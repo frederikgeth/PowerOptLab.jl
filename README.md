@@ -97,7 +97,10 @@ explicit internal AC node behind the converter, with an output filter, internal
 EMF / DC-link modulation bounds, grid-forming operation, converter losses, and
 double-frequency ripple limits (following the BMOPFTools
 [IBR model extensions](https://github.com/frederikgeth/BMOPFTools.jl/blob/main/docs/ibr_model_extensions.md)
-design doc). Every feature is opt-in.
+design doc). For three phases it carries the exact **switching-polytope**
+feasible-region models of the 3-leg, 4-leg, and split-DC-link topologies (exact
+time-sampled DC-utilisation limits, 2ω bus-ripple derating, neutral-current
+limits). Every feature is opt-in; runs in SI or per-unit.
 
 ```julia
 using PowerOptLab
