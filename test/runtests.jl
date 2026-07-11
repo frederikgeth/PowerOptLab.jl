@@ -8,6 +8,7 @@ include("fixtures.jl")
     include("multiperiod_tests.jl")
     include("ev_tests.jl")
     include("state_estimation_tests.jl")
+    include("parameter_estimation_tests.jl")
     include("operating_envelope_tests.jl")
     include("advanced_inverter_tests.jl")
 end

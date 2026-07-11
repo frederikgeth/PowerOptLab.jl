@@ -30,6 +30,15 @@ solve_state_estimation
 StateEstimationResult
 ```
 
+## Parameter estimation
+
+```@docs
+CalibLine
+CalibTap
+solve_parameter_estimation
+ParameterEstimationResult
+```
+
 ## Dynamic operating envelopes
 
 ```@docs

@@ -14,6 +14,7 @@ makedocs(
         "Storage & EVs"      => "devices.md",
         "Multi-period OPF"   => "multiperiod.md",
         "State estimation"   => "state_estimation.md",
+        "Parameter estimation" => "parameter_estimation.md",
         "Operating envelopes" => "operating_envelope.md",
         "Advanced inverter"  => "advanced_inverter.md",
         "API reference"      => "api.md",

@@ -25,6 +25,7 @@ later be folded back into the BMOPF spec.
 | **EV charging** (V1G / V2G) with availability & departure energy | [`EVDevice`](src/devices.jl) | storage device + per-period masking |
 | **Multi-period OPF** co-optimising many snapshots | [`solve_multiperiod_opf`](src/multiperiod.jl) | staged API (one shared model) |
 | **State estimation** (weighted least squares) | [`solve_state_estimation`](src/state_estimation.jl) | bounds-free physics + custom objective |
+| **Parameter estimation** (calibrate line lengths / taps) | [`solve_parameter_estimation`](src/parameter_estimation.jl) | shared parameters across snapshots + WLS objective |
 | **Dynamic operating envelopes** (DER export limits) | [`solve_operating_envelope`](src/operating_envelope.jl) | operational bounds + fairness objective |
 | **Advanced inverter** (internal-node IBR prototype) | [`AdvancedInverter`](src/advanced_inverter.jl) | internal node + filter / EMF / losses / ripple |
 
@@ -71,6 +72,24 @@ se = solve_state_estimation(net, meas)
 se.bus["bus1"]["1"]["vm"]   # estimated voltage magnitude (V)
 se.residuals                # per-measurement (measured, estimated, residual, normalized)
 ```
+
+### Calibrate line lengths / taps from smart-meter data
+
+```julia
+using PowerOptLab
+# `nets` are per-snapshot physics nets carrying the metered loads but NOT the
+# uncertain elements; `meas[t]` are that snapshot's :vmag meter readings.
+r = solve_parameter_estimation(nets, meas;
+        lines=[CalibLine(id="l1", bus_from="src", bus_to="b1",
+                         r_per_length=0.4, x_per_length=0.25)],
+        taps =[CalibTap(id="t1", bus_from="b1", bus_to="b2", ratio_nom=1.0)])
+r.line_length["l1"]   # estimated line length
+r.tap["t1"]           # estimated tap multiplier τ
+r.residual_rms        # RMS voltage misfit (V); near the meter noise floor if the fit is good
+```
+
+Diverse loads across multiple time steps are what make the shared parameters
+identifiable — a single snapshot cannot separate a long line from a heavy load.
 
 ### Dynamic operating envelope (DER export limits)
 

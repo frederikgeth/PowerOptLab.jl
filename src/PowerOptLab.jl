@@ -26,6 +26,9 @@ into accepted practice can later be folded back into the spec and the engine.
 - **State estimation** ([`solve_state_estimation`](@ref)) — weighted
   least-squares estimation of the network state from noisy measurements, reusing
   the same device physics as a pure measurement-fitting problem.
+- **Parameter estimation** ([`solve_parameter_estimation`](@ref)) — calibration
+  of uncertain line lengths and transformer tap ratios from smart-meter data
+  across multiple time steps (the shared-parameter dual of state estimation).
 - **Dynamic operating envelopes** ([`solve_operating_envelope`](@ref)) —
   per-connection-point DER export limits that respect the network's voltage and
   thermal constraints, recomputed per interval.
@@ -45,6 +48,7 @@ using Ipopt
 include("devices.jl")
 include("multiperiod.jl")
 include("state_estimation.jl")
+include("parameter_estimation.jl")
 include("operating_envelope.jl")
 include("advanced_inverter.jl")
 
@@ -56,6 +60,9 @@ export solve_multiperiod_opf, MultiperiodResult
 
 # State estimation
 export Measurement, solve_state_estimation, StateEstimationResult
+
+# Parameter estimation (calibration of line lengths / transformer taps)
+export CalibLine, CalibTap, solve_parameter_estimation, ParameterEstimationResult
 
 # Dynamic operating envelopes
 export ConnectionPoint, solve_operating_envelope, OperatingEnvelopeResult

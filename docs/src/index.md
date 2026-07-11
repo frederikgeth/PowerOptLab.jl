@@ -21,6 +21,7 @@ later be folded back into the BMOPF spec.
 | EV charging (V1G / V2G) with availability & departure energy | [`EVDevice`](@ref) | storage device + per-period masking |
 | Multi-period OPF co-optimising many snapshots | [`solve_multiperiod_opf`](@ref) | staged API (one shared model) |
 | State estimation (weighted least squares) | [`solve_state_estimation`](@ref) | bounds-free physics + custom objective |
+| Parameter estimation (calibrate line lengths / taps) | [`solve_parameter_estimation`](@ref) | shared parameters across snapshots + WLS objective |
 | Dynamic operating envelopes (DER export limits) | [`solve_operating_envelope`](@ref) | operational bounds + fairness objective |
 | Advanced inverter (internal-node IBR prototype) | [`AdvancedInverter`](@ref) | `model_hook!` internal node + filter/EMF/loss/ripple |
 
@@ -55,5 +56,9 @@ Each capability is a thin layer over the BMOPFTools staged API:
   specification* on the same physics: a bounds-free net gives free bus voltages,
   a `model_hook!` adds free injections at measured buses and a weighted
   least-squares residual objective, and the solve returns the fitted state.
+- **Parameter estimation** ([`solve_parameter_estimation`](@ref)) inverts that:
+  many snapshots share one model, uncertain lines/taps are stamped with free
+  parameters common to every snapshot, and a WLS voltage objective calibrates the
+  shared line lengths and tap ratios from smart-meter time series.
 
 See the per-topic pages for worked examples.
