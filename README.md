@@ -79,13 +79,15 @@ cps  = [ConnectionPoint(id="der1", bus="bus1", export_max=10e3),   # W
         ConnectionPoint(id="der2", bus="bus2", export_max=10e3)]
 # `nets` are per-interval snapshots (differing baseline loads). Each interval's
 # envelope respects that interval's voltage/thermal limits.
-env = solve_operating_envelope(nets, cps; fairness=:equal)  # or :sum
+env = solve_operating_envelope(nets, cps; fairness=:equal)  # or :sum, :proportional
 env.envelope["der1"]   # allocated export limit per interval (W)
 env.total_export       # total allocated across connection points, per interval
 ```
 
 `:equal` allocates the same limit to every point (equitable); `:sum` maximises
-the total (efficient, but skewed toward electrically stronger points).
+the total (efficient, but may starve electrically weaker points); `:proportional`
+maximises `sum(log(pₑ))` — a middle ground where no point is starved but stronger
+points still get more.
 
 ## Development setup
 

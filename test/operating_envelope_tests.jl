@@ -46,6 +46,31 @@ end
     @test sm.envelope["der1"][1] > sm.envelope["der2"][1] + 1000.0
 end
 
+@testset "Operating envelope: proportional fairness is the middle ground" begin
+    cps = [ConnectionPoint(id="der1", bus="bus1", export_max=10e3),
+           ConnectionPoint(id="der2", bus="bus2", export_max=10e3)]
+    nets = [doe_feeder(p1=200.0, p2=200.0), doe_feeder(p1=5000.0, p2=5000.0)]
+
+    eq = solve_operating_envelope(nets, cps; fairness=:equal)
+    pr = solve_operating_envelope(nets, cps; fairness=:proportional)
+    sm = solve_operating_envelope(nets, cps; fairness=:sum)
+    @test all(s in ("LOCALLY_SOLVED", "OPTIMAL") for s in pr.termination_status)
+
+    for t in 1:2
+        e1 = pr.envelope["der1"][t]; e2 = pr.envelope["der2"][t]
+        @test e1 > 100.0 && e2 > 100.0                 # no point is starved
+        @test e1 >= e2 - 1.0                           # stronger point gets ≥ weaker
+        @test e1 <= 10e3 + 1.0 && e2 <= 10e3 + 1.0     # within the inverter cap
+        # Total sits between the equitable and efficient extremes.
+        @test pr.total_export[t] >= eq.total_export[t] - 1.0
+        @test pr.total_export[t] <= sm.total_export[t] + 1.0
+    end
+
+    # Where :sum starves the weak point (low load), proportional keeps it well
+    # above zero — the defining property of proportional fairness.
+    @test pr.envelope["der2"][1] > sm.envelope["der2"][1] + 1000.0
+end
+
 @testset "Operating envelope: single-net convenience + input validation" begin
     cps = [ConnectionPoint(id="der1", bus="bus1", export_max=10e3),
            ConnectionPoint(id="der2", bus="bus2", export_max=10e3)]

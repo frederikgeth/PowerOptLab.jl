@@ -88,7 +88,7 @@ function _stamp_export_port!(ctx, cp::ConnectionPoint)
     return pe
 end
 
-const _FAIRNESS = (:equal, :sum)
+const _FAIRNESS = (:equal, :sum, :proportional)
 
 """
     solve_operating_envelope(nets, connection_points; fairness=:equal, kwargs...)
@@ -114,7 +114,10 @@ objective, so the engine's voltage and thermal limits bound the result.
   - `:equal` maximises a common export level assigned to every point (equitable;
     the level is capped by the weakest point and the tightest constraint);
   - `:sum` maximises the total allocated export (efficient; points with more
-    network headroom get more).
+    network headroom get more, and a weak point may receive ≈0);
+  - `:proportional` maximises `sum(log(pₑ))` over the points (proportional /
+    Nash–Kelly fairness) — a middle ground where no point is starved but a point
+    with more headroom still gets more.
 - `per_unit=true`, `s_base=1e6`, `optimizer=Ipopt.Optimizer`, `verbose=false`,
   `solver_options=()` — solver control, as in `solve_opf`.
 
@@ -160,8 +163,14 @@ function solve_operating_envelope(nets::AbstractVector,
                     JuMP.@constraint(m, pe[cp.id] == level)
                 end
                 JuMP.@objective(m, Max, level)
-            else # :sum
+            elseif fairness == :sum
                 JuMP.@objective(m, Max, sum(pe[cp.id] for cp in cps))
+            else # :proportional — maximise Σ log(pe): no point is starved, but a
+                 # point with more headroom still receives more (Nash/Kelly fairness).
+                for cp in cps
+                    JuMP.set_start_value(pe[cp.id], 1.0)   # keep the log argument off 0
+                end
+                JuMP.@objective(m, Max, sum(log(pe[cp.id]) for cp in cps))
             end
         end
         env_hook! = (ctx, result) -> begin

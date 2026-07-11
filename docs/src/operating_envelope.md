@@ -17,14 +17,18 @@ independent.
 
 ## Fairness rules
 
-Two allocation rules trade equity against efficiency:
+Three allocation rules trade equity against efficiency:
 
 - `:equal` maximises a single export level assigned to **every** point. The
   result is equitable but capped by the weakest point and the tightest
   constraint.
 - `:sum` maximises the **total** allocated export. The result is efficient but
   can be uneven — an electrically stronger point (nearer the source, more
-  headroom) may receive most of the allocation.
+  headroom) may receive most of the allocation, and a weak point may get ≈0.
+- `:proportional` maximises ``\sum_i \log(p^e_i)`` (proportional / Nash–Kelly
+  fairness). This is the middle ground: **no point is starved** (the log drives
+  every allocation strictly positive), yet a point with more network headroom
+  still receives more. Its total sits between the `:equal` and `:sum` extremes.
 
 ## Worked example
 
@@ -63,8 +67,12 @@ env.total_export       # sum across connection points, per interval (W)
 ```
 
 With `:equal` both points receive the same limit and the far bus sits at its
-`v_max`; switching to `fairness=:sum` raises the total but skews it toward the
-stronger point — the efficiency/equity tradeoff a DOE policy must choose between.
+`v_max`; `fairness=:sum` raises the total but skews it toward the stronger point,
+possibly starving the weaker one; and `fairness=:proportional` keeps every point
+above zero while still rewarding headroom — the efficiency/equity tradeoff a DOE
+policy must choose between. For example, at low baseline load the weak point's
+allocation is roughly `0` under `:sum`, its `:equal` share under `:equal`, and an
+in-between positive value under `:proportional`.
 
 See the API reference for [`ConnectionPoint`](@ref),
 [`solve_operating_envelope`](@ref), and [`OperatingEnvelopeResult`](@ref).
