@@ -25,6 +25,7 @@ later be folded back into the BMOPF spec.
 | **EV charging** (V1G / V2G) with availability & departure energy | [`EVDevice`](src/devices.jl) | storage device + per-period masking |
 | **Multi-period OPF** co-optimising many snapshots | [`solve_multiperiod_opf`](src/multiperiod.jl) | staged API (one shared model) |
 | **State estimation** (weighted least squares) | [`solve_state_estimation`](src/state_estimation.jl) | bounds-free physics + custom objective |
+| **Dynamic operating envelopes** (DER export limits) | [`solve_operating_envelope`](src/operating_envelope.jl) | operational bounds + fairness objective |
 
 ## Examples
 
@@ -69,6 +70,22 @@ se = solve_state_estimation(net, meas)
 se.bus["bus1"]["1"]["vm"]   # estimated voltage magnitude (V)
 se.residuals                # per-measurement (measured, estimated, residual, normalized)
 ```
+
+### Dynamic operating envelope (DER export limits)
+
+```julia
+using PowerOptLab
+cps  = [ConnectionPoint(id="der1", bus="bus1", export_max=10e3),   # W
+        ConnectionPoint(id="der2", bus="bus2", export_max=10e3)]
+# `nets` are per-interval snapshots (differing baseline loads). Each interval's
+# envelope respects that interval's voltage/thermal limits.
+env = solve_operating_envelope(nets, cps; fairness=:equal)  # or :sum
+env.envelope["der1"]   # allocated export limit per interval (W)
+env.total_export       # total allocated across connection points, per interval
+```
+
+`:equal` allocates the same limit to every point (equitable); `:sum` maximises
+the total (efficient, but skewed toward electrically stronger points).
 
 ## Development setup
 

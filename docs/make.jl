@@ -14,6 +14,7 @@ makedocs(
         "Storage & EVs"      => "devices.md",
         "Multi-period OPF"   => "multiperiod.md",
         "State estimation"   => "state_estimation.md",
+        "Operating envelopes" => "operating_envelope.md",
         "API reference"      => "api.md",
     ],
     checkdocs = :exports,

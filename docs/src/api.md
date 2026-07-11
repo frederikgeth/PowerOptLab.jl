@@ -30,6 +30,14 @@ solve_state_estimation
 StateEstimationResult
 ```
 
+## Dynamic operating envelopes
+
+```@docs
+ConnectionPoint
+solve_operating_envelope
+OperatingEnvelopeResult
+```
+
 ## Index
 
 ```@index

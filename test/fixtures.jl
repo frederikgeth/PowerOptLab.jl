@@ -38,3 +38,21 @@ two_bus_net(; load=true) = parse_bmopf("""
     "d2":{"bus":"bus2","terminal_map":["1","n"],"configuration":"SINGLE_PHASE","p_nom":[20000.0],"q_nom":[0.0]}}""" : "")
 }
 """; from_string=true)
+
+# LV radial feeder for operating-envelope tests: source ──l1── bus1 ──l2── bus2,
+# with v_max on the DER buses so simultaneous export is voltage-limited. `p1`,`p2`
+# set the baseline loads (W) that define the interval's headroom.
+doe_feeder(; p1, p2, vmax=245.0) = parse_bmopf("""
+{"bus":{
+    "src": {"terminal_names":["1","n"],"perfectly_grounded_terminals":["n"]},
+    "bus1":{"terminal_names":["1","n"],"perfectly_grounded_terminals":["n"],"v_min":[216.0],"v_max":[$vmax]},
+    "bus2":{"terminal_names":["1","n"],"perfectly_grounded_terminals":["n"],"v_min":[216.0],"v_max":[$vmax]}},
+ "voltage_source":{"vs":{"bus":"src","terminal_map":["1"],"v_magnitude":[230.0],"v_angle":[0.0]}},
+ "linecode":{"lc":{"R_series_1_1":0.4}},
+ "line":{
+    "l1":{"bus_from":"src","bus_to":"bus1","terminal_map_from":["1"],"terminal_map_to":["1"],"linecode":"lc","length":1.0},
+    "l2":{"bus_from":"bus1","bus_to":"bus2","terminal_map_from":["1"],"terminal_map_to":["1"],"linecode":"lc","length":1.0}},
+ "load":{
+    "d1":{"bus":"bus1","terminal_map":["1","n"],"configuration":"SINGLE_PHASE","p_nom":[$p1],"q_nom":[0.0]},
+    "d2":{"bus":"bus2","terminal_map":["1","n"],"configuration":"SINGLE_PHASE","p_nom":[$p2],"q_nom":[0.0]}}}
+"""; from_string=true)

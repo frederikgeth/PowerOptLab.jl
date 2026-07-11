@@ -26,6 +26,9 @@ into accepted practice can later be folded back into the spec and the engine.
 - **State estimation** ([`solve_state_estimation`](@ref)) — weighted
   least-squares estimation of the network state from noisy measurements, reusing
   the same device physics as a pure measurement-fitting problem.
+- **Dynamic operating envelopes** ([`solve_operating_envelope`](@ref)) —
+  per-connection-point DER export limits that respect the network's voltage and
+  thermal constraints, recomputed per interval.
 
 Everything is SI at the interface; per-unit conditioning inside the solve is
 handled via the engine's `ctx.bases`.
@@ -39,6 +42,7 @@ using Ipopt
 include("devices.jl")
 include("multiperiod.jl")
 include("state_estimation.jl")
+include("operating_envelope.jl")
 
 # Devices
 export StorageDevice, EVDevice
@@ -48,5 +52,8 @@ export solve_multiperiod_opf, MultiperiodResult
 
 # State estimation
 export Measurement, solve_state_estimation, StateEstimationResult
+
+# Dynamic operating envelopes
+export ConnectionPoint, solve_operating_envelope, OperatingEnvelopeResult
 
 end # module PowerOptLab

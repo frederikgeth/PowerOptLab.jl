@@ -21,6 +21,7 @@ later be folded back into the BMOPF spec.
 | EV charging (V1G / V2G) with availability & departure energy | [`EVDevice`](@ref) | storage device + per-period masking |
 | Multi-period OPF co-optimising many snapshots | [`solve_multiperiod_opf`](@ref) | staged API (one shared model) |
 | State estimation (weighted least squares) | [`solve_state_estimation`](@ref) | bounds-free physics + custom objective |
+| Dynamic operating envelopes (DER export limits) | [`solve_operating_envelope`](@ref) | operational bounds + fairness objective |
 
 ## Installation
 
