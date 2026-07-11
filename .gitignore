@@ -1,0 +1,15 @@
+**/.DS_Store
+
+# Code-coverage artifacts emitted by `julia --code-coverage` / Pkg.test(coverage=true)
+*.cov
+*.info
+lcov.info
+
+# Resolved dependency manifests — not consumed downstream for a library and a
+# source of churn. The environment is reproducible from Project.toml plus the
+# dev-path to BMOPFTools (see README "Development setup").
+Manifest.toml
+**/Manifest.toml
+
+# Scratch
+/scratch/
