@@ -26,6 +26,7 @@ later be folded back into the BMOPF spec.
 | **Multi-period OPF** co-optimising many snapshots | [`solve_multiperiod_opf`](src/multiperiod.jl) | staged API (one shared model) |
 | **State estimation** (weighted least squares) | [`solve_state_estimation`](src/state_estimation.jl) | bounds-free physics + custom objective |
 | **Dynamic operating envelopes** (DER export limits) | [`solve_operating_envelope`](src/operating_envelope.jl) | operational bounds + fairness objective |
+| **Advanced inverter** (internal-node IBR prototype) | [`AdvancedInverter`](src/advanced_inverter.jl) | internal node + filter / EMF / losses / ripple |
 
 ## Examples
 
@@ -88,6 +89,26 @@ env.total_export       # total allocated across connection points, per interval
 the total (efficient, but may starve electrically weaker points); `:proportional`
 maximises `sum(log(pₑ))` — a middle ground where no point is starved but stronger
 points still get more.
+
+### Advanced inverter (prototype internal-node IBR)
+
+A more detailed IBR than the engine's built-in current-injection model: an
+explicit internal AC node behind the converter, with an output filter, internal
+EMF / DC-link modulation bounds, grid-forming operation, converter losses, and
+double-frequency ripple limits (following the BMOPFTools
+[IBR model extensions](https://github.com/frederikgeth/BMOPFTools.jl/blob/main/docs/ibr_model_extensions.md)
+design doc). Every feature is opt-in.
+
+```julia
+using PowerOptLab
+inv = AdvancedInverter(id="inv", bus="poc", s_max=5e3,   # VA converter rating
+                       r_filter=0.2, x_filter=0.5,        # Ω output filter
+                       p_loss_fixed=20.0, a_loss=0.3, c_loss=0.02)  # 3-term loss
+r = solve_advanced_inverter(net, inv; objective=:min_loss, p_set=3e3)
+r.p_poc    # power delivered to the grid (W)
+r.p_dc     # DC-link power = p_conv + p_loss  (non-branching)
+r.v_int_mag  # internal EMF magnitude per phase (V)
+```
 
 ## Development setup
 

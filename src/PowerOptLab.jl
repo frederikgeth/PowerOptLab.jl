@@ -29,6 +29,9 @@ into accepted practice can later be folded back into the spec and the engine.
 - **Dynamic operating envelopes** ([`solve_operating_envelope`](@ref)) —
   per-connection-point DER export limits that respect the network's voltage and
   thermal constraints, recomputed per interval.
+- **Advanced inverter** ([`AdvancedInverter`](@ref)) — a prototype internal-AC-node
+  IBR with an output filter, internal-EMF/DC-modulation bounds, grid-forming
+  operation, converter losses, and double-frequency ripple limits.
 
 Everything is SI at the interface; per-unit conditioning inside the solve is
 handled via the engine's `ctx.bases`.
@@ -43,6 +46,7 @@ include("devices.jl")
 include("multiperiod.jl")
 include("state_estimation.jl")
 include("operating_envelope.jl")
+include("advanced_inverter.jl")
 
 # Devices
 export StorageDevice, EVDevice
@@ -55,5 +59,8 @@ export Measurement, solve_state_estimation, StateEstimationResult
 
 # Dynamic operating envelopes
 export ConnectionPoint, solve_operating_envelope, OperatingEnvelopeResult
+
+# Advanced inverter (prototype internal-node IBR)
+export AdvancedInverter, solve_advanced_inverter, InverterResult
 
 end # module PowerOptLab

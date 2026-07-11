@@ -15,6 +15,7 @@ makedocs(
         "Multi-period OPF"   => "multiperiod.md",
         "State estimation"   => "state_estimation.md",
         "Operating envelopes" => "operating_envelope.md",
+        "Advanced inverter"  => "advanced_inverter.md",
         "API reference"      => "api.md",
     ],
     checkdocs = :exports,

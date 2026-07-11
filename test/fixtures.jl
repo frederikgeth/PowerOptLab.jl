@@ -39,6 +39,27 @@ two_bus_net(; load=true) = parse_bmopf("""
 }
 """; from_string=true)
 
+# Stiff single-phase grid for advanced-inverter tests: slack at "grid", short line
+# to the inverter POC bus, so the inverter's own limits (not the network) bind.
+inv_grid(; vmax=250.0) = parse_bmopf("""
+{"bus":{
+    "grid":{"terminal_names":["1","n"],"perfectly_grounded_terminals":["n"]},
+    "poc": {"terminal_names":["1","n"],"perfectly_grounded_terminals":["n"],"v_min":[200.0],"v_max":[$vmax]}},
+ "voltage_source":{"vs":{"bus":"grid","terminal_map":["1"],"v_magnitude":[230.0],"v_angle":[0.0]}},
+ "linecode":{"lc":{"R_series_1_1":0.05}},
+ "line":{"l1":{"bus_from":"grid","bus_to":"poc","terminal_map_from":["1"],"terminal_map_to":["1"],"linecode":"lc","length":1.0}}}
+"""; from_string=true)
+
+# Balanced three-phase stiff grid (for grid-forming tests).
+inv_grid3() = parse_bmopf("""
+{"bus":{
+    "grid":{"terminal_names":["a","b","c","n"],"perfectly_grounded_terminals":["n"]},
+    "poc": {"terminal_names":["a","b","c","n"],"perfectly_grounded_terminals":["n"],"v_min":[200.0,200.0,200.0],"v_max":[250.0,250.0,250.0]}},
+ "voltage_source":{"vs":{"bus":"grid","terminal_map":["a","b","c"],"v_magnitude":[230.0,230.0,230.0],"v_angle":[0.0,-2.0944,2.0944]}},
+ "linecode":{"lc":{"R_series_1_1":0.05,"R_series_2_2":0.05,"R_series_3_3":0.05,"R_series_4_4":0.05}},
+ "line":{"l1":{"bus_from":"grid","bus_to":"poc","terminal_map_from":["a","b","c","n"],"terminal_map_to":["a","b","c","n"],"linecode":"lc","length":1.0}}}
+"""; from_string=true)
+
 # LV radial feeder for operating-envelope tests: source ──l1── bus1 ──l2── bus2,
 # with v_max on the DER buses so simultaneous export is voltage-limited. `p1`,`p2`
 # set the baseline loads (W) that define the interval's headroom.

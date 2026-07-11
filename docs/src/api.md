@@ -38,6 +38,14 @@ solve_operating_envelope
 OperatingEnvelopeResult
 ```
 
+## Advanced inverter
+
+```@docs
+AdvancedInverter
+solve_advanced_inverter
+InverterResult
+```
+
 ## Index
 
 ```@index

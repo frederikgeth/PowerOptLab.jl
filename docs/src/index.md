@@ -22,6 +22,7 @@ later be folded back into the BMOPF spec.
 | Multi-period OPF co-optimising many snapshots | [`solve_multiperiod_opf`](@ref) | staged API (one shared model) |
 | State estimation (weighted least squares) | [`solve_state_estimation`](@ref) | bounds-free physics + custom objective |
 | Dynamic operating envelopes (DER export limits) | [`solve_operating_envelope`](@ref) | operational bounds + fairness objective |
+| Advanced inverter (internal-node IBR prototype) | [`AdvancedInverter`](@ref) | `model_hook!` internal node + filter/EMF/loss/ripple |
 
 ## Installation
 
