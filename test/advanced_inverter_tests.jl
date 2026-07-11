@@ -136,6 +136,65 @@ end
     @test capped.dv2 <= 3.0 + 1e-2         # the amplitude cap binds
 end
 
+@testset "Advanced inverter: reactive setpoint q_set is met" begin
+    # The converter delivers the requested reactive power at the POC, trading it
+    # against active power on the apparent-power circle.
+    r = solve_advanced_inverter(inv_grid(),
+            AdvancedInverter(id="i", bus="poc", s_max=5000.0); q_set=1500.0)
+    @test r.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+    @test r.q_poc ≈ 1500.0  rtol=1e-2
+    @test r.p_poc ≈ sqrt(5000.0^2 - 1500.0^2)  rtol=1e-2   # rest of the circle → P
+end
+
+@testset "Advanced inverter: per-conductor current limit i_max binds" begin
+    base = solve_advanced_inverter(inv_grid(), AdvancedInverter(id="i", bus="poc", s_max=5000.0))
+    lim  = solve_advanced_inverter(inv_grid(), AdvancedInverter(id="i", bus="poc", s_max=5000.0, i_max=15.0))
+    @test lim.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+    @test lim.i_mag[1] ≈ 15.0  rtol=1e-2          # current pinned at the limit
+    @test lim.p_poc < base.p_poc - 100.0          # and export curtailed below nameplate
+end
+
+@testset "Advanced inverter: internal EMF cap v_int_max binds and curtails export" begin
+    common = (bus="poc", s_max=5000.0, r_filter=0.2, x_filter=0.5)   # filter ⇒ V_int > V_poc
+    loose = solve_advanced_inverter(inv_grid(), AdvancedInverter(; id="i", v_int_max=250.0, common...))
+    tight = solve_advanced_inverter(inv_grid(), AdvancedInverter(; id="i", v_int_max=228.0, common...))
+    @test tight.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+    @test tight.v_int_mag[1] ≈ 228.0  atol=0.5    # EMF held at its cap …
+    @test tight.p_poc < loose.p_poc - 50.0        # … curtailing export
+end
+
+@testset "Advanced inverter: single-phase modulation cap binds (|V_int| ≤ m·Vdc/√3)" begin
+    common = (bus="poc", s_max=5000.0, r_filter=0.2, x_filter=0.5)
+    loose = solve_advanced_inverter(inv_grid(), AdvancedInverter(; id="i", common...))
+    capd  = solve_advanced_inverter(inv_grid(), AdvancedInverter(; id="i", modulation_max=1.0, v_dc=400.0, common...))
+    @test capd.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+    @test capd.v_int_mag[1] ≈ 1.0 * 400.0 / sqrt(3)  atol=1.0   # pinned at m·Vdc/√3 ≈ 231 V
+    @test capd.p_poc < loose.p_poc - 20.0
+end
+
+@testset "Advanced inverter: grid-side shunt injects reactive and raises POC voltage" begin
+    net = inv_grid_x()   # line has reactance, so a capacitor moves the voltage
+    kw = (objective=:min_loss, p_set=1000.0, q_set=0.0)   # converter pinned at unity PF
+    none = solve_advanced_inverter(net, AdvancedInverter(id="i", bus="poc", s_max=5000.0); kw...)
+    shun = solve_advanced_inverter(net, AdvancedInverter(id="i", bus="poc", s_max=5000.0, b_filter_shunt=0.05); kw...)
+    @test shun.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+    # A grid-side capacitor supplies reactive locally, lifting the POC voltage.
+    @test shun.bus["poc"]["1"]["vm"] > none.bus["poc"]["1"]["vm"] + 5.0
+end
+
+@testset "Advanced inverter: neutral-current limit In_max binds" begin
+    net = inv_grid3_src(mags=[250.0, 205.0, 230.0], angs=[0.1, -2.2, 1.95])   # strong unbalance
+    common = (bus="poc", phase_terminals=["a","b","c"], neutral="n", s_max=20e3,
+              i_max=60.0, r_filter=0.05, x_filter=0.15, m_max=0.96, topology=:FOUR_LEG,
+              v_dc=750.0, c_dc=1.1e-3)
+    loose = solve_advanced_inverter(net, AdvancedInverter(; id="i", In_max=40.0, common...))
+    tight = solve_advanced_inverter(net, AdvancedInverter(; id="i", In_max=5.0, common...))
+    @test tight.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+    @test loose.i_neutral > 8.0                   # unbalance wants a large neutral current …
+    @test tight.i_neutral ≈ 5.0  rtol=5e-2        # … which the tight rating pins down
+    @test tight.i_neutral < loose.i_neutral - 1.0
+end
+
 @testset "Advanced inverter: per-unit matches SI" begin
     # Three-phase topology with neutral current and ripple.
     net = inv_grid3_unbal()

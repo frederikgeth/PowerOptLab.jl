@@ -50,6 +50,17 @@ inv_grid(; vmax=250.0) = parse_bmopf("""
  "line":{"l1":{"bus_from":"grid","bus_to":"poc","terminal_map_from":["1"],"terminal_map_to":["1"],"linecode":"lc","length":1.0}}}
 """; from_string=true)
 
+# Single-phase grid with line REACTANCE (weaker), so a reactive grid-side shunt
+# visibly moves the POC voltage.
+inv_grid_x() = parse_bmopf("""
+{"bus":{
+    "grid":{"terminal_names":["1","n"],"perfectly_grounded_terminals":["n"]},
+    "poc": {"terminal_names":["1","n"],"perfectly_grounded_terminals":["n"],"v_min":[180.0],"v_max":[280.0]}},
+ "voltage_source":{"vs":{"bus":"grid","terminal_map":["1"],"v_magnitude":[230.0],"v_angle":[0.0]}},
+ "linecode":{"lc":{"R_series_1_1":0.3,"X_series_1_1":1.0}},
+ "line":{"l1":{"bus_from":"grid","bus_to":"poc","terminal_map_from":["1"],"terminal_map_to":["1"],"linecode":"lc","length":1.0}}}
+"""; from_string=true)
+
 # Balanced three-phase stiff grid (for grid-forming tests).
 inv_grid3() = parse_bmopf("""
 {"bus":{

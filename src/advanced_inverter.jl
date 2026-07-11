@@ -2,9 +2,9 @@
 #
 # A more detailed inverter-based-resource (IBR) than the BMOPFTools engine's
 # built-in current-injection IBR. It combines the "IBR Model Extensions" design
-# doc's internal-AC-node structure with the exact three-phase feasible-region
-# models of ARPSTTopic1 (`inverter_feasible_regions_exact.jl` +
-# `inverter_parameters.md`):
+# doc's internal-AC-node structure with exact three-phase converter
+# feasible-region models drawn from ongoing research (fundamental-frequency
+# switching-polytope voltage feasibility with a 2ω bus-ripple derating):
 #
 #   POC bus ──[filter r+jx (+ grid shunt b)]── internal node ──[converter]── DC
 #     network sets V                            EMF lives here          losses/ripple

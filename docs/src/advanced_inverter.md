@@ -13,8 +13,8 @@ phases layered on it.
    network sets V here                       EMF lives here          losses/ripple here
 ```
 
-On top of that structure it carries the exact three-phase **feasible-region
-models** of ARPSTTopic1 — 3-leg (3-wire), 4-leg, and split-DC-link converters —
+On top of that structure it carries exact three-phase **feasible-region models**
+from ongoing research — 3-leg (3-wire), 4-leg, and split-DC-link converters —
 whose DC-utilisation limit is the exact time-sampled switching-polytope condition
 with an endogenous 2ω bus-ripple derating and neutral-current limits (see
 [Three-phase topology models](@ref three-phase-topology-models) below).
@@ -108,7 +108,7 @@ r.dv2         # 2ω bus-ripple amplitude (V) that derated the DC rails
 On a balanced grid all three topologies coincide (no neutral current, no ripple).
 Under unbalance the 4-leg and split-DC draw neutral current (bounded by `In_max`),
 and the split-DC needs a **higher `v_dc`** for the same per-phase voltage — the
-half-bus utilisation penalty documented in the ARPST dataset.
+half-bus utilisation penalty of the split-capacitor structure.
 
 See the API reference for [`AdvancedInverter`](@ref),
 [`solve_advanced_inverter`](@ref), and [`InverterResult`](@ref).
@@ -116,23 +116,22 @@ See the API reference for [`AdvancedInverter`](@ref),
 ## Scope
 
 This is a **prototype** for experimentation, not a validated engine feature. It
-implements the design doc's Phases 0–4 plus the ARPST three-phase topology models
-as a hook-stamped device; the reactive/active priority modes, sequence-current
-limits, and grid-forming-as-reference capabilities listed in the design doc's
-backlog are not included. If a piece of this matures, it can be folded back into
-the engine.
+implements the design doc's Phases 0–4 plus the three-phase topology models as a
+hook-stamped device; the reactive/active priority modes, sequence-current limits,
+and grid-forming-as-reference capabilities listed in the design doc's backlog are
+not included. If a piece of this matures, it can be folded back into the engine.
 
 ## [Three-phase topology models](@id three-phase-topology-models)
 
 For the three-phase topologies (`:THREE_LEG`, `:FOUR_LEG`, `:SPLIT_DC`) the
 crude scalar modulation cap is replaced by the **exact time-sampled
-switching-polytope** feasibility of
-[ARPSTTopic1](https://github.com/frederikgeth/BMOPFTools.jl) (fundamental-frequency
-RMS phasors; adapted from Holmes & Lipo, Zhang et al., Verdelho & Marques, Kolar &
-Round — see the ARPST `inverter_parameters.md` for provenance). All constraints
-apply to the **converter output** `U_x = V_int_x` (the internal node), so the
-filter, losses, grid-forming, and `s_max` circle all compose. The equations below
-are what the code stamps (shown in SI; per-unit is the same after base scaling).
+switching-polytope** feasibility from ongoing research on converter feasible
+regions (fundamental-frequency RMS phasors; the classical pulse-width-modulation
+DC-utilisation and DC-link-ripple results of the power-electronics literature).
+All constraints apply to the **converter output** `U_x = V_int_x` (the internal
+node), so the filter, losses, grid-forming, and `s_max` circle all compose. The
+equations below are what the code stamps (shown in SI; per-unit is the same after
+base scaling).
 
 **Oscillating (2ω) power.** The unconjugated phase sum
 
