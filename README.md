@@ -77,12 +77,15 @@ se.residuals                # per-measurement (measured, estimated, residual, no
 
 ```julia
 using PowerOptLab
-# `nets` are per-snapshot physics nets carrying the metered loads but NOT the
-# uncertain elements; `meas[t]` are that snapshot's :vmag meter readings.
+# `nets` are per-snapshot physics nets (known source + transformers; uncertain
+# lines omitted; no loads). `meas[t]` are that snapshot's noisy (P,Q,|V|) readings
+# as `Measurement`s. Taps use the engine's native free-tap; lines are re-stamped
+# with a shared free length. Follows Vanin, Geth et al., arXiv:2506.04949.
 r = solve_parameter_estimation(nets, meas;
         lines=[CalibLine(id="l1", bus_from="src", bus_to="b1",
                          r_per_length=0.4, x_per_length=0.25)],
-        taps =[CalibTap(id="t1", bus_from="b1", bus_to="b2", ratio_nom=1.0)])
+        taps =[CalibTap(id="t1", tap_min=0.9, tap_max=1.1)],
+        objective=:wls)       # or :wlav (robust, bad-data-rejecting)
 r.line_length["l1"]   # estimated line length
 r.tap["t1"]           # estimated tap multiplier τ
 r.residual_rms        # RMS voltage misfit (V); near the meter noise floor if the fit is good
@@ -90,6 +93,7 @@ r.residual_rms        # RMS voltage misfit (V); near the meter noise floor if th
 
 Diverse loads across multiple time steps are what make the shared parameters
 identifiable — a single snapshot cannot separate a long line from a heavy load.
+`per_unit=true` and `per_unit=false` give identical estimates.
 
 ### Dynamic operating envelope (DER export limits)
 

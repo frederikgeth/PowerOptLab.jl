@@ -1,45 +1,59 @@
 # Network parameter estimation (calibration).
 #
-# Distribution GIS records are often wrong: line lengths are approximate and
-# transformer/regulator tap positions drift or are mislogged. This is a THIRD
-# problem specification over the same network physics — a sibling of state
-# estimation. State estimation fixes the parameters and estimates the per-snapshot
-# STATE; calibration inverts that: it fixes nothing about the uncertain elements
-# and instead estimates the SHARED, TIME-INVARIANT parameters (line lengths, tap
-# ratios) that best reproduce many snapshots of smart-meter data at once.
+# A THIRD problem specification over the same network physics — the shared-parameter
+# dual of state estimation, and a multi-time-step extension of it. State estimation
+# fixes the parameters and estimates the per-snapshot state; calibration fixes
+# nothing about the uncertain elements and estimates the shared, time-invariant
+# parameters (line lengths, transformer tap ratios) that best reproduce many
+# snapshots of smart-meter data at once.
 #
-# Identifiability needs multiple time steps: a single snapshot has too few
-# equations to separate a long line from a heavy load. With T snapshots of diverse
-# loads the shared parameters are over-determined and the fit converges. Each
-# snapshot contributes the network's KVL/KCL physics; the smart meters supply the
-# known loads (as fixed injections in each snapshot net) and the measured voltage
-# magnitudes (the WLS targets). The unknowns — one length per uncertain line, one
-# tap multiplier per uncertain transformer — are SHARED variables on a single
-# JuMP model spanning every snapshot, exactly the multi-period build pattern.
+# This mirrors the formulation of Vanin, Geth, Heidari & Van Hertem, "Distribution
+# System State and Impedance Estimation Augmented with Carson's Equations"
+# (arXiv:2506.04949): a weighted measurement-residual objective over a time series,
+# the multiconductor IVR (rectangular current–voltage) power flow as the physics,
+# time-invariant impedances written as nominal·length (their Eq. 12), and the
+# smart-meter measurement set as noisy (P, Q, |V|) triples per user (their Eqs.
+# 4–6). Identifiability needs multiple time steps: a single snapshot cannot
+# separate a long line from a heavy load, whereas diverse loads over T snapshots
+# over-determine the shared parameters.
 #
-# The uncertain elements are the unknowns, so they are NOT part of the per-snapshot
-# physics nets (which carry the known source, known lines, and the metered loads);
-# they are stamped into the shared model by the hook with variable parameters:
-#   * variable-length line  V_f − V_t = (r₀+jx₀)·ℓ·I   (ℓ the free length)
-#   * variable-ratio ideal transformer  V_f = a·V_t,  I_s = a·I_p,  a = a₀·τ
-# Both introduce bilinear terms (ℓ·I, τ·V), so the calibration is a smooth NLP
-# (Ipopt), like every other nonconvex piece of this package.
+# ── How the uncertain elements are stamped ──────────────────────────────────
+# The two element classes are handled DIFFERENTLY, because the BMOPFTools engine
+# exposes them differently:
 #
-# Prototype scope: single-phase (one terminal per element end; add one uncertain
-# element per phase for a multi-phase feeder), lossless ideal-transformer taps,
-# and SI units throughout (the WLS residual is in volts, and the line/tap physics
-# read exactly as written — per-unit transformer base referral is deliberately out
-# of scope for this didactic example).
+#   * Transformer taps use the engine's NATIVE free-tap variable: a transformer
+#     carrying `tap_min`/`tap_max` gets a `:tap` decision variable that the engine
+#     threads through its (per-unit-correct, base-referred) winding constraints.
+#     We keep the transformer in every snapshot net and couple its tap variable
+#     equal across snapshots. Nothing is re-derived — the engine's transformer
+#     physics (leakage, losses, base referral) is reused unchanged.
+#
+#   * Line lengths have NO native free variable, so the uncertain lines are OMITTED
+#     from the physics nets and re-stamped here with a shared free length ℓ:
+#         V_f − V_t = (r₀+jx₀)·ℓ·I         (per-unit: r₀,x₀ scaled by z_base)
+#     This is the one genuine "replace Ohm's law" workaround (see the dev notes in
+#     BMOPFTools docs/src/dev/opf_engine.md and the open issue on a free line
+#     impedance/length variable).
+#
+# Both the ℓ·I product and the P/Q measurement projections are bilinear, so the
+# calibration is a smooth NLP (Ipopt), consistent with the rest of this package.
+#
+# Prototype scope: single-phase elements (one terminal per end — add one CalibLine
+# per phase for a multi-phase feeder). Per-unit and SI are both supported and give
+# identical results.
 
 """
     CalibLine(; id, bus_from, bus_to, r_per_length, x_per_length, ...)
 
 An uncertain line whose **length** is a free parameter estimated by
 [`solve_parameter_estimation`](@ref). The series impedance is
-`(r_per_length + j·x_per_length)·length` [Ω]; only `length` is estimated.
+`(r_per_length + j·x_per_length)·length` [Ω]; only `length` is estimated (the
+nominal per-length impedance is treated as known, following the construction-code
+model `Z = Zⁿᵒᵐ·ℓ` of Vanin et al.).
 
-Single-phase: it connects `(bus_from, terminal)` to `(bus_to, terminal)`. For a
-multi-phase line add one `CalibLine` per phase conductor.
+The uncertain lines must be **omitted** from the physics nets — they are the
+unknowns, stamped by this function. Single-phase: it connects `(bus_from, terminal)`
+to `(bus_to, terminal)`; add one `CalibLine` per phase for a multi-phase line.
 
 # Keywords
 - `id::String` — label for reporting.
@@ -61,30 +75,25 @@ Base.@kwdef struct CalibLine
 end
 
 """
-    CalibTap(; id, bus_from, bus_to, ratio_nom=1.0, ...)
+    CalibTap(; id, tap_min=0.9, tap_max=1.1)
 
-An uncertain (ideal, lossless) transformer/regulator whose **tap** is a free
-parameter estimated by [`solve_parameter_estimation`](@ref). The turns ratio is
-`a = ratio_nom · τ` with `V_from = a·V_to`; the tap multiplier `τ` is estimated
-(so `τ=1` is the nominal ratio, `τ=1.05` a +5 % boost).
+An uncertain transformer/regulator **tap** estimated by
+[`solve_parameter_estimation`](@ref). Unlike [`CalibLine`](@ref), the transformer
+stays **in** the physics nets: this just names the transformer `id` and the tap
+bounds. The function sets `tap_min`/`tap_max` on that transformer so the engine
+creates its native free-tap variable, then couples the tap equal across all
+snapshots and reports the estimate.
 
-`bus_from` is the primary (regulated/HV) side, `bus_to` the secondary. Single-phase
-(one `terminal` per side).
+The reported estimate is the tap **multiplier** `τ` on the nominal ratio
+`N₀ = v_nom_from / v_nom_to` (so `τ = 1` is nominal); the effective turns ratio is
+`N = N₀·τ`.
 
 # Keywords
-- `id::String` — label for reporting.
-- `bus_from::String`, `bus_to::String`, `terminal::String="1"` — primary/secondary.
-- `ratio_nom::Float64=1.0` — nominal primary/secondary turns ratio `a₀`.
-- `tap_init::Float64=1.0` — starting guess for `τ`.
-- `tap_min::Float64=0.9`, `tap_max::Float64=1.1` — bounds on `τ`.
+- `id::String` — transformer id present in every snapshot net.
+- `tap_min::Float64=0.9`, `tap_max::Float64=1.1` — bounds on the multiplier `τ`.
 """
 Base.@kwdef struct CalibTap
     id::String
-    bus_from::String
-    bus_to::String
-    terminal::String = "1"
-    ratio_nom::Float64 = 1.0
-    tap_init::Float64 = 1.0
     tap_min::Float64 = 0.9
     tap_max::Float64 = 1.1
 end
@@ -96,13 +105,13 @@ Result of [`solve_parameter_estimation`](@ref).
 
 # Fields
 - `termination_status::String`, `objective::Float64` — solver status and the
-  optimal weighted-residual sum `∑ (z−|V|)²/σ²` over all snapshots.
+  optimal weighted-residual value.
 - `line_length::Dict{String,Float64}` — estimated length per `CalibLine` id.
 - `tap::Dict{String,Float64}` — estimated tap multiplier `τ` per `CalibTap` id.
-- `residual_rms::Float64` — root-mean-square voltage residual across all
-  measurements [V] (a quick goodness-of-fit / noise-floor check).
-- `snapshots::Vector{Dict{String,Any}}` — per-snapshot `extract_result` (SI),
-  the fitted network state at the estimated parameters.
+- `residual_rms::Float64` — root-mean-square voltage-measurement residual [V], a
+  quick goodness-of-fit / noise-floor check.
+- `snapshots::Vector{Dict{String,Any}}` — per-snapshot `extract_result` (SI), the
+  fitted network state at the estimated parameters.
 """
 struct ParameterEstimationResult
     termination_status::String
@@ -113,36 +122,51 @@ struct ParameterEstimationResult
     snapshots::Vector{Dict{String,Any}}
 end
 
-# Stamp a variable-length line into the shared model: KVL with the free length ℓ
+# Per-bus voltage base (volts) — 1.0 in SI mode, v_base[bus] in per-unit mode.
+_pe_vbase(ctx, bus) = ctx.bases === nothing ? 1.0 : ctx.bases.v_base[bus]
+# Per-bus impedance base (Ω) — 1.0 in SI mode.
+_pe_zbase(ctx, bus) = ctx.bases === nothing ? 1.0 : ctx.bases.z_base[bus]
+
+# Stamp a variable-length line: KVL with the free length ℓ (per-unit-scaled R/X)
 # and injection of its current into both endpoints' KCL.
 function _stamp_calib_line!(ctx, ln::CalibLine, ell, t)
     m = ctx.model; vr = ctx.vars[:vr]; vi = ctx.vars[:vi]
     f = ln.bus_from; g = ln.bus_to; c = ln.terminal
+    zb = _pe_zbase(ctx, f)                 # line: same base both ends (no ratio)
+    r = ln.r_per_length / zb; x = ln.x_per_length / zb
     cr = JuMP.@variable(m, base_name = "calib_cr_$(ln.id)_$t")
     ci = JuMP.@variable(m, base_name = "calib_ci_$(ln.id)_$t")
-    # V_f − V_t = (r₀+jx₀)·ℓ·(cr+jci)   (bilinear in ℓ·c)
-    JuMP.@constraint(m, vr[(f,c)] - vr[(g,c)] == ln.r_per_length*ell*cr - ln.x_per_length*ell*ci)
-    JuMP.@constraint(m, vi[(f,c)] - vi[(g,c)] == ln.r_per_length*ell*ci + ln.x_per_length*ell*cr)
+    JuMP.@constraint(m, vr[(f,c)] - vr[(g,c)] == r*ell*cr - x*ell*ci)
+    JuMP.@constraint(m, vi[(f,c)] - vi[(g,c)] == r*ell*ci + x*ell*cr)
     JuMP.add_to_expression!(ctx.kcl_r[(f,c)], -cr); JuMP.add_to_expression!(ctx.kcl_i[(f,c)], -ci)
     JuMP.add_to_expression!(ctx.kcl_r[(g,c)],  cr); JuMP.add_to_expression!(ctx.kcl_i[(g,c)],  ci)
 end
 
-# Stamp a variable-ratio ideal transformer: V_f = a·V_t, I_s = a·I_p, a = a₀·τ.
-# Primary current I_p leaves bus_from; secondary current I_s enters bus_to.
-function _stamp_calib_tap!(ctx, tr::CalibTap, tau, t)
-    m = ctx.model; vr = ctx.vars[:vr]; vi = ctx.vars[:vi]
-    f = tr.bus_from; g = tr.bus_to; c = tr.terminal
-    a = JuMP.@expression(m, tr.ratio_nom * tau)
-    ipr = JuMP.@variable(m, base_name = "calib_ipr_$(tr.id)_$t")
-    ipi = JuMP.@variable(m, base_name = "calib_ipi_$(tr.id)_$t")
-    isr = JuMP.@variable(m, base_name = "calib_isr_$(tr.id)_$t")
-    isi = JuMP.@variable(m, base_name = "calib_isi_$(tr.id)_$t")
-    JuMP.@constraint(m, vr[(f,c)] == a * vr[(g,c)])   # V_from = a·V_to
-    JuMP.@constraint(m, vi[(f,c)] == a * vi[(g,c)])
-    JuMP.@constraint(m, isr == a * ipr)               # ampere-turns: I_s = a·I_p
-    JuMP.@constraint(m, isi == a * ipi)
-    JuMP.add_to_expression!(ctx.kcl_r[(f,c)], -ipr); JuMP.add_to_expression!(ctx.kcl_i[(f,c)], -ipi)
-    JuMP.add_to_expression!(ctx.kcl_r[(g,c)],  isr); JuMP.add_to_expression!(ctx.kcl_i[(g,c)],  isi)
+# Locate a transformer id across subtype blocks; return (subtype_entries, N0) and
+# stamp the tap bounds into a deep-copied net so the engine frees the tap.
+function _prepare_tap_nets(nets, taps)
+    isempty(taps) && return nets, Dict{String,Float64}()
+    n0 = Dict{String,Float64}()
+    prepared = map(nets) do net
+        net = deepcopy(net)
+        xdict = get(net, "transformer", nothing)
+        xdict isa Dict || throw(ArgumentError("nets have no transformer for CalibTap"))
+        for tp in taps
+            found = false
+            for (_, entries) in xdict
+                entries isa Dict || continue
+                haskey(entries, tp.id) || continue
+                e = entries[tp.id]
+                e["tap_min"] = tp.tap_min; e["tap_max"] = tp.tap_max
+                vf = Float64(get(e, "v_nom_from", 1.0)); vt = Float64(get(e, "v_nom_to", 1.0))
+                n0[tp.id] = iszero(vt) ? 1.0 : vf/vt
+                found = true; break
+            end
+            found || throw(ArgumentError("CalibTap id '$(tp.id)' not found among transformers"))
+        end
+        net
+    end
+    return prepared, n0
 end
 
 """
@@ -150,30 +174,35 @@ end
         -> ParameterEstimationResult
 
 Calibrate uncertain **line lengths** and **transformer tap ratios** from
-smart-meter data spread over multiple time steps. The uncertain elements'
-parameters are shared, time-invariant unknowns; each snapshot supplies the known
-loads (as the injections already baked into its net) and the measured voltage
-magnitudes to fit.
+smart-meter time series. The uncertain elements' parameters are shared,
+time-invariant unknowns; each snapshot supplies noisy `(P, Q, |V|)` meter readings
+that are fit in a weighted-least-squares (or robust weighted-least-absolute-value)
+sense across the whole horizon.
 
-Every snapshot is built into one shared JuMP model; the `lines` and `taps` are
-stamped into it with a single free length / tap variable each (reused across all
-snapshots), and the objective is the combined weighted-least-squares voltage
-residual. Diverse loads across snapshots are what make the parameters
-identifiable — a single snapshot generally cannot separate a long line from a
-heavy load.
+The meters' loads are **not** baked in as exact injections — each measured user
+gets a free injection current fit to its noisy `P`/`Q` readings (as in state
+estimation), and the phase-to-neutral voltage magnitude is fit to `|V|`. Buses
+with no injection measurement are zero-injection.
 
 # Arguments
-- `nets::AbstractVector` — `T` per-snapshot physics nets (`parse_bmopf` output),
-  each carrying the known source, the **known** lines/transformers, and that
-  snapshot's metered loads, but **not** the uncertain elements in `lines`/`taps`
-  (those are the unknowns, stamped by this function).
+- `nets::AbstractVector` — `T` per-snapshot **physics** nets (`parse_bmopf`
+  output): the known source, the known lines, and the transformers named by
+  `taps` (kept, so the engine frees their taps). The uncertain `lines` are
+  **omitted** — they are the unknowns. No load objects are needed; injections come
+  from the measurements.
 - `measurements::AbstractVector` — parallel to `nets`; `measurements[t]` is a
-  `Vector{Measurement}` of that snapshot's meter readings. Only `:vmag` kind is
-  used (voltage magnitude, SI volts, with its `sigma` as the WLS weight).
+  `Vector{Measurement}` of that snapshot's meter readings. `:vmag` (SI volts),
+  `:pinj`, `:qinj` (SI W/var, injection into the network — negative for a load)
+  are all treated as noisy, weighted by their `sigma`.
 
 # Keywords
 - `lines::AbstractVector=CalibLine[]`, `taps::AbstractVector=CalibTap[]` — the
   uncertain elements to estimate (at least one required).
+- `neutral="n"` — return terminal for the phase-to-neutral projections; pass
+  `nothing` if phase terminals are referenced directly to ground.
+- `objective=:wls` — `:wls` (weighted least squares, smooth) or `:wlav` (weighted
+  least absolute value, better bad-data rejection; the choice in Vanin et al.).
+- `per_unit=true`, `s_base=1e6` — engine unit handling; measurements stay SI.
 - `optimizer=Ipopt.Optimizer`, `verbose=false`, `solver_options=()`.
 
 # Returns
@@ -183,6 +212,10 @@ multipliers, the RMS voltage residual, and the per-snapshot fitted state.
 function solve_parameter_estimation(nets::AbstractVector, measurements::AbstractVector;
                                     lines::AbstractVector = CalibLine[],
                                     taps::AbstractVector = CalibTap[],
+                                    neutral::Union{String,Nothing} = "n",
+                                    objective::Symbol = :wls,
+                                    per_unit::Bool = true,
+                                    s_base::Float64 = 1e6,
                                     optimizer = Ipopt.Optimizer,
                                     verbose::Bool = false,
                                     solver_options = ())
@@ -192,8 +225,11 @@ function solve_parameter_estimation(nets::AbstractVector, measurements::Abstract
         throw(ArgumentError("measurements must be parallel to nets (got $(length(measurements)) vs $T)"))
     (isempty(lines) && isempty(taps)) &&
         throw(ArgumentError("nothing to estimate: supply at least one CalibLine or CalibTap"))
+    objective in (:wls, :wlav) || throw(ArgumentError("objective must be :wls or :wlav, got :$objective"))
     allunique([[l.id for l in lines]; [t.id for t in taps]]) ||
         throw(ArgumentError("CalibLine/CalibTap ids must be unique"))
+
+    nets, n0 = _prepare_tap_nets(nets, taps)
 
     model = JuMP.Model(optimizer)
     verbose || JuMP.set_silent(model)
@@ -201,38 +237,90 @@ function solve_parameter_estimation(nets::AbstractVector, measurements::Abstract
         JuMP.set_attribute(model, string(name), value)
     end
 
-    # Shared, time-invariant unknowns: one length per line, one tap per transformer.
+    # Shared unknown: one free length per uncertain line (dimensionless, SI).
     ell = Dict(l.id => JuMP.@variable(model, lower_bound = l.length_min,
                    upper_bound = l.length_max, start = l.length_init,
                    base_name = "len_$(l.id)") for l in lines)
-    tau = Dict(t.id => JuMP.@variable(model, lower_bound = t.tap_min,
-                   upper_bound = t.tap_max, start = t.tap_init,
-                   base_name = "tap_$(t.id)") for t in taps)
 
-    # (measured value, |V|-expression) pairs collected across all snapshots for WLS.
-    probes = Vector{Tuple{Float64,Float64,Any}}()   # (z, sigma, |V|)
+    # (measured value, sigma, SI h-expression) triples for the residual objective.
+    probes = Vector{Tuple{Float64,Float64,Any}}()
+    vprobes = Vector{Tuple{Float64,Any}}()      # (measured |V|, |V|-expr) for RMS
 
     stamp(t) = ctx -> begin
         m = ctx.model; vr = ctx.vars[:vr]; vi = ctx.vars[:vi]
+        sb = ctx.bases === nothing ? 1.0 : ctx.bases.s_base
         for l in lines; _stamp_calib_line!(ctx, l, ell[l.id], t); end
-        for tr in taps; _stamp_calib_tap!(ctx, tr, tau[tr.id], t); end
+
+        # Free injection currents at each measured (bus, phase) carrying a P/Q
+        # measurement, added to KCL so those buses' voltages stay free to fit.
+        inj = Dict{Tuple{String,String},Tuple{Any,Any}}()
         for meas in measurements[t]
-            meas.kind == :vmag ||
-                throw(ArgumentError("parameter estimation uses :vmag measurements; got :$(meas.kind)"))
+            meas.kind in (:pinj, :qinj) || continue
+            key = (meas.bus, meas.terminal); haskey(inj, key) && continue
+            cr = JuMP.@variable(m, base_name = "peinj_r_$(meas.bus)_$(meas.terminal)_$t")
+            ci = JuMP.@variable(m, base_name = "peinj_i_$(meas.bus)_$(meas.terminal)_$t")
+            inj[key] = (cr, ci)
+            JuMP.add_to_expression!(ctx.kcl_r[(meas.bus, meas.terminal)], cr)
+            JuMP.add_to_expression!(ctx.kcl_i[(meas.bus, meas.terminal)], ci)
+            if neutral !== nothing
+                JuMP.add_to_expression!(ctx.kcl_r[(meas.bus, neutral)], -cr)
+                JuMP.add_to_expression!(ctx.kcl_i[(meas.bus, neutral)], -ci)
+            end
+        end
+
+        for meas in measurements[t]
             b = meas.bus; c = meas.terminal
-            vm = JuMP.@variable(m, lower_bound = 0.0, start = meas.value,
-                                base_name = "pevm_$(b)_$(c)_$t")
-            JuMP.@constraint(m, vm^2 == vr[(b,c)]^2 + vi[(b,c)]^2)
-            push!(probes, (meas.value, meas.sigma, vm))
+            if neutral === nothing
+                dvr = vr[(b,c)]; dvi = vi[(b,c)]
+            else
+                dvr = JuMP.@expression(m, vr[(b,c)] - vr[(b,neutral)])
+                dvi = JuMP.@expression(m, vi[(b,c)] - vi[(b,neutral)])
+            end
+            if meas.kind == :vmag
+                vm = JuMP.@variable(m, lower_bound = 0.0, start = meas.value / _pe_vbase(ctx,b),
+                                    base_name = "pevm_$(b)_$(c)_$t")
+                JuMP.@constraint(m, vm^2 == dvr^2 + dvi^2)
+                h = JuMP.@expression(m, vm * _pe_vbase(ctx, b))       # → volts
+                push!(probes, (meas.value, meas.sigma, h)); push!(vprobes, (meas.value, h))
+            elseif meas.kind in (:pinj, :qinj)
+                cr, ci = inj[(b,c)]
+                pq = meas.kind == :pinj ?
+                    JuMP.@expression(m, dvr*cr + dvi*ci) :
+                    JuMP.@expression(m, dvi*cr - dvr*ci)
+                h = JuMP.@expression(m, pq * sb)                       # → W / var
+                push!(probes, (meas.value, meas.sigma, h))
+            else
+                throw(ArgumentError("unknown measurement kind :$(meas.kind)"))
+            end
         end
     end
 
-    ctxs = [build_opf_model(nets[t]; model = model, per_unit = false,
+    ctxs = [build_opf_model(nets[t]; model = model, per_unit = per_unit, s_base = s_base,
                             add_objective = false, model_hook! = stamp(t))
             for t in 1:T]
 
-    isempty(probes) && throw(ArgumentError("no :vmag measurements supplied"))
-    JuMP.@objective(model, Min, sum(((z - vm) / s)^2 for (z, s, vm) in probes))
+    # Couple each transformer's native free tap equal across all snapshots.
+    for tp in taps
+        haskey(ctxs[1].vars, :tap) && haskey(ctxs[1].vars[:tap], tp.id) ||
+            throw(ArgumentError("transformer '$(tp.id)' did not expose a free tap; check tap bounds"))
+        for t in 2:T
+            JuMP.@constraint(model, ctxs[t].vars[:tap][tp.id] == ctxs[1].vars[:tap][tp.id])
+        end
+    end
+
+    isempty(probes) && throw(ArgumentError("no measurements supplied"))
+    if objective == :wls
+        JuMP.@objective(model, Min, sum(((z - h)/s)^2 for (z, s, h) in probes))
+    else                                    # weighted least absolute value
+        obj = JuMP.AffExpr(0.0)
+        for (z, s, h) in probes
+            rho = JuMP.@variable(model, lower_bound = 0.0)
+            JuMP.@constraint(model, rho >= (h - z)/s)
+            JuMP.@constraint(model, rho >= (z - h)/s)
+            JuMP.add_to_expression!(obj, rho)
+        end
+        JuMP.@objective(model, Min, obj)
+    end
 
     foreach(enforce_kcl!, ctxs)
     JuMP.optimize!(model)
@@ -242,14 +330,13 @@ function solve_parameter_estimation(nets::AbstractVector, measurements::Abstract
     obj = solved ? JuMP.objective_value(model) : NaN
 
     line_length = Dict(id => (solved ? JuMP.value(v) : NaN) for (id, v) in ell)
-    tap = Dict(id => (solved ? JuMP.value(v) : NaN) for (id, v) in tau)
+    tap = Dict(tp.id => (solved ? JuMP.value(ctxs[1].vars[:tap][tp.id]) / get(n0, tp.id, 1.0) : NaN)
+               for tp in taps)
 
-    # RMS voltage residual (SI) as a plain goodness-of-fit summary.
-    if solved
-        sse = sum((z - JuMP.value(vm))^2 for (z, _, vm) in probes)
-        residual_rms = sqrt(sse / length(probes))
+    residual_rms = if solved && !isempty(vprobes)
+        sqrt(sum((z - JuMP.value(h))^2 for (z, h) in vprobes) / length(vprobes))
     else
-        residual_rms = NaN
+        NaN
     end
 
     snapshots = [extract_result(ctxs[t]) for t in 1:T]
