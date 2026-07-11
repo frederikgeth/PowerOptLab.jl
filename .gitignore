@@ -11,5 +11,8 @@ lcov.info
 Manifest.toml
 **/Manifest.toml
 
+# Documenter build output
+docs/build/
+
 # Scratch
 /scratch/

@@ -1,5 +1,9 @@
 # PowerOptLab.jl
 
+[![CI](https://github.com/frederikgeth/PowerOptLab.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/frederikgeth/PowerOptLab.jl/actions/workflows/CI.yml)
+[![Documentation](https://img.shields.io/badge/docs-dev-blue.svg)](https://frederikgeth.github.io/PowerOptLab.jl/dev/)
+[![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue.svg)](LICENSE.md)
+
 A staging ground for **component models** and **problem specifications** built on
 top of the [BMOPFTools](https://github.com/frederikgeth/BMOPFTools.jl) reference
 optimal-power-flow engine.
@@ -83,4 +87,12 @@ environment is reproducible from `Project.toml` plus the dev-path above.
 
 ## License
 
-BSD-3-Clause. See [LICENSE.md](LICENSE.md).
+Dual-licensed:
+
+- **Source code** — BSD-3-Clause. See [LICENSE.md](LICENSE.md).
+- **Data files** (test cases, benchmark networks, and any dataset shipped with
+  the package) — Creative Commons Attribution 4.0 International (CC BY 4.0). See
+  [LICENSE-DATA.md](LICENSE-DATA.md).
+
+This mirrors the BMOPFTools convention: code under a permissive software license,
+data under CC BY so cases can be shared and cited with attribution.
