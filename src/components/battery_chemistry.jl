@@ -52,8 +52,15 @@ Construct one with [`thevenin_chemistry`](@ref), [`linear_chemistry`](@ref) or
 
 # Fields
 - `name::String` — chemistry label.
-- `ocv::Function` — `soc ∈ [0,1] → open-circuit voltage (V)`; non-decreasing.
+- `ocv::Function` — `soc ∈ [0,1] → open-circuit voltage (V)`; non-decreasing and
+  smooth (C¹). `linear`/`thevenin` OCV is affine; `tabulated` OCV is a monotone
+  cubic (PCHIP) so it is safe to embed as a function of the SoC *variable*.
 - `r_internal::Function` — `soc ∈ [0,1] → internal resistance (Ω) ≥ 0`.
+- `ocv_affine::Union{Tuple{Float64,Float64},Nothing}` — `(intercept, slope)` when
+  OCV is affine (so the multi-period model embeds it as a plain expression rather
+  than a registered operator), else `nothing`.
+- `r_constant::Union{Float64,Nothing}` — the resistance value when `R` is constant,
+  else `nothing`.
 - `q_cell::Float64` — cell capacity (Ah).
 - `v_cell_min`, `v_cell_max::Float64` — terminal-voltage operating bounds (V).
 - `i_charge_max`, `i_discharge_max::Float64` — current magnitude limits (A ≥ 0).
@@ -65,6 +72,8 @@ struct BatteryChemistry
     name::String
     ocv::Function
     r_internal::Function
+    ocv_affine::Union{Tuple{Float64,Float64},Nothing}
+    r_constant::Union{Float64,Nothing}
     q_cell::Float64
     v_cell_min::Float64
     v_cell_max::Float64
@@ -75,20 +84,48 @@ struct BatteryChemistry
     source::String
 end
 
-# Clamped piecewise-linear interpolation of `ys` over the (sorted) grid `xs`.
-# Clamping (rather than extrapolating) is deliberate: a cubic that overshoots
-# outside its sample hull hands an optimiser free voltage — i.e. free energy —
-# so the terminal-voltage model must stay flat beyond the fitted domain.
-function _interp_clamped(xs::Vector{Float64}, ys::Vector{Float64}, x::Real)
-    x <= xs[1] && return ys[1]
-    x >= xs[end] && return ys[end]
-    @inbounds for k in 1:length(xs)-1
-        if x <= xs[k+1]
-            t = (x - xs[k]) / (xs[k+1] - xs[k])
-            return ys[k] + t * (ys[k+1] - ys[k])
+# Monotone cubic (Fritsch–Carlson / PCHIP) interpolant of `(xs, ys)`, returned as
+# a closure. It is **smooth** (C¹, continuous first derivative — what an
+# interior-point solver needs) and **shape-preserving** (no overshoot, so a
+# monotone OCV curve stays monotone), and is held flat outside `[xs[1], xs[end]]`
+# so the optimiser cannot extrapolate into non-physical voltage. The closure is
+# generic in its argument (accepts `ForwardDiff.Dual`), so it registers directly
+# as a JuMP nonlinear operator with automatic-differentiation derivatives.
+#
+# A plain cubic spline would be C² but can overshoot — the very defect (free
+# voltage ⇒ free energy) we criticise in the source paper's raw splines — so
+# monotonicity is preferred over the extra derivative.
+function _monotone_cubic(xs::Vector{Float64}, ys::Vector{Float64})
+    n = length(xs)
+    h = [xs[i+1] - xs[i] for i in 1:n-1]
+    Δ = [(ys[i+1] - ys[i]) / h[i] for i in 1:n-1]
+    d = Vector{Float64}(undef, n)
+    d[1] = Δ[1]; d[n] = Δ[n-1]                       # shape-preserving endpoints
+    for i in 2:n-1
+        if Δ[i-1] * Δ[i] <= 0
+            d[i] = 0.0                                # local extremum ⇒ flat tangent
+        else
+            w1 = 2h[i] + h[i-1]; w2 = h[i] + 2h[i-1]  # Fritsch–Carlson weights
+            d[i] = (w1 + w2) / (w1 / Δ[i-1] + w2 / Δ[i])
         end
     end
-    return ys[end]
+    return function (x)
+        x <= xs[1] && return ys[1] + zero(x)
+        x >= xs[n] && return ys[n] + zero(x)
+        k = 1
+        @inbounds while k < n - 1 && x > xs[k+1]
+            k += 1
+        end
+        @inbounds begin
+            t = (x - xs[k]) / h[k]
+            t2 = t * t; t3 = t2 * t
+            h00 =  2t3 - 3t2 + 1
+            h10 =  t3 - 2t2 + t
+            h01 = -2t3 + 3t2
+            h11 =  t3 - t2
+            return h00 * ys[k] + h10 * h[k] * d[k] + h01 * ys[k+1] + h11 * h[k] * d[k+1]
+        end
+    end
 end
 
 """
@@ -117,7 +154,8 @@ function thevenin_chemistry(; name::String="Thevenin",
                             soc_min::Float64 = 0.0, soc_max::Float64 = 1.0,
                             source::String = "Thévenin / Rint model")
     r_internal >= 0 || throw(ArgumentError("r_internal must be ≥ 0"))
-    return BatteryChemistry(name, _ -> v_nominal, _ -> r_internal, q_cell,
+    return BatteryChemistry(name, _ -> v_nominal, _ -> r_internal,
+                            (v_nominal, 0.0), r_internal, q_cell,
                             v_cell_min, v_cell_max, i_charge_max, i_discharge_max,
                             soc_min, soc_max, source)
 end
@@ -150,7 +188,8 @@ function linear_chemistry(; name::String="Linear",
     v_full >= v_empty || throw(ArgumentError("v_full must be ≥ v_empty"))
     r_internal >= 0 || throw(ArgumentError("r_internal must be ≥ 0"))
     ocv = soc -> v_empty + (v_full - v_empty) * soc
-    return BatteryChemistry(name, ocv, _ -> r_internal, q_cell,
+    return BatteryChemistry(name, ocv, _ -> r_internal,
+                            (v_empty, v_full - v_empty), r_internal, q_cell,
                             v_cell_min, v_cell_max, i_charge_max, i_discharge_max,
                             soc_min, soc_max, source)
 end
@@ -192,22 +231,25 @@ function tabulated_chemistry(; name::String="Tabulated",
     issorted(ocv_points) ||
         throw(ArgumentError("ocv_points must be non-decreasing (a physical OCV curve)"))
 
-    ocv = soc -> _interp_clamped(soc_points, ocv_points, soc)
+    ocv = _monotone_cubic(soc_points, ocv_points)   # smooth (C¹), monotone
 
+    r_const = nothing
     rfun = if r_points !== nothing
         length(r_points) == length(soc_points) ||
             throw(ArgumentError("r_points must match soc_points in length"))
         all(>=(0), r_points) || throw(ArgumentError("r_points must be ≥ 0"))
-        soc -> _interp_clamped(soc_points, r_points, soc)
+        _monotone_cubic(soc_points, r_points)
     elseif r_internal !== nothing
         r_internal >= 0 || throw(ArgumentError("r_internal must be ≥ 0"))
+        r_const = r_internal
         _ -> r_internal
     else
         throw(ArgumentError("provide either r_internal (scalar Ω) or r_points (Vector Ω)"))
     end
 
-    return BatteryChemistry(name, ocv, rfun, q_cell, v_cell_min, v_cell_max,
-                            i_charge_max, i_discharge_max, soc_min, soc_max, source)
+    return BatteryChemistry(name, ocv, rfun, nothing, r_const, q_cell,
+                            v_cell_min, v_cell_max, i_charge_max, i_discharge_max,
+                            soc_min, soc_max, source)
 end
 
 # ── Preloaded chemistry shapes ───────────────────────────────────────────────

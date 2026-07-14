@@ -111,6 +111,7 @@ export AdvancedInverter, solve_advanced_inverter, InverterResult
 export BatteryChemistry, thevenin_chemistry, linear_chemistry, tabulated_chemistry,
        lfp_chemistry, nmc_chemistry, nca_chemistry, lead_acid_chemistry, leaf_chemistry
 export IVQBattery, solve_ivq_battery, IVQBatteryResult
+export solve_multiperiod_ivq, MultiperiodIVQResult
 
 # HELM power flow (holomorphic embedding load-flow, a bespoke solution method)
 export helm_series, HelmResult, solve_pf_helm

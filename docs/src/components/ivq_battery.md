@@ -1,6 +1,6 @@
 # Current–voltage (IVQ) battery
 
-> **Kind:** Component model · **Maturity:** prototype · **Direction:** forward · **Temporal:** single-snapshot (multi-period planned)
+> **Kind:** Component model · **Maturity:** prototype · **Direction:** forward · **Temporal:** single-snapshot + multi-period
 
 [`IVQBattery`](@ref) models grid storage in the **voltage–current–charge**
 variable space instead of the power–energy space of [`StorageDevice`](@ref). It
@@ -51,17 +51,21 @@ Three fidelity levels, cheapest first — each a [`BatteryChemistry`](@ref):
 |---|---|---|---|
 | [`thevenin_chemistry`](@ref) | constant | fixed | a nominal voltage + a resistance |
 | [`linear_chemistry`](@ref) | linear `v_empty → v_full` | fixed | two endpoint voltages + a resistance |
-| [`tabulated_chemistry`](@ref) | clamped piecewise-linear | fixed or `R(soc)` table | an OCV curve (± HPPC) |
+| [`tabulated_chemistry`](@ref) | monotone cubic (PCHIP) | fixed or `R(soc)` table | an OCV curve (± HPPC) |
 
 The PE-model is the further special case of `thevenin_chemistry` with `R = 0`
 (constant voltage ⇒ power ∝ current).
 
-!!! note "Extrapolation is clamped on purpose"
-    A free cubic spline overshoots outside its sample hull; in an *optimiser*
-    that hands out free voltage — i.e. free energy. `tabulated_chemistry` holds
-    OCV **flat** beyond the fitted range and requires a **non-decreasing** OCV
-    curve, and every chemistry carries a `soc_min`/`soc_max` usable window the
-    device clamps `soc_init` to.
+!!! note "OCV(soc) is smooth and monotone by construction"
+    In multi-period, `OCV(soc)` is evaluated at the SoC *variable*, so it must be
+    twice-differentiable for the interior-point solver. `linear`/`thevenin` OCV is
+    affine (embedded directly); `tabulated` OCV uses a **monotone cubic (PCHIP)**
+    interpolant — smooth (C¹) *and* shape-preserving, so it registers as a smooth
+    JuMP operator without overshoot. A plain cubic spline is C² but can overshoot
+    outside its knots, handing an optimiser free voltage (= free energy) — the
+    very defect this model avoids. OCV is also held **flat** outside the fitted
+    range, and every chemistry carries a `soc_min`/`soc_max` window the solve
+    clamps to.
 
 ## Reusing the converter
 
@@ -103,6 +107,49 @@ limit), `:max_charge`, or `:min_loss` (with a `p_set` delivery target). SoC is
 fixed at `soc_init` — this single operating point reproduces the paper's second
 case study: the deliverable power set by the cell's own voltage and current
 limits, which a power-only model misses.
+
+## Multi-period arbitrage
+
+[`solve_multiperiod_ivq`](@ref) co-optimises a chronological sequence of
+snapshots with the SoC linking the periods — now `soc` is a *decision variable*,
+so `OCV(soc)` enters the model as a function of it (embedded for affine
+chemistries; a registered smooth operator for tabulated ones).
+
+```julia
+nets = [net_expensive, net_cheap]            # e.g. differing voltage_source `cost`
+bat  = IVQBattery(id="bat", bus="poc", chemistry=lfp_chemistry(),
+                  n_series=300, n_parallel=1, soc_init=0.5, inverter=inv, cyclic=true)
+res  = solve_multiperiod_ivq(nets, [bat]; dt_h=1.0)
+res.dispatch["bat"].soc      # SoC trajectory (length T+1)
+res.dispatch["bat"].i_cell   # signed cell current per period
+```
+
+The charge balance ``q_{t+1} = q_t - i\,\Delta t`` uses the `integration` rule on
+the device: `:trapezoidal` (default) averages consecutive period currents;
+`:forward` — exact for piecewise-constant period currents — takes the period's
+own current. Terminal state is set by `cyclic=true` (return to `soc_init`) or
+`soc_final`.
+
+!!! warning "Nonconvex — expect local optima"
+    The coupled cell + inverter model over several periods is nonconvex
+    (`p = OCV(soc)·i` is bilinear on top of the rectangular power flow), so
+    `solve_multiperiod_ivq` finds a *local* optimum and does not converge for
+    every configuration. A non-`LOCALLY_SOLVED`/`OPTIMAL` status returns `NaN`
+    trajectories rather than an unconverged point — always check the status. A
+    PE-model warm start (solve [`solve_multiperiod_opf`](@ref) first, seed the
+    dispatch) is the planned robustness improvement.
+
+### Scaling: per-unit and SI
+
+The battery is modelled in **pack quantities, per-unit on its own DC bases**
+(pack nominal voltage and max discharge current), so the current and voltage
+variables are ≈ O(1) *independent of the engine's `s_base`*. This is what keeps
+the coupled solve conditioned — a naïve SI formulation mixes cell volts (~3.5 V),
+network kV, and kW in one problem, spanning five orders of magnitude, and the
+solver then returns poor points. The DC↔AC coupling carries the `s_base` factor
+explicitly, so `solve_ivq_battery` and `solve_multiperiod_ivq` work in both the
+engine's SI (`per_unit=false`, the default) and per-unit (`per_unit=true`) modes;
+results are returned in SI either way.
 
 ## Chemistry library and data sources
 
@@ -163,22 +210,24 @@ Honest notes on the 2020 paper, and the choices made here:
 
 ## Status and next steps
 
-This branch delivers the chemistry library and the **single-snapshot** device.
-Planned:
+Delivered: the chemistry library, the single-snapshot device
+([`solve_ivq_battery`](@ref)), and multi-period arbitrage
+([`solve_multiperiod_ivq`](@ref)) with the trapezoidal/forward charge balance and
+per-unit conditioning. Planned:
 
-1. **Multi-period** IVQ: `soc` as a variable with the charge balance
-   ``q_{t+1} = q_t - \Delta t\,\tfrac{i_t + i_{t+1}}{2}`` (trapezoidal — the
-   paper's recommended integrator, with forward/backward Euler options), linked
-   like [`StorageDevice`](@ref) in [`solve_multiperiod_opf`](@ref), plus a PE
-   warm-start. For a linear chemistry this stays polynomial (directly
-   embeddable); a tabulated OCV(soc) is registered as a smooth JuMP operator.
-2. **Shared `v_dc`**: couple the inverter DC rail to the battery terminal voltage.
+1. **PE warm-start** for the multi-period solve — seed from
+   [`solve_multiperiod_opf`](@ref) to put Ipopt in the right basin on the harder
+   (e.g. net-charge-against-price) configurations that currently fail to converge.
+2. **Shared `v_dc`**: couple the inverter DC rail to the battery terminal voltage
+   (so the three-phase switching-polytope sees the true SoC-dependent DC rail).
 3. **Temperature / degradation** hooks on `R(soc)` and capacity.
+4. Co-optimise IVQ batteries alongside PE [`StorageDevice`](@ref)s in one horizon.
 
 ## API
 
 See the API reference for [`IVQBattery`](@ref), [`solve_ivq_battery`](@ref),
-[`IVQBatteryResult`](@ref), [`BatteryChemistry`](@ref), and the chemistry
+[`IVQBatteryResult`](@ref), [`solve_multiperiod_ivq`](@ref),
+[`MultiperiodIVQResult`](@ref), [`BatteryChemistry`](@ref), and the chemistry
 constructors [`thevenin_chemistry`](@ref), [`linear_chemistry`](@ref),
 [`tabulated_chemistry`](@ref), and the preloaded [`lfp_chemistry`](@ref),
 [`nmc_chemistry`](@ref), [`nca_chemistry`](@ref), [`lead_acid_chemistry`](@ref),

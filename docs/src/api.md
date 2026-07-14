@@ -61,6 +61,8 @@ InverterResult
 IVQBattery
 solve_ivq_battery
 IVQBatteryResult
+solve_multiperiod_ivq
+MultiperiodIVQResult
 BatteryChemistry
 thevenin_chemistry
 linear_chemistry
