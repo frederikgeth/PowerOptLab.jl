@@ -1,5 +1,7 @@
 # Parameter estimation (calibration)
 
+> **Kind:** Problem specification · **Maturity:** prototype · **Direction:** inverse · **Temporal:** inter-temporal (shared parameters)
+
 [`solve_parameter_estimation`](@ref) calibrates uncertain **network parameters**
 — line lengths and transformer/regulator tap ratios — from smart-meter data. It
 is the *shared-parameter dual* of [state estimation](state_estimation.md), and a

@@ -15,26 +15,40 @@ least-squares state estimation) that reuse the engine's device physics,
 per-unit handling, and result extraction unchanged. Anything here that matures
 into accepted practice can later be folded back into the spec and the engine.
 
-## Modules of capability
+Contributions are organised by *what layer of the engine they extend*:
 
-- **Devices** ([`StorageDevice`](@ref), [`EVDevice`](@ref)) — battery/EV inverter
-  ports stamped into a solve as current injections with an inter-temporal
+### Component models — new network elements (`src/components/`)
+
+Stamped into a solve through `model_hook!` / `solution_hook!`.
+
+- **Storage / EV** ([`StorageDevice`](@ref), [`EVDevice`](@ref)) — battery/EV
+  inverter ports stamped as current injections with an inter-temporal
   state-of-charge state.
+- **Advanced inverter** ([`AdvancedInverter`](@ref)) — a prototype internal-AC-node
+  IBR with an output filter, internal-EMF/DC-modulation bounds, grid-forming
+  operation, converter losses, and double-frequency ripple limits.
+
+### Problem specifications — new formulations over the staged API (`src/problems/`)
+
+A different objective/variable/constraint structure on the same physics.
+
 - **Multi-period OPF** ([`solve_multiperiod_opf`](@ref)) — several network
   snapshots co-optimised in one model with storage/EV state linking each step to
   the next.
 - **State estimation** ([`solve_state_estimation`](@ref)) — weighted
-  least-squares estimation of the network state from noisy measurements, reusing
-  the same device physics as a pure measurement-fitting problem.
+  least-squares estimation of the network state from noisy measurements (an
+  *inverse* problem on the same physics).
 - **Parameter estimation** ([`solve_parameter_estimation`](@ref)) — calibration
   of uncertain line lengths and transformer tap ratios from smart-meter data
   across multiple time steps (the shared-parameter dual of state estimation).
 - **Dynamic operating envelopes** ([`solve_operating_envelope`](@ref)) —
   per-connection-point DER export limits that respect the network's voltage and
   thermal constraints, recomputed per interval.
-- **Advanced inverter** ([`AdvancedInverter`](@ref)) — a prototype internal-AC-node
-  IBR with an output filter, internal-EMF/DC-modulation bounds, grid-forming
-  operation, converter losses, and double-frequency ripple limits.
+
+### Bespoke algorithms — new solution methods (`src/algorithms/`)
+
+Custom solve loops around the staged API (decomposition, sequential
+linearization, warm-start schemes). None yet — the slot is reserved.
 
 Everything is SI at the interface; per-unit conditioning inside the solve is
 handled via the engine's `ctx.bases`.
@@ -45,12 +59,17 @@ using BMOPFTools
 using JuMP
 using Ipopt
 
-include("devices.jl")
-include("multiperiod.jl")
-include("state_estimation.jl")
-include("parameter_estimation.jl")
-include("operating_envelope.jl")
-include("advanced_inverter.jl")
+# Component models — new network elements stamped via model_hook! / solution_hook!
+include("components/devices.jl")
+include("components/advanced_inverter.jl")
+
+# Problem specifications — new objective/constraint structures over the staged API
+include("problems/multiperiod.jl")
+include("problems/state_estimation.jl")
+include("problems/parameter_estimation.jl")
+include("problems/operating_envelope.jl")
+
+# Bespoke algorithms — new solution methods (custom solve loops); none yet.
 
 # Devices
 export StorageDevice, EVDevice

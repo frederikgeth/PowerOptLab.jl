@@ -1,5 +1,7 @@
 # Multi-period OPF
 
+> **Kind:** Problem specification · **Maturity:** promotion candidate · **Direction:** forward · **Temporal:** inter-temporal
+
 [`solve_multiperiod_opf`](@ref) co-optimises a sequence of network snapshots in
 one JuMP model, with storage/EV devices whose state of charge links each period
 to the next. This is the formulation the single-snapshot `solve_opf` cannot

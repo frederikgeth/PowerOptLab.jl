@@ -1,5 +1,7 @@
 # Storage & EV devices
 
+> **Kind:** Component model · **Maturity:** promotion candidate · **Direction:** forward · **Temporal:** inter-temporal (state of charge)
+
 Devices are the reusable building blocks that
 [`solve_multiperiod_opf`](@ref) stamps into each network snapshot. A device is
 described by an SI-valued struct; the package handles the per-unit scaling, the

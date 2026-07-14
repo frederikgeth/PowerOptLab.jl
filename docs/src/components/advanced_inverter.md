@@ -1,5 +1,7 @@
 # Advanced inverter (prototype)
 
+> **Kind:** Component model · **Maturity:** prototype · **Direction:** forward · **Temporal:** single-snapshot
+
 [`AdvancedInverter`](@ref) is a more detailed inverter-based-resource (IBR) than
 the BMOPFTools engine's built-in current-injection IBR. The engine models an IBR
 as a bounded current source at the point of connection (POC); this prototype adds

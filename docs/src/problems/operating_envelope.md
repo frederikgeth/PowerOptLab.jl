@@ -1,5 +1,7 @@
 # Dynamic operating envelopes
 
+> **Kind:** Problem specification · **Maturity:** promotion candidate · **Direction:** forward · **Temporal:** per-interval
+
 A **dynamic operating envelope** (DOE) is the time-varying active-power export
 limit a network operator allocates to each connection point so that, when every
 point exports at its allocated limit at once, the network's operational limits
