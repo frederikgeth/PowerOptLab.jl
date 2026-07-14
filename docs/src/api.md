@@ -55,6 +55,14 @@ solve_advanced_inverter
 InverterResult
 ```
 
+## HELM power flow
+
+```@docs
+solve_pf_helm
+helm_series
+HelmResult
+```
+
 ## Index
 
 ```@index

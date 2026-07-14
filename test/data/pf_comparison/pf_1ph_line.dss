@@ -1,0 +1,38 @@
+! Single-phase 2-wire (phase + neutral) power-flow comparison case.
+!
+! Topology: src ──[1-ph line, 0.5 km, self-impedance only]── lb
+!   src.1  = phase conductor (240 V / 0° relative to earth)
+!   lb.1   = load phase terminal
+!
+! The return current flows through earth (OpenDSS implicit neutral).
+! Series self-impedance only: R = 0.5 Ω/km × 0.5 km = 0.25 Ω,
+!   X = 0.2 Ω/km × 0.5 km = 0.1 Ω.
+! At 10 kW / 3 kVAr the line drop is ≈ 10.6 V (≈ 4.4%).
+!
+! BMOPF network: single-conductor bus (terminal "1" only), no neutral.
+! Grounding shunt omitted — earth return is implicit in ODS single-phase.
+
+Clear
+
+! Base frequency locked to 50 Hz (BMOPF's modelling frequency).  The OpenDSS
+! default (60 Hz, or whatever a Windows GUI session persisted) would otherwise
+! rescale every reactance.  See docs/src/validation.md.
+Set DefaultBaseFreq=50
+
+New Circuit.pf_1ph_line basekv=0.240 pu=1.0 angle=0 phases=1 bus1=src.1.0 model=ideal
+
+! Single-phase line: self-impedance only (no explicit neutral conductor).
+New Line.l1 bus1=src.1 bus2=lb.1 phases=1 length=0.5 units=km r1=0.5 x1=0.2
+
+! Constant-power load (model=1) phase-to-earth.
+! Vminpu=0 Vmaxpu=2: disable ODS voltage-dependent load switching so model=1
+! behaves as strict constant P+Q at all voltages, matching BMOPF.
+New Load.ld1 bus1=lb.1 kv=0.240 kw=10 kvar=3 phases=1 model=1 Vminpu=0 Vmaxpu=2
+
+Set VoltageBases=[0.240]
+CalcVoltageBases
+! Tolerance 1e-8 (<< the voltage-comparison tolerance) removes OpenDSS-side
+! convergence slop; MaxIterations raised so the tighter target is reached.
+Set Tolerance=1e-8
+Set MaxIterations=100
+Solve

@@ -22,7 +22,10 @@ makedocs(
             "Parameter estimation" => "problems/parameter_estimation.md",
             "Operating envelopes"  => "problems/operating_envelope.md",
         ],
-        "Bespoke algorithms" => "algorithms/index.md",
+        "Bespoke algorithms" => [
+            "Overview"        => "algorithms/index.md",
+            "HELM power flow" => "algorithms/helm.md",
+        ],
         "Contributing"       => "contributing.md",
         "API reference"      => "api.md",
     ],
