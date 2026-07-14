@@ -19,15 +19,27 @@ later be folded back into the BMOPF spec.
 
 ## What's inside
 
+Contributions are organised by *what layer of the engine they extend* — see
+[Concepts](docs/src/concepts.md).
+
+**Component models** (`src/components/`) — new network elements via `model_hook!` / `solution_hook!`:
+
 | Capability | Entry point | Reuses |
 |---|---|---|
-| **Storage / battery** devices with state of charge | [`StorageDevice`](src/devices.jl) | `model_hook!` current injection + KCL |
-| **EV charging** (V1G / V2G) with availability & departure energy | [`EVDevice`](src/devices.jl) | storage device + per-period masking |
-| **Multi-period OPF** co-optimising many snapshots | [`solve_multiperiod_opf`](src/multiperiod.jl) | staged API (one shared model) |
-| **State estimation** (weighted least squares) | [`solve_state_estimation`](src/state_estimation.jl) | bounds-free physics + custom objective |
-| **Parameter estimation** (calibrate line lengths / taps) | [`solve_parameter_estimation`](src/parameter_estimation.jl) | shared parameters across snapshots + WLS objective |
-| **Dynamic operating envelopes** (DER export limits) | [`solve_operating_envelope`](src/operating_envelope.jl) | operational bounds + fairness objective |
-| **Advanced inverter** (internal-node IBR prototype) | [`AdvancedInverter`](src/advanced_inverter.jl) | internal node + filter / EMF / losses / ripple |
+| **Storage / battery** devices with state of charge | [`StorageDevice`](src/components/devices.jl) | `model_hook!` current injection + KCL |
+| **EV charging** (V1G / V2G) with availability & departure energy | [`EVDevice`](src/components/devices.jl) | storage device + per-period masking |
+| **Advanced inverter** (internal-node IBR prototype) | [`AdvancedInverter`](src/components/advanced_inverter.jl) | internal node + filter / EMF / losses / ripple |
+
+**Problem specifications** (`src/problems/`) — new formulations via the staged API:
+
+| Capability | Entry point | Reuses |
+|---|---|---|
+| **Multi-period OPF** co-optimising many snapshots | [`solve_multiperiod_opf`](src/problems/multiperiod.jl) | staged API (one shared model) |
+| **State estimation** (weighted least squares) | [`solve_state_estimation`](src/problems/state_estimation.jl) | bounds-free physics + custom objective |
+| **Parameter estimation** (calibrate line lengths / taps) | [`solve_parameter_estimation`](src/problems/parameter_estimation.jl) | shared parameters across snapshots + WLS objective |
+| **Dynamic operating envelopes** (DER export limits) | [`solve_operating_envelope`](src/problems/operating_envelope.jl) | operational bounds + fairness objective |
+
+**Bespoke algorithms** (`src/algorithms/`) — new solution methods. None yet; the slot is reserved.
 
 ## Examples
 

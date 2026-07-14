@@ -1,5 +1,7 @@
 # State estimation
 
+> **Kind:** Problem specification · **Maturity:** promotion candidate · **Direction:** inverse · **Temporal:** single-snapshot
+
 [`solve_state_estimation`](@ref) is a *different problem specification* over the
 same network physics: given noisy measurements of an energised network, find the
 bus voltage state that best fits them in a weighted-least-squares (WLS) sense.
