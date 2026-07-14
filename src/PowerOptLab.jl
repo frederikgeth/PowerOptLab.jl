@@ -26,9 +26,10 @@ Stamped into a solve through `model_hook!` / `solution_hook!`.
   state-of-charge state (an energy/power "PE" model with fixed efficiency).
 - **IVQ battery** ([`IVQBattery`](@ref)) — the current–voltage counterpart: cells
   of a [`BatteryChemistry`](@ref) modelled in the voltage–current–charge space
-  (`v = OCV(soc) − i·R`), so voltage and current limits bind individually and
-  round-trip efficiency emerges from the physics. Reuses the
-  [`AdvancedInverter`](@ref) for the AC↔DC converter.
+  (`v = OCV(soc) − i·R`), so voltage and current limits bind individually and a
+  current-dependent cell efficiency emerges from the physics (a Rint proxy, not a
+  full round-trip energy efficiency). Reuses the [`AdvancedInverter`](@ref) for
+  the AC↔DC converter.
 - **Advanced inverter** ([`AdvancedInverter`](@ref)) — a prototype internal-AC-node
   IBR with an output filter, internal-EMF/DC-modulation bounds, grid-forming
   operation, converter losses, and double-frequency ripple limits.
@@ -109,7 +110,8 @@ export AdvancedInverter, solve_advanced_inverter, InverterResult
 
 # Current–voltage (IVQ) battery storage + chemistry library
 export BatteryChemistry, thevenin_chemistry, linear_chemistry, tabulated_chemistry,
-       lfp_chemistry, nmc_chemistry, nca_chemistry, lead_acid_chemistry, leaf_chemistry
+       illustrative_lfp, illustrative_nmc, illustrative_nca,
+       illustrative_lead_acid, illustrative_leaf
 export IVQBattery, solve_ivq_battery, IVQBatteryResult
 export solve_multiperiod_ivq, MultiperiodIVQResult
 

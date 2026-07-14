@@ -18,10 +18,17 @@
 #     v(soc, i) = OCV(soc) − i · R(soc)            (i > 0 discharge)
 #
 # where OCV(soc) is the open-circuit voltage (abundant and citable for every
-# chemistry) and R(soc) the internal resistance (from HPPC pulse data). This
-# recovers the same physics the paper's surface encodes — including the
-# round-trip efficiency emerging as η = f_v(soc, i)/f_v(soc, −i) rather than
-# being a fixed parameter — while only requiring data that actually exists.
+# chemistry) and R(soc) the internal resistance (from HPPC pulse data).
+#
+# This is a 0th-order (Rint) equivalent circuit. It captures the same *qualitative*
+# effect the paper's empirical surface does — terminal voltage sagging with
+# discharge current and rising on charge — from data that actually exists, but it
+# is NOT the same physics: Rint omits polarization dynamics, relaxation, rate
+# dependence and hysteresis (which matter especially for LFP; a hysteresis-aware
+# RC model is the usual next step). Likewise η = f_v(soc, i)/f_v(soc, −i) is an
+# instantaneous *equal-current cell* efficiency proxy at a fixed SoC — it is not a
+# full round-trip *energy* efficiency over a cycle and excludes converter losses
+# (those live on the `AdvancedInverter`).
 #
 # Three levels of fidelity, cheapest first:
 #   • `thevenin_chemistry` — constant OCV behind a fixed resistance (the paper's
@@ -46,9 +53,9 @@ terminal voltage follows the Thévenin/Rint decomposition
 (`i < 0`) raises the terminal voltage above OCV and discharging lowers it.
 
 Construct one with [`thevenin_chemistry`](@ref), [`linear_chemistry`](@ref) or
-[`tabulated_chemistry`](@ref), or use a preloaded shape ([`lfp_chemistry`](@ref),
-[`nmc_chemistry`](@ref), [`nca_chemistry`](@ref), [`lead_acid_chemistry`](@ref),
-[`leaf_chemistry`](@ref)).
+[`tabulated_chemistry`](@ref), or use a preloaded shape ([`illustrative_lfp`](@ref),
+[`illustrative_nmc`](@ref), [`illustrative_nca`](@ref), [`illustrative_lead_acid`](@ref),
+[`illustrative_leaf`](@ref)).
 
 # Fields
 - `name::String` — chemistry label.
@@ -82,6 +89,28 @@ struct BatteryChemistry
     soc_min::Float64
     soc_max::Float64
     source::String
+
+    # Inner constructor validates the physical domain for every construction path,
+    # so a nonphysical chemistry can never reach a solve (where it would produce
+    # NaNs or a division by zero — e.g. i_discharge_max = 0 corrupts the DC bases).
+    function BatteryChemistry(name, ocv, r_internal, ocv_affine, r_constant, q_cell,
+                              v_cell_min, v_cell_max, i_charge_max, i_discharge_max,
+                              soc_min, soc_max, source)
+        all(isfinite, (q_cell, v_cell_min, v_cell_max, i_charge_max, i_discharge_max,
+                       soc_min, soc_max)) ||
+            throw(ArgumentError("chemistry '$name': all numeric parameters must be finite"))
+        q_cell > 0 || throw(ArgumentError("chemistry '$name': q_cell must be > 0 (got $q_cell)"))
+        i_charge_max >= 0 || throw(ArgumentError("chemistry '$name': i_charge_max must be ≥ 0"))
+        i_discharge_max > 0 ||
+            throw(ArgumentError("chemistry '$name': i_discharge_max must be > 0 (it sets the DC current base)"))
+        0 < v_cell_min < v_cell_max ||
+            throw(ArgumentError("chemistry '$name': need 0 < v_cell_min < v_cell_max (got $v_cell_min, $v_cell_max)"))
+        0 <= soc_min < soc_max <= 1 ||
+            throw(ArgumentError("chemistry '$name': need 0 ≤ soc_min < soc_max ≤ 1 (got $soc_min, $soc_max)"))
+        return new(name, ocv, r_internal, ocv_affine, r_constant, q_cell,
+                   v_cell_min, v_cell_max, i_charge_max, i_discharge_max,
+                   soc_min, soc_max, source)
+    end
 end
 
 # Monotone cubic (Fritsch–Carlson / PCHIP) interpolant of `(xs, ys)`, returned as
@@ -198,14 +227,18 @@ end
     tabulated_chemistry(; name, soc_points, ocv_points, r_internal, q_cell, kwargs...)
 
 Open-circuit voltage (and optionally resistance) from data points — e.g. a
-published OCV curve or a slow-rate (≈ C/20) discharge test. `OCV(soc)` is the
-clamped piecewise-linear interpolant of `(soc_points, ocv_points)`, which must
-be non-decreasing (a physical OCV curve); outside the range it is held flat so
-the optimiser cannot extrapolate into non-physical voltage. `r_internal` may be
-a scalar Ω or a matching vector `r_points` interpolated the same way.
+published OCV curve or a slow-rate (≈ C/20) discharge test. `OCV(soc)` is a
+**monotone cubic (PCHIP) interpolant** of `(soc_points, ocv_points)`, which must
+be strictly increasing in `soc` and non-decreasing in `ocv` (a physical OCV
+curve). Outside the fitted range it is held flat so the optimiser cannot
+extrapolate into non-physical voltage — note this makes the function only C⁰ at
+the two outer knots, so keep `soc_min`/`soc_max` strictly inside them (the
+default nudges them in). `r_internal` may be a scalar Ω or a matching vector
+`r_points` interpolated the same way.
 
 # Keywords
-- `name`, `soc_points::Vector`, `ocv_points::Vector` (non-decreasing, V).
+- `name`, `soc_points::Vector` (strictly increasing), `ocv_points::Vector`
+  (non-decreasing, V).
 - `r_internal` — scalar Ω, **or** pass `r_points::Vector` (Ω) for an R(soc) table.
 - `q_cell` (Ah), `v_cell_min = minimum(ocv_points)`, `v_cell_max = maximum(ocv_points)`,
   `i_charge_max`, `i_discharge_max`, `soc_min = minimum(soc_points)`,
@@ -227,9 +260,17 @@ function tabulated_chemistry(; name::String="Tabulated",
     length(soc_points) == length(ocv_points) ||
         throw(ArgumentError("soc_points and ocv_points must have equal length"))
     length(soc_points) >= 2 || throw(ArgumentError("need at least two data points"))
-    issorted(soc_points) || throw(ArgumentError("soc_points must be sorted ascending"))
+    all(isfinite, soc_points) && all(isfinite, ocv_points) ||
+        throw(ArgumentError("soc_points and ocv_points must all be finite"))
+    # STRICTLY increasing (not just sorted): equal knots give a zero interval and
+    # the interpolant divides by it → NaN.
+    all(soc_points[i] < soc_points[i+1] for i in 1:length(soc_points)-1) ||
+        throw(ArgumentError("soc_points must be strictly increasing (no duplicate knots)"))
     issorted(ocv_points) ||
         throw(ArgumentError("ocv_points must be non-decreasing (a physical OCV curve)"))
+    minimum(soc_points) <= soc_min < soc_max <= maximum(soc_points) ||
+        throw(ArgumentError("need soc_points[1] ≤ soc_min < soc_max ≤ soc_points[end] " *
+                            "so OCV is evaluated only within the fitted (smooth) range"))
 
     ocv = _monotone_cubic(soc_points, ocv_points)   # smooth (C¹), monotone
 
@@ -237,7 +278,8 @@ function tabulated_chemistry(; name::String="Tabulated",
     rfun = if r_points !== nothing
         length(r_points) == length(soc_points) ||
             throw(ArgumentError("r_points must match soc_points in length"))
-        all(>=(0), r_points) || throw(ArgumentError("r_points must be ≥ 0"))
+        (all(isfinite, r_points) && all(>=(0), r_points)) ||
+            throw(ArgumentError("r_points must be finite and ≥ 0"))
         _monotone_cubic(soc_points, r_points)
     elseif r_internal !== nothing
         r_internal >= 0 || throw(ArgumentError("r_internal must be ≥ 0"))
@@ -252,123 +294,125 @@ function tabulated_chemistry(; name::String="Tabulated",
                             soc_min, soc_max, source)
 end
 
-# ── Preloaded chemistry shapes ───────────────────────────────────────────────
+# ── Illustrative chemistry presets ───────────────────────────────────────────
 #
-# Each returns a `BatteryChemistry` for a single cell. The OCV shapes below are
-# STYLISED curves anchored to published nominal / min / max cell voltages — they
-# capture the qualitative OCV(soc) form of each chemistry (LFP's flat plateau,
-# NMC/NCA's slope, lead-acid's near-linear fall) for illustration and defaults.
-# They are NOT fits to a specific cell's test data. For a calibrated curve, load
-# real data through `tabulated_chemistry` — see the module docs for open
-# datasets (PyBaMM parameter sets, Sandia/CALCE/Oxford via batteryarchive.org,
-# and the Nissan-Leaf cell dataset used by the source paper).
+# IMPORTANT: these are NAMED `illustrative_*` deliberately. Each returns a
+# hand-drawn OCV *shape* that captures a chemistry's qualitative form (LFP's flat
+# plateau, NMC/NCA's slope, lead-acid's near-linear fall) — they are **not** fits
+# to any specific cell's measured data, carry no temperature / SoH / rest-protocol
+# metadata, and the capacity / current / resistance defaults are round numbers,
+# NOT tied to the same cell that inspired the voltage band. Use them for demos,
+# unit tests and defaults; do NOT use them for scientific comparison or
+# operational studies. For a calibrated chemistry, fit real data (PyBaMM
+# parameter sets; Sandia/CALCE/Oxford via batteryarchive.org; the Nissan-Leaf
+# cell dataset used by the source paper) and pass it through `tabulated_chemistry`
+# — see the module docs. Provenance is recorded separately for the OCV shape and
+# for the (representative, not measured) capacity/limits.
 
 """
-    lfp_chemistry(; q_cell=100.0, r_internal=0.006, kwargs...)
+    illustrative_lfp(; q_cell=100.0, r_internal=0.006, kwargs...)
 
-Lithium iron phosphate (LFP/LiFePO₄): a flat ~3.2–3.3 V plateau between sharp
-knees, the dominant chemistry in stationary and residential storage. The flat
-OCV is where a constant-voltage PE-model is least wrong in mid-SoC yet where the
-terminal-voltage and current limits still bite hardest at the knees — a good
-honest stress case for the IVQ model.
-
-Stylised OCV anchored to typical LFP cell voltages (charged ≈ 3.65 V, nominal
-≈ 3.2 V, knee ≈ 2.5 V). Source: LFP cell datasheets (e.g. A123 APR18650,
-CATL/BYD prismatic); PyBaMM `Prada2013` LFP parameter set.
+**Illustrative** lithium iron phosphate (LFP) shape — a flat ~3.2–3.3 V plateau
+between sharp knees. The flat OCV is where a constant-voltage PE-model is least
+wrong in mid-SoC yet where the terminal-voltage and current limits still bite
+hardest at the knees — a good stress case for the IVQ model. Hand-drawn to a
+typical LFP voltage band (knee ≈ 2.5 V, nominal ≈ 3.2 V, charged ≈ 3.65 V); *not*
+a fit. `q_cell`/`r_internal` are representative round numbers, not a specific cell.
 """
-function lfp_chemistry(; q_cell::Float64=100.0, r_internal::Float64=0.006,
-                       i_charge_max::Float64=q_cell, i_discharge_max::Float64=q_cell,
-                       soc_min::Float64=0.05, soc_max::Float64=0.98)
+function illustrative_lfp(; q_cell::Float64=100.0, r_internal::Float64=0.006,
+                          i_charge_max::Float64=q_cell, i_discharge_max::Float64=q_cell,
+                          soc_min::Float64=0.05, soc_max::Float64=0.98)
     soc = [0.0, 0.03, 0.08, 0.15, 0.30, 0.50, 0.70, 0.85, 0.92, 0.97, 1.0]
     ocv = [2.50, 3.00, 3.20, 3.25, 3.27, 3.29, 3.31, 3.33, 3.35, 3.45, 3.65]
-    return tabulated_chemistry(; name="LFP", soc_points=soc, ocv_points=ocv,
+    return tabulated_chemistry(; name="illustrative-LFP", soc_points=soc, ocv_points=ocv,
         r_internal=r_internal, q_cell=q_cell,
         v_cell_min=2.5, v_cell_max=3.65,
         i_charge_max=i_charge_max, i_discharge_max=i_discharge_max,
         soc_min=soc_min, soc_max=soc_max,
-        source="Stylised LFP OCV (datasheet-anchored); PyBaMM Prada2013")
+        source="ILLUSTRATIVE hand-drawn LFP OCV shape (not a fit); " *
+               "capacity/limits representative only")
 end
 
 """
-    nmc_chemistry(; q_cell=5.0, r_internal=0.03, kwargs...)
+    illustrative_nmc(; q_cell=5.0, r_internal=0.03, kwargs...)
 
-Nickel-manganese-cobalt (NMC, ~811): a monotonic slope from ≈ 3.0 V to 4.2 V,
-the workhorse of EV cells. Stylised OCV anchored to typical NMC811 cell voltages.
-Source: LG INR21700-M50 (NMC811/graphite-SiOx) datasheet; PyBaMM `Chen2020`
-parameter set (Chen et al., J. Electrochem. Soc. 167 (2020) 080534).
+**Illustrative** NMC (nickel-manganese-cobalt) shape — a monotonic slope from
+≈ 3.0 V to 4.2 V, the workhorse EV form. Hand-drawn to a typical NMC voltage
+band; *not* a fit. For a calibrated NMC811 set to fit against, see PyBaMM
+`Chen2020` (LG INR21700-M50, from GITT/EIS) — this preset is **not** that set.
 """
-function nmc_chemistry(; q_cell::Float64=5.0, r_internal::Float64=0.03,
-                       i_charge_max::Float64=q_cell, i_discharge_max::Float64=2q_cell,
-                       soc_min::Float64=0.05, soc_max::Float64=0.98)
+function illustrative_nmc(; q_cell::Float64=5.0, r_internal::Float64=0.03,
+                          i_charge_max::Float64=q_cell, i_discharge_max::Float64=2q_cell,
+                          soc_min::Float64=0.05, soc_max::Float64=0.98)
     soc = [0.0, 0.05, 0.15, 0.30, 0.50, 0.70, 0.85, 0.95, 1.0]
     ocv = [3.00, 3.35, 3.55, 3.68, 3.80, 3.95, 4.08, 4.15, 4.20]
-    return tabulated_chemistry(; name="NMC811", soc_points=soc, ocv_points=ocv,
+    return tabulated_chemistry(; name="illustrative-NMC", soc_points=soc, ocv_points=ocv,
         r_internal=r_internal, q_cell=q_cell,
         v_cell_min=3.0, v_cell_max=4.2,
         i_charge_max=i_charge_max, i_discharge_max=i_discharge_max,
         soc_min=soc_min, soc_max=soc_max,
-        source="Stylised NMC811 OCV (datasheet-anchored); PyBaMM Chen2020")
+        source="ILLUSTRATIVE hand-drawn NMC OCV shape (not a fit; cf. PyBaMM Chen2020)")
 end
 
 """
-    nca_chemistry(; q_cell=3.2, r_internal=0.035, kwargs...)
+    illustrative_nca(; q_cell=3.2, r_internal=0.035, kwargs...)
 
-Nickel-cobalt-aluminium (NCA): similar sloped profile to NMC, ≈ 2.5–4.2 V, used
-in Panasonic/Tesla cylindrical cells. Stylised OCV anchored to typical NCA cell
-voltages. Source: Panasonic NCR18650B datasheet.
+**Illustrative** NCA (nickel-cobalt-aluminium) shape — a sloped ≈ 2.5–4.2 V
+profile similar to NMC (Panasonic/Tesla cylindrical form). Hand-drawn; *not* a fit.
 """
-function nca_chemistry(; q_cell::Float64=3.2, r_internal::Float64=0.035,
-                       i_charge_max::Float64=0.5q_cell, i_discharge_max::Float64=2q_cell,
-                       soc_min::Float64=0.05, soc_max::Float64=0.98)
+function illustrative_nca(; q_cell::Float64=3.2, r_internal::Float64=0.035,
+                          i_charge_max::Float64=0.5q_cell, i_discharge_max::Float64=2q_cell,
+                          soc_min::Float64=0.05, soc_max::Float64=0.98)
     soc = [0.0, 0.05, 0.15, 0.30, 0.50, 0.70, 0.85, 0.95, 1.0]
     ocv = [2.50, 3.30, 3.52, 3.65, 3.78, 3.95, 4.08, 4.16, 4.20]
-    return tabulated_chemistry(; name="NCA", soc_points=soc, ocv_points=ocv,
+    return tabulated_chemistry(; name="illustrative-NCA", soc_points=soc, ocv_points=ocv,
         r_internal=r_internal, q_cell=q_cell,
         v_cell_min=2.5, v_cell_max=4.2,
         i_charge_max=i_charge_max, i_discharge_max=i_discharge_max,
         soc_min=soc_min, soc_max=soc_max,
-        source="Stylised NCA OCV (datasheet-anchored); Panasonic NCR18650B")
+        source="ILLUSTRATIVE hand-drawn NCA OCV shape (not a fit)")
 end
 
 """
-    lead_acid_chemistry(; q_cell=100.0, r_internal=0.004, kwargs...)
+    illustrative_lead_acid(; q_cell=100.0, r_internal=0.004, kwargs...)
 
-Lead-acid: a roughly linear open-circuit voltage from ≈ 1.75 V (empty) to
-≈ 2.15 V (full) per cell — modelled here with [`linear_chemistry`](@ref). Still
-common in off-grid and backup storage. Source: standard flooded/AGM lead-acid
-OCV-SoC relation (e.g. IEEE 1188 / manufacturer curves).
+**Illustrative** lead-acid shape — a roughly linear OCV from ≈ 1.75 V (empty) to
+≈ 2.15 V (full) per cell, via [`linear_chemistry`](@ref). Consistent with the
+textbook flooded/AGM OCV–SoC relation (e.g. IEEE 1188); endpoints only, *not* a fit.
 """
-function lead_acid_chemistry(; q_cell::Float64=100.0, r_internal::Float64=0.004,
-                             i_charge_max::Float64=0.2q_cell, i_discharge_max::Float64=q_cell,
-                             soc_min::Float64=0.2, soc_max::Float64=1.0)
-    return linear_chemistry(; name="Lead-acid", v_full=2.15, v_empty=1.75,
+function illustrative_lead_acid(; q_cell::Float64=100.0, r_internal::Float64=0.004,
+                                i_charge_max::Float64=0.2q_cell, i_discharge_max::Float64=q_cell,
+                                soc_min::Float64=0.2, soc_max::Float64=1.0)
+    return linear_chemistry(; name="illustrative-lead-acid", v_full=2.15, v_empty=1.75,
         r_internal=r_internal, q_cell=q_cell,
         v_cell_min=1.70, v_cell_max=2.40,
         i_charge_max=i_charge_max, i_discharge_max=i_discharge_max,
         soc_min=soc_min, soc_max=soc_max,
-        source="Linear lead-acid OCV (1.75–2.15 V/cell); IEEE 1188 / datasheets")
+        source="ILLUSTRATIVE linear lead-acid OCV (1.75–2.15 V/cell); cf. IEEE 1188")
 end
 
 """
-    leaf_chemistry(; kwargs...)
+    illustrative_leaf(; kwargs...)
 
-The 2013 Nissan-Leaf cell used by the source paper (Aaslid et al., 2020) — an
-LMO/NMC blend cycled 3.0–4.2 V. Terminal voltage bounds and the ≈ 3.9 V average
-match the paper's Table 2 (`Vmin/Vmax/Vavg = 3.20/4.15/3.90 V`, `Qmax = 29 Ah`,
-`Ib,ch/Ib,dch = 30/90 A`); the OCV shape is a stylised monotone curve through
-that band. Provided for reproducing the paper; for the true `f_v(soc, i)`
-surface load the cell dataset (Wiggins, Allu & Wang, ORNL, 2020,
-https://doi.org/10.5281/zenodo.2580327) via [`tabulated_chemistry`](@ref).
+**Illustrative** shape in the voltage band of the 2013 Nissan-Leaf cell used by
+the source paper (Aaslid et al., 2020) — an LMO/NMC blend. The voltage bounds and
+capacity/current match the paper's Table 2 (`Vmin/Vmax = 3.20/4.15 V`,
+`Qmax = 29 Ah`, `Ib,ch/Ib,dch = 30/90 A`), but the OCV curve is a hand-drawn
+monotone line through that band — it does **not** reproduce the paper, which used
+an empirical current–SoC voltage *surface* `f_v(soc, i)`. To actually reproduce
+the paper, fit that surface from the cell dataset (Wiggins, Allu & Wang, ORNL,
+2020, https://doi.org/10.5281/zenodo.2580327) and supply an R(soc)/surface model.
 """
-function leaf_chemistry(; q_cell::Float64=29.0, r_internal::Float64=0.0035,
-                        i_charge_max::Float64=30.0, i_discharge_max::Float64=90.0,
-                        soc_min::Float64=0.05, soc_max::Float64=0.98)
+function illustrative_leaf(; q_cell::Float64=29.0, r_internal::Float64=0.0035,
+                           i_charge_max::Float64=30.0, i_discharge_max::Float64=90.0,
+                           soc_min::Float64=0.05, soc_max::Float64=0.98)
     soc = [0.0, 0.05, 0.15, 0.30, 0.50, 0.70, 0.85, 0.95, 1.0]
     ocv = [3.20, 3.45, 3.60, 3.72, 3.85, 3.98, 4.06, 4.12, 4.15]
-    return tabulated_chemistry(; name="Nissan-Leaf-2013", soc_points=soc, ocv_points=ocv,
+    return tabulated_chemistry(; name="illustrative-Leaf-2013", soc_points=soc, ocv_points=ocv,
         r_internal=r_internal, q_cell=q_cell,
         v_cell_min=3.20, v_cell_max=4.15,
         i_charge_max=i_charge_max, i_discharge_max=i_discharge_max,
         soc_min=soc_min, soc_max=soc_max,
-        source="Aaslid et al. 2020 (JES 32:101979), Table 2; cell data Zenodo 2580327")
+        source="ILLUSTRATIVE shape in the Aaslid et al. 2020 Leaf voltage band " *
+               "(Table 2); NOT the paper's f_v(soc,i) surface; cell data Zenodo 2580327")
 end

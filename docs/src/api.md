@@ -67,11 +67,11 @@ BatteryChemistry
 thevenin_chemistry
 linear_chemistry
 tabulated_chemistry
-lfp_chemistry
-nmc_chemistry
-nca_chemistry
-lead_acid_chemistry
-leaf_chemistry
+illustrative_lfp
+illustrative_nmc
+illustrative_nca
+illustrative_lead_acid
+illustrative_leaf
 ```
 
 ## HELM power flow

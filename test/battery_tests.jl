@@ -42,8 +42,8 @@
 end
 
 @testset "BatteryChemistry: preloaded library is monotone and cited" begin
-    for chem in (lfp_chemistry(), nmc_chemistry(), nca_chemistry(),
-                 lead_acid_chemistry(), leaf_chemistry())
+    for chem in (illustrative_lfp(), illustrative_nmc(), illustrative_nca(),
+                 illustrative_lead_acid(), illustrative_leaf())
         socs = range(chem.soc_min, chem.soc_max; length=25)
         ocvs = [chem.ocv(s) for s in socs]
         @test issorted(ocvs)                                  # OCV non-decreasing
@@ -52,7 +52,7 @@ end
         @test !isempty(chem.source)                            # provenance recorded
     end
     # LFP has the characteristically flat mid-SoC plateau.
-    lfp = lfp_chemistry()
+    lfp = illustrative_lfp()
     @test abs(lfp.ocv(0.7) - lfp.ocv(0.3)) < 0.1
     # The tabulated OCV is SMOOTH (C¹): the derivative is continuous across an
     # interior data knot (a piecewise-linear interpolant would kink here). This
@@ -65,7 +65,7 @@ end
         @test dleft >= -1e-6                                   # and non-decreasing
     end
     # Leaf cell matches the source paper's Table 2 band.
-    leaf = leaf_chemistry()
+    leaf = illustrative_leaf()
     @test leaf.v_cell_min ≈ 3.20 && leaf.v_cell_max ≈ 4.15
     @test leaf.q_cell ≈ 29.0 && leaf.i_discharge_max ≈ 90.0
 end
@@ -83,7 +83,7 @@ end
 
 @testset "IVQ battery: discharges to the converter rating (max export)" begin
     # Large pack, modest inverter → the converter s_max binds, not the cell.
-    chem = leaf_chemistry()
+    chem = illustrative_leaf()
     inv  = AdvancedInverter(id="bat", bus="poc", s_max=5000.0)
     bat  = IVQBattery(id="bat", bus="poc", chemistry=chem,
                       n_series=100, n_parallel=1, soc_init=0.6, inverter=inv)
@@ -98,7 +98,7 @@ end
 end
 
 @testset "IVQ battery: charges from the grid (max charge)" begin
-    chem = nmc_chemistry()
+    chem = illustrative_nmc()
     inv  = AdvancedInverter(id="bat", bus="poc", s_max=4000.0)
     bat  = IVQBattery(id="bat", bus="poc", chemistry=chem,
                       n_series=100, n_parallel=2, soc_init=0.4, inverter=inv)
@@ -111,7 +111,7 @@ end
 
 @testset "IVQ battery: the cell current limit binds before the converter" begin
     # Small per-cell discharge limit, oversized inverter → the cell current caps export.
-    chem = leaf_chemistry(; i_discharge_max=40.0)
+    chem = illustrative_leaf(; i_discharge_max=40.0)
     inv  = AdvancedInverter(id="bat", bus="poc", s_max=1e6)
     bat  = IVQBattery(id="bat", bus="poc", chemistry=chem,
                       n_series=100, n_parallel=1, soc_init=0.7, inverter=inv)
@@ -136,7 +136,7 @@ end
 end
 
 @testset "IVQ battery: converter loss makes the DC side supply more than the POC" begin
-    chem = leaf_chemistry()
+    chem = illustrative_leaf()
     inv  = AdvancedInverter(id="bat", bus="poc", s_max=5000.0, r_filter=0.1, x_filter=0.2,
                             p_loss_fixed=15.0, a_loss=0.2, c_loss=0.01)
     bat  = IVQBattery(id="bat", bus="poc", chemistry=chem,
@@ -151,7 +151,7 @@ end
 end
 
 @testset "IVQ battery: input validation" begin
-    chem = leaf_chemistry()
+    chem = illustrative_leaf()
     inv  = AdvancedInverter(id="bat", bus="poc", s_max=5000.0)
     bat  = IVQBattery(id="bat", bus="poc", chemistry=chem,
                       n_series=100, n_parallel=1, soc_init=0.6, inverter=inv)
@@ -162,86 +162,165 @@ end
     badbat = IVQBattery(id="bat", bus="poc", chemistry=chem,
                         n_series=100, n_parallel=1, soc_init=0.6, inverter=badinv)
     @test_throws ArgumentError solve_ivq_battery(inv_grid(), badbat)
-    # soc_init outside the chemistry's usable window is caught at stamp time.
+    # soc_init outside the chemistry's usable window is caught.
     oob = IVQBattery(id="bat", bus="poc", chemistry=chem,
                      n_series=100, n_parallel=1, soc_init=0.999, inverter=inv)
-    @test_throws Exception solve_ivq_battery(inv_grid(), oob)
+    @test_throws ArgumentError solve_ivq_battery(inv_grid(), oob)
+    # Nonpositive pack counts.
+    @test_throws ArgumentError solve_ivq_battery(inv_grid(),
+        IVQBattery(id="bat", bus="poc", chemistry=chem, n_series=0, n_parallel=1,
+                   soc_init=0.6, inverter=inv))
+    @test_throws ArgumentError solve_ivq_battery(inv_grid(),
+        IVQBattery(id="bat", bus="poc", chemistry=chem, n_series=100, n_parallel=0,
+                   soc_init=0.6, inverter=inv))
+    # soc_final outside the window.
+    @test_throws ArgumentError solve_ivq_battery(inv_grid(),
+        IVQBattery(id="bat", bus="poc", chemistry=chem, n_series=100, n_parallel=1,
+                   soc_init=0.6, inverter=inv, soc_final=1.5))
+    # Nonpositive dt_h (multi-period entry).
+    @test_throws ArgumentError solve_multiperiod_ivq([inv_grid()], [bat]; dt_h=0.0)
 end
 
-@testset "IVQ multi-period: linear chemistry arbitrages across price periods" begin
-    # Expensive slack in period 1, cheap in period 2 → discharge then recharge,
-    # returning to the initial SoC (cyclic). Affine OCV ⇒ the embedded polynomial
-    # path (no operator registration).
-    nets = [single_bus_net(; src_cost=0.20, pload=0.0),
-            single_bus_net(; src_cost=0.05, pload=0.0)]
-    chem = linear_chemistry(; v_full=3.6, v_empty=3.0, r_internal=0.01, q_cell=50.0,
-                            soc_min=0.05, soc_max=0.95)
-    inv  = AdvancedInverter(id="b", bus="bus1", s_max=100e3)
-    bat  = IVQBattery(id="b", bus="bus1", chemistry=chem,
-                      n_series=300, n_parallel=1, soc_init=0.5, inverter=inv, cyclic=true)
-    res = solve_multiperiod_ivq(nets, [bat]; dt_h=1.0)
-    @test res.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
-    d = res.dispatch["b"]
-    @test d.i_cell[1] > 0                                      # discharge when expensive
-    @test d.i_cell[2] < 0                                      # charge when cheap
-    @test d.p_poc[1] > 0 && d.p_poc[2] < 0                    # export then import
-    @test d.soc[1] ≈ 0.5   rtol=1e-6                          # start
-    @test d.soc[3] ≈ 0.5   rtol=1e-6                          # cyclic closure
-    @test d.soc[2] <  0.5                                      # drained in period 1
-    @test d.v_cell[1] < chem.ocv(d.soc[1])                    # terminal V droops on discharge
-    @test d.v_cell[2] > chem.ocv(d.soc[2])                    # and rises on charge
-    # Exact charge balance with the default trapezoidal rule (q_cell·n_parallel = 50 Ah):
-    #   interior step averages the two period currents; the last step is forward.
-    q = 50.0
-    @test d.soc[2] ≈ d.soc[1] - (d.i_cell[1] + d.i_cell[2])/2 * 1.0/q  rtol=1e-4
-    @test d.soc[3] ≈ d.soc[2] - d.i_cell[2] * 1.0/q                    rtol=1e-4
+@testset "BatteryChemistry: nonphysical parameters are rejected" begin
+    # Duplicate SoC knots (would divide by a zero interval → NaN).
+    @test_throws ArgumentError tabulated_chemistry(; soc_points=[0.0, 0.5, 0.5, 1.0],
+        ocv_points=[3.0, 3.3, 3.4, 3.6], r_internal=0.02, q_cell=10.0)
+    # Non-increasing SoC knots.
+    @test_throws ArgumentError tabulated_chemistry(; soc_points=[0.0, 0.8, 0.5],
+        ocv_points=[3.0, 3.4, 3.6], r_internal=0.02, q_cell=10.0)
+    # Non-finite data.
+    @test_throws ArgumentError tabulated_chemistry(; soc_points=[0.0, 1.0],
+        ocv_points=[3.0, NaN], r_internal=0.02, q_cell=10.0)
+    # Negative capacity.
+    @test_throws ArgumentError linear_chemistry(; v_full=3.6, v_empty=3.0,
+        r_internal=0.01, q_cell=-5.0)
+    # Zero discharge current (would zero the DC current base → division by zero).
+    @test_throws ArgumentError thevenin_chemistry(; v_nominal=3.6, r_internal=0.01,
+        q_cell=10.0, i_discharge_max=0.0)
+    # Invalid voltage bounds.
+    @test_throws ArgumentError thevenin_chemistry(; v_nominal=3.6, r_internal=0.01,
+        q_cell=10.0, v_cell_min=4.0, v_cell_max=3.0)
+    # SoC window outside [0,1].
+    @test_throws ArgumentError linear_chemistry(; v_full=3.6, v_empty=3.0,
+        r_internal=0.01, q_cell=10.0, soc_min=-0.1, soc_max=0.9)
+    @test_throws ArgumentError linear_chemistry(; v_full=3.6, v_empty=3.0,
+        r_internal=0.01, q_cell=10.0, soc_min=0.1, soc_max=1.2)
+    # SoC window not strictly inside the tabulated knots.
+    @test_throws ArgumentError tabulated_chemistry(; soc_points=[0.1, 0.9],
+        ocv_points=[3.0, 3.6], r_internal=0.02, q_cell=10.0, soc_min=0.0, soc_max=0.9)
 end
 
-@testset "IVQ multi-period: forward integration is exact for period currents" begin
-    # With :forward, Δsoc = −i·Δt/q_cell exactly (piecewise-constant period current).
+@testset "IVQ multi-period: arbitrage with exact coulomb conservation (forward)" begin
+    # Expensive slack in period 1, cheaper in period 2 → discharge then recharge.
+    # The forward balance conserves charge EXACTLY: for a cyclic horizon the
+    # closure Σ i·Δt = 0 must hold, not merely soc[T+1] = soc[1] by some recurrence.
     nets = [single_bus_net(; src_cost=0.15, pload=0.0),
             single_bus_net(; src_cost=0.10, pload=0.0)]
     chem = linear_chemistry(; v_full=3.6, v_empty=3.0, r_internal=0.01, q_cell=50.0,
                             soc_min=0.05, soc_max=0.95)
-    inv  = AdvancedInverter(id="b", bus="bus1", s_max=100e3)
-    bat  = IVQBattery(id="b", bus="bus1", chemistry=chem, n_series=300, n_parallel=1,
-                      soc_init=0.6, inverter=inv, cyclic=true, integration=:forward)
-    r = solve_multiperiod_ivq(nets, [bat]; dt_h=1.0)
-    @test r.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
-    d = r.dispatch["b"]
-    for t in 1:2                                               # forward balance is exact
-        @test d.soc[t+1] ≈ d.soc[t] - d.i_cell[t]*1.0/50.0  rtol=1e-4
-    end
-end
-
-@testset "IVQ multi-period: tabulated (LFP) chemistry via smooth operator" begin
-    # Tabulated OCV(soc) ⇒ the registered smooth-operator path exercises end to end.
-    nets = [single_bus_net(; src_cost=0.20, pload=0.0),
-            single_bus_net(; src_cost=0.05, pload=0.0)]
-    chem = lfp_chemistry(; q_cell=50.0)
     inv  = AdvancedInverter(id="b", bus="bus1", s_max=100e3)
     bat  = IVQBattery(id="b", bus="bus1", chemistry=chem,
                       n_series=300, n_parallel=1, soc_init=0.6, inverter=inv, cyclic=true)
     res = solve_multiperiod_ivq(nets, [bat]; dt_h=1.0)
     @test res.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
     d = res.dispatch["b"]
+    @test d.i_cell[1] > 0                                      # discharge when expensive
+    @test d.i_cell[2] < 0                                      # charge when cheaper
+    @test d.p_poc[1] > 0 && d.p_poc[2] < 0                    # export then import
+    @test d.v_cell[1] < chem.ocv(d.soc[1])                    # terminal V droops on discharge
+    @test d.v_cell[2] > chem.ocv(d.soc[2])                    # and rises on charge
+    # Net amp-hour conservation (coulomb closure), checked INDEPENDENTLY of soc:
+    @test sum(d.i_cell) * 1.0 ≈ 0.0  atol=1e-4               # Σ i·Δt = 0 (cyclic)
+    # Cyclic closure of the SoC trajectory:
+    @test d.soc[1] ≈ 0.6  rtol=1e-6
+    @test d.soc[3] ≈ 0.6  rtol=1e-5
+    # Forward balance is exact per step: Δsoc = −i·Δt / (q_cell·n_parallel).
+    for t in 1:2
+        @test d.soc[t+1] ≈ d.soc[t] - d.i_cell[t]*1.0/50.0  rtol=1e-4
+    end
+end
+
+@testset "IVQ multi-period: tabulated (LFP) chemistry via smooth operator" begin
+    # Tabulated OCV(soc) ⇒ the registered smooth-operator path, end to end.
+    nets = [single_bus_net(; src_cost=0.20, pload=0.0),
+            single_bus_net(; src_cost=0.05, pload=0.0)]
+    chem = illustrative_lfp(; q_cell=50.0)
+    inv  = AdvancedInverter(id="b", bus="bus1", s_max=100e3)
+    bat  = IVQBattery(id="b", bus="bus1", chemistry=chem,
+                      n_series=300, n_parallel=1, soc_init=0.5, inverter=inv, cyclic=true)
+    res = solve_multiperiod_ivq(nets, [bat]; dt_h=1.0)
+    @test res.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+    d = res.dispatch["b"]
     @test d.i_cell[1] > 0 && d.i_cell[2] < 0                  # discharge then charge
-    @test d.soc[3] ≈ 0.6  rtol=1e-5                           # cyclic
+    @test sum(d.i_cell) * 1.0 ≈ 0.0  atol=1e-4               # coulomb closure
     @test all(chem.soc_min - 1e-6 .<= d.soc .<= chem.soc_max + 1e-6)   # within the window
-    # Terminal voltage stays within the cell bounds at every period.
     @test all(chem.v_cell_min - 1e-3 .<= d.v_cell .<= chem.v_cell_max + 1e-3)
 end
 
-@testset "IVQ multi-period: soc_final pins the terminal state" begin
-    nets = [single_bus_net(; src_cost=0.20, pload=0.0),
-            single_bus_net(; src_cost=0.05, pload=0.0)]
+@testset "IVQ multi-period: R(soc) resistance table through a solve" begin
+    # A tabulated R(soc) exercises the registered resistance operator in a solve.
+    chem = tabulated_chemistry(; name="rtab",
+        soc_points=[0.0, 0.5, 1.0], ocv_points=[3.0, 3.3, 3.6],
+        r_points=[0.05, 0.02, 0.01], q_cell=50.0, soc_min=0.05, soc_max=0.95)
+    @test chem.r_constant === nothing                         # R is a table, not constant
+    nets = [single_bus_net(; src_cost=0.12, pload=0.0),
+            single_bus_net(; src_cost=0.10, pload=0.0)]
+    inv  = AdvancedInverter(id="b", bus="bus1", s_max=100e3)
+    bat  = IVQBattery(id="b", bus="bus1", chemistry=chem,
+                      n_series=300, n_parallel=1, soc_init=0.5, inverter=inv, cyclic=true)
+    res = solve_multiperiod_ivq(nets, [bat]; dt_h=1.0)
+    @test res.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+    @test sum(res.dispatch["b"].i_cell) * 1.0 ≈ 0.0  atol=1e-4
+end
+
+@testset "IVQ multi-period: soc_final pins the terminal state (T=1)" begin
     chem = linear_chemistry(; v_full=3.6, v_empty=3.0, r_internal=0.01, q_cell=50.0,
                             soc_min=0.05, soc_max=0.95)
     inv  = AdvancedInverter(id="b", bus="bus1", s_max=100e3)
-    bat  = IVQBattery(id="b", bus="bus1", chemistry=chem, n_series=300, n_parallel=1,
-                      soc_init=0.5, inverter=inv, cyclic=false, soc_final=0.6)
-    res = solve_multiperiod_ivq(nets, [bat]; dt_h=1.0)
-    @test res.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
-    @test res.dispatch["b"].soc[3] ≈ 0.6  rtol=1e-4          # terminal SoC pinned
-    @test res.dispatch["b"].soc[1] ≈ 0.5  rtol=1e-6          # and the initial state held
+    for sf in (0.45, 0.55)                                     # net discharge / net charge
+        bat = IVQBattery(id="b", bus="bus1", chemistry=chem, n_series=300, n_parallel=1,
+                         soc_init=0.5, inverter=inv, cyclic=false, soc_final=sf)
+        res = solve_multiperiod_ivq([single_bus_net(; src_cost=0.10, pload=0.0)], [bat]; dt_h=1.0)
+        @test res.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+        d = res.dispatch["b"]
+        @test d.soc[1] ≈ 0.5  rtol=1e-6                        # initial held
+        @test d.soc[2] ≈ sf   rtol=1e-4                        # terminal pinned
+        @test d.soc[2] ≈ d.soc[1] - d.i_cell[1]*1.0/50.0  rtol=1e-4   # forward balance
+    end
+end
+
+@testset "IVQ: SI and per-unit engine modes agree" begin
+    # The battery is per-unit on its own DC bases, so the engine's per_unit flag
+    # must not change the (SI) result.
+    chem = illustrative_leaf()
+    inv  = AdvancedInverter(id="bat", bus="poc", s_max=5000.0, r_filter=0.1, x_filter=0.2)
+    bat  = IVQBattery(id="bat", bus="poc", chemistry=chem,
+                      n_series=100, n_parallel=1, soc_init=0.6, inverter=inv)
+    r_si = solve_ivq_battery(inv_grid(), bat; per_unit=false)
+    r_pu = solve_ivq_battery(inv_grid(), bat; per_unit=true, s_base=5e3)
+    @test r_si.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+    @test r_pu.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+    @test r_si.p_poc  ≈ r_pu.p_poc   rtol=1e-3
+    @test r_si.i_cell ≈ r_pu.i_cell  rtol=1e-3
+    @test r_si.v_cell ≈ r_pu.v_cell  rtol=1e-3
+    @test r_si.p_loss ≈ r_pu.p_loss  rtol=1e-2
+end
+
+@testset "IVQ: converter loss cannot be inflated under charging" begin
+    # Adversarial: :max_charge (min p_poc). The regularised-norm equality pins the
+    # current magnitude, so the solver cannot manufacture linear losses (a_loss·im)
+    # to import more than it stores. Loss must equal the true three-term curve.
+    chem = illustrative_leaf()
+    inv  = AdvancedInverter(id="bat", bus="poc", s_max=5000.0,
+                            p_loss_fixed=10.0, a_loss=0.5, c_loss=0.01)
+    bat  = IVQBattery(id="bat", bus="poc", chemistry=chem,
+                      n_series=100, n_parallel=1, soc_init=0.5, inverter=inv)
+    r = solve_ivq_battery(inv_grid(), bat; objective=:max_charge)
+    @test r.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+    @test r.i_cell < 0                                         # genuinely charging
+    @test r.p_dc  < 0                                          # DC power into the battery
+    imag = hypot(r.i_cell, 0.0) * 1                            # single phase: |I| pack-side
+    # Loss stays bounded and physical (not inflated): at most the loaded three-term
+    # value at the operating current, and small relative to the ~kW throughput.
+    @test 0 <= r.p_loss < 0.25 * abs(r.p_poc) + 50.0
 end

@@ -53,8 +53,11 @@ A current–voltage battery: `n_series × n_parallel` cells of a
 # Optional (reserved for multi-period use; ignored in the single-snapshot solve)
 - `cyclic::Bool=true` — require terminal SoC to return to `soc_init`.
 - `soc_final::Union{Float64,Nothing}=nothing` — pin terminal SoC (overrides `cyclic`).
-- `integration::Symbol=:trapezoidal` — charge-balance rule (`:forward`,
-  `:backward`, `:trapezoidal`) for the SoC ODE `dq/dt = −i`.
+
+The multi-period charge balance uses a forward update `q[t+1] = q[t] − i[t]·Δt`,
+which is *exact* for the piecewise-constant current of each period (there is one
+current variable per period, not per time node). A true trapezoidal rule needs
+currents at all `T+1` nodes with consistent endpoint semantics and is deferred.
 """
 Base.@kwdef struct IVQBattery
     id::String
@@ -66,7 +69,26 @@ Base.@kwdef struct IVQBattery
     inverter::AdvancedInverter
     cyclic::Bool = true
     soc_final::Union{Float64,Nothing} = nothing
-    integration::Symbol = :trapezoidal
+end
+
+# Physical / domain validation, run at solve entry (the chemistry itself is
+# validated at construction). Catches configurations that would otherwise produce
+# NaNs, division by zero, or a nonphysical model.
+function _validate_battery(b::IVQBattery)
+    chem = b.chemistry
+    b.inverter.bus == b.bus || throw(ArgumentError(
+        "battery '$(b.id)' bus '$(b.bus)' must match its inverter bus '$(b.inverter.bus)'"))
+    b.n_series >= 1 || throw(ArgumentError("battery '$(b.id)': n_series must be ≥ 1"))
+    b.n_parallel >= 1 || throw(ArgumentError("battery '$(b.id)': n_parallel must be ≥ 1"))
+    isfinite(b.soc_init) && chem.soc_min <= b.soc_init <= chem.soc_max || throw(ArgumentError(
+        "battery '$(b.id)': soc_init=$(b.soc_init) must be finite and within the " *
+        "chemistry window [$(chem.soc_min), $(chem.soc_max)]"))
+    if b.soc_final !== nothing
+        isfinite(b.soc_final) && chem.soc_min <= b.soc_final <= chem.soc_max || throw(ArgumentError(
+            "battery '$(b.id)': soc_final=$(b.soc_final) must be finite and within the " *
+            "chemistry window [$(chem.soc_min), $(chem.soc_max)]"))
+    end
+    return nothing
 end
 
 # DC per-unit bases tied to the battery's OWN rating — pack nominal voltage and
@@ -202,10 +224,7 @@ function solve_ivq_battery(net::Dict{String,Any}, battery::IVQBattery;
         throw(ArgumentError("objective must be :max_export, :max_charge or :min_loss, got :$objective"))
     objective == :min_loss && p_set === nothing &&
         throw(ArgumentError(":min_loss requires a p_set (W) active-power target"))
-    battery.inverter.bus == battery.bus ||
-        throw(ArgumentError("battery bus '$(battery.bus)' must match its inverter bus '$(battery.inverter.bus)'"))
-    battery.integration in (:forward, :backward, :trapezoidal) ||
-        throw(ArgumentError("integration must be :forward, :backward or :trapezoidal"))
+    _validate_battery(battery)
 
     inv_h = Ref{Any}(); bat_h = Ref{Any}()
     hook! = ctx -> begin
@@ -338,8 +357,8 @@ snapshots (e.g. a time-varying slack import price via each net's `voltage_source
 - `nets::Vector` — `T` network dicts (`parse_bmopf` output), one per period.
 - `batteries::Vector{IVQBattery}` — each battery's `bus`/inverter must exist in
   every snapshot. `soc_init` sets the horizon start; `cyclic`/`soc_final` the
-  terminal condition; `integration` (`:forward` default, or `:trapezoidal`) the
-  charge-balance rule.
+  terminal condition. The charge balance is a forward update, exact for the
+  piecewise-constant per-period current, so it conserves charge exactly.
 
 # Keywords
 - `dt_h=1.0` — period duration in hours.
@@ -355,18 +374,10 @@ function solve_multiperiod_ivq(nets::AbstractVector, batteries::AbstractVector;
                                solver_options=())
     T = length(nets)
     T >= 1 || throw(ArgumentError("need at least one snapshot"))
+    (isfinite(dt_h) && dt_h > 0) || throw(ArgumentError("dt_h must be a positive finite number of hours"))
     ids = [b.id for b in batteries]
     allunique(ids) || throw(ArgumentError("battery ids must be unique: $ids"))
-    for b in batteries
-        b.inverter.bus == b.bus || throw(ArgumentError(
-            "battery '$(b.id)' bus '$(b.bus)' must match its inverter bus '$(b.inverter.bus)'"))
-        b.integration in (:forward, :trapezoidal) || throw(ArgumentError(
-            "battery '$(b.id)': integration must be :forward or :trapezoidal"))
-        chem = b.chemistry
-        chem.soc_min <= b.soc_init <= chem.soc_max || throw(ArgumentError(
-            "battery '$(b.id)': soc_init=$(b.soc_init) outside the chemistry window " *
-            "[$(chem.soc_min), $(chem.soc_max)]"))
-    end
+    foreach(_validate_battery, batteries)
 
     model = JuMP.Model(optimizer)
     verbose || JuMP.set_silent(model)
@@ -413,23 +424,24 @@ function solve_multiperiod_ivq(nets::AbstractVector, batteries::AbstractVector;
         end
     end
 
-    ctxs = [build_opf_model(nets[t]; model=model, per_unit=per_unit, s_base=s_base,
-                            add_objective=false, model_hook! = stamp_all(t))
+    # Pass t_index=t so time-series nets materialise their period-t snapshot (a
+    # plain snapshot net ignores it); otherwise every period would reuse index 1.
+    ctxs = [build_opf_model(nets[t]; t_index=t, model=model, per_unit=per_unit,
+                            s_base=s_base, add_objective=false, model_hook! = stamp_all(t))
             for t in 1:T]
     sb = ctxs[1].bases === nothing ? 1.0 : ctxs[1].bases.s_base
 
-    # Charge balance q[t+1] = q[t] − i·Δt (soc = q_pack/qp), then the terminal
-    # state. The per-unit pack current ipu maps to SI amps as ipu·ibase.
+    # Charge balance q[t+1] = q[t] − i[t]·Δt (soc = q_pack/qp), then the terminal
+    # state. Forward is EXACT for the piecewise-constant period current (one
+    # current per period), so it conserves charge: for a cyclic horizon the SoC
+    # closure Σ i[t]·Δt = 0 is enforced term-for-term. The per-unit pack current
+    # ipu maps to SI amps as ipu·ibase.
     for b in batteries
         soc = socs[b.id]; ip = ipack[b.id]
         _, ibase = dcbases[b.id]
         qp = b.chemistry.q_cell * b.n_parallel   # pack charge capacity (Ah)
         for t in 1:T
-            if b.integration == :forward || t == T
-                JuMP.@constraint(model, soc[t+1] == soc[t] - dt_h * ip[t] * ibase / qp)
-            else
-                JuMP.@constraint(model, soc[t+1] == soc[t] - dt_h * (ip[t] + ip[t+1]) * ibase / (2qp))
-            end
+            JuMP.@constraint(model, soc[t+1] == soc[t] - dt_h * ip[t] * ibase / qp)
         end
         if b.soc_final !== nothing
             JuMP.@constraint(model, soc[T+1] == b.soc_final)
@@ -438,7 +450,9 @@ function solve_multiperiod_ivq(nets::AbstractVector, batteries::AbstractVector;
         end
     end
 
-    JuMP.@objective(model, Min, sum(generation_cost(ctxs[t]) for t in 1:T))
+    # Weight each snapshot's cost rate by the period length so the objective is a
+    # horizon energy cost (generation_cost is a per-snapshot rate).
+    JuMP.@objective(model, Min, dt_h * sum(generation_cost(ctxs[t]) for t in 1:T))
     foreach(enforce_kcl!, ctxs)
     JuMP.optimize!(model)
 
