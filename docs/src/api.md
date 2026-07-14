@@ -55,6 +55,23 @@ solve_advanced_inverter
 InverterResult
 ```
 
+## Current–voltage (IVQ) battery
+
+```@docs
+IVQBattery
+solve_ivq_battery
+IVQBatteryResult
+BatteryChemistry
+thevenin_chemistry
+linear_chemistry
+tabulated_chemistry
+lfp_chemistry
+nmc_chemistry
+nca_chemistry
+lead_acid_chemistry
+leaf_chemistry
+```
+
 ## HELM power flow
 
 ```@docs
