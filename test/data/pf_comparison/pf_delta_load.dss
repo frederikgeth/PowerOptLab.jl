@@ -1,0 +1,56 @@
+! Three-phase DELTA load on a four-wire branch — power-flow comparison case.
+!
+! Topology: src ──[4-wire line, 0.5 km]── lb
+!   src.1/2/3 = phase conductors (3-phase balanced 0.415 kV source)
+!   src.4     = neutral, earthed via near-zero reactor
+!   lb.1/2/3  = load phase terminals (delta arms connected line-to-line)
+!   lb.4      = neutral; carried by the branch but NOT connected to the load
+!
+! The load is an UNBALANCED three-phase delta bank built from three
+! single-phase delta arms:
+!   d12 across lb.1-2, d23 across lb.2-3, d31 across lb.3-1.
+! Unbalance is deliberate: it exercises the arm connection order (1-2, 2-3,
+! 3-1) and the line-to-line voltage coupling, which a balanced delta (symmetric
+! solution) cannot distinguish from a rotated wiring.
+!
+! Physics check: a pure delta load has no zero-sequence path, so the line
+! neutral carries ~0 current and lb.4 stays near earth potential despite the
+! phase imbalance — a direct test that the delta KCL injects only between phase
+! terminals and never into the neutral.
+
+Clear
+
+! Base frequency locked to 50 Hz (BMOPF's modelling frequency).  The OpenDSS
+! default (60 Hz, or whatever a Windows GUI session persisted) would otherwise
+! rescale every reactance.  See docs/src/validation.md.
+Set DefaultBaseFreq=50
+
+New Circuit.pf_delta_load basekv=0.415 pu=1.0 angle=0 phases=3 bus1=src.1.2.3 model=ideal
+
+New Reactor.grnd bus1=src.4 bus2=src.0 R=0.001 X=0
+
+! 4-wire linecode: 4x4 lower-triangular Rmatrix/Xmatrix in Ohm/km.
+! Phase self 0.5 Ohm/km; neutral self 0.5 Ohm/km; mutual 0.02 Ohm/km.
+New Linecode.4w nphases=4
+~ Rmatrix=[0.500|0.020 0.500|0.020 0.020 0.500|0.020 0.020 0.020 0.500]
+~ Xmatrix=[0.200|0.050 0.200|0.050 0.050 0.200|0.050 0.050 0.050 0.200]
+~ Cmatrix=[0|0 0|0 0 0|0 0 0 0]
+~ units=km
+
+New Line.l1 bus1=src.1.2.3.4 bus2=lb.1.2.3.4 linecode=4w length=500 units=m
+
+! Unbalanced delta arms (constant power, model=1).
+! kv = 0.415 (line-to-line nominal across each arm).
+! Vminpu=0 Vmaxpu=2: disable ODS voltage-dependent load switching so model=1
+! behaves as strict constant P+Q at all voltages, matching BMOPF.
+New Load.d12 bus1=lb.1.2 phases=1 conn=delta kv=0.415 kw=15 kvar=5 model=1 Vminpu=0 Vmaxpu=2
+New Load.d23 bus1=lb.2.3 phases=1 conn=delta kv=0.415 kw=10 kvar=3 model=1 Vminpu=0 Vmaxpu=2
+New Load.d31 bus1=lb.3.1 phases=1 conn=delta kv=0.415 kw=20 kvar=7 model=1 Vminpu=0 Vmaxpu=2
+
+Set VoltageBases=[0.415]
+CalcVoltageBases
+! Tolerance 1e-8 (<< the voltage-comparison tolerance) removes OpenDSS-side
+! convergence slop; MaxIterations raised so the tighter target is reached.
+Set Tolerance=1e-8
+Set MaxIterations=100
+Solve

@@ -1,0 +1,34 @@
+! Single-phase ZIP load — power-flow comparison case.
+!
+! Topology: src ──[1-ph line, 0.5 km]── lb   (earth return, no explicit neutral)
+!
+! Mixed ZIP load with BOTH non-trivial P and Q voltage dependence:
+!   P = P0·(0.5·v² + 0.2·v + 0.3)   (αZ, αI, αP)
+!   Q = Q0·(0.4·v² + 0.3·v + 0.3)   (βZ, βI, βP)   with v = |V|/Vnom
+! OpenDSS model=8 (ZIPV); ZIPV = [a1 a2 a3  b1 b2 b3  Vcutoff].
+! Vcutoff=0 and Vminpu=0 Vmaxpu=2 disable the constant-Z fallback so the
+! polynomial holds across the whole operating range, matching BMOPF.
+!
+! Distinct P and Q coefficients exercise the reactive (beta) path, which the
+! analytical T15 unit tests leave untested (they use q_nom=0).
+
+Clear
+
+! Base frequency locked to 50 Hz (BMOPF's modelling frequency).  The OpenDSS
+! default (60 Hz, or whatever a Windows GUI session persisted) would otherwise
+! rescale every reactance.  See docs/src/validation.md.
+Set DefaultBaseFreq=50
+
+New Circuit.pf_zip_1ph basekv=0.240 pu=1.0 angle=0 phases=1 bus1=src.1.0 model=ideal
+
+New Line.l1 bus1=src.1 bus2=lb.1 phases=1 length=0.5 units=km r1=0.5 x1=0.2
+
+New Load.ld1 bus1=lb.1 phases=1 kv=0.240 kw=15 kvar=5 model=8 ZIPV=(0.5 0.2 0.3 0.4 0.3 0.3 0.0) Vminpu=0 Vmaxpu=2
+
+Set VoltageBases=[0.240]
+CalcVoltageBases
+! Tolerance 1e-8 (<< the voltage-comparison tolerance) removes OpenDSS-side
+! convergence slop; MaxIterations raised so the tighter target is reached.
+Set Tolerance=1e-8
+Set MaxIterations=100
+Solve

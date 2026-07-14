@@ -1,0 +1,40 @@
+! Single-phase load on a four-wire branch — PERFECTLY grounded load-bus neutral.
+! Power-flow comparison case for the four-wire grounding study.
+!
+! Identical to pf_1ph_freeneutral.dss except the load-bus neutral lb.4 is solidly
+! earthed (hard tie to lb.0 via a near-zero reactor). This pins lb.4 ≈ 0 V, so
+! the neutral return current splits between the line neutral and the local solid
+! earth. BMOPF models this with perfectly_grounded_terminals=["n"] at lb (exact
+! vr=vi=0). The two should agree to comparison tolerance.
+
+Clear
+
+! Base frequency locked to 50 Hz (BMOPF's modelling frequency).  The OpenDSS
+! default (60 Hz, or whatever a Windows GUI session persisted) would otherwise
+! rescale every reactance.  See docs/src/validation.md.
+Set DefaultBaseFreq=50
+
+New Circuit.pf_1ph_perfectneutral basekv=0.415 pu=1.0 angle=0 phases=3 bus1=src.1.2.3 model=ideal
+
+New Reactor.grnd bus1=src.4 bus2=src.0 R=0.001 X=0
+
+New Linecode.4w nphases=4
+~ Rmatrix=[0.500|0.020 0.500|0.020 0.020 0.500|0.020 0.020 0.020 0.500]
+~ Xmatrix=[0.200|0.050 0.200|0.050 0.050 0.200|0.050 0.050 0.050 0.200]
+~ Cmatrix=[0|0 0|0 0 0|0 0 0 0]
+~ units=km
+
+New Line.l1 bus1=src.1.2.3.4 bus2=lb.1.2.3.4 linecode=4w length=500 units=m
+
+! Solidly earth the load-bus neutral (near-zero reactor to earth node lb.0).
+New Reactor.lbgrnd bus1=lb.4 bus2=lb.0 R=0.001 X=0
+
+New Load.ld1 bus1=lb.1.4 phases=1 conn=wye kv=0.2396 kw=15 kvar=5 model=1 Vminpu=0 Vmaxpu=2
+
+Set VoltageBases=[0.415]
+CalcVoltageBases
+! Tolerance 1e-8 (<< the voltage-comparison tolerance) removes OpenDSS-side
+! convergence slop; MaxIterations raised so the tighter target is reached.
+Set Tolerance=1e-8
+Set MaxIterations=100
+Solve

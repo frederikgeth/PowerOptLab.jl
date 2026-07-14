@@ -47,8 +47,15 @@ A different objective/variable/constraint structure on the same physics.
 
 ### Bespoke algorithms — new solution methods (`src/algorithms/`)
 
-Custom solve loops around the staged API (decomposition, sequential
-linearization, warm-start schemes). None yet — the slot is reserved.
+Custom solve loops (decomposition, sequential linearization, warm-start
+schemes) and alternative solution methods.
+
+- **HELM** ([`solve_pf_helm`](@ref)) — the Holomorphic Embedding Load-flow
+  Method: a non-iterative power flow that expands each voltage as a power series
+  in a load-scaling parameter and evaluates it by Padé analytic continuation, so
+  voltage collapse is a *certified* outcome (Stahl's theorem) rather than a
+  solver failure, and the series' radius of convergence yields the loading
+  margin directly.
 
 Everything is SI at the interface; per-unit conditioning inside the solve is
 handled via the engine's `ctx.bases`.
@@ -58,6 +65,8 @@ module PowerOptLab
 using BMOPFTools
 using JuMP
 using Ipopt
+using LinearAlgebra
+using SparseArrays
 
 # Component models — new network elements stamped via model_hook! / solution_hook!
 include("components/devices.jl")
@@ -69,7 +78,9 @@ include("problems/state_estimation.jl")
 include("problems/parameter_estimation.jl")
 include("problems/operating_envelope.jl")
 
-# Bespoke algorithms — new solution methods (custom solve loops); none yet.
+# Bespoke algorithms — new solution methods (custom solve loops)
+include("algorithms/pade.jl")
+include("algorithms/helm.jl")
 
 # Devices
 export StorageDevice, EVDevice
@@ -88,5 +99,8 @@ export ConnectionPoint, solve_operating_envelope, OperatingEnvelopeResult
 
 # Advanced inverter (prototype internal-node IBR)
 export AdvancedInverter, solve_advanced_inverter, InverterResult
+
+# HELM power flow (holomorphic embedding load-flow, a bespoke solution method)
+export helm_series, HelmResult, solve_pf_helm
 
 end # module PowerOptLab
