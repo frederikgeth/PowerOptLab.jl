@@ -109,6 +109,9 @@ distinguishes a threshold crossing from a candidate bound or solver failure.
 Profiles can reveal asymmetric, bound-limited, and flat directions that the
 local covariance cannot. They remain local connected profiles; deterministic
 multistart or a global method is needed to rule out disconnected regions.
+Each continuation point is warm-started from its predecessor; a failed solve is
+retried from deterministic fitted/candidate starts before being reported as a
+solver-limited endpoint.
 
 These intervals only have coverage meaning when the supplied covariance is a
 credible total error model. Paper rounding, uncertainty in conductor catalogs,

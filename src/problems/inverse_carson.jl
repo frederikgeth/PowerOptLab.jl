@@ -583,13 +583,30 @@ function _ic_profile_endpoint(c, obs, best_u, index, target, threshold;
 
     function evaluate(fixed_value, start)
         JuMP.fix(u[index], fixed_value; force=true)
-        JuMP.set_start_value.(u, start)
-        JuMP.set_start_value(u[index], fixed_value)
-        JuMP.optimize!(model)
-        status = JuMP.termination_status(model)
-        _ic_usable_profile_solution(model, status) || return (Inf, start, false)
-        solution = JuMP.value.(u)
-        (_ic_objective(c, obs, solution), solution, true)
+        trial_starts = Vector{Vector{Float64}}([Float64.(start)])
+        # Continuation normally solves on the first warm start. If a solver
+        # fails there, retry deterministically from the fitted point and the
+        # same candidate-wide starts used by the main fit. This avoids making
+        # an interval endpoint depend on one fragile solver trajectory while
+        # retaining :failed when every independent retry fails.
+        push!(trial_starts, Float64.(best_u))
+        append!(trial_starts, _ic_starts(c, 4))
+        attempted = Vector{Vector{Float64}}()
+        for trial in trial_starts
+            trial[index] = fixed_value
+            any(norm(trial - old) <= 1e-10 for old in attempted) && continue
+            push!(attempted, trial)
+            JuMP.set_start_value.(u, trial)
+            JuMP.optimize!(model)
+            status = JuMP.termination_status(model)
+            _ic_usable_profile_solution(model, status) || continue
+            solution = JuMP.value.(u)
+            all(isfinite, solution) || continue
+            value = _ic_objective(c, obs, solution)
+            isfinite(value) || continue
+            return (value, solution, true)
+        end
+        (Inf, Float64.(start), false)
     end
 
     inside = best_u[index]
@@ -635,8 +652,10 @@ and `:failed` conservatively returns the bound because the profile solve failed.
 
 The default threshold is the one-degree-of-freedom chi-square quantile implied
 by `fit.confidence_level`. `points=12` traces each side before bisection;
-`bisection_steps=16` refines the first crossing. These are local connected
-profiles, not a guarantee that disconnected feasible regions do not exist.
+`bisection_steps=16` refines the first crossing. A failed continuation solve is
+retried from deterministic alternative starts before the endpoint is labelled
+`:failed`. These are local connected profiles, not a guarantee that disconnected
+feasible regions do not exist.
 """
 function profile_inverse_carson(fit::InverseCarsonFit,
                                 c::OverheadCarsonCandidate,
