@@ -1,0 +1,225 @@
+schema_version = 1
+
+[[benchmark]]
+id = "paper_table_iv_horizontal_4wire_mars_75c"
+
+[benchmark.provenance]
+kind = "published_forward_calculation"
+citation = "C. H. Tam, F. Geth, and N. Mithulananthan, The Inverse Carson's Equations Problem: Definition, Implementation and Numerical Experiments, arXiv:2404.08210v2, 2024."
+location = "Tables I, II, IV, and V; geometry definition in Section III-C"
+values_reported = true
+
+[benchmark.assumptions]
+frequency_hz = 50.0
+frequency_status = "inferred_from_the_modified_carson_constants_in_table_i"
+earth_resistivity_ohm_m = 100.0
+earth_resistivity_status = "inferred_from_the_modified_carson_constants_in_table_i"
+earth_model = "modified_carson"
+transposition = "untransposed_explicit_geometry"
+neutral_treatment = "fourth_conductor_kron_reduced_assuming_zero_neutral_voltage"
+sequence_transform = "A_inverse_Zabc_A_with_A_columns_zero_positive_negative"
+
+[benchmark.observation]
+ordering = ["R0", "X0", "R1", "X1"]
+values = [0.7788, 1.1057, 0.4481, 0.3422]
+units = "ohm_per_km"
+
+[benchmark.uncertainty]
+measurement_uncertainty_status = "not_reported"
+rounding_resolution = 0.0001
+rounding_resolution_units = "ohm_per_km"
+surrogate_sigma = [2.886751345948129e-5, 2.886751345948129e-5, 2.886751345948129e-5, 2.886751345948129e-5]
+surrogate_model = "independent_uniform_rounding_error_only"
+
+[benchmark.construction]
+geometry = "horizontal_4"
+parameter_names = ["inner_offset", "outer_gap", "height", "temperature"]
+parameters = [0.45, 0.65, 9.15, 75.0]
+parameter_units = ["m", "m", "m", "degC"]
+paper_u1_m = 0.45
+paper_u2_m = 1.1
+conductor = "Mars_7_strand_Al_1350"
+conductor_count = 4
+r_ac_ref_ohm_per_m = 0.00036605872461518557
+temperature_ref_degC = 20.0
+alpha_20_per_degC = 0.00403
+gmr_m = 0.0040875
+radius_m = 0.005625
+
+[[benchmark]]
+id = "paper_table_iv_neutral_under_4wire_mars_75c"
+
+[benchmark.provenance]
+kind = "published_forward_calculation"
+citation = "C. H. Tam, F. Geth, and N. Mithulananthan, The Inverse Carson's Equations Problem: Definition, Implementation and Numerical Experiments, arXiv:2404.08210v2, 2024."
+location = "Tables I, II, IV, and V; geometry definition in Section III-C"
+values_reported = true
+
+[benchmark.assumptions]
+frequency_hz = 50.0
+frequency_status = "inferred_from_the_modified_carson_constants_in_table_i"
+earth_resistivity_ohm_m = 100.0
+earth_resistivity_status = "inferred_from_the_modified_carson_constants_in_table_i"
+earth_model = "modified_carson"
+transposition = "untransposed_explicit_geometry"
+neutral_treatment = "fourth_conductor_kron_reduced_assuming_zero_neutral_voltage"
+sequence_transform = "A_inverse_Zabc_A_with_A_columns_zero_positive_negative"
+
+[benchmark.observation]
+ordering = ["R0", "X0", "R1", "X1"]
+values = [0.7554, 1.1072, 0.4472, 0.3671]
+units = "ohm_per_km"
+
+[benchmark.uncertainty]
+measurement_uncertainty_status = "not_reported"
+rounding_resolution = 0.0001
+rounding_resolution_units = "ohm_per_km"
+surrogate_sigma = [2.886751345948129e-5, 2.886751345948129e-5, 2.886751345948129e-5, 2.886751345948129e-5]
+surrogate_model = "independent_uniform_rounding_error_only"
+
+[benchmark.construction]
+geometry = "neutral_under_4"
+parameter_names = ["half_span", "phase_height", "neutral_drop", "temperature"]
+parameters = [1.118, 9.15, 1.575, 75.0]
+parameter_units = ["m", "m", "m", "degC"]
+conductor = "Mars_7_strand_Al_1350"
+conductor_count = 4
+r_ac_ref_ohm_per_m = 0.00036605872461518557
+temperature_ref_degC = 20.0
+alpha_20_per_degC = 0.00403
+gmr_m = 0.0040875
+radius_m = 0.005625
+
+[[benchmark]]
+id = "paper_table_iv_horizontal_3wire_mars_75c"
+
+[benchmark.provenance]
+kind = "published_forward_calculation"
+citation = "C. H. Tam, F. Geth, and N. Mithulananthan, The Inverse Carson's Equations Problem: Definition, Implementation and Numerical Experiments, arXiv:2404.08210v2, 2024."
+location = "Tables I, II, IV, and V; geometry definition in Section III-C"
+values_reported = true
+
+[benchmark.assumptions]
+frequency_hz = 50.0
+frequency_status = "inferred_from_the_modified_carson_constants_in_table_i"
+earth_resistivity_ohm_m = 100.0
+earth_resistivity_status = "inferred_from_the_modified_carson_constants_in_table_i"
+earth_model = "modified_carson"
+transposition = "untransposed_explicit_geometry"
+neutral_treatment = "no_neutral_conductor"
+sequence_transform = "A_inverse_Zabc_A_with_A_columns_zero_positive_negative"
+
+[benchmark.observation]
+ordering = ["R0", "X0", "R1", "X1"]
+values = [0.5952, 1.5934, 0.4472, 0.3662]
+units = "ohm_per_km"
+
+[benchmark.uncertainty]
+measurement_uncertainty_status = "not_reported"
+rounding_resolution = 0.0001
+rounding_resolution_units = "ohm_per_km"
+surrogate_sigma = [2.886751345948129e-5, 2.886751345948129e-5, 2.886751345948129e-5, 2.886751345948129e-5]
+surrogate_model = "independent_uniform_rounding_error_only"
+
+[benchmark.construction]
+geometry = "horizontal_3"
+parameter_names = ["half_span", "height", "temperature"]
+parameters = [1.1, 9.15, 75.0]
+parameter_units = ["m", "m", "degC"]
+conductor = "Mars_7_strand_Al_1350"
+conductor_count = 3
+r_ac_ref_ohm_per_m = 0.00036605872461518557
+temperature_ref_degC = 20.0
+alpha_20_per_degC = 0.00403
+gmr_m = 0.0040875
+radius_m = 0.005625
+
+[[benchmark]]
+id = "paper_table_iv_triangle_21_67deg_3wire_mars_75c"
+
+[benchmark.provenance]
+kind = "published_forward_calculation"
+citation = "C. H. Tam, F. Geth, and N. Mithulananthan, The Inverse Carson's Equations Problem: Definition, Implementation and Numerical Experiments, arXiv:2404.08210v2, 2024."
+location = "Tables I, II, IV, and V; geometry definition in Section III-C"
+values_reported = true
+
+[benchmark.assumptions]
+frequency_hz = 50.0
+frequency_status = "inferred_from_the_modified_carson_constants_in_table_i"
+earth_resistivity_ohm_m = 100.0
+earth_resistivity_status = "inferred_from_the_modified_carson_constants_in_table_i"
+earth_model = "modified_carson"
+transposition = "untransposed_explicit_geometry"
+neutral_treatment = "no_neutral_conductor"
+sequence_transform = "A_inverse_Zabc_A_with_A_columns_zero_positive_negative"
+
+[benchmark.observation]
+ordering = ["R0", "X0", "R1", "X1"]
+values = [0.5952, 1.5873, 0.4472, 0.3692]
+units = "ohm_per_km"
+
+[benchmark.uncertainty]
+measurement_uncertainty_status = "not_reported"
+rounding_resolution = 0.0001
+rounding_resolution_units = "ohm_per_km"
+surrogate_sigma = [2.886751345948129e-5, 2.886751345948129e-5, 2.886751345948129e-5, 2.886751345948129e-5]
+surrogate_model = "independent_uniform_rounding_error_only"
+
+[benchmark.construction]
+geometry = "triangle_3"
+parameter_names = ["half_span", "height", "temperature"]
+parameters = [1.1, 9.15, 75.0]
+parameter_units = ["m", "m", "degC"]
+angle_deg = 21.67
+conductor = "Mars_7_strand_Al_1350"
+conductor_count = 3
+r_ac_ref_ohm_per_m = 0.00036605872461518557
+temperature_ref_degC = 20.0
+alpha_20_per_degC = 0.00403
+gmr_m = 0.0040875
+radius_m = 0.005625
+
+[[benchmark]]
+id = "paper_table_iv_triangle_49_27deg_3wire_mars_75c"
+
+[benchmark.provenance]
+kind = "published_forward_calculation"
+citation = "C. H. Tam, F. Geth, and N. Mithulananthan, The Inverse Carson's Equations Problem: Definition, Implementation and Numerical Experiments, arXiv:2404.08210v2, 2024."
+location = "Tables I, II, IV, and V; geometry definition in Section III-C"
+values_reported = true
+
+[benchmark.assumptions]
+frequency_hz = 50.0
+frequency_status = "inferred_from_the_modified_carson_constants_in_table_i"
+earth_resistivity_ohm_m = 100.0
+earth_resistivity_status = "inferred_from_the_modified_carson_constants_in_table_i"
+earth_model = "modified_carson"
+transposition = "untransposed_explicit_geometry"
+neutral_treatment = "no_neutral_conductor"
+sequence_transform = "A_inverse_Zabc_A_with_A_columns_zero_positive_negative"
+
+[benchmark.observation]
+ordering = ["R0", "X0", "R1", "X1"]
+values = [0.5952, 1.6547, 0.4472, 0.3355]
+units = "ohm_per_km"
+
+[benchmark.uncertainty]
+measurement_uncertainty_status = "not_reported"
+rounding_resolution = 0.0001
+rounding_resolution_units = "ohm_per_km"
+surrogate_sigma = [2.886751345948129e-5, 2.886751345948129e-5, 2.886751345948129e-5, 2.886751345948129e-5]
+surrogate_model = "independent_uniform_rounding_error_only"
+
+[benchmark.construction]
+geometry = "triangle_3"
+parameter_names = ["half_span", "height", "temperature"]
+parameters = [0.508, 9.15, 75.0]
+parameter_units = ["m", "m", "degC"]
+angle_deg = 49.27
+conductor = "Mars_7_strand_Al_1350"
+conductor_count = 3
+r_ac_ref_ohm_per_m = 0.00036605872461518557
+temperature_ref_degC = 20.0
+alpha_20_per_degC = 0.00403
+gmr_m = 0.0040875
+radius_m = 0.005625

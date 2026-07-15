@@ -58,6 +58,9 @@ susceptances. Values are converted to SI per metre internally.
 - `sigma` — standard deviations in the same input units, ordered
   `(R0, X0, R1, X1[, B0, B1])`. If omitted, a descriptive 1% tolerance is
   used; candidate scores then have no formal statistical interpretation.
+- `covariance` — full positive-definite covariance matrix in the same ordered
+  input units. It is mutually exclusive with `sigma`; correlations affect the
+  Mahalanobis objective while `standardized_residual` remains marginal.
 - `frequency` [Hz] and `earth_resistivity=100.0` [Ω·m].
 
 The observation is assumed to come from a three-phase matrix, with any circuit
@@ -69,6 +72,8 @@ struct SequenceLineObservation
     b0::Union{Nothing,Float64}
     b1::Union{Nothing,Float64}
     sigma::Vector{Float64}
+    covariance::Matrix{Float64}
+    covariance_cholesky::Matrix{Float64}
     frequency::Float64
     earth_resistivity::Float64
 end
@@ -78,7 +83,8 @@ function SequenceLineObservation(; z0, z1, b0=nothing, b1=nothing,
                                  earth_resistivity::Real=100.0,
                                  z_units::Symbol=:ohm_per_km,
                                  b_units::Symbol=:micro_siemens_per_km,
-                                 sigma=nothing)
+                                 sigma=nothing,
+                                 covariance=nothing)
     zfactor = z_units == :ohm_per_m ? 1.0 :
               z_units == :ohm_per_km ? 1e-3 :
               throw(ArgumentError("z_units must be :ohm_per_m or :ohm_per_km"))
@@ -96,21 +102,41 @@ function SequenceLineObservation(; z0, z1, b0=nothing, b1=nothing,
     yin = b0 === nothing ? zin : [zin; Float64(b0); Float64(b1)]
     factors = b0 === nothing ? fill(zfactor, 4) :
               [fill(zfactor, 4); bfactor; bfactor]
-    sigin = if sigma === nothing
-        [max(0.01 * abs(v), i <= 4 ? 1e-6 : 1e-3)
-         for (i, v) in enumerate(yin)]
+    sigma !== nothing && covariance !== nothing &&
+        throw(ArgumentError("supply either sigma or covariance, not both"))
+    covariance_in = if covariance === nothing
+        sigin = sigma === nothing ?
+            [max(0.01 * abs(v), i <= 4 ? 1e-6 : 1e-3)
+             for (i, v) in enumerate(yin)] : Float64.(collect(sigma))
+        length(sigin) == length(yin) ||
+            throw(DimensionMismatch("sigma must have $(length(yin)) entries"))
+        all(>(0), sigin) || throw(ArgumentError("all sigma values must be > 0"))
+        Diagonal(sigin .^ 2)
     else
-        Float64.(collect(sigma))
+        cov = Float64.(collect(covariance))
+        size(cov) == (length(yin), length(yin)) ||
+            throw(DimensionMismatch("covariance must be $(length(yin))×$(length(yin))"))
+        all(isfinite, cov) || throw(ArgumentError("covariance must be finite"))
+        isapprox(cov, transpose(cov); rtol=1e-10, atol=0.0) ||
+            throw(ArgumentError("covariance must be symmetric"))
+        cov
     end
-    length(sigin) == length(yin) ||
-        throw(DimensionMismatch("sigma must have $(length(yin)) entries"))
-    all(>(0), sigin) || throw(ArgumentError("all sigma values must be > 0"))
+    covariance_si = factors .* covariance_in .* transpose(factors)
+    covariance_si = 0.5 .* (covariance_si .+ transpose(covariance_si))
+    factor = try
+        cholesky(Symmetric(covariance_si))
+    catch err
+        err isa PosDefException || rethrow()
+        throw(ArgumentError("covariance must be positive definite"))
+    end
+    sigma_si = sqrt.(diag(covariance_si))
 
     SequenceLineObservation(ComplexF64(z0) * zfactor,
         ComplexF64(z1) * zfactor,
         b0 === nothing ? nothing : Float64(b0) * bfactor,
         b1 === nothing ? nothing : Float64(b1) * bfactor,
-        sigin .* factors, Float64(frequency), Float64(earth_resistivity))
+        sigma_si, covariance_si, collect(factor.L),
+        Float64(frequency), Float64(earth_resistivity))
 end
 
 """
@@ -196,6 +222,46 @@ function OverheadCarsonCandidate(; id, geometry::Symbol, r_ac_ref, gmr, radius,
         Float64(angle), Dict{String,Any}(metadata))
 end
 
+function _ic_normal_quantile(p::Real)
+    0 < p < 1 || throw(ArgumentError("normal quantile requires 0 < p < 1"))
+    # Acklam's rational approximation; absolute error is below 1.2e-9.
+    a = (-3.969683028665376e1, 2.209460984245205e2,
+         -2.759285104469687e2, 1.383577518672690e2,
+         -3.066479806614716e1, 2.506628277459239)
+    b = (-5.447609879822406e1, 1.615858368580409e2,
+         -1.556989798598866e2, 6.680131188771972e1,
+         -1.328068155288572e1)
+    c = (-7.784894002430293e-3, -3.223964580411365e-1,
+         -2.400758277161838, -2.549732539343734,
+          4.374664141464968, 2.938163982698783)
+    d = (7.784695709041462e-3, 3.224671290700398e-1,
+         2.445134137142996, 3.754408661907416)
+    plow = 0.02425
+    if p < plow
+        q = sqrt(-2log(p))
+        return (((((c[1] * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) * q + c[6]) /
+               ((((d[1] * q + d[2]) * q + d[3]) * q + d[4]) * q + 1)
+    elseif p > 1 - plow
+        return -_ic_normal_quantile(1 - p)
+    end
+    q = p - 0.5
+    r = q^2
+    (((((a[1] * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * r + a[6]) * q /
+        (((((b[1] * r + b[2]) * r + b[3]) * r + b[4]) * r + b[5]) * r + 1)
+end
+
+"Connected profile-likelihood interval for one inverse-Carson parameter."
+struct InverseCarsonProfileInterval
+    parameter::Symbol
+    estimate::Float64
+    lower::Float64
+    upper::Float64
+    lower_status::Symbol
+    upper_status::Symbol
+    confidence_level::Float64
+    delta_objective::Float64
+end
+
 "One fitted candidate returned by [`solve_inverse_carson`](@ref)."
 struct InverseCarsonFit
     candidate_id::String
@@ -214,6 +280,9 @@ struct InverseCarsonFit
     B_sequence::Union{Nothing,Matrix{ComplexF64}}
     jacobian_singular_values::Vector{Float64}
     jacobian_rank::Int
+    local_parameter_covariance::Union{Nothing,Matrix{Float64}}
+    local_confidence_intervals::Union{Nothing,Matrix{Float64}}
+    confidence_level::Float64
     local_solutions::Vector{Vector{Float64}}
     frequency::Float64
     earth_resistivity::Float64
@@ -299,10 +368,23 @@ function _ic_predict(c::OverheadCarsonCandidate, obs::SequenceLineObservation, u
 end
 
 function _ic_residual(c, obs, u)
-    (_ic_predict(c, obs, u) .- _ic_observed(obs)) ./ obs.sigma
+    LowerTriangular(obs.covariance_cholesky) \
+        (_ic_predict(c, obs, u) .- _ic_observed(obs))
 end
 
+_ic_standardized_residual(c, obs, u) =
+    (_ic_predict(c, obs, u) .- _ic_observed(obs)) ./ obs.sigma
+
 _ic_objective(c, obs, u) = sum(abs2, _ic_residual(c, obs, u))
+
+_ic_success_status(status) = status in
+    (JuMP.MOI.OPTIMAL, JuMP.MOI.LOCALLY_SOLVED,
+     JuMP.MOI.ALMOST_OPTIMAL, JuMP.MOI.ALMOST_LOCALLY_SOLVED)
+
+_ic_usable_profile_solution(model, status) = _ic_success_status(status) ||
+    (status == JuMP.MOI.SLOW_PROGRESS && JuMP.has_values(model) &&
+     JuMP.primal_status(model) in
+        (JuMP.MOI.FEASIBLE_POINT, JuMP.MOI.NEARLY_FEASIBLE_POINT))
 
 function _ic_starts(c::OverheadCarsonCandidate, count::Int)
     count >= 1 || throw(ArgumentError("starts must be at least 1"))
@@ -316,18 +398,19 @@ function _ic_starts(c::OverheadCarsonCandidate, count::Int)
     points
 end
 
-function _ic_failed_fit(c, obs, status)
+function _ic_failed_fit(c, obs, status, confidence_level)
     InverseCarsonFit(c.id, c.geometry, status, Inf, Inf, false,
         collect(_ic_parameter_names(c.geometry)), Float64[], Float64[], Float64[],
         zeros(ComplexF64, 0, 0), zeros(0, 0), zeros(ComplexF64, 0, 0), nothing,
-        Float64[], 0,
+        Float64[], 0, nothing, nothing, confidence_level,
         Vector{Vector{Float64}}(), obs.frequency, obs.earth_resistivity)
 end
 
 function _ic_fit_candidate(c::OverheadCarsonCandidate,
                            obs::SequenceLineObservation;
                            starts::Int, acceptance_sigma::Float64,
-                           rank_tolerance::Float64, optimizer,
+                           rank_tolerance::Float64, confidence_level::Float64,
+                           optimizer,
                            verbose::Bool, solver_options)
     n = length(c.lower)
     model = JuMP.Model(optimizer)
@@ -353,28 +436,44 @@ function _ic_fit_candidate(c::OverheadCarsonCandidate,
         JuMP.optimize!(model)
         status = JuMP.termination_status(model)
         push!(statuses, string(status))
-        status in (JuMP.MOI.OPTIMAL, JuMP.MOI.LOCALLY_SOLVED,
-                   JuMP.MOI.ALMOST_OPTIMAL, JuMP.MOI.ALMOST_LOCALLY_SOLVED) ||
-            continue
+        _ic_success_status(status) || continue
         sol = JuMP.value.(u)
         obj = _ic_objective(c, obs, sol)
         if all(norm(sol - old) > 1e-6 for old in local_u)
             push!(local_u, sol); push!(local_obj, obj); push!(local_status, string(status))
         end
     end
-    isempty(local_u) && return _ic_failed_fit(c, obs, join(unique(statuses), ","))
+    isempty(local_u) && return _ic_failed_fit(c, obs,
+        join(unique(statuses), ","), confidence_level)
 
     best = argmin(local_obj)
     ubest = local_u[best]
     pbest = _ic_physical(c, ubest)
     pred = Float64.(_ic_predict(c, obs, ubest))
-    residual = (pred .- _ic_observed(obs)) ./ obs.sigma
+    residual = _ic_standardized_residual(c, obs, ubest)
     constants = _ic_forward(c, pbest, obs.frequency, obs.earth_resistivity)
     Z012, B012 = _ic_sequence_matrices(constants.Z, constants.C, obs.frequency)
     J = ForwardDiff.jacobian(v -> _ic_residual(c, obs, v), ubest)
-    singular = svdvals(J)
+    jacobian_svd = svd(J)
+    singular = jacobian_svd.S
     cutoff = isempty(singular) ? Inf : rank_tolerance * maximum(singular)
     numerical_rank = count(>(cutoff), singular)
+    parameter_covariance = if numerical_rank == n
+        scale = Diagonal(c.upper .- c.lower)
+        covariance_u = jacobian_svd.V * Diagonal(1 ./ singular .^ 2) *
+                       transpose(jacobian_svd.V)
+        collect(scale * covariance_u * scale)
+    else
+        nothing
+    end
+    local_intervals = if parameter_covariance === nothing
+        nothing
+    else
+        zcrit = _ic_normal_quantile((1 + confidence_level) / 2)
+        se = sqrt.(max.(diag(parameter_covariance), 0.0))
+        hcat(max.(c.lower, pbest .- zcrit .* se),
+             min.(c.upper, pbest .+ zcrit .* se))
+    end
     ordered_local = local_u[sortperm(local_obj)]
 
     InverseCarsonFit(c.id, c.geometry, local_status[best], local_obj[best],
@@ -382,7 +481,8 @@ function _ic_fit_candidate(c::OverheadCarsonCandidate,
         collect(_ic_parameter_names(c.geometry)), Float64.(pbest), pred,
         Float64.(residual), ComplexF64.(constants.Z), Float64.(constants.C),
         ComplexF64.(Z012), obs.b0 === nothing ? nothing : ComplexF64.(B012),
-        Float64.(singular), numerical_rank,
+        Float64.(singular), numerical_rank, parameter_covariance,
+        local_intervals, confidence_level,
         [Float64.(_ic_physical(c, v)) for v in ordered_local],
         obs.frequency, obs.earth_resistivity)
 end
@@ -401,6 +501,7 @@ order; ambiguity is retained rather than collapsed to a single winner.
   standardized residual is within this threshold.
 - `rank_tolerance=1e-6` — relative threshold for the singular values of the
   standardized prediction Jacobian.
+- `confidence_level=0.95` — level for the local linearized parameter intervals.
 - `optimizer=Ipopt.Optimizer`, `verbose=false`; `solver_options` accepts an
   iterable of name-value pairs or a named tuple.
 
@@ -413,6 +514,7 @@ function solve_inverse_carson(obs::SequenceLineObservation,
                               starts::Int=16,
                               acceptance_sigma::Real=3.0,
                               rank_tolerance::Real=1e-6,
+                              confidence_level::Real=0.95,
                               optimizer=Ipopt.Optimizer,
                               verbose::Bool=false,
                               solver_options=())
@@ -421,10 +523,13 @@ function solve_inverse_carson(obs::SequenceLineObservation,
         throw(ArgumentError("candidate ids must be unique"))
     acceptance_sigma > 0 || throw(ArgumentError("acceptance_sigma must be > 0"))
     rank_tolerance > 0 || throw(ArgumentError("rank_tolerance must be > 0"))
+    0 < confidence_level < 1 ||
+        throw(ArgumentError("confidence_level must lie strictly between 0 and 1"))
 
     fits = [_ic_fit_candidate(c, obs; starts=starts,
                 acceptance_sigma=Float64(acceptance_sigma),
                 rank_tolerance=Float64(rank_tolerance), optimizer=optimizer,
+                confidence_level=Float64(confidence_level),
                 verbose=verbose, solver_options=solver_options)
             for c in candidates]
     sort!(fits, by=f -> f.objective)
@@ -440,6 +545,123 @@ function solve_inverse_carson(obs::SequenceLineObservation,
                 "candidate $(fit.candidate_id) is locally rank-deficient")
     end
     InverseCarsonResult(fits, compatible, unique(warnings))
+end
+
+function _ic_profile_endpoint(c, obs, best_u, index, target, threshold;
+                              points, bisection_steps, optimizer, verbose,
+                              solver_options)
+    n = length(best_u)
+    model = JuMP.Model(optimizer)
+    verbose || JuMP.set_silent(model)
+    JuMP.set_attribute(model, "hessian_approximation", "limited-memory")
+    options = solver_options isa NamedTuple ? pairs(solver_options) : solver_options
+    for (name, value) in options
+        JuMP.set_attribute(model, string(name), value)
+    end
+    u = JuMP.@variable(model, 0 <= u[1:n] <= 1)
+    objective(args::T...) where {T<:Real} =
+        _ic_objective(c, obs, collect(args))
+    op = JuMP.add_nonlinear_operator(model, n, objective;
+                                     name=:inverse_carson_profile_objective)
+    JuMP.@objective(model, Min, op(u...))
+
+    function evaluate(fixed_value, start)
+        JuMP.fix(u[index], fixed_value; force=true)
+        JuMP.set_start_value.(u, start)
+        JuMP.set_start_value(u[index], fixed_value)
+        JuMP.optimize!(model)
+        status = JuMP.termination_status(model)
+        _ic_usable_profile_solution(model, status) || return (Inf, start, false)
+        solution = JuMP.value.(u)
+        (_ic_objective(c, obs, solution), solution, true)
+    end
+
+    inside = best_u[index]
+    inside_solution = copy(best_u)
+    # Log spacing resolves both very tight metrology-driven intervals and
+    # weakly identified profiles that extend to the candidate bounds.
+    fractions = exp.(range(log(1e-8), 0.0; length=points))
+    for fraction in fractions
+        fixed_value = best_u[index] + fraction * (target - best_u[index])
+        value, solution, ok = evaluate(fixed_value, inside_solution)
+        if !ok || value > threshold
+            outside = fixed_value
+            crossed = ok
+            for _ in 1:bisection_steps
+                midpoint = (inside + outside) / 2
+                midvalue, midsolution, midok = evaluate(midpoint, inside_solution)
+                if !midok
+                    outside = midpoint
+                elseif midvalue <= threshold
+                    inside = midpoint
+                    inside_solution = midsolution
+                else
+                    outside = midpoint
+                    crossed = true
+                end
+            end
+            return crossed ? (inside, :threshold) : (target, :failed)
+        end
+        inside = fixed_value
+        inside_solution = solution
+    end
+    (target, :bound)
+end
+
+"""
+    profile_inverse_carson(fit, candidate, observation; kwargs...)
+
+Compute connected one-parameter profile-likelihood confidence intervals around
+an inverse-Carson fit. Each parameter is fixed successively while all remaining
+parameters are reoptimized. An endpoint status of `:threshold` means the
+chi-square threshold was crossed, `:bound` means the candidate bound was reached,
+and `:failed` conservatively returns the bound because the profile solve failed.
+
+The default threshold is the one-degree-of-freedom chi-square quantile implied
+by `fit.confidence_level`. `points=12` traces each side before bisection;
+`bisection_steps=16` refines the first crossing. These are local connected
+profiles, not a guarantee that disconnected feasible regions do not exist.
+"""
+function profile_inverse_carson(fit::InverseCarsonFit,
+                                c::OverheadCarsonCandidate,
+                                obs::SequenceLineObservation;
+                                confidence_level::Real=fit.confidence_level,
+                                points::Int=12,
+                                bisection_steps::Int=16,
+                                optimizer=Ipopt.Optimizer,
+                                verbose::Bool=false,
+                                solver_options=())
+    fit.candidate_id == c.id ||
+        throw(ArgumentError("fit and candidate ids do not match"))
+    isempty(fit.parameters) && throw(ArgumentError("cannot profile a failed fit"))
+    isapprox(fit.frequency, obs.frequency) ||
+        throw(ArgumentError("fit and observation frequencies do not match"))
+    isapprox(fit.earth_resistivity, obs.earth_resistivity) ||
+        throw(ArgumentError("fit and observation earth resistivities do not match"))
+    0 < confidence_level < 1 ||
+        throw(ArgumentError("confidence_level must lie strictly between 0 and 1"))
+    points >= 2 || throw(ArgumentError("points must be at least 2"))
+    bisection_steps >= 1 ||
+        throw(ArgumentError("bisection_steps must be at least 1"))
+
+    best_u = (fit.parameters .- c.lower) ./ (c.upper .- c.lower)
+    zcrit = _ic_normal_quantile((1 + confidence_level) / 2)
+    delta = zcrit^2
+    threshold = fit.objective + delta
+    intervals = InverseCarsonProfileInterval[]
+    for (i, name) in enumerate(fit.parameter_names)
+        lower_u, lower_status = _ic_profile_endpoint(c, obs, best_u, i, 0.0,
+            threshold; points=points, bisection_steps=bisection_steps,
+            optimizer=optimizer, verbose=verbose, solver_options=solver_options)
+        upper_u, upper_status = _ic_profile_endpoint(c, obs, best_u, i, 1.0,
+            threshold; points=points, bisection_steps=bisection_steps,
+            optimizer=optimizer, verbose=verbose, solver_options=solver_options)
+        scale = c.upper[i] - c.lower[i]
+        push!(intervals, InverseCarsonProfileInterval(name, fit.parameters[i],
+            c.lower[i] + scale * lower_u, c.lower[i] + scale * upper_u,
+            lower_status, upper_status, Float64(confidence_level), delta))
+    end
+    intervals
 end
 
 """

@@ -1,0 +1,76 @@
+schema_version = 1
+
+[[benchmark]]
+id = "opendss_deri_triangle_21_67deg_3wire_mars_75c"
+
+[benchmark.provenance]
+kind = "independent_deterministic_forward_calculation"
+implementation = "DSS C-API via OpenDSSDirect.jl"
+implementation_version = "DSS C-API 0.14.3 revision eb03a63a86e287bc71312d7e50c30288ae946142 based on OpenDSS SVN 3723"
+input_file = "opendss_mars_triangle.dss"
+api = "LineGeometries.Zmatrix/Cmatrix"
+
+[benchmark.assumptions]
+frequency_hz = 50.0
+frequency_status = "explicit"
+earth_resistivity_ohm_m = 100.0
+earth_resistivity_status = "explicit_via_LineGeometries.RhoEarth"
+earth_model = "deri"
+transposition = "untransposed_explicit_geometry"
+neutral_treatment = "no_neutral_conductor"
+sequence_transform = "A_inverse_Zabc_A_with_A_columns_zero_positive_negative"
+rdc_equals_rac = true
+rdc_note = "prevents OpenDSS frequency interpolation between different Rdc and Rac inputs"
+
+[benchmark.observation]
+ordering = ["R0", "X0", "R1", "X1", "B0", "B1"]
+values = [0.5929935172032721, 1.6041917320025227, 0.4473795739594153, 0.3691399280650188, 1.3255652964447103e-6, 3.1677234430463037e-6]
+units = ["ohm_per_km", "ohm_per_km", "ohm_per_km", "ohm_per_km", "siemens_per_km", "siemens_per_km"]
+
+[benchmark.primitive]
+z_order = "julia_column_major_3x3"
+z_values = [
+    [0.4959300820993795, 0.7808110058802188],
+    [0.048531752190714414, 0.4246725018551648],
+    [0.048550438862427915, 0.3857068002271744],
+    [0.048531752190714414, 0.4246725018551648],
+    [0.49589250092334364, 0.7808495763721225],
+    [0.048531752190714414, 0.4246725018551648],
+    [0.048550438862427915, 0.3857068002271744],
+    [0.048531752190714414, 0.4246725018551648],
+    [0.4959300820993795, 0.7808110058802188],
+]
+z_units = "ohm_per_km"
+c_order = "julia_column_major_3x3"
+c_values = [8.002792812097532, -2.2676473985941854, -1.3284767025845896, -2.2676473985941854, 8.38017353456581, -2.267647398594185, -1.3284767025845896, -2.267647398594185, 8.002792812097532]
+c_units = "nanofarad_per_km"
+
+[benchmark.uncertainty]
+measurement_uncertainty_status = "not_applicable_deterministic_forward_calculation"
+impedance_reproducibility_tolerance = 1e-10
+impedance_reproducibility_tolerance_units = "ohm_per_km"
+susceptance_reproducibility_tolerance = 1e-12
+susceptance_reproducibility_tolerance_units = "siemens_per_km"
+inverse_use_note = "model discrepancy between Deri and modified Carson must be represented separately; these tolerances are not measurement sigma"
+deri_cross_implementation_real_z_tolerance = 2e-4
+deri_cross_implementation_real_z_tolerance_units = "ohm_per_km"
+deri_cross_implementation_imag_z_tolerance = 2e-7
+deri_cross_implementation_imag_z_tolerance_units = "ohm_per_km"
+deri_cross_implementation_c_tolerance = 2e-4
+deri_cross_implementation_c_tolerance_units = "nanofarad_per_km"
+deri_cross_implementation_note = "elementwise agreement threshold between BMOPFTools and DSS C-API; kept separate from exact artifact reproducibility and measurement uncertainty"
+
+[benchmark.construction]
+geometry = "triangle_3"
+parameter_names = ["half_span", "height", "temperature"]
+parameters = [1.1, 9.15, 75.0]
+parameter_units = ["m", "m", "degC"]
+angle_deg = 21.67
+conductor = "Mars_7_strand_Al_1350"
+conductor_count = 3
+r_ac_ref_ohm_per_m = 0.00036605872461518557
+r_ac_75c_ohm_per_km = 0.44719564092614145
+temperature_ref_degC = 20.0
+alpha_20_per_degC = 0.00403
+gmr_m = 0.0040875
+radius_m = 0.005625

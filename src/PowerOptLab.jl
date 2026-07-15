@@ -110,7 +110,8 @@ export CalibLine, CalibTap, solve_parameter_estimation, ParameterEstimationResul
 
 # Inverse Carson reconstruction from diagonal sequence data
 export SequenceLineObservation, OverheadCarsonCandidate,
-       InverseCarsonFit, InverseCarsonResult, solve_inverse_carson,
+       InverseCarsonFit, InverseCarsonResult, InverseCarsonProfileInterval,
+       solve_inverse_carson, profile_inverse_carson,
        materialize_inverse_carson
 
 # Dynamic operating envelopes

@@ -44,6 +44,9 @@ end
         @test fit.compatible
         @test fit.parameters ≈ truth atol=1e-4
         @test fit.jacobian_rank == 3
+        @test size(something(fit.local_parameter_covariance)) == (3, 3)
+        @test all(something(fit.local_confidence_intervals)[:, 1] .<= truth)
+        @test all(truth .<= something(fit.local_confidence_intervals)[:, 2])
         @test fit.objective < 1e-8
         @test fit.Z_primitive == transpose(fit.Z_primitive)
         @test fit.C_primitive == transpose(fit.C_primitive)
@@ -58,6 +61,16 @@ end
         Z = PowerOptLab.BMOPFTools._pattern_keys_to_matrix(lc, "R_series_") .+
             im .* PowerOptLab.BMOPFTools._pattern_keys_to_matrix(lc, "X_series_")
         @test Z ≈ fit.Z_primitive rtol=1e-12
+
+        profiles = profile_inverse_carson(fit, c, obs;
+            points=3, bisection_steps=5,
+            solver_options=(tol=1e-9,))
+        @test length(profiles) == 3
+        @test all(p.lower <= p.estimate <= p.upper for p in profiles)
+        @test all(p.lower_status != :failed for p in profiles)
+        @test all(p.upper_status != :failed for p in profiles)
+        @test any(p.lower_status == :threshold || p.upper_status == :threshold
+                  for p in profiles)
     end
 
     @testset "series-only ambiguity and conductor-count rejection" begin
@@ -72,8 +85,42 @@ end
         @test !result.fits[findfirst(f -> f.candidate_id == "four_wire",
                                     result.fits)].compatible
         @test all(f.jacobian_rank == 2 for f in result.fits if f.compatible)
+        @test all(isnothing(f.local_parameter_covariance)
+                  for f in result.fits if f.compatible)
         @test any(w -> contains(w, "ambiguous"), result.warnings)
         @test any(w -> contains(w, "rank-deficient"), result.warnings)
+
+        horizontal_fit = result.fits[findfirst(
+            f -> f.candidate_id == "horizontal", result.fits)]
+        profiles = profile_inverse_carson(horizontal_fit, horizontal, obs;
+            points=3, bisection_steps=4)
+        height = profiles[findfirst(p -> p.parameter == :height, profiles)]
+        @test height.lower ≈ horizontal.lower[2]
+        @test height.upper ≈ horizontal.upper[2]
+        @test height.lower_status == :bound
+        @test height.upper_status == :bound
+    end
+
+
+    @testset "full covariance weighting" begin
+        c = _ic_test_candidate("correlated", :horizontal_3)
+        base = _ic_observation_from(c, [0.55, 9.15, 75.0])
+        y = PowerOptLab._ic_observed(base)
+        sigma = [1e-5, 2e-5, 1.5e-5, 2.5e-5]
+        correlation = [1.0 0.3 -0.2 0.0;
+                       0.3 1.0 0.1 -0.1;
+                      -0.2 0.1 1.0 0.4;
+                       0.0 -0.1 0.4 1.0]
+        covariance = sigma .* correlation .* transpose(sigma)
+        obs = SequenceLineObservation(
+            z0=y[1] + im * y[2], z1=y[3] + im * y[4],
+            frequency=50.0, z_units=:ohm_per_m, covariance=covariance)
+        u = [0.35, 0.55, 0.65]
+        delta = PowerOptLab._ic_predict(c, obs, u) .- y
+        @test PowerOptLab._ic_objective(c, obs, u) ≈
+              PowerOptLab.dot(delta, covariance \ delta) rtol=1e-10
+        @test obs.sigma ≈ sigma
+        @test obs.covariance ≈ covariance
     end
 
     @testset "smooth derivative and no-match outcome" begin
@@ -102,6 +149,12 @@ end
             z0=1 + im, z1=1 + im, b0=1.0, frequency=50.0)
         @test_throws DimensionMismatch SequenceLineObservation(
             z0=1 + im, z1=1 + im, frequency=50.0, sigma=ones(3))
+        @test_throws ArgumentError SequenceLineObservation(
+            z0=1 + im, z1=1 + im, frequency=50.0,
+            sigma=ones(4), covariance=PowerOptLab.Diagonal(ones(4)))
+        @test_throws ArgumentError SequenceLineObservation(
+            z0=1 + im, z1=1 + im, frequency=50.0,
+            covariance=[1.0 0 0 0; 0 0.0 0 0; 0 0 1 0; 0 0 0 1])
         @test_throws ArgumentError OverheadCarsonCandidate(
             id="bad", geometry=:horizontal_3, r_ac_ref=fill(IC_RAC, 3),
             gmr=fill(IC_GMR, 3), radius=fill(IC_RAD, 3),
