@@ -1,0 +1,517 @@
+# Compiled four-wire voltage-state evaluation for the constrained-NLLS estimator.
+#
+# This is deliberately separate from the legacy JuMP/Ipopt WLS prototype in
+# `state_estimation.jl`.  It owns only immutable topology/equation structure and
+# mutable numerical parameters; a dense composite-step solver is layered on top
+# in the next development phase.
+
+const TerminalID = Tuple{String,String}
+
+"""
+    ExactInjectionSpecification
+
+Marker hierarchy for information which is genuinely exact.  Meter readings and
+forecasts are intentionally absent: they belong in the stochastic residual
+model, not in this hierarchy.
+"""
+abstract type ExactInjectionSpecification end
+struct NoExactInjection <: ExactInjectionSpecification end
+struct ExactZeroInjection <: ExactInjectionSpecification end
+struct ExactDeviceEquation{M} <: ExactInjectionSpecification
+    model::M
+end
+
+struct _SEMeasurementSpec{Ti<:Integer}
+    kind::Symbol
+    terminal::Ti
+    reference::Ti                  # 0 denotes the earth reference
+end
+
+"""
+    SEStructure{Ti}
+
+Immutable compiled structure for the voltage-only, four-wire state-estimation
+formulation.  It imports BMOPFTools' passive, conductor-to-earth Ybus exactly
+once.  `free_state_map` maps a free conductor to its position in the rectangular
+state `[real(V_free); imag(V_free)]`; ideal-source conductors are held in the
+parameter vector instead.  Closed ideal switches are already represented by the
+node aliases in `ybus_passive`.
+
+The initial evaluator supports terminal voltage components/magnitudes and
+terminal active/reactive injection measurements, plus exact terminal
+zero-injection equations.  Device equations, branch telemetry, and the solver
+belong to subsequent phases.
+"""
+struct SEStructure{Ti<:Integer}
+    nodes::Vector{TerminalID}
+    node_index::Dict{TerminalID,Ti}
+    passive_pattern::SparseMatrixCSC{ComplexF64,Ti}
+    measurement_pattern::Vector{_SEMeasurementSpec{Ti}}
+    constraint_pattern::Vector{Ti}
+    free_state_map::Dict{TerminalID,Ti}
+    reference_map::Dict{TerminalID,ComplexF64}
+    voltage_state_jacobian::SparseMatrixCSC{Float64,Ti}
+    current_state_jacobian::SparseMatrixCSC{Float64,Ti}
+    fixed_voltage_state::Vector{Float64}
+    fixed_current_state::Vector{Float64}
+end
+
+"""
+    SEParameters
+
+Mutable numerical data paired with an [`SEStructure`](@ref).  Updating the
+measurement values, standard deviations, or fixed source phasors does not alter
+terminal ordering or symbolic sparsity.  Standard deviations are the diagonal
+whitening factors for this first implementation.
+"""
+mutable struct SEParameters
+    fixed_voltages::Vector{ComplexF64}
+    measurement_values::Vector{Float64}
+    covariance_values::Vector{Float64}
+    magnitude_epsilon::Float64
+end
+
+"""Values of the compiled residual/constraint model at one voltage state."""
+struct SEEvaluation
+    voltage::Vector{ComplexF64}
+    current::Vector{ComplexF64}
+    predicted::Vector{Float64}
+    residual::Vector{Float64}
+    constraints::Vector{Float64}
+end
+
+"""
+    ConstrainedStateEstimationResult
+
+Result from the dense composite-step reference solver.  `status` distinguishes a
+numerically converged but underobserved estimate from failure to establish the
+exact equations.  `history` records the scaled trust-region radius, merit value,
+measurement objective, and exact-constraint norm at accepted iterates.
+"""
+struct ConstrainedStateEstimationResult
+    status::Symbol
+    state::Vector{Float64}
+    evaluation::SEEvaluation
+    iterations::Int
+    constraint_rank::Int
+    tangent_dimension::Int
+    observable_dimension::Int
+    history::Vector{NamedTuple}
+end
+
+_se_node_index(s::SEStructure, node::TerminalID) = get(s.node_index, node, 0)
+
+function _source_phasors(net::Dict{String,Any}, node_index)
+    fixed = Dict{Int,ComplexF64}()
+    for (_, source) in get(net, "voltage_source", Dict())
+        bus = String(get(source, "bus", ""))
+        terminals = String.(get(source, "terminal_map", String[]))
+        magnitudes = Float64.(get(source, "v_magnitude", Float64[]))
+        angles = Float64.(get(source, "v_angle", zeros(length(terminals))))
+        length(magnitudes) == length(terminals) ||
+            throw(ArgumentError("voltage source at bus '$bus' must provide one v_magnitude per terminal"))
+        for k in eachindex(terminals)
+            i = get(node_index, (bus, terminals[k]), 0)
+            i == 0 && throw(ArgumentError("voltage source terminal ($bus, $(terminals[k])) is earth-referenced or absent from Ybus"))
+            v = magnitudes[k] * cis(k <= length(angles) ? angles[k] : 0.0)
+            if haskey(fixed, i) && !isapprox(fixed[i], v; rtol=1e-10, atol=1e-10)
+                throw(ArgumentError("conflicting ideal source phasors at aliased Ybus node ($bus, $(terminals[k]))"))
+            end
+            fixed[i] = v
+        end
+    end
+    fixed
+end
+
+function _compile_measurements(measurements, node_index, neutral)
+    specs = _SEMeasurementSpec{Int}[]
+    for m in measurements
+        m isa Measurement || throw(ArgumentError("measurements must contain `Measurement` values"))
+        i = get(node_index, (m.bus, m.terminal), 0)
+        i == 0 && throw(ArgumentError("measurement terminal ($(m.bus), $(m.terminal)) is not a free Ybus conductor"))
+        ref = _resolve_ref(m, neutral)
+        j = ref === nothing ? 0 : get(node_index, (m.bus, ref), 0)
+        ref !== nothing && !haskey(node_index, (m.bus, ref)) &&
+            throw(ArgumentError("measurement reference terminal ($(m.bus), $ref) is absent from Ybus"))
+        m.kind in (:vr, :vi, :vmag, :pinj, :qinj) ||
+            throw(ArgumentError("compiled state estimator does not support measurement kind :$(m.kind)"))
+        push!(specs, _SEMeasurementSpec(m.kind, i, j))
+    end
+    specs
+end
+
+"""
+    compile_state_estimator(net, measurements=Measurement[];
+                            neutral="n", zero_injection=String[]) -> SEStructure
+
+Compile the immutable voltage-state evaluator.  The network is represented by
+BMOPFTools' passive `I = YV` relation in SI units.  Every source terminal with a
+specified phasor is eliminated from the state; ungrounded neutrals and floating
+conductors remain explicit states, so gauge/reference deficiencies are visible
+to the later rank diagnostics rather than silently grounded.
+"""
+function compile_state_estimator(net::Dict{String,Any}, measurements::AbstractVector=Measurement[];
+                                 neutral::Union{String,Nothing}="n",
+                                 zero_injection=String[])
+    ybus = ybus_passive(net)
+    nodes = TerminalID.(ybus.nodes)
+    node_index = Dict{TerminalID,Int}(TerminalID(k) => Int(v) for (k, v) in ybus.index)
+    fixed = _source_phasors(net, node_index)
+    n = length(nodes)
+    free_indices = [i for i in 1:n if !haskey(fixed, i)]
+    free_state_map = Dict{TerminalID,Int}(nodes[i] => k for (k, i) in enumerate(free_indices))
+
+    # Map a rectangular free-voltage state into all Ybus node voltages.
+    nf = length(free_indices)
+    I = Int[]; J = Int[]; V = Float64[]
+    for (k, i) in enumerate(free_indices)
+        push!(I, i);     push!(J, k);      push!(V, 1.0)
+        push!(I, n + i); push!(J, nf + k); push!(V, 1.0)
+    end
+    E = sparse(I, J, V, 2n, 2nf)
+    Yr = sparse(real(ybus.Y)); Yi = sparse(imag(ybus.Y))
+    K = [Yr -Yi; Yi Yr]
+    M = sparse(K * E)
+
+    fixed_voltage = zeros(Float64, 2n)
+    for (i, v) in fixed
+        fixed_voltage[i] = real(v)
+        fixed_voltage[n + i] = imag(v)
+    end
+    fixed_current = Vector{Float64}(K * fixed_voltage)
+
+    specs = _compile_measurements(measurements, node_index, neutral)
+    zi = _zero_injection_set(net, zero_injection, neutral)
+    constraint_nodes = Int[]
+    for node in zi
+        i = get(node_index, node, 0)
+        i == 0 && throw(ArgumentError("zero-injection terminal $node is earth-referenced or absent from Ybus"))
+        haskey(fixed, i) && throw(ArgumentError("zero-injection terminal $node is fixed by an ideal source"))
+        push!(constraint_nodes, i)
+    end
+    unique!(constraint_nodes)
+    sort!(constraint_nodes)
+
+    SEStructure(nodes, node_index, sparse(ybus.Y), specs, constraint_nodes,
+                free_state_map, Dict(nodes[i] => v for (i, v) in fixed),
+                E, M, fixed_voltage, fixed_current)
+end
+
+function SEParameters(s::SEStructure, measurements::AbstractVector=Measurement[];
+                      magnitude_epsilon::Real=0.0)
+    length(measurements) == length(s.measurement_pattern) ||
+        throw(ArgumentError("SEParameters needs the same number of measurements used for compilation"))
+    epsmag = Float64(magnitude_epsilon)
+    epsmag >= 0 && isfinite(epsmag) ||
+        throw(ArgumentError("magnitude_epsilon must be finite and non-negative"))
+    # Store one phasor per fixed Ybus node in the deterministic node order.
+    fixed_by_node = fill(ComplexF64(NaN, NaN), length(s.nodes))
+    for (node, v) in s.reference_map
+        fixed_by_node[s.node_index[node]] = v
+    end
+    values = Float64[m.value for m in measurements]
+    sigmas = Float64[m.sigma for m in measurements]
+    isempty(measurements) && (values = Float64[]; sigmas = Float64[])
+    SEParameters(fixed_by_node, values, sigmas, epsmag)
+end
+
+function _validate_parameters(s::SEStructure, p::SEParameters)
+    length(p.fixed_voltages) == length(s.nodes) ||
+        throw(ArgumentError("fixed_voltages must contain one entry per compiled Ybus node"))
+    length(p.measurement_values) == length(s.measurement_pattern) ||
+        throw(ArgumentError("measurement_values length does not match compiled measurement pattern"))
+    length(p.covariance_values) == length(s.measurement_pattern) ||
+        throw(ArgumentError("covariance_values length does not match compiled measurement pattern"))
+    all(x -> isfinite(x) && x > 0, p.covariance_values) ||
+        throw(ArgumentError("all measurement standard deviations must be finite and > 0"))
+    p.magnitude_epsilon >= 0 && isfinite(p.magnitude_epsilon) ||
+        throw(ArgumentError("magnitude_epsilon must be finite and non-negative"))
+    return nothing
+end
+
+function _se_parts(s::SEStructure, p::SEParameters, x::AbstractVector{<:Real})
+    length(x) == size(s.voltage_state_jacobian, 2) ||
+        throw(DimensionMismatch("state has length $(length(x)); expected $(size(s.voltage_state_jacobian, 2))"))
+    _validate_parameters(s, p)
+    # Fixed source values are deliberately read from parameters: time-series
+    # source updates retain the compilation and all Jacobian sparsity.
+    b = copy(s.fixed_voltage_state)
+    for node in keys(s.reference_map)
+        i = s.node_index[node]
+        v = p.fixed_voltages[i]
+        (isfinite(real(v)) && isfinite(imag(v))) ||
+            throw(ArgumentError("fixed source phasor at node $node must be finite"))
+        b[i] = real(v); b[length(s.nodes) + i] = imag(v)
+    end
+    u = b + s.voltage_state_jacobian * x
+    q = Vector{Float64}(s.fixed_current_state + s.current_state_jacobian * x)
+    n = length(s.nodes)
+    u[1:n], u[n+1:end], q[1:n], q[n+1:end]
+end
+
+function _measurement_value(spec, vr, vi, ir, ii, epsmag)
+    i, j = spec.terminal, spec.reference
+    dvr = vr[i] - (j == 0 ? 0.0 : vr[j])
+    dvi = vi[i] - (j == 0 ? 0.0 : vi[j])
+    spec.kind === :vr   && return dvr
+    spec.kind === :vi   && return dvi
+    spec.kind === :vmag && return sqrt(dvr^2 + dvi^2 + epsmag^2)
+    spec.kind === :pinj && return dvr * ir[i] + dvi * ii[i]
+    spec.kind === :qinj && return dvi * ir[i] - dvr * ii[i]
+    error("unsupported compiled measurement kind $(spec.kind)")
+end
+
+"""
+    evaluate_state_estimator(structure, parameters, x) -> SEEvaluation
+
+Evaluate SI phasors, whitened stochastic residuals `(h(x)-z)/σ`, and exact
+zero-injection residuals.  The constraint vector is never whitened or otherwise
+softened.
+"""
+function evaluate_state_estimator(s::SEStructure, p::SEParameters, x::AbstractVector{<:Real})
+    vr, vi, ir, ii = _se_parts(s, p, x)
+    predicted = [_measurement_value(spec, vr, vi, ir, ii, p.magnitude_epsilon)
+                 for spec in s.measurement_pattern]
+    residual = (predicted .- p.measurement_values) ./ p.covariance_values
+    constraints = Vector{Float64}(undef, 2length(s.constraint_pattern))
+    for (k, i) in enumerate(s.constraint_pattern)
+        constraints[2k - 1] = ir[i]
+        constraints[2k] = ii[i]
+    end
+    SEEvaluation(ComplexF64.(vr .+ im .* vi), ComplexF64.(ir .+ im .* ii),
+                 predicted, residual, constraints)
+end
+
+"""Analytic Jacobian of the whitened stochastic residual vector."""
+function residual_jacobian(s::SEStructure, p::SEParameters, x::AbstractVector{<:Real})
+    vr, vi, ir, ii = _se_parts(s, p, x)
+    n = length(s.nodes)
+    E = s.voltage_state_jacobian
+    M = s.current_state_jacobian
+    nstate = size(E, 2)
+    J = zeros(Float64, length(s.measurement_pattern), nstate)
+    for (row, spec) in enumerate(s.measurement_pattern)
+        i, j = spec.terminal, spec.reference
+        jdvr = Vector(E[i, :]); jdvi = Vector(E[n + i, :])
+        if j != 0
+            jdvr .-= Vector(E[j, :]); jdvi .-= Vector(E[n + j, :])
+        end
+        dvr = vr[i] - (j == 0 ? 0.0 : vr[j])
+        dvi = vi[i] - (j == 0 ? 0.0 : vi[j])
+        if spec.kind === :vr
+            J[row, :] .= jdvr
+        elseif spec.kind === :vi
+            J[row, :] .= jdvi
+        elseif spec.kind === :vmag
+            mag = sqrt(dvr^2 + dvi^2 + p.magnitude_epsilon^2)
+            mag > 0 || throw(DomainError(mag, "voltage-magnitude derivative is undefined at zero; set magnitude_epsilon > 0"))
+            J[row, :] .= (dvr .* jdvr .+ dvi .* jdvi) ./ mag
+        elseif spec.kind === :pinj
+            J[row, :] .= ir[i] .* jdvr .+ ii[i] .* jdvi .+
+                         dvr .* Vector(M[i, :]) .+ dvi .* Vector(M[n + i, :])
+        elseif spec.kind === :qinj
+            J[row, :] .= ii[i] .* jdvr .- ir[i] .* jdvi .+
+                         dvi .* Vector(M[i, :]) .- dvr .* Vector(M[n + i, :])
+        end
+        J[row, :] ./= p.covariance_values[row]
+    end
+    J
+end
+
+"""Analytic Jacobian of exact zero-injection constraints."""
+function constraint_jacobian(s::SEStructure, p::SEParameters, x::AbstractVector{<:Real})
+    _se_parts(s, p, x) # validates state/parameters; Jacobian itself is constant.
+    n = length(s.nodes)
+    C = zeros(Float64, 2length(s.constraint_pattern), size(s.current_state_jacobian, 2))
+    for (k, i) in enumerate(s.constraint_pattern)
+        C[2k - 1, :] .= s.current_state_jacobian[i, :]
+        C[2k, :] .= s.current_state_jacobian[n + i, :]
+    end
+    C
+end
+
+# ── dense composite-step reference solver ───────────────────────────────────
+
+function _se_rank_nullspace(A::AbstractMatrix{<:Real}; rtol::Real=sqrt(eps(Float64)))
+    n = size(A, 2)
+    size(A, 1) == 0 && return (0, Matrix{Float64}(I, n, n))
+    F = svd(Matrix{Float64}(A); full=true)
+    smax = isempty(F.S) ? 0.0 : maximum(F.S)
+    tol = max(Float64(rtol) * max(size(A)...) * smax, eps(Float64))
+    rank = count(>(tol), F.S)
+    rank, Matrix(F.V[:, rank+1:end])
+end
+
+_se_merit(e::SEEvaluation, μ) = 0.5 * sum(abs2, e.residual) + μ * norm(e.constraints)
+
+function _se_scaled_normal_step(C, c, scale, radius)
+    isempty(c) && return zeros(Float64, size(C, 2))
+    Cs = C * Diagonal(1.0 ./ scale)
+    y = -(Cs \ c)
+    ny = norm(y)
+    ny > radius && ny > 0 && (y .*= radius / ny)
+    y ./ scale
+end
+
+function _se_soc_step(C, defect, scale, radius)
+    isempty(defect) && return zeros(Float64, size(C, 2))
+    y = (C * Diagonal(1.0 ./ scale)) \ defect
+    ny = norm(y)
+    ny > radius && ny > 0 && (y .*= radius / ny)
+    y ./ scale
+end
+
+function _se_history_entry(iteration, radius, merit, e)
+    (iteration=iteration, radius=radius, merit=merit,
+     measurement_objective=0.5 * sum(abs2, e.residual),
+     constraint_norm=norm(e.constraints))
+end
+
+"""
+    solve_compiled_state_estimator(structure, parameters, x0; kwargs...)
+        -> ConstrainedStateEstimationResult
+
+Dense reference implementation of the plan's equality-constrained
+Gauss--Newton method.  It uses a scaled Byrd--Omojokun composite step: a normal
+least-squares step for exact-equation violation, followed by a null-space
+tangential measurement step.  An exact-penalty merit function globalises both
+quantities; rejected nonlinear constraint steps receive one trust-region-limited
+second-order correction before the radius contracts.
+
+This intentionally transparent solver is for small-system verification.  It
+uses dense SVD rank/null-space diagnostics; the compiled evaluator preserves the
+sparsity needed by the planned sparse QR/Hachtel implementation.
+"""
+function solve_compiled_state_estimator(s::SEStructure, p::SEParameters,
+                                        x0::AbstractVector{<:Real};
+                                        max_iterations::Integer=100,
+                                        initial_radius::Real=0.25,
+                                        max_radius::Real=4.0,
+                                        normal_fraction::Real=0.8,
+                                        penalty::Real=10.0,
+                                        acceptance_threshold::Real=0.1,
+                                        constraint_tolerance::Real=1e-8,
+                                        optimality_tolerance::Real=1e-8,
+                                        min_radius::Real=1e-10,
+                                        rank_rtol::Real=sqrt(eps(Float64)))
+    max_iterations > 0 || throw(ArgumentError("max_iterations must be positive"))
+    0 < initial_radius <= max_radius || throw(ArgumentError("require 0 < initial_radius ≤ max_radius"))
+    0 < normal_fraction < 1 || throw(ArgumentError("normal_fraction must lie in (0, 1)"))
+    penalty > 0 || throw(ArgumentError("penalty must be positive"))
+    0 < acceptance_threshold < 1 || throw(ArgumentError("acceptance_threshold must lie in (0, 1)"))
+
+    x = Float64.(x0)
+    e = evaluate_state_estimator(s, p, x)
+    # A uniform nominal-voltage scale gives the rectangular state a physically
+    # meaningful trust-region norm even when an initial imaginary component is 0.
+    nominal = maximum(abs.(p.fixed_voltages[isfinite.(real.(p.fixed_voltages))]); init=1.0)
+    # `scale` is the diagonal D in ||D*s|| ≤ Δ, hence it has inverse-voltage
+    # units.  A unit scaled step is one nominal-voltage state increment.
+    scale = 1.0 ./ max.(abs.(x), max(nominal, 1.0))
+    radius = Float64(initial_radius)
+    μ = Float64(penalty)
+    history = [_se_history_entry(0, radius, _se_merit(e, μ), e)]
+    rejected = 0
+
+    for iteration in 1:max_iterations
+        H = residual_jacobian(s, p, x)
+        C = constraint_jacobian(s, p, x)
+        rankC, Z = _se_rank_nullspace(C; rtol=rank_rtol)
+        c = e.constraints
+        r = e.residual
+        n = _se_scaled_normal_step(C, c, scale, normal_fraction * radius)
+
+        # The tangential component is an exact linearised-null-space step.  Its
+        # own radius leaves room for the normal component already taken.
+        reduced_radius = sqrt(max(radius^2 - norm(scale .* n)^2, 0.0))
+        t = zeros(Float64, length(x))
+        if size(Z, 2) > 0 && reduced_radius > 0
+            B = H * Z
+            q = -(B \ (r + H * n))
+            nq = norm(scale .* (Z * q))
+            nq > reduced_radius && nq > 0 && (q .*= reduced_radius / nq)
+            t .= Z * q
+        end
+        step = n + t
+        model_r = r + H * step
+        model_c = c + C * step
+        predicted = _se_merit(e, μ) - (0.5 * sum(abs2, model_r) + μ * norm(model_c))
+
+        # A zero/negative predicted reduction means the local model is no longer
+        # useful; contract rather than accepting a coincidental raw decrease.
+        if !(isfinite(predicted) && predicted > 0)
+            radius *= 0.25
+            rejected += 1
+            radius < min_radius && break
+            continue
+        end
+
+        trial_x = x + step
+        trial = try
+            evaluate_state_estimator(s, p, trial_x)
+        catch err
+            err isa DomainError || rethrow()
+            nothing
+        end
+        accepted = false
+        ρ = -Inf
+        if trial !== nothing
+            actual = _se_merit(e, μ) - _se_merit(trial, μ)
+            ρ = actual / predicted
+            accepted = isfinite(ρ) && ρ >= acceptance_threshold
+        end
+
+        # One second-order correction repairs nonlinear constraint curvature;
+        # it is bounded and evaluated through the same merit acceptance test.
+        if !accepted && trial !== nothing && !isempty(c)
+            defect = -trial.constraints + c + C * step
+            soc = _se_soc_step(C, defect, scale, 0.5 * reduced_radius)
+            if norm(scale .* (step + soc)) <= radius * (1 + 1e-12)
+                soc_trial = evaluate_state_estimator(s, p, x + step + soc)
+                actual = _se_merit(e, μ) - _se_merit(soc_trial, μ)
+                ρsoc = actual / predicted
+                if isfinite(ρsoc) && ρsoc >= acceptance_threshold
+                    step .+= soc
+                    trial = soc_trial
+                    ρ = ρsoc
+                    accepted = true
+                end
+            end
+        end
+
+        if accepted
+            x .+= step
+            e = trial
+            rejected = 0
+            radius = ρ > 0.75 ? min(2radius, Float64(max_radius)) : radius
+            push!(history, _se_history_entry(iteration, radius, _se_merit(e, μ), e))
+
+            # Tangent-space first-order stationarity and exact-equation
+            # feasibility are separate conditions; satisfying only one is not
+            # convergence for a constrained estimator.
+            Cnow = constraint_jacobian(s, p, x)
+            _, Znow = _se_rank_nullspace(Cnow; rtol=rank_rtol)
+            gred = size(Znow, 2) == 0 ? 0.0 : norm(Znow' * (residual_jacobian(s, p, x)' * e.residual), Inf)
+            if norm(e.constraints) <= constraint_tolerance && gred <= optimality_tolerance
+                Hnow = residual_jacobian(s, p, x)
+                observable, _ = _se_rank_nullspace(Hnow * Znow; rtol=rank_rtol)
+                rankC, _ = _se_rank_nullspace(Cnow; rtol=rank_rtol)
+                status = observable == size(Znow, 2) ? :converged_unique : :converged_underobserved
+                return ConstrainedStateEstimationResult(status, x, e, iteration, rankC,
+                                                        size(Znow, 2), observable, history)
+            end
+        else
+            radius *= 0.25
+            rejected += 1
+            radius < min_radius && break
+        end
+    end
+
+    C = constraint_jacobian(s, p, x)
+    rankC, Z = _se_rank_nullspace(C; rtol=rank_rtol)
+    status = norm(e.constraints) > constraint_tolerance ?
+        (rejected > 0 ? :constraint_restoration_failed : :infeasible_constraints) :
+        (radius < min_radius ? :trust_region_stalled : :max_iterations)
+    ConstrainedStateEstimationResult(status, x, e, max_iterations, rankC,
+                                    size(Z, 2), 0, history)
+end
