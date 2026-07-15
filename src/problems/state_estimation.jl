@@ -455,7 +455,9 @@ function _observability(net, measurements, neutral, zi::Set{Tuple{String,String}
     nodes = yb.nodes                                  # Vector{(bus, term)}
     N = length(nodes)
     posof = Dict(nd => k for (k, nd) in enumerate(nodes))
-    Yr = Float64.(real.(yb.Y)); Yi = Float64.(imag.(yb.Y))
+    # Non-broadcast real/imag: these return SparseMatrixCSC{Float64}. The
+    # broadcast form `Float64.(real.(Y))` infers eltype Any on Julia 1.10.
+    Yr = real(yb.Y); Yi = imag(yb.Y)
 
     # Fixed (source-boundary) node voltages: v_magnitude∠v_angle per source terminal.
     fixed = Dict{Tuple{String,String},ComplexF64}()
