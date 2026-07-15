@@ -15,6 +15,7 @@ makedocs(
         "Component models" => [
             "Storage & EVs"     => "components/devices.md",
             "Advanced inverter" => "components/advanced_inverter.md",
+            "IVQ battery"       => "components/ivq_battery.md",
         ],
         "Problem specifications" => [
             "Multi-period OPF"     => "problems/multiperiod.md",

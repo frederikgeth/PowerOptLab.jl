@@ -31,6 +31,10 @@
 # stay SI, the AC↔DC coupling scales through the POC bus's v_base/i_base/s_base).
 
 const _SQRT3 = sqrt(3.0)
+# Positive start for the current-magnitude aux im (im² = |I|², im ≥ 0), to keep
+# interior-point iterates off the I = 0 point where that equality's Jacobian is
+# degenerate (per-unit current).
+const _IMAG_START = 1e-3
 const _PAIRS_IDX = ((1, 2), (2, 3), (3, 1))
 _sample_grid(N::Int) = [2pi * (k - 1) / N for k in 1:N]
 
@@ -182,7 +186,6 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
 
     vrint = Vector{Any}(undef, nph); viint = Vector{Any}(undef, nph)
     cri   = Vector{Any}(undef, nph); cii   = Vector{Any}(undef, nph)
-    imag_aux = Vector{Any}(undef, nph)
 
     Pconv = zero(JuMP.QuadExpr); Qconv = zero(JuMP.QuadExpr)
     Ppoc  = zero(JuMP.QuadExpr); Qpoc  = zero(JuMP.QuadExpr)
@@ -231,15 +234,30 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
             JuMP.add_to_expression!(ctx.kcl_i[(bus, neutral)], -cii[k])
         end
 
-        # |I|² and a |I| ≥ √(cri²+cii²) auxiliary (tight whenever loss/limits bite).
+        # |I|² (for the quadratic loss term and the current cap) and the current
+        # magnitude |I| = √(cri²+cii²) via an auxiliary `im ≥ 0`. The magnitude only
+        # feeds the LINEAR loss term a_loss·|I|, and how tightly `im` is pinned to
+        # |I| matters only there:
+        #   • a_loss ≠ 0 → the implicit square-root EQUALITY `im² = |I|²`. An epigraph
+        #     `im² ≥ isq` is tight only when the objective necessarily minimises im,
+        #     which FAILS for charging / negative-price objectives that would then
+        #     inflate im to manufacture losses and reverse the requested dispatch.
+        #     (Degenerate Jacobian only at I = 0, ∂(im²−isq)/∂im = 2·im → 0, so im
+        #     gets a small positive start.)
+        #   • a_loss == 0 → the epigraph `im² ≥ isq`. im is unused in the objective,
+        #     so the loose form is harmless and better conditioned for the solve.
         isq = JuMP.@expression(m, cri[k]^2 + cii[k]^2)
         isq_sum += isq
         if inv.i_max !== nothing
             JuMP.@constraint(m, isq <= (inv.i_max / ib)^2)
         end
         im = JuMP.@variable(m, base_name = "imag_$(inv.id)_$(ph)", lower_bound = 0.0)
-        JuMP.@constraint(m, im^2 >= isq)
-        imag_aux[k] = im
+        if inv.a_loss != 0.0
+            JuMP.set_start_value(im, _IMAG_START)   # keep iterates off the I=0 degeneracy
+            JuMP.@constraint(m, im^2 == isq)        # exact: no loss inflation
+        else
+            JuMP.@constraint(m, im^2 >= isq)        # epigraph: unused ⇒ harmless slack
+        end
         imag_sum += im
 
         # Internal EMF magnitude bounds (skipped under grid-forming, which pins the

@@ -23,7 +23,13 @@ Stamped into a solve through `model_hook!` / `solution_hook!`.
 
 - **Storage / EV** ([`StorageDevice`](@ref), [`EVDevice`](@ref)) — battery/EV
   inverter ports stamped as current injections with an inter-temporal
-  state-of-charge state.
+  state-of-charge state (an energy/power "PE" model with fixed efficiency).
+- **IVQ battery** ([`IVQBattery`](@ref)) — the current–voltage counterpart: cells
+  of a [`BatteryChemistry`](@ref) modelled in the voltage–current–charge space
+  (`v = OCV(soc) − i·R`), so voltage and current limits bind individually and a
+  current-dependent cell efficiency emerges from the physics (a Rint proxy, not a
+  full round-trip energy efficiency). Reuses the [`AdvancedInverter`](@ref) for
+  the AC↔DC converter.
 - **Advanced inverter** ([`AdvancedInverter`](@ref)) — a prototype internal-AC-node
   IBR with an output filter, internal-EMF/DC-modulation bounds, grid-forming
   operation, converter losses, and double-frequency ripple limits.
@@ -71,6 +77,8 @@ using SparseArrays
 # Component models — new network elements stamped via model_hook! / solution_hook!
 include("components/devices.jl")
 include("components/advanced_inverter.jl")
+include("components/battery_chemistry.jl")
+include("components/ivq_battery.jl")
 
 # Problem specifications — new objective/constraint structures over the staged API
 include("problems/multiperiod.jl")
@@ -99,6 +107,13 @@ export ConnectionPoint, solve_operating_envelope, OperatingEnvelopeResult
 
 # Advanced inverter (prototype internal-node IBR)
 export AdvancedInverter, solve_advanced_inverter, InverterResult
+
+# Current–voltage (IVQ) battery storage + chemistry library
+export BatteryChemistry, thevenin_chemistry, linear_chemistry, tabulated_chemistry,
+       illustrative_lfp, illustrative_nmc, illustrative_nca,
+       illustrative_lead_acid, illustrative_leaf
+export IVQBattery, solve_ivq_battery, IVQBatteryResult
+export solve_multiperiod_ivq, MultiperiodIVQResult
 
 # HELM power flow (holomorphic embedding load-flow, a bespoke solution method)
 export helm_series, HelmResult, solve_pf_helm
