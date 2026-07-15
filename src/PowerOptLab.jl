@@ -47,6 +47,10 @@ A different objective/variable/constraint structure on the same physics.
 - **Parameter estimation** ([`solve_parameter_estimation`](@ref)) — calibration
   of uncertain line lengths and transformer tap ratios from smart-meter data
   across multiple time steps (the shared-parameter dual of state estimation).
+- **Inverse Carson reconstruction** ([`solve_inverse_carson`](@ref)) — screens
+  discrete overhead construction candidates against diagonal sequence data,
+  retaining ambiguity and local identifiability diagnostics while reconstructing
+  a full primitive, neutral-explicit line model.
 - **Dynamic operating envelopes** ([`solve_operating_envelope`](@ref)) —
   per-connection-point DER export limits that respect the network's voltage and
   thermal constraints, recomputed per interval.
@@ -69,6 +73,7 @@ handled via the engine's `ctx.bases`.
 module PowerOptLab
 
 using BMOPFTools
+using ForwardDiff
 using JuMP
 using Ipopt
 using LinearAlgebra
@@ -84,6 +89,7 @@ include("components/ivq_battery.jl")
 include("problems/multiperiod.jl")
 include("problems/state_estimation.jl")
 include("problems/parameter_estimation.jl")
+include("problems/inverse_carson.jl")
 include("problems/operating_envelope.jl")
 
 # Bespoke algorithms — new solution methods (custom solve loops)
@@ -101,6 +107,11 @@ export Measurement, solve_state_estimation, StateEstimationResult
 
 # Parameter estimation (calibration of line lengths / transformer taps)
 export CalibLine, CalibTap, solve_parameter_estimation, ParameterEstimationResult
+
+# Inverse Carson reconstruction from diagonal sequence data
+export SequenceLineObservation, OverheadCarsonCandidate,
+       InverseCarsonFit, InverseCarsonResult, solve_inverse_carson,
+       materialize_inverse_carson
 
 # Dynamic operating envelopes
 export ConnectionPoint, solve_operating_envelope, OperatingEnvelopeResult
