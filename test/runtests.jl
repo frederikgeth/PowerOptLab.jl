@@ -1,4 +1,5 @@
 using Test
+using TOML
 using PowerOptLab
 using JuMP, Ipopt
 
@@ -18,6 +19,8 @@ include("fixtures.jl")
     include("ev_tests.jl")
     include("state_estimation_tests.jl")
     include("parameter_estimation_tests.jl")
+    include("inverse_carson_tests.jl")
+    include("inverse_carson_benchmark_tests.jl")
     include("operating_envelope_tests.jl")
     include("advanced_inverter_tests.jl")
     include("battery_tests.jl")

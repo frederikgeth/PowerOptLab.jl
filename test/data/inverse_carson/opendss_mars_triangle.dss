@@ -1,0 +1,12 @@
+Clear
+New Circuit.inverse_carson_benchmark basekv=0.4 pu=1 phases=3 bus1=source
+Set DefaultBaseFrequency=50
+Set EarthModel=Deri
+
+New WireData.mars Rdc=0.44719564092614145 Rac=0.44719564092614145 Runits=km GMRac=4.0875 GMRUnits=mm Radius=5.625 Radunits=mm CapRadius=5.625
+
+New LineGeometry.mars_triangle nconds=3 nphases=3
+~ cond=1 wire=mars x=-1.1 h=9.15 units=m
+~ cond=2 wire=mars x=0 h=9.587076135269887 units=m
+~ cond=3 wire=mars x=1.1 h=9.15 units=m
+~ reduce=no

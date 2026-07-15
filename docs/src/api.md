@@ -39,6 +39,19 @@ solve_parameter_estimation
 ParameterEstimationResult
 ```
 
+## Inverse Carson reconstruction
+
+```@docs
+SequenceLineObservation
+OverheadCarsonCandidate
+solve_inverse_carson
+profile_inverse_carson
+InverseCarsonFit
+InverseCarsonResult
+InverseCarsonProfileInterval
+materialize_inverse_carson
+```
+
 ## Dynamic operating envelopes
 
 ```@docs

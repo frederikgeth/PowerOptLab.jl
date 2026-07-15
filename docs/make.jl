@@ -21,6 +21,7 @@ makedocs(
             "Multi-period OPF"     => "problems/multiperiod.md",
             "State estimation"     => "problems/state_estimation.md",
             "Parameter estimation" => "problems/parameter_estimation.md",
+            "Inverse Carson"       => "problems/inverse_carson.md",
             "Operating envelopes"  => "problems/operating_envelope.md",
         ],
         "Bespoke algorithms" => [
