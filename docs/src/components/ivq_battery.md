@@ -161,8 +161,13 @@ the coupled solve conditioned — a naïve SI formulation mixes cell volts (~3.5
 network kV, and kW in one problem, spanning five orders of magnitude, and the
 solver then returns poor points. The DC↔AC coupling carries the `s_base` factor
 explicitly, so `solve_ivq_battery` and `solve_multiperiod_ivq` work in both the
-engine's SI (`per_unit=false`, the default) and per-unit (`per_unit=true`) modes;
-results are returned in SI either way.
+engine's per-unit (`per_unit=true`, **the default**) and raw-SI (`per_unit=false`)
+modes; results are returned in SI either way. Per-unit additionally conditions
+the *AC-network* side of the coupled solve, and the nonconvex multi-period
+problem converges far more reliably under it across platforms/Ipopt builds — a
+raw-SI solve of the same problem is knife-edge (small solver-option changes flip
+it between `LOCALLY_SOLVED` and `LOCALLY_INFEASIBLE`), which is why per-unit is
+the default.
 
 ## Chemistry presets and data sources
 

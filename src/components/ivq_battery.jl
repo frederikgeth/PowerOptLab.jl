@@ -208,14 +208,17 @@ through the inverter.
 # Keywords
 - `p_set=nothing` — required active-power target (W) for `:min_loss`.
 - `q_set=nothing` — optional reactive-power constraint at the POC (var).
-- `per_unit=false`, `s_base=1e6`, `optimizer=Ipopt.Optimizer`, `verbose=false`,
+- `per_unit=true`, `s_base=1e6`, `optimizer=Ipopt.Optimizer`, `verbose=false`,
   `solver_options=()`. Results are returned in SI regardless of `per_unit`.
+  Per-unit conditions the voltage–current bilinear coupling and is markedly more
+  robust for this nonconvex solve; pass `per_unit=false` only to reproduce a raw
+  SI solve.
 """
 function solve_ivq_battery(net::Dict{String,Any}, battery::IVQBattery;
                            objective::Symbol=:max_export,
                            p_set::Union{Float64,Nothing}=nothing,
                            q_set::Union{Float64,Nothing}=nothing,
-                           per_unit::Bool=false,
+                           per_unit::Bool=true,
                            s_base::Float64=1e6,
                            optimizer=Ipopt.Optimizer,
                            verbose::Bool=false,
@@ -362,12 +365,14 @@ snapshots (e.g. a time-varying slack import price via each net's `voltage_source
 
 # Keywords
 - `dt_h=1.0` — period duration in hours.
-- `per_unit=false`, `s_base=1e6`, `optimizer=Ipopt.Optimizer`, `verbose=false`,
-  `solver_options=()`. Results are SI regardless of `per_unit`.
+- `per_unit=true`, `s_base=1e6`, `optimizer=Ipopt.Optimizer`, `verbose=false`,
+  `solver_options=()`. Results are SI regardless of `per_unit`. Per-unit
+  conditions the coupled nonconvex solve and converges far more reliably across
+  platforms/Ipopt builds; `per_unit=false` reproduces a raw SI solve.
 """
 function solve_multiperiod_ivq(nets::AbstractVector, batteries::AbstractVector;
                                dt_h::Float64=1.0,
-                               per_unit::Bool=false,
+                               per_unit::Bool=true,
                                s_base::Float64=1e6,
                                optimizer=Ipopt.Optimizer,
                                verbose::Bool=false,
