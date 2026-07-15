@@ -57,7 +57,8 @@ susceptances. Values are converted to SI per metre internally.
   `:siemens_per_km`, or `:micro_siemens_per_km`.
 - `sigma` — standard deviations in the same input units, ordered
   `(R0, X0, R1, X1[, B0, B1])`. If omitted, a descriptive 1% tolerance is
-  used; candidate scores then have no formal statistical interpretation.
+  used with an absolute floor in the declared input units; candidate scores
+  then have no formal statistical interpretation.
 - `covariance` — full positive-definite covariance matrix in the same ordered
   input units. It is mutually exclusive with `sigma`; correlations affect the
   Mahalanobis objective while `standardized_residual` remains marginal.
@@ -386,6 +387,24 @@ _ic_usable_profile_solution(model, status) = _ic_success_status(status) ||
      JuMP.primal_status(model) in
         (JuMP.MOI.FEASIBLE_POINT, JuMP.MOI.NEARLY_FEASIBLE_POINT))
 
+function _ic_configure_model!(model, verbose::Bool, solver_options)
+    verbose || JuMP.set_silent(model)
+    # Ipopt relaxes variable bounds by default. That can expose the physical
+    # forward kernel to u just outside the domain validated by the candidate
+    # constructor (for example, slightly overlapping conductors). Keep its
+    # trial points inside the exact JuMP bounds. Do not send these raw
+    # Ipopt-specific attributes to another configurable optimizer.
+    if JuMP.unsafe_backend(model) isa Ipopt.Optimizer
+        JuMP.set_attribute(model, "hessian_approximation", "limited-memory")
+        JuMP.set_attribute(model, "bound_relax_factor", 0.0)
+    end
+    options = solver_options isa NamedTuple ? pairs(solver_options) : solver_options
+    for (name, value) in options
+        JuMP.set_attribute(model, string(name), value)
+    end
+    nothing
+end
+
 function _ic_starts(c::OverheadCarsonCandidate, count::Int)
     count >= 1 || throw(ArgumentError("starts must be at least 1"))
     n = length(c.lower)
@@ -414,12 +433,7 @@ function _ic_fit_candidate(c::OverheadCarsonCandidate,
                            verbose::Bool, solver_options)
     n = length(c.lower)
     model = JuMP.Model(optimizer)
-    verbose || JuMP.set_silent(model)
-    JuMP.set_attribute(model, "hessian_approximation", "limited-memory")
-    options = solver_options isa NamedTuple ? pairs(solver_options) : solver_options
-    for (name, value) in options
-        JuMP.set_attribute(model, string(name), value)
-    end
+    _ic_configure_model!(model, verbose, solver_options)
     u = JuMP.@variable(model, 0 <= u[1:n] <= 1)
     objective(args::T...) where {T<:Real} =
         _ic_objective(c, obs, collect(args))
@@ -439,8 +453,13 @@ function _ic_fit_candidate(c::OverheadCarsonCandidate,
         _ic_success_status(status) || continue
         sol = JuMP.value.(u)
         obj = _ic_objective(c, obs, sol)
-        if all(norm(sol - old) > 1e-6 for old in local_u)
+        duplicate = findfirst(old -> norm(sol - old) <= 1e-6, local_u)
+        if duplicate === nothing
             push!(local_u, sol); push!(local_obj, obj); push!(local_status, string(status))
+        elseif obj < local_obj[duplicate]
+            local_u[duplicate] = sol
+            local_obj[duplicate] = obj
+            local_status[duplicate] = string(status)
         end
     end
     isempty(local_u) && return _ic_failed_fit(c, obs,
@@ -503,7 +522,9 @@ order; ambiguity is retained rather than collapsed to a single winner.
   standardized prediction Jacobian.
 - `confidence_level=0.95` — level for the local linearized parameter intervals.
 - `optimizer=Ipopt.Optimizer`, `verbose=false`; `solver_options` accepts an
-  iterable of name-value pairs or a named tuple.
+  iterable of name-value pairs or a named tuple. Ipopt receives safe defaults
+  `hessian_approximation="limited-memory"` and `bound_relax_factor=0.0` before
+  user options are applied. Other optimizers receive no Ipopt-specific options.
 
 The solver uses modified Carson only. Returned `Z_primitive` and `C_primitive`
 retain an explicit circuit neutral; Kron reduction is used solely to compare
@@ -552,12 +573,7 @@ function _ic_profile_endpoint(c, obs, best_u, index, target, threshold;
                               solver_options)
     n = length(best_u)
     model = JuMP.Model(optimizer)
-    verbose || JuMP.set_silent(model)
-    JuMP.set_attribute(model, "hessian_approximation", "limited-memory")
-    options = solver_options isa NamedTuple ? pairs(solver_options) : solver_options
-    for (name, value) in options
-        JuMP.set_attribute(model, string(name), value)
-    end
+    _ic_configure_model!(model, verbose, solver_options)
     u = JuMP.@variable(model, 0 <= u[1:n] <= 1)
     objective(args::T...) where {T<:Real} =
         _ic_objective(c, obs, collect(args))

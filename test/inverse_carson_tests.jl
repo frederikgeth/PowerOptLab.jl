@@ -73,6 +73,32 @@ end
                   for p in profiles)
     end
 
+    @testset "four-wire round trip and neutral materialization" begin
+        c = _ic_test_candidate("neutral_under", :neutral_under_4)
+        truth = [0.55, 9.15, 1.1, 75.0]
+        obs = _ic_observation_from(c, truth; shunt=true)
+        result = solve_inverse_carson(obs, [c]; starts=8,
+                                      solver_options=(tol=1e-9,))
+        fit = only(result.fits)
+
+        @test fit.compatible
+        @test fit.parameters ≈ truth atol=2e-4
+        @test fit.jacobian_rank == 4
+        @test size(fit.Z_primitive) == (4, 4)
+        @test size(fit.C_primitive) == (4, 4)
+
+        materialized = materialize_inverse_carson(fit, c)
+        geometry = materialized["line_geometry"][c.id]
+        @test [wire["terminal"] for wire in geometry["conductors"]] ==
+              ["a", "b", "c", "n"]
+        @test length(materialized["wire_data"]) == 4
+        PowerOptLab.BMOPFTools.compile_linecode(materialized, c.id)
+        lc = materialized["linecode"][c.id]
+        Z = PowerOptLab.BMOPFTools._pattern_keys_to_matrix(lc, "R_series_") .+
+            im .* PowerOptLab.BMOPFTools._pattern_keys_to_matrix(lc, "X_series_")
+        @test Z ≈ fit.Z_primitive rtol=1e-12
+    end
+
     @testset "series-only ambiguity and conductor-count rejection" begin
         horizontal = _ic_test_candidate("horizontal", :horizontal_3)
         triangle = _ic_test_candidate("triangle", :triangle_3)
@@ -145,6 +171,29 @@ end
     end
 
     @testset "input contracts" begin
+        @test PowerOptLab._ic_normal_quantile(0.5) == 0.0
+        @test PowerOptLab._ic_normal_quantile(0.975) ≈
+              1.959963984540054 atol=2e-9
+        @test PowerOptLab._ic_normal_quantile(0.025) ≈
+              -1.959963984540054 atol=2e-9
+        @test_throws ArgumentError PowerOptLab._ic_normal_quantile(1.0)
+
+        ipopt_model = JuMP.Model(Ipopt.Optimizer)
+        PowerOptLab._ic_configure_model!(ipopt_model, false, ())
+        ipopt_backend = JuMP.unsafe_backend(ipopt_model)
+        @test JuMP.MOI.get(ipopt_backend,
+            JuMP.MOI.RawOptimizerAttribute("bound_relax_factor")) == 0.0
+        @test JuMP.MOI.get(ipopt_backend,
+            JuMP.MOI.RawOptimizerAttribute("hessian_approximation")) ==
+              "limited-memory"
+
+        # A non-Ipopt model must not receive Ipopt-only raw attributes.
+        mock_backend = JuMP.MOI.Utilities.MockOptimizer(
+            JuMP.MOI.Utilities.Model{Float64}())
+        mock_model = JuMP.direct_model(mock_backend)
+        @test isnothing(PowerOptLab._ic_configure_model!(
+            mock_model, true, ()))
+
         @test_throws ArgumentError SequenceLineObservation(
             z0=1 + im, z1=1 + im, b0=1.0, frequency=50.0)
         @test_throws DimensionMismatch SequenceLineObservation(
@@ -169,5 +218,22 @@ end
             r_ac_ref=fill(IC_RAC, 3), gmr=fill(IC_GMR, 3),
             radius=fill(IC_RAD, 3), alpha_20=0.01,
             lower=[0.3, 6.0, -100.0], upper=[0.8, 12.0, 90.0])
+
+        # Regression for Ipopt's default bound relaxation: the valid physical
+        # margin is much narrower than Ipopt's former relaxed u-bound.
+        near_contact = OverheadCarsonCandidate(
+            id="near-contact", geometry=:horizontal_3,
+            r_ac_ref=fill(IC_RAC, 3), gmr=fill(IC_GMR, 3),
+            radius=fill(IC_RAD, 3),
+            lower=[2IC_RAD + 1e-12, 6.0, 20.0],
+            upper=[0.03, 12.0, 90.0])
+        boundary_truth = [near_contact.lower[1], 9.15, 75.0]
+        boundary_obs = _ic_observation_from(near_contact, boundary_truth;
+                                             shunt=true)
+        boundary_fit = only(solve_inverse_carson(
+            boundary_obs, [near_contact]; starts=4,
+            solver_options=(tol=1e-9,)).fits)
+        @test boundary_fit.compatible
+        @test boundary_fit.parameters[1] >= near_contact.lower[1]
     end
 end

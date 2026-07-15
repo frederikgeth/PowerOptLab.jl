@@ -79,9 +79,9 @@ when shunt data were supplied. These entries are model-derived completions and
 must not be interpreted as separately measured quantities.
 
 `sigma` controls both weighting and compatibility. When it is omitted, the
-constructor supplies a descriptive 1% tolerance. Scores should only be treated
-as statistical quantities when `sigma` genuinely represents measurement and
-source-model uncertainty.
+constructor supplies a descriptive 1% tolerance with an absolute floor in the
+declared input units. Scores should only be treated as statistical quantities
+when `sigma` genuinely represents measurement and source-model uncertainty.
 
 A full `covariance` matrix may be supplied instead of `sigma`, in the ordering
 `(R0, X0, R1, X1[, B0, B1])` and in the declared input units. The objective then
@@ -120,7 +120,11 @@ meter noise, and should not be disguised as very precise measurement sigma.
 - Discrete candidates are enumerated outside the NLP.
 - Continuous variables are affinely scaled to `[0,1]`.
 - The default objective is smooth weighted least squares.
-- Ipopt uses limited-memory Hessians and deterministic multistart.
+- Ipopt uses limited-memory Hessians, exact (unrelaxed) variable bounds, and
+  deterministic multistart. This prevents trial points from escaping the
+  candidate domain validated before optimization.
+- Alternative optimizers do not receive Ipopt-specific raw attributes and must
+  honor the JuMP variable bounds during nonlinear evaluations.
 - Distances remain strictly positive through physical candidate bounds.
 - Candidate compatibility requires every standardized residual to lie within
   `acceptance_sigma` (three by default).
