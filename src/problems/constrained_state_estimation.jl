@@ -134,6 +134,26 @@ mutable struct SEParameters
     voltage_min_model::Float64
     regularization_voltage::Float64
     continuation_alpha::Float64
+    prior_indices::Vector{Int}
+    prior_values::Vector{Float64}
+    prior_sigmas::Vector{Float64}
+end
+
+"""A stochastic prior on selected rectangular voltage-state entries."""
+struct StatePrior
+    indices::Vector{Int}
+    values::Vector{Float64}
+    sigmas::Vector{Float64}
+    function StatePrior(indices::AbstractVector{<:Integer}, values::AbstractVector{<:Real},
+                        sigmas::AbstractVector{<:Real})
+        length(indices) == length(values) == length(sigmas) ||
+            throw(ArgumentError("state prior indices, values, and sigmas must have equal length"))
+        all(i -> i > 0, indices) || throw(ArgumentError("state prior indices must be positive"))
+        all(isfinite, values) || throw(ArgumentError("state prior values must be finite"))
+        all(σ -> isfinite(σ) && σ > 0, sigmas) ||
+            throw(ArgumentError("state prior sigmas must be finite and > 0"))
+        new(Int.(indices), Float64.(values), Float64.(sigmas))
+    end
 end
 
 """Values of the compiled residual/constraint model at one voltage state."""
@@ -143,6 +163,7 @@ struct SEEvaluation
     device_current::Vector{ComplexF64}
     predicted::Vector{Float64}
     residual::Vector{Float64}
+    prior_residual::Vector{Float64}
     constraints::Vector{Float64}
 end
 
@@ -330,7 +351,7 @@ end
 function SEParameters(s::SEStructure, measurements::AbstractVector=Measurement[];
                       exact_devices=Any[], magnitude_epsilon::Real=0.0,
                       voltage_min_model::Real=1e-3, regularization_voltage::Real=1e-3,
-                      continuation_alpha::Real=1.0)
+                      continuation_alpha::Real=1.0, prior::Union{StatePrior,Nothing}=nothing)
     length(measurements) == length(s.measurement_pattern) ||
         throw(ArgumentError("SEParameters needs the same number of measurements used for compilation"))
     epsmag = Float64(magnitude_epsilon)
@@ -352,8 +373,23 @@ function SEParameters(s::SEStructure, measurements::AbstractVector=Measurement[]
     sigmas = Float64[m.sigma for m in measurements]
     isempty(measurements) && (values = Float64[]; sigmas = Float64[])
     powers, currents, admittances = _flatten_device_parameters(exact_devices)
+    prior_indices = isnothing(prior) ? Int[] : copy(prior.indices)
+    prior_values = isnothing(prior) ? Float64[] : copy(prior.values)
+    prior_sigmas = isnothing(prior) ? Float64[] : copy(prior.sigmas)
     SEParameters(fixed_by_node, values, sigmas, epsmag, powers, currents, admittances,
-                 vmin, vreg, α)
+                 vmin, vreg, α, prior_indices, prior_values, prior_sigmas)
+end
+
+"""Replace the stochastic state prior without recompiling network structure."""
+function set_state_prior!(p::SEParameters, prior::Union{StatePrior,Nothing})
+    if isnothing(prior)
+        empty!(p.prior_indices); empty!(p.prior_values); empty!(p.prior_sigmas)
+    else
+        p.prior_indices = copy(prior.indices)
+        p.prior_values = copy(prior.values)
+        p.prior_sigmas = copy(prior.sigmas)
+    end
+    p
 end
 
 function _validate_parameters(s::SEStructure, p::SEParameters)
@@ -377,6 +413,14 @@ function _validate_parameters(s::SEStructure, p::SEParameters)
         throw(ArgumentError("regularization_voltage must be finite and > 0"))
     0 <= p.continuation_alpha <= 1 && isfinite(p.continuation_alpha) ||
         throw(ArgumentError("continuation_alpha must lie in [0, 1]"))
+    length(p.prior_indices) == length(p.prior_values) == length(p.prior_sigmas) ||
+        throw(ArgumentError("state prior indices, values, and sigmas must have equal length"))
+    nstate = size(s.voltage_state_jacobian, 2)
+    all(i -> 1 <= i <= nstate, p.prior_indices) ||
+        throw(ArgumentError("state prior index is outside the compiled state"))
+    all(isfinite, p.prior_values) || throw(ArgumentError("state prior values must be finite"))
+    all(σ -> isfinite(σ) && σ > 0, p.prior_sigmas) ||
+        throw(ArgumentError("state prior sigmas must be finite and > 0"))
     return nothing
 end
 
@@ -497,7 +541,9 @@ function evaluate_state_estimator(s::SEStructure, p::SEParameters, x::AbstractVe
     dir, dii, _, _ = _device_parts(s, p, vr, vi)
     predicted = [_measurement_value(spec, vr, vi, ir, ii, p.magnitude_epsilon)
                  for spec in s.measurement_pattern]
-    residual = (predicted .- p.measurement_values) ./ p.covariance_values
+    measurement_residual = (predicted .- p.measurement_values) ./ p.covariance_values
+    prior_residual = (Float64.(x[p.prior_indices]) .- p.prior_values) ./ p.prior_sigmas
+    residual = vcat(measurement_residual, prior_residual)
     constraints = Vector{Float64}(undef, 2length(s.constraint_pattern))
     for (k, i) in enumerate(s.constraint_pattern)
         constraints[2k - 1] = ir[i] + dir[i]
@@ -505,7 +551,7 @@ function evaluate_state_estimator(s::SEStructure, p::SEParameters, x::AbstractVe
     end
     SEEvaluation(ComplexF64.(vr .+ im .* vi), ComplexF64.(ir .+ im .* ii),
                  ComplexF64.(dir .+ im .* dii),
-                 predicted, residual, constraints)
+                 predicted, residual, prior_residual, constraints)
 end
 
 """Analytic Jacobian of the whitened stochastic residual vector."""
@@ -515,7 +561,7 @@ function residual_jacobian(s::SEStructure, p::SEParameters, x::AbstractVector{<:
     E = s.voltage_state_jacobian
     M = s.current_state_jacobian
     nstate = size(E, 2)
-    J = zeros(Float64, length(s.measurement_pattern), nstate)
+    J = zeros(Float64, length(s.measurement_pattern) + length(p.prior_indices), nstate)
     for (row, spec) in enumerate(s.measurement_pattern)
         i, j = spec.terminal, spec.reference
         jdvr = Vector(E[i, :]); jdvi = Vector(E[n + i, :])
@@ -540,6 +586,9 @@ function residual_jacobian(s::SEStructure, p::SEParameters, x::AbstractVector{<:
                          dvi .* Vector(M[i, :]) .- dvr .* Vector(M[n + i, :])
         end
         J[row, :] ./= p.covariance_values[row]
+    end
+    for (offset, i) in enumerate(p.prior_indices)
+        J[length(s.measurement_pattern) + offset, i] = 1.0 / p.prior_sigmas[offset]
     end
     J
 end
@@ -1048,3 +1097,62 @@ row per requested quantity and one column per state variable.
 """
 derived_covariance(s::SEStructure, p::SEParameters, x::AbstractVector{<:Real}, jacobian::AbstractMatrix{<:Real}; kwargs...) =
     _derived_covariance(s, p, x, jacobian; kwargs...)
+
+# ── time-series estimation ──────────────────────────────────────────────────
+
+"""Outcome of sequential estimation over one unchanged compiled topology."""
+struct TimeSeriesStateEstimationResult
+    status::Symbol
+    snapshots::Vector{Any}
+    completed_snapshots::Int
+end
+
+function _se_previous_state_prior(x, sigma)
+    n = length(x)
+    sigmas = sigma isa Real ? fill(Float64(sigma), n) : Float64.(sigma)
+    length(sigmas) == n || throw(ArgumentError("previous_state_sigma must be scalar or have one value per state"))
+    StatePrior(collect(1:n), Float64.(x), sigmas)
+end
+
+"""
+    solve_time_series_state_estimator(structure, parameters, x0;
+                                      previous_state_sigma=nothing, solver=:sparse, kwargs...)
+
+Solve successive snapshots without rebuilding terminal maps, Ybus structure, or
+measurement/device incidence.  `parameters` contains one mutable
+[`SEParameters`](@ref) per snapshot; callers update its numerical measurements,
+covariances, sources, and device values in place before calling.  Each snapshot
+warm-starts from the preceding result.  When `previous_state_sigma` is supplied,
+that preceding state becomes a whitened stochastic prior for the next snapshot,
+not an exact equation.
+
+`solver` is `:sparse` (default) or `:dense`.  The result preserves every
+per-snapshot result and stops at the first non-converged snapshot, reporting
+`:time_series_stalled` without claiming later estimates.
+"""
+function solve_time_series_state_estimator(s::SEStructure,
+                                            parameters::AbstractVector{<:SEParameters},
+                                            x0::AbstractVector{<:Real};
+                                            previous_state_sigma=nothing,
+                                            solver::Symbol=:sparse, kwargs...)
+    isempty(parameters) && throw(ArgumentError("time-series estimation needs at least one parameter snapshot"))
+    solve_one = solver === :sparse ? solve_sparse_state_estimator :
+                solver === :dense ? solve_compiled_state_estimator :
+                throw(ArgumentError("solver must be :sparse or :dense"))
+    x = Float64.(x0)
+    snapshots = Any[]
+    for (t, p) in enumerate(parameters)
+        if t == 1 || isnothing(previous_state_sigma)
+            set_state_prior!(p, nothing)
+        else
+            set_state_prior!(p, _se_previous_state_prior(x, previous_state_sigma))
+        end
+        result = solve_one(s, p, x; kwargs...)
+        push!(snapshots, result)
+        if !(result.status in (:converged_unique, :converged_underobserved))
+            return TimeSeriesStateEstimationResult(:time_series_stalled, snapshots, t - 1)
+        end
+        x = result.state
+    end
+    TimeSeriesStateEstimationResult(:converged, snapshots, length(snapshots))
+end

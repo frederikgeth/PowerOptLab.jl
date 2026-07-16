@@ -145,6 +145,31 @@ end
     direction = unobservable_directions(sw, pw, xtrue; count=1)
     @test norm(residual_jacobian(sw, pw, xtrue) * direction) ≤ 1e-8
     @test_throws ArgumentError selected_state_covariance(sw, pw, xtrue, [1])
+
+    # Priors are ordinary whitened residuals.  They add rows to H without
+    # changing the compiled topology or measurement incidence.
+    prior = StatePrior([1], [xtrue[1] - 1.0], [2.0])
+    pp = SEParameters(s, measurements; prior=prior)
+    ep = evaluate_state_estimator(s, pp, xtrue)
+    @test length(ep.prior_residual) == 1
+    @test ep.prior_residual == [0.5]
+    @test size(residual_jacobian(s, pp, xtrue), 1) == length(measurements) + 1
+
+    # A time-series solve reuses `s`, warm-starts snapshot 2, and makes the
+    # previous state a stochastic (not exact) prior.
+    p1 = SEParameters(s, measurements)
+    p2 = SEParameters(s, measurements)
+    p2.measurement_values[1] += 2.0
+    series = solve_time_series_state_estimator(s, [p1, p2], zeros(length(xtrue));
+                                                previous_state_sigma=10.0, initial_radius=2.0)
+    @test series.status == :converged
+    @test series.completed_snapshots == 2
+    @test length(series.snapshots) == 2
+    @test length(p1.prior_indices) == 0
+    @test p2.prior_values ≈ series.snapshots[1].state
+    measured_state = s.free_state_map[(measurements[1].bus, measurements[1].terminal)]
+    @test series.snapshots[2].state[measured_state] > series.snapshots[1].state[measured_state]
+    @test series.snapshots[2].state[measured_state] < p2.measurement_values[1]
 end
 
 @testset "Compiled constrained state estimator: exact nonlinear devices" begin

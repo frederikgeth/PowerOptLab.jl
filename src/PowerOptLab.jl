@@ -114,7 +114,9 @@ export TerminalID, ExactInjectionSpecification, NoExactInjection,
        ContinuationStateEstimationResult, solve_with_continuation,
        SparseConstrainedStateEstimationResult, solve_sparse_state_estimator,
        SEObservability, observability_diagnostics, unobservable_directions,
-       selected_state_covariance, derived_covariance
+       selected_state_covariance, derived_covariance,
+       StatePrior, set_state_prior!, TimeSeriesStateEstimationResult,
+       solve_time_series_state_estimator
 
 # Parameter estimation (calibration of line lengths / transformer taps)
 export CalibLine, CalibTap, solve_parameter_estimation, ParameterEstimationResult
