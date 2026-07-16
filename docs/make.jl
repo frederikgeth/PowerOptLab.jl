@@ -34,6 +34,7 @@ makedocs(
             "Constrained NLLS state estimation" => "tutorials/constrained_nlls_state_estimation.md",
             "Inverse Carson reconstruction" => "tutorials/inverse_carson_reconstruction.md",
             "Battery storage models" => "tutorials/battery_storage_models.md",
+            "HELM versus nonlinear power flow" => "tutorials/helm_vs_nonlinear_power_flow.md",
         ],
         "Contributing"       => "contributing.md",
         "API reference"      => "api.md",
