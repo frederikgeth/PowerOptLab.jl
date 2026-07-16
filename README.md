@@ -38,7 +38,7 @@ Contributions are organised by *what layer of the engine they extend* — see
 | **Legacy WLS state estimation** | [`solve_state_estimation`](src/problems/state_estimation.jl) | bounds-free physics + custom objective |
 | **Constrained NLLS state estimation** | [`solve_sparse_state_estimator`](src/problems/constrained_state_estimation.jl) | compiled four-wire residual/constraint model |
 | **Parameter estimation** (calibrate line lengths / taps) | [`solve_parameter_estimation`](src/problems/parameter_estimation.jl) | shared parameters across snapshots + WLS objective |
-| **Dynamic operating envelopes** (DER export limits) | [`solve_operating_envelope`](src/problems/operating_envelope.jl) | operational bounds + fairness objective |
+| **Dynamic operating envelopes** (active import/export capacity) | [`solve_operating_envelope`](src/problems/operating_envelope.jl) | operational bounds + scenarios + fairness policy |
 
 **Bespoke algorithms** (`src/algorithms/`) — new solution methods. None yet; the slot is reserved.
 
@@ -108,23 +108,30 @@ Diverse loads across multiple time steps are what make the shared parameters
 identifiable — a single snapshot cannot separate a long line from a heavy load.
 `per_unit=true` and `per_unit=false` give identical estimates.
 
-### Dynamic operating envelope (DER export limits)
+### Dynamic operating envelopes
 
 ```julia
 using PowerOptLab
-cps  = [ConnectionPoint(id="der1", bus="bus1", export_max=10e3),   # W
-        ConnectionPoint(id="der2", bus="bus2", export_max=10e3)]
-# `nets` are per-interval snapshots (differing baseline loads). Each interval's
-# envelope respects that interval's voltage/thermal limits.
-env = solve_operating_envelope(nets, cps; fairness=:equal)  # or :sum, :proportional
-env.envelope["der1"]   # allocated export limit per interval (W)
-env.total_export       # total allocated across connection points, per interval
+cps = [ConnectionPoint(id="der1", bus="bus1", export_max=10e3),
+       # Bind realistic PV/batteries to an existing BMOPFTools IBR so its
+       # mandatory Q-V law and converter limits remain active.
+       ConnectionPoint(id="der2", bus="bus2", ibr_id="pv2", export_max=10e3)]
+
+env = solve_operating_envelope(nets, cps;
+    direction=:export,
+    fairness=FairnessPolicy(kind=:max_min, normalization=:capacity),
+    security=:bound_point)  # use :corners for every zero/full box corner
+
+env.envelope["der1"]  # positive directional capacity per interval (W)
+env.total_capacity
+env.diagnostics
 ```
 
-`:equal` allocates the same limit to every point (equitable); `:sum` maximises
-the total (efficient, but may starve electrically weaker points); `:proportional`
-maximises `sum(log(pₑ))` — a middle ground where no point is starved but stronger
-points still get more.
+The solver supports export or import, forecast/model scenario groups, weighted
+and normalized fairness policies, and explicit bound-point versus all-corner
+security semantics. Loads retain snapshot P/Q; connection-bound IBRs retain
+their prescribed Volt-VAr/Volt-Watt laws. Add a BMOPFTools STATCOM to a copy of
+the network to quantify its impact on the active-power envelope.
 
 ### Advanced inverter (prototype internal-node IBR)
 

@@ -90,8 +90,12 @@ materialize_inverse_carson
 
 ```@docs
 ConnectionPoint
+FairnessPolicy
 solve_operating_envelope
+compare_operating_envelope_policies
+verify_operating_envelope
 OperatingEnvelopeResult
+OperatingEnvelopeVerification
 ```
 
 ## Advanced inverter

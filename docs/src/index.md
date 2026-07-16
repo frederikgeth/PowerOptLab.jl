@@ -38,7 +38,7 @@ New formulations over the same physics, via the staged `build_opf_model` /
 | [Legacy WLS state estimation](problems/state_estimation.md) | [`solve_state_estimation`](@ref) | inverse | promotion candidate |
 | [Constrained NLLS state estimation](problems/constrained_state_estimation.md) | [`solve_sparse_state_estimator`](@ref) | inverse | prototype |
 | [Parameter estimation](problems/parameter_estimation.md) (line lengths / taps) | [`solve_parameter_estimation`](@ref) | inverse | prototype |
-| [Dynamic operating envelopes](problems/operating_envelope.md) (DER export limits) | [`solve_operating_envelope`](@ref) | forward | promotion candidate |
+| [Dynamic operating envelopes](problems/operating_envelope.md) (active import/export capacity) | [`solve_operating_envelope`](@ref) | forward | research prototype |
 
 ### Bespoke algorithms
 
