@@ -89,6 +89,9 @@ end
                       n_series=100, n_parallel=1, soc_init=0.6, inverter=inv)
     r = solve_ivq_battery(inv_grid(), bat)
     @test r.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+    @test bat isa AbstractDevice
+    @test solve_status(r).publishable
+    @test solve_diagnostics(r).soc == r.soc
     @test r.p_poc ≈ 5000.0  rtol=1e-3                          # export at nameplate
     @test r.i_cell > 0                                          # discharging
     @test r.p_dc ≈ r.p_poc  rtol=1e-3                          # no loss model ⇒ P_dc = P_poc
@@ -179,6 +182,8 @@ end
                    soc_init=0.6, inverter=inv, soc_final=1.5))
     # Nonpositive dt_h (multi-period entry).
     @test_throws ArgumentError solve_multiperiod_ivq([inv_grid()], [bat]; dt_h=0.0)
+    @test_throws ArgumentError solve_multiperiod_ivq([inv_grid()], [bat];
+        time_grid=TimeGrid([1.0, 1.0]))
     # The embedded inverter is validated through the battery entry points too.
     badrating = AdvancedInverter(id="bat", bus="poc", s_max=-1.0)
     @test_throws ArgumentError solve_ivq_battery(inv_grid(),

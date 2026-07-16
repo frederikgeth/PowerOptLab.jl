@@ -12,6 +12,29 @@ PowerOptLab
 
 ```@docs
 SolveOutcome
+SolveStatus
+AbstractSolveResult
+solve_status
+solve_diagnostics
+TimeGrid
+MultiContext
+build_multi_context
+```
+
+## Extension interfaces
+
+```@docs
+AbstractDevice
+device_id
+validate_device
+stamp_device!
+link_device!
+extract_device
+AbstractMeasurement
+measurement_kind
+measurement_value
+measurement_sigma
+measurement_prediction
 ```
 
 ## Devices

@@ -8,6 +8,11 @@ described by an SI-valued struct; the package handles the per-unit scaling, the
 current-injection stamping into the engine's KCL, and the inter-temporal
 state-of-charge linking.
 
+All package devices subtype [`AbstractDevice`](@ref) and use the same lifecycle:
+[`validate_device`](@ref), [`stamp_device!`](@ref), [`link_device!`](@ref), and
+[`extract_device`](@ref). New experimental devices can implement that interface
+without adding another type switch to the multi-period builder.
+
 ## Model
 
 Per snapshot, a device contributes a per-phase current injection `(cr, ci)` added

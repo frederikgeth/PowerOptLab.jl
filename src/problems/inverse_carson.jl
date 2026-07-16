@@ -290,11 +290,28 @@ struct InverseCarsonFit
 end
 
 "Result of [`solve_inverse_carson`](@ref), retaining all candidate fits."
-struct InverseCarsonResult
+struct InverseCarsonResult <: AbstractSolveResult
     fits::Vector{InverseCarsonFit}
     compatible_candidates::Vector{String}
     warnings::Vector{String}
 end
+
+function solve_status(result::InverseCarsonResult)
+    successful = [fit for fit in result.fits
+                  if isfinite(fit.objective) && !isempty(fit.parameters)]
+    has_primal = !isempty(successful)
+    optimal = has_primal && all(fit -> fit.termination_status in
+        ("OPTIMAL", "LOCALLY_SOLVED"), successful)
+    termination = _termination_summary(fit.termination_status for fit in result.fits)
+    SolveStatus(termination, has_primal ? "FEASIBLE_POINT" : "NO_SOLUTION",
+                has_primal, has_primal, optimal, optimal)
+end
+
+solve_diagnostics(result::InverseCarsonResult) =
+    (candidate_count=length(result.fits),
+     compatible_count=length(result.compatible_candidates),
+     best_objective=minimum((fit.objective for fit in result.fits); init=Inf),
+     warning_count=length(result.warnings))
 
 _ic_observed(obs::SequenceLineObservation) = obs.b0 === nothing ?
     Float64[real(obs.z0), imag(obs.z0), real(obs.z1), imag(obs.z1)] :

@@ -145,6 +145,8 @@ end
         P = 2000.0
         hr = helm_series(_two_node_net(P))
         @test hr.status == :converged && hr.converged
+        @test solve_status(hr).publishable
+        @test solve_diagnostics(hr).residual == hr.residual
         dv = hr.V[("ld", "a")] - hr.V[("ld", "n")]
         @test dv ≈ _dv_closed_form(P) rtol=1e-9
         @test abs(imag(dv)) < 1e-9
