@@ -19,7 +19,8 @@ makedocs(
         ],
         "Problem specifications" => [
             "Multi-period OPF"     => "problems/multiperiod.md",
-            "State estimation"     => "problems/state_estimation.md",
+            "Legacy WLS state estimation" => "problems/state_estimation.md",
+            "Constrained NLLS state estimation" => "problems/constrained_state_estimation.md",
             "Parameter estimation" => "problems/parameter_estimation.md",
             "Inverse Carson"       => "problems/inverse_carson.md",
             "Operating envelopes"  => "problems/operating_envelope.md",

@@ -22,12 +22,46 @@ solve_multiperiod_opf
 MultiperiodResult
 ```
 
-## State estimation
+## Legacy WLS state estimation
 
 ```@docs
 Measurement
 solve_state_estimation
 StateEstimationResult
+```
+
+## Constrained NLLS state estimation
+
+```@docs
+TerminalConnection
+ExactInjectionSpecification
+ConstantPowerDevice
+ConstantCurrentDevice
+ZIPDevice
+ExactDeviceEquation
+BranchMeasurement
+SEStructure
+SEParameters
+SEEvaluation
+compile_state_estimator
+evaluate_state_estimator
+residual_jacobian
+constraint_jacobian
+ConstrainedStateEstimationResult
+solve_compiled_state_estimator
+SparseConstrainedStateEstimationResult
+solve_sparse_state_estimator
+ContinuationStateEstimationResult
+solve_with_continuation
+SEObservability
+observability_diagnostics
+unobservable_directions
+selected_state_covariance
+derived_covariance
+StatePrior
+set_state_prior!
+TimeSeriesStateEstimationResult
+solve_time_series_state_estimator
 ```
 
 ## Parameter estimation

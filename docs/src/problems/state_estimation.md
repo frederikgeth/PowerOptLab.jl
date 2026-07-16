@@ -1,6 +1,10 @@
-# State estimation
+# Legacy WLS state estimation
 
 > **Kind:** Problem specification · **Maturity:** promotion candidate · **Direction:** inverse · **Temporal:** single-snapshot
+
+This page documents the original JuMP/Ipopt WLS prototype.  For the compiled
+four-wire constrained-NLLS estimator, exact device equations, branch telemetry,
+and time series, use [Constrained NLLS state estimation](constrained_state_estimation.md).
 
 [`solve_state_estimation`](@ref) is a *different problem specification* over the
 same network physics: given noisy measurements of an energised network, find the

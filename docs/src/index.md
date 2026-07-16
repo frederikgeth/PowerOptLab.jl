@@ -35,7 +35,8 @@ New formulations over the same physics, via the staged `build_opf_model` /
 | Capability | Entry point | Direction | Maturity |
 |---|---|---|---|
 | [Multi-period OPF](problems/multiperiod.md) co-optimising many snapshots | [`solve_multiperiod_opf`](@ref) | forward | promotion candidate |
-| [State estimation](problems/state_estimation.md) (weighted least squares) | [`solve_state_estimation`](@ref) | inverse | promotion candidate |
+| [Legacy WLS state estimation](problems/state_estimation.md) | [`solve_state_estimation`](@ref) | inverse | promotion candidate |
+| [Constrained NLLS state estimation](problems/constrained_state_estimation.md) | [`solve_sparse_state_estimator`](@ref) | inverse | prototype |
 | [Parameter estimation](problems/parameter_estimation.md) (line lengths / taps) | [`solve_parameter_estimation`](@ref) | inverse | prototype |
 | [Dynamic operating envelopes](problems/operating_envelope.md) (DER export limits) | [`solve_operating_envelope`](@ref) | forward | promotion candidate |
 

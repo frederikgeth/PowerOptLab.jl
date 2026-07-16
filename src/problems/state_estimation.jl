@@ -43,9 +43,10 @@ A single scalar measurement for [`solve_state_estimation`](@ref). `value` and
 is the measurement standard deviation (WLS weight `1/sigma²`), and must be
 finite and strictly positive.
 
-- `kind::Symbol` — `:vmag` (voltage magnitude across `(bus, terminal)`→
-  `reference`), `:pinj` (active power injected into the network at that terminal
-  pair), or `:qinj` (reactive power injection).
+- `kind::Symbol` — `:vr`, `:vi`, or `:vmag` (a rectangular component or the
+  magnitude of the voltage across `(bus, terminal)`→`reference`), `:pinj`
+  (active power injected into the network at that terminal pair), or `:qinj`
+  (reactive power injection).
 - `bus::String`, `terminal::String="1"` — the measured phase conductor.
 - `reference` — the return terminal the quantity is referenced to. `missing`
   (the default) inherits the solve's `neutral`; a `String` names an explicit
@@ -67,8 +68,8 @@ struct Measurement
     function Measurement(; kind::Symbol, bus::String, value::Real, sigma::Real,
                          terminal::String="1",
                          reference::Union{String,Nothing,Missing}=missing)
-        kind in (:vmag, :pinj, :qinj) ||
-            throw(ArgumentError("unknown measurement kind :$(kind); expected :vmag, :pinj, or :qinj"))
+        kind in (:vr, :vi, :vmag, :pinj, :qinj) ||
+            throw(ArgumentError("unknown measurement kind :$(kind); expected :vr, :vi, :vmag, :pinj, or :qinj"))
         isfinite(value) ||
             throw(ArgumentError("measurement value must be finite (got $value)"))
         (isfinite(sigma) && sigma > 0) ||
@@ -309,6 +310,9 @@ function solve_state_estimation(net::Dict{String,Any}, measurements::AbstractVec
     isempty(measurements) && throw(ArgumentError("no measurements supplied"))
     all(m -> m isa Measurement, measurements) ||
         throw(ArgumentError("measurements must be a collection of `Measurement`"))
+    all(m -> m.kind in (:vmag, :pinj, :qinj), measurements) ||
+        throw(ArgumentError("solve_state_estimation currently supports :vmag, :pinj, and :qinj; " *
+                            "use the compiled constrained-NLLS evaluator for :vr/:vi measurements"))
 
     _reject_operational(net, allow_operational)
     zi = _zero_injection_set(net, zero_injection, neutral)

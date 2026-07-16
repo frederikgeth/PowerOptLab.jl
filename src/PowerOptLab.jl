@@ -88,6 +88,7 @@ include("components/ivq_battery.jl")
 # Problem specifications — new objective/constraint structures over the staged API
 include("problems/multiperiod.jl")
 include("problems/state_estimation.jl")
+include("problems/constrained_state_estimation.jl")
 include("problems/parameter_estimation.jl")
 include("problems/inverse_carson.jl")
 include("problems/operating_envelope.jl")
@@ -103,7 +104,19 @@ export StorageDevice, EVDevice
 export solve_multiperiod_opf, MultiperiodResult
 
 # State estimation
-export Measurement, solve_state_estimation, StateEstimationResult
+export Measurement, BranchMeasurement, solve_state_estimation, StateEstimationResult
+export TerminalID, ExactInjectionSpecification, NoExactInjection,
+       ExactZeroInjection, ExactDeviceEquation, TerminalConnection,
+       ConstantPowerDevice, ConstantCurrentDevice, ZIPDevice, SEStructure, SEParameters,
+       SEEvaluation, compile_state_estimator, evaluate_state_estimator,
+       residual_jacobian, constraint_jacobian,
+       ConstrainedStateEstimationResult, solve_compiled_state_estimator,
+       ContinuationStateEstimationResult, solve_with_continuation,
+       SparseConstrainedStateEstimationResult, solve_sparse_state_estimator,
+       SEObservability, observability_diagnostics, unobservable_directions,
+       selected_state_covariance, derived_covariance,
+       StatePrior, set_state_prior!, TimeSeriesStateEstimationResult,
+       solve_time_series_state_estimator
 
 # Parameter estimation (calibration of line lengths / transformer taps)
 export CalibLine, CalibTap, solve_parameter_estimation, ParameterEstimationResult

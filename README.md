@@ -39,7 +39,8 @@ Contributions are organised by *what layer of the engine they extend* — see
 | Capability | Entry point | Reuses |
 |---|---|---|
 | **Multi-period OPF** co-optimising many snapshots | [`solve_multiperiod_opf`](src/problems/multiperiod.jl) | staged API (one shared model) |
-| **State estimation** (weighted least squares) | [`solve_state_estimation`](src/problems/state_estimation.jl) | bounds-free physics + custom objective |
+| **Legacy WLS state estimation** | [`solve_state_estimation`](src/problems/state_estimation.jl) | bounds-free physics + custom objective |
+| **Constrained NLLS state estimation** | [`solve_sparse_state_estimator`](src/problems/constrained_state_estimation.jl) | compiled four-wire residual/constraint model |
 | **Parameter estimation** (calibrate line lengths / taps) | [`solve_parameter_estimation`](src/problems/parameter_estimation.jl) | shared parameters across snapshots + WLS objective |
 | **Dynamic operating envelopes** (DER export limits) | [`solve_operating_envelope`](src/problems/operating_envelope.jl) | operational bounds + fairness objective |
 
