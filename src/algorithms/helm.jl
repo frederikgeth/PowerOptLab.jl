@@ -44,14 +44,8 @@
 # ideal — its no-load (magnetising) shunt and neutral-grounding branch are
 # dropped along with the singular series stamp.
 
-# HELM is a bespoke algorithm living in PowerOptLab but built directly on the
-# BMOPFTools engine. Beyond the public admittance-matrix API (`ybus_augmented`,
-# `AugYbusResult`, `IdealCoupling`), it reuses the engine's *internal* node type
-# and load-splitting builders — the same seams `ybus_linearized` uses — so its
-# load model stays byte-equivalent to the OPF's. These are imported by name
-# (unexported); track BMOPFTools' internals when upgrading its compat bound.
-using BMOPFTools: _Node, _SubLoad, _load_subloads, _subload_S, _subload_yz,
-    _stamp_pair!, _neutral_terminal, _neutral_labels, _DEFAULT_CONFIG
+# The BMOPFTools compatibility imports used here are isolated in
+# `src/upstream.jl`; see the contributing guide for their upstream replacement.
 
 """
     HelmResult

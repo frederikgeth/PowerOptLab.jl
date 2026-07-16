@@ -1,5 +1,6 @@
 using Test
 using TOML
+using Aqua
 using PowerOptLab
 using JuMP, Ipopt
 
@@ -13,6 +14,10 @@ if _HAS_ODS
 end
 
 include("fixtures.jl")
+
+@testset "Package quality" begin
+    Aqua.test_all(PowerOptLab)
+end
 
 @testset "PowerOptLab" begin
     include("multiperiod_tests.jl")

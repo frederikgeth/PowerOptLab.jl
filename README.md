@@ -44,7 +44,8 @@ Contributions are organised by *what layer of the engine they extend* — see
 | **Parameter estimation** (calibrate line lengths / taps) | [`solve_parameter_estimation`](src/problems/parameter_estimation.jl) | shared parameters across snapshots + WLS objective |
 | **Dynamic operating envelopes** (active import/export capacity) | [`solve_operating_envelope`](src/problems/operating_envelope.jl) | operational bounds + scenarios + fairness policy |
 
-**Bespoke algorithms** (`src/algorithms/`) — new solution methods. None yet; the slot is reserved.
+**Bespoke algorithms** (`src/algorithms/`) — custom solution methods, currently
+including [HELM power flow](docs/src/algorithms/helm.md).
 
 ## Examples
 
@@ -162,7 +163,9 @@ r.v_int_mag  # internal EMF magnitude per phase (V)
 
 ## Development setup
 
-BMOPFTools is not yet registered, so develop it from a local checkout:
+BMOPFTools is not yet registered. For development, use a local checkout; CI and
+documentation builds pin commit `c8df8f353637a46a70f60fa95c2d2184e7475d39`
+so their dependency source is reproducible:
 
 ```julia
 using Pkg
@@ -173,7 +176,8 @@ Pkg.test()
 ```
 
 `Manifest.toml` is intentionally not committed (library convention); the
-environment is reproducible from `Project.toml` plus the dev-path above.
+package compat pins BMOPFTools 0.1.0 exactly, while CI pins the tested source
+commit shown above.
 
 ## License
 

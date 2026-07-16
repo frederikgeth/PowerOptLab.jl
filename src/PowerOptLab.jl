@@ -81,6 +81,10 @@ using Ipopt
 using LinearAlgebra
 using SparseArrays
 
+# One isolated compatibility adapter for the load decomposition that
+# BMOPFTools 0.1.0 does not yet expose publicly.
+include("upstream.jl")
+
 # Component models — new network elements stamped via model_hook! / solution_hook!
 include("components/devices.jl")
 include("components/advanced_inverter.jl")

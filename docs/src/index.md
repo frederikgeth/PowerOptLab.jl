@@ -42,18 +42,20 @@ New formulations over the same physics, via the staged `build_opf_model` /
 
 ### Bespoke algorithms
 
-New solution methods (custom solve loops). None yet — see
-[Bespoke algorithms](algorithms/index.md) for the reserved slot.
+Custom solution methods, currently including [HELM power
+flow](algorithms/helm.md). See [Bespoke algorithms](algorithms/index.md) for the
+method roadmap.
 
 ## Installation
 
-BMOPFTools is not yet registered, so develop both from local checkouts (or Git
-URLs):
+BMOPFTools is not yet registered. Develop both from local checkouts; automated
+builds pin BMOPFTools commit
+`c8df8f353637a46a70f60fa95c2d2184e7475d39`:
 
 ```julia
 using Pkg
 Pkg.activate(".")
-Pkg.develop(path="../BMOPFTools.jl")   # or Pkg.develop(url="https://github.com/frederikgeth/BMOPFTools.jl")
+Pkg.develop(path="../BMOPFTools.jl")
 Pkg.instantiate()
 ```
 
