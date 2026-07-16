@@ -29,6 +29,9 @@ makedocs(
             "Overview"        => "algorithms/index.md",
             "HELM power flow" => "algorithms/helm.md",
         ],
+        "Tutorials" => [
+            "Dynamic operating envelopes" => "tutorials/dynamic_operating_envelopes.md",
+        ],
         "Contributing"       => "contributing.md",
         "API reference"      => "api.md",
     ],
