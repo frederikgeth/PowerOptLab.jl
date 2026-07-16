@@ -586,8 +586,6 @@ function _solve_interval_group(group, cps, policy;
                                fixed_capacity=nothing,
                                patterns_override=nothing)
     model = JuMP.Model(optimizer)
-    verbose || JuMP.set_silent(model)
-    _set_solver_options!(model, solver_options)
     pb = per_unit ? s_base : 1.0
     cap = Dict{String,Any}()
     for cp in cps
@@ -603,23 +601,28 @@ function _solve_interval_group(group, cps, policy;
     end
 
     patterns = patterns_override === nothing ? _dispatch_patterns(length(cps), security) : patterns_override
-    records = NamedTuple[]
     sign = direction == :export ? 1.0 : -1.0
-    for (scenario_index, net) in enumerate(group),
-        (pattern_index, fractions) in enumerate(patterns)
-        hook! = ctx -> begin
+    specifications = [(net=net, scenario=scenario_index,
+                       pattern=pattern_index, fractions=fractions)
+                      for (scenario_index, net) in enumerate(group)
+                      for (pattern_index, fractions) in enumerate(patterns)]
+    hook_factory = context_index -> begin
+        fractions = specifications[context_index].fractions
+        ctx -> begin
             for (i, cp) in enumerate(cps)
                 p = _connection_active_power(ctx, cp)
                 JuMP.@constraint(ctx.model,
                     p == sign * fractions[i] * cap[cp.id])
             end
         end
-        ctx = build_opf_model(net; model=model, add_objective=false,
-            model_hook! = hook!, per_unit=per_unit, s_base=s_base,
-            volt_var_watt_eps=volt_var_watt_eps, verbose=verbose)
-        push!(records, (ctx=ctx, net=net, scenario=scenario_index,
-                        pattern=pattern_index, fractions=fractions))
     end
+    multi = build_multi_context([spec.net for spec in specifications]; model,
+        hook_factory, per_unit, s_base, optimizer, verbose, solver_options,
+        context_options=(volt_var_watt_eps=volt_var_watt_eps, verbose=verbose))
+    records = [(ctx=multi.contexts[index], net=spec.net,
+                scenario=spec.scenario, pattern=spec.pattern,
+                fractions=spec.fractions)
+               for (index, spec) in enumerate(specifications)]
     foreach(r -> enforce_kcl!(r.ctx), records)
     if fixed_capacity === nothing
         stage = _set_fairness_objective!(model, cap, cps, policy, direction, pb;
