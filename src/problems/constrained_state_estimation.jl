@@ -717,7 +717,10 @@ function _se_rank_nullspace(A::AbstractMatrix{<:Real}; rtol::Real=sqrt(eps(Float
     smax = isempty(F.S) ? 0.0 : maximum(F.S)
     tol = max(Float64(rtol) * max(size(A)...) * smax, eps(Float64))
     rank = count(>(tol), F.S)
-    rank, Matrix(F.V[:, rank+1:end])
+    # `collect` deliberately avoids `Matrix(...)`: OpenDSSDirect extends that
+    # constructor for its parser enum, which makes the unparameterised call
+    # ambiguous on supported Julia versions.
+    rank, collect(F.V[:, rank+1:end])
 end
 
 _se_merit(e::SEEvaluation, μ) = 0.5 * sum(abs2, e.residual) + μ * norm(e.constraints)
@@ -1034,7 +1037,9 @@ function solve_sparse_state_estimator(s::SEStructure, p::SEParameters,
         C = sparse(constraint_jacobian(s, p, x))
         r, c = e.residual, e.constraints
         status, rankC, tangent, observable = _se_status_from_linearisation(H, C; rank_rtol=rank_rtol)
-        gred = tangent == 0 ? 0.0 : norm((Matrix(H)' * r + Matrix(C)' * λ), Inf)
+        # Materialise sparse Jacobians without the unparameterised `Matrix(...)`
+        # constructor; see `_se_rank_nullspace` for the OpenDSSDirect conflict.
+        gred = tangent == 0 ? 0.0 : norm((collect(H)' * r + collect(C)' * λ), Inf)
         if norm(c) <= constraint_tolerance && gred <= optimality_tolerance
             _, λ = _se_hachtel_step(H, C, r, zeros(Float64, length(c)), scale, damping)
             return SparseConstrainedStateEstimationResult(status, x, e, iteration - 1, rankC,
