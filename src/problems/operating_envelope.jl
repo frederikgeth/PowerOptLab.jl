@@ -510,7 +510,9 @@ function _fairness_metrics(alloc, cps, policy, direction; cumulative=nothing)
     end
     values_ = collect(values(normalized))
     denominator = length(values_) * sum(x^2 for x in values_)
-    jain = denominator > 0 ? sum(values_)^2 / denominator : 1.0
+    # Roundoff can push the mathematically bounded index marginally above one
+    # (for example 1.0000000000000002 for equal allocations).
+    jain = denominator > 0 ? clamp(sum(values_)^2 / denominator, 0.0, 1.0) : 1.0
     out = Dict{String,Any}(
         "total_capacity_W" => sum(values(alloc)),
         "normalized_allocations" => normalized,
