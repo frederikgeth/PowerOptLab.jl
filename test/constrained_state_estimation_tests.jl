@@ -97,6 +97,24 @@ end
     @test size(s.passive_pattern) == (12, 12)
 end
 
+@testset "Compiled constrained state estimator: branch telemetry" begin
+    measurements = [
+        BranchMeasurement(kind=:ire,   line="l1", side=:from, terminal="1", value=0.0, sigma=0.1),
+        BranchMeasurement(kind=:iim,   line="l1", side=:from, terminal="1", value=0.0, sigma=0.1),
+        BranchMeasurement(kind=:imag,  line="l1", side=:from, terminal="1", value=0.0, sigma=0.1),
+        BranchMeasurement(kind=:pflow, line="l1", side=:from, terminal="1", value=0.0, sigma=10.0),
+        BranchMeasurement(kind=:qflow, line="l1", side=:from, terminal="1", value=0.0, sigma=10.0),
+    ]
+    s = compile_state_estimator(compiled_se_net(), measurements)
+    p = SEParameters(s, measurements)
+    x = flat_compiled_state(s)
+    x[s.free_state_map[("b1", "1")]] -= 1.0  # non-zero l1 current for |I| derivative
+    p.measurement_values .= evaluate_state_estimator(s, p, x).predicted
+    @test evaluate_state_estimator(s, p, x).residual ≈ zeros(length(measurements)) atol=1e-10
+    @test residual_jacobian(s, p, x) ≈
+          central_jacobian(y -> evaluate_state_estimator(s, p, y).residual, x) rtol=1e-5 atol=1e-6
+end
+
 @testset "Compiled constrained state estimator: dense composite-step reference solver" begin
     net = compiled_se_net()
     seed = compile_state_estimator(net)

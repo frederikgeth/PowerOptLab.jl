@@ -104,7 +104,7 @@ export StorageDevice, EVDevice
 export solve_multiperiod_opf, MultiperiodResult
 
 # State estimation
-export Measurement, solve_state_estimation, StateEstimationResult
+export Measurement, BranchMeasurement, solve_state_estimation, StateEstimationResult
 export TerminalID, ExactInjectionSpecification, NoExactInjection,
        ExactZeroInjection, ExactDeviceEquation, TerminalConnection,
        ConstantPowerDevice, ConstantCurrentDevice, ZIPDevice, SEStructure, SEParameters,

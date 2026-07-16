@@ -78,6 +78,34 @@ struct _SEMeasurementSpec{Ti<:Integer}
     reference::Ti                  # 0 denotes the earth reference
 end
 
+"""A scalar telemetry reading on one end/conductor of a named BMOPF line."""
+struct BranchMeasurement
+    kind::Symbol
+    line::String
+    side::Symbol
+    terminal::String
+    value::Float64
+    sigma::Float64
+    function BranchMeasurement(; kind::Symbol, line::String, side::Symbol=:from,
+                               terminal::String, value::Real, sigma::Real)
+        kind in (:ire, :iim, :imag, :pflow, :qflow) ||
+            throw(ArgumentError("unknown branch measurement kind :$kind"))
+        side in (:from, :to) || throw(ArgumentError("branch measurement side must be :from or :to"))
+        isempty(line) && throw(ArgumentError("branch measurement line must be non-empty"))
+        isempty(terminal) && throw(ArgumentError("branch measurement terminal must be non-empty"))
+        isfinite(value) || throw(ArgumentError("branch measurement value must be finite"))
+        isfinite(sigma) && sigma > 0 || throw(ArgumentError("branch measurement sigma must be finite and > 0"))
+        new(kind, line, side, terminal, Float64(value), Float64(sigma))
+    end
+end
+
+struct _SEBranchMeasurementSpec{Ti<:Integer}
+    kind::Symbol
+    nodes::Vector{Ti}              # 0 denotes earth
+    conductor::Ti
+    yrow::Vector{ComplexF64}
+end
+
 struct _SEExactDeviceSpec{Ti<:Integer}
     kind::Symbol
     positive::Vector{Ti}
@@ -104,7 +132,7 @@ struct SEStructure{Ti<:Integer}
     nodes::Vector{TerminalID}
     node_index::Dict{TerminalID,Ti}
     passive_pattern::SparseMatrixCSC{ComplexF64,Ti}
-    measurement_pattern::Vector{_SEMeasurementSpec{Ti}}
+    measurement_pattern::Vector{Any}
     constraint_pattern::Vector{Ti}
     device_pattern::Vector{_SEExactDeviceSpec{Ti}}
     free_state_map::Dict{TerminalID,Ti}
@@ -218,10 +246,26 @@ function _source_phasors(net::Dict{String,Any}, node_index)
     fixed
 end
 
-function _compile_measurements(measurements, node_index, neutral)
-    specs = _SEMeasurementSpec{Int}[]
+function _compile_measurements(net, measurements, node_index, neutral)
+    specs = Any[]
     for m in measurements
-        m isa Measurement || throw(ArgumentError("measurements must contain `Measurement` values"))
+        if m isa BranchMeasurement
+            line = get(get(net, "line", Dict()), m.line, nothing)
+            line isa AbstractDict || throw(ArgumentError("branch measurement line '$(m.line)' is absent from net"))
+            nodes, Y = line_yprim(line, get(net, "linecode", Dict()))
+            isempty(nodes) && throw(ArgumentError("branch measurement line '$(m.line)' has no finite primitive"))
+            n = length(nodes) ÷ 2
+            terminals = String.(get(line, m.side === :from ? "terminal_map_from" : "terminal_map_to", String[]))
+            k = findfirst(==(m.terminal), terminals)
+            isnothing(k) && throw(ArgumentError("terminal '$(m.terminal)' is not on $(m.side) side of line '$(m.line)'"))
+            row = m.side === :from ? k : n + k
+            local_nodes = Int[get(node_index, TerminalID(node), 0) for node in nodes]
+            conductor = local_nodes[row]
+            conductor != 0 || throw(ArgumentError("branch measurement conductor is earth-referenced"))
+            push!(specs, _SEBranchMeasurementSpec(m.kind, local_nodes, conductor, ComplexF64.(Y[row, :])))
+            continue
+        end
+        m isa Measurement || throw(ArgumentError("measurements must contain Measurement or BranchMeasurement values"))
         i = get(node_index, (m.bus, m.terminal), 0)
         i == 0 && throw(ArgumentError("measurement terminal ($(m.bus), $(m.terminal)) is not a free Ybus conductor"))
         ref = _resolve_ref(m, neutral)
@@ -328,7 +372,7 @@ function compile_state_estimator(net::Dict{String,Any}, measurements::AbstractVe
     end
     fixed_current = Vector{Float64}(K * fixed_voltage)
 
-    specs = _compile_measurements(measurements, node_index, neutral)
+    specs = _compile_measurements(net, measurements, node_index, neutral)
     zi = _zero_injection_set(net, zero_injection, neutral)
     constraint_nodes = Int[]
     for node in zi
@@ -456,6 +500,50 @@ function _measurement_value(spec, vr, vi, ir, ii, epsmag)
     error("unsupported compiled measurement kind $(spec.kind)")
 end
 
+function _branch_measurement_value(spec::_SEBranchMeasurementSpec, vr, vi)
+    br = 0.0; bi = 0.0
+    for (k, node) in enumerate(spec.nodes)
+        node == 0 && continue
+        y = spec.yrow[k]
+        br += real(y) * vr[node] - imag(y) * vi[node]
+        bi += imag(y) * vr[node] + real(y) * vi[node]
+    end
+    spec.kind === :ire && return br
+    spec.kind === :iim && return bi
+    spec.kind === :imag && return hypot(br, bi)
+    vrr, vii = vr[spec.conductor], vi[spec.conductor]
+    spec.kind === :pflow && return vrr * br + vii * bi
+    spec.kind === :qflow && return vii * br - vrr * bi
+    error("unsupported branch measurement kind $(spec.kind)")
+end
+
+function _branch_measurement_jacobian(spec::_SEBranchMeasurementSpec, E, vr, vi)
+    n = length(vr); ns = size(E, 2)
+    jir = zeros(Float64, ns); jii = zeros(Float64, ns)
+    br = 0.0; bi = 0.0
+    for (k, node) in enumerate(spec.nodes)
+        node == 0 && continue
+        y = spec.yrow[k]; G, B = real(y), imag(y)
+        br += G * vr[node] - B * vi[node]; bi += B * vr[node] + G * vi[node]
+        jir .+= G .* Vector(E[node, :]) .- B .* Vector(E[n + node, :])
+        jii .+= B .* Vector(E[node, :]) .+ G .* Vector(E[n + node, :])
+    end
+    spec.kind === :ire && return br, jir
+    spec.kind === :iim && return bi, jii
+    if spec.kind === :imag
+        mag = hypot(br, bi)
+        mag > 0 || throw(DomainError(mag, "branch-current magnitude derivative is undefined at zero"))
+        return mag, (br .* jir .+ bi .* jii) ./ mag
+    end
+    i = spec.conductor; vrr, vii = vr[i], vi[i]
+    jvr, jvi = Vector(E[i, :]), Vector(E[n + i, :])
+    spec.kind === :pflow && return vrr * br + vii * bi,
+        br .* jvr .+ bi .* jvi .+ vrr .* jir .+ vii .* jii
+    spec.kind === :qflow && return vii * br - vrr * bi,
+        br .* jvi .- bi .* jvr .+ vii .* jir .- vrr .* jii
+    error("unsupported branch measurement kind $(spec.kind)")
+end
+
 function _power_current_and_derivative(S, vr, vi, p::SEParameters)
     d = vr^2 + vi^2
     if p.continuation_alpha > 0 && sqrt(d) < p.voltage_min_model
@@ -539,7 +627,9 @@ softened.
 function evaluate_state_estimator(s::SEStructure, p::SEParameters, x::AbstractVector{<:Real})
     vr, vi, ir, ii = _se_parts(s, p, x)
     dir, dii, _, _ = _device_parts(s, p, vr, vi)
-    predicted = [_measurement_value(spec, vr, vi, ir, ii, p.magnitude_epsilon)
+    predicted = [spec isa _SEBranchMeasurementSpec ?
+                 _branch_measurement_value(spec, vr, vi) :
+                 _measurement_value(spec, vr, vi, ir, ii, p.magnitude_epsilon)
                  for spec in s.measurement_pattern]
     measurement_residual = (predicted .- p.measurement_values) ./ p.covariance_values
     prior_residual = (Float64.(x[p.prior_indices]) .- p.prior_values) ./ p.prior_sigmas
@@ -563,6 +653,11 @@ function residual_jacobian(s::SEStructure, p::SEParameters, x::AbstractVector{<:
     nstate = size(E, 2)
     J = zeros(Float64, length(s.measurement_pattern) + length(p.prior_indices), nstate)
     for (row, spec) in enumerate(s.measurement_pattern)
+        if spec isa _SEBranchMeasurementSpec
+            _, Jrow = _branch_measurement_jacobian(spec, E, vr, vi)
+            J[row, :] .= Jrow ./ p.covariance_values[row]
+            continue
+        end
         i, j = spec.terminal, spec.reference
         jdvr = Vector(E[i, :]); jdvi = Vector(E[n + i, :])
         if j != 0
