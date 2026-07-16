@@ -10,6 +10,9 @@ using Dates
 
     res = solve_operating_envelope(nets, cps; fairness=:equal)
     @test all(s in ("LOCALLY_SOLVED", "OPTIMAL") for s in res.termination_status)
+    @test solve_status(res).publishable
+    @test solve_status(res).optimal
+    @test solve_diagnostics(res).published_count == 2
 
     for t in 1:2
         e1 = res.envelope["der1"][t]; e2 = res.envelope["der2"][t]
@@ -114,6 +117,8 @@ end
     @test all(isnan(infeasible.envelope[id][1]) for id in ("d1", "d2"))
     @test isnan(infeasible.total_capacity[1])
     @test infeasible.snapshots[1]["primal_status"] == "INFEASIBLE_POINT"
+    @test !solve_status(infeasible).publishable
+    @test !solve_status(infeasible).feasible
 end
 
 @testset "Operating envelope: import direction and result semantics" begin
@@ -253,8 +258,11 @@ end
         utilizations=:bound_point)
     @test verified.feasible == [true]
     @test verified.diagnostics[1]["verification"]
+    @test solve_status(verified).publishable
+    @test solve_diagnostics(verified).verification
 
     fallback = solve_operating_envelope([nets[1], doe_feeder(p1=5e3, p2=5e3)], cps;
         security=:corners, fallback=:last_feasible)
     @test fallback.schedule[2]["publication_source"] in (:optimized, :last_feasible_fallback)
+    @test solve_status(fallback).publishable
 end

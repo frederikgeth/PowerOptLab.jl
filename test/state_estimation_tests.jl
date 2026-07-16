@@ -29,6 +29,24 @@ function se_full_meas()
     m, Dict(b => tv(b) for b in ("bus1","bus2"))
 end
 
+@testset "Shared measurement-model equations" begin
+    @test measurement_prediction(:vr, 3.0, 4.0) == 3.0
+    @test measurement_prediction(:vi, 3.0, 4.0) == 4.0
+    @test measurement_prediction(:vmag, 3.0, 4.0) == 5.0
+    @test measurement_prediction(:vmag, 3.0, 4.0; magnitude=7.0) == 7.0
+    @test measurement_prediction(:pinj, 3.0, 4.0; ir=2.0, ii=-1.0) == 2.0
+    @test measurement_prediction(:qinj, 3.0, 4.0; ir=2.0, ii=-1.0) == 11.0
+    @test measurement_prediction(:pflow, 3.0, 4.0; ir=2.0, ii=-1.0) == 2.0
+    @test measurement_prediction(:qflow, 3.0, 4.0; ir=2.0, ii=-1.0) == 11.0
+    @test measurement_prediction(:ire, 0.0, 0.0; ir=3.0, ii=4.0) == 3.0
+    @test measurement_prediction(:iim, 0.0, 0.0; ir=3.0, ii=4.0) == 4.0
+    @test measurement_prediction(:imag, 0.0, 0.0; ir=3.0, ii=4.0) == 5.0
+    @test_throws ArgumentError measurement_prediction(:pinj, 3.0, 4.0)
+    @test_throws ArgumentError measurement_prediction(:bogus, 3.0, 4.0)
+    @test_throws ArgumentError measurement_prediction(:vmag, 3.0, 4.0;
+                                                       magnitude_epsilon=-1.0)
+end
+
 @testset "State estimation: exact recovery from noiseless measurements" begin
     meas, true_vm = se_full_meas()
     @test all(m -> m isa AbstractMeasurement, meas)

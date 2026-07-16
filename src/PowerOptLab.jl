@@ -108,7 +108,7 @@ export AbstractDevice, AbstractMeasurement, AbstractSolveResult
 export TimeGrid, MultiContext, build_multi_context
 export SolveStatus, solve_status, solve_diagnostics
 export device_id, validate_device, stamp_device!, link_device!, extract_device
-export measurement_kind, measurement_value, measurement_sigma
+export measurement_kind, measurement_value, measurement_sigma, measurement_prediction
 
 # Devices
 export StorageDevice, EVDevice

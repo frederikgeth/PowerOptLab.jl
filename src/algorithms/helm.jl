@@ -82,7 +82,7 @@ Fields:
                   `λ* < 1` explains a `:diverged_no_solution`. `NaN` when the
                   series is too short/featureless to extrapolate.
 """
-struct HelmResult
+struct HelmResult <: AbstractSolveResult
     V::Dict{_Node,ComplexF64}
     w::Vector{ComplexF64}
     couplings::Vector{IdealCoupling}
@@ -93,6 +93,16 @@ struct HelmResult
     n_order::Int
     load_margin::Float64
 end
+
+function solve_status(result::HelmResult)
+    publishable = result.converged && result.status === :converged
+    _result_solve_status(string(result.status), publishable;
+        primal_status=publishable ? "FEASIBLE_POINT" : "NO_SOLUTION")
+end
+
+solve_diagnostics(result::HelmResult) =
+    (residual=result.residual, order=result.n_order,
+     load_margin=result.load_margin)
 
 Base.show(io::IO, r::HelmResult) =
     print(io, "HelmResult($(length(r.V)) terminals, status=$(r.status), " *

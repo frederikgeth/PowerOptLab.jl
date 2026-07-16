@@ -68,7 +68,7 @@ struct Measurement <: AbstractMeasurement
     function Measurement(; kind::Symbol, bus::String, value::Real, sigma::Real,
                          terminal::String="1",
                          reference::Union{String,Nothing,Missing}=missing)
-        kind in (:vr, :vi, :vmag, :pinj, :qinj) ||
+        kind in _NODE_MEASUREMENT_KINDS ||
             throw(ArgumentError("unknown measurement kind :$(kind); expected :vr, :vi, :vmag, :pinj, or :qinj"))
         _validate_measurement_scalar(kind, value, sigma)
         isempty(bus) && throw(ArgumentError("measurement bus must be non-empty"))
@@ -385,14 +385,15 @@ function solve_state_estimation(net::Dict{String,Any}, measurements::AbstractVec
                 vm = JuMP.@variable(m, base_name = "sevm_$(b)_$(t)", lower_bound = 0.0,
                                     start = meas.value / vb)
                 JuMP.@constraint(m, vm^2 == dvr^2 + dvi^2)
-                h_si = JuMP.@expression(m, vm * vb)                        # → volts
+                h_model = measurement_prediction(measurement_kind(meas), dvr, dvi;
+                                                 magnitude=vm)
+                h_si = JuMP.@expression(m, h_model * vb)                   # → volts
                 obj += w * (h_si - meas.value)^2
                 push!(probes, (meas, h_si))
             else  # :pinj / :qinj
                 cr = inj_r[(b,t)]; ci = inj_i[(b,t)]
-                p_or_q = meas.kind == :pinj ?
-                    JuMP.@expression(m, dvr*cr + dvi*ci) :
-                    JuMP.@expression(m, dvi*cr - dvr*ci)
+                p_or_q = measurement_prediction(measurement_kind(meas), dvr, dvi;
+                                                 ir=cr, ii=ci)
                 h_si = JuMP.@expression(m, p_or_q * sb)                    # → W / var
                 obj += w * (h_si - meas.value)^2
                 push!(probes, (meas, h_si))

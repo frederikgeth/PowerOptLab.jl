@@ -110,6 +110,13 @@ function _result_solve_status(termination_status::AbstractString,
                 publishable, publishable, publishable)
 end
 
+function _termination_summary(statuses)
+    unique_statuses = unique(String.(collect(statuses)))
+    isempty(unique_statuses) && return "NO_RESULTS"
+    length(unique_statuses) == 1 && return only(unique_statuses)
+    "MIXED[" * join(unique_statuses, ",") * "]"
+end
+
 """Return the normalized [`SolveStatus`](@ref) for a structured solve result."""
 function solve_status end
 
@@ -139,6 +146,50 @@ measurement_value(m::AbstractMeasurement) = getfield(m, :value)
 
 """Return a scalar measurement's positive SI standard deviation."""
 measurement_sigma(m::AbstractMeasurement) = getfield(m, :sigma)
+
+const _NODE_MEASUREMENT_KINDS = (:vr, :vi, :vmag, :pinj, :qinj)
+const _BRANCH_MEASUREMENT_KINDS = (:ire, :iim, :imag, :pflow, :qflow)
+
+"""
+    measurement_prediction(kind, dvr, dvi;
+        ir=nothing, ii=nothing, magnitude=nothing, magnitude_epsilon=0)
+
+Evaluate the shared scalar measurement model from a complex voltage drop
+`dvr + im*dvi` and, for power/current quantities, a complex current
+`ir + im*ii`.
+
+Supported node kinds are `:vr`, `:vi`, `:vmag`, `:pinj`, and `:qinj`;
+supported branch kinds are `:ire`, `:iim`, `:imag`, `:pflow`, and `:qflow`.
+Injection and flow powers use the same `V * conj(I)` convention. Pass an
+auxiliary nonnegative `magnitude` when a JuMP formulation represents `|V|`
+explicitly; otherwise the magnitude is evaluated directly. A positive
+`magnitude_epsilon` supplies the smooth magnitude used by compiled state
+estimation.
+
+The function is generic over numbers, automatic-differentiation values, and
+JuMP expressions so every estimation formulation uses the same physical
+measurement equations.
+"""
+function measurement_prediction(kind::Symbol, dvr, dvi;
+                                ir=nothing, ii=nothing, magnitude=nothing,
+                                magnitude_epsilon::Real=0.0)
+    isfinite(magnitude_epsilon) && magnitude_epsilon >= 0 || throw(ArgumentError(
+        "magnitude_epsilon must be finite and >= 0"))
+    kind === :vr && return dvr
+    kind === :vi && return dvi
+    kind === :vmag && return magnitude === nothing ?
+        sqrt(dvr^2 + dvi^2 + magnitude_epsilon^2) : magnitude
+
+    kind in (:pinj, :qinj, :ire, :iim, :imag, :pflow, :qflow) ||
+        throw(ArgumentError("unknown measurement kind :$kind"))
+    ir === nothing && throw(ArgumentError("measurement kind :$kind requires ir"))
+    ii === nothing && throw(ArgumentError("measurement kind :$kind requires ii"))
+    kind === :ire && return ir
+    kind === :iim && return ii
+    kind === :imag && return sqrt(ir^2 + ii^2 + magnitude_epsilon^2)
+    kind in (:pinj, :pflow) && return dvr * ir + dvi * ii
+    dvi * ir - dvr * ii
+end
 
 function _validate_measurement_scalar(kind, value::Real, sigma::Real)
     isfinite(value) || throw(ArgumentError(

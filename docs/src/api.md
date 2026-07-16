@@ -34,6 +34,7 @@ AbstractMeasurement
 measurement_kind
 measurement_value
 measurement_sigma
+measurement_prediction
 ```
 
 ## Devices

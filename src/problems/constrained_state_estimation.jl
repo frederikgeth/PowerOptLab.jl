@@ -95,7 +95,7 @@ struct BranchMeasurement <: AbstractMeasurement
     sigma::Float64
     function BranchMeasurement(; kind::Symbol, line::String, side::Symbol=:from,
                                terminal::String, value::Real, sigma::Real)
-        kind in (:ire, :iim, :imag, :pflow, :qflow) ||
+        kind in _BRANCH_MEASUREMENT_KINDS ||
             throw(ArgumentError("unknown branch measurement kind :$kind"))
         side in (:from, :to) || throw(ArgumentError("branch measurement side must be :from or :to"))
         isempty(line) && throw(ArgumentError("branch measurement line must be non-empty"))
@@ -521,12 +521,8 @@ function _measurement_value(spec, vr, vi, ir, ii, epsmag)
     i, j = spec.terminal, spec.reference
     dvr = vr[i] - (j == 0 ? 0.0 : vr[j])
     dvi = vi[i] - (j == 0 ? 0.0 : vi[j])
-    spec.kind === :vr   && return dvr
-    spec.kind === :vi   && return dvi
-    spec.kind === :vmag && return sqrt(dvr^2 + dvi^2 + epsmag^2)
-    spec.kind === :pinj && return dvr * ir[i] + dvi * ii[i]
-    spec.kind === :qinj && return dvi * ir[i] - dvr * ii[i]
-    error("unsupported compiled measurement kind $(spec.kind)")
+    measurement_prediction(spec.kind, dvr, dvi; ir=ir[i], ii=ii[i],
+                           magnitude_epsilon=epsmag)
 end
 
 function _branch_measurement_value(spec::_SEBranchMeasurementSpec, vr, vi)
@@ -537,13 +533,9 @@ function _branch_measurement_value(spec::_SEBranchMeasurementSpec, vr, vi)
         br += real(y) * vr[node] - imag(y) * vi[node]
         bi += imag(y) * vr[node] + real(y) * vi[node]
     end
-    spec.kind === :ire && return br
-    spec.kind === :iim && return bi
-    spec.kind === :imag && return hypot(br, bi)
-    vrr, vii = vr[spec.conductor], vi[spec.conductor]
-    spec.kind === :pflow && return vrr * br + vii * bi
-    spec.kind === :qflow && return vii * br - vrr * bi
-    error("unsupported branch measurement kind $(spec.kind)")
+    vrr = spec.conductor == 0 ? 0.0 : vr[spec.conductor]
+    vii = spec.conductor == 0 ? 0.0 : vi[spec.conductor]
+    measurement_prediction(spec.kind, vrr, vii; ir=br, ii=bi)
 end
 
 function _branch_measurement_jacobian(spec::_SEBranchMeasurementSpec, E, vr, vi)

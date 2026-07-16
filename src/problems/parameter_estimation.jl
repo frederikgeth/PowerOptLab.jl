@@ -289,14 +289,15 @@ function solve_parameter_estimation(nets::AbstractVector, measurements::Abstract
                                     start = measurement_value(meas) / _pe_vbase(ctx,b),
                                     base_name = "pevm_$(b)_$(c)_$t")
                 JuMP.@constraint(m, vm^2 == dvr^2 + dvi^2)
-                h = JuMP.@expression(m, vm * _pe_vbase(ctx, b))       # → volts
+                h_model = measurement_prediction(measurement_kind(meas), dvr, dvi;
+                                                 magnitude=vm)
+                h = JuMP.@expression(m, h_model * _pe_vbase(ctx, b))  # → volts
                 push!(probes, (measurement_value(meas), measurement_sigma(meas), h))
                 push!(vprobes, (measurement_value(meas), h))
             elseif measurement_kind(meas) in (:pinj, :qinj)
                 cr, ci = inj[(b,c)]
-                pq = measurement_kind(meas) == :pinj ?
-                    JuMP.@expression(m, dvr*cr + dvi*ci) :
-                    JuMP.@expression(m, dvi*cr - dvr*ci)
+                pq = measurement_prediction(measurement_kind(meas), dvr, dvi;
+                                            ir=cr, ii=ci)
                 h = JuMP.@expression(m, pq * sb)                       # → W / var
                 push!(probes, (measurement_value(meas), measurement_sigma(meas), h))
             else
