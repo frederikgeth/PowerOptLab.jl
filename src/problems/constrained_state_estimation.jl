@@ -938,3 +938,113 @@ function solve_sparse_state_estimator(s::SEStructure, p::SEParameters,
     SparseConstrainedStateEstimationResult(status, x, e, max_iterations, rankC,
                                             tangent, observable, λ, history)
 end
+
+# ── tangent-space observability and selective uncertainty ───────────────────
+
+"""Local tangent-space observability diagnostic for a compiled estimator."""
+struct SEObservability
+    constraint_rank::Int
+    tangent_dimension::Int
+    observable_dimension::Int
+    unobservable_dimension::Int
+    min_singular::Float64
+    condition_number::Float64
+end
+
+function _se_reduced_jacobian(s::SEStructure, p::SEParameters, x;
+                              rank_rtol=sqrt(eps(Float64)))
+    H = residual_jacobian(s, p, x)
+    C = constraint_jacobian(s, p, x)
+    rankC, Z = _se_rank_nullspace(C; rtol=rank_rtol)
+    H, C, Z, rankC, H * Z
+end
+
+function _se_svd_rank(A; rank_rtol=sqrt(eps(Float64)))
+    F = svd(Matrix{Float64}(A); full=true)
+    smax = isempty(F.S) ? 0.0 : maximum(F.S)
+    tol = max(Float64(rank_rtol) * max(size(A)...) * smax, eps(Float64))
+    count(>(tol), F.S), F
+end
+
+"""
+    observability_diagnostics(structure, parameters, x) -> SEObservability
+
+Report local identifiability on the feasible tangent space, using `H*Z` where
+`C*Z = 0`.  This is deliberately not the rank of the unconstrained measurement
+Jacobian.  The current dense diagnostic is intended for small/reference cases;
+the sparse solver uses it only after convergence, not in its linear step.
+"""
+function observability_diagnostics(s::SEStructure, p::SEParameters,
+                                   x::AbstractVector{<:Real};
+                                   rank_rtol::Real=sqrt(eps(Float64)))
+    _, _, Z, rankC, Hred = _se_reduced_jacobian(s, p, x; rank_rtol=rank_rtol)
+    rankH, F = _se_svd_rank(Hred; rank_rtol=rank_rtol)
+    tangent = size(Z, 2)
+    minsing = tangent == 0 ? Inf : (length(F.S) >= tangent ? F.S[tangent] : 0.0)
+    smax = isempty(F.S) ? 0.0 : maximum(F.S)
+    condn = minsing > 0 ? smax / minsing : Inf
+    SEObservability(rankC, tangent, rankH, tangent - rankH, minsing, condn)
+end
+
+"""
+    unobservable_directions(structure, parameters, x; count=nothing)
+
+Generate requested local unobservable state directions on demand.  No basis is
+stored in `SEStructure`; callers that only need ranks should use
+[`observability_diagnostics`](@ref) instead.
+"""
+function unobservable_directions(s::SEStructure, p::SEParameters,
+                                 x::AbstractVector{<:Real};
+                                 count::Union{Nothing,Integer}=nothing,
+                                 rank_rtol::Real=sqrt(eps(Float64)))
+    _, _, Z, _, Hred = _se_reduced_jacobian(s, p, x; rank_rtol=rank_rtol)
+    rankH, F = _se_svd_rank(Hred; rank_rtol=rank_rtol)
+    available = size(Z, 2) - rankH
+    requested = isnothing(count) ? available : Int(count)
+    0 <= requested <= available ||
+        throw(ArgumentError("requested $requested unobservable directions; only $available are available"))
+    requested == 0 && return zeros(Float64, size(Z, 1), 0)
+    Z * F.V[:, rankH+1:rankH+requested]
+end
+
+function _derived_covariance(s::SEStructure, p::SEParameters, x, Jderived;
+                             rank_rtol=sqrt(eps(Float64)))
+    _, _, Z, _, Hred = _se_reduced_jacobian(s, p, x; rank_rtol=rank_rtol)
+    size(Jderived, 2) == size(Z, 1) ||
+        throw(DimensionMismatch("derived Jacobian has $(size(Jderived, 2)) columns; expected $(size(Z, 1))"))
+    rankH, F = _se_svd_rank(Hred; rank_rtol=rank_rtol)
+    rankH == size(Z, 2) ||
+        throw(ArgumentError("requested covariance is not finite: $(size(Z, 2) - rankH) tangent directions are unobservable"))
+    size(Z, 2) == 0 && return zeros(Float64, size(Jderived, 1), size(Jderived, 1))
+    W = Matrix{Float64}(Jderived) * Z * F.V[:, 1:rankH]
+    W * Diagonal(1.0 ./ (F.S[1:rankH] .^ 2)) * W'
+end
+
+"""
+    selected_state_covariance(structure, parameters, x, indices)
+
+Return only the requested covariance block of the rectangular voltage state.
+The measurement residual Jacobian is already whitened, so this is the local
+Gauss--Newton covariance under the diagonal covariance model.  It throws for a
+rank-deficient tangent space rather than returning a misleading finite matrix.
+"""
+function selected_state_covariance(s::SEStructure, p::SEParameters,
+                                   x::AbstractVector{<:Real}, indices::AbstractVector{<:Integer};
+                                   rank_rtol::Real=sqrt(eps(Float64)))
+    n = length(x)
+    all(i -> 1 <= i <= n, indices) || throw(BoundsError(x, indices))
+    J = zeros(Float64, length(indices), n)
+    for (row, i) in enumerate(indices)
+        J[row, i] = 1.0
+    end
+    _derived_covariance(s, p, x, J; rank_rtol=rank_rtol)
+end
+
+"""
+    derived_covariance(structure, parameters, x, jacobian)
+
+Return the local covariance of selected derived quantities.  `jacobian` has one
+row per requested quantity and one column per state variable.
+"""
+derived_covariance(s::SEStructure, p::SEParameters, x::AbstractVector{<:Real}, jacobian::AbstractMatrix{<:Real}; kwargs...) =
+    _derived_covariance(s, p, x, jacobian; kwargs...)

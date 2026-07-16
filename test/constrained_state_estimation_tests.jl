@@ -1,5 +1,5 @@
 using BMOPFTools: parse_bmopf
-using LinearAlgebra: norm
+using LinearAlgebra: norm, I
 
 # A four-conductor feeder with an explicitly modelled (not perfectly grounded)
 # neutral.  The source phase phasors pin the electrical angle; the neutral stays
@@ -125,6 +125,26 @@ end
     @test sparse_result.status == :converged_unique
     @test sparse_result.state ≈ xtrue atol=1e-9
     @test isempty(sparse_result.constraint_multipliers)
+
+    diagnostic = observability_diagnostics(s, SEParameters(s, measurements), xtrue)
+    @test diagnostic.observable_dimension == length(xtrue)
+    @test diagnostic.unobservable_dimension == 0
+    covariance = selected_state_covariance(s, SEParameters(s, measurements), xtrue, [1, nf + 1])
+    @test covariance ≈ Matrix{Float64}(I, 2, 2) atol=1e-10
+    @test derived_covariance(s, SEParameters(s, measurements), xtrue,
+                             reshape([1.0; zeros(length(xtrue) - 1)], 1, :)) ≈ ones(1, 1)
+
+    # One magnitude row cannot identify the full four-wire state.  The
+    # unobservable basis is generated only when explicitly requested, and a
+    # finite covariance is refused rather than invented.
+    weak = [Measurement(kind=:vmag, bus="b1", terminal="1", value=230.0, sigma=1.0)]
+    sw = compile_state_estimator(net, weak)
+    pw = SEParameters(sw, weak)
+    ow = observability_diagnostics(sw, pw, xtrue)
+    @test ow.unobservable_dimension > 0
+    direction = unobservable_directions(sw, pw, xtrue; count=1)
+    @test norm(residual_jacobian(sw, pw, xtrue) * direction) ≤ 1e-8
+    @test_throws ArgumentError selected_state_covariance(sw, pw, xtrue, [1])
 end
 
 @testset "Compiled constrained state estimator: exact nonlinear devices" begin
