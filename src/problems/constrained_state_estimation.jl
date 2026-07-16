@@ -17,6 +17,13 @@ model, not in this hierarchy.
 abstract type ExactInjectionSpecification end
 struct NoExactInjection <: ExactInjectionSpecification end
 struct ExactZeroInjection <: ExactInjectionSpecification end
+"""
+    ExactDeviceEquation(model)
+
+Wrap an exact device model so its terminal KCL equations enter
+`c(x)=0`.  Use only for a device law known exactly; uncertain load/generation
+information belongs in measurements or priors.
+"""
 struct ExactDeviceEquation{M} <: ExactInjectionSpecification
     model::M
 end
