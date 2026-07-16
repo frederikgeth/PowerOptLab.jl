@@ -786,3 +786,155 @@ function solve_with_continuation(s::SEStructure, p::SEParameters,
     end
     ContinuationStateEstimationResult(stages[end].status, stages[end], αs, stages)
 end
+
+# ── sparse augmented-system solver ──────────────────────────────────────────
+
+"""
+    SparseConstrainedStateEstimationResult
+
+Result from [`solve_sparse_state_estimator`](@ref).  `constraint_multipliers`
+are recovered directly from the final Hachtel system, in the same row order as
+`evaluation.constraints`; they are useful for ranking suspicious exact
+zero-injection or device equations.
+"""
+struct SparseConstrainedStateEstimationResult
+    status::Symbol
+    state::Vector{Float64}
+    evaluation::SEEvaluation
+    iterations::Int
+    constraint_rank::Int
+    tangent_dimension::Int
+    observable_dimension::Int
+    constraint_multipliers::Vector{Float64}
+    history::Vector{NamedTuple}
+end
+
+function _se_hachtel_step(H, C, r, c, scale, damping)
+    m, n, q = size(H, 1), size(H, 2), size(C, 1)
+    invD = spdiagm(0 => 1.0 ./ scale)
+    Hs = sparse(H * invD)
+    Cs = sparse(C * invD)
+    Im = spdiagm(0 => ones(Float64, m))
+    In = spdiagm(0 => fill(Float64(damping), n))
+    Zmq = spzeros(Float64, m, q); Zqm = spzeros(Float64, q, m)
+    Zqq = spzeros(Float64, q, q)
+    # [I H 0; H' γI C'; 0 C 0] is the Hachtel augmented system.  It
+    # preserves the first-order residual operator and avoids H'H formation.
+    K = [Im Hs Zmq;
+         Hs' In Cs';
+         Zqm Cs Zqq]
+    rhs = vcat(-Float64.(r), zeros(Float64, n), -Float64.(c))
+    solution = qr(K) \ rhs
+    y = Vector{Float64}(solution[m+1:m+n])
+    λ = Vector{Float64}(solution[m+n+1:end])
+    y ./ scale, λ
+end
+
+function _se_status_from_linearisation(H, C; rank_rtol=sqrt(eps(Float64)))
+    rankC, Z = _se_rank_nullspace(C; rtol=rank_rtol)
+    observable, _ = _se_rank_nullspace(H * Z; rtol=rank_rtol)
+    status = observable == size(Z, 2) ? :converged_unique : :converged_underobserved
+    status, rankC, size(Z, 2), observable
+end
+
+"""
+    solve_sparse_state_estimator(structure, parameters, x0; kwargs...)
+        -> SparseConstrainedStateEstimationResult
+
+Sparse augmented-system implementation for larger compiled networks.  Each
+iteration solves the scaled Hachtel system using SuiteSparse QR, retaining the
+residual and constraint operators rather than explicitly forming `H' * H` or a
+dense null-space basis.  The dense SVD helper is used only for the small final
+rank diagnostic/status; it is not part of the linear step.
+
+The trust-region acceptance uses the same exact-penalty merit function as the
+dense reference solver.  `damping` is a small scaled primal regulariser used
+only to select a stable representative in rank-deficient linear systems.
+"""
+function solve_sparse_state_estimator(s::SEStructure, p::SEParameters,
+                                      x0::AbstractVector{<:Real};
+                                      max_iterations::Integer=100,
+                                      initial_radius::Real=0.25,
+                                      max_radius::Real=4.0,
+                                      penalty::Real=10.0,
+                                      acceptance_threshold::Real=0.1,
+                                      constraint_tolerance::Real=1e-8,
+                                      optimality_tolerance::Real=1e-8,
+                                      min_radius::Real=1e-10,
+                                      damping::Real=1e-10,
+                                      rank_rtol::Real=sqrt(eps(Float64)))
+    max_iterations > 0 || throw(ArgumentError("max_iterations must be positive"))
+    0 < initial_radius <= max_radius || throw(ArgumentError("require 0 < initial_radius ≤ max_radius"))
+    penalty > 0 || throw(ArgumentError("penalty must be positive"))
+    0 < acceptance_threshold < 1 || throw(ArgumentError("acceptance_threshold must lie in (0, 1)"))
+    damping >= 0 || throw(ArgumentError("damping must be non-negative"))
+
+    x = Float64.(x0)
+    e = evaluate_state_estimator(s, p, x)
+    nominal = maximum(abs.(p.fixed_voltages[isfinite.(real.(p.fixed_voltages))]); init=1.0)
+    scale = 1.0 ./ max.(abs.(x), max(nominal, 1.0))
+    radius = Float64(initial_radius); μ = Float64(penalty)
+    history = [_se_history_entry(0, radius, _se_merit(e, μ), e)]
+    λ = zeros(Float64, length(e.constraints))
+    rejected = 0
+
+    for iteration in 1:max_iterations
+        H = sparse(residual_jacobian(s, p, x))
+        C = sparse(constraint_jacobian(s, p, x))
+        r, c = e.residual, e.constraints
+        status, rankC, tangent, observable = _se_status_from_linearisation(H, C; rank_rtol=rank_rtol)
+        gred = tangent == 0 ? 0.0 : norm((Matrix(H)' * r + Matrix(C)' * λ), Inf)
+        if norm(c) <= constraint_tolerance && gred <= optimality_tolerance
+            _, λ = _se_hachtel_step(H, C, r, zeros(Float64, length(c)), scale, damping)
+            return SparseConstrainedStateEstimationResult(status, x, e, iteration - 1, rankC,
+                                                          tangent, observable, λ, history)
+        end
+
+        step, λtrial = try
+            _se_hachtel_step(H, C, r, c, scale, damping)
+        catch err
+            if err isa SingularException || err isa PosDefException
+                return SparseConstrainedStateEstimationResult(:numerical_failure, x, e, iteration - 1,
+                                                              rankC, tangent, observable, λ, history)
+            end
+            rethrow()
+        end
+        scaled_norm = norm(scale .* step)
+        scaled_norm > radius && scaled_norm > 0 && (step .*= radius / scaled_norm)
+        model_r = r + H * step
+        model_c = c + C * step
+        predicted = _se_merit(e, μ) - (0.5 * sum(abs2, model_r) + μ * norm(model_c))
+        if !(isfinite(predicted) && predicted > 0)
+            radius *= 0.25; rejected += 1
+            radius < min_radius && break
+            continue
+        end
+        trial = try
+            evaluate_state_estimator(s, p, x + step)
+        catch err
+            err isa DomainError || rethrow()
+            nothing
+        end
+        accepted = false; ρ = -Inf
+        if trial !== nothing
+            ρ = (_se_merit(e, μ) - _se_merit(trial, μ)) / predicted
+            accepted = isfinite(ρ) && ρ >= acceptance_threshold
+        end
+        if accepted
+            x .+= step; e = trial; λ = λtrial; rejected = 0
+            radius = ρ > 0.75 ? min(2radius, Float64(max_radius)) : radius
+            push!(history, _se_history_entry(iteration, radius, _se_merit(e, μ), e))
+        else
+            radius *= 0.25; rejected += 1
+            radius < min_radius && break
+        end
+    end
+
+    H = sparse(residual_jacobian(s, p, x)); C = sparse(constraint_jacobian(s, p, x))
+    _, rankC, tangent, observable = _se_status_from_linearisation(H, C; rank_rtol=rank_rtol)
+    status = norm(e.constraints) > constraint_tolerance ?
+        (rejected > 0 ? :constraint_restoration_failed : :infeasible_constraints) :
+        (radius < min_radius ? :trust_region_stalled : :max_iterations)
+    SparseConstrainedStateEstimationResult(status, x, e, max_iterations, rankC,
+                                            tangent, observable, λ, history)
+end

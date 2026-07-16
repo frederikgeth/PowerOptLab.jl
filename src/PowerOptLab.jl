@@ -111,7 +111,8 @@ export TerminalID, ExactInjectionSpecification, NoExactInjection,
        SEEvaluation, compile_state_estimator, evaluate_state_estimator,
        residual_jacobian, constraint_jacobian,
        ConstrainedStateEstimationResult, solve_compiled_state_estimator,
-       ContinuationStateEstimationResult, solve_with_continuation
+       ContinuationStateEstimationResult, solve_with_continuation,
+       SparseConstrainedStateEstimationResult, solve_sparse_state_estimator
 
 # Parameter estimation (calibration of line lengths / transformer taps)
 export CalibLine, CalibTap, solve_parameter_estimation, ParameterEstimationResult

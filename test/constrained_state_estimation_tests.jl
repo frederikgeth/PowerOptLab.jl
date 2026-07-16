@@ -119,6 +119,12 @@ end
     @test result.state ≈ xtrue atol=1e-9
     @test norm(result.evaluation.residual) ≤ 1e-9
     @test result.constraint_rank == 0
+
+    sparse_result = solve_sparse_state_estimator(s, SEParameters(s, measurements), zeros(length(xtrue));
+                                                initial_radius=2.0)
+    @test sparse_result.status == :converged_unique
+    @test sparse_result.state ≈ xtrue atol=1e-9
+    @test isempty(sparse_result.constraint_multipliers)
 end
 
 @testset "Compiled constrained state estimator: exact nonlinear devices" begin
@@ -169,4 +175,17 @@ end
                                            constraint_tolerance=1e-7)
     @test continuation.status == :converged_unique
     @test psolve.continuation_alpha == 1.0
+
+    # The sparse Hachtel path exposes the multiplier directly.  Here the
+    # voltage reading conflicts with the exact load equation, so the multiplier
+    # is nonzero rather than hiding the conflict in a soft compromise.
+    conflicting = [Measurement(kind=:vr, bus="b", terminal="1", reference=nothing,
+                               value=999.0, sigma=1.0)]
+    smult = compile_state_estimator(constant_power_test_net(), conflicting; exact_devices=[load])
+    pmult = SEParameters(smult, conflicting; exact_devices=[load])
+    sparse = solve_sparse_state_estimator(smult, pmult, [1000.0, 0.0];
+                                          initial_radius=0.1, constraint_tolerance=1e-7)
+    @test sparse.status == :converged_unique
+    @test norm(sparse.evaluation.constraints) ≤ 1e-7
+    @test abs(sparse.constraint_multipliers[1]) > 1e-3
 end
