@@ -52,8 +52,9 @@ A different objective/variable/constraint structure on the same physics.
   retaining ambiguity and local identifiability diagnostics while reconstructing
   a full primitive, neutral-explicit line model.
 - **Dynamic operating envelopes** ([`solve_operating_envelope`](@ref)) —
-  per-connection-point DER export limits that respect the network's voltage and
-  thermal constraints, recomputed per interval.
+  per-connection-point active-power import/export capacity with parameterized
+  fairness, forecast/model scenarios, explicit corner-security semantics, and
+  prescribed IBR Q-V controls retained from the network model.
 
 ### Bespoke algorithms — new solution methods (`src/algorithms/`)
 
@@ -73,6 +74,7 @@ handled via the engine's `ctx.bases`.
 module PowerOptLab
 
 using BMOPFTools
+using Dates
 using ForwardDiff
 using JuMP
 using Ipopt
@@ -128,7 +130,9 @@ export SequenceLineObservation, OverheadCarsonCandidate,
        materialize_inverse_carson
 
 # Dynamic operating envelopes
-export ConnectionPoint, solve_operating_envelope, OperatingEnvelopeResult
+export ConnectionPoint, FairnessPolicy, solve_operating_envelope,
+       verify_operating_envelope, compare_operating_envelope_policies,
+       OperatingEnvelopeResult, OperatingEnvelopeVerification
 
 # Advanced inverter (prototype internal-node IBR)
 export AdvancedInverter, solve_advanced_inverter, InverterResult
