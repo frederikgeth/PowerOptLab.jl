@@ -148,8 +148,9 @@ The test suite (`test/helm_tests.jl`) checks, always:
 - a closed-form two-node feeder: voltages to `rtol 1e-9`, the neutral-rise
   detail, and `singularity_estimate` against the analytic saddle-node
   ``P^* = E^2/4R`` (`≈ 6.6`, `≈ 2`, and `< 1` past collapse);
-- a nonlinear Ipopt loading sweep bracketing that analytic saddle-node, checked
-  against HELM convergence and series-divergence classifications;
+- a warm-started natural-parameter continuation trace whose nonlinear Ipopt
+  correctors bracket that analytic saddle-node, checked against HELM convergence
+  and series-divergence classifications;
 - switch `:alias ≡ :constrain` voltage identity with exact conductor currents;
 - delta and line-to-line loads against a rotated closed form;
 - the `ybus_linearized` residual oracle
