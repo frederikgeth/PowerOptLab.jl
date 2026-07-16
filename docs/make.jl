@@ -31,6 +31,7 @@ makedocs(
         ],
         "Tutorials" => [
             "Dynamic operating envelopes" => "tutorials/dynamic_operating_envelopes.md",
+            "Constrained NLLS state estimation" => "tutorials/constrained_nlls_state_estimation.md",
         ],
         "Contributing"       => "contributing.md",
         "API reference"      => "api.md",
