@@ -33,6 +33,7 @@ makedocs(
             "Dynamic operating envelopes" => "tutorials/dynamic_operating_envelopes.md",
             "Constrained NLLS state estimation" => "tutorials/constrained_nlls_state_estimation.md",
             "Inverse Carson reconstruction" => "tutorials/inverse_carson_reconstruction.md",
+            "Battery storage models" => "tutorials/battery_storage_models.md",
         ],
         "Contributing"       => "contributing.md",
         "API reference"      => "api.md",
