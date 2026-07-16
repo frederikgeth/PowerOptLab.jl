@@ -1,3 +1,7 @@
+> [!WARNING]  
+> This project is currently ongoing rapid development and may have breaking changes made directly to main. Use at your own risk until further notice.
+> Note that the bar for quality here is research contributions, not production grade code.
+
 # PowerOptLab.jl
 
 [![CI](https://github.com/frederikgeth/PowerOptLab.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/frederikgeth/PowerOptLab.jl/actions/workflows/CI.yml)
