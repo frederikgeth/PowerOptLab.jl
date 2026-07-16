@@ -35,6 +35,7 @@ makedocs(
             "Inverse Carson reconstruction" => "tutorials/inverse_carson_reconstruction.md",
             "Battery storage models" => "tutorials/battery_storage_models.md",
             "HELM versus nonlinear power flow" => "tutorials/helm_vs_nonlinear_power_flow.md",
+            "Learning smart-inverter controls" => "tutorials/learning_smart_inverter_controls.md",
         ],
         "Contributing"       => "contributing.md",
         "API reference"      => "api.md",
