@@ -76,6 +76,8 @@ end
 # NaNs, division by zero, or a nonphysical model.
 function _validate_battery(b::IVQBattery)
     chem = b.chemistry
+    isempty(b.id) && throw(ArgumentError("battery id must not be empty"))
+    _validate_inverter(b.inverter)
     b.inverter.bus == b.bus || throw(ArgumentError(
         "battery '$(b.id)' bus '$(b.bus)' must match its inverter bus '$(b.inverter.bus)'"))
     b.n_series >= 1 || throw(ArgumentError("battery '$(b.id)': n_series must be ≥ 1"))
@@ -228,6 +230,10 @@ function solve_ivq_battery(net::Dict{String,Any}, battery::IVQBattery;
     objective == :min_loss && p_set === nothing &&
         throw(ArgumentError(":min_loss requires a p_set (W) active-power target"))
     _validate_battery(battery)
+    _validate_inverter(battery.inverter, (net,))
+    p_set === nothing || isfinite(p_set) || throw(ArgumentError("p_set must be finite"))
+    q_set === nothing || isfinite(q_set) || throw(ArgumentError("q_set must be finite"))
+    isfinite(s_base) && s_base > 0 || throw(ArgumentError("s_base must be finite and > 0"))
 
     inv_h = Ref{Any}(); bat_h = Ref{Any}()
     hook! = ctx -> begin
@@ -248,21 +254,20 @@ function solve_ivq_battery(net::Dict{String,Any}, battery::IVQBattery;
     ctx = build_opf_model(net; per_unit=per_unit, s_base=s_base,
                           add_objective=false, model_hook! = hook!,
                           optimizer=optimizer, verbose=verbose)
-    for (name, value) in solver_options
-        JuMP.set_attribute(ctx.model, string(name), value)
-    end
+    _set_solver_options!(ctx.model, solver_options)
     enforce_kcl!(ctx)
     JuMP.optimize!(ctx.model)
 
-    status = string(JuMP.termination_status(ctx.model))
-    solved = JuMP.primal_status(ctx.model) == JuMP.MOI.FEASIBLE_POINT
+    outcome = _solve_outcome(ctx.model)
+    status = string(outcome.termination_status)
+    solved = _publishable(outcome)
 
     ih = inv_h[]; bh = bat_h[]
     sb = ih.sb
     i_pack = solved ? JuMP.value(bh.ipu) * bh.ibase : NaN   # per-unit → SI
     v_pack = solved ? JuMP.value(bh.vpu) * bh.vbase : NaN
 
-    result = extract_result(ctx)
+    result = _extract_result(ctx, outcome)
     return IVQBatteryResult(status,
                             solved ? JuMP.value(ih.p_poc) * sb : NaN,
                             solved ? JuMP.value(ih.q_poc) * sb : NaN,
@@ -371,7 +376,7 @@ snapshots (e.g. a time-varying slack import price via each net's `voltage_source
   platforms/Ipopt builds; `per_unit=false` reproduces a raw SI solve.
 """
 function solve_multiperiod_ivq(nets::AbstractVector, batteries::AbstractVector;
-                               dt_h::Float64=1.0,
+                               dt_h::Real=1.0,
                                per_unit::Bool=true,
                                s_base::Float64=1e6,
                                optimizer=Ipopt.Optimizer,
@@ -380,15 +385,19 @@ function solve_multiperiod_ivq(nets::AbstractVector, batteries::AbstractVector;
     T = length(nets)
     T >= 1 || throw(ArgumentError("need at least one snapshot"))
     (isfinite(dt_h) && dt_h > 0) || throw(ArgumentError("dt_h must be a positive finite number of hours"))
+    all(b -> b isa IVQBattery, batteries) || throw(ArgumentError(
+        "batteries must contain only IVQBattery values"))
     ids = [b.id for b in batteries]
     allunique(ids) || throw(ArgumentError("battery ids must be unique: $ids"))
     foreach(_validate_battery, batteries)
+    for b in batteries
+        _validate_inverter(b.inverter, nets)
+    end
+    isfinite(s_base) && s_base > 0 || throw(ArgumentError("s_base must be finite and > 0"))
 
     model = JuMP.Model(optimizer)
     verbose || JuMP.set_silent(model)
-    for (name, value) in solver_options
-        JuMP.set_attribute(model, string(name), value)
-    end
+    _set_solver_options!(model, solver_options)
 
     # Per battery: register smooth OCV/R operators once (tabulated only), and the
     # SoC trajectory bounded to the chemistry's usable window.
@@ -461,10 +470,11 @@ function solve_multiperiod_ivq(nets::AbstractVector, batteries::AbstractVector;
     foreach(enforce_kcl!, ctxs)
     JuMP.optimize!(model)
 
-    status = string(JuMP.termination_status(model))
-    solved = JuMP.primal_status(model) == JuMP.MOI.FEASIBLE_POINT
+    outcome = _solve_outcome(model)
+    status = string(outcome.termination_status)
+    solved = _publishable(outcome)
     obj = solved ? JuMP.objective_value(model) : NaN
-    snapshots = [extract_result(ctxs[t]) for t in 1:T]
+    snapshots = [_extract_result(ctxs[t], outcome) for t in 1:T]
 
     dispatch = Dict{String,NamedTuple}()
     for b in batteries

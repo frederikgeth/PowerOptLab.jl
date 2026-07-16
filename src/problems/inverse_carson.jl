@@ -378,11 +378,9 @@ _ic_standardized_residual(c, obs, u) =
 
 _ic_objective(c, obs, u) = sum(abs2, _ic_residual(c, obs, u))
 
-_ic_success_status(status) = status in
-    (JuMP.MOI.OPTIMAL, JuMP.MOI.LOCALLY_SOLVED,
-     JuMP.MOI.ALMOST_OPTIMAL, JuMP.MOI.ALMOST_LOCALLY_SOLVED)
+_ic_success_status(model) = _publishable(_solve_outcome(model))
 
-_ic_usable_profile_solution(model, status) = _ic_success_status(status) ||
+_ic_usable_profile_solution(model, status) = _ic_success_status(model) ||
     (status == JuMP.MOI.SLOW_PROGRESS && JuMP.has_values(model) &&
      JuMP.primal_status(model) in
         (JuMP.MOI.FEASIBLE_POINT, JuMP.MOI.NEARLY_FEASIBLE_POINT))
@@ -398,10 +396,7 @@ function _ic_configure_model!(model, verbose::Bool, solver_options)
         JuMP.set_attribute(model, "hessian_approximation", "limited-memory")
         JuMP.set_attribute(model, "bound_relax_factor", 0.0)
     end
-    options = solver_options isa NamedTuple ? pairs(solver_options) : solver_options
-    for (name, value) in options
-        JuMP.set_attribute(model, string(name), value)
-    end
+    _set_solver_options!(model, solver_options)
     nothing
 end
 
@@ -450,7 +445,7 @@ function _ic_fit_candidate(c::OverheadCarsonCandidate,
         JuMP.optimize!(model)
         status = JuMP.termination_status(model)
         push!(statuses, string(status))
-        _ic_success_status(status) || continue
+        _ic_success_status(model) || continue
         sol = JuMP.value.(u)
         obj = _ic_objective(c, obs, sol)
         duplicate = findfirst(old -> norm(sol - old) <= 1e-6, local_u)

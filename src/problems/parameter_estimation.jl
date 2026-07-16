@@ -226,6 +226,7 @@ function solve_parameter_estimation(nets::AbstractVector, measurements::Abstract
     (isempty(lines) && isempty(taps)) &&
         throw(ArgumentError("nothing to estimate: supply at least one CalibLine or CalibTap"))
     objective in (:wls, :wlav) || throw(ArgumentError("objective must be :wls or :wlav, got :$objective"))
+    isfinite(s_base) && s_base > 0 || throw(ArgumentError("s_base must be finite and > 0"))
     allunique([[l.id for l in lines]; [t.id for t in taps]]) ||
         throw(ArgumentError("CalibLine/CalibTap ids must be unique"))
 
@@ -233,9 +234,7 @@ function solve_parameter_estimation(nets::AbstractVector, measurements::Abstract
 
     model = JuMP.Model(optimizer)
     verbose || JuMP.set_silent(model)
-    for (name, value) in solver_options
-        JuMP.set_attribute(model, string(name), value)
-    end
+    _set_solver_options!(model, solver_options)
 
     # Shared unknown: one free length per uncertain line (dimensionless, SI).
     ell = Dict(l.id => JuMP.@variable(model, lower_bound = l.length_min,
@@ -325,8 +324,9 @@ function solve_parameter_estimation(nets::AbstractVector, measurements::Abstract
     foreach(enforce_kcl!, ctxs)
     JuMP.optimize!(model)
 
-    status = string(JuMP.termination_status(model))
-    solved = JuMP.primal_status(model) == JuMP.MOI.FEASIBLE_POINT
+    outcome = _solve_outcome(model)
+    status = string(outcome.termination_status)
+    solved = _publishable(outcome)
     obj = solved ? JuMP.objective_value(model) : NaN
 
     line_length = Dict(id => (solved ? JuMP.value(v) : NaN) for (id, v) in ell)
@@ -339,6 +339,6 @@ function solve_parameter_estimation(nets::AbstractVector, measurements::Abstract
         NaN
     end
 
-    snapshots = [extract_result(ctxs[t]) for t in 1:T]
+    snapshots = [_extract_result(ctxs[t], outcome) for t in 1:T]
     return ParameterEstimationResult(status, obj, line_length, tap, residual_rms, snapshots)
 end

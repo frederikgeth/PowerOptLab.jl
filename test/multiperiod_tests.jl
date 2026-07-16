@@ -41,3 +41,39 @@ end
     @test d.soc[3] ≈ d.soc[2] + (0.95*d.p_charge[2] - d.p_discharge[2]/0.95)*1.0  rtol=1e-6
     @test d.soc[3] ≈ 40e3  rtol=1e-6         # still cyclic
 end
+
+@testset "Multi-period OPF: duration and device contracts" begin
+    nets = [single_bus_net(; src_cost=0.20), single_bus_net(; src_cost=0.05)]
+    bat = StorageDevice(id="bat", bus="bus1", p_charge_max=40e3,
+        p_discharge_max=40e3, energy_max=100e3, energy_init=40e3)
+    @test_throws ArgumentError solve_multiperiod_opf(nets, [bat]; dt_h=0.0)
+    @test_throws ArgumentError solve_multiperiod_opf(nets, [bat]; dt_h=Inf)
+    @test_throws ArgumentError solve_multiperiod_opf(nets,
+        [StorageDevice(id="bad", bus="bus1", p_charge_max=-1.0,
+            p_discharge_max=1.0, energy_max=10.0, energy_init=5.0)])
+    @test_throws ArgumentError solve_multiperiod_opf(nets,
+        [StorageDevice(id="bad", bus="missing", p_charge_max=1.0,
+            p_discharge_max=1.0, energy_max=10.0, energy_init=5.0)])
+    @test_throws ArgumentError solve_multiperiod_opf(nets,
+        [StorageDevice(id="bad", bus="bus1", p_charge_max=1.0,
+            p_discharge_max=1.0, energy_max=10.0, energy_init=11.0)])
+    @test_throws ArgumentError solve_multiperiod_opf(nets,
+        [StorageDevice(id="bad", bus="bus1", p_charge_max=1.0,
+            p_discharge_max=1.0, energy_max=10.0, energy_init=5.0,
+            eff_charge=0.0)])
+
+    # With no inter-temporal device, duration only converts each cost rate to
+    # an interval cost and must scale the reported objective exactly.
+    hourly = solve_multiperiod_opf(nets, StorageDevice[]; dt_h=1.0)
+    half_hourly = solve_multiperiod_opf(nets, StorageDevice[]; dt_h=0.5)
+    @test half_hourly.objective ≈ 0.5 * hourly.objective rtol=1e-8
+end
+
+@testset "Multi-period OPF: iteration-limited points are not published" begin
+    nets = [single_bus_net(; src_cost=0.20), single_bus_net(; src_cost=0.05)]
+    r = solve_multiperiod_opf(nets, StorageDevice[];
+        solver_options=(max_iter=0,))
+    @test !(r.termination_status in ("LOCALLY_SOLVED", "OPTIMAL"))
+    @test isnan(r.objective)
+    @test all(isnan(r.snapshots[t]["bus"]["bus1"]["1"]["vm"]) for t in eachindex(nets))
+end

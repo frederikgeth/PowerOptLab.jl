@@ -87,7 +87,7 @@ A [`MultiperiodResult`](@ref) with the per-period solutions and each device's SI
 charge/discharge/SOC trajectory.
 """
 function solve_multiperiod_opf(nets::AbstractVector, devices::AbstractVector;
-                               dt_h::Float64=1.0,
+                               dt_h::Real=1.0,
                                per_unit::Bool=true,
                                s_base::Float64=1e6,
                                optimizer=Ipopt.Optimizer,
@@ -95,14 +95,18 @@ function solve_multiperiod_opf(nets::AbstractVector, devices::AbstractVector;
                                solver_options=())
     T = length(nets)
     T >= 1 || throw(ArgumentError("need at least one snapshot"))
+    isfinite(dt_h) && dt_h > 0 || throw(ArgumentError(
+        "dt_h must be a positive finite number of hours"))
+    isfinite(s_base) && s_base > 0 || throw(ArgumentError("s_base must be finite and > 0"))
+    all(d -> d isa Union{StorageDevice,EVDevice}, devices) || throw(ArgumentError(
+        "devices must contain only StorageDevice or EVDevice values"))
+    foreach(d -> _validate_device(d, T, nets), devices)
     ids = [_dev_id(d) for d in devices]
     allunique(ids) || throw(ArgumentError("device ids must be unique: $ids"))
 
     model = JuMP.Model(optimizer)
     verbose || JuMP.set_silent(model)
-    for (name, value) in solver_options
-        JuMP.set_attribute(model, string(name), value)
-    end
+    _set_solver_options!(model, solver_options)
 
     # ports[dev.id][t] :: PortHandle. Filled as each snapshot's hook runs.
     ports = Dict{String,Vector{PortHandle}}(id => Vector{PortHandle}(undef, T) for id in ids)
@@ -125,16 +129,18 @@ function solve_multiperiod_opf(nets::AbstractVector, devices::AbstractVector;
                             for d in devices)
 
     # One combined objective: total generation cost across the horizon.
-    JuMP.@objective(model, Min, sum(generation_cost(ctxs[t]) for t in 1:T))
+    JuMP.@objective(model, Min, Float64(dt_h) *
+        sum(generation_cost(ctxs[t]) for t in 1:T))
 
     foreach(enforce_kcl!, ctxs)
     JuMP.optimize!(model)
 
-    status = string(JuMP.termination_status(model))
-    solved = JuMP.primal_status(model) == JuMP.MOI.FEASIBLE_POINT
+    outcome = _solve_outcome(model)
+    status = string(outcome.termination_status)
+    solved = _publishable(outcome)
     obj = solved ? JuMP.objective_value(model) : NaN
 
-    snapshots = [extract_result(ctxs[t]) for t in 1:T]
+    snapshots = [_extract_result(ctxs[t], outcome) for t in 1:T]
 
     dispatch = Dict{String,NamedTuple}()
     for d in devices

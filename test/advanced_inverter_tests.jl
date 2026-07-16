@@ -74,6 +74,22 @@ end
     @test_throws ArgumentError solve_advanced_inverter(inv_grid3_bal(), bad2)
     @test_throws ArgumentError solve_advanced_inverter(inv_grid(),
         AdvancedInverter(id="i", bus="poc", s_max=5e3, topology=:BOGUS))
+    @test_throws ArgumentError solve_advanced_inverter(inv_grid(),
+        AdvancedInverter(id="i", bus="poc", s_max=-5e3))
+    @test_throws ArgumentError solve_advanced_inverter(inv_grid(),
+        AdvancedInverter(id="i", bus="poc", s_max=5e3, grid_forming=true))
+    @test_throws ArgumentError solve_advanced_inverter(inv_grid(),
+        AdvancedInverter(id="i", bus="poc", s_max=5e3, modulation_max=1.0))
+    @test_throws ArgumentError solve_advanced_inverter(inv_grid(),
+        AdvancedInverter(id="i", bus="poc", s_max=5e3, p_loss_fixed=-1.0))
+    bad_dc = (bus="poc", phase_terminals=["a","b","c"], neutral="n",
+              s_max=5e3, topology=:THREE_LEG, v_dc=700.0)
+    @test_throws ArgumentError solve_advanced_inverter(inv_grid3_bal(),
+        AdvancedInverter(; id="i", c_dc=0.0, bad_dc...))
+    @test_throws ArgumentError solve_advanced_inverter(inv_grid3_bal(),
+        AdvancedInverter(; id="i", c_dc=1e-3, f=0.0, bad_dc...))
+    @test_throws ArgumentError solve_advanced_inverter(inv_grid3_bal(),
+        AdvancedInverter(; id="i", c_dc=1e-3, n_samples=0, bad_dc...))
 end
 
 # Shared knobs for the three-phase topology tests.
@@ -122,6 +138,7 @@ end
     split_hi = solve_advanced_inverter(net, AdvancedInverter(; id="i", topology=:SPLIT_DC, v_dc=800.0, c_dc=2.8e-3, In_max=24.0, _TOPO_COMMON...))
     @test four.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")   # 4-leg fine at 650 V
     @test isnan(split_lo.p_poc)                                       # split infeasible at 650 V
+    @test all(isnan(split_lo.bus["poc"][ph]["vm"]) for ph in ("a", "b", "c"))
     @test split_hi.termination_status in ("LOCALLY_SOLVED", "OPTIMAL") # feasible at 800 V
     @test !isnan(split_hi.p_poc)
 end
@@ -172,14 +189,26 @@ end
     @test capd.p_poc < loose.p_poc - 20.0
 end
 
-@testset "Advanced inverter: grid-side shunt injects reactive and raises POC voltage" begin
-    net = inv_grid_x()   # line has reactance, so a capacitor moves the voltage
-    kw = (objective=:min_loss, p_set=1000.0, q_set=0.0)   # converter pinned at unity PF
-    none = solve_advanced_inverter(net, AdvancedInverter(id="i", bus="poc", s_max=5000.0); kw...)
-    shun = solve_advanced_inverter(net, AdvancedInverter(id="i", bus="poc", s_max=5000.0, b_filter_shunt=0.05); kw...)
+@testset "Advanced inverter: POC Q includes the grid-side shunt" begin
+    net = inv_grid_x()
+    b = 0.05
+    shun = solve_advanced_inverter(net,
+        AdvancedInverter(id="i", bus="poc", s_max=5000.0, b_filter_shunt=b);
+        objective=:min_loss, p_set=1000.0, q_set=0.0)
     @test shun.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
-    # A grid-side capacitor supplies reactive locally, lifting the POC voltage.
-    @test shun.bus["poc"]["1"]["vm"] > none.bus["poc"]["1"]["vm"] + 5.0
+    q_shunt = b * shun.bus["poc"]["1"]["vm"]^2
+    @test shun.q_poc ≈ 0.0 atol=1e-3
+    @test shun.q_poc - shun.q_conv ≈ q_shunt rtol=1e-5
+end
+
+@testset "Advanced inverter: iteration-limited points are not published" begin
+    r = solve_advanced_inverter(inv_grid(),
+        AdvancedInverter(id="i", bus="poc", s_max=5000.0);
+        solver_options=(max_iter=0,))
+    @test !(r.termination_status in ("LOCALLY_SOLVED", "OPTIMAL"))
+    @test isnan(r.p_poc)
+    @test isnan(r.q_poc)
+    @test isnan(r.bus["poc"]["1"]["vm"])
 end
 
 @testset "Advanced inverter: neutral-current limit In_max binds" begin

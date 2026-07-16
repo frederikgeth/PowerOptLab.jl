@@ -179,6 +179,11 @@ end
                    soc_init=0.6, inverter=inv, soc_final=1.5))
     # Nonpositive dt_h (multi-period entry).
     @test_throws ArgumentError solve_multiperiod_ivq([inv_grid()], [bat]; dt_h=0.0)
+    # The embedded inverter is validated through the battery entry points too.
+    badrating = AdvancedInverter(id="bat", bus="poc", s_max=-1.0)
+    @test_throws ArgumentError solve_ivq_battery(inv_grid(),
+        IVQBattery(id="bat", bus="poc", chemistry=chem, n_series=100, n_parallel=1,
+                   soc_init=0.6, inverter=badrating))
 end
 
 @testset "BatteryChemistry: nonphysical parameters are rejected" begin

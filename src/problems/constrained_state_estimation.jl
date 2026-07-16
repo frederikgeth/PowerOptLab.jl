@@ -490,8 +490,14 @@ function _se_parts(s::SEStructure, p::SEParameters, x::AbstractVector{<:Real})
         b[i] = real(v); b[length(s.nodes) + i] = imag(v)
     end
     u = b + s.voltage_state_jacobian * x
-    q = Vector{Float64}(s.fixed_current_state + s.current_state_jacobian * x)
     n = length(s.nodes)
+    # `fixed_current_state` was compiled from the original source phasors. Source
+    # phasors are mutable parameters, so recompute their YV contribution here;
+    # otherwise updated voltages and currents describe different network states.
+    vfixed = ComplexF64.(b[1:n] .+ im .* b[n+1:end])
+    ifixed = s.passive_pattern * vfixed
+    q = Vector{Float64}(vcat(real(ifixed), imag(ifixed)) +
+                        s.current_state_jacobian * x)
     u[1:n], u[n+1:end], q[1:n], q[n+1:end]
 end
 

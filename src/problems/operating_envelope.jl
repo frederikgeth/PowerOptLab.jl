@@ -390,8 +390,7 @@ function _set_fairness_objective!(model, cap, cps, policy, direction, power_base
     end
 end
 
-_has_primal(model) = JuMP.primal_status(model) in
-    (JuMP.MOI.FEASIBLE_POINT, JuMP.MOI.NEARLY_FEASIBLE_POINT)
+_has_primal(model) = _publishable(_solve_outcome(model))
 
 function _result_margins(result, net)
     best = Dict{String,Tuple{Float64,String}}()
@@ -588,9 +587,7 @@ function _solve_interval_group(group, cps, policy;
                                patterns_override=nothing)
     model = JuMP.Model(optimizer)
     verbose || JuMP.set_silent(model)
-    for (name, value) in solver_options
-        JuMP.set_attribute(model, string(name), value)
-    end
+    _set_solver_options!(model, solver_options)
     pb = per_unit ? s_base : 1.0
     cap = Dict{String,Any}()
     for cp in cps
@@ -633,9 +630,10 @@ function _solve_interval_group(group, cps, policy;
         JuMP.optimize!(model)
     end
 
-    status = string(JuMP.termination_status(model))
-    primal = string(JuMP.primal_status(model))
-    feasible = _has_primal(model)
+    outcome = _solve_outcome(model)
+    status = string(outcome.termination_status)
+    primal = string(outcome.primal_status)
+    feasible = _publishable(outcome)
     total = NaN
     alloc = Dict(cp.id => NaN for cp in cps)
     snapshot = Dict{String,Any}("termination_status"=>status,

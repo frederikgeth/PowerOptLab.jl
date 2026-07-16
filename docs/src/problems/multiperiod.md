@@ -9,9 +9,10 @@ express, because state of charge couples time steps.
 
 Under the hood it uses the BMOPFTools staged API: every snapshot is built into
 one shared model with `build_opf_model(add_objective=false)`, each device's
-state of charge is linked across the snapshots, the per-snapshot generation costs
-are summed into one objective, KCL is enforced per snapshot, and the model is
-solved once.
+state of charge is linked across the snapshots, the per-snapshot generation-cost
+rates are multiplied by `dt_h` and summed into one interval-cost objective, KCL
+is enforced per snapshot, and the model is solved once. `dt_h` must be positive
+and finite.
 
 ## Worked example: battery arbitrage
 
@@ -68,3 +69,9 @@ per-period BMOPFTools result dicts (`res.snapshots`) plus each device's SI
 `p_charge`, `p_discharge`, `p_net`, `q`, and `soc` trajectories in
 `res.dispatch`. See the API reference for [`solve_multiperiod_opf`](@ref) and
 [`MultiperiodResult`](@ref).
+
+Numerical values are published only when the shared solve reaches `OPTIMAL` or
+`LOCALLY_SOLVED` with a feasible primal point. Iteration-limited, infeasible, or
+relaxed-tolerance outcomes retain their termination status and return `NaN`
+objective/trajectory values rather than presenting a candidate iterate as an
+optimum.
