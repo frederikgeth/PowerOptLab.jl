@@ -86,7 +86,7 @@ zero filter) it is a plain grid-following converter at the POC.
 - `p_ripple_max` — SINGLE_PHASE only: bound on the 2ω power-ripple magnitude (VA).
 - `i_max=nothing` — optional per-conductor current limit (A).
 """
-Base.@kwdef struct AdvancedInverter
+Base.@kwdef struct AdvancedInverter <: AbstractDevice
     id::String
     bus::String
     phase_terminals::Vector{String} = ["1"]
@@ -179,6 +179,12 @@ function _validate_inverter(inv::AdvancedInverter, nets=())
     return nothing
 end
 
+function validate_device(inv::AdvancedInverter, nets=(); periods::Integer=length(nets))
+    periods == length(nets) || throw(ArgumentError(
+        "period count $periods does not match $(length(nets)) network snapshots"))
+    _validate_inverter(inv, nets)
+end
+
 """
     InverterResult
 
@@ -197,7 +203,7 @@ currents A.
 - `dv2` — 2ω bus-ripple amplitude (V; three-phase topologies, else 0).
 - `bus::Dict{String,Any}` — the BMOPFTools `result["bus"]` (POC voltages, …).
 """
-struct InverterResult
+struct InverterResult <: AbstractSolveResult
     termination_status::String
     topology::Symbol
     p_poc::Float64
@@ -212,7 +218,14 @@ struct InverterResult
     ripple::Float64
     dv2::Float64
     bus::Dict{String,Any}
+    solve::SolveStatus
 end
+
+solve_status(result::InverterResult) = result.solve
+
+solve_diagnostics(result::InverterResult) =
+    (topology=result.topology, p_loss=result.p_loss, ripple=result.ripple,
+     neutral_current=result.i_neutral)
 
 # Handles the hook publishes for post-solve reporting. Power/current/voltage
 # expressions are in MODEL units; `sb`/`vb`/`ib` convert them back to SI.
@@ -470,6 +483,32 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
                        in_re, in_im, dre, dim, sb, vb, ib)
 end
 
+stamp_device!(ctx, inverter::AdvancedInverter; kwargs...) =
+    _stamp_inverter!(ctx, inverter)
+
+link_device!(model, inverter::AdvancedInverter, handles, sb, grid::TimeGrid) = nothing
+
+function extract_device(inverter::AdvancedInverter, h::_InvHandles,
+                        status::SolveStatus)
+    solved = status.publishable
+    sb = h.sb; vb = h.vb; ib = h.ib
+    scaled(e, scale) = solved ? JuMP.value(e) * scale : NaN
+    mag(a, b, scale) = solved ? hypot(JuMP.value(a), JuMP.value(b)) * scale : NaN
+    nph = length(inverter.phase_terminals)
+    return (
+        p_poc=scaled(h.p_poc, sb), q_poc=scaled(h.q_poc, sb),
+        p_conv=scaled(h.p_conv, sb), q_conv=scaled(h.q_conv, sb),
+        p_loss=scaled(h.p_loss, sb), p_dc=scaled(h.p_dc, sb),
+        v_int_mag=[mag(h.vrint[k], h.viint[k], vb) for k in 1:nph],
+        i_mag=[mag(h.cri[k], h.cii[k], ib) for k in 1:nph],
+        i_neutral=h.in_re === nothing ? 0.0 :
+            (solved ? hypot(JuMP.value(h.in_re), JuMP.value(h.in_im)) : NaN),
+        ripple=mag(h.ripple_re, h.ripple_im, sb),
+        dv2=h.dre === nothing ? 0.0 :
+            (solved ? hypot(JuMP.value(h.dre), JuMP.value(h.dim)) : NaN),
+    )
+end
+
 """
     solve_advanced_inverter(net, inverter; objective=:max_export, kwargs...)
         -> InverterResult
@@ -504,11 +543,11 @@ function solve_advanced_inverter(net::Dict{String,Any}, inverter::AdvancedInvert
     p_set === nothing || isfinite(p_set) || throw(ArgumentError("p_set must be finite"))
     q_set === nothing || isfinite(q_set) || throw(ArgumentError("q_set must be finite"))
     isfinite(s_base) && s_base > 0 || throw(ArgumentError("s_base must be finite and > 0"))
-    _validate_inverter(inverter, (net,))
+    validate_device(inverter, (net,); periods=1)
 
     handles = Ref{_InvHandles}()
     hook! = ctx -> begin
-        h = _stamp_inverter!(ctx, inverter)
+        h = stamp_device!(ctx, inverter)
         handles[] = h
         q_set === nothing || JuMP.@constraint(ctx.model, h.q_poc == q_set / h.sb)
         if objective == :max_export
@@ -528,24 +567,15 @@ function solve_advanced_inverter(net::Dict{String,Any}, inverter::AdvancedInvert
 
     outcome = _solve_outcome(ctx.model)
     status = string(outcome.termination_status)
-    solved = _publishable(outcome)
-
     h = handles[]
-    sb = h.sb; vb = h.vb; ib = h.ib
-    scaled(e, s) = solved ? JuMP.value(e) * s : NaN
-    mag(a, b, s) = solved ? hypot(JuMP.value(a), JuMP.value(b)) * s : NaN
-    nph = length(inverter.phase_terminals)
-
-    vint = [mag(h.vrint[k], h.viint[k], vb) for k in 1:nph]
-    imag = [mag(h.cri[k],   h.cii[k],   ib) for k in 1:nph]
-    ripple = mag(h.ripple_re, h.ripple_im, sb)
-    i_neutral = h.in_re === nothing ? 0.0 : (solved ? hypot(JuMP.value(h.in_re), JuMP.value(h.in_im)) : NaN)
-    dv2 = h.dre === nothing ? 0.0 : (solved ? hypot(JuMP.value(h.dre), JuMP.value(h.dim)) : NaN)
+    device_result = extract_device(inverter, h, SolveStatus(outcome))
 
     result = _extract_result(ctx, outcome)
     return InverterResult(status, inverter.topology,
-                          scaled(h.p_poc, sb), scaled(h.q_poc, sb),
-                          scaled(h.p_conv, sb), scaled(h.q_conv, sb),
-                          scaled(h.p_loss, sb), scaled(h.p_dc, sb),
-                          vint, imag, i_neutral, ripple, dv2, result["bus"])
+                          device_result.p_poc, device_result.q_poc,
+                          device_result.p_conv, device_result.q_conv,
+                          device_result.p_loss, device_result.p_dc,
+                          device_result.v_int_mag, device_result.i_mag,
+                          device_result.i_neutral, device_result.ripple,
+                          device_result.dv2, result["bus"], SolveStatus(outcome))
 end

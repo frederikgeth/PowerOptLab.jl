@@ -86,7 +86,7 @@ struct _SEMeasurementSpec{Ti<:Integer}
 end
 
 """A scalar telemetry reading on one end/conductor of a named BMOPF line."""
-struct BranchMeasurement
+struct BranchMeasurement <: AbstractMeasurement
     kind::Symbol
     line::String
     side::Symbol
@@ -100,8 +100,7 @@ struct BranchMeasurement
         side in (:from, :to) || throw(ArgumentError("branch measurement side must be :from or :to"))
         isempty(line) && throw(ArgumentError("branch measurement line must be non-empty"))
         isempty(terminal) && throw(ArgumentError("branch measurement terminal must be non-empty"))
-        isfinite(value) || throw(ArgumentError("branch measurement value must be finite"))
-        isfinite(sigma) && sigma > 0 || throw(ArgumentError("branch measurement sigma must be finite and > 0"))
+        _validate_measurement_scalar(kind, value, sigma)
         new(kind, line, side, terminal, Float64(value), Float64(sigma))
     end
 end
@@ -210,7 +209,7 @@ numerically converged but underobserved estimate from failure to establish the
 exact equations.  `history` records the scaled trust-region radius, merit value,
 measurement objective, and exact-constraint norm at accepted iterates.
 """
-struct ConstrainedStateEstimationResult
+struct ConstrainedStateEstimationResult <: AbstractSolveResult
     status::Symbol
     state::Vector{Float64}
     evaluation::SEEvaluation
@@ -221,13 +220,28 @@ struct ConstrainedStateEstimationResult
     history::Vector{NamedTuple}
 end
 
+function solve_status(result::ConstrainedStateEstimationResult)
+    ok = result.status in (:converged_unique, :converged_underobserved)
+    _result_solve_status(string(result.status), ok; primal_status="NOT_APPLICABLE")
+end
+
+solve_diagnostics(result::ConstrainedStateEstimationResult) =
+    (iterations=result.iterations, constraint_rank=result.constraint_rank,
+     tangent_dimension=result.tangent_dimension,
+     observable_dimension=result.observable_dimension)
+
 """Result and per-stage diagnostics from constant-power continuation."""
-struct ContinuationStateEstimationResult
+struct ContinuationStateEstimationResult <: AbstractSolveResult
     status::Symbol
     result::ConstrainedStateEstimationResult
     alphas::Vector{Float64}
     stages::Vector{ConstrainedStateEstimationResult}
 end
+
+solve_status(result::ContinuationStateEstimationResult) = solve_status(result.result)
+solve_diagnostics(result::ContinuationStateEstimationResult) =
+    (stages=length(result.stages), alphas=copy(result.alphas),
+     final=solve_diagnostics(result.result))
 
 _se_node_index(s::SEStructure, node::TerminalID) = get(s.node_index, node, 0)
 
@@ -420,8 +434,10 @@ function SEParameters(s::SEStructure, measurements::AbstractVector=Measurement[]
     for (node, v) in s.reference_map
         fixed_by_node[s.node_index[node]] = v
     end
-    values = Float64[m.value for m in measurements]
-    sigmas = Float64[m.sigma for m in measurements]
+    all(m -> m isa AbstractMeasurement, measurements) || throw(ArgumentError(
+        "measurements must contain AbstractMeasurement values"))
+    values = Float64[measurement_value(m) for m in measurements]
+    sigmas = Float64[measurement_sigma(m) for m in measurements]
     isempty(measurements) && (values = Float64[]; sigmas = Float64[])
     powers, currents, admittances = _flatten_device_parameters(exact_devices)
     prior_indices = isnothing(prior) ? Int[] : copy(prior.indices)
@@ -957,7 +973,7 @@ are recovered directly from the final Hachtel system, in the same row order as
 `evaluation.constraints`; they are useful for ranking suspicious exact
 zero-injection or device equations.
 """
-struct SparseConstrainedStateEstimationResult
+struct SparseConstrainedStateEstimationResult <: AbstractSolveResult
     status::Symbol
     state::Vector{Float64}
     evaluation::SEEvaluation
@@ -968,6 +984,17 @@ struct SparseConstrainedStateEstimationResult
     constraint_multipliers::Vector{Float64}
     history::Vector{NamedTuple}
 end
+
+function solve_status(result::SparseConstrainedStateEstimationResult)
+    ok = result.status in (:converged_unique, :converged_underobserved)
+    _result_solve_status(string(result.status), ok; primal_status="NOT_APPLICABLE")
+end
+
+solve_diagnostics(result::SparseConstrainedStateEstimationResult) =
+    (iterations=result.iterations, constraint_rank=result.constraint_rank,
+     tangent_dimension=result.tangent_dimension,
+     observable_dimension=result.observable_dimension,
+     multipliers=copy(result.constraint_multipliers))
 
 function _se_hachtel_step(H, C, r, c, scale, damping)
     m, n, q = size(H, 1), size(H, 2), size(C, 1)
@@ -1214,11 +1241,20 @@ derived_covariance(s::SEStructure, p::SEParameters, x::AbstractVector{<:Real}, j
 # ── time-series estimation ──────────────────────────────────────────────────
 
 """Outcome of sequential estimation over one unchanged compiled topology."""
-struct TimeSeriesStateEstimationResult
+struct TimeSeriesStateEstimationResult <: AbstractSolveResult
     status::Symbol
     snapshots::Vector{Any}
     completed_snapshots::Int
 end
+
+function solve_status(result::TimeSeriesStateEstimationResult)
+    ok = result.status == :converged
+    _result_solve_status(string(result.status), ok; primal_status="NOT_APPLICABLE")
+end
+
+solve_diagnostics(result::TimeSeriesStateEstimationResult) =
+    (completed_snapshots=result.completed_snapshots,
+     requested_snapshots=length(result.snapshots))
 
 function _se_previous_state_prior(x, sigma)
     n = length(x)

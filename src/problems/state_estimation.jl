@@ -57,7 +57,7 @@ finite and strictly positive.
 Construction validates `kind`, finiteness, `sigma > 0`, and non-empty
 identifiers; it does not check that the identifiers exist in a particular net.
 """
-struct Measurement
+struct Measurement <: AbstractMeasurement
     kind::Symbol
     bus::String
     value::Float64
@@ -70,10 +70,7 @@ struct Measurement
                          reference::Union{String,Nothing,Missing}=missing)
         kind in (:vr, :vi, :vmag, :pinj, :qinj) ||
             throw(ArgumentError("unknown measurement kind :$(kind); expected :vr, :vi, :vmag, :pinj, or :qinj"))
-        isfinite(value) ||
-            throw(ArgumentError("measurement value must be finite (got $value)"))
-        (isfinite(sigma) && sigma > 0) ||
-            throw(ArgumentError("measurement sigma must be finite and > 0 (got $sigma)"))
+        _validate_measurement_scalar(kind, value, sigma)
         isempty(bus) && throw(ArgumentError("measurement bus must be non-empty"))
         isempty(terminal) && throw(ArgumentError("measurement terminal must be non-empty"))
         reference isa String && isempty(reference) &&
@@ -110,14 +107,21 @@ Result of [`solve_state_estimation`](@ref).
   `(observable, n_states, rank, redundancy, min_singular, cond)` from the
   measurement Jacobian at the returned point (see [`solve_state_estimation`](@ref)).
 """
-struct StateEstimationResult
+struct StateEstimationResult <: AbstractSolveResult
     termination_status::String
     primal_status::String
     objective::Float64
     bus::Dict{String,Any}
     residuals::Vector{NamedTuple}
     observability::NamedTuple
+    solve::SolveStatus
 end
+
+solve_status(result::StateEstimationResult) = result.solve
+
+solve_diagnostics(result::StateEstimationResult) =
+    (objective=result.objective, observability=result.observability,
+     residual_count=length(result.residuals))
 
 _vscale(ctx, bus) = ctx.bases === nothing ? 1.0 : ctx.bases.v_base[bus]
 
@@ -443,7 +447,8 @@ function solve_state_estimation(net::Dict{String,Any}, measurements::AbstractVec
         end
     end
 
-    return StateEstimationResult(status, pstatus, obj, est_bus, residuals, obsv)
+    return StateEstimationResult(status, pstatus, obj, est_bus, residuals, obsv,
+                                 SolveStatus(outcome))
 end
 
 # ── observability diagnostic ─────────────────────────────────────────────────

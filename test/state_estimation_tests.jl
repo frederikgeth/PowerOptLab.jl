@@ -31,6 +31,10 @@ end
 
 @testset "State estimation: exact recovery from noiseless measurements" begin
     meas, true_vm = se_full_meas()
+    @test all(m -> m isa AbstractMeasurement, meas)
+    @test measurement_kind(meas[1]) == meas[1].kind
+    @test measurement_value(meas[1]) == meas[1].value
+    @test measurement_sigma(meas[1]) == meas[1].sigma
     se = solve_state_estimation(se_net(), meas)
     @test se.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
     @test se.primal_status == "FEASIBLE_POINT"
@@ -41,6 +45,8 @@ end
     @test se.objective < 1e-3
     @test se.observability.observable === true
     @test se.observability.rank == se.observability.n_states == 4
+    @test solve_status(se).publishable
+    @test solve_diagnostics(se).residual_count == length(meas)
 end
 
 @testset "State estimation: noise reduction vs raw measurements" begin
@@ -181,6 +187,7 @@ end
     # One iteration cannot converge this nonlinear fit ⇒ no feasible point.
     se = solve_state_estimation(se_net(), meas; solver_options=["max_iter" => 0])
     @test !(se.termination_status in ("LOCALLY_SOLVED", "OPTIMAL"))
+    @test !solve_status(se).publishable
     @test isnan(se.objective)
     @test all(isnan(se.bus[b]["1"]["vm"]) for b in ("bus1","bus2"))
     @test all(isnan(r.estimated) for r in se.residuals)

@@ -18,12 +18,14 @@ Result of [`solve_multiperiod_opf`](@ref).
   horizon: `p_charge`, `p_discharge`, `p_net` (discharge positive), `q`
   (each length `T`), and `soc` (length `T+1`, energy in Wh at each step boundary,
   `soc[1]` = initial).
+- `solve::SolveStatus` — exact normalized status and publication decision.
 """
-struct MultiperiodResult
+struct MultiperiodResult <: AbstractSolveResult
     termination_status::String
     objective::Float64
     snapshots::Vector{Dict{String,Any}}
     dispatch::Dict{String,NamedTuple}
+    solve::SolveStatus
 end
 
 # Terminal / departure state-of-charge constraint, dispatched per device type.
@@ -46,18 +48,38 @@ end
 
 # Link a device's per-period ports through its state of charge (all per-unit).
 #   soc[t+1] = soc[t] + (eff_c·pc[t] − pd[t]/eff_d)·Δt ,   e_min ≤ soc ≤ e_max
-function _link_soc!(model, dev, ports::Vector{PortHandle}, sb, dt_h, T)
+function link_device!(model, dev::Union{StorageDevice,EVDevice},
+                      ports::AbstractVector, sb, grid::TimeGrid)
+    T = length(grid)
     soc = JuMP.@variable(model, [1:T+1], base_name = "soc_$(_dev_id(dev))")
     JuMP.@constraint(model, soc[1] == _dev_einit(dev) / sb)
     effc = _dev_effc(dev); effd = _dev_effd(dev)
     for t in 1:T
         JuMP.@constraint(model,
-            soc[t+1] == soc[t] + (effc*ports[t].pc - ports[t].pd/effd) * dt_h)
+            soc[t+1] == soc[t] +
+                        (effc*ports[t].pc - ports[t].pd/effd) * grid[t])
         JuMP.@constraint(model, soc[t+1] >= _dev_emin(dev) / sb)
         JuMP.@constraint(model, soc[t+1] <= _dev_emax(dev) / sb)
     end
     _finalize_soc!(model, dev, soc, sb, T)
     return soc
+end
+
+_link_soc!(model, dev, ports::AbstractVector, sb, dt_h, T) =
+    link_device!(model, dev, ports, sb, TimeGrid(T, dt_h))
+
+function extract_device(dev::Union{StorageDevice,EVDevice},
+                        ports::AbstractVector, soc, sb,
+                        status::SolveStatus)
+    T = length(ports)
+    val(x) = status.publishable ? JuMP.value(x) : NaN
+    return (
+        p_charge    = [val(ports[t].pc) * sb for t in 1:T],
+        p_discharge = [val(ports[t].pd) * sb for t in 1:T],
+        p_net       = [val(ports[t].p)  * sb for t in 1:T],
+        q           = [val(ports[t].q)  * sb for t in 1:T],
+        soc         = [val(soc[k])      * sb for k in 1:T+1],
+    )
 end
 
 """
@@ -74,11 +96,14 @@ slack import price set via each net's `voltage_source` `cost`, or differing load
 
 # Arguments
 - `nets::Vector` — `T` network dicts (`parse_bmopf` output), one per period.
-- `devices::Vector` — [`StorageDevice`](@ref) / [`EVDevice`](@ref) instances. A
-  device's `bus`/terminals must exist in every snapshot.
+- `devices::Vector` — [`AbstractDevice`](@ref) instances implementing the
+  validation/stamp/link/extract lifecycle. Built-in storage and EV devices
+  require their bus/terminals to exist in every snapshot.
 
 # Keywords
-- `dt_h=1.0` — period duration in hours (SOC integrates power over this).
+- `dt_h=1.0` — uniform period duration in hours (compatibility shorthand).
+- `time_grid=nothing` — pass `TimeGrid([Δt₁, Δt₂, ...])` for nonuniform
+  durations. When supplied it takes precedence over `dt_h`.
 - `per_unit=true`, `s_base=1e6` — engine unit handling (results are SI regardless).
 - `optimizer=Ipopt.Optimizer`, `verbose=false`, `solver_options=()` — solver control.
 
@@ -88,6 +113,7 @@ charge/discharge/SOC trajectory.
 """
 function solve_multiperiod_opf(nets::AbstractVector, devices::AbstractVector;
                                dt_h::Real=1.0,
+                               time_grid::Union{Nothing,TimeGrid}=nothing,
                                per_unit::Bool=true,
                                s_base::Float64=1e6,
                                optimizer=Ipopt.Optimizer,
@@ -95,47 +121,44 @@ function solve_multiperiod_opf(nets::AbstractVector, devices::AbstractVector;
                                solver_options=())
     T = length(nets)
     T >= 1 || throw(ArgumentError("need at least one snapshot"))
-    isfinite(dt_h) && dt_h > 0 || throw(ArgumentError(
-        "dt_h must be a positive finite number of hours"))
-    isfinite(s_base) && s_base > 0 || throw(ArgumentError("s_base must be finite and > 0"))
-    all(d -> d isa Union{StorageDevice,EVDevice}, devices) || throw(ArgumentError(
-        "devices must contain only StorageDevice or EVDevice values"))
-    foreach(d -> _validate_device(d, T, nets), devices)
-    ids = [_dev_id(d) for d in devices]
+    grid = _resolve_time_grid(T, dt_h, time_grid)
+    all(d -> d isa AbstractDevice, devices) || throw(ArgumentError(
+        "devices must contain only AbstractDevice values"))
+    foreach(d -> validate_device(d, nets; periods=T), devices)
+    ids = [device_id(d) for d in devices]
     allunique(ids) || throw(ArgumentError("device ids must be unique: $ids"))
 
-    model = JuMP.Model(optimizer)
-    verbose || JuMP.set_silent(model)
-    _set_solver_options!(model, solver_options)
-
     # ports[dev.id][t] :: PortHandle. Filled as each snapshot's hook runs.
-    ports = Dict{String,Vector{PortHandle}}(id => Vector{PortHandle}(undef, T) for id in ids)
+    ports = Dict{String,Vector{Any}}(id => Vector{Any}(undef, T) for id in ids)
 
     stamp_all(t) = ctx -> begin
         for d in devices
-            ports[_dev_id(d)][t] = _stamp_port!(ctx, d; active=_dev_available(d, t))
+            ports[device_id(d)][t] = stamp_device!(ctx, d; period=t)
         end
     end
 
     # Build every snapshot into the shared model; the engine adds no objective.
-    ctxs = [build_opf_model(nets[t]; model=model, per_unit=per_unit, s_base=s_base,
-                            add_objective=false, model_hook! = stamp_all(t))
-            for t in 1:T]
+    multi = build_multi_context(nets; hook_factory=stamp_all, per_unit, s_base,
+                                optimizer, verbose, solver_options)
+    model = multi.model
+    ctxs = multi.contexts
 
     sb = _sbase(ctxs[1])
 
     # State-of-charge linking per device.
-    socs = Dict{String,Any}(_dev_id(d) => _link_soc!(model, d, ports[_dev_id(d)], sb, dt_h, T)
+    socs = Dict{String,Any}(device_id(d) =>
+                            link_device!(model, d, ports[device_id(d)], sb, grid)
                             for d in devices)
 
     # One combined objective: total generation cost across the horizon.
-    JuMP.@objective(model, Min, Float64(dt_h) *
-        sum(generation_cost(ctxs[t]) for t in 1:T))
+    JuMP.@objective(model, Min,
+        sum(grid[t] * generation_cost(ctxs[t]) for t in 1:T))
 
     foreach(enforce_kcl!, ctxs)
     JuMP.optimize!(model)
 
     outcome = _solve_outcome(model)
+    status_contract = SolveStatus(outcome)
     status = string(outcome.termination_status)
     solved = _publishable(outcome)
     obj = solved ? JuMP.objective_value(model) : NaN
@@ -144,16 +167,15 @@ function solve_multiperiod_opf(nets::AbstractVector, devices::AbstractVector;
 
     dispatch = Dict{String,NamedTuple}()
     for d in devices
-        id = _dev_id(d); ph = ports[id]; soc = socs[id]
-        val(x) = solved ? JuMP.value(x) : NaN
-        dispatch[id] = (
-            p_charge    = [val(ph[t].pc) * sb for t in 1:T],
-            p_discharge = [val(ph[t].pd) * sb for t in 1:T],
-            p_net       = [val(ph[t].p)  * sb for t in 1:T],
-            q           = [val(ph[t].q)  * sb for t in 1:T],
-            soc         = [val(soc[k])   * sb for k in 1:T+1],
-        )
+        id = device_id(d)
+        dispatch[id] = extract_device(d, ports[id], socs[id], sb, status_contract)
     end
 
-    return MultiperiodResult(status, obj, snapshots, dispatch)
+    return MultiperiodResult(status, obj, snapshots, dispatch, status_contract)
 end
+
+solve_status(result::MultiperiodResult) = result.solve
+
+solve_diagnostics(result::MultiperiodResult) =
+    (objective=result.objective, periods=length(result.snapshots),
+     devices=length(result.dispatch))
