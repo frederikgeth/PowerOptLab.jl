@@ -20,6 +20,15 @@ function compiled_se_net()
     """; from_string=true)
 end
 
+function constant_power_test_net()
+    parse_bmopf("""
+    {"bus":{"src":{"terminal_names":["1"]},"b":{"terminal_names":["1"]}},
+     "voltage_source":{"s":{"bus":"src","terminal_map":["1"],"v_magnitude":[1000.0],"v_angle":[0.0]}},
+     "linecode":{"lc":{"R_series_1_1":0.1}},
+     "line":{"l":{"bus_from":"src","bus_to":"b","terminal_map_from":["1"],"terminal_map_to":["1"],"linecode":"lc","length":1.0}}}
+    """; from_string=true)
+end
+
 function flat_compiled_state(s)
     nf = length(s.free_state_map)
     x = zeros(2nf)
@@ -110,4 +119,54 @@ end
     @test result.state ≈ xtrue atol=1e-9
     @test norm(result.evaluation.residual) ≤ 1e-9
     @test result.constraint_rank == 0
+end
+
+@testset "Compiled constrained state estimator: exact nonlinear devices" begin
+    connection = TerminalConnection(("b1", "1"), ("b1", "n"))
+    devices = ExactDeviceEquation[
+        ExactDeviceEquation(ConstantPowerDevice([connection], ComplexF64[4_000 + 1_000im])),
+        ExactDeviceEquation(ConstantCurrentDevice([connection], ComplexF64[2.0 - 0.5im])),
+        ExactDeviceEquation(ZIPDevice([connection], ComplexF64[1_000 + 200im],
+                                      ComplexF64[0.5 + 0.1im], ComplexF64[0.01 - 0.002im])),
+    ]
+    for device in devices
+        s = compile_state_estimator(compiled_se_net(); exact_devices=[device])
+        p = SEParameters(s; exact_devices=[device])
+        x = flat_compiled_state(s)
+        C = constraint_jacobian(s, p, x)
+        Cfd = central_jacobian(y -> evaluate_state_estimator(s, p, y).constraints, x)
+        @test C ≈ Cfd rtol=1e-5 atol=1e-6
+        @test any(x -> !iszero(x), evaluate_state_estimator(s, p, x).device_current)
+    end
+
+    # A phase-to-phase connection injects equal and opposite conductor current:
+    # this is the same primitive used for a delta winding or a signed generator.
+    delta = ExactDeviceEquation(ConstantPowerDevice(
+        [TerminalConnection(("b1", "1"), ("b1", "2"))], ComplexF64[2_000 + 0im]))
+    sδ = compile_state_estimator(compiled_se_net(); exact_devices=[delta])
+    pδ = SEParameters(sδ; exact_devices=[delta])
+    eδ = evaluate_state_estimator(sδ, pδ, flat_compiled_state(sδ))
+    i1, i2 = sδ.node_index[("b1", "1")], sδ.node_index[("b1", "2")]
+    @test eδ.device_current[i1] ≈ -eδ.device_current[i2]
+
+    cp = devices[1]
+    sguard = compile_state_estimator(compiled_se_net(); exact_devices=[cp])
+    pguard = SEParameters(sguard; exact_devices=[cp], voltage_min_model=1.0)
+    @test_throws DomainError evaluate_state_estimator(sguard, pguard, zeros(2length(sguard.free_state_map)))
+    pguard.continuation_alpha = 0.0
+    @test isfinite(norm(evaluate_state_estimator(sguard, pguard, zeros(2length(sguard.free_state_map))).constraints))
+
+    load = ExactDeviceEquation(ConstantPowerDevice(
+        [TerminalConnection(("b", "1"), nothing)], ComplexF64[1_000 + 0im]))
+    ssolve = compile_state_estimator(constant_power_test_net(); exact_devices=[load])
+    psolve = SEParameters(ssolve; exact_devices=[load])
+    direct = solve_compiled_state_estimator(ssolve, psolve, [1000.0, 0.0];
+                                             initial_radius=0.1, constraint_tolerance=1e-7)
+    @test direct.status == :converged_unique
+    @test norm(direct.evaluation.constraints) ≤ 1e-7
+    continuation = solve_with_continuation(ssolve, psolve, [1000.0, 0.0];
+                                           alphas=[0.0, 0.5, 1.0], initial_radius=0.1,
+                                           constraint_tolerance=1e-7)
+    @test continuation.status == :converged_unique
+    @test psolve.continuation_alpha == 1.0
 end

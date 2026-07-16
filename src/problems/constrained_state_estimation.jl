@@ -21,10 +21,68 @@ struct ExactDeviceEquation{M} <: ExactInjectionSpecification
     model::M
 end
 
+"""One oriented device branch: current is positive from `positive` to `negative`."""
+struct TerminalConnection
+    positive::TerminalID
+    negative::Union{TerminalID,Nothing}
+end
+
+abstract type ExactDeviceModel end
+
+"""Exact constant-power branches; positive power denotes consumption."""
+struct ConstantPowerDevice <: ExactDeviceModel
+    connections::Vector{TerminalConnection}
+    powers::Vector{ComplexF64}
+    function ConstantPowerDevice(connections::AbstractVector{TerminalConnection},
+                                 powers::AbstractVector{<:Complex})
+        length(connections) == length(powers) ||
+            throw(ArgumentError("constant-power device needs one power per connection"))
+        isempty(connections) && throw(ArgumentError("constant-power device needs at least one connection"))
+        new(collect(connections), ComplexF64.(powers))
+    end
+end
+
+"""Exact constant-current branches; positive current flows into the device."""
+struct ConstantCurrentDevice <: ExactDeviceModel
+    connections::Vector{TerminalConnection}
+    currents::Vector{ComplexF64}
+    function ConstantCurrentDevice(connections::AbstractVector{TerminalConnection},
+                                   currents::AbstractVector{<:Complex})
+        length(connections) == length(currents) ||
+            throw(ArgumentError("constant-current device needs one current per connection"))
+        isempty(connections) && throw(ArgumentError("constant-current device needs at least one connection"))
+        new(collect(connections), ComplexF64.(currents))
+    end
+end
+
+"""Exact ZIP branches: `conj(S/V) + I + YV`, all in SI branch quantities."""
+struct ZIPDevice <: ExactDeviceModel
+    connections::Vector{TerminalConnection}
+    powers::Vector{ComplexF64}
+    currents::Vector{ComplexF64}
+    admittances::Vector{ComplexF64}
+    function ZIPDevice(connections::AbstractVector{TerminalConnection},
+                       powers::AbstractVector{<:Complex}, currents::AbstractVector{<:Complex},
+                       admittances::AbstractVector{<:Complex})
+        n = length(connections)
+        length(powers) == n && length(currents) == n && length(admittances) == n ||
+            throw(ArgumentError("ZIP device needs one S, I, and Y value per connection"))
+        n > 0 || throw(ArgumentError("ZIP device needs at least one connection"))
+        new(collect(connections), ComplexF64.(powers), ComplexF64.(currents), ComplexF64.(admittances))
+    end
+end
+
 struct _SEMeasurementSpec{Ti<:Integer}
     kind::Symbol
     terminal::Ti
     reference::Ti                  # 0 denotes the earth reference
+end
+
+struct _SEExactDeviceSpec{Ti<:Integer}
+    kind::Symbol
+    positive::Vector{Ti}
+    negative::Vector{Ti}           # 0 denotes earth
+    parameter_range::UnitRange{Int}
 end
 
 """
@@ -37,10 +95,10 @@ state `[real(V_free); imag(V_free)]`; ideal-source conductors are held in the
 parameter vector instead.  Closed ideal switches are already represented by the
 node aliases in `ybus_passive`.
 
-The initial evaluator supports terminal voltage components/magnitudes and
-terminal active/reactive injection measurements, plus exact terminal
-zero-injection equations.  Device equations, branch telemetry, and the solver
-belong to subsequent phases.
+The evaluator supports terminal voltage components/magnitudes and terminal
+active/reactive injection measurements, exact zero-injection equations, and
+connection-aware exact constant-power, constant-current, and ZIP devices.
+Branch telemetry and sparse linear algebra belong to subsequent phases.
 """
 struct SEStructure{Ti<:Integer}
     nodes::Vector{TerminalID}
@@ -48,6 +106,7 @@ struct SEStructure{Ti<:Integer}
     passive_pattern::SparseMatrixCSC{ComplexF64,Ti}
     measurement_pattern::Vector{_SEMeasurementSpec{Ti}}
     constraint_pattern::Vector{Ti}
+    device_pattern::Vector{_SEExactDeviceSpec{Ti}}
     free_state_map::Dict{TerminalID,Ti}
     reference_map::Dict{TerminalID,ComplexF64}
     voltage_state_jacobian::SparseMatrixCSC{Float64,Ti}
@@ -69,12 +128,19 @@ mutable struct SEParameters
     measurement_values::Vector{Float64}
     covariance_values::Vector{Float64}
     magnitude_epsilon::Float64
+    device_powers::Vector{ComplexF64}
+    device_currents::Vector{ComplexF64}
+    device_admittances::Vector{ComplexF64}
+    voltage_min_model::Float64
+    regularization_voltage::Float64
+    continuation_alpha::Float64
 end
 
 """Values of the compiled residual/constraint model at one voltage state."""
 struct SEEvaluation
     voltage::Vector{ComplexF64}
     current::Vector{ComplexF64}
+    device_current::Vector{ComplexF64}
     predicted::Vector{Float64}
     residual::Vector{Float64}
     constraints::Vector{Float64}
@@ -97,6 +163,14 @@ struct ConstrainedStateEstimationResult
     tangent_dimension::Int
     observable_dimension::Int
     history::Vector{NamedTuple}
+end
+
+"""Result and per-stage diagnostics from constant-power continuation."""
+struct ContinuationStateEstimationResult
+    status::Symbol
+    result::ConstrainedStateEstimationResult
+    alphas::Vector{Float64}
+    stages::Vector{ConstrainedStateEstimationResult}
 end
 
 _se_node_index(s::SEStructure, node::TerminalID) = get(s.node_index, node, 0)
@@ -140,9 +214,62 @@ function _compile_measurements(measurements, node_index, neutral)
     specs
 end
 
+function _compile_exact_devices(exact_devices, node_index)
+    specs = _SEExactDeviceSpec{Int}[]
+    constrained = Int[]
+    cursor = 1
+    for wrapped in exact_devices
+        wrapped isa ExactDeviceEquation ||
+            throw(ArgumentError("exact_devices must contain ExactDeviceEquation(model) values"))
+        model = wrapped.model
+        model isa ExactDeviceModel ||
+            throw(ArgumentError("unsupported exact device model $(typeof(model))"))
+        kind = model isa ConstantPowerDevice ? :constant_power :
+               model isa ConstantCurrentDevice ? :constant_current : :zip
+        positive = Int[]; negative = Int[]
+        for connection in model.connections
+            i = get(node_index, connection.positive, 0)
+            i == 0 && throw(ArgumentError("exact device positive terminal $(connection.positive) is earth-referenced or absent from Ybus"))
+            j = connection.negative === nothing ? 0 : get(node_index, connection.negative, 0)
+            connection.negative !== nothing && j == 0 &&
+                throw(ArgumentError("exact device negative terminal $(connection.negative) is earth-referenced or absent from Ybus"))
+            i == j && throw(ArgumentError("exact device connection $(connection.positive) has identical endpoints"))
+            push!(positive, i); push!(negative, j); push!(constrained, i)
+            j != 0 && push!(constrained, j)
+        end
+        rng = cursor:(cursor + length(positive) - 1)
+        cursor += length(positive)
+        push!(specs, _SEExactDeviceSpec(kind, positive, negative, rng))
+    end
+    specs, constrained
+end
+
+function _flatten_device_parameters(exact_devices)
+    powers = ComplexF64[]; currents = ComplexF64[]; admittances = ComplexF64[]
+    for wrapped in exact_devices
+        model = wrapped.model
+        if model isa ConstantPowerDevice
+            append!(powers, model.powers)
+            append!(currents, zeros(ComplexF64, length(model.connections)))
+            append!(admittances, zeros(ComplexF64, length(model.connections)))
+        elseif model isa ConstantCurrentDevice
+            append!(powers, zeros(ComplexF64, length(model.connections)))
+            append!(currents, model.currents)
+            append!(admittances, zeros(ComplexF64, length(model.connections)))
+        elseif model isa ZIPDevice
+            append!(powers, model.powers)
+            append!(currents, model.currents)
+            append!(admittances, model.admittances)
+        else
+            throw(ArgumentError("unsupported exact device model $(typeof(model))"))
+        end
+    end
+    powers, currents, admittances
+end
+
 """
     compile_state_estimator(net, measurements=Measurement[];
-                            neutral="n", zero_injection=String[]) -> SEStructure
+                            neutral="n", zero_injection=String[], exact_devices=[]) -> SEStructure
 
 Compile the immutable voltage-state evaluator.  The network is represented by
 BMOPFTools' passive `I = YV` relation in SI units.  Every source terminal with a
@@ -152,7 +279,7 @@ to the later rank diagnostics rather than silently grounded.
 """
 function compile_state_estimator(net::Dict{String,Any}, measurements::AbstractVector=Measurement[];
                                  neutral::Union{String,Nothing}="n",
-                                 zero_injection=String[])
+                                 zero_injection=String[], exact_devices=Any[])
     ybus = ybus_passive(net)
     nodes = TerminalID.(ybus.nodes)
     node_index = Dict{TerminalID,Int}(TerminalID(k) => Int(v) for (k, v) in ybus.index)
@@ -190,20 +317,32 @@ function compile_state_estimator(net::Dict{String,Any}, measurements::AbstractVe
         push!(constraint_nodes, i)
     end
     unique!(constraint_nodes)
+    devices, device_nodes = _compile_exact_devices(exact_devices, node_index)
+    append!(constraint_nodes, device_nodes)
+    unique!(constraint_nodes)
     sort!(constraint_nodes)
 
-    SEStructure(nodes, node_index, sparse(ybus.Y), specs, constraint_nodes,
+    SEStructure(nodes, node_index, sparse(ybus.Y), specs, constraint_nodes, devices,
                 free_state_map, Dict(nodes[i] => v for (i, v) in fixed),
                 E, M, fixed_voltage, fixed_current)
 end
 
 function SEParameters(s::SEStructure, measurements::AbstractVector=Measurement[];
-                      magnitude_epsilon::Real=0.0)
+                      exact_devices=Any[], magnitude_epsilon::Real=0.0,
+                      voltage_min_model::Real=1e-3, regularization_voltage::Real=1e-3,
+                      continuation_alpha::Real=1.0)
     length(measurements) == length(s.measurement_pattern) ||
         throw(ArgumentError("SEParameters needs the same number of measurements used for compilation"))
     epsmag = Float64(magnitude_epsilon)
     epsmag >= 0 && isfinite(epsmag) ||
         throw(ArgumentError("magnitude_epsilon must be finite and non-negative"))
+    vmin = Float64(voltage_min_model); vreg = Float64(regularization_voltage)
+    α = Float64(continuation_alpha)
+    vmin > 0 && isfinite(vmin) || throw(ArgumentError("voltage_min_model must be finite and > 0"))
+    vreg > 0 && isfinite(vreg) || throw(ArgumentError("regularization_voltage must be finite and > 0"))
+    0 <= α <= 1 && isfinite(α) || throw(ArgumentError("continuation_alpha must lie in [0, 1]"))
+    length(exact_devices) == length(s.device_pattern) ||
+        throw(ArgumentError("SEParameters needs the exact_devices used for compilation"))
     # Store one phasor per fixed Ybus node in the deterministic node order.
     fixed_by_node = fill(ComplexF64(NaN, NaN), length(s.nodes))
     for (node, v) in s.reference_map
@@ -212,7 +351,9 @@ function SEParameters(s::SEStructure, measurements::AbstractVector=Measurement[]
     values = Float64[m.value for m in measurements]
     sigmas = Float64[m.sigma for m in measurements]
     isempty(measurements) && (values = Float64[]; sigmas = Float64[])
-    SEParameters(fixed_by_node, values, sigmas, epsmag)
+    powers, currents, admittances = _flatten_device_parameters(exact_devices)
+    SEParameters(fixed_by_node, values, sigmas, epsmag, powers, currents, admittances,
+                 vmin, vreg, α)
 end
 
 function _validate_parameters(s::SEStructure, p::SEParameters)
@@ -226,6 +367,16 @@ function _validate_parameters(s::SEStructure, p::SEParameters)
         throw(ArgumentError("all measurement standard deviations must be finite and > 0"))
     p.magnitude_epsilon >= 0 && isfinite(p.magnitude_epsilon) ||
         throw(ArgumentError("magnitude_epsilon must be finite and non-negative"))
+    ndevice = sum((length(d.positive) for d in s.device_pattern); init=0)
+    length(p.device_powers) == ndevice || throw(ArgumentError("device_powers length does not match compiled device pattern"))
+    length(p.device_currents) == ndevice || throw(ArgumentError("device_currents length does not match compiled device pattern"))
+    length(p.device_admittances) == ndevice || throw(ArgumentError("device_admittances length does not match compiled device pattern"))
+    p.voltage_min_model > 0 && isfinite(p.voltage_min_model) ||
+        throw(ArgumentError("voltage_min_model must be finite and > 0"))
+    p.regularization_voltage > 0 && isfinite(p.regularization_voltage) ||
+        throw(ArgumentError("regularization_voltage must be finite and > 0"))
+    0 <= p.continuation_alpha <= 1 && isfinite(p.continuation_alpha) ||
+        throw(ArgumentError("continuation_alpha must lie in [0, 1]"))
     return nothing
 end
 
@@ -261,6 +412,79 @@ function _measurement_value(spec, vr, vi, ir, ii, epsmag)
     error("unsupported compiled measurement kind $(spec.kind)")
 end
 
+function _power_current_and_derivative(S, vr, vi, p::SEParameters)
+    d = vr^2 + vi^2
+    if p.continuation_alpha > 0 && sqrt(d) < p.voltage_min_model
+        throw(DomainError(sqrt(d), "constant-power device voltage is below voltage_min_model"))
+    end
+    P, Q = real(S), imag(S)
+    nr = P * vr + Q * vi
+    ni = P * vi - Q * vr
+    dreg = d + p.regularization_voltage^2
+    α = p.continuation_alpha
+    denom = α == 1 ? d : dreg
+    jr = nr / denom; ji = ni / denom
+    djr_dvr = (P * denom - 2vr * nr) / denom^2
+    djr_dvi = (Q * denom - 2vi * nr) / denom^2
+    dji_dvr = (-Q * denom - 2vr * ni) / denom^2
+    dji_dvi = (P * denom - 2vi * ni) / denom^2
+    if 0 < α < 1
+        # Continuation blends a smooth internal law with the physical law.  A
+        # caller must finish at α=1 before accepting the final estimate.
+        er = nr / d; ei = ni / d
+        der_vr = (P * d - 2vr * nr) / d^2
+        der_vi = (Q * d - 2vi * nr) / d^2
+        dei_vr = (-Q * d - 2vr * ni) / d^2
+        dei_vi = (P * d - 2vi * ni) / d^2
+        jr = (1 - α) * jr + α * er; ji = (1 - α) * ji + α * ei
+        djr_dvr = (1 - α) * djr_dvr + α * der_vr
+        djr_dvi = (1 - α) * djr_dvi + α * der_vi
+        dji_dvr = (1 - α) * dji_dvr + α * dei_vr
+        dji_dvi = (1 - α) * dji_dvi + α * dei_vi
+    end
+    jr, ji, djr_dvr, djr_dvi, dji_dvr, dji_dvi
+end
+
+function _device_parts(s::SEStructure, p::SEParameters, vr, vi)
+    n = length(s.nodes); ns = size(s.voltage_state_jacobian, 2)
+    dr = zeros(Float64, n); di = zeros(Float64, n)
+    Jdr = zeros(Float64, n, ns); Jdi = zeros(Float64, n, ns)
+    E = s.voltage_state_jacobian
+    for device in s.device_pattern
+        for (branch_index, k) in enumerate(device.parameter_range)
+            i, j = device.positive[branch_index], device.negative[branch_index]
+            dvr = vr[i] - (j == 0 ? 0.0 : vr[j])
+            dvi = vi[i] - (j == 0 ? 0.0 : vi[j])
+            jdvr = Vector(E[i, :]); jdvi = Vector(E[n + i, :])
+            if j != 0
+                jdvr .-= Vector(E[j, :]); jdvi .-= Vector(E[n + j, :])
+            end
+            jr = ji = djr_dvr = djr_dvi = dji_dvr = dji_dvi = 0.0
+            if device.kind === :constant_power || device.kind === :zip
+                jr, ji, djr_dvr, djr_dvi, dji_dvr, dji_dvi =
+                    _power_current_and_derivative(p.device_powers[k], dvr, dvi, p)
+            end
+            if device.kind === :constant_current || device.kind === :zip
+                I = p.device_currents[k]
+                jr += real(I); ji += imag(I)
+            end
+            if device.kind === :zip
+                Y = p.device_admittances[k]
+                G, B = real(Y), imag(Y)
+                jr += G * dvr - B * dvi; ji += B * dvr + G * dvi
+                djr_dvr += G; djr_dvi -= B; dji_dvr += B; dji_dvi += G
+            end
+            gjr = djr_dvr .* jdvr .+ djr_dvi .* jdvi
+            gji = dji_dvr .* jdvr .+ dji_dvi .* jdvi
+            dr[i] += jr; di[i] += ji; Jdr[i, :] .+= gjr; Jdi[i, :] .+= gji
+            if j != 0
+                dr[j] -= jr; di[j] -= ji; Jdr[j, :] .-= gjr; Jdi[j, :] .-= gji
+            end
+        end
+    end
+    dr, di, Jdr, Jdi
+end
+
 """
     evaluate_state_estimator(structure, parameters, x) -> SEEvaluation
 
@@ -270,15 +494,17 @@ softened.
 """
 function evaluate_state_estimator(s::SEStructure, p::SEParameters, x::AbstractVector{<:Real})
     vr, vi, ir, ii = _se_parts(s, p, x)
+    dir, dii, _, _ = _device_parts(s, p, vr, vi)
     predicted = [_measurement_value(spec, vr, vi, ir, ii, p.magnitude_epsilon)
                  for spec in s.measurement_pattern]
     residual = (predicted .- p.measurement_values) ./ p.covariance_values
     constraints = Vector{Float64}(undef, 2length(s.constraint_pattern))
     for (k, i) in enumerate(s.constraint_pattern)
-        constraints[2k - 1] = ir[i]
-        constraints[2k] = ii[i]
+        constraints[2k - 1] = ir[i] + dir[i]
+        constraints[2k] = ii[i] + dii[i]
     end
     SEEvaluation(ComplexF64.(vr .+ im .* vi), ComplexF64.(ir .+ im .* ii),
+                 ComplexF64.(dir .+ im .* dii),
                  predicted, residual, constraints)
 end
 
@@ -320,12 +546,13 @@ end
 
 """Analytic Jacobian of exact zero-injection constraints."""
 function constraint_jacobian(s::SEStructure, p::SEParameters, x::AbstractVector{<:Real})
-    _se_parts(s, p, x) # validates state/parameters; Jacobian itself is constant.
+    vr, vi, _, _ = _se_parts(s, p, x)
+    _, _, Jdr, Jdi = _device_parts(s, p, vr, vi)
     n = length(s.nodes)
     C = zeros(Float64, 2length(s.constraint_pattern), size(s.current_state_jacobian, 2))
     for (k, i) in enumerate(s.constraint_pattern)
-        C[2k - 1, :] .= s.current_state_jacobian[i, :]
-        C[2k, :] .= s.current_state_jacobian[n + i, :]
+        C[2k - 1, :] .= s.current_state_jacobian[i, :] .+ Jdr[i, :]
+        C[2k, :] .= s.current_state_jacobian[n + i, :] .+ Jdi[i, :]
     end
     C
 end
@@ -419,6 +646,16 @@ function solve_compiled_state_estimator(s::SEStructure, p::SEParameters,
         rankC, Z = _se_rank_nullspace(C; rtol=rank_rtol)
         c = e.constraints
         r = e.residual
+        # Continuation stages and externally supplied warm starts can already
+        # satisfy both tests.  Do not manufacture a zero predicted-reduction
+        # failure merely because there is no step left to take.
+        gred0 = size(Z, 2) == 0 ? 0.0 : norm(Z' * (H' * r), Inf)
+        if norm(c) <= constraint_tolerance && gred0 <= optimality_tolerance
+            observable, _ = _se_rank_nullspace(H * Z; rtol=rank_rtol)
+            status = observable == size(Z, 2) ? :converged_unique : :converged_underobserved
+            return ConstrainedStateEstimationResult(status, x, e, iteration - 1, rankC,
+                                                    size(Z, 2), observable, history)
+        end
         n = _se_scaled_normal_step(C, c, scale, normal_fraction * radius)
 
         # The tangential component is an exact linearised-null-space step.  Its
@@ -514,4 +751,38 @@ function solve_compiled_state_estimator(s::SEStructure, p::SEParameters,
         (radius < min_radius ? :trust_region_stalled : :max_iterations)
     ConstrainedStateEstimationResult(status, x, e, max_iterations, rankC,
                                     size(Z, 2), 0, history)
+end
+
+"""
+    solve_with_continuation(structure, parameters, x0; alphas=0:0.25:1, kwargs...)
+
+Advance exact constant-power/ZIP constraints from the regularised internal model
+(`α=0`) to their physical, unregularised equations (`α=1`).  Each stage warm
+starts the dense constrained solver.  A returned `:power_flow_initialization_failed`
+status means a stage could not establish feasibility; no final estimate is
+claimed unless the last stage is at α=1.
+"""
+function solve_with_continuation(s::SEStructure, p::SEParameters,
+                                 x0::AbstractVector{<:Real};
+                                 alphas=collect(0.0:0.25:1.0), kwargs...)
+    αs = Float64.(collect(alphas))
+    !isempty(αs) || throw(ArgumentError("continuation needs at least one alpha"))
+    all(α -> isfinite(α) && 0 <= α <= 1, αs) ||
+        throw(ArgumentError("continuation alphas must lie in [0, 1]"))
+    issorted(αs) || throw(ArgumentError("continuation alphas must be nondecreasing"))
+    αs[end] == 1.0 || throw(ArgumentError("continuation must finish at α=1"))
+
+    x = Float64.(x0)
+    stages = ConstrainedStateEstimationResult[]
+    for α in αs
+        p.continuation_alpha = α
+        result = solve_compiled_state_estimator(s, p, x; kwargs...)
+        push!(stages, result)
+        if !(result.status in (:converged_unique, :converged_underobserved))
+            return ContinuationStateEstimationResult(:power_flow_initialization_failed,
+                                                     result, αs, stages)
+        end
+        x = result.state
+    end
+    ContinuationStateEstimationResult(stages[end].status, stages[end], αs, stages)
 end

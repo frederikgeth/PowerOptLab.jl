@@ -106,10 +106,12 @@ export solve_multiperiod_opf, MultiperiodResult
 # State estimation
 export Measurement, solve_state_estimation, StateEstimationResult
 export TerminalID, ExactInjectionSpecification, NoExactInjection,
-       ExactZeroInjection, ExactDeviceEquation, SEStructure, SEParameters,
+       ExactZeroInjection, ExactDeviceEquation, TerminalConnection,
+       ConstantPowerDevice, ConstantCurrentDevice, ZIPDevice, SEStructure, SEParameters,
        SEEvaluation, compile_state_estimator, evaluate_state_estimator,
        residual_jacobian, constraint_jacobian,
-       ConstrainedStateEstimationResult, solve_compiled_state_estimator
+       ConstrainedStateEstimationResult, solve_compiled_state_estimator,
+       ContinuationStateEstimationResult, solve_with_continuation
 
 # Parameter estimation (calibration of line lengths / transformer taps)
 export CalibLine, CalibTap, solve_parameter_estimation, ParameterEstimationResult
