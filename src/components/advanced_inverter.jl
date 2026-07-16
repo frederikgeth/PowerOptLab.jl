@@ -116,6 +116,69 @@ end
 
 const _THREE_PHASE_TOPOLOGIES = (:THREE_LEG, :FOUR_LEG, :SPLIT_DC)
 
+function _validate_inverter(inv::AdvancedInverter, nets=())
+    _validate_connection(inv.id, inv.bus, inv.phase_terminals, inv.neutral, nets)
+    inv.topology in (:SINGLE_PHASE, _THREE_PHASE_TOPOLOGIES...) ||
+        throw(ArgumentError("unknown topology :$(inv.topology)"))
+
+    isfinite(inv.s_max) && inv.s_max > 0 || throw(ArgumentError(
+        "inverter '$(inv.id)' s_max must be finite and > 0"))
+    for (name, value) in (("r_filter", inv.r_filter), ("x_filter", inv.x_filter),
+                          ("b_filter_shunt", inv.b_filter_shunt),
+                          ("m_max", inv.m_max), ("f", inv.f),
+                          ("p_loss_fixed", inv.p_loss_fixed),
+                          ("a_loss", inv.a_loss), ("c_loss", inv.c_loss))
+        isfinite(value) || throw(ArgumentError(
+            "inverter '$(inv.id)' $name must be finite"))
+    end
+    inv.r_filter >= 0 || throw(ArgumentError(
+        "inverter '$(inv.id)' r_filter must be >= 0"))
+    inv.m_max > 0 || throw(ArgumentError(
+        "inverter '$(inv.id)' m_max must be > 0"))
+    inv.f > 0 || throw(ArgumentError(
+        "inverter '$(inv.id)' f must be > 0"))
+    all(x -> x >= 0, (inv.p_loss_fixed, inv.a_loss, inv.c_loss)) ||
+        throw(ArgumentError("inverter '$(inv.id)' loss coefficients must be >= 0"))
+
+    for (name, value) in (("i_max", inv.i_max), ("v_dc", inv.v_dc),
+                          ("c_dc", inv.c_dc), ("In_max", inv.In_max),
+                          ("dv2_max", inv.dv2_max), ("v_int_max", inv.v_int_max),
+                          ("modulation_max", inv.modulation_max),
+                          ("p_ripple_max", inv.p_ripple_max))
+        value === nothing || (isfinite(value) && value > 0) || throw(ArgumentError(
+            "inverter '$(inv.id)' $name must be finite and > 0 when supplied"))
+    end
+    if inv.v_int_min !== nothing
+        isfinite(inv.v_int_min) && inv.v_int_min >= 0 || throw(ArgumentError(
+            "inverter '$(inv.id)' v_int_min must be finite and >= 0"))
+    end
+    inv.v_int_min !== nothing && inv.v_int_max !== nothing &&
+        inv.v_int_min > inv.v_int_max && throw(ArgumentError(
+            "inverter '$(inv.id)' requires v_int_min <= v_int_max"))
+
+    is_3ph = inv.topology in _THREE_PHASE_TOPOLOGIES
+    if is_3ph
+        length(inv.phase_terminals) == 3 || throw(ArgumentError(
+            "topology :$(inv.topology) requires 3 phase_terminals"))
+        (inv.v_dc !== nothing && inv.c_dc !== nothing) || throw(ArgumentError(
+            "topology :$(inv.topology) requires v_dc and c_dc"))
+        inv.n_samples >= 4 || throw(ArgumentError(
+            "topology :$(inv.topology) requires n_samples >= 4"))
+        inv.modulation_max === nothing || throw(ArgumentError(
+            "inverter '$(inv.id)' modulation_max applies only to :SINGLE_PHASE"))
+        inv.p_ripple_max === nothing || throw(ArgumentError(
+            "inverter '$(inv.id)' p_ripple_max applies only to :SINGLE_PHASE"))
+        (inv.topology in (:FOUR_LEG, :SPLIT_DC) && inv.In_max === nothing) &&
+            throw(ArgumentError("topology :$(inv.topology) requires In_max"))
+    elseif inv.modulation_max !== nothing && inv.v_dc === nothing
+        throw(ArgumentError(
+            "inverter '$(inv.id)' modulation_max requires v_dc"))
+    end
+    inv.grid_forming && length(inv.phase_terminals) != 3 && throw(ArgumentError(
+        "grid-forming inverter '$(inv.id)' requires 3 phase_terminals"))
+    return nothing
+end
+
 """
     InverterResult
 
@@ -275,7 +338,8 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
         end
     end
 
-    # Optional grid-side shunt susceptance at the POC (phase-to-neutral).
+    # Optional grid-side shunt susceptance at the POC (phase-to-neutral). Its
+    # reactive injection is part of the total grid-side POC exchange.
     if inv.b_filter_shunt != 0.0
         b = inv.b_filter_shunt * zb          # S → per-unit susceptance
         for ph in phases
@@ -287,6 +351,7 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
             end
             JuMP.add_to_expression!(ctx.kcl_r[(bus, ph)],  b, vip)
             JuMP.add_to_expression!(ctx.kcl_i[(bus, ph)], -b, vrp)
+            Qpoc += JuMP.@expression(m, b * (vrp^2 + vip^2))
             if neutral !== nothing
                 JuMP.add_to_expression!(ctx.kcl_r[(bus, neutral)], -b, vip)
                 JuMP.add_to_expression!(ctx.kcl_i[(bus, neutral)],  b, vrp)
@@ -436,16 +501,10 @@ function solve_advanced_inverter(net::Dict{String,Any}, inverter::AdvancedInvert
         throw(ArgumentError("objective must be :max_export or :min_loss, got :$objective"))
     objective == :min_loss && p_set === nothing &&
         throw(ArgumentError(":min_loss requires a p_set (W) active-power target"))
-    inverter.topology in (:SINGLE_PHASE, _THREE_PHASE_TOPOLOGIES...) ||
-        throw(ArgumentError("unknown topology :$(inverter.topology)"))
-    if inverter.topology in _THREE_PHASE_TOPOLOGIES
-        length(inverter.phase_terminals) == 3 ||
-            throw(ArgumentError("topology :$(inverter.topology) requires 3 phase_terminals"))
-        (inverter.v_dc !== nothing && inverter.c_dc !== nothing) ||
-            throw(ArgumentError("topology :$(inverter.topology) requires v_dc and c_dc"))
-        (inverter.topology in (:FOUR_LEG, :SPLIT_DC) && inverter.In_max === nothing) &&
-            throw(ArgumentError("topology :$(inverter.topology) requires In_max"))
-    end
+    p_set === nothing || isfinite(p_set) || throw(ArgumentError("p_set must be finite"))
+    q_set === nothing || isfinite(q_set) || throw(ArgumentError("q_set must be finite"))
+    isfinite(s_base) && s_base > 0 || throw(ArgumentError("s_base must be finite and > 0"))
+    _validate_inverter(inverter, (net,))
 
     handles = Ref{_InvHandles}()
     hook! = ctx -> begin
@@ -463,14 +522,13 @@ function solve_advanced_inverter(net::Dict{String,Any}, inverter::AdvancedInvert
     ctx = build_opf_model(net; per_unit=per_unit, s_base=s_base,
                           add_objective=false, model_hook! = hook!,
                           optimizer=optimizer, verbose=verbose)
-    for (name, value) in solver_options
-        JuMP.set_attribute(ctx.model, string(name), value)
-    end
+    _set_solver_options!(ctx.model, solver_options)
     enforce_kcl!(ctx)
     JuMP.optimize!(ctx.model)
 
-    status = string(JuMP.termination_status(ctx.model))
-    solved = JuMP.primal_status(ctx.model) == JuMP.MOI.FEASIBLE_POINT
+    outcome = _solve_outcome(ctx.model)
+    status = string(outcome.termination_status)
+    solved = _publishable(outcome)
 
     h = handles[]
     sb = h.sb; vb = h.vb; ib = h.ib
@@ -484,7 +542,7 @@ function solve_advanced_inverter(net::Dict{String,Any}, inverter::AdvancedInvert
     i_neutral = h.in_re === nothing ? 0.0 : (solved ? hypot(JuMP.value(h.in_re), JuMP.value(h.in_im)) : NaN)
     dv2 = h.dre === nothing ? 0.0 : (solved ? hypot(JuMP.value(h.dre), JuMP.value(h.dim)) : NaN)
 
-    result = extract_result(ctx)
+    result = _extract_result(ctx, outcome)
     return InverterResult(status, inverter.topology,
                           scaled(h.p_poc, sb), scaled(h.q_poc, sb),
                           scaled(h.p_conv, sb), scaled(h.q_conv, sb),

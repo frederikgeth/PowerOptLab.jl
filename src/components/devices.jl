@@ -112,6 +112,78 @@ _dev_einit(d) = d.energy_init
 _dev_effc(d) = d.eff_charge
 _dev_effd(d) = d.eff_discharge
 
+function _validate_connection(id, bus, phases, neutral, nets)
+    isempty(id) && throw(ArgumentError("device id must not be empty"))
+    isempty(bus) && throw(ArgumentError("device '$id' bus must not be empty"))
+    isempty(phases) && throw(ArgumentError("device '$id' needs at least one phase terminal"))
+    allunique(phases) || throw(ArgumentError("device '$id' phase terminals must be unique"))
+    neutral in phases && throw(ArgumentError(
+        "device '$id' neutral cannot also be a phase terminal"))
+    for (t, net) in enumerate(nets)
+        buses = get(net, "bus", Dict())
+        haskey(buses, bus) || throw(ArgumentError(
+            "snapshot $t: device '$id' bus '$bus' not found"))
+        terminals = Set(String.(get(buses[bus], "terminal_names", String[])))
+        for phase in phases
+            phase in terminals || throw(ArgumentError(
+                "snapshot $t: device '$id' phase terminal '$phase' not found at bus '$bus'"))
+        end
+        neutral === nothing || neutral in terminals || throw(ArgumentError(
+            "snapshot $t: device '$id' neutral '$neutral' not found at bus '$bus'"))
+    end
+    return nothing
+end
+
+function _validate_storage_values(d)
+    values = (("p_charge_max", d.p_charge_max),
+              ("p_discharge_max", d.p_discharge_max),
+              ("energy_min", d.energy_min),
+              ("energy_max", d.energy_max),
+              ("energy_init", d.energy_init),
+              ("q_min", d.q_min), ("q_max", d.q_max),
+              ("eff_charge", d.eff_charge), ("eff_discharge", d.eff_discharge))
+    all(isfinite(value) for (_, value) in values) || throw(ArgumentError(
+        "device '$(d.id)' power, energy, reactive-power, and efficiency values must be finite"))
+    d.p_charge_max >= 0 || throw(ArgumentError(
+        "device '$(d.id)' p_charge_max must be >= 0"))
+    d.p_discharge_max >= 0 || throw(ArgumentError(
+        "device '$(d.id)' p_discharge_max must be >= 0"))
+    d.q_min <= d.q_max || throw(ArgumentError(
+        "device '$(d.id)' requires q_min <= q_max"))
+    0 <= d.energy_min <= d.energy_init <= d.energy_max || throw(ArgumentError(
+        "device '$(d.id)' requires 0 <= energy_min <= energy_init <= energy_max"))
+    0 < d.eff_charge <= 1 || throw(ArgumentError(
+        "device '$(d.id)' eff_charge must lie in (0, 1]"))
+    0 < d.eff_discharge <= 1 || throw(ArgumentError(
+        "device '$(d.id)' eff_discharge must lie in (0, 1]"))
+    return nothing
+end
+
+function _validate_device(d::StorageDevice, T, nets)
+    _validate_connection(d.id, d.bus, d.phase_terminals, d.neutral, nets)
+    _validate_storage_values(d)
+    if d.energy_final !== nothing
+        isfinite(d.energy_final) && d.energy_min <= d.energy_final <= d.energy_max ||
+            throw(ArgumentError(
+                "device '$(d.id)' energy_final must be finite and within its energy bounds"))
+    end
+    return nothing
+end
+
+function _validate_device(d::EVDevice, T, nets)
+    _validate_connection(d.id, d.bus, d.phase_terminals, d.neutral, nets)
+    _validate_storage_values(d)
+    length(d.available) == T || throw(ArgumentError(
+        "EV '$(d.id)' availability must contain exactly $T entries"))
+    isfinite(d.departure_energy) && d.energy_min <= d.departure_energy <= d.energy_max ||
+        throw(ArgumentError(
+            "EV '$(d.id)' departure_energy must be finite and within its energy bounds"))
+    dp = d.departure_period === nothing ? T : d.departure_period
+    1 <= dp <= T || throw(ArgumentError(
+        "EV '$(d.id)': departure_period=$(d.departure_period) out of range 1:$T"))
+    return nothing
+end
+
 # Per-period availability: batteries are always controllable; EVs follow their mask.
 _dev_available(d::StorageDevice, t::Int) = true
 _dev_available(d::EVDevice, t::Int) = t <= length(d.available) ? d.available[t] : false

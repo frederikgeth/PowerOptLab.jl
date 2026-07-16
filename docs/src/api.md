@@ -8,6 +8,12 @@ All exported names, grouped by capability.
 PowerOptLab
 ```
 
+## Shared contracts
+
+```@docs
+SolveOutcome
+```
+
 ## Devices
 
 ```@docs

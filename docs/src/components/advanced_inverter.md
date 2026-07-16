@@ -38,6 +38,10 @@ Results are returned in SI in both modes.
 | 3 | Converter losses | non-branching `P_dc = P_ac + P_loss`, `P_loss = p_loss_fixed + a_loss·|I| + c_loss·|I|²` |
 | 4 | Double-frequency ripple | single-phase cap `|Σ_k V_int_k·I_k|² ≤ p_ripple_max²`; three-phase topologies form the 2ω bus-ripple phasor that derates the DC rails (below) |
 
+`p_poc` and `q_poc` are the total grid-side exchange. In particular, `q_poc`
+and `q_set` include the optional grid-side shunt; `q_conv` is the converter-side
+quantity before the filter and shunt.
+
 Every feature is opt-in: with only `id`, `bus`, and `s_max` the device is a plain
 grid-following converter, and the internal node collapses onto the POC when the
 filter is zero.
@@ -80,6 +84,7 @@ inv = AdvancedInverter(id="inv", bus="poc", s_max=5000.0,
 r = solve_advanced_inverter(net, inv; objective=:min_loss, p_set=3000.0)
 
 r.p_poc     # ≈ 3000 W delivered at the POC
+r.q_poc     # total POC reactive exchange, including any grid-side shunt
 r.p_conv    # converter-side active power (> p_poc: filter losses)
 r.p_loss    # 20 + 0.3·|I| + 0.02·|I|²
 r.p_dc      # = p_conv + p_loss  (the non-branching DC-link balance)

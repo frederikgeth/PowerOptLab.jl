@@ -180,11 +180,10 @@ end
     meas, _ = se_full_meas()
     # One iteration cannot converge this nonlinear fit ⇒ no feasible point.
     se = solve_state_estimation(se_net(), meas; solver_options=["max_iter" => 0])
-    if se.primal_status != "FEASIBLE_POINT"
-        @test isnan(se.objective)
-        @test all(isnan(se.bus[b]["1"]["vm"]) for b in ("bus1","bus2"))
-        @test all(isnan(r.estimated) for r in se.residuals)
-    end
+    @test !(se.termination_status in ("LOCALLY_SOLVED", "OPTIMAL"))
+    @test isnan(se.objective)
+    @test all(isnan(se.bus[b]["1"]["vm"]) for b in ("bus1","bus2"))
+    @test all(isnan(r.estimated) for r in se.residuals)
 end
 
 @testset "State estimation: empty and bad inputs" begin

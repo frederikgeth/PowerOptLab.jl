@@ -313,6 +313,7 @@ function solve_state_estimation(net::Dict{String,Any}, measurements::AbstractVec
     all(m -> m.kind in (:vmag, :pinj, :qinj), measurements) ||
         throw(ArgumentError("solve_state_estimation currently supports :vmag, :pinj, and :qinj; " *
                             "use the compiled constrained-NLLS evaluator for :vr/:vi measurements"))
+    isfinite(s_base) && s_base > 0 || throw(ArgumentError("s_base must be finite and > 0"))
 
     _reject_operational(net, allow_operational)
     zi = _zero_injection_set(net, zero_injection, neutral)
@@ -399,15 +400,14 @@ function solve_state_estimation(net::Dict{String,Any}, measurements::AbstractVec
     ctx = build_opf_model(net; per_unit=per_unit, s_base=s_base,
                           add_objective=false, model_hook! = wls!,
                           optimizer=optimizer, verbose=verbose)
-    for (name, value) in solver_options
-        JuMP.set_attribute(ctx.model, string(name), value)
-    end
+    _set_solver_options!(ctx.model, solver_options)
     enforce_kcl!(ctx)
     JuMP.optimize!(ctx.model)
 
-    status = string(JuMP.termination_status(ctx.model))
-    pstatus = string(JuMP.primal_status(ctx.model))
-    solved = JuMP.primal_status(ctx.model) == JuMP.MOI.FEASIBLE_POINT
+    outcome = _solve_outcome(ctx.model)
+    status = string(outcome.termination_status)
+    pstatus = string(outcome.primal_status)
+    solved = _publishable(outcome)
     obj = solved ? JuMP.objective_value(ctx.model) : NaN
 
     # Residuals (SI) from the probed h-expressions while the model is still live.
@@ -421,7 +421,7 @@ function solve_state_estimation(net::Dict{String,Any}, measurements::AbstractVec
                           residual=r, standardized=r / meas.sigma))
     end
 
-    result = extract_result(ctx)
+    result = _extract_result(ctx, outcome)
     est_bus = result["bus"]
 
     # Observability from the returned operating point (SI, via ybus_passive),

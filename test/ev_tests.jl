@@ -25,6 +25,19 @@
     @test d.p_charge[2] ≈ 20e3  rtol=1e-2
 end
 
+
+@testset "EV charging: horizon validation" begin
+    nets = [single_bus_net(), single_bus_net()]
+    short = EVDevice(id="ev", bus="bus1", p_charge_max=10e3,
+        energy_max=40e3, energy_init=10e3, available=[true],
+        departure_energy=20e3)
+    @test_throws ArgumentError solve_multiperiod_opf(nets, [short])
+    impossible = EVDevice(id="ev", bus="bus1", p_charge_max=10e3,
+        energy_max=40e3, energy_init=10e3, available=[true, true],
+        departure_energy=50e3)
+    @test_throws ArgumentError solve_multiperiod_opf(nets, [impossible])
+end
+
 @testset "EV charging: V2G discharge into an expensive peak" begin
     # Plugged in the whole horizon, bidirectional. A cheap period then an
     # expensive one; with a modest departure target the EV can arbitrage by

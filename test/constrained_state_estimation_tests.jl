@@ -97,6 +97,18 @@ end
     @test size(s.passive_pattern) == (12, 12)
 end
 
+@testset "Compiled constrained state estimator: source updates preserve I = YV" begin
+    measurements = [Measurement(kind=:vr, bus="b1", terminal="1", value=230.0, sigma=1.0)]
+    s = compile_state_estimator(compiled_se_net(), measurements)
+    p = SEParameters(s, measurements)
+    x = flat_compiled_state(s)
+    source = s.node_index[("src", "1")]
+    p.fixed_voltages[source] = 235.0 + 0.0im
+    e = evaluate_state_estimator(s, p, x)
+    @test e.current ≈ s.passive_pattern * e.voltage atol=1e-10
+    @test abs(e.current[source]) > 1.0
+end
+
 @testset "Compiled constrained state estimator: branch telemetry" begin
     measurements = [
         BranchMeasurement(kind=:ire,   line="l1", side=:from, terminal="1", value=0.0, sigma=0.1),

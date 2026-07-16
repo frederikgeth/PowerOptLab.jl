@@ -31,6 +31,17 @@ Round-trip loss (``\eta < 1``) makes simultaneous charging and discharging
 suboptimal, so the split stays physical without an explicit complementarity
 constraint.
 
+This is an economic, not algebraic, exclusion: at unit efficiency or under
+unusual negative-price objectives the split can be degenerate. Studies that need
+an explicit operating-mode guarantee should add a complementarity/disjunctive
+mode formulation rather than interpreting both nonnegative variables as a
+certified physical mode.
+
+The solve validates finite nonnegative power limits, ordered energy bounds,
+efficiencies in `(0, 1]`, terminal existence in every snapshot, and an EV
+availability entry for every interval before constructing the optimization
+model.
+
 ## Battery / storage
 
 ```julia
