@@ -15,10 +15,12 @@ SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 [compat]
 Aqua = "0.8"
 BMOPFTools = "=0.1.0"
+Dates = "1"
 ForwardDiff = "1"
 Ipopt = "1"
 JuMP = "1"
 LinearAlgebra = "1"
+OpenDSSDirect = "0.9.9"
 SparseArrays = "1"
 julia = "1.10"
 
