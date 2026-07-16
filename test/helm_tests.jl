@@ -4,7 +4,7 @@
 #          limits — including series that DIVERGE at the evaluation point but
 #          have an analytic continuation there (the HELM situation).
 # Later layers (added with the solver): analytic power-flow fixtures, OpenDSS
-# parity, collapse / non-existence detection.
+# parity, and numerical divergence diagnostics around known collapse points.
 #
 # HELM itself now lives in PowerOptLab (bespoke algorithm); it consumes the
 # BMOPFTools engine through its public exports only.
@@ -153,24 +153,48 @@ end
         Iload = P / real(dv)
         @test hr.V[("ld", "n")] ≈ 0.5 * Iload rtol=1e-9
         @test _lin_residual(_two_node_net(P), hr) < 1e-6
-        # Loading margin: collapse at P* = E²/4R = 13225 W ⇒ λ* ≈ 6.61.
-        @test hr.load_margin ≈ (230.0^2 / 4) / P rtol=0.1
+        # On this analytic saddle-node fixture, the Domb–Sykes singularity
+        # estimate tracks P* = E²/4R = 13225 W ⇒ λ* ≈ 6.61.
+        @test hr.singularity_estimate ≈ (230.0^2 / 4) / P rtol=0.1
+        @test hr.load_margin == hr.singularity_estimate  # compatibility alias
+        @test length(hr.pade_spread) == size(hr.coeffs, 1)
+        @test all(x -> x >= 0, hr.pade_spread)
+        @test length(hr.coefficient_tail_ratios) + 1 ==
+              length(hr.coefficient_tail_norms)
     end
 
-    @testset "constant-P at half the collapse loading: margin ≈ 2" begin
+    @testset "constant-P at half the collapse loading: singularity estimate ≈ 2" begin
         Pstar = 230.0^2 / 4
         hr = helm_series(_two_node_net(Pstar / 2); max_order=60)
         @test hr.status == :converged
         @test hr.V[("ld", "a")] - hr.V[("ld", "n")] ≈ _dv_closed_form(Pstar / 2) rtol=1e-7
-        @test hr.load_margin ≈ 2.0 rtol=0.1
+        @test hr.singularity_estimate ≈ 2.0 rtol=0.1
     end
 
-    @testset "past collapse: certified no-solution" begin
+    @testset "past analytic collapse: series-divergence diagnostic" begin
         Pstar = 230.0^2 / 4
         hr = helm_series(_two_node_net(1.2 * Pstar))
-        @test hr.status == :diverged_no_solution
+        @test hr.status == :series_diverged
         @test !hr.converged
-        @test 0.7 < hr.load_margin < 1.0     # ≈ 1/1.2
+        @test all(>(1.0), hr.coefficient_tail_ratios)
+        @test 0.7 < hr.singularity_estimate < 1.0     # ≈ 1/1.2
+    end
+
+    @testset "analytic collapse agrees with nonlinear loading sweep" begin
+        Pstar = 230.0^2 / 4
+        sweep = Dict(λ => solve_pf(_two_node_net(λ * Pstar);
+                                  per_unit=false, optimizer=Ipopt.Optimizer)
+                     for λ in (0.90, 0.98, 1.02, 1.10))
+        @test all(sweep[λ]["feasible"] for λ in (0.90, 0.98))
+        @test all(!sweep[λ]["feasible"] for λ in (1.02, 1.10))
+
+        below = helm_series(_two_node_net(0.98 * Pstar); max_order=80, tol=1e-6)
+        above = helm_series(_two_node_net(1.02 * Pstar); max_order=80, tol=1e-6)
+        @test below.status == :converged
+        @test !above.converged
+        @test above.status in (:series_diverged, :max_order_reached)
+        @test below.singularity_estimate ≈ inv(0.98) rtol=0.1
+        @test above.singularity_estimate ≈ inv(1.02) rtol=0.1
     end
 
     @testset "just below collapse still converges" begin
@@ -424,10 +448,14 @@ end
             ),
         )
         res = solve_pf_helm(net)
-        @test res["termination_status"] == "HELM_NO_SOLUTION"
+        @test res["termination_status"] == "HELM_SERIES_DIVERGED"
         @test res["feasible"] === false
         @test isnan(res["bus"]["ld"]["a"]["vm"])
-        @test res["helm"]["load_margin"] < 1.0     # ≈ 1/1.3
+        @test res["helm"]["singularity_estimate"] < 1.0     # ≈ 1/1.3
+        @test res["helm"]["load_margin"] ==
+              res["helm"]["singularity_estimate"]
+        @test !isempty(res["helm"]["pade_spread"])
+        @test all(>(1.0), res["helm"]["coefficient_tail_ratios"])
     end
 
     @testset "coupling currents in the result dict (switch :constrain)" begin
