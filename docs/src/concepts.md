@@ -58,5 +58,20 @@ Everything is **SI at the interface** (watts, vars, watt-hours, volts); per-unit
 conditioning inside each solve is handled by the engine's `ctx.bases`. Where it
 applies, `per_unit=true` and `per_unit=false` give identical results.
 
+Cross-cutting code uses four shared contracts:
+
+- [`AbstractDevice`](@ref) with validation, stamping, temporal linking, and
+  extraction methods;
+- [`TimeGrid`](@ref), which gives every snapshot an explicit positive duration;
+- [`AbstractMeasurement`](@ref) with common value/uncertainty accessors;
+- [`build_multi_context`](@ref), which builds ordered snapshots into one JuMP
+  model, plus [`solve_status`](@ref) / [`solve_diagnostics`](@ref) for a stable
+  result-status view.
+
+JuMP-backed results retain the exact normalized [`SolveStatus`](@ref) produced
+at solve time, including whether a primal candidate existed and whether it was
+strictly publishable. Compatibility fields such as `termination_status` remain,
+but new code should branch on `solve_status(result).publishable`.
+
 See [Contributing](contributing.md) for how to add each kind of contribution and
 the path back to the BMOPF spec.

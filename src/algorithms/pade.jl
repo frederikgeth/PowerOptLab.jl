@@ -10,13 +10,11 @@
 #     ε^{(j)}_{k+1} = ε^{(j+1)}_{k-1} + 1 / (ε^{(j+1)}_k − ε^{(j)}_k)
 #
 # has even columns ε^{(j)}_{2k} equal to the [j+k / k] Padé approximants of the
-# series, evaluated at the point. For a series with a genuine limit (Stahl's
-# convergence-in-capacity for the HELM voltage series) the even-column diagonal
-# converges to it — including for series whose plain partial sums DIVERGE, as
-# long as the underlying function is analytic at the evaluation point. When no
-# limit exists (HELM: no power-flow solution / voltage collapse) the even
-# columns stagnate at a large spread instead, which is exactly the signal the
-# solver's failure taxonomy uses.
+# series, evaluated at the point. When the finite diagonal sequence stabilizes,
+# it can recover analytic continuations whose plain partial sums diverge. A
+# large finite-order spread is useful numerical evidence of instability, but is
+# not by itself a proof that the underlying function or power-flow solution
+# does not exist.
 #
 # Self-contained: no dependencies beyond Base complex arithmetic.
 
@@ -26,10 +24,10 @@
 Accelerate a sequence of partial sums with Wynn's epsilon algorithm.
 
 Returns the highest-order even-column epsilon estimate (`value`) and `spread`,
-the absolute difference between the last two even-column estimates — the
-convergence indicator: `spread ≈ 0` means the (Padé) continuation has locked
-in; a `spread` that stagnates at a large value across increasing series order
-means the series has no limit at the evaluation point.
+the absolute difference between the last two even-column estimates — a
+finite-order convergence indicator. `spread ≈ 0` means the available Padé
+sequence has stabilized; a large spread means the continuation is numerically
+unresolved at this order, not that non-existence has been proved.
 
 Guards: a (near-)zero difference between adjacent entries means the sequence
 has already converged — the algorithm returns that entry with `spread = 0`
@@ -74,10 +72,9 @@ end
 Evaluate a power series `Σ coeffs[k+1]·sᵏ` at `s = 1` by analytic continuation:
 build the partial sums and accelerate them with [`_wynn_epsilon`](@ref).
 
-This converges to the underlying function's value at `s = 1` whenever that
-value exists — even when `s = 1` lies outside the series' radius of convergence
-(the HELM situation for heavily loaded feeders) — and reports a stagnating
-`spread` when it does not (no power-flow solution).
+This can converge to the underlying function's value at `s = 1` even when
+`s = 1` lies outside the series' radius of convergence, and returns the last
+two-approximant `spread` so callers can inspect finite-order stability.
 """
 function _pade_sum(coeffs::AbstractVector{<:Complex})
     isempty(coeffs) && throw(ArgumentError("empty coefficient sequence"))

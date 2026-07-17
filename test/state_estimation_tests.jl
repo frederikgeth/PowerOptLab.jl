@@ -29,8 +29,30 @@ function se_full_meas()
     m, Dict(b => tv(b) for b in ("bus1","bus2"))
 end
 
+@testset "Shared measurement-model equations" begin
+    @test measurement_prediction(:vr, 3.0, 4.0) == 3.0
+    @test measurement_prediction(:vi, 3.0, 4.0) == 4.0
+    @test measurement_prediction(:vmag, 3.0, 4.0) == 5.0
+    @test measurement_prediction(:vmag, 3.0, 4.0; magnitude=7.0) == 7.0
+    @test measurement_prediction(:pinj, 3.0, 4.0; ir=2.0, ii=-1.0) == 2.0
+    @test measurement_prediction(:qinj, 3.0, 4.0; ir=2.0, ii=-1.0) == 11.0
+    @test measurement_prediction(:pflow, 3.0, 4.0; ir=2.0, ii=-1.0) == 2.0
+    @test measurement_prediction(:qflow, 3.0, 4.0; ir=2.0, ii=-1.0) == 11.0
+    @test measurement_prediction(:ire, 0.0, 0.0; ir=3.0, ii=4.0) == 3.0
+    @test measurement_prediction(:iim, 0.0, 0.0; ir=3.0, ii=4.0) == 4.0
+    @test measurement_prediction(:imag, 0.0, 0.0; ir=3.0, ii=4.0) == 5.0
+    @test_throws ArgumentError measurement_prediction(:pinj, 3.0, 4.0)
+    @test_throws ArgumentError measurement_prediction(:bogus, 3.0, 4.0)
+    @test_throws ArgumentError measurement_prediction(:vmag, 3.0, 4.0;
+                                                       magnitude_epsilon=-1.0)
+end
+
 @testset "State estimation: exact recovery from noiseless measurements" begin
     meas, true_vm = se_full_meas()
+    @test all(m -> m isa AbstractMeasurement, meas)
+    @test measurement_kind(meas[1]) == meas[1].kind
+    @test measurement_value(meas[1]) == meas[1].value
+    @test measurement_sigma(meas[1]) == meas[1].sigma
     se = solve_state_estimation(se_net(), meas)
     @test se.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
     @test se.primal_status == "FEASIBLE_POINT"
@@ -41,6 +63,8 @@ end
     @test se.objective < 1e-3
     @test se.observability.observable === true
     @test se.observability.rank == se.observability.n_states == 4
+    @test solve_status(se).publishable
+    @test solve_diagnostics(se).residual_count == length(meas)
 end
 
 @testset "State estimation: noise reduction vs raw measurements" begin
@@ -180,11 +204,11 @@ end
     meas, _ = se_full_meas()
     # One iteration cannot converge this nonlinear fit ⇒ no feasible point.
     se = solve_state_estimation(se_net(), meas; solver_options=["max_iter" => 0])
-    if se.primal_status != "FEASIBLE_POINT"
-        @test isnan(se.objective)
-        @test all(isnan(se.bus[b]["1"]["vm"]) for b in ("bus1","bus2"))
-        @test all(isnan(r.estimated) for r in se.residuals)
-    end
+    @test !(se.termination_status in ("LOCALLY_SOLVED", "OPTIMAL"))
+    @test !solve_status(se).publishable
+    @test isnan(se.objective)
+    @test all(isnan(se.bus[b]["1"]["vm"]) for b in ("bus1","bus2"))
+    @test all(isnan(r.estimated) for r in se.residuals)
 end
 
 @testset "State estimation: empty and bad inputs" begin

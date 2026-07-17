@@ -2,7 +2,7 @@
 
 > **Audience:** power-system researchers · **Scope:** four-wire distribution power flow, solvability diagnostics, and cross-method validation.
 
-The Holomorphic Embedding Load-flow Method (HELM) is not merely another nonlinear iteration. It constructs the branch connected to an energized no-load network, evaluates it by analytic continuation, and can distinguish a certified collapse from insufficient series order. This gives it unusual value beside the Ipopt-based nonlinear `solve_pf`.
+The Holomorphic Embedding Load-flow Method (HELM) is not merely another nonlinear iteration. It constructs the branch connected to an energized no-load network and evaluates it by analytic continuation. This gives it useful, independent numerical evidence beside the Ipopt-based nonlinear `solve_pf`, but a finite-order divergent series is not a proof of voltage collapse.
 
 The trade-off is explicit: the present embedding supports constant-power and constant-impedance load components only. It cannot replace the nonlinear engine for arbitrary ZIP/exponential loads, IBRs, generators, controls, or OPF limits.
 
@@ -13,8 +13,8 @@ The trade-off is explicit: the present embedding supports constant-power and con
 | Operating point | no-load germ, power series, Padé continuation | iterative nonlinear feasibility/optimization solve |
 | Initialization | none | numerical initialization and local convergence matter |
 | Branch | continuously connected to no-load state | feasible local point reached by the solve |
-| No solution | can certify collapse in its supported embedding | failure is not a nonexistence proof |
-| Collapse distance | `load_margin` on every solve | needs a separate loading study |
+| Failed solve | exposes Padé/coefficient diagnostics | exposes nonlinear solver status |
+| Collapse study | `singularity_estimate` is a heuristic | loading continuation is separate |
 | v1 load model | constant-P and constant-Z | full engine-supported operational model |
 
 Agreement on common physics is strong cross-method evidence because the numerical mechanisms differ. Disagreement should trigger a model/branch audit, not a vote for a preferred solver.
@@ -33,30 +33,32 @@ The germ is not a flat-voltage approximation. In an unbalanced four-wire feeder 
 using PowerOptLab
 
 helm = helm_series(net; max_order=40, tol=1e-8)
-helm.status       # :converged | :diverged_no_solution | :max_order_reached
+helm.status       # :converged | :series_diverged | :max_order_reached
 helm.residual     # full nonlinear current mismatch [A]
-helm.load_margin  # estimated collapse loading multiplier
+helm.pade_spread  # last-two Padé differences for every coefficient row
+helm.coefficient_tail_ratios
+helm.singularity_estimate # heuristic; validate before calling it a margin
 ```
 
 The final test is physical: returned voltages are substituted into the full nonlinear current mismatch. `solve_pf_helm` returns the standard result shape.
 
 ### Why this is more than avoiding an initial guess
 
-Iterative solvers can fail because of scaling, a local basin, line search, or a poor start. HELM fixes the operational branch by continuation from no load. For the supported holomorphic embedding, persistent coefficient growth at ``s=1`` means the solvable branch ends before the requested loading; it is not an instruction to try a different initialization.
+Iterative solvers can fail because of scaling, a local basin, line search, or a poor start. HELM fixes the studied branch by continuation from no load and therefore supplies different evidence. Persistent finite-order coefficient growth at ``s=1`` says this series evaluation did not resolve the requested state; another study is required before concluding that the solvable branch ends there.
 
 ## 3. Interpret status and margin precisely
 
 | Status | Meaning | Response |
 |---|---|---|
-| `HELM_CONVERGED` | operational branch reached; physical residual met tolerance | inspect voltage/margin and compare with nonlinear PF |
-| `HELM_NO_SOLUTION` | certified collapse for the supported embedding at ``s=1`` | redesign/reduce loading; do not hunt for a start point |
-| `HELM_MAX_ORDER` | finite series order was insufficient | increase `max_order`; it is not collapse |
+| `HELM_CONVERGED` | operational branch reached; physical residual met tolerance | inspect voltage/diagnostics and compare with nonlinear PF |
+| `HELM_SERIES_DIVERGED` | mismatch failed and the exposed coefficient tail grows | inspect Padé spread/ratios and run a loading continuation or analytic check |
+| `HELM_MAX_ORDER` | mismatch failed without the growing-tail classification | increase `max_order`; the result is inconclusive |
 
-Coefficient-tail Domb-Sykes extrapolation estimates the collapse multiplier ``\lambda^*``. A margin near 2 means the present supported load is about half of its collapse loading; a margin below 1 is consistent with collapse before ``s=1``. `NaN` means the tail cannot estimate a reliable radius, often because collapse is too remote for light or constant-impedance-only loading.
+Coefficient-tail Domb-Sykes extrapolation estimates a coefficient-dominating singularity ``\lambda``. On the repository's analytic two-node saddle-node, a value near 2 means the present load is about half the known collapse loading, and a value below 1 agrees with the known branch ending before ``s=1``. General networks may have other real or complex singularities, so this interpretation does not transfer automatically. `NaN` means the finite tail could not produce an estimate.
 
 ### Pitfall: calling every failed solve voltage collapse
 
-Only `HELM_NO_SOLUTION` has the collapse meaning. `HELM_MAX_ORDER` is inconclusive. Likewise, failure of nonlinear `solve_pf` is not proof of nonexistence without a solvability analysis such as HELM on a common model.
+Both `HELM_SERIES_DIVERGED` and `HELM_MAX_ORDER` are inconclusive about non-existence. Likewise, failure of nonlinear `solve_pf` is not proof. For a defensible collapse claim, bracket the limit with continuation power flow or use an analytically known fixture, and report the common model and tolerances.
 
 ## 4. Four-wire and ideal-element strengths
 
@@ -96,7 +98,7 @@ Repository validation combines closed-form feeders, a separate `ybus_linearized`
 
 1. Specify common source, grounding, switch/transformer, and load physics.
 2. Compare phase-to-earth voltages, neutral rise, and relevant currents.
-3. Inspect residuals and HELM margin.
+3. Inspect residuals, Padé spreads, coefficient-tail ratios, and the singularity estimate.
 4. Investigate disagreement before changing tolerances.
 5. Add operational physics only to nonlinear PF, clearly marking HELM's scope.
 
@@ -116,10 +118,10 @@ It also needs an energized WYE/SINGLE_PHASE source and a linear path from every 
 
 ### Pitfall: treating rejection as a numerical weakness
 
-The rejection protects the analytic claim. Forcing a non-holomorphic load into the recursion makes the certificate and load margin meaningless. An explicit scope is more scientifically useful than silently solving a different model.
+The rejection protects the embedding's mathematical scope. Forcing a non-holomorphic load into the recursion makes the resulting diagnostics hard to interpret. An explicit scope is more scientifically useful than silently solving a different model.
 
 ## 7. Publication checklist
 
-Report the load representation, source/reference and neutral treatment, ideal-element model, HELM order/tolerance/status/residual/margin, and cross-solver comparison on common physics. State every excluded control and unsupported load component. HELM's value is not replacing nonlinear PF: it provides deterministic analytic reference, branch-aware no-solution evidence, and a collapse-distance indicator where iterative PF alone is most ambiguous.
+Report the load representation, source/reference and neutral treatment, ideal-element model, HELM order/tolerance/status/residual, Padé/coefficient diagnostics, singularity estimate, and cross-solver comparison on common physics. State every excluded control and unsupported load component. HELM's value is not replacing nonlinear PF: it provides a deterministic analytic-continuation reference whose claims can be checked independently.
 
 For API details see [HELM power flow](../algorithms/helm.md).

@@ -93,7 +93,7 @@ For a new import study use `total_capacity` and inspect `direction`.
 capacity at each interval. `schedule` records the issue/validity metadata and
 whether a non-optimised fallback was published.
 """
-struct OperatingEnvelopeResult
+struct OperatingEnvelopeResult <: AbstractSolveResult
     termination_status::Vector{String}
     envelope::Dict{String,Vector{Float64}}
     total_export::Vector{Float64}
@@ -104,6 +104,26 @@ struct OperatingEnvelopeResult
     fairness_metrics::Vector{Dict{String,Any}}
     schedule::Vector{Dict{String,Any}}
 end
+
+function solve_status(result::OperatingEnvelopeResult)
+    published = !isempty(result.total_capacity) && all(isfinite, result.total_capacity)
+    has_primal = !isempty(result.diagnostics) && all(diag ->
+        get(diag, "primal_status", "NO_SOLUTION") != "NO_SOLUTION",
+        result.diagnostics)
+    feasible = !isempty(result.diagnostics) ?
+        all(diag -> get(diag, "feasible", false), result.diagnostics) : published
+    optimal = feasible && all(status -> status in ("OPTIMAL", "LOCALLY_SOLVED"),
+                              result.termination_status)
+    primal = feasible ? "FEASIBLE_POINT" : published ? "FALLBACK_POINT" : "NO_SOLUTION"
+    SolveStatus(_termination_summary(result.termination_status), primal,
+                has_primal, feasible, optimal, published)
+end
+
+solve_diagnostics(result::OperatingEnvelopeResult) =
+    (interval_count=length(result.total_capacity),
+     feasible_count=count(diag -> get(diag, "feasible", false), result.diagnostics),
+     published_count=count(isfinite, result.total_capacity),
+     direction=result.direction)
 
 # Source compatibility for callers that constructed the original four-field
 # result directly. New solves always populate the richer fields above.
@@ -120,12 +140,29 @@ fixed, already-issued allocation was locally feasible at every requested
 utilisation point and forecast/model scenario. This is a verification result,
 not a new allocation.
 """
-struct OperatingEnvelopeVerification
+struct OperatingEnvelopeVerification <: AbstractSolveResult
     termination_status::Vector{String}
     feasible::Vector{Bool}
     snapshots::Vector{Dict{String,Any}}
     diagnostics::Vector{Dict{String,Any}}
 end
+
+
+function solve_status(result::OperatingEnvelopeVerification)
+    has_primal = !isempty(result.diagnostics) && all(diag ->
+        get(diag, "primal_status", "NO_SOLUTION") != "NO_SOLUTION",
+        result.diagnostics)
+    feasible = !isempty(result.feasible) && all(result.feasible)
+    optimal = feasible && all(status -> status in ("OPTIMAL", "LOCALLY_SOLVED"),
+                              result.termination_status)
+    SolveStatus(_termination_summary(result.termination_status),
+                feasible ? "FEASIBLE_POINT" : "NO_SOLUTION",
+                has_primal, feasible, optimal, feasible)
+end
+
+solve_diagnostics(result::OperatingEnvelopeVerification) =
+    (interval_count=length(result.feasible),
+     feasible_count=count(identity, result.feasible), verification=true)
 
 const _FAIRNESS_KINDS =
     (:equal, :max_total, :proportional, :alpha, :max_min, :equal_curtailment)
@@ -390,8 +427,7 @@ function _set_fairness_objective!(model, cap, cps, policy, direction, power_base
     end
 end
 
-_has_primal(model) = JuMP.primal_status(model) in
-    (JuMP.MOI.FEASIBLE_POINT, JuMP.MOI.NEARLY_FEASIBLE_POINT)
+_has_primal(model) = _publishable(_solve_outcome(model))
 
 function _result_margins(result, net)
     best = Dict{String,Tuple{Float64,String}}()
@@ -587,10 +623,6 @@ function _solve_interval_group(group, cps, policy;
                                fixed_capacity=nothing,
                                patterns_override=nothing)
     model = JuMP.Model(optimizer)
-    verbose || JuMP.set_silent(model)
-    for (name, value) in solver_options
-        JuMP.set_attribute(model, string(name), value)
-    end
     pb = per_unit ? s_base : 1.0
     cap = Dict{String,Any}()
     for cp in cps
@@ -606,23 +638,28 @@ function _solve_interval_group(group, cps, policy;
     end
 
     patterns = patterns_override === nothing ? _dispatch_patterns(length(cps), security) : patterns_override
-    records = NamedTuple[]
     sign = direction == :export ? 1.0 : -1.0
-    for (scenario_index, net) in enumerate(group),
-        (pattern_index, fractions) in enumerate(patterns)
-        hook! = ctx -> begin
+    specifications = [(net=net, scenario=scenario_index,
+                       pattern=pattern_index, fractions=fractions)
+                      for (scenario_index, net) in enumerate(group)
+                      for (pattern_index, fractions) in enumerate(patterns)]
+    hook_factory = context_index -> begin
+        fractions = specifications[context_index].fractions
+        ctx -> begin
             for (i, cp) in enumerate(cps)
                 p = _connection_active_power(ctx, cp)
                 JuMP.@constraint(ctx.model,
                     p == sign * fractions[i] * cap[cp.id])
             end
         end
-        ctx = build_opf_model(net; model=model, add_objective=false,
-            model_hook! = hook!, per_unit=per_unit, s_base=s_base,
-            volt_var_watt_eps=volt_var_watt_eps, verbose=verbose)
-        push!(records, (ctx=ctx, net=net, scenario=scenario_index,
-                        pattern=pattern_index, fractions=fractions))
     end
+    multi = build_multi_context([spec.net for spec in specifications]; model,
+        hook_factory, per_unit, s_base, optimizer, verbose, solver_options,
+        context_options=(volt_var_watt_eps=volt_var_watt_eps, verbose=verbose))
+    records = [(ctx=multi.contexts[index], net=spec.net,
+                scenario=spec.scenario, pattern=spec.pattern,
+                fractions=spec.fractions)
+               for (index, spec) in enumerate(specifications)]
     foreach(r -> enforce_kcl!(r.ctx), records)
     if fixed_capacity === nothing
         stage = _set_fairness_objective!(model, cap, cps, policy, direction, pb;
@@ -633,9 +670,10 @@ function _solve_interval_group(group, cps, policy;
         JuMP.optimize!(model)
     end
 
-    status = string(JuMP.termination_status(model))
-    primal = string(JuMP.primal_status(model))
-    feasible = _has_primal(model)
+    outcome = _solve_outcome(model)
+    status = string(outcome.termination_status)
+    primal = string(outcome.primal_status)
+    feasible = _publishable(outcome)
     total = NaN
     alloc = Dict(cp.id => NaN for cp in cps)
     snapshot = Dict{String,Any}("termination_status"=>status,

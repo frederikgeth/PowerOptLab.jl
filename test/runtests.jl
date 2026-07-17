@@ -8,15 +8,19 @@ using JuMP, Ipopt
 # HELM OpenDSS-parity tests optionally use OpenDSSDirect and skip themselves
 # when it is not installed (mirrors the guard in BMOPFTools' own suite).
 const _HAS_JUMP_IPOPT = true
-const _HAS_ODS = !isnothing(Base.identify_package("OpenDSSDirect"))
-if _HAS_ODS
-    @eval using OpenDSSDirect
-end
 
 include("fixtures.jl")
 
 @testset "Package quality" begin
     Aqua.test_all(PowerOptLab)
+end
+
+# Load the optional OpenDSS oracle only after Aqua. OpenDSSDirect 0.9.9 extends
+# several Base constructor names during load, which can interfere with Aqua's
+# isolated persistent-task probe even though PowerOptLab starts no such tasks.
+const _HAS_ODS = !isnothing(Base.identify_package("OpenDSSDirect"))
+if _HAS_ODS
+    @eval using OpenDSSDirect
 end
 
 @testset "PowerOptLab" begin

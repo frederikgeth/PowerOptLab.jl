@@ -63,10 +63,10 @@ schemes) and alternative solution methods.
 
 - **HELM** ([`solve_pf_helm`](@ref)) — the Holomorphic Embedding Load-flow
   Method: a non-iterative power flow that expands each voltage as a power series
-  in a load-scaling parameter and evaluates it by Padé analytic continuation, so
-  voltage collapse is a *certified* outcome (Stahl's theorem) rather than a
-  solver failure, and the series' radius of convergence yields the loading
-  margin directly.
+  in a load-scaling parameter and evaluates it by Padé analytic continuation.
+  Physical mismatch, Padé spread, and coefficient-tail diagnostics distinguish
+  convergence from finite-order numerical divergence without treating the
+  latter as a non-existence certificate.
 
 Everything is SI at the interface; per-unit conditioning inside the solve is
 handled via the engine's `ctx.bases`.
@@ -80,6 +80,10 @@ using JuMP
 using Ipopt
 using LinearAlgebra
 using SparseArrays
+
+# Shared validation and solver-result contracts.
+include("contracts.jl")
+include("interfaces.jl")
 
 # One isolated compatibility adapter for the load decomposition that
 # BMOPFTools 0.1.0 does not yet expose publicly.
@@ -103,8 +107,18 @@ include("problems/operating_envelope.jl")
 include("algorithms/pade.jl")
 include("algorithms/helm.jl")
 
+# Shared extension interfaces
+export AbstractDevice, AbstractMeasurement, AbstractSolveResult
+export TimeGrid, MultiContext, build_multi_context
+export SolveStatus, solve_status, solve_diagnostics
+export device_id, validate_device, stamp_device!, link_device!, extract_device
+export measurement_kind, measurement_value, measurement_sigma, measurement_prediction
+
 # Devices
 export StorageDevice, EVDevice
+
+# Shared solve-result contract
+export SolveOutcome
 
 # Multi-period OPF
 export solve_multiperiod_opf, MultiperiodResult

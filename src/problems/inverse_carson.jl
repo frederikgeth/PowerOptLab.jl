@@ -290,11 +290,28 @@ struct InverseCarsonFit
 end
 
 "Result of [`solve_inverse_carson`](@ref), retaining all candidate fits."
-struct InverseCarsonResult
+struct InverseCarsonResult <: AbstractSolveResult
     fits::Vector{InverseCarsonFit}
     compatible_candidates::Vector{String}
     warnings::Vector{String}
 end
+
+function solve_status(result::InverseCarsonResult)
+    successful = [fit for fit in result.fits
+                  if isfinite(fit.objective) && !isempty(fit.parameters)]
+    has_primal = !isempty(successful)
+    optimal = has_primal && all(fit -> fit.termination_status in
+        ("OPTIMAL", "LOCALLY_SOLVED"), successful)
+    termination = _termination_summary(fit.termination_status for fit in result.fits)
+    SolveStatus(termination, has_primal ? "FEASIBLE_POINT" : "NO_SOLUTION",
+                has_primal, has_primal, optimal, optimal)
+end
+
+solve_diagnostics(result::InverseCarsonResult) =
+    (candidate_count=length(result.fits),
+     compatible_count=length(result.compatible_candidates),
+     best_objective=minimum((fit.objective for fit in result.fits); init=Inf),
+     warning_count=length(result.warnings))
 
 _ic_observed(obs::SequenceLineObservation) = obs.b0 === nothing ?
     Float64[real(obs.z0), imag(obs.z0), real(obs.z1), imag(obs.z1)] :
@@ -378,11 +395,9 @@ _ic_standardized_residual(c, obs, u) =
 
 _ic_objective(c, obs, u) = sum(abs2, _ic_residual(c, obs, u))
 
-_ic_success_status(status) = status in
-    (JuMP.MOI.OPTIMAL, JuMP.MOI.LOCALLY_SOLVED,
-     JuMP.MOI.ALMOST_OPTIMAL, JuMP.MOI.ALMOST_LOCALLY_SOLVED)
+_ic_success_status(model) = _publishable(_solve_outcome(model))
 
-_ic_usable_profile_solution(model, status) = _ic_success_status(status) ||
+_ic_usable_profile_solution(model, status) = _ic_success_status(model) ||
     (status == JuMP.MOI.SLOW_PROGRESS && JuMP.has_values(model) &&
      JuMP.primal_status(model) in
         (JuMP.MOI.FEASIBLE_POINT, JuMP.MOI.NEARLY_FEASIBLE_POINT))
@@ -398,10 +413,7 @@ function _ic_configure_model!(model, verbose::Bool, solver_options)
         JuMP.set_attribute(model, "hessian_approximation", "limited-memory")
         JuMP.set_attribute(model, "bound_relax_factor", 0.0)
     end
-    options = solver_options isa NamedTuple ? pairs(solver_options) : solver_options
-    for (name, value) in options
-        JuMP.set_attribute(model, string(name), value)
-    end
+    _set_solver_options!(model, solver_options)
     nothing
 end
 
@@ -435,7 +447,7 @@ function _ic_fit_candidate(c::OverheadCarsonCandidate,
     model = JuMP.Model(optimizer)
     _ic_configure_model!(model, verbose, solver_options)
     u = JuMP.@variable(model, 0 <= u[1:n] <= 1)
-    objective(args::T...) where {T<:Real} =
+    objective(args::Real...) =
         _ic_objective(c, obs, collect(args))
     op = JuMP.add_nonlinear_operator(model, n, objective;
                                      name=:inverse_carson_objective)
@@ -450,7 +462,7 @@ function _ic_fit_candidate(c::OverheadCarsonCandidate,
         JuMP.optimize!(model)
         status = JuMP.termination_status(model)
         push!(statuses, string(status))
-        _ic_success_status(status) || continue
+        _ic_success_status(model) || continue
         sol = JuMP.value.(u)
         obj = _ic_objective(c, obs, sol)
         duplicate = findfirst(old -> norm(sol - old) <= 1e-6, local_u)
@@ -575,7 +587,7 @@ function _ic_profile_endpoint(c, obs, best_u, index, target, threshold;
     model = JuMP.Model(optimizer)
     _ic_configure_model!(model, verbose, solver_options)
     u = JuMP.@variable(model, 0 <= u[1:n] <= 1)
-    objective(args::T...) where {T<:Real} =
+    objective(args::Real...) =
         _ic_objective(c, obs, collect(args))
     op = JuMP.add_nonlinear_operator(model, n, objective;
                                      name=:inverse_carson_profile_objective)

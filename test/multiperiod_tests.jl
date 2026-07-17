@@ -41,3 +41,76 @@ end
     @test d.soc[3] ≈ d.soc[2] + (0.95*d.p_charge[2] - d.p_discharge[2]/0.95)*1.0  rtol=1e-6
     @test d.soc[3] ≈ 40e3  rtol=1e-6         # still cyclic
 end
+
+@testset "Multi-period OPF: duration and device contracts" begin
+    nets = [single_bus_net(; src_cost=0.20), single_bus_net(; src_cost=0.05)]
+    bat = StorageDevice(id="bat", bus="bus1", p_charge_max=40e3,
+        p_discharge_max=40e3, energy_max=100e3, energy_init=40e3)
+    @test_throws ArgumentError solve_multiperiod_opf(nets, [bat]; dt_h=0.0)
+    @test_throws ArgumentError solve_multiperiod_opf(nets, [bat]; dt_h=Inf)
+    @test_throws ArgumentError TimeGrid(Float64[])
+    @test_throws ArgumentError TimeGrid([1.0, 0.0])
+    @test_throws ArgumentError solve_multiperiod_opf(nets, [bat];
+        time_grid=TimeGrid([1.0]))
+    @test_throws ArgumentError solve_multiperiod_opf(nets,
+        [StorageDevice(id="bad", bus="bus1", p_charge_max=-1.0,
+            p_discharge_max=1.0, energy_max=10.0, energy_init=5.0)])
+    @test_throws ArgumentError solve_multiperiod_opf(nets,
+        [StorageDevice(id="bad", bus="missing", p_charge_max=1.0,
+            p_discharge_max=1.0, energy_max=10.0, energy_init=5.0)])
+    @test_throws ArgumentError solve_multiperiod_opf(nets,
+        [StorageDevice(id="bad", bus="bus1", p_charge_max=1.0,
+            p_discharge_max=1.0, energy_max=10.0, energy_init=11.0)])
+    @test_throws ArgumentError solve_multiperiod_opf(nets,
+        [StorageDevice(id="bad", bus="bus1", p_charge_max=1.0,
+            p_discharge_max=1.0, energy_max=10.0, energy_init=5.0,
+            eff_charge=0.0)])
+
+    # With no inter-temporal device, duration only converts each cost rate to
+    # an interval cost and must scale the reported objective exactly.
+    hourly = solve_multiperiod_opf(nets, StorageDevice[]; dt_h=1.0)
+    half_hourly = solve_multiperiod_opf(nets, StorageDevice[]; dt_h=0.5)
+    @test half_hourly.objective ≈ 0.5 * hourly.objective rtol=1e-8
+
+    # Nonuniform periods weight each rate separately rather than applying one
+    # scalar to the whole horizon.
+    p1 = solve_multiperiod_opf([nets[1]], StorageDevice[]).objective
+    p2 = solve_multiperiod_opf([nets[2]], StorageDevice[]).objective
+    nonuniform = solve_multiperiod_opf(nets, StorageDevice[];
+        time_grid=TimeGrid([0.25, 0.75]))
+    @test nonuniform.objective ≈ 0.25p1 + 0.75p2 rtol=1e-8
+
+    multi = build_multi_context([nets[1]]; per_unit=false)
+    @test length(multi) == 1
+    @test multi[1].model === multi.model
+
+    @test bat isa AbstractDevice
+    @test validate_device(bat, nets; periods=2) === nothing
+    @test solve_status(hourly).publishable
+    @test solve_diagnostics(hourly).periods == 2
+end
+
+@testset "Multi-period OPF: nonuniform SOC integration" begin
+    nets = [single_bus_net(; src_cost=0.20), single_bus_net(; src_cost=0.05)]
+    grid = TimeGrid([0.5, 1.5])
+    bat = StorageDevice(id="bat", bus="bus1",
+        p_charge_max=40e3, p_discharge_max=40e3,
+        energy_max=100e3, energy_init=40e3, cyclic=true)
+    result = solve_multiperiod_opf(nets, [bat]; time_grid=grid)
+    dispatch = result.dispatch["bat"]
+    for t in eachindex(grid.durations_h)
+        @test dispatch.soc[t+1] ≈
+              dispatch.soc[t] - dispatch.p_net[t] * grid[t] rtol=1e-6
+    end
+    @test dispatch.soc[end] ≈ dispatch.soc[1] rtol=1e-6
+end
+
+@testset "Multi-period OPF: iteration-limited points are not published" begin
+    nets = [single_bus_net(; src_cost=0.20), single_bus_net(; src_cost=0.05)]
+    r = solve_multiperiod_opf(nets, StorageDevice[];
+        solver_options=(max_iter=0,))
+    @test !(r.termination_status in ("LOCALLY_SOLVED", "OPTIMAL"))
+    @test !solve_status(r).publishable
+    @test isnan(r.objective)
+    @test all(isnan(r.snapshots[t]["bus"]["bus1"]["1"]["vm"]) for t in eachindex(nets))
+end

@@ -59,7 +59,7 @@ which is *exact* for the piecewise-constant current of each period (there is one
 current variable per period, not per time node). A true trapezoidal rule needs
 currents at all `T+1` nodes with consistent endpoint semantics and is deferred.
 """
-Base.@kwdef struct IVQBattery
+Base.@kwdef struct IVQBattery <: AbstractDevice
     id::String
     bus::String
     chemistry::BatteryChemistry
@@ -76,6 +76,8 @@ end
 # NaNs, division by zero, or a nonphysical model.
 function _validate_battery(b::IVQBattery)
     chem = b.chemistry
+    isempty(b.id) && throw(ArgumentError("battery id must not be empty"))
+    _validate_inverter(b.inverter)
     b.inverter.bus == b.bus || throw(ArgumentError(
         "battery '$(b.id)' bus '$(b.bus)' must match its inverter bus '$(b.inverter.bus)'"))
     b.n_series >= 1 || throw(ArgumentError("battery '$(b.id)': n_series must be ≥ 1"))
@@ -88,6 +90,14 @@ function _validate_battery(b::IVQBattery)
             "battery '$(b.id)': soc_final=$(b.soc_final) must be finite and within the " *
             "chemistry window [$(chem.soc_min), $(chem.soc_max)]"))
     end
+    return nothing
+end
+
+function validate_device(battery::IVQBattery, nets=(); periods::Integer=length(nets))
+    periods == length(nets) || throw(ArgumentError(
+        "period count $periods does not match $(length(nets)) network snapshots"))
+    _validate_battery(battery)
+    isempty(nets) || _validate_inverter(battery.inverter, nets)
     return nothing
 end
 
@@ -159,6 +169,33 @@ function _stamp_battery!(ctx, battery::IVQBattery, inv_handles)
     return _BatHandles(ipu, vpu, vbase, ibase, soc, ns, np)
 end
 
+function stamp_device!(ctx, battery::IVQBattery; kwargs...)
+    inverter = stamp_device!(ctx, battery.inverter)
+    pack = _stamp_battery!(ctx, battery, inverter)
+    return (inverter=inverter, pack=pack)
+end
+
+function extract_device(battery::IVQBattery, handles::NamedTuple,
+                        status::SolveStatus)
+    ih = handles.inverter
+    bh = handles.pack
+    solved = status.publishable
+    i_pack = solved ? JuMP.value(bh.ipu) * bh.ibase : NaN
+    v_pack = solved ? JuMP.value(bh.vpu) * bh.vbase : NaN
+    return (
+        p_poc=solved ? JuMP.value(ih.p_poc) * ih.sb : NaN,
+        q_poc=solved ? JuMP.value(ih.q_poc) * ih.sb : NaN,
+        p_conv=solved ? JuMP.value(ih.p_conv) * ih.sb : NaN,
+        p_dc=solved ? v_pack * i_pack : NaN,
+        p_loss=solved ? JuMP.value(ih.p_loss) * ih.sb : NaN,
+        soc=solved ? bh.soc : NaN,
+        v_cell=v_pack / bh.n_series,
+        i_cell=i_pack / bh.n_parallel,
+        v_pack=v_pack,
+        i_pack=i_pack,
+    )
+end
+
 """
     IVQBatteryResult
 
@@ -175,7 +212,7 @@ Result of [`solve_ivq_battery`](@ref). SI units throughout.
 - `v_pack`, `i_pack` — pack terminal voltage (V) and current (A).
 - `bus::Dict{String,Any}` — the BMOPFTools `result["bus"]`.
 """
-struct IVQBatteryResult
+struct IVQBatteryResult <: AbstractSolveResult
     termination_status::String
     p_poc::Float64
     q_poc::Float64
@@ -188,7 +225,14 @@ struct IVQBatteryResult
     v_pack::Float64
     i_pack::Float64
     bus::Dict{String,Any}
+    solve::SolveStatus
 end
+
+solve_status(result::IVQBatteryResult) = result.solve
+
+solve_diagnostics(result::IVQBatteryResult) =
+    (p_loss=result.p_loss, soc=result.soc, v_cell=result.v_cell,
+     i_cell=result.i_cell)
 
 """
     solve_ivq_battery(net, battery; objective=:max_export, kwargs...) -> IVQBatteryResult
@@ -227,12 +271,16 @@ function solve_ivq_battery(net::Dict{String,Any}, battery::IVQBattery;
         throw(ArgumentError("objective must be :max_export, :max_charge or :min_loss, got :$objective"))
     objective == :min_loss && p_set === nothing &&
         throw(ArgumentError(":min_loss requires a p_set (W) active-power target"))
-    _validate_battery(battery)
+    validate_device(battery, (net,); periods=1)
+    p_set === nothing || isfinite(p_set) || throw(ArgumentError("p_set must be finite"))
+    q_set === nothing || isfinite(q_set) || throw(ArgumentError("q_set must be finite"))
+    isfinite(s_base) && s_base > 0 || throw(ArgumentError("s_base must be finite and > 0"))
 
     inv_h = Ref{Any}(); bat_h = Ref{Any}()
     hook! = ctx -> begin
-        ih = _stamp_inverter!(ctx, battery.inverter)
-        bh = _stamp_battery!(ctx, battery, ih)
+        handles = stamp_device!(ctx, battery)
+        ih = handles.inverter
+        bh = handles.pack
         inv_h[] = ih; bat_h[] = bh
         q_set === nothing || JuMP.@constraint(ctx.model, ih.q_poc == q_set / ih.sb)
         if objective == :max_export
@@ -248,31 +296,24 @@ function solve_ivq_battery(net::Dict{String,Any}, battery::IVQBattery;
     ctx = build_opf_model(net; per_unit=per_unit, s_base=s_base,
                           add_objective=false, model_hook! = hook!,
                           optimizer=optimizer, verbose=verbose)
-    for (name, value) in solver_options
-        JuMP.set_attribute(ctx.model, string(name), value)
-    end
+    _set_solver_options!(ctx.model, solver_options)
     enforce_kcl!(ctx)
     JuMP.optimize!(ctx.model)
 
-    status = string(JuMP.termination_status(ctx.model))
-    solved = JuMP.primal_status(ctx.model) == JuMP.MOI.FEASIBLE_POINT
-
+    outcome = _solve_outcome(ctx.model)
+    status = string(outcome.termination_status)
     ih = inv_h[]; bh = bat_h[]
-    sb = ih.sb
-    i_pack = solved ? JuMP.value(bh.ipu) * bh.ibase : NaN   # per-unit → SI
-    v_pack = solved ? JuMP.value(bh.vpu) * bh.vbase : NaN
+    device_result = extract_device(battery, (inverter=ih, pack=bh),
+                                   SolveStatus(outcome))
 
-    result = extract_result(ctx)
+    result = _extract_result(ctx, outcome)
     return IVQBatteryResult(status,
-                            solved ? JuMP.value(ih.p_poc) * sb : NaN,
-                            solved ? JuMP.value(ih.q_poc) * sb : NaN,
-                            solved ? JuMP.value(ih.p_conv) * sb : NaN,
-                            solved ? v_pack * i_pack : NaN,        # p_dc (SI)
-                            solved ? JuMP.value(ih.p_loss) * sb : NaN,
-                            bh.soc,
-                            v_pack / bh.n_series, i_pack / bh.n_parallel,   # cell = pack / n
-                            v_pack, i_pack,
-                            result["bus"])
+                            device_result.p_poc, device_result.q_poc,
+                            device_result.p_conv, device_result.p_dc,
+                            device_result.p_loss, device_result.soc,
+                            device_result.v_cell, device_result.i_cell,
+                            device_result.v_pack, device_result.i_pack,
+                            result["bus"], SolveStatus(outcome))
 end
 
 # ── Multi-period ─────────────────────────────────────────────────────────────
@@ -305,12 +346,19 @@ The coupled cell + inverter model is nonconvex, so `solve_multiperiod_ivq` finds
 a local optimum and may not converge for every configuration; a non-`LOCALLY_SOLVED`
 /`OPTIMAL` status returns `NaN` trajectories rather than an unconverged point.
 """
-struct MultiperiodIVQResult
+struct MultiperiodIVQResult <: AbstractSolveResult
     termination_status::String
     objective::Float64
     snapshots::Vector{Dict{String,Any}}
     dispatch::Dict{String,NamedTuple}
+    solve::SolveStatus
 end
+
+solve_status(result::MultiperiodIVQResult) = result.solve
+
+solve_diagnostics(result::MultiperiodIVQResult) =
+    (objective=result.objective, periods=length(result.snapshots),
+     devices=length(result.dispatch))
 
 # Stamp one battery into snapshot `ctx` at SoC variable `soc_t`, coupling its DC
 # power to the inverter `ih`. Modelled in PACK quantities per-unit on the
@@ -344,6 +392,24 @@ function _stamp_battery_mp!(ctx, battery::IVQBattery, soc_t, ih, ocv_op, r_op)
     return ipu, vpu, vbase, ibase
 end
 
+function link_device!(model, battery::IVQBattery, handles::NamedTuple, sb,
+                      grid::TimeGrid)
+    soc = handles.soc
+    current = handles.current
+    ibase = handles.ibase
+    capacity_ah = battery.chemistry.q_cell * battery.n_parallel
+    for t in 1:length(grid)
+        JuMP.@constraint(model,
+            soc[t+1] == soc[t] - grid[t] * current[t] * ibase / capacity_ah)
+    end
+    if battery.soc_final !== nothing
+        JuMP.@constraint(model, soc[length(grid)+1] == battery.soc_final)
+    elseif battery.cyclic
+        JuMP.@constraint(model, soc[length(grid)+1] == soc[1])
+    end
+    return soc
+end
+
 """
     solve_multiperiod_ivq(nets, batteries; kwargs...) -> MultiperiodIVQResult
 
@@ -364,14 +430,17 @@ snapshots (e.g. a time-varying slack import price via each net's `voltage_source
   piecewise-constant per-period current, so it conserves charge exactly.
 
 # Keywords
-- `dt_h=1.0` — period duration in hours.
+- `dt_h=1.0` — uniform period duration in hours (compatibility shorthand).
+- `time_grid=nothing` — a [`TimeGrid`](@ref) for nonuniform durations; when
+  supplied it takes precedence over `dt_h`.
 - `per_unit=true`, `s_base=1e6`, `optimizer=Ipopt.Optimizer`, `verbose=false`,
   `solver_options=()`. Results are SI regardless of `per_unit`. Per-unit
   conditions the coupled nonconvex solve and converges far more reliably across
   platforms/Ipopt builds; `per_unit=false` reproduces a raw SI solve.
 """
 function solve_multiperiod_ivq(nets::AbstractVector, batteries::AbstractVector;
-                               dt_h::Float64=1.0,
+                               dt_h::Real=1.0,
+                               time_grid::Union{Nothing,TimeGrid}=nothing,
                                per_unit::Bool=true,
                                s_base::Float64=1e6,
                                optimizer=Ipopt.Optimizer,
@@ -379,16 +448,17 @@ function solve_multiperiod_ivq(nets::AbstractVector, batteries::AbstractVector;
                                solver_options=())
     T = length(nets)
     T >= 1 || throw(ArgumentError("need at least one snapshot"))
-    (isfinite(dt_h) && dt_h > 0) || throw(ArgumentError("dt_h must be a positive finite number of hours"))
+    grid = _resolve_time_grid(T, dt_h, time_grid)
+    all(b -> b isa IVQBattery, batteries) || throw(ArgumentError(
+        "batteries must contain only IVQBattery values"))
     ids = [b.id for b in batteries]
     allunique(ids) || throw(ArgumentError("battery ids must be unique: $ids"))
-    foreach(_validate_battery, batteries)
+    foreach(b -> validate_device(b, nets; periods=T), batteries)
+    isfinite(s_base) && s_base > 0 || throw(ArgumentError("s_base must be finite and > 0"))
 
     model = JuMP.Model(optimizer)
     verbose || JuMP.set_silent(model)
-    for (name, value) in solver_options
-        JuMP.set_attribute(model, string(name), value)
-    end
+    _set_solver_options!(model, solver_options)
 
     # Per battery: register smooth OCV/R operators once (tabulated only), and the
     # SoC trajectory bounded to the chemistry's usable window.
@@ -420,7 +490,7 @@ function solve_multiperiod_ivq(nets::AbstractVector, batteries::AbstractVector;
 
     stamp_all(t) = ctx -> begin
         for b in batteries
-            ih = _stamp_inverter!(ctx, b.inverter)
+            ih = stamp_device!(ctx, b.inverter)
             ipu, vpu, _, _ = _stamp_battery_mp!(ctx, b, socs[b.id][t], ih,
                                                 get(ocv_ops, b.id, nothing),
                                                 get(r_ops, b.id, nothing))
@@ -431,9 +501,9 @@ function solve_multiperiod_ivq(nets::AbstractVector, batteries::AbstractVector;
 
     # Pass t_index=t so time-series nets materialise their period-t snapshot (a
     # plain snapshot net ignores it); otherwise every period would reuse index 1.
-    ctxs = [build_opf_model(nets[t]; t_index=t, model=model, per_unit=per_unit,
-                            s_base=s_base, add_objective=false, model_hook! = stamp_all(t))
-            for t in 1:T]
+    multi = build_multi_context(nets; model, hook_factory=stamp_all, per_unit,
+                                s_base, optimizer, verbose, solver_options)
+    ctxs = multi.contexts
     sb = ctxs[1].bases === nothing ? 1.0 : ctxs[1].bases.s_base
 
     # Charge balance q[t+1] = q[t] − i[t]·Δt (soc = q_pack/qp), then the terminal
@@ -442,29 +512,23 @@ function solve_multiperiod_ivq(nets::AbstractVector, batteries::AbstractVector;
     # closure Σ i[t]·Δt = 0 is enforced term-for-term. The per-unit pack current
     # ipu maps to SI amps as ipu·ibase.
     for b in batteries
-        soc = socs[b.id]; ip = ipack[b.id]
         _, ibase = dcbases[b.id]
-        qp = b.chemistry.q_cell * b.n_parallel   # pack charge capacity (Ah)
-        for t in 1:T
-            JuMP.@constraint(model, soc[t+1] == soc[t] - dt_h * ip[t] * ibase / qp)
-        end
-        if b.soc_final !== nothing
-            JuMP.@constraint(model, soc[T+1] == b.soc_final)
-        elseif b.cyclic
-            JuMP.@constraint(model, soc[T+1] == soc[1])
-        end
+        link_device!(model, b,
+            (soc=socs[b.id], current=ipack[b.id], ibase=ibase), nothing, grid)
     end
 
     # Weight each snapshot's cost rate by the period length so the objective is a
     # horizon energy cost (generation_cost is a per-snapshot rate).
-    JuMP.@objective(model, Min, dt_h * sum(generation_cost(ctxs[t]) for t in 1:T))
+    JuMP.@objective(model, Min,
+        sum(grid[t] * generation_cost(ctxs[t]) for t in 1:T))
     foreach(enforce_kcl!, ctxs)
     JuMP.optimize!(model)
 
-    status = string(JuMP.termination_status(model))
-    solved = JuMP.primal_status(model) == JuMP.MOI.FEASIBLE_POINT
+    outcome = _solve_outcome(model)
+    status = string(outcome.termination_status)
+    solved = _publishable(outcome)
     obj = solved ? JuMP.objective_value(model) : NaN
-    snapshots = [extract_result(ctxs[t]) for t in 1:T]
+    snapshots = [_extract_result(ctxs[t], outcome) for t in 1:T]
 
     dispatch = Dict{String,NamedTuple}()
     for b in batteries
@@ -485,5 +549,6 @@ function solve_multiperiod_ivq(nets::AbstractVector, batteries::AbstractVector;
         )
     end
 
-    return MultiperiodIVQResult(status, obj, snapshots, dispatch)
+    return MultiperiodIVQResult(status, obj, snapshots, dispatch,
+                                SolveStatus(outcome))
 end

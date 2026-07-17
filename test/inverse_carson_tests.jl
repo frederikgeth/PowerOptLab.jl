@@ -41,6 +41,9 @@ end
         fit = only(result.fits)
 
         @test result.compatible_candidates == [c.id]
+        @test solve_status(result).publishable
+        @test solve_status(result).optimal
+        @test solve_diagnostics(result).compatible_count == 1
         @test fit.compatible
         @test fit.parameters ≈ truth atol=1e-4
         @test fit.jacobian_rank == 3
