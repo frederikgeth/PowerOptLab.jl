@@ -9,9 +9,10 @@ express, because state of charge couples time steps.
 
 Under the hood it uses the BMOPFTools staged API: every snapshot is built into
 one shared model with `build_opf_model(add_objective=false)`, each device's
-state of charge is linked across the snapshots, the per-snapshot generation costs
-are summed into one objective, KCL is enforced per snapshot, and the model is
-solved once.
+state of charge is linked across the snapshots, the per-snapshot generation-cost
+rates are multiplied by the corresponding [`TimeGrid`](@ref) duration and summed
+into one interval-cost objective, KCL is enforced per snapshot, and the model is
+solved once. The `dt_h` keyword is the uniform-duration shorthand.
 
 ## Worked example: battery arbitrage
 
@@ -48,6 +49,14 @@ res.dispatch["bat"].p_net   # ≈ [ +40e3, −40e3 ]  discharge then charge (W)
 res.dispatch["bat"].soc     # ≈ [ 40e3, 0.0, 40e3 ]  (Wh, cyclic)
 ```
 
+For nonuniform telemetry or tariff intervals, supply one positive duration per
+snapshot. The same duration weights both the objective rate and state update:
+
+```julia
+grid = TimeGrid([0.25, 0.75])
+res = solve_multiperiod_opf(nets, [bat]; time_grid=grid)
+```
+
 ## Multiple devices
 
 Pass any mix of [`StorageDevice`](@ref) and [`EVDevice`](@ref); each gets its own
@@ -68,3 +77,9 @@ per-period BMOPFTools result dicts (`res.snapshots`) plus each device's SI
 `p_charge`, `p_discharge`, `p_net`, `q`, and `soc` trajectories in
 `res.dispatch`. See the API reference for [`solve_multiperiod_opf`](@ref) and
 [`MultiperiodResult`](@ref).
+
+Numerical values are published only when the shared solve reaches `OPTIMAL` or
+`LOCALLY_SOLVED` with a feasible primal point. Iteration-limited, infeasible, or
+relaxed-tolerance outcomes retain their termination status and return `NaN`
+objective/trajectory values rather than presenting a candidate iterate as an
+optimum.

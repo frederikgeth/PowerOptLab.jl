@@ -91,7 +91,7 @@ Fields:
 `result.load_margin` remains a compatibility alias for
 `result.singularity_estimate`; new code should use the latter name.
 """
-struct HelmResult
+struct HelmResult <: AbstractSolveResult
     V::Dict{_Node,ComplexF64}
     w::Vector{ComplexF64}
     couplings::Vector{IdealCoupling}
@@ -113,6 +113,20 @@ end
 
 Base.propertynames(::HelmResult, private::Bool=false) =
     (fieldnames(HelmResult)..., :load_margin)
+
+function solve_status(result::HelmResult)
+    publishable = result.converged && result.status === :converged
+    _result_solve_status(string(result.status), publishable;
+        primal_status=publishable ? "FEASIBLE_POINT" : "NO_SOLUTION")
+end
+
+solve_diagnostics(result::HelmResult) =
+    (residual=result.residual, order=result.n_order,
+     pade_spread=result.pade_spread,
+     coefficient_tail_norms=result.coefficient_tail_norms,
+     coefficient_tail_ratios=result.coefficient_tail_ratios,
+     singularity_estimate=result.singularity_estimate,
+     load_margin=result.load_margin)
 
 Base.show(io::IO, r::HelmResult) =
     print(io, "HelmResult($(length(r.V)) terminals, status=$(r.status), " *

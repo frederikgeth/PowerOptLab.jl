@@ -86,7 +86,7 @@ struct _SEMeasurementSpec{Ti<:Integer}
 end
 
 """A scalar telemetry reading on one end/conductor of a named BMOPF line."""
-struct BranchMeasurement
+struct BranchMeasurement <: AbstractMeasurement
     kind::Symbol
     line::String
     side::Symbol
@@ -95,13 +95,12 @@ struct BranchMeasurement
     sigma::Float64
     function BranchMeasurement(; kind::Symbol, line::String, side::Symbol=:from,
                                terminal::String, value::Real, sigma::Real)
-        kind in (:ire, :iim, :imag, :pflow, :qflow) ||
+        kind in _BRANCH_MEASUREMENT_KINDS ||
             throw(ArgumentError("unknown branch measurement kind :$kind"))
         side in (:from, :to) || throw(ArgumentError("branch measurement side must be :from or :to"))
         isempty(line) && throw(ArgumentError("branch measurement line must be non-empty"))
         isempty(terminal) && throw(ArgumentError("branch measurement terminal must be non-empty"))
-        isfinite(value) || throw(ArgumentError("branch measurement value must be finite"))
-        isfinite(sigma) && sigma > 0 || throw(ArgumentError("branch measurement sigma must be finite and > 0"))
+        _validate_measurement_scalar(kind, value, sigma)
         new(kind, line, side, terminal, Float64(value), Float64(sigma))
     end
 end
@@ -210,7 +209,7 @@ numerically converged but underobserved estimate from failure to establish the
 exact equations.  `history` records the scaled trust-region radius, merit value,
 measurement objective, and exact-constraint norm at accepted iterates.
 """
-struct ConstrainedStateEstimationResult
+struct ConstrainedStateEstimationResult <: AbstractSolveResult
     status::Symbol
     state::Vector{Float64}
     evaluation::SEEvaluation
@@ -221,13 +220,28 @@ struct ConstrainedStateEstimationResult
     history::Vector{NamedTuple}
 end
 
+function solve_status(result::ConstrainedStateEstimationResult)
+    ok = result.status in (:converged_unique, :converged_underobserved)
+    _result_solve_status(string(result.status), ok; primal_status="NOT_APPLICABLE")
+end
+
+solve_diagnostics(result::ConstrainedStateEstimationResult) =
+    (iterations=result.iterations, constraint_rank=result.constraint_rank,
+     tangent_dimension=result.tangent_dimension,
+     observable_dimension=result.observable_dimension)
+
 """Result and per-stage diagnostics from constant-power continuation."""
-struct ContinuationStateEstimationResult
+struct ContinuationStateEstimationResult <: AbstractSolveResult
     status::Symbol
     result::ConstrainedStateEstimationResult
     alphas::Vector{Float64}
     stages::Vector{ConstrainedStateEstimationResult}
 end
+
+solve_status(result::ContinuationStateEstimationResult) = solve_status(result.result)
+solve_diagnostics(result::ContinuationStateEstimationResult) =
+    (stages=length(result.stages), alphas=copy(result.alphas),
+     final=solve_diagnostics(result.result))
 
 _se_node_index(s::SEStructure, node::TerminalID) = get(s.node_index, node, 0)
 
@@ -420,8 +434,10 @@ function SEParameters(s::SEStructure, measurements::AbstractVector=Measurement[]
     for (node, v) in s.reference_map
         fixed_by_node[s.node_index[node]] = v
     end
-    values = Float64[m.value for m in measurements]
-    sigmas = Float64[m.sigma for m in measurements]
+    all(m -> m isa AbstractMeasurement, measurements) || throw(ArgumentError(
+        "measurements must contain AbstractMeasurement values"))
+    values = Float64[measurement_value(m) for m in measurements]
+    sigmas = Float64[measurement_sigma(m) for m in measurements]
     isempty(measurements) && (values = Float64[]; sigmas = Float64[])
     powers, currents, admittances = _flatten_device_parameters(exact_devices)
     prior_indices = isnothing(prior) ? Int[] : copy(prior.indices)
@@ -490,8 +506,14 @@ function _se_parts(s::SEStructure, p::SEParameters, x::AbstractVector{<:Real})
         b[i] = real(v); b[length(s.nodes) + i] = imag(v)
     end
     u = b + s.voltage_state_jacobian * x
-    q = Vector{Float64}(s.fixed_current_state + s.current_state_jacobian * x)
     n = length(s.nodes)
+    # `fixed_current_state` was compiled from the original source phasors. Source
+    # phasors are mutable parameters, so recompute their YV contribution here;
+    # otherwise updated voltages and currents describe different network states.
+    vfixed = ComplexF64.(b[1:n] .+ im .* b[n+1:end])
+    ifixed = s.passive_pattern * vfixed
+    q = Vector{Float64}(vcat(real(ifixed), imag(ifixed)) +
+                        s.current_state_jacobian * x)
     u[1:n], u[n+1:end], q[1:n], q[n+1:end]
 end
 
@@ -499,12 +521,8 @@ function _measurement_value(spec, vr, vi, ir, ii, epsmag)
     i, j = spec.terminal, spec.reference
     dvr = vr[i] - (j == 0 ? 0.0 : vr[j])
     dvi = vi[i] - (j == 0 ? 0.0 : vi[j])
-    spec.kind === :vr   && return dvr
-    spec.kind === :vi   && return dvi
-    spec.kind === :vmag && return sqrt(dvr^2 + dvi^2 + epsmag^2)
-    spec.kind === :pinj && return dvr * ir[i] + dvi * ii[i]
-    spec.kind === :qinj && return dvi * ir[i] - dvr * ii[i]
-    error("unsupported compiled measurement kind $(spec.kind)")
+    measurement_prediction(spec.kind, dvr, dvi; ir=ir[i], ii=ii[i],
+                           magnitude_epsilon=epsmag)
 end
 
 function _branch_measurement_value(spec::_SEBranchMeasurementSpec, vr, vi)
@@ -515,13 +533,9 @@ function _branch_measurement_value(spec::_SEBranchMeasurementSpec, vr, vi)
         br += real(y) * vr[node] - imag(y) * vi[node]
         bi += imag(y) * vr[node] + real(y) * vi[node]
     end
-    spec.kind === :ire && return br
-    spec.kind === :iim && return bi
-    spec.kind === :imag && return hypot(br, bi)
-    vrr, vii = vr[spec.conductor], vi[spec.conductor]
-    spec.kind === :pflow && return vrr * br + vii * bi
-    spec.kind === :qflow && return vii * br - vrr * bi
-    error("unsupported branch measurement kind $(spec.kind)")
+    vrr = spec.conductor == 0 ? 0.0 : vr[spec.conductor]
+    vii = spec.conductor == 0 ? 0.0 : vi[spec.conductor]
+    measurement_prediction(spec.kind, vrr, vii; ir=br, ii=bi)
 end
 
 function _branch_measurement_jacobian(spec::_SEBranchMeasurementSpec, E, vr, vi)
@@ -951,7 +965,7 @@ are recovered directly from the final Hachtel system, in the same row order as
 `evaluation.constraints`; they are useful for ranking suspicious exact
 zero-injection or device equations.
 """
-struct SparseConstrainedStateEstimationResult
+struct SparseConstrainedStateEstimationResult <: AbstractSolveResult
     status::Symbol
     state::Vector{Float64}
     evaluation::SEEvaluation
@@ -962,6 +976,17 @@ struct SparseConstrainedStateEstimationResult
     constraint_multipliers::Vector{Float64}
     history::Vector{NamedTuple}
 end
+
+function solve_status(result::SparseConstrainedStateEstimationResult)
+    ok = result.status in (:converged_unique, :converged_underobserved)
+    _result_solve_status(string(result.status), ok; primal_status="NOT_APPLICABLE")
+end
+
+solve_diagnostics(result::SparseConstrainedStateEstimationResult) =
+    (iterations=result.iterations, constraint_rank=result.constraint_rank,
+     tangent_dimension=result.tangent_dimension,
+     observable_dimension=result.observable_dimension,
+     multipliers=copy(result.constraint_multipliers))
 
 function _se_hachtel_step(H, C, r, c, scale, damping)
     m, n, q = size(H, 1), size(H, 2), size(C, 1)
@@ -1208,11 +1233,20 @@ derived_covariance(s::SEStructure, p::SEParameters, x::AbstractVector{<:Real}, j
 # ── time-series estimation ──────────────────────────────────────────────────
 
 """Outcome of sequential estimation over one unchanged compiled topology."""
-struct TimeSeriesStateEstimationResult
+struct TimeSeriesStateEstimationResult <: AbstractSolveResult
     status::Symbol
     snapshots::Vector{Any}
     completed_snapshots::Int
 end
+
+function solve_status(result::TimeSeriesStateEstimationResult)
+    ok = result.status == :converged
+    _result_solve_status(string(result.status), ok; primal_status="NOT_APPLICABLE")
+end
+
+solve_diagnostics(result::TimeSeriesStateEstimationResult) =
+    (completed_snapshots=result.completed_snapshots,
+     requested_snapshots=length(result.snapshots))
 
 function _se_previous_state_prior(x, sigma)
     n = length(x)

@@ -81,6 +81,10 @@ using Ipopt
 using LinearAlgebra
 using SparseArrays
 
+# Shared validation and solver-result contracts.
+include("contracts.jl")
+include("interfaces.jl")
+
 # Component models — new network elements stamped via model_hook! / solution_hook!
 include("components/devices.jl")
 include("components/advanced_inverter.jl")
@@ -99,8 +103,18 @@ include("problems/operating_envelope.jl")
 include("algorithms/pade.jl")
 include("algorithms/helm.jl")
 
+# Shared extension interfaces
+export AbstractDevice, AbstractMeasurement, AbstractSolveResult
+export TimeGrid, MultiContext, build_multi_context
+export SolveStatus, solve_status, solve_diagnostics
+export device_id, validate_device, stamp_device!, link_device!, extract_device
+export measurement_kind, measurement_value, measurement_sigma, measurement_prediction
+
 # Devices
 export StorageDevice, EVDevice
+
+# Shared solve-result contract
+export SolveOutcome
 
 # Multi-period OPF
 export solve_multiperiod_opf, MultiperiodResult

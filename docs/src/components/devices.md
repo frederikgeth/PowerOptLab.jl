@@ -8,6 +8,11 @@ described by an SI-valued struct; the package handles the per-unit scaling, the
 current-injection stamping into the engine's KCL, and the inter-temporal
 state-of-charge linking.
 
+All package devices subtype [`AbstractDevice`](@ref) and use the same lifecycle:
+[`validate_device`](@ref), [`stamp_device!`](@ref), [`link_device!`](@ref), and
+[`extract_device`](@ref). New experimental devices can implement that interface
+without adding another type switch to the multi-period builder.
+
 ## Model
 
 Per snapshot, a device contributes a per-phase current injection `(cr, ci)` added
@@ -30,6 +35,17 @@ E_{t+1} = E_t + \left(\eta^{\text{c}}\, p^{\text{c}}_t - \frac{p^{\text{d}}_t}{\
 Round-trip loss (``\eta < 1``) makes simultaneous charging and discharging
 suboptimal, so the split stays physical without an explicit complementarity
 constraint.
+
+This is an economic, not algebraic, exclusion: at unit efficiency or under
+unusual negative-price objectives the split can be degenerate. Studies that need
+an explicit operating-mode guarantee should add a complementarity/disjunctive
+mode formulation rather than interpreting both nonnegative variables as a
+certified physical mode.
+
+The solve validates finite nonnegative power limits, ordered energy bounds,
+efficiencies in `(0, 1]`, terminal existence in every snapshot, and an EV
+availability entry for every interval before constructing the optimization
+model.
 
 ## Battery / storage
 

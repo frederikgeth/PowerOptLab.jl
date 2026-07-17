@@ -37,7 +37,7 @@ inter-temporal state of charge. Powers are SI watts, energies SI watt-hours.
 - `energy_final=nothing` — if set, pin the terminal energy to this value (Wh),
   overriding `cyclic`.
 """
-Base.@kwdef struct StorageDevice
+Base.@kwdef struct StorageDevice <: AbstractDevice
     id::String
     bus::String
     phase_terminals::Vector{String} = ["1"]
@@ -77,7 +77,7 @@ for bidirectional (V2G) charging; the default `0.0` gives unidirectional (V1G).
 - `phase_terminals`, `neutral`, `energy_min`, `q_min`, `q_max`,
   `eff_charge`, `eff_discharge` — as [`StorageDevice`](@ref).
 """
-Base.@kwdef struct EVDevice
+Base.@kwdef struct EVDevice <: AbstractDevice
     id::String
     bus::String
     phase_terminals::Vector{String} = ["1"]
@@ -112,9 +112,90 @@ _dev_einit(d) = d.energy_init
 _dev_effc(d) = d.eff_charge
 _dev_effd(d) = d.eff_discharge
 
+function _validate_connection(id, bus, phases, neutral, nets)
+    isempty(id) && throw(ArgumentError("device id must not be empty"))
+    isempty(bus) && throw(ArgumentError("device '$id' bus must not be empty"))
+    isempty(phases) && throw(ArgumentError("device '$id' needs at least one phase terminal"))
+    allunique(phases) || throw(ArgumentError("device '$id' phase terminals must be unique"))
+    neutral in phases && throw(ArgumentError(
+        "device '$id' neutral cannot also be a phase terminal"))
+    for (t, net) in enumerate(nets)
+        buses = get(net, "bus", Dict())
+        haskey(buses, bus) || throw(ArgumentError(
+            "snapshot $t: device '$id' bus '$bus' not found"))
+        terminals = Set(String.(get(buses[bus], "terminal_names", String[])))
+        for phase in phases
+            phase in terminals || throw(ArgumentError(
+                "snapshot $t: device '$id' phase terminal '$phase' not found at bus '$bus'"))
+        end
+        neutral === nothing || neutral in terminals || throw(ArgumentError(
+            "snapshot $t: device '$id' neutral '$neutral' not found at bus '$bus'"))
+    end
+    return nothing
+end
+
+function _validate_storage_values(d)
+    values = (("p_charge_max", d.p_charge_max),
+              ("p_discharge_max", d.p_discharge_max),
+              ("energy_min", d.energy_min),
+              ("energy_max", d.energy_max),
+              ("energy_init", d.energy_init),
+              ("q_min", d.q_min), ("q_max", d.q_max),
+              ("eff_charge", d.eff_charge), ("eff_discharge", d.eff_discharge))
+    all(isfinite(value) for (_, value) in values) || throw(ArgumentError(
+        "device '$(d.id)' power, energy, reactive-power, and efficiency values must be finite"))
+    d.p_charge_max >= 0 || throw(ArgumentError(
+        "device '$(d.id)' p_charge_max must be >= 0"))
+    d.p_discharge_max >= 0 || throw(ArgumentError(
+        "device '$(d.id)' p_discharge_max must be >= 0"))
+    d.q_min <= d.q_max || throw(ArgumentError(
+        "device '$(d.id)' requires q_min <= q_max"))
+    0 <= d.energy_min <= d.energy_init <= d.energy_max || throw(ArgumentError(
+        "device '$(d.id)' requires 0 <= energy_min <= energy_init <= energy_max"))
+    0 < d.eff_charge <= 1 || throw(ArgumentError(
+        "device '$(d.id)' eff_charge must lie in (0, 1]"))
+    0 < d.eff_discharge <= 1 || throw(ArgumentError(
+        "device '$(d.id)' eff_discharge must lie in (0, 1]"))
+    return nothing
+end
+
+function validate_device(d::StorageDevice, nets; periods::Integer=length(nets))
+    periods == length(nets) || throw(ArgumentError(
+        "period count $periods does not match $(length(nets)) network snapshots"))
+    _validate_connection(d.id, d.bus, d.phase_terminals, d.neutral, nets)
+    _validate_storage_values(d)
+    if d.energy_final !== nothing
+        isfinite(d.energy_final) && d.energy_min <= d.energy_final <= d.energy_max ||
+            throw(ArgumentError(
+                "device '$(d.id)' energy_final must be finite and within its energy bounds"))
+    end
+    return nothing
+end
+
+function validate_device(d::EVDevice, nets; periods::Integer=length(nets))
+    periods == length(nets) || throw(ArgumentError(
+        "period count $periods does not match $(length(nets)) network snapshots"))
+    _validate_connection(d.id, d.bus, d.phase_terminals, d.neutral, nets)
+    _validate_storage_values(d)
+    length(d.available) == periods || throw(ArgumentError(
+        "EV '$(d.id)' availability must contain exactly $periods entries"))
+    isfinite(d.departure_energy) && d.energy_min <= d.departure_energy <= d.energy_max ||
+        throw(ArgumentError(
+            "EV '$(d.id)' departure_energy must be finite and within its energy bounds"))
+    dp = d.departure_period === nothing ? periods : d.departure_period
+    1 <= dp <= periods || throw(ArgumentError(
+        "EV '$(d.id)': departure_period=$(d.departure_period) out of range 1:$periods"))
+    return nothing
+end
+
+_validate_device(d::Union{StorageDevice,EVDevice}, periods, nets) =
+    validate_device(d, nets; periods)
+
 # Per-period availability: batteries are always controllable; EVs follow their mask.
 _dev_available(d::StorageDevice, t::Int) = true
 _dev_available(d::EVDevice, t::Int) = t <= length(d.available) ? d.available[t] : false
+_device_active(d::AbstractDevice, t::Int) = true
+_device_active(d::EVDevice, t::Int) = _dev_available(d, t)
 
 # Handle returned by `_stamp_port!`: the JuMP variables/expressions a snapshot
 # exposes for state-of-charge linking and result extraction. Powers are in the
@@ -197,3 +278,7 @@ function _stamp_port!(ctx, dev; active::Bool=true)
 
     return PortHandle(pc, pd, P, Q)
 end
+
+stamp_device!(ctx, device::Union{StorageDevice,EVDevice}; period::Integer=1,
+              active::Bool=_device_active(device, period)) =
+    _stamp_port!(ctx, device; active)

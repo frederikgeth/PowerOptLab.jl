@@ -113,14 +113,21 @@ Result of [`solve_parameter_estimation`](@ref).
 - `snapshots::Vector{Dict{String,Any}}` — per-snapshot `extract_result` (SI), the
   fitted network state at the estimated parameters.
 """
-struct ParameterEstimationResult
+struct ParameterEstimationResult <: AbstractSolveResult
     termination_status::String
     objective::Float64
     line_length::Dict{String,Float64}
     tap::Dict{String,Float64}
     residual_rms::Float64
     snapshots::Vector{Dict{String,Any}}
+    solve::SolveStatus
 end
+
+solve_status(result::ParameterEstimationResult) = result.solve
+
+solve_diagnostics(result::ParameterEstimationResult) =
+    (objective=result.objective, residual_rms=result.residual_rms,
+     periods=length(result.snapshots))
 
 # Per-bus voltage base (volts) — 1.0 in SI mode, v_base[bus] in per-unit mode.
 _pe_vbase(ctx, bus) = ctx.bases === nothing ? 1.0 : ctx.bases.v_base[bus]
@@ -223,9 +230,12 @@ function solve_parameter_estimation(nets::AbstractVector, measurements::Abstract
     T >= 1 || throw(ArgumentError("need at least one snapshot"))
     length(measurements) == T ||
         throw(ArgumentError("measurements must be parallel to nets (got $(length(measurements)) vs $T)"))
+    all(ms -> all(m -> m isa Measurement, ms), measurements) || throw(ArgumentError(
+        "each measurement snapshot must contain only Measurement values"))
     (isempty(lines) && isempty(taps)) &&
         throw(ArgumentError("nothing to estimate: supply at least one CalibLine or CalibTap"))
     objective in (:wls, :wlav) || throw(ArgumentError("objective must be :wls or :wlav, got :$objective"))
+    isfinite(s_base) && s_base > 0 || throw(ArgumentError("s_base must be finite and > 0"))
     allunique([[l.id for l in lines]; [t.id for t in taps]]) ||
         throw(ArgumentError("CalibLine/CalibTap ids must be unique"))
 
@@ -233,9 +243,7 @@ function solve_parameter_estimation(nets::AbstractVector, measurements::Abstract
 
     model = JuMP.Model(optimizer)
     verbose || JuMP.set_silent(model)
-    for (name, value) in solver_options
-        JuMP.set_attribute(model, string(name), value)
-    end
+    _set_solver_options!(model, solver_options)
 
     # Shared unknown: one free length per uncertain line (dimensionless, SI).
     ell = Dict(l.id => JuMP.@variable(model, lower_bound = l.length_min,
@@ -255,7 +263,7 @@ function solve_parameter_estimation(nets::AbstractVector, measurements::Abstract
         # measurement, added to KCL so those buses' voltages stay free to fit.
         inj = Dict{Tuple{String,String},Tuple{Any,Any}}()
         for meas in measurements[t]
-            meas.kind in (:pinj, :qinj) || continue
+            measurement_kind(meas) in (:pinj, :qinj) || continue
             key = (meas.bus, meas.terminal); haskey(inj, key) && continue
             cr = JuMP.@variable(m, base_name = "peinj_r_$(meas.bus)_$(meas.terminal)_$t")
             ci = JuMP.@variable(m, base_name = "peinj_i_$(meas.bus)_$(meas.terminal)_$t")
@@ -276,28 +284,31 @@ function solve_parameter_estimation(nets::AbstractVector, measurements::Abstract
                 dvr = JuMP.@expression(m, vr[(b,c)] - vr[(b,neutral)])
                 dvi = JuMP.@expression(m, vi[(b,c)] - vi[(b,neutral)])
             end
-            if meas.kind == :vmag
-                vm = JuMP.@variable(m, lower_bound = 0.0, start = meas.value / _pe_vbase(ctx,b),
+            if measurement_kind(meas) == :vmag
+                vm = JuMP.@variable(m, lower_bound = 0.0,
+                                    start = measurement_value(meas) / _pe_vbase(ctx,b),
                                     base_name = "pevm_$(b)_$(c)_$t")
                 JuMP.@constraint(m, vm^2 == dvr^2 + dvi^2)
-                h = JuMP.@expression(m, vm * _pe_vbase(ctx, b))       # → volts
-                push!(probes, (meas.value, meas.sigma, h)); push!(vprobes, (meas.value, h))
-            elseif meas.kind in (:pinj, :qinj)
+                h_model = measurement_prediction(measurement_kind(meas), dvr, dvi;
+                                                 magnitude=vm)
+                h = JuMP.@expression(m, h_model * _pe_vbase(ctx, b))  # → volts
+                push!(probes, (measurement_value(meas), measurement_sigma(meas), h))
+                push!(vprobes, (measurement_value(meas), h))
+            elseif measurement_kind(meas) in (:pinj, :qinj)
                 cr, ci = inj[(b,c)]
-                pq = meas.kind == :pinj ?
-                    JuMP.@expression(m, dvr*cr + dvi*ci) :
-                    JuMP.@expression(m, dvi*cr - dvr*ci)
+                pq = measurement_prediction(measurement_kind(meas), dvr, dvi;
+                                            ir=cr, ii=ci)
                 h = JuMP.@expression(m, pq * sb)                       # → W / var
-                push!(probes, (meas.value, meas.sigma, h))
+                push!(probes, (measurement_value(meas), measurement_sigma(meas), h))
             else
-                throw(ArgumentError("unknown measurement kind :$(meas.kind)"))
+                throw(ArgumentError("unknown measurement kind :$(measurement_kind(meas))"))
             end
         end
     end
 
-    ctxs = [build_opf_model(nets[t]; model = model, per_unit = per_unit, s_base = s_base,
-                            add_objective = false, model_hook! = stamp(t))
-            for t in 1:T]
+    multi = build_multi_context(nets; model, hook_factory=stamp, per_unit,
+                                s_base, optimizer, verbose, solver_options)
+    ctxs = multi.contexts
 
     # Couple each transformer's native free tap equal across all snapshots.
     for tp in taps
@@ -325,8 +336,9 @@ function solve_parameter_estimation(nets::AbstractVector, measurements::Abstract
     foreach(enforce_kcl!, ctxs)
     JuMP.optimize!(model)
 
-    status = string(JuMP.termination_status(model))
-    solved = JuMP.primal_status(model) == JuMP.MOI.FEASIBLE_POINT
+    outcome = _solve_outcome(model)
+    status = string(outcome.termination_status)
+    solved = _publishable(outcome)
     obj = solved ? JuMP.objective_value(model) : NaN
 
     line_length = Dict(id => (solved ? JuMP.value(v) : NaN) for (id, v) in ell)
@@ -339,6 +351,7 @@ function solve_parameter_estimation(nets::AbstractVector, measurements::Abstract
         NaN
     end
 
-    snapshots = [extract_result(ctxs[t]) for t in 1:T]
-    return ParameterEstimationResult(status, obj, line_length, tap, residual_rms, snapshots)
+    snapshots = [_extract_result(ctxs[t], outcome) for t in 1:T]
+    return ParameterEstimationResult(status, obj, line_length, tap, residual_rms,
+                                     snapshots, SolveStatus(outcome))
 end
