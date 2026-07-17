@@ -28,12 +28,12 @@
 # term-by-term and therefore exactly in the summed solution.
 #
 # The series is evaluated at s = 1 by Padé analytic continuation (Wynn epsilon,
-# powerflow/pade.jl). By Stahl's theorem the diagonal Padé sequence converges
-# wherever the power-flow solution exists and PROVABLY fails to converge where
-# it does not — so "no solution" (voltage collapse) is a certified outcome,
-# not a solver failure. Because the embedding scales the loads, the series'
-# radius of convergence in s IS the collapse loading multiplier; the
-# Domb–Sykes coefficient-ratio extrapolation reports it as `load_margin`.
+# powerflow/pade.jl). Finite-order Padé spread, physical mismatch, and
+# coefficient-tail growth are numerical diagnostics: they do not by themselves
+# prove non-existence of a power-flow solution. A Domb–Sykes coefficient-ratio
+# extrapolation is reported as a `singularity_estimate`; it needs validation
+# against continuation or an analytically known system before being interpreted
+# as a voltage-collapse loading multiplier.
 #
 # v1 scope: constant-power and constant-impedance load parts (incl. their ZIP
 # fractions). Constant-current fractions and non-integer exponential loads are
@@ -71,16 +71,25 @@ Fields:
                   (diagnostic; row order = non-fixed nodes then couplings).
 - `converged`   — `true` iff the s = 1 nonlinear current mismatch is within
                   tolerance.
-- `status`      — `:converged` | `:diverged_no_solution` (certified collapse /
-                  no power-flow solution) | `:max_order_reached`.
+- `status`      — `:converged` | `:series_diverged` (the finite coefficient
+                  tail is growing) | `:max_order_reached`.
 - `residual`    — max |current mismatch| (A) over non-source nodes and
                   constraint rows, evaluated at the returned solution.
 - `n_order`     — highest series order computed.
-- `load_margin` — Domb–Sykes estimate of the collapse loading multiplier (the
-                  series' radius of convergence in the load-scaling embedding):
-                  `λ* > 1` ⇒ the present loading is `1/λ*` of collapse;
-                  `λ* < 1` explains a `:diverged_no_solution`. `NaN` when the
-                  series is too short/featureless to extrapolate.
+- `pade_spread` — absolute difference between the last two Wynn-epsilon Padé
+                  estimates for each row of `coeffs` (node rows, then coupling
+                  rows). Values have the units of their corresponding row.
+- `coefficient_tail_norms` — max-norm of the final coefficient orders used by
+                  the status classifier.
+- `coefficient_tail_ratios` — adjacent ratios of those tail norms. A tail with
+                  every ratio above one is classified as `:series_diverged`.
+- `singularity_estimate` — heuristic Domb–Sykes estimate of the nearest
+                  coefficient-dominating singularity in the loading parameter.
+                  It is not a certified loading margin. `NaN` means the series
+                  is too short or featureless to extrapolate.
+
+`result.load_margin` remains a compatibility alias for
+`result.singularity_estimate`; new code should use the latter name.
 """
 struct HelmResult <: AbstractSolveResult
     V::Dict{_Node,ComplexF64}
@@ -91,8 +100,19 @@ struct HelmResult <: AbstractSolveResult
     status::Symbol
     residual::Float64
     n_order::Int
-    load_margin::Float64
+    pade_spread::Vector{Float64}
+    coefficient_tail_norms::Vector{Float64}
+    coefficient_tail_ratios::Vector{Float64}
+    singularity_estimate::Float64
 end
+
+function Base.getproperty(r::HelmResult, name::Symbol)
+    name === :load_margin && return getfield(r, :singularity_estimate)
+    getfield(r, name)
+end
+
+Base.propertynames(::HelmResult, private::Bool=false) =
+    (fieldnames(HelmResult)..., :load_margin)
 
 function solve_status(result::HelmResult)
     publishable = result.converged && result.status === :converged
@@ -102,12 +122,16 @@ end
 
 solve_diagnostics(result::HelmResult) =
     (residual=result.residual, order=result.n_order,
+     pade_spread=result.pade_spread,
+     coefficient_tail_norms=result.coefficient_tail_norms,
+     coefficient_tail_ratios=result.coefficient_tail_ratios,
+     singularity_estimate=result.singularity_estimate,
      load_margin=result.load_margin)
 
 Base.show(io::IO, r::HelmResult) =
     print(io, "HelmResult($(length(r.V)) terminals, status=$(r.status), " *
               "order=$(r.n_order), residual=$(round(r.residual; sigdigits=3)) A, " *
-              "load_margin=$(round(r.load_margin; sigdigits=4)))")
+              "singularity_estimate=$(round(r.singularity_estimate; sigdigits=4)))")
 
 # One constant-power sub-load in the recursion: endpoint positions in the
 # unknown vector (0 = fixed/earth endpoint, with `v0p`/`v0n` carrying the
@@ -232,17 +256,15 @@ function _helm_floating_error(aug::AugYbusResult, fixed::Dict{Int,ComplexF64})
     end
 end
 
-# ── load-margin estimate (Domb–Sykes) ────────────────────────────────────────
+# ── coefficient diagnostics (Domb–Sykes + classifier tail) ─────────────────
 
-# The embedding scales all loads by s, so the series' radius of convergence is
-# the collapse loading multiplier λ*. Domb–Sykes: the coefficient ratios of a
-# series dominated by an algebraic singularity at λ* behave as
-#   |c[k]| / |c[k−1]|  ≈  (1/λ*)·(1 + b/k),
-# so a linear fit of the tail ratios against 1/k extrapolates (k → ∞) to 1/λ*.
-# Returns the minimum λ* over node components with a usable tail; NaN when the
-# series is too short or featureless (e.g. constant-Z-only loading, where the
-# response is entire-ish and ratios carry no singularity signal).
-function _helm_load_margin(coeffs::AbstractMatrix{ComplexF64}, n_nodes::Int)
+# Domb–Sykes: when a component is dominated by an algebraic singularity at λ,
+# its coefficient ratios behave as
+#   |c[k]| / |c[k−1]|  ≈  (1/λ)·(1 + b/k).
+# A finite tail can be affected by other real/complex singularities and
+# numerical noise, so this is a heuristic singularity estimate, not a collapse
+# certificate or a guaranteed loading margin.
+function _helm_singularity_estimate(coeffs::AbstractMatrix{ComplexF64}, n_nodes::Int)
     N = size(coeffs, 2) - 1          # highest order
     N < 8 && return NaN
     λmin = Inf
@@ -270,6 +292,16 @@ function _helm_load_margin(coeffs::AbstractMatrix{ComplexF64}, n_nodes::Int)
     isfinite(λmin) ? λmin : NaN
 end
 
+function _helm_tail_diagnostics(coeffs::AbstractMatrix{ComplexF64})
+    norms = [maximum(abs, view(coeffs, :, j); init=0.0)
+             for j in axes(coeffs, 2)]
+    first_order = max(firstindex(norms), lastindex(norms) - 6)
+    tail_norms = Float64.(norms[first_order:end])
+    tail_ratios = [tail_norms[j] / max(tail_norms[j-1], 1e-300)
+                   for j in 2:length(tail_norms)]
+    tail_norms, tail_ratios
+end
+
 # ── the solver ───────────────────────────────────────────────────────────────
 
 """
@@ -280,10 +312,11 @@ Solve the 4-wire multiphase power flow of `net` with the Holomorphic Embedding
 Load-flow Method on the augmented nodal admittance matrix.
 
 Deterministic and non-iterative: no initial guess, one LU factorization for
-the germ and every series order. Either returns the operational power-flow
-solution (the branch continuously connected to the no-load state) or certifies
-that none exists (`status = :diverged_no_solution` — voltage collapse), with
-the estimated collapse loading multiplier in `load_margin`.
+the germ and every series order. A converged result is the operational branch
+continuously connected to the no-load state. A non-converged result reports
+whether its finite coefficient tail grew (`:series_diverged`) or merely
+exhausted the requested order (`:max_order_reached`); neither is a proof that
+no power-flow solution exists.
 
 Keywords:
 - `switches`, `ideal_xfmrs` — forwarded to `ybus_augmented`;
@@ -429,8 +462,9 @@ function helm_series(net::Dict{String,Any}; config=_DEFAULT_CONFIG,
 
     # ── Padé evaluation at s = 1, per component ──────────────────────────────
     vals = Vector{ComplexF64}(undef, nkeep)
+    pade_spread = Vector{Float64}(undef, nkeep)
     for i in 1:nkeep
-        vals[i], _ = _wynn_epsilon(cumsum(Cmat[i, :]))
+        vals[i], pade_spread[i] = _wynn_epsilon(cumsum(Cmat[i, :]))
     end
 
     # ── assemble the full voltage state ──────────────────────────────────────
@@ -476,24 +510,22 @@ function helm_series(net::Dict{String,Any}; config=_DEFAULT_CONFIG,
     end
     converged = residual <= tol * Iscale
 
-    # ── status taxonomy ──────────────────────────────────────────────────────
+    # ── status taxonomy + auditable coefficient diagnostics ─────────────────
+    coefficient_tail_norms, coefficient_tail_ratios =
+        _helm_tail_diagnostics(Cmat)
     status = if converged
         :converged
     else
-        # Persistently growing coefficients ⇒ radius of convergence < 1 ⇒ the
-        # s = 1 problem lies beyond the solvable branch: certified no-solution.
-        nc = length(coeffs)
-        tail = max(2, nc - 5):nc
-        ratios = [maximum(abs, coeffs[t]; init=0.0) /
-                  max(maximum(abs, coeffs[t-1]; init=0.0), 1e-300) for t in tail]
-        (!isempty(ratios) && minimum(ratios) > 1.0) ? :diverged_no_solution :
-                                                      :max_order_reached
+        (!isempty(coefficient_tail_ratios) &&
+         all(>(1.0), coefficient_tail_ratios)) ? :series_diverged :
+                                                 :max_order_reached
     end
 
-    load_margin = _helm_load_margin(Cmat, nU)
+    singularity_estimate = _helm_singularity_estimate(Cmat, nU)
 
     HelmResult(Vdict, w, aug.couplings, Cmat, converged, status,
-               residual, n_order, load_margin)
+               residual, n_order, pade_spread, coefficient_tail_norms,
+               coefficient_tail_ratios, singularity_estimate)
 end
 
 # ── result-dict wrapper ──────────────────────────────────────────────────────
@@ -508,19 +540,20 @@ result dictionary (SI units, same `"bus"` shape as the OPF results, compatible
 with `write_result`/`read_result`).
 
 Top-level keys:
-- `"termination_status"` — `"HELM_CONVERGED"` | `"HELM_NO_SOLUTION"` (certified
-  voltage collapse: no power-flow solution exists at this loading) |
-  `"HELM_MAX_ORDER"` (series order exhausted before the tolerance was met —
-  retry with a larger `max_order`).
+- `"termination_status"` — `"HELM_CONVERGED"` |
+  `"HELM_SERIES_DIVERGED"` (the computed coefficient tail is growing) |
+  `"HELM_MAX_ORDER"` (series order exhausted before the tolerance was met).
+  Neither non-converged status is a proof of power-flow non-existence.
 - `"feasible"` — `true` iff converged.
 - `"solve_time"` — wall-clock seconds.
 - `"bus"` — `bus_id => terminal => {vr, vi, vm [V], va [rad]}`. NaN-filled
-  when no solution exists (the standard infeasible convention).
+  when HELM does not converge (the standard infeasible convention).
 - `"coupling"` — `id => conductor => {kind, ir, ii [A], im [A]}`: the PHYSICAL
   current through each ideal coupling (closed-switch conductor with
   `switches = :constrain`, ideal-transformer winding core).
-- `"helm"` — diagnostics: `order`, `residual` (A), `load_margin` (collapse
-  loading multiplier, NaN if inestimable), `series_tail_norm`.
+- `"helm"` — diagnostics: `order`, `residual` (A), raw `pade_spread`,
+  `coefficient_tail_norms`, `coefficient_tail_ratios`, and the heuristic
+  `singularity_estimate`. `load_margin` is retained as a compatibility alias.
 """
 function solve_pf_helm(net::Dict{String,Any}; config=_DEFAULT_CONFIG,
                        switches::Symbol=:alias, ideal_xfmrs::Symbol=:constrain,
@@ -551,7 +584,7 @@ function solve_pf_helm(net::Dict{String,Any}; config=_DEFAULT_CONFIG,
     end
 
     status = hr.status === :converged            ? "HELM_CONVERGED" :
-             hr.status === :diverged_no_solution ? "HELM_NO_SOLUTION" :
+             hr.status === :series_diverged      ? "HELM_SERIES_DIVERGED" :
                                                    "HELM_MAX_ORDER"
 
     Dict{String,Any}(
@@ -563,7 +596,11 @@ function solve_pf_helm(net::Dict{String,Any}; config=_DEFAULT_CONFIG,
         "helm" => Dict{String,Any}(
             "order"            => hr.n_order,
             "residual"         => hr.residual,
-            "load_margin"      => hr.load_margin,
+            "pade_spread"      => copy(hr.pade_spread),
+            "coefficient_tail_norms" => copy(hr.coefficient_tail_norms),
+            "coefficient_tail_ratios" => copy(hr.coefficient_tail_ratios),
+            "singularity_estimate" => hr.singularity_estimate,
+            "load_margin"      => hr.singularity_estimate,
             "series_tail_norm" => maximum(abs, view(hr.coeffs, :, size(hr.coeffs, 2));
                                           init=0.0),
         ),

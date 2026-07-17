@@ -9,9 +9,9 @@ engine's admittance-matrix primitives) in a custom loop.
 
 - [**HELM power flow**](helm.md) — the Holomorphic Embedding Load-flow Method: a
   non-iterative 4-wire power flow that expands each voltage as a power series in
-  a load-scaling parameter and evaluates it by Padé analytic continuation, so
-  voltage collapse is a *certified* outcome (Stahl's theorem) and the loading
-  margin falls out of every solve.
+  a load-scaling parameter and evaluates it by Padé analytic continuation, with
+  physical-residual, Padé-spread, coefficient-tail, and heuristic singularity
+  diagnostics exposed for independent validation.
 
 ## Candidates not yet built
 

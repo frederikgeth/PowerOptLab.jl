@@ -5,15 +5,17 @@ on the **Holomorphic Embedding Load-flow Method** (HELM): [`solve_pf_helm`](@ref
 (standard result dictionary) and [`helm_series`](@ref) (programmatic
 [`HelmResult`](@ref)). It is a *bespoke algorithm* — a new solution method built
 on the BMOPFTools engine's public admittance-matrix API — and complements the
-engine's Ipopt-based `solve_pf`: no initial guess, no convergence tuning, and —
-uniquely — a **certificate** when no power-flow solution exists, plus an estimate
-of the distance to voltage collapse from every solve.
+engine's Ipopt-based `solve_pf`: no initial guess and no convergence tuning.
+It reports physical mismatch, Padé spread, and coefficient-tail diagnostics;
+finite-order divergence is deliberately not presented as a proof that no
+power-flow solution exists.
 
 ```julia
 res = solve_pf_helm(net)
-res["termination_status"]        # "HELM_CONVERGED" | "HELM_NO_SOLUTION" | "HELM_MAX_ORDER"
+res["termination_status"]        # "HELM_CONVERGED" | "HELM_SERIES_DIVERGED" | "HELM_MAX_ORDER"
 res["bus"]["lb"]["a"]["vm"]      # voltage magnitude (V)
-res["helm"]["load_margin"]       # collapse loading multiplier (see below)
+res["helm"]["pade_spread"]       # last-two Padé differences, one per series row
+res["helm"]["singularity_estimate"] # heuristic Domb–Sykes diagnostic
 ```
 
 ## The augmented (bordered) admittance matrix
@@ -89,32 +91,35 @@ The series is evaluated at ``s = 1`` by **Padé analytic continuation** (Wynn's
 epsilon algorithm). Convergence is judged *physically*: the returned voltages
 are plugged back into the full nonlinear current-mismatch equations.
 
-## Certified non-existence and the loading margin
+## Convergence and singularity diagnostics
 
-By Stahl's theorem the diagonal Padé sequence converges wherever the power-flow
-solution exists and provably fails to converge where it does not. HELM
-therefore has a three-way outcome, not a "diverged, try another start":
+The implementation makes one positive claim: `HELM_CONVERGED` means the
+Padé-evaluated state satisfies the full nonlinear current mismatch tolerance on
+the no-load-connected branch. Its other statuses describe the finite series
+that was computed; they do not certify non-existence:
 
 | `termination_status` | meaning |
 |---|---|
 | `HELM_CONVERGED` | the operational solution (the branch continuously connected to no-load) |
-| `HELM_NO_SOLUTION` | **certified voltage collapse** — no power-flow solution exists at this loading |
-| `HELM_MAX_ORDER` | series order exhausted; retry with a larger `max_order` |
+| `HELM_SERIES_DIVERGED` | nonlinear mismatch failed and every exposed coefficient-tail norm ratio exceeds one |
+| `HELM_MAX_ORDER` | nonlinear mismatch failed without the growing-tail classification; retrying with a larger `max_order` may help |
 
-Because the embedding parameter scales the loads, the series' **radius of
-convergence is the collapse loading multiplier** ``\lambda^*``. It is estimated
-from the coefficient-ratio tail (Domb–Sykes extrapolation) and reported as
-`load_margin` on every solve:
+The raw diagnostics are available in both APIs:
 
-- ``\lambda^* = 2`` — the present operating point is at half its collapse
-  loading;
-- ``\lambda^* < 1`` — explains a `HELM_NO_SOLUTION` (the solvable range ends
-  before ``s = 1``);
-- `NaN` — the series is too short or featureless to extrapolate (typically
-  very light or constant-impedance-only loading, where the margin is far away).
+- `pade_spread`: absolute difference between the final two Wynn-epsilon Padé
+  estimates for every coefficient row;
+- `coefficient_tail_norms`: max-norm of each final coefficient order;
+- `coefficient_tail_ratios`: adjacent ratios used by `HELM_SERIES_DIVERGED`;
+- `singularity_estimate`: Domb–Sykes extrapolation of the nearest
+  coefficient-dominating singularity in ``s``.
 
-So every routine HELM power flow doubles as a per-feeder distance-to-collapse
-measurement — no continuation power flow required.
+On a simple radial constant-power saddle-node, `singularity_estimate` tracks
+the analytic collapse multiplier. On a general network, another real or
+complex singularity, finite-order effects, or cancellation can dominate the
+coefficients. Treat it as a heuristic and validate any collapse interpretation
+with continuation power flow or an analytically known system. `load_margin`
+remains a compatibility alias for this value, but its old name must not be read
+as a guarantee.
 
 ## Requirements and v1 limitations
 
@@ -141,8 +146,11 @@ The test suite (`test/helm_tests.jl`) checks, always:
   diverge at ``s = 1`` but continue analytically, and one with *no* limit
   (the spread indicator must refuse to lock in);
 - a closed-form two-node feeder: voltages to `rtol 1e-9`, the neutral-rise
-  detail, `load_margin` against the analytic collapse point (`≈ 6.6`, `≈ 2`,
-  and `< 1` past collapse), certified no-solution beyond ``P^* = E^2/4R``;
+  detail, and `singularity_estimate` against the analytic saddle-node
+  ``P^* = E^2/4R`` (`≈ 6.6`, `≈ 2`, and `< 1` past collapse);
+- a warm-started natural-parameter continuation trace whose nonlinear Ipopt
+  correctors bracket that analytic saddle-node, checked against HELM convergence
+  and series-divergence classifications;
 - switch `:alias ≡ :constrain` voltage identity with exact conductor currents;
 - delta and line-to-line loads against a rotated closed form;
 - the `ybus_linearized` residual oracle
