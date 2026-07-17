@@ -12,7 +12,11 @@ const _HAS_JUMP_IPOPT = true
 include("fixtures.jl")
 
 @testset "Package quality" begin
-    Aqua.test_all(PowerOptLab)
+    # On Julia 1.10, Aqua's persistent-task probe develops the package in a fresh
+    # environment that cannot recover the source of the unregistered BMOPFTools
+    # dependency. Keep that probe on newer Julia releases and retain every other
+    # Aqua check on all supported versions.
+    Aqua.test_all(PowerOptLab; persistent_tasks = VERSION >= v"1.11")
 end
 
 # Load the optional OpenDSS oracle only after Aqua. OpenDSSDirect 0.9.9 extends
