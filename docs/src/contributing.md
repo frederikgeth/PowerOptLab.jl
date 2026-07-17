@@ -68,3 +68,19 @@ and the PowerOptLab version becomes a thin re-export or is retired.
 - SI at the interface; per-unit only inside a solve (via `ctx.bases`).
 - `Manifest.toml` is intentionally not committed (library convention).
 - Every feature is opt-in and covered by a test under `test/`.
+
+## BMOPFTools compatibility contract
+
+BMOPFTools is unregistered, so automated builds pin the exact tested source
+commit (`c8df8f353637a46a70f60fa95c2d2184e7475d39`) and `Project.toml` pins its
+package version to 0.1.0. Update both together, then run the complete test and
+documentation suites on the Julia compatibility floor and current stable.
+
+Most integrations use BMOPFTools' public staged-model and admittance APIs. HELM
+also needs the engine's parsed constant-power and constant-impedance sub-loads,
+which BMOPFTools 0.1.0 does not expose publicly. Those imports are isolated in
+`src/upstream.jl`; they are the only supported private compatibility adapter.
+The upstream API needed to remove it is a public, read-only load-decomposition
+function returning each sub-load's terminal pair, complex power, and shunt
+admittance. Until BMOPFTools provides that seam, an upstream upgrade must treat
+changes to the adapter's imported names as breaking.

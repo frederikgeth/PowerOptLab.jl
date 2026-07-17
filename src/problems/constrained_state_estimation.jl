@@ -775,7 +775,8 @@ second-order correction before the radius contracts.
 
 This intentionally transparent solver is for small-system verification.  It
 uses dense SVD rank/null-space diagnostics; the compiled evaluator preserves the
-sparsity needed by the planned sparse QR/Hachtel implementation.
+sparsity used by [`solve_sparse_state_estimator`](@ref), the sparse
+Hachtel-system implementation for larger networks.
 """
 function solve_compiled_state_estimator(s::SEStructure, p::SEParameters,
                                         x0::AbstractVector{<:Real};

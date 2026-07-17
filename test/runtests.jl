@@ -1,5 +1,6 @@
 using Test
 using TOML
+using Aqua
 using PowerOptLab
 using JuMP, Ipopt
 
@@ -7,12 +8,24 @@ using JuMP, Ipopt
 # HELM OpenDSS-parity tests optionally use OpenDSSDirect and skip themselves
 # when it is not installed (mirrors the guard in BMOPFTools' own suite).
 const _HAS_JUMP_IPOPT = true
+
+include("fixtures.jl")
+
+@testset "Package quality" begin
+    # On Julia 1.10, Aqua's persistent-task probe develops the package in a fresh
+    # environment that cannot recover the source of the unregistered BMOPFTools
+    # dependency. Keep that probe on newer Julia releases and retain every other
+    # Aqua check on all supported versions.
+    Aqua.test_all(PowerOptLab; persistent_tasks = VERSION >= v"1.11")
+end
+
+# Load the optional OpenDSS oracle only after Aqua. OpenDSSDirect 0.9.9 extends
+# several Base constructor names during load, which can interfere with Aqua's
+# isolated persistent-task probe even though PowerOptLab starts no such tasks.
 const _HAS_ODS = !isnothing(Base.identify_package("OpenDSSDirect"))
 if _HAS_ODS
     @eval using OpenDSSDirect
 end
-
-include("fixtures.jl")
 
 @testset "PowerOptLab" begin
     include("multiperiod_tests.jl")

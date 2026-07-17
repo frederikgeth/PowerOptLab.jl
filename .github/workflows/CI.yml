@@ -19,7 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: ['lts', '1']   # 'lts' = declared compat floor; '1' = latest stable
+        version: ['1.10', '1']   # declared compat floor and latest stable
         os: [ubuntu-latest]
         arch: [default]
     steps:
@@ -29,9 +29,9 @@ jobs:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
       - uses: julia-actions/cache@v3
-      # BMOPFTools is not registered yet — develop it from its Git repo so the
-      # project resolves before buildpkg/runtest run.
-      - name: Develop unregistered BMOPFTools dependency
-        run: julia --project=. -e 'using Pkg; Pkg.develop(url="https://github.com/frederikgeth/BMOPFTools.jl")'
+      # BMOPFTools is not registered yet. Pin the tested source rather than
+      # resolving whichever commit happens to be at the head of main.
+      - name: Add pinned BMOPFTools dependency
+        run: julia --project=. -e 'using Pkg; Pkg.add(PackageSpec(url="https://github.com/frederikgeth/BMOPFTools.jl", rev="c8df8f353637a46a70f60fa95c2d2184e7475d39"))'
       - uses: julia-actions/julia-buildpkg@latest
       - uses: julia-actions/julia-runtest@latest

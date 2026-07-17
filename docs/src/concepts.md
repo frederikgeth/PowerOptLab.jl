@@ -32,7 +32,8 @@ same way.
   changes the *formulation*, not the elements.
 - A **bespoke algorithm** answers *"how do we solve it?"* — decomposition,
   sequential linearization, warm-start schemes, or any custom loop around the
-  staged API. None exist yet; the slot is reserved.
+  staged API. HELM is the first: it uses the engine's augmented admittance
+  matrix in a custom power-series solve.
 
 ## Cross-cutting dimensions
 
@@ -48,8 +49,8 @@ orthogonal attributes, surfaced as a badge line at the top of its page:
 - **Temporal structure** — *single-snapshot* vs *inter-temporal* (state-of-charge
   coupling, shared parameters, or per-interval envelopes spanning many snapshots).
 
-A future *determinism* axis (deterministic vs stochastic/robust) will slot in
-here when the first such contribution lands.
+- **Uncertainty/security treatment** — deterministic, multi-scenario, robust,
+  or explicitly corner-secure. Operating envelopes already exercise this axis.
 
 ## Interface conventions
 

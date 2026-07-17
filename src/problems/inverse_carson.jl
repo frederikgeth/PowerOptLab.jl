@@ -447,7 +447,7 @@ function _ic_fit_candidate(c::OverheadCarsonCandidate,
     model = JuMP.Model(optimizer)
     _ic_configure_model!(model, verbose, solver_options)
     u = JuMP.@variable(model, 0 <= u[1:n] <= 1)
-    objective(args::T...) where {T<:Real} =
+    objective(args::Real...) =
         _ic_objective(c, obs, collect(args))
     op = JuMP.add_nonlinear_operator(model, n, objective;
                                      name=:inverse_carson_objective)
@@ -587,7 +587,7 @@ function _ic_profile_endpoint(c, obs, best_u, index, target, threshold;
     model = JuMP.Model(optimizer)
     _ic_configure_model!(model, verbose, solver_options)
     u = JuMP.@variable(model, 0 <= u[1:n] <= 1)
-    objective(args::T...) where {T<:Real} =
+    objective(args::Real...) =
         _ic_objective(c, obs, collect(args))
     op = JuMP.add_nonlinear_operator(model, n, objective;
                                      name=:inverse_carson_profile_objective)

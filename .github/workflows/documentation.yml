@@ -18,17 +18,10 @@ jobs:
       - uses: julia-actions/setup-julia@v3
         with:
           version: '1'
-      # Develop the unregistered BMOPFTools dep and this package into the docs
-      # environment atomically (single resolve), then instantiate.
+      # docs/Project.toml declares the local PowerOptLab source and pins the
+      # unregistered BMOPFTools source to the tested commit.
       - name: Install dependencies
-        run: |
-          julia --project=docs/ -e '
-            using Pkg
-            Pkg.develop([
-              PackageSpec(url="https://github.com/frederikgeth/BMOPFTools.jl"),
-              PackageSpec(path=pwd()),
-            ])
-            Pkg.instantiate()'
+        run: julia --project=docs/ -e 'using Pkg; Pkg.instantiate()'
       - name: Build and deploy
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
