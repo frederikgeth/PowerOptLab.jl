@@ -9,7 +9,7 @@
 # HELM itself now lives in PowerOptLab (bespoke algorithm); it consumes the
 # BMOPFTools engine through its public exports only.
 
-using BMOPFTools: solve_pf, read_result, write_result, ybus_linearized, from_dss
+using BMOPFTools
 
 @testset "helm: pade layer" begin
 
@@ -151,11 +151,18 @@ end
         trace = NamedTuple[]
         for lambda in lambdas
             hook! = previous === nothing ? nothing : ctx -> begin
-                for ((bus, terminal), vr) in ctx.vars[:vr]
-                    terminal_result = previous["bus"][bus][terminal]
-                    JuMP.set_start_value(vr, terminal_result["vr"])
-                    JuMP.set_start_value(ctx.vars[:vi][(bus, terminal)],
-                                         terminal_result["vi"])
+                for (bus, bus_data) in BMOPFTools.opf_network(ctx)["bus"]
+                    bid = String(bus)
+                    for terminal in String.(bus_data["terminal_names"])
+                        terminal_result = previous["bus"][bid][terminal]
+                        vr = BMOPFTools.opf_object(ctx,
+                            BMOPFTools.opf_bus_voltage_key(bid, terminal))
+                        vi = BMOPFTools.opf_object(ctx,
+                            BMOPFTools.opf_bus_voltage_key(bid, terminal;
+                                                           component=:imag))
+                        JuMP.set_start_value(vr, terminal_result["vr"])
+                        JuMP.set_start_value(vi, terminal_result["vi"])
+                    end
                 end
             end
             result = solve_pf(_two_node_net(lambda * Pstar);

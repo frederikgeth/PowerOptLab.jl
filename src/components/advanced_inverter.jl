@@ -27,7 +27,7 @@
 #
 # Built on the BMOPFTools staged API through a `model_hook!`; it does not modify
 # the engine. Works in SI (per_unit=false) or per-unit (per_unit=true): device
-# parameters are SI and scaled to model units via `ctx.bases` (Vdc/Cdc/In_max
+# parameters are SI and scaled to model units via `opf_bases(ctx)` (Vdc/Cdc/In_max
 # stay SI, the AC↔DC coupling scales through the POC bus's v_base/i_base/s_base).
 
 const _SQRT3 = sqrt(3.0)
@@ -243,13 +243,13 @@ _start_or(v, default) = (s = JuMP.start_value(v); s === nothing ? default : s)
 
 # Stamp the inverter's internal-node model into `ctx`. Returns `_InvHandles`.
 function _stamp_inverter!(ctx, inv::AdvancedInverter)
-    m = ctx.model
-    vr = ctx.vars[:vr]; vi = ctx.vars[:vi]
+    m = _opf_model(ctx)
+    vr, vi = _opf_voltage_maps(ctx)
     bus = inv.bus; phases = inv.phase_terminals; neutral = inv.neutral
     nph = length(phases)
 
     # Per-unit base factors (1.0 in SI mode), looked up per bus like the engine.
-    bs = ctx.bases
+    bs = _opf_bases(ctx)
     sb = bs === nothing ? 1.0 : bs.s_base
     vb = bs === nothing ? 1.0 : get(bs.v_base, bus, 1.0)
     ib = bs === nothing ? 1.0 : get(bs.i_base, bus, 1.0)
@@ -303,11 +303,9 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
         rip_im += JuMP.@expression(m, vrint[k]*cii[k] + viint[k]*cri[k])
 
         # Inject the converter current into the POC bus KCL.
-        JuMP.add_to_expression!(ctx.kcl_r[(bus, ph)], cri[k])
-        JuMP.add_to_expression!(ctx.kcl_i[(bus, ph)], cii[k])
+        BMOPFTools.add_terminal_injection!(ctx, bus, ph, cri[k], cii[k])
         if neutral !== nothing
-            JuMP.add_to_expression!(ctx.kcl_r[(bus, neutral)], -cri[k])
-            JuMP.add_to_expression!(ctx.kcl_i[(bus, neutral)], -cii[k])
+            BMOPFTools.add_terminal_injection!(ctx, bus, neutral, -cri[k], -cii[k])
         end
 
         # |I|² (for the quadratic loss term and the current cap) and the current
@@ -362,12 +360,10 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
                 vrp = JuMP.@expression(m, vr[(bus, ph)] - vr[(bus, neutral)])
                 vip = JuMP.@expression(m, vi[(bus, ph)] - vi[(bus, neutral)])
             end
-            JuMP.add_to_expression!(ctx.kcl_r[(bus, ph)],  b, vip)
-            JuMP.add_to_expression!(ctx.kcl_i[(bus, ph)], -b, vrp)
+            BMOPFTools.add_terminal_injection!(ctx, bus, ph, b * vip, -b * vrp)
             Qpoc += JuMP.@expression(m, b * (vrp^2 + vip^2))
             if neutral !== nothing
-                JuMP.add_to_expression!(ctx.kcl_r[(bus, neutral)], -b, vip)
-                JuMP.add_to_expression!(ctx.kcl_i[(bus, neutral)],  b, vrp)
+                BMOPFTools.add_terminal_injection!(ctx, bus, neutral, -b * vip, b * vrp)
             end
         end
     end
@@ -549,23 +545,23 @@ function solve_advanced_inverter(net::Dict{String,Any}, inverter::AdvancedInvert
     hook! = ctx -> begin
         h = stamp_device!(ctx, inverter)
         handles[] = h
-        q_set === nothing || JuMP.@constraint(ctx.model, h.q_poc == q_set / h.sb)
+        q_set === nothing || JuMP.@constraint(_opf_model(ctx), h.q_poc == q_set / h.sb)
         if objective == :max_export
-            JuMP.@objective(ctx.model, Max, h.p_poc)
+            JuMP.@objective(_opf_model(ctx), Max, h.p_poc)
         else
-            JuMP.@constraint(ctx.model, h.p_poc == p_set / h.sb)
-            JuMP.@objective(ctx.model, Min, h.p_loss)
+            JuMP.@constraint(_opf_model(ctx), h.p_poc == p_set / h.sb)
+            JuMP.@objective(_opf_model(ctx), Min, h.p_loss)
         end
     end
 
     ctx = build_opf_model(net; per_unit=per_unit, s_base=s_base,
                           add_objective=false, model_hook! = hook!,
                           optimizer=optimizer, verbose=verbose)
-    _set_solver_options!(ctx.model, solver_options)
+    _set_solver_options!(_opf_model(ctx), solver_options)
     enforce_kcl!(ctx)
-    JuMP.optimize!(ctx.model)
+    JuMP.optimize!(_opf_model(ctx))
 
-    outcome = _solve_outcome(ctx.model)
+    outcome = _solve_outcome(_opf_model(ctx))
     status = string(outcome.termination_status)
     h = handles[]
     device_result = extract_device(inverter, h, SolveStatus(outcome))

@@ -55,6 +55,40 @@ end
 Base.length(multi::MultiContext) = length(multi.contexts)
 Base.getindex(multi::MultiContext, period::Integer) = multi.contexts[period]
 
+# BMOPFTools' concrete OpfContext fields are internal. Keep the downstream
+# formulations on the public staged-API accessors and semantic object keys so
+# an upstream context-layout change does not become a PowerOptLab API break.
+_opf_model(ctx) = BMOPFTools.opf_model(ctx)
+_opf_network(ctx) = BMOPFTools.opf_network(ctx)
+_opf_bases(ctx) = BMOPFTools.opf_bases(ctx)
+_opf_voltage(ctx, bus, terminal; component::Symbol=:real) =
+    BMOPFTools.opf_object(ctx,
+        BMOPFTools.opf_bus_voltage_key(String(bus), String(terminal);
+                                       component=component))
+
+function _opf_voltage_maps(ctx)
+    net = _opf_network(ctx)
+    vr = Dict{Tuple{String,String},Any}()
+    vi = Dict{Tuple{String,String},Any}()
+    for (bus, data) in get(net, "bus", Dict())
+        bid = String(bus)
+        for terminal in String.(get(data, "terminal_names", String[]))
+            vr[(bid, terminal)] = BMOPFTools.opf_object(ctx,
+                BMOPFTools.opf_bus_voltage_key(bid, terminal))
+            vi[(bid, terminal)] = BMOPFTools.opf_object(ctx,
+                BMOPFTools.opf_bus_voltage_key(bid, terminal; component=:imag))
+        end
+    end
+    return vr, vi
+end
+
+_opf_ibr_current(ctx, ibr, conductor; component::Symbol=:real) =
+    BMOPFTools.opf_object(ctx,
+        BMOPFTools.opf_ibr_current_key(String(ibr), conductor; component=component))
+
+_opf_transformer_tap(ctx, transformer) = BMOPFTools.opf_object(ctx,
+    BMOPFTools.opf_transformer_tap_key(String(transformer)))
+
 """
     build_multi_context(nets; hook_factory, kwargs...) -> MultiContext
 

@@ -123,7 +123,10 @@ solve_diagnostics(result::StateEstimationResult) =
     (objective=result.objective, observability=result.observability,
      residual_count=length(result.residuals))
 
-_vscale(ctx, bus) = ctx.bases === nothing ? 1.0 : ctx.bases.v_base[bus]
+_vscale(ctx, bus) = begin
+    bases = _opf_bases(ctx)
+    bases === nothing ? 1.0 : bases.v_base[bus]
+end
 
 # ── network contract ────────────────────────────────────────────────────────
 
@@ -336,8 +339,8 @@ function solve_state_estimation(net::Dict{String,Any}, measurements::AbstractVec
     probes = Vector{Tuple{Measurement,Any}}()
 
     function wls!(ctx)
-        m = ctx.model
-        vr = ctx.vars[:vr]; vi = ctx.vars[:vi]
+        m = _opf_model(ctx)
+        vr, vi = _opf_voltage_maps(ctx)
         sb = _sbase(ctx)
 
         # A free injection current at each measured (bus, phase), added to KCL so
@@ -358,11 +361,9 @@ function solve_state_estimation(net::Dict{String,Any}, measurements::AbstractVec
             cr = JuMP.@variable(m, base_name = "seinj_r_$(meas.bus)_$(meas.terminal)", start = cr0)
             ci = JuMP.@variable(m, base_name = "seinj_i_$(meas.bus)_$(meas.terminal)", start = ci0)
             inj_r[key] = cr; inj_i[key] = ci
-            JuMP.add_to_expression!(ctx.kcl_r[(meas.bus, meas.terminal)], cr)
-            JuMP.add_to_expression!(ctx.kcl_i[(meas.bus, meas.terminal)], ci)
+            BMOPFTools.add_terminal_injection!(ctx, meas.bus, meas.terminal, cr, ci)
             if ref !== nothing
-                JuMP.add_to_expression!(ctx.kcl_r[(meas.bus, ref)], -cr)
-                JuMP.add_to_expression!(ctx.kcl_i[(meas.bus, ref)], -ci)
+                BMOPFTools.add_terminal_injection!(ctx, meas.bus, ref, -cr, -ci)
             end
         end
 
@@ -405,15 +406,15 @@ function solve_state_estimation(net::Dict{String,Any}, measurements::AbstractVec
     ctx = build_opf_model(net; per_unit=per_unit, s_base=s_base,
                           add_objective=false, model_hook! = wls!,
                           optimizer=optimizer, verbose=verbose)
-    _set_solver_options!(ctx.model, solver_options)
+    _set_solver_options!(_opf_model(ctx), solver_options)
     enforce_kcl!(ctx)
-    JuMP.optimize!(ctx.model)
+    JuMP.optimize!(_opf_model(ctx))
 
-    outcome = _solve_outcome(ctx.model)
+    outcome = _solve_outcome(_opf_model(ctx))
     status = string(outcome.termination_status)
     pstatus = string(outcome.primal_status)
     solved = _publishable(outcome)
-    obj = solved ? JuMP.objective_value(ctx.model) : NaN
+    obj = solved ? JuMP.objective_value(_opf_model(ctx)) : NaN
 
     # Residuals (SI) from the probed h-expressions while the model is still live.
     residuals = NamedTuple[]

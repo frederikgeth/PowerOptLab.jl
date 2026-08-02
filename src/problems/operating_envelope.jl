@@ -170,7 +170,10 @@ const _NORMALIZATIONS = (:none, :capacity, :request, :custom)
 const _SECURITY_MODES = (:bound_point, :corners)
 const _DIRECTIONS = (:export, :import)
 
-_power_base(ctx) = ctx.bases === nothing ? 1.0 : Float64(ctx.bases.s_base)
+_power_base(ctx) = begin
+    bases = _opf_bases(ctx)
+    bases === nothing ? 1.0 : Float64(bases.s_base)
+end
 _capacity_limit(cp::ConnectionPoint, direction::Symbol) =
     direction == :export ? cp.export_max : cp.import_max
 
@@ -307,7 +310,7 @@ end
 # backward compatibility and simple teaching examples. Real PV/battery studies
 # should bind `ConnectionPoint.ibr_id` to the engine's prescribed-control model.
 function _stamp_legacy_port!(ctx, cp::ConnectionPoint)
-    m = ctx.model
+    m = _opf_model(ctx)
     bus = cp.bus
     P = zero(JuMP.QuadExpr)
     Q = zero(JuMP.QuadExpr)
@@ -317,11 +320,9 @@ function _stamp_legacy_port!(ctx, cp::ConnectionPoint)
         dvr, dvi = _dv(ctx, bus, ph, cp.neutral)
         P += JuMP.@expression(m, dvr*cr + dvi*ci)
         Q += JuMP.@expression(m, dvi*cr - dvr*ci)
-        JuMP.add_to_expression!(ctx.kcl_r[(bus, ph)], cr)
-        JuMP.add_to_expression!(ctx.kcl_i[(bus, ph)], ci)
+        BMOPFTools.add_terminal_injection!(ctx, bus, ph, cr, ci)
         if cp.neutral !== nothing
-            JuMP.add_to_expression!(ctx.kcl_r[(bus, cp.neutral)], -cr)
-            JuMP.add_to_expression!(ctx.kcl_i[(bus, cp.neutral)], -ci)
+            BMOPFTools.add_terminal_injection!(ctx, bus, cp.neutral, -cr, -ci)
         end
     end
     JuMP.@constraint(m, Q == 0.0)
@@ -332,20 +333,21 @@ end
 # adds no reactive decision: the engine's own constant-PF / Volt-VAr equality is
 # retained unchanged.
 function _ibr_active_power(ctx, cp::ConnectionPoint)
-    m = ctx.model
-    inv = ctx.net["ibr"][cp.ibr_id]
+    m = _opf_model(ctx)
+    inv = _opf_network(ctx)["ibr"][cp.ibr_id]
     bus = String(inv["bus"])
     tm = String.(inv["terminal_map"])
     topo = uppercase(String(get(inv, "topology", "FOUR_LEG")))
-    vr = ctx.vars[:vr]; vi = ctx.vars[:vi]
-    cri = ctx.vars[:cri]; cii = ctx.vars[:cii]
+    vr, vi = _opf_voltage_maps(ctx)
 
     if topo == "SINGLE_PHASE"
         ph, ref = tm[1], tm[2]
         dvr = JuMP.@expression(m, vr[(bus,ph)] - vr[(bus,ref)])
         dvi = JuMP.@expression(m, vi[(bus,ph)] - vi[(bus,ref)])
+        cr = _opf_ibr_current(ctx, cp.ibr_id, 1)
+        ci = _opf_ibr_current(ctx, cp.ibr_id, 1; component=:imag)
         return JuMP.@expression(m,
-            dvr*cri[(cp.ibr_id,1)] + dvi*cii[(cp.ibr_id,1)])
+            dvr*cr + dvi*ci)
     end
 
     neutral = cp.neutral !== nothing && cp.neutral in tm ? cp.neutral : tm[end]
@@ -354,8 +356,10 @@ function _ibr_active_power(ctx, cp::ConnectionPoint)
     for (idx, ph) in enumerate(phases)
         dvr = JuMP.@expression(m, vr[(bus,ph)] - vr[(bus,neutral)])
         dvi = JuMP.@expression(m, vi[(bus,ph)] - vi[(bus,neutral)])
+        cr = _opf_ibr_current(ctx, cp.ibr_id, idx)
+        ci = _opf_ibr_current(ctx, cp.ibr_id, idx; component=:imag)
         push!(terms, JuMP.@expression(m,
-            dvr*cri[(cp.ibr_id,idx)] + dvi*cii[(cp.ibr_id,idx)]))
+            dvr*cr + dvi*ci))
     end
     return sum(terms)
 end
@@ -648,7 +652,7 @@ function _solve_interval_group(group, cps, policy;
         ctx -> begin
             for (i, cp) in enumerate(cps)
                 p = _connection_active_power(ctx, cp)
-                JuMP.@constraint(ctx.model,
+                JuMP.@constraint(_opf_model(ctx),
                     p == sign * fractions[i] * cap[cp.id])
             end
         end

@@ -130,14 +130,20 @@ solve_diagnostics(result::ParameterEstimationResult) =
      periods=length(result.snapshots))
 
 # Per-bus voltage base (volts) — 1.0 in SI mode, v_base[bus] in per-unit mode.
-_pe_vbase(ctx, bus) = ctx.bases === nothing ? 1.0 : ctx.bases.v_base[bus]
+_pe_vbase(ctx, bus) = begin
+    bases = _opf_bases(ctx)
+    bases === nothing ? 1.0 : bases.v_base[bus]
+end
 # Per-bus impedance base (Ω) — 1.0 in SI mode.
-_pe_zbase(ctx, bus) = ctx.bases === nothing ? 1.0 : ctx.bases.z_base[bus]
+_pe_zbase(ctx, bus) = begin
+    bases = _opf_bases(ctx)
+    bases === nothing ? 1.0 : bases.z_base[bus]
+end
 
 # Stamp a variable-length line: KVL with the free length ℓ (per-unit-scaled R/X)
 # and injection of its current into both endpoints' KCL.
 function _stamp_calib_line!(ctx, ln::CalibLine, ell, t)
-    m = ctx.model; vr = ctx.vars[:vr]; vi = ctx.vars[:vi]
+    m = _opf_model(ctx); vr, vi = _opf_voltage_maps(ctx)
     f = ln.bus_from; g = ln.bus_to; c = ln.terminal
     zb = _pe_zbase(ctx, f)                 # line: same base both ends (no ratio)
     r = ln.r_per_length / zb; x = ln.x_per_length / zb
@@ -145,8 +151,8 @@ function _stamp_calib_line!(ctx, ln::CalibLine, ell, t)
     ci = JuMP.@variable(m, base_name = "calib_ci_$(ln.id)_$t")
     JuMP.@constraint(m, vr[(f,c)] - vr[(g,c)] == r*ell*cr - x*ell*ci)
     JuMP.@constraint(m, vi[(f,c)] - vi[(g,c)] == r*ell*ci + x*ell*cr)
-    JuMP.add_to_expression!(ctx.kcl_r[(f,c)], -cr); JuMP.add_to_expression!(ctx.kcl_i[(f,c)], -ci)
-    JuMP.add_to_expression!(ctx.kcl_r[(g,c)],  cr); JuMP.add_to_expression!(ctx.kcl_i[(g,c)],  ci)
+    BMOPFTools.add_terminal_injection!(ctx, f, c, -cr, -ci)
+    BMOPFTools.add_terminal_injection!(ctx, g, c, cr, ci)
 end
 
 # Locate a transformer id across subtype blocks; return (subtype_entries, N0) and
@@ -255,8 +261,9 @@ function solve_parameter_estimation(nets::AbstractVector, measurements::Abstract
     vprobes = Vector{Tuple{Float64,Any}}()      # (measured |V|, |V|-expr) for RMS
 
     stamp(t) = ctx -> begin
-        m = ctx.model; vr = ctx.vars[:vr]; vi = ctx.vars[:vi]
-        sb = ctx.bases === nothing ? 1.0 : ctx.bases.s_base
+        m = _opf_model(ctx); vr, vi = _opf_voltage_maps(ctx)
+        bases = _opf_bases(ctx)
+        sb = bases === nothing ? 1.0 : bases.s_base
         for l in lines; _stamp_calib_line!(ctx, l, ell[l.id], t); end
 
         # Free injection currents at each measured (bus, phase) carrying a P/Q
@@ -268,11 +275,9 @@ function solve_parameter_estimation(nets::AbstractVector, measurements::Abstract
             cr = JuMP.@variable(m, base_name = "peinj_r_$(meas.bus)_$(meas.terminal)_$t")
             ci = JuMP.@variable(m, base_name = "peinj_i_$(meas.bus)_$(meas.terminal)_$t")
             inj[key] = (cr, ci)
-            JuMP.add_to_expression!(ctx.kcl_r[(meas.bus, meas.terminal)], cr)
-            JuMP.add_to_expression!(ctx.kcl_i[(meas.bus, meas.terminal)], ci)
+            BMOPFTools.add_terminal_injection!(ctx, meas.bus, meas.terminal, cr, ci)
             if neutral !== nothing
-                JuMP.add_to_expression!(ctx.kcl_r[(meas.bus, neutral)], -cr)
-                JuMP.add_to_expression!(ctx.kcl_i[(meas.bus, neutral)], -ci)
+                BMOPFTools.add_terminal_injection!(ctx, meas.bus, neutral, -cr, -ci)
             end
         end
 
@@ -312,10 +317,14 @@ function solve_parameter_estimation(nets::AbstractVector, measurements::Abstract
 
     # Couple each transformer's native free tap equal across all snapshots.
     for tp in taps
-        haskey(ctxs[1].vars, :tap) && haskey(ctxs[1].vars[:tap], tp.id) ||
+        tap0 = try
+            _opf_transformer_tap(ctxs[1], tp.id)
+        catch err
+            err isa KeyError || rethrow()
             throw(ArgumentError("transformer '$(tp.id)' did not expose a free tap; check tap bounds"))
+        end
         for t in 2:T
-            JuMP.@constraint(model, ctxs[t].vars[:tap][tp.id] == ctxs[1].vars[:tap][tp.id])
+            JuMP.@constraint(model, _opf_transformer_tap(ctxs[t], tp.id) == tap0)
         end
     end
 
@@ -342,7 +351,8 @@ function solve_parameter_estimation(nets::AbstractVector, measurements::Abstract
     obj = solved ? JuMP.objective_value(model) : NaN
 
     line_length = Dict(id => (solved ? JuMP.value(v) : NaN) for (id, v) in ell)
-    tap = Dict(tp.id => (solved ? JuMP.value(ctxs[1].vars[:tap][tp.id]) / get(n0, tp.id, 1.0) : NaN)
+    tap = Dict(tp.id => (solved ? JuMP.value(_opf_transformer_tap(ctxs[1], tp.id)) /
+                                   get(n0, tp.id, 1.0) : NaN)
                for tp in taps)
 
     residual_rms = if solved && !isempty(vprobes)

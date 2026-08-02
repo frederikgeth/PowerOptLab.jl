@@ -208,17 +208,19 @@ struct PortHandle
 end
 
 # s_base for a context (VA), or 1.0 for an SI solve.
-_sbase(ctx) = ctx.bases === nothing ? 1.0 : ctx.bases.s_base
+_sbase(ctx) = (_opf_bases(ctx) === nothing ? 1.0 : _opf_bases(ctx).s_base)
 
 # Phase-to-neutral voltage difference (VariableRef or AffExpr) at (bus, phase).
 function _dv(ctx, bus, ph, neutral)
-    vr = ctx.vars[:vr]; vi = ctx.vars[:vi]
+    vr = _opf_voltage(ctx, bus, ph)
+    vi = _opf_voltage(ctx, bus, ph; component=:imag)
     if neutral === nothing
-        return vr[(bus, ph)], vi[(bus, ph)]
+        return vr, vi
     end
-    m = ctx.model
-    return JuMP.@expression(m, vr[(bus, ph)] - vr[(bus, neutral)]),
-           JuMP.@expression(m, vi[(bus, ph)] - vi[(bus, neutral)])
+    m = _opf_model(ctx)
+    vrn = _opf_voltage(ctx, bus, neutral)
+    vin = _opf_voltage(ctx, bus, neutral; component=:imag)
+    return JuMP.@expression(m, vr - vrn), JuMP.@expression(m, vi - vin)
 end
 
 """
@@ -231,14 +233,12 @@ used by the SOC linker and result extraction. `active=false` pins the port to
 zero (an unplugged EV): no current, no power.
 """
 function _stamp_port!(ctx, dev; active::Bool=true)
-    m   = ctx.model
+    m   = _opf_model(ctx)
     sb  = _sbase(ctx)
     bus = _dev_bus(dev)
     phases = _dev_phases(dev)
     neutral = _dev_neutral(dev)
     id  = _dev_id(dev)
-
-    kcl_r = ctx.kcl_r; kcl_i = ctx.kcl_i
 
     # Per-phase current injections summed into the aggregate device power.
     P = zero(JuMP.QuadExpr)
@@ -249,11 +249,9 @@ function _stamp_port!(ctx, dev; active::Bool=true)
         dvr, dvi = _dv(ctx, bus, ph, neutral)
         P += JuMP.@expression(m, dvr*cr + dvi*ci)      # injected into network
         Q += JuMP.@expression(m, dvi*cr - dvr*ci)
-        JuMP.add_to_expression!(kcl_r[(bus, ph)],  cr)
-        JuMP.add_to_expression!(kcl_i[(bus, ph)],  ci)
+        BMOPFTools.add_terminal_injection!(ctx, bus, ph, cr, ci)
         if neutral !== nothing
-            JuMP.add_to_expression!(kcl_r[(bus, neutral)], -cr)
-            JuMP.add_to_expression!(kcl_i[(bus, neutral)], -ci)
+            BMOPFTools.add_terminal_injection!(ctx, bus, neutral, -cr, -ci)
         end
     end
 

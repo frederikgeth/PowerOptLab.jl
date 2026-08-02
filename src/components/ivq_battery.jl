@@ -32,7 +32,7 @@
 # Signs and units: cell current `i` is signed with i > 0 on discharge (matching
 # the paper); `p_dc > 0` means the pack delivers power to the DC link. Device
 # parameters are SI; the inverter handles per-unit conditioning through
-# `ctx.bases`.
+# `opf_bases(ctx)`.
 
 """
     IVQBattery(; id, bus, chemistry, n_series, n_parallel, soc_init, inverter, kwargs...)
@@ -136,7 +136,7 @@ current and the pack DC power is quadratic in it, so no nonlinear-operator
 registration is needed at this fidelity.
 """
 function _stamp_battery!(ctx, battery::IVQBattery, inv_handles)
-    m = ctx.model
+    m = _opf_model(ctx)
     sb = inv_handles.sb                       # VA base (1.0 in SI mode)
     chem = battery.chemistry
     ns = battery.n_series; np = battery.n_parallel
@@ -282,25 +282,25 @@ function solve_ivq_battery(net::Dict{String,Any}, battery::IVQBattery;
         ih = handles.inverter
         bh = handles.pack
         inv_h[] = ih; bat_h[] = bh
-        q_set === nothing || JuMP.@constraint(ctx.model, ih.q_poc == q_set / ih.sb)
+        q_set === nothing || JuMP.@constraint(_opf_model(ctx), ih.q_poc == q_set / ih.sb)
         if objective == :max_export
-            JuMP.@objective(ctx.model, Max, ih.p_poc)
+            JuMP.@objective(_opf_model(ctx), Max, ih.p_poc)
         elseif objective == :max_charge
-            JuMP.@objective(ctx.model, Min, ih.p_poc)
+            JuMP.@objective(_opf_model(ctx), Min, ih.p_poc)
         else
-            JuMP.@constraint(ctx.model, ih.p_poc == p_set / ih.sb)
-            JuMP.@objective(ctx.model, Min, ih.p_loss)
+            JuMP.@constraint(_opf_model(ctx), ih.p_poc == p_set / ih.sb)
+            JuMP.@objective(_opf_model(ctx), Min, ih.p_loss)
         end
     end
 
     ctx = build_opf_model(net; per_unit=per_unit, s_base=s_base,
                           add_objective=false, model_hook! = hook!,
                           optimizer=optimizer, verbose=verbose)
-    _set_solver_options!(ctx.model, solver_options)
+    _set_solver_options!(_opf_model(ctx), solver_options)
     enforce_kcl!(ctx)
-    JuMP.optimize!(ctx.model)
+    JuMP.optimize!(_opf_model(ctx))
 
-    outcome = _solve_outcome(ctx.model)
+    outcome = _solve_outcome(_opf_model(ctx))
     status = string(outcome.termination_status)
     ih = inv_h[]; bh = bat_h[]
     device_result = extract_device(battery, (inverter=ih, pack=bh),
@@ -366,7 +366,7 @@ solve_diagnostics(result::MultiperiodIVQResult) =
 # are the registered smooth operators (or `nothing` when OCV is affine / R
 # constant). Returns (ipu, vpu, vbase, ibase).
 function _stamp_battery_mp!(ctx, battery::IVQBattery, soc_t, ih, ocv_op, r_op)
-    m = ctx.model
+    m = _opf_model(ctx)
     chem = battery.chemistry
     ns = battery.n_series; np = battery.n_parallel
     vbase, ibase = _dc_bases(chem, ns, np); pbase = vbase * ibase
