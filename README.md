@@ -164,8 +164,9 @@ r.v_int_mag  # internal EMF magnitude per phase (V)
 ## Development setup
 
 BMOPFTools is not yet registered. For development, use a local checkout; CI and
-documentation builds pin commit `c8df8f353637a46a70f60fa95c2d2184e7475d39`
-so their dependency source is reproducible:
+documentation builds pin commit `2a51297c7bbaa97ad1f037472b3325e24be6fc93`
+so their dependency source is reproducible. That BMOPFTools snapshot uses
+PowerIO 0.7:
 
 ```julia
 using Pkg

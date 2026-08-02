@@ -50,7 +50,8 @@ method roadmap.
 
 BMOPFTools is not yet registered. Develop both from local checkouts; automated
 builds pin BMOPFTools commit
-`c8df8f353637a46a70f60fa95c2d2184e7475d39`:
+`2a51297c7bbaa97ad1f037472b3325e24be6fc93` (the PowerIO 0.7-compatible
+snapshot):
 
 ```julia
 using Pkg

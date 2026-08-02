@@ -1,4 +1,4 @@
-# BMOPFTools 0.1.0 compatibility adapter.
+# BMOPFTools 0.1.x compatibility adapter.
 #
 # HELM uses the public augmented-admittance API, but also needs the parsed
 # constant-power and constant-impedance sub-loads used by BMOPFTools' own
