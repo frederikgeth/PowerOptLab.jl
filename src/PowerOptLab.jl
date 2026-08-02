@@ -69,7 +69,7 @@ schemes) and alternative solution methods.
   latter as a non-existence certificate.
 
 Everything is SI at the interface; per-unit conditioning inside the solve is
-handled via the engine's `ctx.bases`.
+handled via the engine's `opf_bases(ctx)` accessor.
 """
 module PowerOptLab
 
