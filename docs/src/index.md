@@ -39,6 +39,7 @@ New formulations over the same physics, via the staged `build_opf_model` /
 | [Constrained NLLS state estimation](problems/constrained_state_estimation.md) | [`solve_sparse_state_estimator`](@ref) | inverse | prototype |
 | [Parameter estimation](problems/parameter_estimation.md) (line lengths / taps) | [`solve_parameter_estimation`](@ref) | inverse | prototype |
 | [Dynamic operating envelopes](problems/operating_envelope.md) (active import/export capacity) | [`solve_operating_envelope`](@ref) | forward | research prototype |
+| [Bilevel PV/tap POC](problems/bilevel.md) (DiffOpt lower-level response) | [`solve_bilevel_pv_tap`](@ref) | hierarchical | proof of concept |
 
 ### Bespoke algorithms
 
@@ -50,8 +51,8 @@ method roadmap.
 
 BMOPFTools is not yet registered. Develop both from local checkouts; automated
 builds pin BMOPFTools commit
-`2a51297c7bbaa97ad1f037472b3325e24be6fc93` (the PowerIO 0.7-compatible
-snapshot):
+`b7aa9a1bb48bcc8b790d3bcf5417d6a32036352a` (the PowerIO 0.7-compatible
+snapshot with the semantic IBR power and monitored-voltage keys):
 
 ```julia
 using Pkg

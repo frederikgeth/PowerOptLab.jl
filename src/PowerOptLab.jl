@@ -55,6 +55,9 @@ A different objective/variable/constraint structure on the same physics.
   per-connection-point active-power import/export capacity with parameterized
   fairness, forecast/model scenarios, explicit corner-security semantics, and
   prescribed IBR Q-V controls retained from the network model.
+- **Bilevel PV/tap POC** ([`solve_bilevel_pv_tap`](@ref)) — differentiated
+  aggregate-export and local-controller lower levels with native Volt-var/
+  Volt-watt controls, compared with a centralized single-level tap/export solve.
 
 ### Bespoke algorithms — new solution methods (`src/algorithms/`)
 
@@ -75,6 +78,7 @@ module PowerOptLab
 
 using BMOPFTools
 using Dates
+using DiffOpt
 using ForwardDiff
 using JuMP
 using Ipopt
@@ -102,6 +106,7 @@ include("problems/constrained_state_estimation.jl")
 include("problems/parameter_estimation.jl")
 include("problems/inverse_carson.jl")
 include("problems/operating_envelope.jl")
+include("problems/bilevel.jl")
 
 # Bespoke algorithms — new solution methods (custom solve loops)
 include("algorithms/pade.jl")
@@ -151,6 +156,11 @@ export SequenceLineObservation, OverheadCarsonCandidate,
 export ConnectionPoint, FairnessPolicy, solve_operating_envelope,
        verify_operating_envelope, compare_operating_envelope_policies,
        OperatingEnvelopeResult, OperatingEnvelopeVerification
+
+# Bilevel distribution-network proof of concept
+export BilevelPVResult, BilevelPVResponse, SingleLevelPVResult,
+       solve_bilevel_pv_tap, solve_bilevel_pv_response,
+       solve_single_level_pv_tap, bilevel_demo_network
 
 # Advanced inverter (prototype internal-node IBR)
 export AdvancedInverter, solve_advanced_inverter, InverterResult

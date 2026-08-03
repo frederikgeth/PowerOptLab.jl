@@ -1,16 +1,18 @@
 [deps]
 BMOPFTools = "5f9a3b62-8f63-4a39-b67b-af9b51e6a7c3"
+DiffOpt = "930fe3bc-9c6b-11ea-2d94-6184641e85e7"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 Ipopt = "b6b21f68-93f8-5de0-b562-5493be1d77c9"
 JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
 PowerOptLab = "eb8cafbb-1592-46c9-95ea-03a10def68a3"
 
 [sources]
-BMOPFTools = {url = "https://github.com/frederikgeth/BMOPFTools.jl", rev = "2a51297c7bbaa97ad1f037472b3325e24be6fc93"}
+BMOPFTools = {url = "https://github.com/frederikgeth/BMOPFTools.jl", rev = "b7aa9a1bb48bcc8b790d3bcf5417d6a32036352a"}
 PowerOptLab = {path = ".."}
 
 [compat]
 BMOPFTools = "=0.1.0"
+DiffOpt = "0.6"
 Documenter = "1"
 Ipopt = "1"
 JuMP = "1"
