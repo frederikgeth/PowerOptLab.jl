@@ -505,7 +505,7 @@ function bilevel_demo_network(; source_voltage::Real=11_000.0)
      "control_profile":{"vvw":{"volt_var":{"voltage_reference":"PN_PER_PHASE",
          "breakpoints":[216.0,225.0,235.0,244.0],"q_limits":[-0.44,0.44],"q_unit":"VA_FRACTION","q_ref":"VAR_MAX"},
        "volt_watt":{"voltage_reference":"PN_PER_PHASE","breakpoints":[236.0,244.0],
-         "p_limits":[1.0,0.0],"p_unit":"VA_FRACTION","p_ref":"S_MAX"}}},
+         "p_limits":[0.0,1.0],"p_unit":"VA_FRACTION","p_ref":"S_MAX"}}},
      "ibr":{
        "pv1":{"bus":"lv1","terminal_map":["1","n"],"topology":"SINGLE_PHASE","prime_mover":"PV",
          "s_max":[7000.0],"p_min":[0.0],"p_max":[6000.0],"q_min":[-7000.0],"q_max":[7000.0],"control_profile":"vvw"},
