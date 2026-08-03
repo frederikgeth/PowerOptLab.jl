@@ -10,7 +10,7 @@
 
 Result of [`solve_bilevel_pv_tap`](@ref). `tap` is the user-facing tap
 multiplier, `exported_power_W` is the lower-level aggregate PV export, and
-`voltages_V` contains the monitored phase-to-neutral voltage magnitudes.
+`voltages_V` contains monitored voltage magnitudes keyed by `(bus, phase)`.
 `converged` and `termination_reason` describe the upper-level search; a
 lower-level `LOCALLY_SOLVED` status alone is not an upper-level convergence
 certificate.
@@ -27,7 +27,7 @@ struct BilevelPVResult <: AbstractSolveResult
     lower_level::Symbol
     tap::Float64
     exported_power_W::Float64
-    voltages_V::Dict{String,Float64}
+    voltages_V::Dict{Tuple{String,String},Float64}
     utility_objective::Float64
     history::Vector{NamedTuple}
     lower_result::Dict{String,Any}
@@ -49,8 +49,8 @@ struct BilevelPVResponse <: AbstractSolveResult
     lower_level::Symbol
     tap::Float64
     exported_power_W::Float64
-    voltages_V::Dict{String,Float64}
-    voltage_sensitivity_V_per_tap::Dict{String,Float64}
+    voltages_V::Dict{Tuple{String,String},Float64}
+    voltage_sensitivity_V_per_tap::Dict{Tuple{String,String},Float64}
     lower_result::Dict{String,Any}
     differentiability_report::Any
 end
@@ -60,7 +60,7 @@ struct SingleLevelPVResult <: AbstractSolveResult
     termination_status::String
     tap::Float64
     exported_power_W::Float64
-    voltages_V::Dict{String,Float64}
+    voltages_V::Dict{Tuple{String,String},Float64}
     objective::Float64
     result::Dict{String,Any}
 end
@@ -89,7 +89,9 @@ Solve one fixed-tap lower-level response and return its local voltage
 sensitivity with respect to the tap. This is the public diagnostic counterpart
 to the differentiated response used by [`solve_bilevel_pv_tap`](@ref): it is
 useful for comparing DiffOpt derivatives against finite differences and for
-checking sensitivity quality near Volt-watt transitions.
+checking sensitivity quality near Volt-watt transitions. `voltage_measurement`
+selects phase-to-neutral (`:pn`), phase-to-ground (`:pg`), or cyclic
+phase-to-phase (`:pp`) monitoring; outputs are keyed by `(bus, phase)`.
 """
 function solve_bilevel_pv_response(net::Dict{String,Any};
                                    transformer_id::AbstractString,
@@ -100,6 +102,7 @@ function solve_bilevel_pv_response(net::Dict{String,Any};
                                    lower_level::Symbol=:aggregate,
                                    voltage_reference::Real=230.0,
                                    voltage_band::Real=15.0,
+                                   voltage_measurement::Symbol=:pn,
                                    volt_var_watt_eps::Real=2e-3,
                                    optimizer=Ipopt.Optimizer,
                                    verbose::Bool=false)
@@ -110,12 +113,14 @@ function solve_bilevel_pv_response(net::Dict{String,Any};
     _bilevel_validation(net, tid, pids, buses)
     lower_level in (:aggregate, :local_controller) || throw(ArgumentError(
         "lower_level must be :aggregate or :local_controller"))
-    _bilevel_voltage_data(net, buses, Float64(voltage_reference),
-                          Float64(voltage_band))
+    _bilevel_validate_voltage_data(net, buses, Float64(voltage_reference),
+                                   Float64(voltage_band))
+    _bilevel_validate_voltage_measurement(voltage_measurement)
     volt_var_watt_eps > 0 || throw(ArgumentError("volt_var_watt_eps must be > 0"))
     lo, hi = Float64.(tap_bounds)
     state = _bilevel_lower_state(net, tid, pids, buses, tap_value, (lo, hi);
                                  lower_level, relu_eps=Float64(volt_var_watt_eps),
+                                 voltage_measurement,
                                  optimizer, verbose)
     snap = _bilevel_lower_solve!(state, tap_value; differentiate=true)
     lower_result = BMOPFTools.extract_result(state.context)
@@ -142,41 +147,76 @@ function _bilevel_copy_with_tap_bounds(net, transformer_id, tap_bounds, tap_init
     return n
 end
 
-function _bilevel_phase_terminals(net, bus::String)
+function _bilevel_validate_voltage_measurement(measurement::Symbol)
+    measurement in (:pn, :pg, :pp) || throw(ArgumentError(
+        "voltage_measurement must be :pn, :pg, or :pp"))
+    measurement
+end
+
+function _bilevel_phase_terminals(net, bus::String;
+                                  neutral_labels=Set(["n"]),
+                                  voltage_measurement::Symbol=:pn)
+    _bilevel_validate_voltage_measurement(voltage_measurement)
     data = get(net["bus"], bus, nothing)
     data === nothing && throw(ArgumentError("monitored bus '$bus' was not found"))
     terminals = String.(get(data, "terminal_names", String[]))
     isempty(terminals) && throw(ArgumentError(
         "monitored bus '$bus' must define terminal_names"))
-    neutral = findfirst(t -> lowercase(t) in ("n", "neutral"), terminals)
-    neutral === nothing && throw(ArgumentError(
-        "monitored bus '$bus' must define a neutral terminal for phase-to-neutral voltage"))
+    declared = haskey(net, "terminal_conventions")
+    neutral = findfirst(t -> t in neutral_labels ||
+                            (!declared && lowercase(t) == "neutral"), terminals)
+    if voltage_measurement == :pn && neutral === nothing
+        throw(ArgumentError(
+            "monitored bus '$bus' must define a neutral terminal for " *
+            "phase-to-neutral voltage; use voltage_measurement=:pg or :pp " *
+            "for a non-neutral bus"))
+    end
     phases = [t for (i, t) in enumerate(terminals) if i != neutral]
     isempty(phases) && throw(ArgumentError(
         "monitored bus '$bus' must have at least one phase terminal"))
-    phases, terminals[neutral]
+    voltage_measurement == :pp && length(phases) < 2 && throw(ArgumentError(
+        "monitored bus '$bus' must have at least two phase terminals for " *
+        "voltage_measurement=:pp"))
+    phases, (neutral === nothing ? nothing : terminals[neutral])
 end
 
-function _bilevel_voltage_handles(ctx, net, buses::Vector{String})
+function _bilevel_voltage_handles(ctx, net, buses::Vector{String};
+                                  voltage_measurement::Symbol=:pn)
+    _bilevel_validate_voltage_measurement(voltage_measurement)
     model = _opf_model(ctx)
     vr, vi = _opf_voltage_maps(ctx)
     bases = _opf_bases(ctx)
     voltage_start = bases === nothing ? 230.0 : 1.0
-    handles = Dict{String,Any}()
+    handles = Dict{Tuple{String,String},Any}()
     for bus in buses
-        phases, neutral = _bilevel_phase_terminals(net, bus)
-        for phase in phases
+        phases, neutral = _bilevel_phase_terminals(net, bus;
+            neutral_labels=Set(string.(BMOPFTools.opf_neutral_labels(ctx))),
+            voltage_measurement)
+        for (phase_index, phase) in enumerate(phases)
             key = (bus, phase)
             haskey(vr, key) || throw(ArgumentError(
                 "monitored bus '$bus' must have phase terminal '$phase'"))
-            pair_key = length(phases) == 1 ? bus : "$(bus):$(phase)"
             vm = JuMP.@variable(model, lower_bound=0.0,
-                                base_name="bilevel_vm_$(replace(pair_key, ':' => '_'))")
+                                base_name="bilevel_vm_$(replace("$(bus)_$(phase)", ':' => '_'))")
             JuMP.set_start_value(vm, voltage_start)
-            JuMP.@constraint(model, vm^2 ==
-                (vr[(bus, phase)] - vr[(bus, neutral)])^2 +
-                (vi[(bus, phase)] - vi[(bus, neutral)])^2)
-            handles[pair_key] = vm
+            reference_phase = if voltage_measurement == :pp
+                phases[mod1(phase_index + 1, length(phases))]
+            else
+                nothing
+            end
+            if voltage_measurement == :pn
+                JuMP.@constraint(model, vm^2 ==
+                    (vr[(bus, phase)] - vr[(bus, neutral)])^2 +
+                    (vi[(bus, phase)] - vi[(bus, neutral)])^2)
+            elseif voltage_measurement == :pg
+                JuMP.@constraint(model, vm^2 ==
+                    vr[(bus, phase)]^2 + vi[(bus, phase)]^2)
+            else
+                JuMP.@constraint(model, vm^2 ==
+                    (vr[(bus, phase)] - vr[(bus, reference_phase)])^2 +
+                    (vi[(bus, phase)] - vi[(bus, reference_phase)])^2)
+            end
+            handles[key] = vm
         end
     end
     handles
@@ -284,6 +324,7 @@ function _bilevel_local_controller_constraints!(ctx, net, pv_ids, relu_eps)
             "PV '$id' p_limits must be ordered as [p_low, p_high]"))
         p_values = [p_limits[2], p_limits[1]]
         p_baseline, p_triples = _bilevel_breakpoints_to_triples(pbreaks, p_values)
+        # Validate only: q is read from BMOPFTools' native registered auxiliary.
         _bilevel_single_phase_voltage_reference(vv, "Volt-var")
         p_voltage_key = BMOPFTools.opf_ibr_voltage_magnitude_key(
             id, 1; reference=_bilevel_single_phase_voltage_reference(vw, "Volt-watt"),
@@ -311,6 +352,12 @@ function _bilevel_local_controller_constraints!(ctx, net, pv_ids, relu_eps)
         # reserving headroom against a second, drifting curve evaluation.
         q = BMOPFTools.opf_object(ctx,
             BMOPFTools.opf_ibr_power_key(id, 1; component=:reactive))
+        # The native SOC is the authoritative capability constraint, but Ipopt
+        # may evaluate an infeasible intermediate point while forming a
+        # nonlinear step. Explicit variable bounds keep the square-root domain
+        # valid throughout the local-controller solve.
+        JuMP.set_lower_bound(q, -s_max)
+        JuMP.set_upper_bound(q, s_max)
         p_curve = p_base * _bilevel_curve_expression(
             op, p_voltage, p_baseline, p_triples)
         # Volt-var priority reserves apparent power for reactive support. The
@@ -340,7 +387,7 @@ function _bilevel_validation(net, transformer_id, pv_ids, monitored_buses)
     nothing
 end
 
-function _bilevel_voltage_data(net, buses, voltage_reference, voltage_band)
+function _bilevel_validate_voltage_data(net, buses, voltage_reference, voltage_band)
     isfinite(voltage_reference) || throw(ArgumentError(
         "voltage_reference must be finite"))
     isfinite(voltage_band) || throw(ArgumentError("voltage_band must be finite"))
@@ -388,11 +435,12 @@ end
 
 function _bilevel_tap_evaluation(net, transformer_id, pv_ids, monitored_buses,
                                  tap, tap_bounds; lower_level, relu_eps,
+                                 voltage_measurement,
                                  voltage_reference, voltage_band, voltage_weight,
                                  tap_penalty, optimizer, verbose)
     state = _bilevel_lower_state(net, transformer_id, pv_ids, monitored_buses,
                                  tap, tap_bounds; lower_level,
-                                 relu_eps, optimizer, verbose)
+                                 relu_eps, voltage_measurement, optimizer, verbose)
     snap = _bilevel_lower_solve!(state, tap; differentiate=true,
                                  throw_on_failure=false)
     snap.solved || return (solved=false, tap=Float64(tap), state=state,
@@ -404,20 +452,21 @@ function _bilevel_tap_evaluation(net, transformer_id, pv_ids, monitored_buses,
      objective=objective, gradient=gradient)
 end
 
-"""Mutable state for the differentiated lower-level response."""
+"""Immutable handles for the differentiated lower-level response."""
 struct _BilevelLowerState
     model::JuMP.Model
     context::Any
     tap_parameter::JuMP.VariableRef
     p_handles::Dict{String,Any}
-    vm_handles::Dict{String,Any}
-    voltage_scales::Dict{String,Float64}
+    vm_handles::Dict{Tuple{String,String},Any}
+    voltage_scales::Dict{Tuple{String,String},Float64}
     power_scale::Float64
 end
 
 function _bilevel_lower_state(net, transformer_id, pv_ids, monitored_buses,
                               tap_initial, tap_bounds; lower_level,
-                              relu_eps, optimizer, verbose)
+                              relu_eps, voltage_measurement=:pn,
+                              optimizer, verbose)
     local_net = _bilevel_copy_with_tap_bounds(
         net, transformer_id, tap_bounds, tap_initial)
     model = DiffOpt.nonlinear_diff_model(optimizer)
@@ -432,7 +481,8 @@ function _bilevel_lower_state(net, transformer_id, pv_ids, monitored_buses,
         input_unit=:tap_multiplier, working_unit=:effective_turns_ratio,
         to_working_scale=1.0, owner=:PowerOptLabBilevel)
     p_handles = _bilevel_pv_handles(ctx, pv_ids)
-    vm_handles = _bilevel_voltage_handles(ctx, local_net, monitored_buses)
+    vm_handles = _bilevel_voltage_handles(ctx, local_net, monitored_buses;
+                                          voltage_measurement)
     if lower_level == :aggregate
         JuMP.@objective(model, Max, sum(values(p_handles)))
     elseif lower_level == :local_controller
@@ -452,7 +502,7 @@ function _bilevel_lower_state(net, transformer_id, pv_ids, monitored_buses,
     isapprox(base_ratio, n0; rtol=1e-10, atol=1e-12) || throw(ArgumentError(
         "per-unit voltage-base propagation is inconsistent with transformer " *
         "nominal turns ratio; the DiffOpt tap binding requires per_unit=true"))
-    voltage_scales = Dict(key => bases.v_base[first(split(key, ":"))]
+    voltage_scales = Dict(key => bases.v_base[key[1]]
                           for key in keys(vm_handles))
     power_scale = bases.s_base
     _BilevelLowerState(model, ctx, parameter, p_handles, vm_handles,
@@ -465,11 +515,11 @@ function _bilevel_lower_solve!(state::_BilevelLowerState, tap;
     JuMP.optimize!(state.model)
     solve = _bilevel_status(state.model; throw_on_failure=throw_on_failure)
     solve.solved || return (status=solve.status, solved=false, exported=NaN,
-                            voltages=Dict{String,Float64}(),
-                            derivatives=Dict{String,Float64}(), error=nothing)
+                            voltages=Dict{Tuple{String,String},Float64}(),
+                            derivatives=Dict{Tuple{String,String},Float64}(), error=nothing)
     exported, voltages = _bilevel_snapshot(state.model, state.p_handles,
         state.vm_handles, state.voltage_scales, state.power_scale)
-    derivatives = Dict{String,Float64}()
+    derivatives = Dict{Tuple{String,String},Float64}()
     if differentiate
         try
             JuMP.MOI.set(state.model, DiffOpt.NonLinearKKTJacobianFactorization(),
@@ -486,7 +536,8 @@ function _bilevel_lower_solve!(state::_BilevelLowerState, tap;
         catch err
             throw_on_failure && rethrow()
             return (status=solve.status, solved=false, exported=exported,
-                    voltages=voltages, derivatives=Dict{String,Float64}(),
+                    voltages=voltages,
+                    derivatives=Dict{Tuple{String,String},Float64}(),
                     error=err)
         end
         DiffOpt.empty_input_sensitivities!(state.model)
@@ -506,7 +557,8 @@ its own Volt-var/Volt-watt response and the lower-level objective is constant;
 the extra equations are differentiated as part of the network equilibrium.
 The upper level minimises a smooth fourth-power voltage-stress metric plus tap
 movement, using DiffOpt's implicit KKT derivative and a safeguarded
-one-dimensional derivative search.
+one-dimensional derivative search. `voltage_measurement` selects the monitored
+phase-to-neutral, phase-to-ground, or cyclic phase-to-phase quantity.
 
 This is intentionally a local, smooth-region experiment: it is not a global
 solution method for a nonconvex bilevel problem. Each upper-level trial builds
@@ -526,6 +578,7 @@ function solve_bilevel_pv_tap(net::Dict{String,Any};
                               voltage_band::Real=15.0,
                               voltage_weight::Real=1.0,
                               tap_penalty::Real=0.05,
+                              voltage_measurement::Symbol=:pn,
                               gradient_tolerance::Real=1e-6,
                               tap_tolerance::Real=1e-5,
                               max_iterations::Integer=16,
@@ -538,8 +591,9 @@ function solve_bilevel_pv_tap(net::Dict{String,Any};
     _bilevel_validation(net, tid, pids, buses)
     lower_level in (:aggregate, :local_controller) || throw(ArgumentError(
         "lower_level must be :aggregate or :local_controller"))
-    _bilevel_voltage_data(net, buses, Float64(voltage_reference),
-                          Float64(voltage_band))
+    _bilevel_validate_voltage_data(net, buses, Float64(voltage_reference),
+                                   Float64(voltage_band))
+    _bilevel_validate_voltage_measurement(voltage_measurement)
     voltage_weight >= 0 || throw(ArgumentError("voltage_weight must be >= 0"))
     tap_penalty >= 0 || throw(ArgumentError("tap_penalty must be >= 0"))
     gradient_tolerance > 0 || throw(ArgumentError(
@@ -558,6 +612,7 @@ function solve_bilevel_pv_tap(net::Dict{String,Any};
     evaluate(t) = _bilevel_tap_evaluation(
         net, tid, pids, buses, t, (lo, hi); lower_level,
         relu_eps=Float64(volt_var_watt_eps),
+        voltage_measurement,
         voltage_reference=Float64(voltage_reference),
         voltage_band=Float64(voltage_band), voltage_weight=Float64(voltage_weight),
         tap_penalty=Float64(tap_penalty), optimizer, verbose)
@@ -579,7 +634,7 @@ function solve_bilevel_pv_tap(net::Dict{String,Any};
             if fallback.solved
                 current = fallback
                 tap = fallback_tap
-                record!(current, i)
+                record!(current, length(history) + 1)
                 break
             end
         end
@@ -587,32 +642,46 @@ function solve_bilevel_pv_tap(net::Dict{String,Any};
     current.solved || throw(ErrorException(
         "no feasible lower-level response was found inside tap_bounds"))
 
-    points = Any[current]
-    for endpoint in (search_lo, search_hi)
-        endpoint == current.tap && continue
-        evaluation = evaluate(endpoint)
-        evaluation.solved && (push!(points, evaluation); record!(evaluation, length(history) + 1))
-    end
-    sort!(points, by=evaluation -> evaluation.tap)
-
     converged = abs(current.gradient) <= gradient_tolerance
     termination_reason = converged ? :gradient_tolerance : :iteration_limit
     selected = current
+    points = Any[current]
     if !converged
+        for endpoint in (search_lo, search_hi)
+            endpoint == current.tap && continue
+            evaluation = evaluate(endpoint)
+            evaluation.solved && (push!(points, evaluation);
+                record!(evaluation, length(history) + 1))
+        end
+        sort!(points, by=evaluation -> evaluation.tap)
+
+        better_stationary(a, b) = abs(a.gradient) <= abs(b.gradient) ? a : b
         bracket = nothing
         for i in 1:(length(points) - 1)
             left, right = points[i], points[i + 1]
-            left.gradient == 0.0 && (selected = left; bracket = nothing; converged = true;
-                                     termination_reason = :gradient_tolerance; break)
-            right.gradient == 0.0 && (selected = right; bracket = nothing; converged = true;
-                                      termination_reason = :gradient_tolerance; break)
+            if abs(left.gradient) <= gradient_tolerance
+                selected = left
+                converged = true
+                termination_reason = :gradient_tolerance
+                break
+            elseif abs(right.gradient) <= gradient_tolerance
+                selected = right
+                converged = true
+                termination_reason = :gradient_tolerance
+                break
+            end
             left.gradient * right.gradient < 0.0 && (bracket = (left, right); break)
         end
         if !converged && bracket !== nothing
             left, right = bracket
             for iteration in 1:max_iterations
                 width = right.tap - left.tap
-                width <= tap_tolerance && break
+                if width <= tap_tolerance
+                    selected = better_stationary(better_stationary(selected, left), right)
+                    converged = true
+                    termination_reason = :tap_tolerance
+                    break
+                end
                 # Bisection is deliberately used as the safeguarded core. The
                 # lower-level response is nonconvex, so a fast open Newton step
                 # can jump across an active-set transition; bisection preserves
@@ -630,7 +699,7 @@ function solve_bilevel_pv_tap(net::Dict{String,Any};
                 end
                 push!(points, candidate)
                 record!(candidate, length(history) + 1)
-                selected = candidate
+                selected = better_stationary(selected, candidate)
                 if abs(candidate.gradient) <= gradient_tolerance
                     converged = true
                     termination_reason = :gradient_tolerance
@@ -640,7 +709,8 @@ function solve_bilevel_pv_tap(net::Dict{String,Any};
                 else
                     left = candidate
                 end
-                selected = abs(left.gradient) < abs(right.gradient) ? left : right
+                selected = better_stationary(
+                    better_stationary(selected, left), right)
                 if right.tap - left.tap <= tap_tolerance
                     converged = true
                     termination_reason = :tap_tolerance
@@ -661,6 +731,15 @@ function solve_bilevel_pv_tap(net::Dict{String,Any};
         end
     end
 
+    # Trial evaluations own complete JuMP/DiffOpt contexts. Keep only the
+    # selected context for extraction by re-solving the selected tap once and
+    # releasing the historical evaluation objects.
+    selected_tap = selected.tap
+    final = evaluate(selected_tap)
+    final.solved || throw(ErrorException(
+        "the selected tap lost feasibility during final re-solve"))
+    selected = final
+    empty!(points)
     snap = selected.snap
     lower_result = BMOPFTools.extract_result(selected.state.context)
     BilevelPVResult(snap.status, lower_level, selected.tap, snap.exported,
@@ -688,6 +767,7 @@ function solve_single_level_pv_tap(net::Dict{String,Any};
                                    voltage_band::Real=15.0,
                                    voltage_weight::Real=1.0,
                                    tap_penalty::Real=0.05,
+                                   voltage_measurement::Symbol=:pn,
                                    export_weight::Real=0.0,
                                    export_scale_W::Real=10_000.0,
                                    volt_var_watt_eps::Real=2e-3,
@@ -695,8 +775,9 @@ function solve_single_level_pv_tap(net::Dict{String,Any};
                                    verbose::Bool=false)
     tid = String(transformer_id); pids = String.(pv_ids); buses = String.(monitored_buses)
     _bilevel_validation(net, tid, pids, buses)
-    _bilevel_voltage_data(net, buses, Float64(voltage_reference),
-                          Float64(voltage_band))
+    _bilevel_validate_voltage_data(net, buses, Float64(voltage_reference),
+                                   Float64(voltage_band))
+    _bilevel_validate_voltage_measurement(voltage_measurement)
     export_scale_W > 0 || throw(ArgumentError("export_scale_W must be > 0"))
     voltage_weight >= 0 || throw(ArgumentError("voltage_weight must be >= 0"))
     tap_penalty >= 0 || throw(ArgumentError("tap_penalty must be >= 0"))
@@ -710,13 +791,14 @@ function solve_single_level_pv_tap(net::Dict{String,Any};
         add_objective=false, softplus=:builtin,
         volt_var_watt_eps=Float64(volt_var_watt_eps))
     p_handles = _bilevel_pv_handles(ctx, pids)
-    vm_handles = _bilevel_voltage_handles(ctx, local_net, buses)
+    vm_handles = _bilevel_voltage_handles(ctx, local_net, buses;
+                                          voltage_measurement)
     tap_multiplier = BMOPFTools.opf_object(ctx,
         BMOPFTools.opf_transformer_tap_key(tid))
     bases = _opf_bases(ctx)
     bases === nothing && throw(ArgumentError(
         "centralized bilevel benchmark requires per-unit OPF bases"))
-    voltage_scales = Dict(key => bases.v_base[first(split(key, ":"))]
+    voltage_scales = Dict(key => bases.v_base[key[1]]
                           for key in keys(vm_handles))
     power_scale = bases.s_base
     voltage_expr(key) = voltage_scales[key] * vm_handles[key]

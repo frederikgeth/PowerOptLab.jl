@@ -22,18 +22,18 @@ centralized = solve_single_level_pv_tap(net;
 println("Aggregate lower-level bilevel response")
 println("  tap:       ", round(aggregate.tap; digits=6))
 println("  PV export: ", round(aggregate.exported_power_W; digits=2), " W")
-println("  voltages:  ", aggregate.voltages_V)
+println("  voltages (bus, phase):  ", aggregate.voltages_V)
 println("  report:    ", aggregate.differentiability_report.ready,
         " / ", aggregate.differentiability_report.kkt_diagnostic.status)
 
 println("Local-controller lower-level bilevel response")
 println("  tap:       ", round(local_controller.tap; digits=6))
 println("  PV export: ", round(local_controller.exported_power_W; digits=2), " W")
-println("  voltages:  ", local_controller.voltages_V)
+println("  voltages (bus, phase):  ", local_controller.voltages_V)
 println("  report:    ", local_controller.differentiability_report.ready,
         " / ", local_controller.differentiability_report.kkt_diagnostic.status)
 
 println("Centralized single-level benchmark")
 println("  tap:       ", round(centralized.tap; digits=6))
 println("  PV export: ", round(centralized.exported_power_W; digits=2), " W")
-println("  voltages:  ", centralized.voltages_V)
+println("  voltages (bus, phase):  ", centralized.voltages_V)

@@ -1,5 +1,33 @@
 @testset "Bilevel PV/tap DiffOpt proof of concept" begin
     net = bilevel_demo_network()
+
+    declared_neutral_net = Dict{String,Any}(
+        "bus" => Dict{String,Any}(
+            "lv1" => Dict{String,Any}(
+                "terminal_names" => ["1", "ret"])),
+        "terminal_conventions" => Dict{String,Any}(
+            "phase" => ["1"], "neutral" => ["ret"], "earth" => String[]))
+    @test PowerOptLab._bilevel_phase_terminals(
+        declared_neutral_net, "lv1"; neutral_labels=Set(["ret"])) ==
+        (["1"], "ret")
+
+    three_wire_net = Dict{String,Any}(
+        "bus" => Dict{String,Any}(
+            "mv" => Dict{String,Any}(
+                "terminal_names" => ["a", "b", "c"])))
+    @test PowerOptLab._bilevel_phase_terminals(
+        three_wire_net, "mv"; voltage_measurement=:pg) ==
+        (["a", "b", "c"], nothing)
+    @test_throws ArgumentError PowerOptLab._bilevel_phase_terminals(
+        three_wire_net, "mv"; voltage_measurement=:pn)
+
+    no_rating = deepcopy(net)
+    delete!(no_rating["ibr"]["pv1"], "s_max")
+    no_rating_response = solve_bilevel_pv_response(no_rating;
+        transformer_id="reg", pv_ids=["pv1", "pv2"],
+        monitored_buses=["lv1", "lv2"], tap=1.0)
+    @test solve_status(no_rating_response).publishable
+
     result = solve_bilevel_pv_tap(net;
         transformer_id="reg", pv_ids=["pv1", "pv2"],
         monitored_buses=["lv1", "lv2"], max_iterations=3)
@@ -26,6 +54,14 @@
     @test all(isfinite, values(response.voltage_sensitivity_V_per_tap))
     @test response.differentiability_report.kkt_diagnostic.status == :accepted
 
+    pg_response = solve_bilevel_pv_response(net;
+        transformer_id="reg", pv_ids=["pv1", "pv2"],
+        monitored_buses=["lv1", "lv2"], tap=1.0,
+        voltage_measurement=:pg)
+    @test solve_status(pg_response).publishable
+    @test Set(keys(pg_response.voltages_V)) ==
+          Set([("lv1", "1"), ("lv2", "1")])
+
     for lower_level in (:aggregate, :local_controller)
         nominal = lower_level == :local_controller ? response :
             solve_bilevel_pv_response(net;
@@ -41,7 +77,7 @@
             transformer_id="reg", pv_ids=["pv1", "pv2"],
             monitored_buses=["lv1", "lv2"], tap=1.0 - h,
             lower_level=lower_level)
-        for bus in ("lv1", "lv2")
+        for bus in (("lv1", "1"), ("lv2", "1"))
             fd = (plus.voltages_V[bus] - minus.voltages_V[bus]) / (2h)
             @test isapprox(nominal.voltage_sensitivity_V_per_tap[bus], fd;
                            atol=2e-3, rtol=2e-5)
@@ -62,6 +98,14 @@
     @test low_start.termination_reason == :at_bound
     @test solve_status(low_start).publishable
 
+    interior = solve_bilevel_pv_tap(net;
+        transformer_id="reg", pv_ids=["pv1", "pv2"],
+        monitored_buses=["lv1", "lv2"], voltage_reference=234.0,
+        tap_penalty=0.0, max_iterations=20)
+    @test interior.converged
+    @test interior.termination_reason == :tap_tolerance
+    @test 0.95 < interior.tap < 1.05
+
     local_controller = solve_bilevel_pv_tap(net;
         transformer_id="reg", pv_ids=["pv1", "pv2"],
         monitored_buses=["lv1", "lv2"], lower_level=:local_controller,
@@ -74,8 +118,10 @@
               for v in values(local_controller.voltages_V))
     @test local_controller.differentiability_report.kkt_diagnostic.status == :accepted
     @test isfinite(local_controller.exported_power_W)
-    @test local_controller.exported_power_W < result.exported_power_W
-    @test all(local_controller.lower_result["ibr"][id]["1"]["pg"] <= 6000.0 + 1e-3
+    @test local_controller.exported_power_W <=
+          result.exported_power_W + 2e-5 * 12_000.0
+    @test all(local_controller.lower_result["ibr"][id]["1"]["pg"] <=
+              net["ibr"][id]["p_max"][1] + 1e-3
               for id in ("pv1", "pv2"))
     @test net["control_profile"]["vvw"]["volt_watt"]["p_limits"] == [0.0, 1.0]
     @test_throws ArgumentError solve_bilevel_pv_tap(net;

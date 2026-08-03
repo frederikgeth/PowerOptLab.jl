@@ -49,6 +49,11 @@ response = solve_bilevel_pv_response(net;
 response.voltage_sensitivity_V_per_tap
 ```
 
+Voltage outputs and sensitivities are keyed consistently by `(bus, phase)`
+tuples. The default monitored quantity is phase-to-neutral (`voltage_measurement=:pn`);
+use `:pg` for phase-to-ground or `:pp` for cyclic phase-to-phase monitoring on
+three-wire or delta configurations.
+
 There are two lower-level interpretations:
 
 ```julia
@@ -87,9 +92,10 @@ For Volt-Watt, BMOPFTools interprets `p_limits` as `[p_low, p_high]`, so the
 demo's `[0.0, 1.0]` setting retains full output at the low-voltage breakpoint
 and curtails toward the high-voltage breakpoint.
 
-Monitored voltages are constructed as phase-to-neutral magnitudes using the
-actual bus phase and neutral terminals. On a multi-phase bus, result keys use
-the form `"bus:phase"`; on a single-phase bus, the legacy bus key is retained.
+Monitored voltages are constructed using the actual bus terminals. Result keys
+use the consistent `(bus, phase)` tuple form for both single- and multi-phase
+measurements. The default is phase-to-neutral; `voltage_measurement=:pg` and
+`:pp` support phase-to-ground and cyclic phase-to-phase measurements.
 
 The aggregate lower-level objective is `Max sum(p_pv)`. This is an aggregate
 greedy model: all consumers value export positively and there is no export
@@ -98,6 +104,14 @@ controller option is different: it prescribes each consumer's response rather
 than solving a shared dispatch problem. A true consumer-by-consumer game would
 require a best-response loop (or a generalized Nash/MPEC formulation) because
 consumers share network voltage constraints.
+
+On the small nominal demo, the aggregate and local-controller responses may
+coincide. That is expected when the aggregate objective selects the same native
+Volt-Watt/apparent-power-limited export point as the deterministic controller;
+it is not evidence that the two formulations are interchangeable in general.
+Use a stressed feeder or the centralized free-dispatch benchmark to expose
+authority differences without manufacturing a gap between mathematically
+aligned lower-level objectives.
 
 The outer objective is
 
