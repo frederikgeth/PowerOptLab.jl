@@ -6,14 +6,15 @@ This page is a proof of concept for a hierarchical distribution-network model:
 2. the PV systems respond through native BMOPFTools Volt-var and Volt-watt
    curves; and
 3. the utility evaluates the lower-level response and minimises a smooth voltage
-   stress metric plus tap movement.
+   stress metric plus tap movement. The upper-level search is safeguarded and
+   one-dimensional; each trial uses a fresh lower-level solve.
 
 The important implementation detail is that the lower model remains a live
 staged BMOPFTools model. Its utility tap is a `JuMP.Parameter` bound to the
 native transformer tap with `bind_opf_parameter!`. After the lower model is
 solved, `DiffOpt.forward_differentiate!` gives the local derivative of monitored
 voltages with respect to the tap. The outer loop uses that derivative in a
-projected, backtracked gradient search.
+safeguarded derivative search.
 
 ```julia
 using PowerOptLab
@@ -28,10 +29,24 @@ bilevel = solve_bilevel_pv_tap(net;
 centralized = solve_single_level_pv_tap(net;
     transformer_id="reg",
     pv_ids=["pv1", "pv2"],
-    monitored_buses=["lv1", "lv2"])
+    monitored_buses=["lv1", "lv2"],
+    export_weight=0.25)
 
 (bilevel.tap, bilevel.exported_power_W, bilevel.voltages_V)
 (centralized.tap, centralized.exported_power_W, centralized.voltages_V)
+```
+
+For a fixed tap, the lower-level response and its local voltage sensitivity can
+be inspected directly. This is useful for reproducing the DiffOpt-versus-finite
+difference checks in the accompanying case-study repository:
+
+```julia
+response = solve_bilevel_pv_response(net;
+    transformer_id="reg", pv_ids=["pv1", "pv2"],
+    monitored_buses=["lv1", "lv2"], tap=1.0,
+    lower_level=:local_controller)
+
+response.voltage_sensitivity_V_per_tap
 ```
 
 There are two lower-level interpretations:
@@ -41,7 +56,7 @@ aggregate = solve_bilevel_pv_tap(net;
     transformer_id="reg", pv_ids=["pv1", "pv2"],
     monitored_buses=["lv1", "lv2"], lower_level=:aggregate)
 
-local = solve_bilevel_pv_tap(net;
+local_controller = solve_bilevel_pv_tap(net;
     transformer_id="reg", pv_ids=["pv1", "pv2"],
     monitored_buses=["lv1", "lv2"], lower_level=:local_controller)
 ```
@@ -57,10 +72,10 @@ appropriate here because the controller equations and network equilibrium are
 still one smooth differentiated lower-level solve; it is not being used to
 differentiate through a discrete best-response or a nonsmooth kink.
 
-The centralized solve is a deliberately comparable benchmark: it chooses the
-tap and PV decisions together, with an explicit export reward in the objective.
-It answers a different question from the hierarchy and therefore exposes the
-coordination gap.
+The centralized solve can optionally include an export reward with
+`export_weight`; the default is zero so the voltage/tap objective is not
+silently changed. It chooses the tap and PV decisions together and answers a
+different question from the hierarchy.
 
 ## Modelling interpretation
 
@@ -68,6 +83,13 @@ The IBR `control_profile` carries the native smooth Volt-var/Volt-watt equations
 For the current BMOPFTools DiffOpt wrapper, use `softplus=:builtin`; the stable
 user-defined softplus is not accepted by that wrapper. The demo uses
 `q_ref="VAR_MAX"` for Volt-var and `p_ref="S_MAX"` for Volt-watt.
+For Volt-Watt, BMOPFTools interprets `p_limits` as `[p_low, p_high]`, so the
+demo's `[0.0, 1.0]` setting retains full output at the low-voltage breakpoint
+and curtails toward the high-voltage breakpoint.
+
+Monitored voltages are constructed as phase-to-neutral magnitudes using the
+actual bus phase and neutral terminals. On a multi-phase bus, result keys use
+the form `"bus:phase"`; on a single-phase bus, the legacy bus key is retained.
 
 The aggregate lower-level objective is `Max sum(p_pv)`. This is an aggregate
 greedy model: all consumers value export positively and there is no export
@@ -95,9 +117,13 @@ scenarios and take the worst-case margin.
   sensitivities are local.
 - DiffOpt derivatives are valid only while the lower-level active set remains
   stable. Volt-watt corners and voltage-bound transitions need perturbation
-  checks or a smaller outer step.
+  checks.
 - Continuous tap control is used here; discrete regulator positions need a
   mixed-integer outer layer or enumeration.
+- `BilevelPVResult.converged` and `termination_reason` report whether the
+  upper-level derivative search reached a stationary point, a tap bound, or a
+  numerical/iteration limit. A lower-level `LOCALLY_SOLVED` status alone is
+  not an upper-level convergence certificate.
 - The consumer objective does not include negative export prices, curtailment
   compensation, or fairness. Those are policy choices that can be added as
   lower-level weights or a game layer later.

@@ -24,7 +24,7 @@ makedocs(
             "Parameter estimation" => "problems/parameter_estimation.md",
             "Inverse Carson"       => "problems/inverse_carson.md",
             "Operating envelopes"  => "problems/operating_envelope.md",
-            "Bilevel PV/tap POC"    => "problems/bilevel.md",
+            "Bilevel PV/tap POC" => "problems/bilevel.md",
         ],
         "Bespoke algorithms" => [
             "Overview"        => "algorithms/index.md",

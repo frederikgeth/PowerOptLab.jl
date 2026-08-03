@@ -17,7 +17,7 @@ local_controller = solve_bilevel_pv_tap(net;
 
 centralized = solve_single_level_pv_tap(net;
     transformer_id="reg", pv_ids=["pv1", "pv2"],
-    monitored_buses=["lv1", "lv2"])
+    monitored_buses=["lv1", "lv2"], export_weight=0.25)
 
 println("Aggregate lower-level bilevel response")
 println("  tap:       ", round(aggregate.tap; digits=6))

@@ -158,7 +158,8 @@ export ConnectionPoint, FairnessPolicy, solve_operating_envelope,
        OperatingEnvelopeResult, OperatingEnvelopeVerification
 
 # Bilevel distribution-network proof of concept
-export BilevelPVResult, SingleLevelPVResult, solve_bilevel_pv_tap,
+export BilevelPVResult, BilevelPVResponse, SingleLevelPVResult,
+       solve_bilevel_pv_tap, solve_bilevel_pv_response,
        solve_single_level_pv_tap, bilevel_demo_network
 
 # Advanced inverter (prototype internal-node IBR)
