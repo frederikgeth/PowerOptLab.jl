@@ -286,8 +286,13 @@ end
     end
     @test all(diff(ps) .> -1.0)                # non-decreasing (1 W solver slack)
     @test ps[end] > ps[1] + 100.0              # and the rating genuinely bites
-    # Tighten it far enough and this grid cannot be served at all.
-    @test !(split(1.0).termination_status in ("LOCALLY_SOLVED", "OPTIMAL"))
+    # Tightening it well below the sweep costs real export. It never renders the
+    # problem infeasible — |I_n| ≤ 2·i_cap_max admits I_n = 0, so an idle inverter
+    # is always feasible — the bank rating buys export, it is not a hard gate.
+    tight = split(0.5)
+    @test tight.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+    @test tight.i_cap <= 0.5 + 1e-3
+    @test tight.p_poc < ps[1] - 500.0
 end
 
 @testset "Advanced inverter: 4-leg caps carry the 2ω term but not the neutral" begin
