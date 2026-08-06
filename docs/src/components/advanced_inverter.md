@@ -110,6 +110,7 @@ inv = AdvancedInverter(id="inv", bus="poc", phase_terminals=["a","b","c"], neutr
 r = solve_advanced_inverter(net3, inv)   # net3 = a three-phase grid
 r.i_neutral   # neutral current (A) — non-zero only under unbalance
 r.dv2         # 2ω bus-ripple amplitude (V) that derated the DC rails
+r.i_cap       # capacitor RMS ripple current (A) — compare against i_cap_max
 ```
 
 On a balanced grid all three topologies coincide (no neutral current, no ripple).
@@ -190,12 +191,89 @@ D_{im}\sin2\theta`. An optional `dv2_max` caps `\sqrt{D_{re}^2+D_{im}^2}`.
 
 ```math
 \pm\sqrt2\big[(U^{re}_x+N_{re})\cos\theta_k - (U^{im}_x+N_{im})\sin\theta_k\big]
-   \le \tfrac{m}{2}\,v_{dc}(\theta_k);\qquad |I_n| \le I_{n,\max}\ \text{(cap rating)},
+   \le \tfrac{m}{2}\,v_{dc}(\theta_k);\qquad
+   \underbrace{|I_n| \le I_{n,\max}}_{\text{optional — see below}},
 ```
+
+Here the standalone `I_{n,\max}` bound is **optional**: the split link's neutral
+current flows through the capacitors, so supplying `i_cap_max` bounds it through
+the thermal budget instead (and then `|I_n| \le 2\,i_{cap,max}`). One of the two
+is required. (`:FOUR_LEG` always needs `I_{n,\max}` — its neutral goes through
+the fourth leg, which the capacitor budget says nothing about.)
 
 with `N_{re} = -I^{im}_n/(2\omega C)`, `N_{im} = I^{re}_n/(2\omega C)`. The factor
 of two on the rail is the split link's utilisation penalty: it needs roughly
 twice the DC voltage of the 4-leg for the same per-phase output.
+
+!!! warning "`In_max` for the split link is net of the 2ω allocation"
+    The split link's half-banks carry the fundamental neutral current **and** the
+    2ω bus current. They are at different frequencies, so they combine in RMS and
+    must be allocated *simultaneously* — the bank rating is not all available for
+    neutral current:
+
+    ```math
+    \Big(\tfrac{|I_n|}{2}\Big)^2 + I_{2\omega,rms}^2 + I_{sw,rms}^2 \le I_{half,rated}^2,
+    \qquad I_{2\omega,rms} = \frac{|\tilde S|}{\sqrt2\,V_{dc}}
+    ```
+
+    so `In_max = 2·√(I_half_rated² − I_2ω,rms² − I_sw,rms²)` (the factor 2 because
+    `|I_n|` divides equally between the two halves). Passing the raw bank rating
+    double-counts the capacitors. Example: a 12 A/half bank at `|S̃|` = 6.6 kVA and
+    `V_dc` = 800 V gives `I_2ω,rms` = 5.8 A, hence `In_max ≈ 21 A`, not 24 A.
+
+    The exact statement is a frequency-weighted thermal limit,
+    `Σ_k ESR(f_k)·I_k² ≤ P_diss,max`. The equal-weight sum used here is an
+    *unweighted* approximation of it, and is conservative **only** when
+    `i_cap_max` is referred to the lowest frequency appearing in the sum —
+    the 50/60 Hz neutral term — because electrolytic ESR *falls* with
+    frequency, so that is the worst case. In practice: take the 100/120 Hz
+    datasheet rating and apply the manufacturer's frequency multiplier
+    (≈0.7–0.85 at 50 Hz) before passing it in. Passing a raw 100/120 Hz
+    rating is **non-conservative** for the 50/60 Hz neutral current.
+
+### Capacitor ripple current: endogenous allocation (`i_cap_max`)
+
+Rather than pre-computing `In_max` by hand, supply the bank's RMS ripple-current
+rating as `i_cap_max` (**per half-bank** for `:SPLIT_DC`, the whole DC-link bank
+otherwise) and let the solve make the allocation at the operating point:
+
+```math
+\underbrace{\Big(\tfrac{|I_n|}{2}\Big)^2}_{\texttt{:SPLIT\_DC}\ \text{only}}
+ + \; I_{2\omega,rms}^2 \; + \; i_{sw}^2 \;\le\; i_{cap,max}^2 ,
+\qquad I_{2\omega,rms} = \frac{|\tilde S|}{\sqrt2\,V_{dc}} = k\,|D|,
+\quad k = \frac{2\omega C_{eq}}{\sqrt2}
+```
+
+Note `I_{2ω,rms} = |\tilde S|/(\sqrt2 V_{dc})` is independent of `C`: capacitance
+sets the ripple *voltage*, not the ripple *current*. `result.i_cap` reports the
+whole left-hand side (square-rooted), `i_sw` included, so it compares directly
+against `i_cap_max`.
+
+The neutral term appears **only** for the split link, whose half-banks sit in the
+neutral path; the 4-leg's neutral current flows through its fourth leg, so its
+bank carries the 2ω component alone. Writing `I_{2ω,rms}` through the ripple
+phasor `D` (rather than the bilinear `\tilde S`) keeps the constraint quadratic
+in variables the model already has. `i_sw` optionally reserves a constant
+switching-frequency allowance out of the budget, for designs where the
+electrolytics — not a parallel film capacitor — carry the `f_sw` component.
+
+`i_cap_max` composes with `In_max`; whichever binds, binds. For `:SPLIT_DC` it
+may also be supplied *instead of* `In_max` — the bank rating bounds `|I_n|` on
+its own. (`:FOUR_LEG` always needs `In_max`: its neutral current flows through
+the fourth leg, whose device rating is unrelated to the capacitors.) The solved
+bank current is reported as `result.i_cap`, so you can see which limit governed:
+
+```julia
+r = solve_advanced_inverter(net, AdvancedInverter(; id="inv", bus="poc",
+        phase_terminals=["a","b","c"], neutral="n", s_max=20e3,
+        topology=:SPLIT_DC, v_dc=800.0, c_dc=2.8e-3, i_cap_max=12.0))
+r.i_cap        # capacitor RMS ripple current (A) vs the 12 A rating
+r.i_neutral    # what was left for neutral current after the 2ω share
+```
+
+This is the model-side statement of the sizing rule above: tightening
+`i_cap_max` on a split link visibly trades away neutral capability, while on a
+4-leg it only reduces the bus ripple.
 
 **Current limits** are per-phase `|I_x| \le i_{max}` and the neutral limits above.
 The sampling makes these **outer** approximations, exact as `N→∞` with relative
