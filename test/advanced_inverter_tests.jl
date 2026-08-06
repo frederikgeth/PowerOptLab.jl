@@ -196,6 +196,86 @@ end
     @test tight.i_cap ≈ k * tight.dv2  rtol=1e-4
 end
 
+@testset "Advanced inverter: switching polytope matches its closed form" begin
+    # With a zero filter at zero power the internal EMF equals the POC voltage
+    # (230 V), so the sampled polytope constrains V_dc alone and can be checked
+    # against the textbook linear-modulation limits:
+    #   3-leg (pairwise, balanced set): √2·√3·|U| ≤ m·V_dc  ⇒  |U| ≤ m·V_dc/√6
+    #   split link (half bus, N = 0):   √2·|U| ≤ (m/2)·V_dc ⇒  |U| ≤ m·V_dc/(2√2)
+    feas(topo, vdc; N=72) = begin
+        kw = topo == :SPLIT_DC ? (; topology=topo, v_dc=vdc, c_dc=50e-3, In_max=40.0) :
+                                 (; topology=topo, v_dc=vdc, c_dc=50e-3)
+        r = solve_advanced_inverter(inv_grid3_bal(),
+                AdvancedInverter(; id="i", kw..., bus="poc",
+                    phase_terminals=["a","b","c"], neutral="n",
+                    s_max=20e3, m_max=0.96, n_samples=N);
+                objective=:min_loss, p_set=0.0)
+        r.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+    end
+    min_vdc(topo; N=72) = begin
+        lo, hi = 400.0, 1200.0
+        for _ in 1:16
+            mid = (lo + hi)/2
+            feas(topo, mid; N=N) ? (hi = mid) : (lo = mid)
+        end
+        hi
+    end
+    three, split = min_vdc(:THREE_LEG), min_vdc(:SPLIT_DC)
+    @test three ≈ 230.0*sqrt(6)/0.96      rtol=2e-3   # ≈ 586.9 V
+    @test split ≈ 230.0*2*sqrt(2)/0.96    rtol=2e-3   # ≈ 677.6 V
+    # The split link's factor-of-two rail is the documented utilisation penalty:
+    # it needs 2/√3 ≈ +15.5 % more DC voltage for the same per-phase output.
+    @test split/three ≈ 2/sqrt(3)         rtol=2e-3
+end
+
+@testset "Advanced inverter: sampled feasibility is an outer approximation" begin
+    # More samples ⇒ the polytope tightens (the true peak stops being missed), so
+    # a bus that a coarse grid accepts must be rejected by a fine one. 587 V is
+    # the converged 3-leg minimum; a 6-sample grid under-constrains down to ~508.
+    coarse(vdc, N) = solve_advanced_inverter(inv_grid3_bal(),
+            AdvancedInverter(; id="i", topology=:THREE_LEG, v_dc=vdc, c_dc=50e-3,
+                bus="poc", phase_terminals=["a","b","c"], neutral="n",
+                s_max=20e3, m_max=0.96, n_samples=N);
+            objective=:min_loss, p_set=0.0).termination_status
+    @test coarse(550.0, 6)  in ("LOCALLY_SOLVED", "OPTIMAL")        # too loose
+    @test !(coarse(550.0, 36) in ("LOCALLY_SOLVED", "OPTIMAL"))     # correctly rejected
+    @test coarse(650.0, 36) in ("LOCALLY_SOLVED", "OPTIMAL")        # genuinely feasible
+end
+
+@testset "Advanced inverter: 2ω ripple uses C_eq = C/2 for the split link" begin
+    # |D| = |S̃|/(2ω·C_eq·V_dc). The split link's series caps halve C_eq, so its
+    # denominator is ωC — not 2ωC. Getting this wrong is a factor-of-two error.
+    net = inv_grid3_unbal(); w = 2pi*50.0
+    com = (bus="poc", phase_terminals=["a","b","c"], neutral="n", s_max=20e3,
+           i_max=40.0, r_filter=0.05, x_filter=0.15, m_max=0.96)
+    four = solve_advanced_inverter(net, AdvancedInverter(; id="i", topology=:FOUR_LEG,
+               v_dc=700.0, c_dc=1.1e-3, In_max=40.0, com...))
+    split = solve_advanced_inverter(net, AdvancedInverter(; id="i", topology=:SPLIT_DC,
+               v_dc=800.0, c_dc=2.8e-3, In_max=21.0, com...))
+    @test four.dv2  ≈ four.ripple /(2w*1.1e-3*700.0)  rtol=1e-4   # single cap: 2ωC
+    @test split.dv2 ≈ split.ripple/(  w*2.8e-3*800.0) rtol=1e-4   # series pair: ωC
+end
+
+@testset "Advanced inverter: 3-wire bank current is the 2ω term alone" begin
+    # No zero-sequence path ⇒ no neutral share, so i_cap is purely the 2ω current.
+    r = solve_advanced_inverter(inv_grid3_unbal(),
+            AdvancedInverter(; id="i", topology=:THREE_LEG, v_dc=700.0, c_dc=1.1e-3,
+                             _TOPO_COMMON...))
+    @test r.i_neutral < 1e-3
+    @test r.i_cap ≈ (2*2pi*50.0*1.1e-3/sqrt(2)) * r.dv2  rtol=1e-4
+end
+
+@testset "Advanced inverter: i_cap_max and In_max compose (whichever binds)" begin
+    net = inv_grid3_src(mags=[250.0, 205.0, 230.0], angs=[0.1, -2.2, 1.95])
+    sp = (topology=:SPLIT_DC, v_dc=800.0, c_dc=2.8e-3)
+    nb = solve_advanced_inverter(net, AdvancedInverter(; id="i", sp..., In_max=4.0,  i_cap_max=20.0, _TOPO_COMMON...))
+    cb = solve_advanced_inverter(net, AdvancedInverter(; id="i", sp..., In_max=40.0, i_cap_max=3.0,  _TOPO_COMMON...))
+    @test nb.i_neutral ≈ 4.0  rtol=5e-2      # neutral rating governs …
+    @test nb.i_cap < 20.0 - 1.0              # … bank rating slack
+    @test cb.i_cap ≈ 3.0  rtol=1e-2          # bank rating governs …
+    @test cb.i_neutral < 40.0 - 1.0          # … neutral rating slack
+end
+
 @testset "Advanced inverter: capacitor-rating argument validation" begin
     common = (bus="poc", phase_terminals=["a","b","c"], neutral="n", s_max=20e3)
     # i_cap_max needs a three-phase topology (it is a DC-bank rating).
@@ -292,7 +372,18 @@ end
     @test pu.q_poc ≈ si.q_poc            rtol=1e-2
     @test pu.i_neutral ≈ si.i_neutral    rtol=1e-2
     @test pu.dv2 ≈ si.dv2                rtol=1e-2
+    @test pu.i_cap ≈ si.i_cap            rtol=1e-2
     @test pu.v_int_mag[1] ≈ si.v_int_mag[1]  rtol=1e-4
+
+    # Split link with a binding bank rating: exercises the i_base scaling of the
+    # neutral share inside the capacitor allocation, which the 4-leg above lacks.
+    invs = AdvancedInverter(; id="i", topology=:SPLIT_DC, v_dc=800.0, c_dc=2.8e-3,
+                            In_max=21.0, i_cap_max=2.5, _TOPO_COMMON...)
+    csi = solve_advanced_inverter(net, invs; per_unit=false)
+    cpu = solve_advanced_inverter(net, invs; per_unit=true)
+    @test csi.i_cap ≈ 2.5                rtol=1e-3    # the rating binds in SI …
+    @test cpu.i_cap ≈ csi.i_cap          rtol=1e-2    # … and per-unit agrees
+    @test cpu.i_neutral ≈ csi.i_neutral  rtol=2e-2
 
     # Single-phase with filter + losses (guards per-unit scaling of the existing features).
     invsp = AdvancedInverter(id="i", bus="poc", s_max=5e3, r_filter=0.2, x_filter=0.5,
