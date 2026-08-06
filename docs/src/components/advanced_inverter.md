@@ -213,9 +213,16 @@ twice the DC voltage of the 4-leg for the same per-phase output.
     `|I_n|` divides equally between the two halves). Passing the raw bank rating
     double-counts the capacitors. Example: a 12 A/half bank at `|S̃|` = 6.6 kVA and
     `V_dc` = 800 V gives `I_2ω,rms` = 5.8 A, hence `In_max ≈ 21 A`, not 24 A.
-    Strictly this should be a frequency-weighted thermal limit
-    (`Σ_k ESR(f_k)·I_k² ≤ P_diss,max`), since electrolytic ESR falls with
-    frequency; the equal-weight RMS sum is the conservative simplification.
+
+    The exact statement is a frequency-weighted thermal limit,
+    `Σ_k ESR(f_k)·I_k² ≤ P_diss,max`. The equal-weight sum used here is an
+    *unweighted* approximation of it, and is conservative **only** when
+    `i_cap_max` is referred to the lowest frequency appearing in the sum —
+    the 50/60 Hz neutral term — because electrolytic ESR *falls* with
+    frequency, so that is the worst case. In practice: take the 100/120 Hz
+    datasheet rating and apply the manufacturer's frequency multiplier
+    (≈0.7–0.85 at 50 Hz) before passing it in. Passing a raw 100/120 Hz
+    rating is **non-conservative** for the 50/60 Hz neutral current.
 
 ### Capacitor ripple current: endogenous allocation (`i_cap_max`)
 
@@ -225,10 +232,15 @@ otherwise) and let the solve make the allocation at the operating point:
 
 ```math
 \underbrace{\Big(\tfrac{|I_n|}{2}\Big)^2}_{\texttt{:SPLIT\_DC}\ \text{only}}
- + \; I_{2\omega,rms}^2 \;\le\; i_{cap,max}^2 - i_{sw}^2 ,
+ + \; I_{2\omega,rms}^2 \; + \; i_{sw}^2 \;\le\; i_{cap,max}^2 ,
 \qquad I_{2\omega,rms} = \frac{|\tilde S|}{\sqrt2\,V_{dc}} = k\,|D|,
 \quad k = \frac{2\omega C_{eq}}{\sqrt2}
 ```
+
+Note `I_{2ω,rms} = |\tilde S|/(\sqrt2 V_{dc})` is independent of `C`: capacitance
+sets the ripple *voltage*, not the ripple *current*. `result.i_cap` reports the
+whole left-hand side (square-rooted), `i_sw` included, so it compares directly
+against `i_cap_max`.
 
 The neutral term appears **only** for the split link, whose half-banks sit in the
 neutral path; the 4-leg's neutral current flows through its fourth leg, so its
@@ -238,8 +250,11 @@ in variables the model already has. `i_sw` optionally reserves a constant
 switching-frequency allowance out of the budget, for designs where the
 electrolytics — not a parallel film capacitor — carry the `f_sw` component.
 
-`i_cap_max` composes with `In_max`; whichever binds, binds. The solved bank
-current is reported as `result.i_cap`, so you can see which limit governed:
+`i_cap_max` composes with `In_max`; whichever binds, binds. For `:SPLIT_DC` it
+may also be supplied *instead of* `In_max` — the bank rating bounds `|I_n|` on
+its own. (`:FOUR_LEG` always needs `In_max`: its neutral current flows through
+the fourth leg, whose device rating is unrelated to the capacitors.) The solved
+bank current is reported as `result.i_cap`, so you can see which limit governed:
 
 ```julia
 r = solve_advanced_inverter(net, AdvancedInverter(; id="inv", bus="poc",

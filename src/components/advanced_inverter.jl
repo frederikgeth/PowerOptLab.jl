@@ -74,14 +74,20 @@ zero filter) it is a plain grid-following converter at the POC.
 - `i_cap_max` — capacitor RMS ripple-current rating (A), three-phase topologies
   only: **per half-bank** for `:SPLIT_DC`, the whole DC-link bank otherwise.
   Supplying it stamps the simultaneous thermal allocation
-  `(|I_n|/2)² + I_2ω,rms² ≤ i_cap_max²` (the neutral term only for `:SPLIT_DC`;
-  the 4-leg's neutral flows through its 4th leg, not the caps), so the split
-  between capacitor-rating and neutral-current limits is decided by the solve at
-  the operating point rather than fixed as a nameplate. Composes with `In_max` —
-  whichever binds, binds.
+  `(|I_n|/2)² + I_2ω,rms² + i_sw² ≤ i_cap_max²` (the neutral term only for
+  `:SPLIT_DC`; the 4-leg's neutral flows through its 4th leg, not the caps), so
+  the split between capacitor-rating and neutral-current limits is decided by the
+  solve at the operating point rather than fixed as a nameplate. Composes with
+  `In_max` — whichever binds, binds. For `:SPLIT_DC` it can also be supplied
+  *instead of* `In_max`, since it bounds `|I_n|` on its own.
+  **Rating convention:** because electrolytic ESR falls with frequency, the
+  equal-weight sum above is only conservative if `i_cap_max` is referred to the
+  *lowest* frequency in it — the 50/60 Hz neutral term — i.e. a 100/120 Hz
+  datasheet rating multiplied by the manufacturer's frequency factor (≈0.7–0.85).
+  Passing a raw 100/120 Hz rating understates 50/60 Hz heating.
 - `i_sw` — optional constant switching-frequency RMS allowance (A) reserved out
   of `i_cap_max` (use when the electrolytics, not a parallel film cap, carry the
-  `f_sw` component).
+  `f_sw` component). Requires `i_cap_max`.
 - `dv2_max` — optional cap on the 2ω bus-ripple amplitude (V).
 - `n_samples=36` — time-sampling grid for the exact feasibility (gap ~(π/N)²).
 - `f=50.0` — fundamental frequency (Hz).
@@ -190,8 +196,16 @@ function _validate_inverter(inv::AdvancedInverter, nets=())
             "inverter '$(inv.id)' modulation_max applies only to :SINGLE_PHASE"))
         inv.p_ripple_max === nothing || throw(ArgumentError(
             "inverter '$(inv.id)' p_ripple_max applies only to :SINGLE_PHASE"))
-        (inv.topology in (:FOUR_LEG, :SPLIT_DC) && inv.In_max === nothing) &&
-            throw(ArgumentError("topology :$(inv.topology) requires In_max"))
+        # The 4-leg's neutral current flows through its fourth leg, whose device
+        # rating is independent of anything on the DC side — so In_max is always
+        # required. The split link's neutral flows through the capacitors, so a
+        # bank rating (i_cap_max) bounds it on its own; either knob suffices.
+        if inv.topology == :FOUR_LEG && inv.In_max === nothing
+            throw(ArgumentError("topology :FOUR_LEG requires In_max (the 4th-leg rating)"))
+        elseif inv.topology == :SPLIT_DC && inv.In_max === nothing && inv.i_cap_max === nothing
+            throw(ArgumentError("topology :SPLIT_DC requires In_max or i_cap_max " *
+                                "to bound the neutral current through the capacitors"))
+        end
     elseif inv.modulation_max !== nothing && inv.v_dc === nothing
         throw(ArgumentError(
             "inverter '$(inv.id)' modulation_max requires v_dc"))
@@ -202,6 +216,10 @@ function _validate_inverter(inv::AdvancedInverter, nets=())
     end
     isfinite(inv.i_sw) && inv.i_sw >= 0 || throw(ArgumentError(
         "inverter '$(inv.id)' i_sw must be finite and >= 0"))
+    if inv.i_sw > 0 && inv.i_cap_max === nothing
+        throw(ArgumentError("inverter '$(inv.id)' i_sw is an allowance reserved out " *
+                            "of i_cap_max; supply i_cap_max or leave i_sw = 0"))
+    end
     if inv.i_cap_max !== nothing && inv.i_sw >= inv.i_cap_max
         throw(ArgumentError("inverter '$(inv.id)' i_sw must be < i_cap_max " *
                             "(the switching allowance cannot exhaust the bank rating)"))
@@ -233,9 +251,10 @@ currents A.
 - `i_neutral` — neutral current magnitude `|I_n|` (0 for 3-wire / single-phase).
 - `ripple` — 2ω power-ripple magnitude `|Σ V_int·I|` (VA).
 - `dv2` — 2ω bus-ripple amplitude (V; three-phase topologies, else 0).
-- `i_cap` — capacitor RMS ripple current (A; three-phase topologies, else 0):
-  the 2ω component, plus the per-half-bank neutral share for `:SPLIT_DC`.
-  Compare against `i_cap_max` to see whether the bank's thermal rating binds.
+- `i_cap` — **total** capacitor RMS ripple current (A; three-phase topologies,
+  else 0): the 2ω component, the per-half-bank neutral share for `:SPLIT_DC`,
+  and the `i_sw` allowance — so it is directly comparable against `i_cap_max`.
+  The low-frequency part alone is `sqrt(i_cap^2 - i_sw^2)`.
 - `bus::Dict{String,Any}` — the BMOPFTools `result["bus"]` (POC voltages, …).
 """
 struct InverterResult <: AbstractSolveResult
@@ -480,7 +499,9 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
         if inv.topology == :THREE_LEG
             JuMP.@constraint(m, sum(cri[k] for k in 1:3) == 0)
             JuMP.@constraint(m, sum(cii[k] for k in 1:3) == 0)
-        else
+        elseif inv.In_max !== nothing
+            # Standalone neutral rating. Optional for :SPLIT_DC, where i_cap_max
+            # can bound |I_n| instead (via the capacitor thermal budget below).
             sumcr = JuMP.@expression(m, sum(cri[k] for k in 1:3))
             sumci = JuMP.@expression(m, sum(cii[k] for k in 1:3))
             JuMP.@constraint(m, sumcr^2 + sumci^2 <= (inv.In_max / ib)^2)
@@ -506,9 +527,12 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
             # neutral current flows through its 4th leg, not through the caps.)
             icap_sq = JuMP.@expression(m, icap_sq + (in_re^2 + in_im^2) / 4)
         end
+        # Reported current is the TOTAL bank loading, i_sw included, so that it is
+        # directly comparable against i_cap_max. (The constraint below is the same
+        # statement with the constant moved to the right-hand side.)
+        icap_sq = JuMP.@expression(m, icap_sq + inv.i_sw^2)
         if inv.i_cap_max !== nothing
-            budget = inv.i_cap_max^2 - inv.i_sw^2      # i_sw < i_cap_max (validated)
-            JuMP.@constraint(m, icap_sq <= budget)
+            JuMP.@constraint(m, icap_sq <= inv.i_cap_max^2)
         end
     end
 

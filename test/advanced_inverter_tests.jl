@@ -174,10 +174,107 @@ end
     k = 2pi * 50.0 * 2.8e-3 / sqrt(2)
     @test tight.i_cap^2 ≈ (k*tight.dv2)^2 + (tight.i_neutral/2)^2  rtol=1e-4
 
-    # i_sw reserves part of the budget: √(3² − 2²) = √5.
+    # i_sw reserves part of the budget, leaving √(3² − 2²) = √5 for the
+    # low-frequency terms — but the REPORTED i_cap is the total bank loading, so
+    # it reads 3.0 and is directly comparable against i_cap_max.
     sw = solve_advanced_inverter(net,
         AdvancedInverter(; id="i", split..., i_cap_max=3.0, i_sw=2.0, _TOPO_COMMON...))
-    @test sw.i_cap ≈ sqrt(5.0)  rtol=1e-3
+    @test sw.i_cap ≈ 3.0  rtol=1e-3                        # total, i_sw included
+    @test sqrt(sw.i_cap^2 - 2.0^2) ≈ sqrt(5.0)  rtol=1e-2  # low-frequency part
+    # Reserving switching headroom costs neutral capability at the SAME rating:
+    # the low-frequency budget drops from 3.0 to √(3²−2²) = √5 ≈ 2.24.
+    nosw = solve_advanced_inverter(net,
+        AdvancedInverter(; id="i", split..., i_cap_max=3.0, _TOPO_COMMON...))
+    @test sw.i_neutral < nosw.i_neutral - 0.5
+end
+
+@testset "Advanced inverter: split link can use i_cap_max instead of In_max" begin
+    # The split link's neutral current flows through the capacitors, so a bank
+    # rating bounds it on its own — In_max is optional (this is the documented
+    # "endogenous instead of pre-computed" usage).
+    net = inv_grid3_unbal()
+    r = solve_advanced_inverter(net, AdvancedInverter(; id="i", topology=:SPLIT_DC,
+            v_dc=800.0, c_dc=2.8e-3, i_cap_max=2.0, _TOPO_COMMON...))
+    @test r.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+    @test r.i_cap <= 2.0 + 1e-3            # the bank rating alone governs …
+    @test r.i_neutral > 0.1                # … and it is what bounds |I_n|
+    # The 4-leg still needs In_max: its neutral goes through the 4th leg, whose
+    # device rating has nothing to do with the capacitor bank.
+    @test_throws ArgumentError solve_advanced_inverter(net,
+        AdvancedInverter(; id="i", topology=:FOUR_LEG, v_dc=700.0, c_dc=1.1e-3,
+                         i_cap_max=5.0, _TOPO_COMMON...))
+    # And a split link with neither knob is still rejected.
+    @test_throws ArgumentError solve_advanced_inverter(net,
+        AdvancedInverter(; id="i", topology=:SPLIT_DC, v_dc=800.0, c_dc=2.8e-3,
+                         _TOPO_COMMON...))
+end
+
+@testset "Advanced inverter: 2ω capacitor current pins the RMS convention" begin
+    # I_2ω,rms = |S̃|/(√2·V_dc) — an RMS quantity, NOT the peak harmonic
+    # amplitude |S̃|/V_dc, and independent of C (capacitance sets ripple VOLTAGE,
+    # not ripple current). Checked against the reported oscillating power.
+    net = inv_grid3_unbal()
+    four(c, vdc) = solve_advanced_inverter(net, AdvancedInverter(; id="i",
+        topology=:FOUR_LEG, v_dc=vdc, c_dc=c, In_max=40.0, _TOPO_COMMON...))
+    a = four(1.1e-3, 700.0)
+    @test a.i_cap ≈ a.ripple/(sqrt(2)*700.0)  rtol=1e-4    # RMS, not peak
+    @test !isapprox(a.i_cap, a.ripple/700.0; rtol=1e-2)    # peak would be √2× larger
+
+    # Independent of C at fixed operating point; scales as 1/V_dc.
+    b = four(4.0e-3, 700.0)
+    @test b.i_cap ≈ b.ripple/(sqrt(2)*700.0)  rtol=1e-4
+    @test b.dv2 < a.dv2 - 1.0                              # …but dv2 ∝ 1/C
+    c = four(1.1e-3, 1400.0)
+    @test c.i_cap ≈ c.ripple/(sqrt(2)*1400.0) rtol=1e-4
+end
+
+@testset "Advanced inverter: sequence components split neutral vs 2ω ripple" begin
+    # S̃ = Σ_x U_x I_x is the UNCONJUGATED sum, so with positive-sequence voltage
+    # a zero-sequence current contributes Σ_x U_x · I₀ = I₀ Σ_x U_x = 0. The two
+    # unbalance mechanisms therefore load different hardware, and superpose:
+    #   negative sequence ⇒ 2ω ripple (capacitor heating), NO neutral current
+    #   zero sequence     ⇒ neutral current (4th leg / caps), NO 2ω ripple
+    seqnet(; vp=230.0, vn=0.0, v0=0.0) = begin
+        a = cis(2pi/3)
+        Va = vp + vn + v0; Vb = a^2*vp + a*vn + v0; Vc = a*vp + a^2*vn + v0
+        inv_grid3_src(mags=[abs(Va), abs(Vb), abs(Vc)],
+                      angs=[angle(Va), angle(Vb), angle(Vc)], vmax=300.0)
+    end
+    run4(net) = solve_advanced_inverter(net, AdvancedInverter(; id="i",
+        topology=:FOUR_LEG, v_dc=700.0, c_dc=1.1e-3, In_max=40.0, _TOPO_COMMON...))
+    bal  = run4(seqnet())
+    negs = run4(seqnet(vn=0.08*230))
+    zers = run4(seqnet(v0=0.08*230))
+    both = run4(seqnet(vn=0.08*230, v0=0.08*230))
+
+    @test bal.i_neutral < 1e-2 && bal.ripple < 10.0          # balanced ⇒ neither
+    # Negative sequence: large oscillating power, no zero-sequence current.
+    @test negs.ripple > 3000.0
+    @test negs.i_neutral < 1e-2
+    # Zero sequence: the mirror image — neutral current, negligible ripple.
+    @test zers.i_neutral > 5.0
+    @test zers.ripple < negs.ripple/10
+    # And the two superpose rather than trading against each other.
+    @test both.i_neutral > 5.0
+    @test both.ripple > 3000.0
+    # The bank current tracks the ripple (4-leg: neutral bypasses the caps).
+    @test negs.i_cap ≈ negs.ripple/(sqrt(2)*700.0)  rtol=1e-3
+end
+
+@testset "Advanced inverter: capability is monotone in i_cap_max" begin
+    # A larger bank rating can only enlarge the feasible set, so the achievable
+    # neutral current must be non-decreasing in i_cap_max.
+    net = inv_grid3_src(mags=[250.0, 205.0, 230.0], angs=[0.1, -2.2, 1.95])
+    ins = Float64[]
+    for icm in (1.5, 2.5, 3.5, 4.5)
+        r = solve_advanced_inverter(net, AdvancedInverter(; id="i", topology=:SPLIT_DC,
+                v_dc=800.0, c_dc=2.8e-3, i_cap_max=icm, _TOPO_COMMON...))
+        @test r.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+        @test r.i_cap <= icm + 1e-3
+        push!(ins, r.i_neutral)
+    end
+    @test issorted(ins)                       # monotone non-decreasing capability
+    @test ins[end] > ins[1] + 1.0             # and strictly useful over the range
 end
 
 @testset "Advanced inverter: 4-leg caps carry the 2ω term but not the neutral" begin
@@ -288,6 +385,11 @@ end
     @test_throws ArgumentError solve_advanced_inverter(inv_grid3_bal(),
         AdvancedInverter(; id="i", topology=:FOUR_LEG, v_dc=700.0, c_dc=1.1e-3,
                          In_max=40.0, i_cap_max=-1.0, common...))
+    # i_sw is an allowance carved out of i_cap_max — without it, it would be a
+    # silent no-op, so it is rejected rather than ignored.
+    @test_throws ArgumentError solve_advanced_inverter(inv_grid3_bal(),
+        AdvancedInverter(; id="i", topology=:FOUR_LEG, v_dc=700.0, c_dc=1.1e-3,
+                         In_max=40.0, i_sw=2.0, common...))
 end
 
 @testset "Advanced inverter: reactive setpoint q_set is met" begin
