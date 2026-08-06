@@ -197,6 +197,25 @@ with `N_{re} = -I^{im}_n/(2\omega C)`, `N_{im} = I^{re}_n/(2\omega C)`. The fact
 of two on the rail is the split link's utilisation penalty: it needs roughly
 twice the DC voltage of the 4-leg for the same per-phase output.
 
+!!! warning "`In_max` for the split link is net of the 2ω allocation"
+    The split link's half-banks carry the fundamental neutral current **and** the
+    2ω bus current. They are at different frequencies, so they combine in RMS and
+    must be allocated *simultaneously* — the bank rating is not all available for
+    neutral current:
+
+    ```math
+    \Big(\tfrac{|I_n|}{2}\Big)^2 + I_{2\omega,rms}^2 + I_{sw,rms}^2 \le I_{half,rated}^2,
+    \qquad I_{2\omega,rms} = \frac{|\tilde S|}{\sqrt2\,V_{dc}}
+    ```
+
+    so `In_max = 2·√(I_half_rated² − I_2ω,rms² − I_sw,rms²)` (the factor 2 because
+    `|I_n|` divides equally between the two halves). Passing the raw bank rating
+    double-counts the capacitors. Example: a 12 A/half bank at `|S̃|` = 6.6 kVA and
+    `V_dc` = 800 V gives `I_2ω,rms` = 5.8 A, hence `In_max ≈ 21 A`, not 24 A.
+    Strictly this should be a frequency-weighted thermal limit
+    (`Σ_k ESR(f_k)·I_k² ≤ P_diss,max`), since electrolytic ESR falls with
+    frequency; the equal-weight RMS sum is the conservative simplification.
+
 **Current limits** are per-phase `|I_x| \le i_{max}` and the neutral limits above.
 The sampling makes these **outer** approximations, exact as `N→∞` with relative
 gap `~(π/N)²` (≈0.8 % at N=36). Every per-sample constraint is linear in the

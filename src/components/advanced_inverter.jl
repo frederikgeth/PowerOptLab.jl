@@ -62,7 +62,14 @@ zero filter) it is a plain grid-following converter at the POC.
   voltage and require `v_dc` and `c_dc` (and `In_max` for the 4-wire ones).
 - `v_dc` — DC-link voltage (V). `c_dc` — DC-link capacitance (F; per half for split).
 - `m_max=1.0` — modulation index limit (dimensionless).
-- `In_max` — neutral current limit (A): split = cap ripple rating, 4-leg = leg rating.
+- `In_max` — neutral current limit (A). For `:FOUR_LEG` this is the 4th leg's
+  device (thermal) rating. For `:SPLIT_DC` it is the half-bank capacitor ripple
+  rating **net of the 2ω allocation**: the same capacitors carry both the
+  fundamental neutral current and the 2ω bus current, which sit at different
+  frequencies and so combine in RMS,
+  `In_max = 2·√(I_half_rated² − I_2ω,rms² − I_sw,rms²)` with
+  `I_2ω,rms = |S̃|/(√2·v_dc)`. Passing the raw bank rating double-counts the
+  capacitors and overstates neutral capability.
 - `dv2_max` — optional cap on the 2ω bus-ripple amplitude (V).
 - `n_samples=36` — time-sampling grid for the exact feasibility (gap ~(π/N)²).
 - `f=50.0` — fundamental frequency (Hz).

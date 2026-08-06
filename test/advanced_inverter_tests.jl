@@ -100,7 +100,9 @@ const _TOPO_COMMON = (bus="poc", phase_terminals=["a","b","c"], neutral="n",
     net = inv_grid3_bal()
     r3 = solve_advanced_inverter(net, AdvancedInverter(; id="i", topology=:THREE_LEG, v_dc=700.0, c_dc=1.1e-3, _TOPO_COMMON...))
     r4 = solve_advanced_inverter(net, AdvancedInverter(; id="i", topology=:FOUR_LEG, v_dc=700.0, c_dc=1.1e-3, In_max=40.0, _TOPO_COMMON...))
-    rs = solve_advanced_inverter(net, AdvancedInverter(; id="i", topology=:SPLIT_DC, v_dc=800.0, c_dc=2.8e-3, In_max=24.0, _TOPO_COMMON...))
+    # In_max = 21 A: the 12 A/half bank rating net of the 2ω allocation (the same
+    # caps carry both currents). See the split-link note in the component docs.
+    rs = solve_advanced_inverter(net, AdvancedInverter(; id="i", topology=:SPLIT_DC, v_dc=800.0, c_dc=2.8e-3, In_max=21.0, _TOPO_COMMON...))
     for r in (r3, r4, rs)
         @test r.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
         @test r.i_neutral < 0.1                       # balanced ⇒ no neutral current
@@ -134,8 +136,8 @@ end
 @testset "Advanced inverter: split-DC utilization penalty (needs a higher Vdc than 4-leg)" begin
     net = inv_grid3_bal(245.0)             # 245 V demands more DC utilisation
     four = solve_advanced_inverter(net, AdvancedInverter(; id="i", topology=:FOUR_LEG, v_dc=650.0, c_dc=1.1e-3, In_max=40.0, _TOPO_COMMON...))
-    split_lo = solve_advanced_inverter(net, AdvancedInverter(; id="i", topology=:SPLIT_DC, v_dc=650.0, c_dc=2.8e-3, In_max=24.0, _TOPO_COMMON...))
-    split_hi = solve_advanced_inverter(net, AdvancedInverter(; id="i", topology=:SPLIT_DC, v_dc=800.0, c_dc=2.8e-3, In_max=24.0, _TOPO_COMMON...))
+    split_lo = solve_advanced_inverter(net, AdvancedInverter(; id="i", topology=:SPLIT_DC, v_dc=650.0, c_dc=2.8e-3, In_max=21.0, _TOPO_COMMON...))
+    split_hi = solve_advanced_inverter(net, AdvancedInverter(; id="i", topology=:SPLIT_DC, v_dc=800.0, c_dc=2.8e-3, In_max=21.0, _TOPO_COMMON...))
     @test four.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")   # 4-leg fine at 650 V
     @test isnan(split_lo.p_poc)                                       # split infeasible at 650 V
     @test all(isnan(split_lo.bus["poc"][ph]["vm"]) for ph in ("a", "b", "c"))
