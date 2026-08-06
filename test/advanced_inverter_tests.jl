@@ -155,6 +155,61 @@ end
     @test capped.dv2 <= 3.0 + 1e-2         # the amplitude cap binds
 end
 
+@testset "Advanced inverter: split-link capacitor allocation is endogenous" begin
+    # The split link's half-banks carry the 2ω bus current AND the fundamental
+    # neutral current. Different frequencies ⇒ they combine in RMS and share one
+    # thermal budget, so tightening the bank rating must SQUEEZE the neutral
+    # current rather than leave it at a hand-computed nameplate.
+    net = inv_grid3_unbal()
+    split = (topology=:SPLIT_DC, v_dc=800.0, c_dc=2.8e-3, In_max=21.0)
+    loose = solve_advanced_inverter(net, AdvancedInverter(; id="i", split..., _TOPO_COMMON...))
+    tight = solve_advanced_inverter(net, AdvancedInverter(; id="i", split..., i_cap_max=2.0, _TOPO_COMMON...))
+    @test tight.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+    @test loose.i_cap > 2.0                       # unconstrained bank current …
+    @test tight.i_cap <= 2.0 + 1e-3               # … the rating binds …
+    @test tight.i_neutral < loose.i_neutral - 1.0 # … and neutral capability pays for it
+
+    # The reported bank current is exactly the RMS sum of its two components:
+    #   i_cap² = (k·|D|)² + (|I_n|/2)²,  k = ωC/√2  (split link: C_eq = C/2)
+    k = 2pi * 50.0 * 2.8e-3 / sqrt(2)
+    @test tight.i_cap^2 ≈ (k*tight.dv2)^2 + (tight.i_neutral/2)^2  rtol=1e-4
+
+    # i_sw reserves part of the budget: √(3² − 2²) = √5.
+    sw = solve_advanced_inverter(net,
+        AdvancedInverter(; id="i", split..., i_cap_max=3.0, i_sw=2.0, _TOPO_COMMON...))
+    @test sw.i_cap ≈ sqrt(5.0)  rtol=1e-3
+end
+
+@testset "Advanced inverter: 4-leg caps carry the 2ω term but not the neutral" begin
+    # The 4-leg's neutral current flows through its fourth leg, NOT the DC caps,
+    # so a bank rating limits the ripple without costing neutral capability —
+    # the physical distinction from the split link above.
+    net = inv_grid3_unbal()
+    four = (topology=:FOUR_LEG, v_dc=700.0, c_dc=1.1e-3, In_max=40.0)
+    loose = solve_advanced_inverter(net, AdvancedInverter(; id="i", four..., _TOPO_COMMON...))
+    tight = solve_advanced_inverter(net, AdvancedInverter(; id="i", four..., i_cap_max=1.0, _TOPO_COMMON...))
+    @test tight.i_cap <= 1.0 + 1e-3               # rating binds
+    @test tight.dv2 < loose.dv2 - 0.2             # ripple is what gives way …
+    @test abs(tight.i_neutral - loose.i_neutral) < 0.2   # … neutral is untouched
+    # Single-cap topology: the bank carries only the 2ω component, k = 2ωC/√2.
+    k = 2 * 2pi * 50.0 * 1.1e-3 / sqrt(2)
+    @test tight.i_cap ≈ k * tight.dv2  rtol=1e-4
+end
+
+@testset "Advanced inverter: capacitor-rating argument validation" begin
+    common = (bus="poc", phase_terminals=["a","b","c"], neutral="n", s_max=20e3)
+    # i_cap_max needs a three-phase topology (it is a DC-bank rating).
+    @test_throws ArgumentError solve_advanced_inverter(inv_grid3_bal(),
+        AdvancedInverter(; id="i", i_cap_max=10.0, common...))
+    # The switching allowance cannot exhaust (or exceed) the bank rating.
+    @test_throws ArgumentError solve_advanced_inverter(inv_grid3_bal(),
+        AdvancedInverter(; id="i", topology=:FOUR_LEG, v_dc=700.0, c_dc=1.1e-3,
+                         In_max=40.0, i_cap_max=5.0, i_sw=5.0, common...))
+    @test_throws ArgumentError solve_advanced_inverter(inv_grid3_bal(),
+        AdvancedInverter(; id="i", topology=:FOUR_LEG, v_dc=700.0, c_dc=1.1e-3,
+                         In_max=40.0, i_cap_max=-1.0, common...))
+end
+
 @testset "Advanced inverter: reactive setpoint q_set is met" begin
     # The converter delivers the requested reactive power at the POC, trading it
     # against active power on the apparent-power circle.

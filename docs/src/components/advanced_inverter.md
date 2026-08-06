@@ -110,6 +110,7 @@ inv = AdvancedInverter(id="inv", bus="poc", phase_terminals=["a","b","c"], neutr
 r = solve_advanced_inverter(net3, inv)   # net3 = a three-phase grid
 r.i_neutral   # neutral current (A) — non-zero only under unbalance
 r.dv2         # 2ω bus-ripple amplitude (V) that derated the DC rails
+r.i_cap       # capacitor RMS ripple current (A) — compare against i_cap_max
 ```
 
 On a balanced grid all three topologies coincide (no neutral current, no ripple).
@@ -215,6 +216,42 @@ twice the DC voltage of the 4-leg for the same per-phase output.
     Strictly this should be a frequency-weighted thermal limit
     (`Σ_k ESR(f_k)·I_k² ≤ P_diss,max`), since electrolytic ESR falls with
     frequency; the equal-weight RMS sum is the conservative simplification.
+
+### Capacitor ripple current: endogenous allocation (`i_cap_max`)
+
+Rather than pre-computing `In_max` by hand, supply the bank's RMS ripple-current
+rating as `i_cap_max` (**per half-bank** for `:SPLIT_DC`, the whole DC-link bank
+otherwise) and let the solve make the allocation at the operating point:
+
+```math
+\underbrace{\Big(\tfrac{|I_n|}{2}\Big)^2}_{\texttt{:SPLIT\_DC}\ \text{only}}
+ + \; I_{2\omega,rms}^2 \;\le\; i_{cap,max}^2 - i_{sw}^2 ,
+\qquad I_{2\omega,rms} = \frac{|\tilde S|}{\sqrt2\,V_{dc}} = k\,|D|,
+\quad k = \frac{2\omega C_{eq}}{\sqrt2}
+```
+
+The neutral term appears **only** for the split link, whose half-banks sit in the
+neutral path; the 4-leg's neutral current flows through its fourth leg, so its
+bank carries the 2ω component alone. Writing `I_{2ω,rms}` through the ripple
+phasor `D` (rather than the bilinear `\tilde S`) keeps the constraint quadratic
+in variables the model already has. `i_sw` optionally reserves a constant
+switching-frequency allowance out of the budget, for designs where the
+electrolytics — not a parallel film capacitor — carry the `f_sw` component.
+
+`i_cap_max` composes with `In_max`; whichever binds, binds. The solved bank
+current is reported as `result.i_cap`, so you can see which limit governed:
+
+```julia
+r = solve_advanced_inverter(net, AdvancedInverter(; id="inv", bus="poc",
+        phase_terminals=["a","b","c"], neutral="n", s_max=20e3,
+        topology=:SPLIT_DC, v_dc=800.0, c_dc=2.8e-3, i_cap_max=12.0))
+r.i_cap        # capacitor RMS ripple current (A) vs the 12 A rating
+r.i_neutral    # what was left for neutral current after the 2ω share
+```
+
+This is the model-side statement of the sizing rule above: tightening
+`i_cap_max` on a split link visibly trades away neutral capability, while on a
+4-leg it only reduces the bus ripple.
 
 **Current limits** are per-phase `|I_x| \le i_{max}` and the neutral limits above.
 The sampling makes these **outer** approximations, exact as `N→∞` with relative

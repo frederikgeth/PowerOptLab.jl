@@ -69,7 +69,19 @@ zero filter) it is a plain grid-following converter at the POC.
   frequencies and so combine in RMS,
   `In_max = 2·√(I_half_rated² − I_2ω,rms² − I_sw,rms²)` with
   `I_2ω,rms = |S̃|/(√2·v_dc)`. Passing the raw bank rating double-counts the
-  capacitors and overstates neutral capability.
+  capacitors and overstates neutral capability. Prefer `i_cap_max`, which makes
+  that allocation endogenous instead of asking you to pre-compute it.
+- `i_cap_max` — capacitor RMS ripple-current rating (A), three-phase topologies
+  only: **per half-bank** for `:SPLIT_DC`, the whole DC-link bank otherwise.
+  Supplying it stamps the simultaneous thermal allocation
+  `(|I_n|/2)² + I_2ω,rms² ≤ i_cap_max²` (the neutral term only for `:SPLIT_DC`;
+  the 4-leg's neutral flows through its 4th leg, not the caps), so the split
+  between capacitor-rating and neutral-current limits is decided by the solve at
+  the operating point rather than fixed as a nameplate. Composes with `In_max` —
+  whichever binds, binds.
+- `i_sw` — optional constant switching-frequency RMS allowance (A) reserved out
+  of `i_cap_max` (use when the electrolytics, not a parallel film cap, carry the
+  `f_sw` component).
 - `dv2_max` — optional cap on the 2ω bus-ripple amplitude (V).
 - `n_samples=36` — time-sampling grid for the exact feasibility (gap ~(π/N)²).
 - `f=50.0` — fundamental frequency (Hz).
@@ -105,6 +117,8 @@ Base.@kwdef struct AdvancedInverter <: AbstractDevice
     c_dc::Union{Float64,Nothing} = nothing
     m_max::Float64 = 1.0
     In_max::Union{Float64,Nothing} = nothing
+    i_cap_max::Union{Float64,Nothing} = nothing
+    i_sw::Float64 = 0.0
     dv2_max::Union{Float64,Nothing} = nothing
     n_samples::Int = 36
     f::Float64 = 50.0
@@ -149,6 +163,7 @@ function _validate_inverter(inv::AdvancedInverter, nets=())
 
     for (name, value) in (("i_max", inv.i_max), ("v_dc", inv.v_dc),
                           ("c_dc", inv.c_dc), ("In_max", inv.In_max),
+                          ("i_cap_max", inv.i_cap_max),
                           ("dv2_max", inv.dv2_max), ("v_int_max", inv.v_int_max),
                           ("modulation_max", inv.modulation_max),
                           ("p_ripple_max", inv.p_ripple_max))
@@ -181,6 +196,16 @@ function _validate_inverter(inv::AdvancedInverter, nets=())
         throw(ArgumentError(
             "inverter '$(inv.id)' modulation_max requires v_dc"))
     end
+    if !is_3ph && inv.i_cap_max !== nothing
+        throw(ArgumentError("inverter '$(inv.id)' i_cap_max applies only to the " *
+                            "three-phase topologies"))
+    end
+    isfinite(inv.i_sw) && inv.i_sw >= 0 || throw(ArgumentError(
+        "inverter '$(inv.id)' i_sw must be finite and >= 0"))
+    if inv.i_cap_max !== nothing && inv.i_sw >= inv.i_cap_max
+        throw(ArgumentError("inverter '$(inv.id)' i_sw must be < i_cap_max " *
+                            "(the switching allowance cannot exhaust the bank rating)"))
+    end
     inv.grid_forming && length(inv.phase_terminals) != 3 && throw(ArgumentError(
         "grid-forming inverter '$(inv.id)' requires 3 phase_terminals"))
     return nothing
@@ -208,6 +233,9 @@ currents A.
 - `i_neutral` — neutral current magnitude `|I_n|` (0 for 3-wire / single-phase).
 - `ripple` — 2ω power-ripple magnitude `|Σ V_int·I|` (VA).
 - `dv2` — 2ω bus-ripple amplitude (V; three-phase topologies, else 0).
+- `i_cap` — capacitor RMS ripple current (A; three-phase topologies, else 0):
+  the 2ω component, plus the per-half-bank neutral share for `:SPLIT_DC`.
+  Compare against `i_cap_max` to see whether the bank's thermal rating binds.
 - `bus::Dict{String,Any}` — the BMOPFTools `result["bus"]` (POC voltages, …).
 """
 struct InverterResult <: AbstractSolveResult
@@ -224,6 +252,7 @@ struct InverterResult <: AbstractSolveResult
     i_neutral::Float64
     ripple::Float64
     dv2::Float64
+    i_cap::Float64
     bus::Dict{String,Any}
     solve::SolveStatus
 end
@@ -232,7 +261,7 @@ solve_status(result::InverterResult) = result.solve
 
 solve_diagnostics(result::InverterResult) =
     (topology=result.topology, p_loss=result.p_loss, ripple=result.ripple,
-     neutral_current=result.i_neutral)
+     neutral_current=result.i_neutral, cap_current=result.i_cap)
 
 # Handles the hook publishes for post-solve reporting. Power/current/voltage
 # expressions are in MODEL units; `sb`/`vb`/`ib` convert them back to SI.
@@ -243,6 +272,7 @@ struct _InvHandles
     ripple_re; ripple_im
     in_re; in_im          # SI neutral-current components (or nothing)
     dre; dim              # SI 2ω ripple-phasor components (or nothing)
+    icap_sq               # SI capacitor RMS ripple current, squared (or nothing)
     sb::Float64; vb::Float64; ib::Float64
 end
 
@@ -397,7 +427,7 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
     end
 
     # ── Three-phase switching-polytope feasibility (exact, time-sampled) ────────
-    in_re = nothing; in_im = nothing; dre = nothing; dim = nothing
+    in_re = nothing; in_im = nothing; dre = nothing; dim = nothing; icap_sq = nothing
     if is_3ph_topo
         w = 2pi * inv.f
         v_dc = inv.v_dc; c_dc = inv.c_dc
@@ -458,6 +488,28 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
         # Neutral current (SI), for reporting: I_n = −Σ I_phase.
         in_re = JuMP.@expression(m, -sum(cri[k] for k in 1:3) * ib)
         in_im = JuMP.@expression(m, -sum(cii[k] for k in 1:3) * ib)
+
+        # ── Capacitor RMS ripple current: SIMULTANEOUS thermal allocation ───────
+        # The bank always carries the 2ω bus current, and in the split link the
+        # fundamental neutral current as well. They sit at different frequencies,
+        # so they combine in RMS and must be allocated together — charging the
+        # whole bank rating to neutral current double-counts the capacitors.
+        #
+        #   I_2ω,rms = |S̃|/(√2·Vdc) = k·|D|,   k = denom/(√2·Vdc)
+        #
+        # Writing it through the ripple phasor D keeps this QUADRATIC in variables
+        # that already exist, rather than quartic in the bilinear S̃.
+        k2w = denom / (sqrt(2) * v_dc)
+        icap_sq = JuMP.@expression(m, k2w^2 * (dre^2 + dim^2))
+        if inv.topology == :SPLIT_DC
+            # |I_n| divides equally between the two half-banks. (The 4-leg's
+            # neutral current flows through its 4th leg, not through the caps.)
+            icap_sq = JuMP.@expression(m, icap_sq + (in_re^2 + in_im^2) / 4)
+        end
+        if inv.i_cap_max !== nothing
+            budget = inv.i_cap_max^2 - inv.i_sw^2      # i_sw < i_cap_max (validated)
+            JuMP.@constraint(m, icap_sq <= budget)
+        end
     end
 
     # Converter apparent-power circle P_conv²+Q_conv² ≤ s_max² (aux keeps it quadratic).
@@ -483,7 +535,7 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
 
     return _InvHandles(Ppoc, Qpoc, Pconv, Qconv, P_loss, P_dc,
                        vrint, viint, cri, cii, rip_re, rip_im,
-                       in_re, in_im, dre, dim, sb, vb, ib)
+                       in_re, in_im, dre, dim, icap_sq, sb, vb, ib)
 end
 
 stamp_device!(ctx, inverter::AdvancedInverter; kwargs...) =
@@ -509,6 +561,8 @@ function extract_device(inverter::AdvancedInverter, h::_InvHandles,
         ripple=mag(h.ripple_re, h.ripple_im, sb),
         dv2=h.dre === nothing ? 0.0 :
             (solved ? hypot(JuMP.value(h.dre), JuMP.value(h.dim)) : NaN),
+        i_cap=h.icap_sq === nothing ? 0.0 :
+            (solved ? sqrt(max(JuMP.value(h.icap_sq), 0.0)) : NaN),
     )
 end
 
@@ -580,5 +634,6 @@ function solve_advanced_inverter(net::Dict{String,Any}, inverter::AdvancedInvert
                           device_result.p_loss, device_result.p_dc,
                           device_result.v_int_mag, device_result.i_mag,
                           device_result.i_neutral, device_result.ripple,
-                          device_result.dv2, result["bus"], SolveStatus(outcome))
+                          device_result.dv2, device_result.i_cap,
+                          result["bus"], SolveStatus(outcome))
 end
