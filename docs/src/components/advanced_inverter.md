@@ -191,8 +191,15 @@ D_{im}\sin2\theta`. An optional `dv2_max` caps `\sqrt{D_{re}^2+D_{im}^2}`.
 
 ```math
 \pm\sqrt2\big[(U^{re}_x+N_{re})\cos\theta_k - (U^{im}_x+N_{im})\sin\theta_k\big]
-   \le \tfrac{m}{2}\,v_{dc}(\theta_k);\qquad |I_n| \le I_{n,\max}\ \text{(cap rating)},
+   \le \tfrac{m}{2}\,v_{dc}(\theta_k);\qquad
+   \underbrace{|I_n| \le I_{n,\max}}_{\text{optional — see below}},
 ```
+
+Here the standalone `I_{n,\max}` bound is **optional**: the split link's neutral
+current flows through the capacitors, so supplying `i_cap_max` bounds it through
+the thermal budget instead (and then `|I_n| \le 2\,i_{cap,max}`). One of the two
+is required. (`:FOUR_LEG` always needs `I_{n,\max}` — its neutral goes through
+the fourth leg, which the capacitor budget says nothing about.)
 
 with `N_{re} = -I^{im}_n/(2\omega C)`, `N_{im} = I^{re}_n/(2\omega C)`. The factor
 of two on the rail is the split link's utilisation penalty: it needs roughly

@@ -211,8 +211,11 @@ end
 
 @testset "Advanced inverter: 2ω capacitor current pins the RMS convention" begin
     # I_2ω,rms = |S̃|/(√2·V_dc) — an RMS quantity, NOT the peak harmonic
-    # amplitude |S̃|/V_dc, and independent of C (capacitance sets ripple VOLTAGE,
-    # not ripple current). Checked against the reported oscillating power.
+    # amplitude |S̃|/V_dc. The identity is checked at several (C, V_dc) settings;
+    # since C does not appear in it, independence from C follows algebraically
+    # *at equal |S̃|*. Note these are separate optima — changing C or V_dc moves
+    # the operating point — so this pins the FORMULA, not a same-operating-point
+    # invariance (capacitance still sets the ripple VOLTAGE, checked via dv2).
     net = inv_grid3_unbal()
     four(c, vdc) = solve_advanced_inverter(net, AdvancedInverter(; id="i",
         topology=:FOUR_LEG, v_dc=vdc, c_dc=c, In_max=40.0, _TOPO_COMMON...))
@@ -261,20 +264,30 @@ end
     @test negs.i_cap ≈ negs.ripple/(sqrt(2)*700.0)  rtol=1e-3
 end
 
-@testset "Advanced inverter: capability is monotone in i_cap_max" begin
-    # A larger bank rating can only enlarge the feasible set, so the achievable
-    # neutral current must be non-decreasing in i_cap_max.
-    net = inv_grid3_src(mags=[250.0, 205.0, 230.0], angs=[0.1, -2.2, 1.95])
-    ins = Float64[]
-    for icm in (1.5, 2.5, 3.5, 4.5)
-        r = solve_advanced_inverter(net, AdvancedInverter(; id="i", topology=:SPLIT_DC,
-                v_dc=800.0, c_dc=2.8e-3, i_cap_max=icm, _TOPO_COMMON...))
+@testset "Advanced inverter: a larger bank rating cannot worsen the optimum" begin
+    # A larger i_cap_max enlarges the feasible set, so the OBJECTIVE is
+    # non-decreasing. That is the property actually guaranteed — the chosen
+    # neutral current is NOT: the optimizer is free to re-mix zero- against
+    # negative-sequence current and may serve more export with less |I_n|.
+    # A zero-sequence-heavy grid makes the rating genuinely bite, so the
+    # assertion is not vacuous.
+    a = cis(2pi/3); vp = 230.0; v0 = 0.18*230.0
+    Va = vp + v0; Vb = a^2*vp + v0; Vc = a*vp + v0
+    net = inv_grid3_src(mags=[abs(Va), abs(Vb), abs(Vc)],
+                        angs=[angle(Va), angle(Vb), angle(Vc)], vmax=300.0)
+    split(icm) = solve_advanced_inverter(net, AdvancedInverter(; id="i",
+        topology=:SPLIT_DC, v_dc=800.0, c_dc=2.8e-3, i_cap_max=icm, _TOPO_COMMON...))
+    ps = Float64[]
+    for icm in (1.5, 2.0, 3.0, 4.0)
+        r = split(icm)
         @test r.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
-        @test r.i_cap <= icm + 1e-3
-        push!(ins, r.i_neutral)
+        @test r.i_cap <= icm + 1e-3            # the hard constraint always holds
+        push!(ps, r.p_poc)
     end
-    @test issorted(ins)                       # monotone non-decreasing capability
-    @test ins[end] > ins[1] + 1.0             # and strictly useful over the range
+    @test all(diff(ps) .> -1.0)                # non-decreasing (1 W solver slack)
+    @test ps[end] > ps[1] + 100.0              # and the rating genuinely bites
+    # Tighten it far enough and this grid cannot be served at all.
+    @test !(split(1.0).termination_status in ("LOCALLY_SOLVED", "OPTIMAL"))
 end
 
 @testset "Advanced inverter: 4-leg caps carry the 2ω term but not the neutral" begin

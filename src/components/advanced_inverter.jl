@@ -59,7 +59,10 @@ zero filter) it is a plain grid-following converter at the POC.
 - `topology=:SINGLE_PHASE` — one of `:SINGLE_PHASE` (internal-EMF model),
   `:THREE_LEG`, `:FOUR_LEG`, `:SPLIT_DC`. The three-phase topologies apply the
   exact time-sampled switching-polytope voltage feasibility on the internal-node
-  voltage and require `v_dc` and `c_dc` (and `In_max` for the 4-wire ones).
+  voltage and require `v_dc` and `c_dc`. The 4-wire topologies additionally need
+  their neutral current bounded: `:FOUR_LEG` requires `In_max` (the 4th-leg
+  rating), `:SPLIT_DC` requires `In_max` **or** `i_cap_max` (its neutral flows
+  through the capacitors, so a bank rating bounds it on its own).
 - `v_dc` — DC-link voltage (V). `c_dc` — DC-link capacitance (F; per half for split).
 - `m_max=1.0` — modulation index limit (dimensionless).
 - `In_max` — neutral current limit (A). For `:FOUR_LEG` this is the 4th leg's
