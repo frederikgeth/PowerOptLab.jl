@@ -8,31 +8,45 @@
 [![Documentation](https://img.shields.io/badge/docs-dev-blue.svg)](https://frederikgeth.github.io/PowerOptLab.jl/dev/)
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue.svg)](LICENSE.md)
 
-A staging ground for **component models** and **problem specifications** built on
-top of the [BMOPFTools](https://github.com/frederikgeth/BMOPFTools.jl) reference
-optimal-power-flow engine.
+PowerOptLab is a research laboratory for **four-wire distribution-network
+decisions when the network state or model is uncertain**. It connects three
+questions that are often treated separately:
 
-BMOPFTools ships one small, correct four-wire rectangular current–voltage OPF and
-deliberately refuses to become a "model zoo". PowerOptLab is where the zoo lives:
-experimental devices and alternative problem formulations that reuse the engine's
-device physics, per-unit handling, and result extraction **through its public
-extension seams** (`model_hook!` / `solution_hook!` and the staged
-`build_opf_model` / `enforce_kcl!` / `generation_cost` / `extract_result` API) —
-without forking the engine. Anything here that matures into accepted practice can
-later be folded back into the BMOPF spec.
+1. What states and network models are compatible with the available evidence?
+2. Which additional evidence would separate the important alternatives?
+3. Which operating decisions remain feasible under those alternatives?
+
+The package builds on the
+[BMOPFTools](https://github.com/frederikgeth/BMOPFTools.jl) reference
+current–voltage OPF engine. It reuses the engine's neutral-explicit device
+physics, per-unit handling, and result extraction through public extension seams
+(`model_hook!` / `solution_hook!` and the staged `build_opf_model` /
+`enforce_kcl!` / `generation_cost` / `extract_result` API), without forking the
+engine.
+
+The full evidence-to-decision loop is a research direction, not a claim about
+the current API. Today the repository provides separate foundations for
+constrained state estimation, line/tap estimation, inverse-Carson candidate
+screening, scenario-aware operating envelopes, differentiated controller
+experiments, and power-flow diagnostics. See the
+[research program](docs/src/research_program.md) for the boundary between what
+exists and what remains to be built.
 
 ## What's inside
 
 Contributions are organised by *what layer of the engine they extend* — see
 [Concepts](docs/src/concepts.md).
 
-**Component models** (`src/components/`) — new network elements via `model_hook!` / `solution_hook!`:
+**Component models** (`src/components/`) — network elements that support a
+specific estimation, control, or verification experiment via `model_hook!` /
+`solution_hook!`:
 
 | Capability | Entry point | Reuses |
 |---|---|---|
 | **Storage / battery** devices with state of charge | [`StorageDevice`](src/components/devices.jl) | `model_hook!` current injection + KCL |
 | **EV charging** (V1G / V2G) with availability & departure energy | [`EVDevice`](src/components/devices.jl) | storage device + per-period masking |
 | **Advanced inverter** (internal-node IBR prototype) | [`AdvancedInverter`](src/components/advanced_inverter.jl) | internal node + filter / EMF / losses / ripple |
+| **IVQ battery** (current–voltage–charge model) | [`IVQBattery`](src/components/ivq_battery.jl) | battery chemistry + advanced inverter |
 
 **Problem specifications** (`src/problems/`) — new formulations via the staged API:
 
@@ -42,7 +56,9 @@ Contributions are organised by *what layer of the engine they extend* — see
 | **Legacy WLS state estimation** | [`solve_state_estimation`](src/problems/state_estimation.jl) | bounds-free physics + custom objective |
 | **Constrained NLLS state estimation** | [`solve_sparse_state_estimator`](src/problems/constrained_state_estimation.jl) | compiled four-wire residual/constraint model |
 | **Parameter estimation** (calibrate line lengths / taps) | [`solve_parameter_estimation`](src/problems/parameter_estimation.jl) | shared parameters across snapshots + WLS objective |
+| **Inverse Carson reconstruction** (retain compatible construction candidates) | [`solve_inverse_carson`](src/problems/inverse_carson.jl) | multiconductor line physics + local identifiability diagnostics |
 | **Dynamic operating envelopes** (active import/export capacity) | [`solve_operating_envelope`](src/problems/operating_envelope.jl) | operational bounds + scenarios + fairness policy |
+| **Bilevel PV/tap proof of concept** | [`solve_bilevel_pv_tap`](src/problems/bilevel.jl) | DiffOpt sensitivity of a local lower-level response |
 
 **Bespoke algorithms** (`src/algorithms/`) — custom solution methods, currently
 including [HELM power flow](docs/src/algorithms/helm.md).
@@ -83,12 +99,13 @@ using PowerOptLab
 meas = [
     Measurement(kind=:vmag, bus="bus1", value=979.5, sigma=2.0),   # volts
     Measurement(kind=:pinj, bus="bus1", value=-20_000.0, sigma=400.0),  # watts
+    Measurement(kind=:qinj, bus="bus1", value=0.0, sigma=400.0),   # vars
     # …
 ]
 # `net` is a physics-only net (buses, lines, source; no operational limits).
 se = solve_state_estimation(net, meas)
 se.bus["bus1"]["1"]["vm"]   # estimated voltage magnitude (V)
-se.residuals                # per-measurement (measured, estimated, residual, normalized)
+se.residuals                # measured, estimated, residual, and standardized residual
 ```
 
 ### Calibrate line lengths / taps from smart-meter data
@@ -103,7 +120,7 @@ r = solve_parameter_estimation(nets, meas;
         lines=[CalibLine(id="l1", bus_from="src", bus_to="b1",
                          r_per_length=0.4, x_per_length=0.25)],
         taps =[CalibTap(id="t1", tap_min=0.9, tap_max=1.1)],
-        objective=:wls)       # or :wlav (robust, bad-data-rejecting)
+        objective=:wls)       # or :wlav (less sensitive to isolated outliers)
 r.line_length["l1"]   # estimated line length
 r.tap["t1"]           # estimated tap multiplier τ
 r.residual_rms        # RMS voltage misfit (V); near the meter noise floor if the fit is good
@@ -127,8 +144,8 @@ env = solve_operating_envelope(nets, cps;
     fairness=FairnessPolicy(kind=:max_min, normalization=:capacity),
     security=:bound_point)  # use :corners for every zero/full box corner
 
-env.envelope["der1"]  # positive directional capacity per interval (W)
-env.total_capacity
+env.envelope["der1"][1]  # positive directional capacity in interval 1 (W)
+env.total_capacity[1]
 env.diagnostics
 ```
 
@@ -164,7 +181,7 @@ r.v_int_mag  # internal EMF magnitude per phase (V)
 ## Development setup
 
 BMOPFTools is not yet registered. For development, use a local checkout; CI and
-documentation builds pin commit `2a51297c7bbaa97ad1f037472b3325e24be6fc93`
+documentation builds pin commit `b7aa9a1bb48bcc8b790d3bcf5417d6a32036352a`
 so their dependency source is reproducible. That BMOPFTools snapshot uses
 PowerIO 0.7:
 

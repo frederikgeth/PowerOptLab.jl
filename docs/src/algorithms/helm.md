@@ -1,5 +1,7 @@
 # HELM power flow
 
+> **Kind:** Bespoke algorithm · **Maturity:** prototype · **Direction:** forward · **Temporal:** single-snapshot
+
 PowerOptLab adds a deterministic, non-iterative 4-wire power-flow solver based
 on the **Holomorphic Embedding Load-flow Method** (HELM): [`solve_pf_helm`](@ref)
 (standard result dictionary) and [`helm_series`](@ref) (programmatic
