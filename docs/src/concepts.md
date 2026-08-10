@@ -1,13 +1,33 @@
 # Concepts
 
-PowerOptLab is a **staging ground** for experimental power-system modelling built
-on top of the [BMOPFTools](https://github.com/frederikgeth/BMOPFTools.jl)
-reference optimal-power-flow engine. BMOPFTools ships one small, correct four-wire
-rectangular current–voltage OPF and deliberately refuses to become a "model zoo";
-PowerOptLab is where the zoo lives. Everything here reuses the engine's device
-physics, per-unit handling, and result extraction **through its public extension
-seams** — without forking the engine. Anything that matures into accepted practice
-can later be folded back into the BMOPF spec.
+PowerOptLab studies **four-wire distribution-network decisions under state and
+model uncertainty**. It is built on the
+[BMOPFTools](https://github.com/frederikgeth/BMOPFTools.jl) reference
+current–voltage OPF engine and reuses the engine's neutral-explicit device
+physics, per-unit handling, and result extraction through public extension
+seams, without forking the engine.
+
+The scientific organizing principle is an evidence-to-decision loop:
+
+1. **Model evidence:** compile telemetry, metadata, and exact circuit equations.
+2. **Forensics:** retain the states, parameter regions, or discrete models that
+   the evidence cannot distinguish.
+3. **Experiment design:** seek safe measurements or interventions that separate
+   alternatives which matter to a decision.
+4. **Decision verification:** test an operating decision across the remaining
+   model and forecast alternatives.
+5. **Revision:** return new evidence to the inference stage.
+
+Only parts of this loop exist today. The constrained estimator, parameter
+estimator, and inverse-Carson solver provide distinct forms of model evidence;
+the operating-envelope solver consumes explicitly supplied network scenarios;
+the bilevel and HELM work provide local sensitivity and solution diagnostics.
+There is not yet a joint model-hypothesis API, an active-probing optimizer, or a
+global robust-feasibility certificate. The [Research program](research_program.md)
+keeps those proposed capabilities separate from the callable API.
+
+The source tree is organized by implementation layer. That engineering taxonomy
+supports the research loop; it is not the project's scientific identity.
 
 ## The three kinds of contribution
 
@@ -40,23 +60,26 @@ same way.
 The three kinds above are the primary axis, but each capability also carries a few
 orthogonal attributes, surfaced as a badge line at the top of its page:
 
-- **Maturity** — *prototype* (experimental, expect churn) vs *promotion
-  candidate* (stable enough to fold back into the BMOPF spec). This is the whole
-  point of a staging ground: knowing what is ready to graduate.
+- **Maturity** — *proof of concept* (demonstrates a narrow idea), *prototype*
+  (test-backed but experimental), *research prototype* (intended for declared
+  studies rather than operational use), or *promotion candidate* (stable enough
+  to propose for the BMOPF spec).
 - **Direction** — *forward* (given parameters, find an operating point:
-  dispatch/OPF) vs *inverse* (given measurements, find the state or parameters:
-  state and parameter estimation).
+  dispatch/OPF), *inverse* (given measurements, find the state or parameters),
+  or *hierarchical* (different decision-makers or response levels).
 - **Temporal structure** — *single-snapshot* vs *inter-temporal* (state-of-charge
   coupling, shared parameters, or per-interval envelopes spanning many snapshots).
 
-- **Uncertainty/security treatment** — deterministic, multi-scenario, robust,
-  or explicitly corner-secure. Operating envelopes already exercise this axis.
+- **Uncertainty/security treatment** — deterministic, explicit scenarios,
+  tested utilization points, or globally certified. These labels describe
+  different claim strengths and must not be used interchangeably.
 
 ## Interface conventions
 
 Everything is **SI at the interface** (watts, vars, watt-hours, volts); per-unit
-conditioning inside each solve is handled by the engine's `ctx.bases`. Where it
-applies, `per_unit=true` and `per_unit=false` give identical results.
+conditioning inside each solve is handled through the engine's
+`opf_bases(ctx)` accessor. Where it applies, `per_unit=true` and
+`per_unit=false` give identical results.
 
 Cross-cutting code uses four shared contracts:
 
@@ -73,5 +96,5 @@ at solve time, including whether a primal candidate existed and whether it was
 strictly publishable. Compatibility fields such as `termination_status` remain,
 but new code should branch on `solve_status(result).publishable`.
 
-See [Contributing](contributing.md) for how to add each kind of contribution and
-the path back to the BMOPF spec.
+See [Contributing](contributing.md) for how to add each kind of contribution,
+the research-fit test, and the path back to the BMOPF spec.

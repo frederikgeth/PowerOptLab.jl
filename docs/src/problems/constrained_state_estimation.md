@@ -1,6 +1,6 @@
 # Constrained nonlinear least-squares state estimation
 
-> **Kind:** compiled problem specification · **Maturity:** prototype · **Direction:** inverse · **Temporal:** single snapshot or sequential time series
+> **Kind:** Problem specification (compiled) · **Maturity:** prototype · **Direction:** inverse · **Temporal:** single snapshot or sequential time series
 
 This is the new four-wire estimator.  It solves the equality-constrained
 nonlinear least-squares problem

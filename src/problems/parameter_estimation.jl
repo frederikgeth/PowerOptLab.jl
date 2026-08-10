@@ -214,7 +214,8 @@ with no injection measurement are zero-injection.
 - `neutral="n"` — return terminal for the phase-to-neutral projections; pass
   `nothing` if phase terminals are referenced directly to ground.
 - `objective=:wls` — `:wls` (weighted least squares, smooth) or `:wlav` (weighted
-  least absolute value, better bad-data rejection; the choice in Vanin et al.).
+  least absolute value, less sensitive to isolated large residuals; the choice
+  in Vanin et al.). WLAV does not automatically identify or remove bad data.
 - `per_unit=true`, `s_base=1e6` — engine unit handling; measurements stay SI.
 - `optimizer=Ipopt.Optimizer`, `verbose=false`, `solver_options=()`.
 

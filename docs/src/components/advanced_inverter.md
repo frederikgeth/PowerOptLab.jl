@@ -24,7 +24,7 @@ with an endogenous 2ω bus-ripple derating and neutral-current limits (see
 It is built entirely on the BMOPFTools staged API through a `model_hook!`; it
 does **not** modify the engine. Device parameters are SI; the solve runs in SI
 (`per_unit=false`) or per-unit (`per_unit=true`), scaling every parameter to model
-units via `ctx.bases` — the DC-side quantities (`v_dc`, `c_dc`, `In_max`) stay SI
+units via `opf_bases(ctx)` — the DC-side quantities (`v_dc`, `c_dc`, `In_max`) stay SI
 and the AC↔DC coupling scales through the POC bus's `v_base`/`i_base`/`s_base`.
 Results are returned in SI in both modes.
 

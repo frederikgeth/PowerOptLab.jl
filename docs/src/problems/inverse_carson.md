@@ -1,6 +1,6 @@
 # Inverse Carson reconstruction
 
-> **Kind:** Problem specification · **Maturity:** prototype · **Direction:** inverse · **Scope:** overhead lines
+> **Kind:** Problem specification · **Maturity:** prototype · **Direction:** inverse · **Temporal:** single observation · **Scope:** overhead lines
 
 [`solve_inverse_carson`](@ref) reconstructs plausible overhead-line construction
 data from diagonal zero- and positive-sequence impedance, with optional shunt

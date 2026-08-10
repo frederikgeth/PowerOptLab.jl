@@ -13,15 +13,24 @@ engine's admittance-matrix primitives) in a custom loop.
   physical-residual, Padé-spread, coefficient-tail, and heuristic singularity
   diagnostics exposed for independent validation.
 
-## Candidates not yet built
+## Question-driven candidates not yet built
 
-- **Decomposition** — spatial (per-feeder) or temporal (per-snapshot) splitting
-  with a coordinating master problem.
-- **Sequential linearization / SLP-SQP** — solve a sequence of tractable
-  approximations to convergence.
-- **ADMM / operator splitting** — distributed consensus across sub-networks.
-- **Warm-start schemes** — reuse one solve's state to accelerate the next
-  (e.g. across the snapshots of a multi-period run).
+The next algorithms should support the [research program](../research_program.md),
+rather than form an unconnected catalogue:
 
-When the next one lands, add it under `src/algorithms/` and give it a page here.
-See [Contributing](../contributing.md) for the pattern.
+- **Continuation and branch discovery** — pseudo-arclength continuation,
+  singular-point handling, deflation, and systematic multistart to identify which
+  nonlinear solution a sensitivity or decision uses.
+- **Sensitivity validation** — KKT regularity, active-set transition, and
+  finite-difference/continuation comparisons for DiffOpt and, where useful,
+  direct sensitivities through the HELM coefficient recursion.
+- **Counterexample generation** — adversarial utilization/model searches for
+  falsifying operating-envelope candidates, with explicit local-search stopping
+  semantics.
+- **Relaxations and valid bounds** — multiconductor convex relaxations when a
+  valid bound can strengthen a forensics or robust-decision claim.
+- **Decomposition** — spatial, temporal, or hypothesis decomposition only when
+  the integrated inference or verification studies require it for scale.
+
+When one lands, add it under `src/algorithms/`, give it a page here, and document
+the validity of its claims. See [Contributing](../contributing.md) for the pattern.

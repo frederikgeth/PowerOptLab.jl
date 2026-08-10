@@ -1,5 +1,7 @@
 # Bilevel PV export and utility tap control
 
+> **Kind:** Problem specification · **Maturity:** proof of concept · **Direction:** hierarchical · **Temporal:** single-snapshot
+
 This page is a proof of concept for a hierarchical distribution-network model:
 
 1. the utility chooses a continuous transformer tap;

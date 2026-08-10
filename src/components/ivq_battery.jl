@@ -504,7 +504,8 @@ function solve_multiperiod_ivq(nets::AbstractVector, batteries::AbstractVector;
     multi = build_multi_context(nets; model, hook_factory=stamp_all, per_unit,
                                 s_base, optimizer, verbose, solver_options)
     ctxs = multi.contexts
-    sb = ctxs[1].bases === nothing ? 1.0 : ctxs[1].bases.s_base
+    bases = _opf_bases(ctxs[1])
+    sb = bases === nothing ? 1.0 : bases.s_base
 
     # Charge balance q[t+1] = q[t] − i[t]·Δt (soc = q_pack/qp), then the terminal
     # state. Forward is EXACT for the piecewise-constant period current (one
