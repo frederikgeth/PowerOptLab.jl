@@ -12,9 +12,16 @@ makedocs(
     pages = [
         "Home"            => "index.md",
         "Concepts"        => "concepts.md",
+        "Inverter-based resources" => [
+            "Overview"                 => "ibr/index.md",
+            "Scientific foundations"   => "ibr/foundations.md",
+            "Advanced inverter API"    => "components/advanced_inverter.md",
+            "Modelling tutorial"       => "tutorials/advanced_inverter_modelling.md",
+            "Verification & benchmarks" => "ibr/verification.md",
+            "References"               => "ibr/references.md",
+        ],
         "Component models" => [
             "Storage & EVs"     => "components/devices.md",
-            "Advanced inverter" => "components/advanced_inverter.md",
             "IVQ battery"       => "components/ivq_battery.md",
         ],
         "Problem specifications" => [
@@ -36,7 +43,6 @@ makedocs(
             "Inverse Carson reconstruction" => "tutorials/inverse_carson_reconstruction.md",
             "Battery storage models" => "tutorials/battery_storage_models.md",
             "HELM versus nonlinear power flow" => "tutorials/helm_vs_nonlinear_power_flow.md",
-            "Advanced inverter modelling" => "tutorials/advanced_inverter_modelling.md",
             "Learning smart-inverter controls" => "tutorials/learning_smart_inverter_controls.md",
         ],
         "Contributing"       => "contributing.md",
