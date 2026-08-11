@@ -29,7 +29,7 @@ Stamped into a solve through `model_hook!` / `solution_hook!`.
   current-dependent cell efficiency emerges from the physics (a Rint proxy, not a
   full round-trip energy efficiency). Reuses the [`AdvancedInverter`](@ref) for
   the AC↔DC converter.
-- **Advanced inverter** ([`AdvancedInverter`](@ref)) — a prototype internal-AC-node
+- **Advanced inverter** ([`AdvancedInverter`](@ref)) — an experimental internal-AC-node
   IBR with an output filter, internal-EMF/DC-modulation bounds, grid-forming
   operation, converter losses, and double-frequency ripple limits.
 

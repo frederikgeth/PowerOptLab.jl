@@ -31,7 +31,7 @@ New network elements, stamped via `model_hook!` / `solution_hook!`.
 |---|---|---|
 | [Storage / battery](components/devices.md) with state of charge | [`StorageDevice`](@ref) | promotion candidate |
 | [EV charging](components/devices.md) (V1G / V2G) with availability & departure energy | [`EVDevice`](@ref) | promotion candidate |
-| [Advanced inverter](components/advanced_inverter.md) (internal-node IBR) | [`AdvancedInverter`](@ref) | prototype |
+| [Advanced inverter](ibr/index.md) (circuit-aware IBR) | [`AdvancedInverter`](@ref) | experimental |
 | [IVQ battery](components/ivq_battery.md) (current–voltage–charge model) | [`IVQBattery`](@ref) | prototype |
 
 ### Problem specifications
