@@ -578,8 +578,9 @@ end
     r = solve_advanced_inverter(inv_grid3_unbal(), AdvancedInverter(; id="i",
         topology=:FOUR_LEG, v_dc=750.0, c_dc=1.1e-3, In_max=60.0,
         a_loss=af, c_loss=cf, _TOPO_COMMON...);
-        objective=:min_loss, p_set=8e3)
+        objective=:max_export, per_unit=true)
     @test r.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+    @test r.i_neutral > 1.0
     expected = af*(sum(r.i_mag) + r.i_neutral) +
                cf*(sum(abs2, r.i_mag) + r.i_neutral^2)
     @test r.p_loss ≈ expected rtol=2e-4 atol=0.01
