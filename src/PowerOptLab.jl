@@ -1,19 +1,18 @@
 """
     PowerOptLab
 
-A staging ground for component models and problem specifications built on top of
-the BMOPFTools reference OPF engine, using its public extension seams
-(`model_hook!` / `solution_hook!` and the staged `build_opf_model` /
-`enforce_kcl!` / `generation_cost` / `extract_result` API) rather than forking
-the engine.
+A research laboratory for four-wire distribution-network decisions when the
+network state or model is uncertain. It connects model evidence and forensics,
+informative interventions, and verification of operating decisions. The complete
+workflow is a research direction; current APIs provide separate foundations and
+state their local, scenario, or prototype limits explicitly.
 
-The BMOPFTools engine deliberately stays small and correct — it ships one
-four-wire rectangular current–voltage OPF and refuses to be a "model zoo".
-PowerOptLab is where the zoo lives: experimental devices (storage, EVs) and
-alternative problem specifications (multi-period co-optimisation, weighted
-least-squares state estimation) that reuse the engine's device physics,
-per-unit handling, and result extraction unchanged. Anything here that matures
-into accepted practice can later be folded back into the spec and the engine.
+PowerOptLab builds on the BMOPFTools reference current–voltage OPF engine, using
+its public extension seams (`model_hook!` / `solution_hook!` and the staged
+`build_opf_model` / `enforce_kcl!` / `generation_cost` / `extract_result` API)
+rather than forking the engine. Experimental devices and formulations reuse the
+engine's neutral-explicit physics, per-unit handling, and result extraction.
+Stable foundational work can later be proposed for the BMOPF spec.
 
 Contributions are organised by *what layer of the engine they extend*:
 
@@ -44,6 +43,9 @@ A different objective/variable/constraint structure on the same physics.
 - **State estimation** ([`solve_state_estimation`](@ref)) — weighted
   least-squares estimation of the network state from noisy measurements (an
   *inverse* problem on the same physics).
+- **Constrained NLLS state estimation** ([`solve_sparse_state_estimator`](@ref))
+  — a compiled neutral-explicit residual/constraint model with tangent-space
+  observability, selected local covariance, and sparse or dense reference solves.
 - **Parameter estimation** ([`solve_parameter_estimation`](@ref)) — calibration
   of uncertain line lengths and transformer tap ratios from smart-meter data
   across multiple time steps (the shared-parameter dual of state estimation).
@@ -61,8 +63,7 @@ A different objective/variable/constraint structure on the same physics.
 
 ### Bespoke algorithms — new solution methods (`src/algorithms/`)
 
-Custom solve loops (decomposition, sequential linearization, warm-start
-schemes) and alternative solution methods.
+Question-driven custom solve loops and alternative solution methods.
 
 - **HELM** ([`solve_pf_helm`](@ref)) — the Holomorphic Embedding Load-flow
   Method: a non-iterative power flow that expands each voltage as a power series

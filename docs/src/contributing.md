@@ -1,10 +1,22 @@
 # Contributing
 
-PowerOptLab is a staging ground: new work lands here first, and anything that
-matures folds back into the [BMOPFTools](https://github.com/frederikgeth/BMOPFTools.jl)
-spec. Before adding something, decide which of the three
-[kinds of contribution](concepts.md) it is — that determines where the code and
-docs go and which engine seam you reuse.
+PowerOptLab develops experimental methods for four-wire model inference,
+informative interventions, and verified network decisions. Stable foundational
+physics may later fold back into the
+[BMOPFTools](https://github.com/frederikgeth/BMOPFTools.jl) spec.
+
+Before adding a capability, answer two separate questions:
+
+1. **Research fit:** which inference, experiment-design, decision-verification,
+   or solution-validity question does it enable?
+2. **Implementation kind:** is it a component model, problem specification, or
+   bespoke algorithm?
+
+A standalone device or generic algorithm is not a sufficient contribution by
+itself. Its documentation should name the research question, the evidence or
+decision it connects to, and the validity limits of the result. Once that fit is
+clear, the [kind of contribution](concepts.md) determines where the code and docs
+go and which engine seam it reuses.
 
 ## Adding a component model
 
@@ -51,9 +63,10 @@ at a glance:
 ```
 
 - **Kind** — Component model / Problem specification / Bespoke algorithm.
-- **Maturity** — *prototype* (expect churn) or *promotion candidate* (ready to
-  fold into the BMOPF spec).
-- **Direction** — *forward* (dispatch/OPF) or *inverse* (estimation).
+- **Maturity** — *proof of concept*, *prototype*, *research prototype*, or
+  *promotion candidate*. Use the definitions in [Concepts](concepts.md).
+- **Direction** — *forward* (dispatch/OPF), *inverse* (estimation), or
+  *hierarchical* (multiple decision/response levels).
 - **Temporal** — *single-snapshot* or *inter-temporal*.
 
 ## The promotion path
@@ -65,7 +78,7 @@ and the PowerOptLab version becomes a thin re-export or is retired.
 
 ## Conventions
 
-- SI at the interface; per-unit only inside a solve (via `ctx.bases`).
+- SI at the interface; per-unit only inside a solve (via `opf_bases(ctx)`).
 - `Manifest.toml` is intentionally not committed (library convention).
 - Every feature is opt-in and covered by a test under `test/`.
 

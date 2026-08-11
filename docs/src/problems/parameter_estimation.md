@@ -49,7 +49,9 @@ Each metered user contributes noisy `(P, Q, |V|)` readings as
 
 `sigma` is the standard deviation (WLS weight `1/σ²`). Choose the objective with
 `objective=:wls` (smooth least squares) or `objective=:wlav` (weighted least
-*absolute* value — the robust, bad-data-rejecting choice used in Vanin et al.).
+*absolute* value, which is less sensitive to isolated large residuals and is
+used in Vanin et al.). WLAV does not identify or remove bad measurements; inspect
+the fitted residuals before attributing a discrepancy to a particular meter.
 
 ## How the uncertain elements are stamped
 

@@ -12,6 +12,7 @@ makedocs(
     pages = [
         "Home"            => "index.md",
         "Concepts"        => "concepts.md",
+        "Research program" => "research_program.md",
         "Inverter-based resources" => [
             "Overview"                 => "ibr/index.md",
             "Scientific foundations"   => "ibr/foundations.md",

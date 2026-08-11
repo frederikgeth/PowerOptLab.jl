@@ -1,19 +1,25 @@
 # PowerOptLab.jl
 
-A staging ground for **component models**, **problem specifications**, and
-**bespoke algorithms** built on top of the
+PowerOptLab is a research laboratory for **four-wire distribution-network
+decisions when the network state or model is uncertain**. Its organizing
+questions are:
+
+1. What states and models are compatible with telemetry and metadata?
+2. What safe measurement or intervention would distinguish material
+   alternatives?
+3. What operating decision is justified by the remaining alternatives?
+
+The package builds on the
 [BMOPFTools](https://github.com/frederikgeth/BMOPFTools.jl) reference
-optimal-power-flow engine.
+current–voltage OPF engine and reuses its neutral-explicit device physics,
+per-unit handling, and result extraction through public extension seams.
 
-BMOPFTools ships one small, correct four-wire rectangular current–voltage OPF and
-deliberately refuses to become a "model zoo". PowerOptLab is where the zoo lives:
-experimental devices and alternative problem formulations that reuse the engine's
-device physics, per-unit handling, and result extraction **through its public
-extension seams** — without forking the engine. Anything here that matures into
-accepted practice can later be folded back into the BMOPF spec.
-
-New here? Start with [Concepts](concepts.md) for the three kinds of contribution
-and the engine seams they reuse, then browse the capabilities below.
+The complete loop is not implemented yet. Current capabilities provide its
+foundations as separate, explicit research prototypes; the documentation does
+not treat proposed model-forensics, active-probing, or global-certification APIs
+as existing functionality. Start with [Concepts](concepts.md) for the modelling
+contracts, then read the [Research program](research_program.md) for the current
+boundary and priorities.
 
 ## Capabilities
 
@@ -26,6 +32,7 @@ New network elements, stamped via `model_hook!` / `solution_hook!`.
 | [Storage / battery](components/devices.md) with state of charge | [`StorageDevice`](@ref) | promotion candidate |
 | [EV charging](components/devices.md) (V1G / V2G) with availability & departure energy | [`EVDevice`](@ref) | promotion candidate |
 | [Advanced inverter](ibr/index.md) (circuit-aware IBR) | [`AdvancedInverter`](@ref) | experimental |
+| [IVQ battery](components/ivq_battery.md) (current–voltage–charge model) | [`IVQBattery`](@ref) | prototype |
 
 ### Problem specifications
 
@@ -35,9 +42,10 @@ New formulations over the same physics, via the staged `build_opf_model` /
 | Capability | Entry point | Direction | Maturity |
 |---|---|---|---|
 | [Multi-period OPF](problems/multiperiod.md) co-optimising many snapshots | [`solve_multiperiod_opf`](@ref) | forward | promotion candidate |
-| [Legacy WLS state estimation](problems/state_estimation.md) | [`solve_state_estimation`](@ref) | inverse | promotion candidate |
+| [Legacy WLS state estimation](problems/state_estimation.md) | [`solve_state_estimation`](@ref) | inverse | prototype |
 | [Constrained NLLS state estimation](problems/constrained_state_estimation.md) | [`solve_sparse_state_estimator`](@ref) | inverse | prototype |
 | [Parameter estimation](problems/parameter_estimation.md) (line lengths / taps) | [`solve_parameter_estimation`](@ref) | inverse | prototype |
+| [Inverse Carson reconstruction](problems/inverse_carson.md) (compatible overhead constructions) | [`solve_inverse_carson`](@ref) | inverse | prototype |
 | [Dynamic operating envelopes](problems/operating_envelope.md) (active import/export capacity) | [`solve_operating_envelope`](@ref) | forward | research prototype |
 | [Bilevel PV/tap POC](problems/bilevel.md) (DiffOpt lower-level response) | [`solve_bilevel_pv_tap`](@ref) | hierarchical | proof of concept |
 
@@ -62,7 +70,8 @@ Pkg.instantiate()
 ```
 
 Everything is SI at the interface (watts, vars, watt-hours, volts); per-unit
-conditioning inside each solve is handled by the engine's `ctx.bases`.
+conditioning inside each solve is handled through the engine's
+`opf_bases(ctx)` accessor.
 
 ## How it fits together
 

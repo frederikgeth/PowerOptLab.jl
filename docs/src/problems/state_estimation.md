@@ -1,6 +1,6 @@
 # Legacy WLS state estimation
 
-> **Kind:** Problem specification · **Maturity:** promotion candidate · **Direction:** inverse · **Temporal:** single-snapshot
+> **Kind:** Problem specification · **Maturity:** prototype · **Direction:** inverse · **Temporal:** single-snapshot
 
 This page documents the original JuMP/Ipopt WLS prototype.  For the compiled
 four-wire constrained-NLLS estimator, exact device equations, branch telemetry,
