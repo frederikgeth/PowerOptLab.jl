@@ -43,6 +43,12 @@ const _HALF_SQRT3 = _SQRT3 / 2
 # an epigraph that an unrelated objective could inflate.
 const _IMAG_EPS_SI = 1e-3  # A
 const _PAIRS_IDX = ((1, 2), (2, 3), (3, 1))
+# Relaxation weight on the previous PWM reserve in the outer closure below.
+# The audited ripple depends only weakly on the reserve already allocated, so
+# the fixed point is a near-constant map and heavy damping only buys extra NLP
+# solves — each of which is another chance for the solver to stall on these
+# nonconvex instances. Keep enough damping to absorb a genuine feedback term.
+const _PWM_RELAX = 0.25
 _sample_grid(N::Int) = [2pi * (k - 1) / N for k in 1:N]
 
 # Components of the unconjugated phasor sum sum(V_x I_x). Kept as a small,
@@ -1370,7 +1376,9 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
         #     unrelated charging/price objective; the equality cannot. Smoothing
         #     removes the singular Jacobian of the exact norm at I=0.
         #   • a_loss == 0 → the original epigraph is retained as a benign
-        #     regularising constraint; its slack cannot affect the zero coefficient.
+        #     regularising constraint; its slack cannot affect the zero
+        #     coefficient. It is boxed by the conductor rating so that slack
+        #     stays a regulariser instead of a free ride to infinity.
         isq = JuMP.@expression(m, cri[k]^2 + cii[k]^2)
         isq_sum += isq
         if inv.i_max !== nothing
@@ -1390,7 +1398,17 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
             JuMP.@constraint(m, im^2 == isq + imag_eps^2)
             imag_sum += im - imag_eps
         else
-            im = JuMP.@variable(m, base_name = "imag_$(inv.id)_$(ph)", lower_bound = 0.0)
+            # The epigraph is kept as a regulariser (its multiplier convexifies
+            # the current block), but it is BOXED: with a zero objective
+            # coefficient nothing pushes |I| back down, and an unbounded
+            # auxiliary lets Ipopt take enormous, useless steps. |I| can never
+            # exceed the conductor rating, so that is the honest bound.
+            im = JuMP.@variable(m, base_name = "imag_$(inv.id)_$(ph)",
+                                lower_bound = 0.0)
+            if inv.i_max !== nothing
+                JuMP.set_upper_bound(im, inv.i_max / ib)
+                JuMP.set_start_value(im, inv.i_max / ib)
+            end
             JuMP.@constraint(m, im^2 >= isq)
             imag_sum += im
         end
@@ -1425,7 +1443,14 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
             JuMP.@constraint(m, imn^2 == isq_n + imag_eps^2)
             imag_sum += imn - imag_eps
         else
-            imn = JuMP.@variable(m, base_name = "imag_$(inv.id)_neutral", lower_bound = 0.0)
+            # Boxed for the same reason as the per-phase auxiliary above; the
+            # fourth leg's current is bounded by its own rating.
+            imn = JuMP.@variable(m, base_name = "imag_$(inv.id)_neutral",
+                                 lower_bound = 0.0)
+            if inv.In_max !== nothing
+                JuMP.set_upper_bound(imn, inv.In_max / ib)
+                JuMP.set_start_value(imn, inv.In_max / ib)
+            end
             JuMP.@constraint(m, imn^2 >= isq_n)
             imag_sum += imn
         end
@@ -1897,7 +1922,10 @@ RMS reserves until the carrier-harmonic converter, grid, and neutral currents
 are covered by any supplied `i_max`, `i_grid_max`, and `In_max` ratings.
 
 PWM closure keywords are `pwm_tolerance=1e-3` (relative current tolerance),
-`pwm_max_iterations=8`, and `pwm_reserve_factor=1.01`. Inspect
+`pwm_max_iterations=16`, and `pwm_reserve_factor=1.01`. A cold start reaches
+its fixed point in a handful of solves, so the cap sits well clear of it: a
+closure reported at the iteration limit is a genuine non-convergence, not a
+budget that ran out. Inspect
 `result.pwm_reserve_margin`, `result.pwm_modulation_margin`, and
 `result.pwm_iterations` for every publishable PWM-enabled solve.
 
@@ -1921,7 +1949,7 @@ function solve_advanced_inverter(net::Dict{String,Any}, inverter::AdvancedInvert
                                  verbose::Bool=false,
                                  solver_options=(),
                                  pwm_tolerance::Float64=1e-3,
-                                 pwm_max_iterations::Int=8,
+                                 pwm_max_iterations::Int=16,
                                  pwm_reserve_factor::Float64=1.01)
     validate_device(inverter, (net,); periods=1)
     isfinite(pwm_tolerance) && pwm_tolerance >= 0 || throw(ArgumentError(
@@ -1972,12 +2000,14 @@ function solve_advanced_inverter(net::Dict{String,Any}, inverter::AdvancedInvert
         if dc_closed && ac_closed
             return result
         end
+        blend(old_value, predicted) = _PWM_RELAX*old_value +
+            (1 - _PWM_RELAX)*pwm_reserve_factor*predicted
         if !dc_closed
             leg_norm = sqrt(sum(abs2, result.i_mag) +
                 (inverter.topology == :FOUR_LEG ? result.i_neutral^2 : 0.0))
             leg_norm > 1e-9 || return result
-            desired = pwm_reserve_factor * target / leg_norm
-            factor = max(inverter.pwm_current_factor, 0.5*factor + 0.5*desired)
+            factor = max(inverter.pwm_current_factor,
+                         blend(factor, target / leg_norm))
         end
         if inverter.pwm_ac_ripple
             all(isfinite, result.i_ac_switching_rms) &&
@@ -1986,19 +2016,18 @@ function solve_advanced_inverter(net::Dict{String,Any}, inverter::AdvancedInvert
             if inverter.i_max !== nothing
                 converter_reserve = ntuple(k -> max(
                     inverter.pwm_ac_converter_reserve[k],
-                    0.5*converter_reserve[k] +
-                    0.5*pwm_reserve_factor*result.i_ac_switching_rms[k]), 3)
+                    blend(converter_reserve[k],
+                          result.i_ac_switching_rms[k])), 3)
             end
             if inverter.i_grid_max !== nothing
                 grid_reserve = ntuple(k -> max(
                     inverter.pwm_ac_grid_reserve[k],
-                    0.5*grid_reserve[k] +
-                    0.5*pwm_reserve_factor*result.i_grid_switching_rms[k]), 3)
+                    blend(grid_reserve[k],
+                          result.i_grid_switching_rms[k])), 3)
             end
             if inverter.In_max !== nothing
                 neutral_reserve = max(inverter.pwm_ac_neutral_reserve,
-                    0.5*neutral_reserve +
-                    0.5*pwm_reserve_factor*result.i_neutral_switching_rms)
+                    blend(neutral_reserve, result.i_neutral_switching_rms))
             end
         end
     end

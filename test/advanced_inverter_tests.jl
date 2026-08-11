@@ -819,10 +819,14 @@ end
     @test finite.p_dc_source_switching_loss ≈
           0.01*finite.i_dc_source_switching_rms^2 rtol=1e-10
     @test finite.pwm_dc_network_margin > 0.0
+    # The split link runs with DC-rail and bank headroom on purpose: this case
+    # regresses the SPWM reserve closure, not the modulation or thermal limit
+    # (those bind in their own testsets). Sitting on several active nonlinear
+    # constraints at once is what made this instance solver-path-sensitive.
     split = solve_advanced_inverter(inv_grid3_unbal(), AdvancedInverter(; id="i",
-        topology=:SPLIT_DC, v_dc=900.0, c_dc=3e-3,
+        topology=:SPLIT_DC, v_dc=950.0, c_dc=3e-3,
         c_dc_upper=2.5e-3, c_dc_lower=3.5e-3, In_max=40.0,
-        i_cap_max=25.0, pwm_strategy=:SPWM, f_sw=12e3,
+        i_cap_max=30.0, pwm_strategy=:SPWM, f_sw=12e3,
         pwm_fundamental_samples=72, pwm_carrier_samples=128, _TOPO_COMMON...);
         solve_kw...)
     @test split.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
