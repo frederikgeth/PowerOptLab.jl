@@ -27,6 +27,19 @@ oracle. A solver returning `LOCALLY_SOLVED` is necessary, but not sufficient.
 | Bounded midpoint balancing | differential-charge identity | `v_mid_mean - v_mid_natural = 2q_mid_balance/(Cu+Cl)` and insufficient charge authority is infeasible |
 | Capacitor RMS budget | orthogonal components | reported physical upper/lower currents combine their neutral share, common 2ω current, and reserved switching term |
 | Capacitor thermal and ESR loss | weighted squared-current sum | rating constraints use `i_cap_thermal_*`; `p_cap_loss = ESRu Iu,th² + ESRl Il,th²` and enters `p_dc` exactly |
+| Balanced carrier PWM | Mandrioli et al. Eqs. (40), (42) | numerical shared-carrier integration reproduces the published SPWM and centered-PWM DC-link ripple RMS at modulation indices 0.1, 0.3, and 0.5 within 0.2% |
+| PWM scaling | carrier-period charge balance | switching-current RMS scales with AC current and is independent of `Cdc` and `f_sw` under the frozen-current assumption; switching-voltage ripple scales as `1/(Cdc f_sw)` |
+| PWM reserve closure | post-solve carrier oracle | allocated switching current covers the predicted value, the capacitor bound remains satisfied, and a binding bank rating curtails export |
+| PWM topology and units | paired 4-leg/split-link and SI/per-unit solves | the fourth leg participates in shared-carrier DC current; split-link SPWM uses the series-equivalent bus capacitance; SI diagnostics agree |
+| DC harmonic KCL | finite source R–L in parallel with `Ceq` | `Ibridge,h + Icap,h + Isource,h = 0` at every retained carrier harmonic; the open-source and high-impedance limits converge |
+| DC source loss and units | Parseval plus paired SI/per-unit solves | `Psource,sw = Rsource Isource,rms²`; bridge/source/capacitor diagnostics and the normalized network margin are unit-system invariant |
+| Split rail switching voltage | series-capacitor charge | `Vupper=(Ceq/Cu)Vbus`, `Vlower=(Ceq/Cl)Vbus`, and the two rail ripples sum to total-bus ripple |
+| DC antiresonance screen | parallel-admittance cancellation | a lossless `Lsource` satisfying `Ω²LsourceCeq=1` drives `pwm_dc_network_margin` to zero and returns non-finite voltage rather than a misleading bounded result |
+| Split-link AC ripple | Mandrioli et al. Eqs. (15), (27) | carrier-harmonic phase and neutral RMS values agree across modulation indices 0.1, 0.3, and 0.5 within 0.3% |
+| AC-ripple scaling | inductive harmonic circuit | phase and neutral ripple scale as `1/(L f_sw)` |
+| Harmonic filter topology | reduced-L/LCL limiting cases | two series arms with `Cf=0` reproduce their summed impedance; a physical midpoint branch separates converter, shunt, and grid ripple |
+| Neutral inductance and 3-wire projection | paired topology audits | increasing `Ln/L` suppresses four-leg neutral ripple; the 3-leg sum-zero subspace has exactly zero neutral ripple |
+| AC-ripple reserve closure | physical total-RMS ratings | allocated carrier RMS covers every predicted phase/neutral value and `hypot(Ifund, Isw)` respects `i_max`/`In_max` in SI and per-unit |
 | Split rating composition | paired bound cases | common and individual half-bank ratings compose; enlarging any rating cannot shrink the feasible set |
 | Fourth-leg loss | fitted loss equation | phase currents plus `i_neutral` enter the per-leg loss sum |
 | Unit system | paired solves | SI and per-unit solves return the same SI diagnostics, including LCL midpoint quantities |
@@ -83,6 +96,30 @@ frequency-weighted bank ratings. The final one must wait for an explicit
 hybrid topology; using the current `:FOUR_LEG` result as its surrogate would be a
 model error.
 
+### Mandrioli et al. (2021) and Hammami et al. (2020)
+
+Mandrioli et al. give balanced-load RMS closed forms for sinusoidal PWM and
+centered continuous PWM. These are unusually clean unit-test oracles because
+they isolate shared-carrier correlation from the OPF optimum. The package now
+evaluates both formulas at three modulation indices, then separately checks
+current, capacitance, and switching-frequency scaling. Hammami et al. provide
+the complementary three-phase four-wire split-capacitor derivation. The present
+split-link test exercises asymmetric half-banks and the series-equivalent bus
+capacitance, but digitising several of their modulation/load-angle maps remains
+a useful independent regression target.
+
+### Mandrioli et al. (2021), Viatkin et al. (2021), and the 2023 generalization
+
+The split-capacitor paper provides closed-form phase and neutral switching RMS
+currents under SPWM. Equations (15) and (27) are now literal tests at three
+modulation indices, including the predicted `1/(L f_sw)` scaling. Viatkin et
+al. add an explicit neutral inductor to the four-leg circuit; the package tests
+their central monotonic result that increasing the neutral-to-phase inductance
+ratio suppresses neutral ripple. The 2023 generalized treatment covers many
+common-mode injections and hundreds of simulation/experimental operating
+conditions. Its published numeric archive would be the best next fixture for
+DPWM, THIPWM, and strategy-dependent neutral-inductor validation.
+
 ## Recommended higher-fidelity test harness
 
 For each topology, build one parameter-identical averaged or switched model in
@@ -116,11 +153,14 @@ and whether the DC source absorbs 2ω power.
 For every claimed boundary point:
 
 1. require non-negative `switching_margin`, increase `n_samples`, and demonstrate convergence;
-2. resolve from more than one physically sensible initial point;
-3. check all reported conductor, sequence, rail, and capacitor residuals;
-4. perturb the operating point inside and outside the claimed boundary;
-5. state whether each value is RMS, peak amplitude, or Fourier magnitude; and
-6. compare at least one representative point with a higher-fidelity oracle.
+2. for PWM-enabled points, require non-negative `pwm_reserve_margin` and
+   `pwm_modulation_margin`, require every AC `*_reserved` value to cover its
+   predicted ripple, then refine both sampling grids and `pwm_ac_harmonics`;
+3. resolve from more than one physically sensible initial point;
+4. check all reported conductor, sequence, rail, and capacitor residuals;
+5. perturb the operating point inside and outside the claimed boundary;
+6. state whether each value is RMS, peak amplitude, or Fourier magnitude; and
+7. compare at least one representative point with a higher-fidelity oracle.
 
 For an explicit LCL case, also verify that the fundamental frequency is well
 separated from every passive modal resonance and that the resonance remains

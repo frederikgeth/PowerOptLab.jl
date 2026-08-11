@@ -147,6 +147,41 @@ end
             In_max=30.0, c_dc_upper=2.5e-3))
     @test_throws ArgumentError solve_advanced_inverter(inv_grid3_bal(),
         AdvancedInverter(; id="i", cap_thermal_weights=(1.0, -1.0, 1.0), splitbase...))
+    @test_throws ArgumentError solve_advanced_inverter(inv_grid3_bal(),
+        AdvancedInverter(; id="i", pwm_strategy=:BOGUS, splitbase...))
+    @test_throws ArgumentError solve_advanced_inverter(inv_grid3_bal(),
+        AdvancedInverter(; id="i", pwm_strategy=:SPWM, splitbase...))
+    @test_throws ArgumentError solve_advanced_inverter(inv_grid3_bal(),
+        AdvancedInverter(; id="i", pwm_strategy=:CENTERED, f_sw=10e3,
+                           i_cap_max=20.0, splitbase...))
+    @test_throws ArgumentError solve_advanced_inverter(inv_grid3_bal(),
+        AdvancedInverter(; id="i", pwm_strategy=:SPWM, f_sw=10e3,
+                           pwm_carrier_samples=15, i_cap_max=20.0, splitbase...))
+    @test_throws ArgumentError solve_advanced_inverter(inv_grid3_bal(),
+        AdvancedInverter(; id="i", pwm_dc_source_r=0.1, splitbase...))
+    @test_throws ArgumentError solve_advanced_inverter(inv_grid3_bal(),
+        AdvancedInverter(; id="i", pwm_strategy=:SPWM, f_sw=10e3,
+            pwm_dc_source_r=-0.1, i_cap_max=20.0, splitbase...))
+    @test_throws ArgumentError solve_advanced_inverter(inv_grid3_bal(),
+        AdvancedInverter(; id="i", pwm_strategy=:SPWM, f_sw=10e3,
+            pwm_dc_source_l=-1e-3, i_cap_max=20.0, splitbase...))
+    @test_throws ArgumentError solve_advanced_inverter(inv_grid3_bal(),
+        AdvancedInverter(; id="i", pwm_strategy=:SPWM, f_sw=10e3,
+            pwm_dc_source_r=0.0, i_cap_max=20.0, splitbase...))
+    @test_throws ArgumentError solve_advanced_inverter(inv_grid3_bal(),
+        AdvancedInverter(; id="i", pwm_strategy=:SPWM, f_sw=10e3,
+            pwm_dc_harmonics=129, pwm_carrier_samples=256,
+            pwm_dc_source_r=0.1, i_cap_max=20.0, splitbase...))
+    @test_throws ArgumentError solve_advanced_inverter(inv_grid3_bal(),
+        AdvancedInverter(; id="i", pwm_strategy=:SPWM, f_sw=10e3,
+            i_cap_max=20.0, pwm_ac_ripple=true, splitbase...)) # no inductance
+    @test_throws ArgumentError solve_advanced_inverter(inv_grid3_bal(),
+        AdvancedInverter(; id="i", pwm_strategy=:SPWM, f_sw=10e3,
+            i_cap_max=20.0, pwm_ac_ripple=true, pwm_ac_harmonics=129,
+            pwm_carrier_samples=256, x_filter=0.1, splitbase...))
+    @test_throws ArgumentError solve_advanced_inverter(inv_grid3_bal(),
+        AdvancedInverter(; id="i", pwm_ac_converter_reserve=(1.0, 0.0, 0.0),
+            splitbase...)) # reserve requires i_max
     # Natural offset = 800(2.5-3.5)/(2·6) = -66.7 V; without an actuator a
     # 1 V mean-offset limit is a contradictory parameterisation.
     @test_throws ArgumentError solve_advanced_inverter(inv_grid3_bal(),
@@ -631,6 +666,296 @@ end
         q_mid_balance_max=0.10, v_mid_mean_max=1.0, common...))
     @test !(bad.termination_status in ("LOCALLY_SOLVED", "OPTIMAL"))
     @test isnan(bad.v_mid_mean)
+end
+
+@testset "Advanced inverter: carrier PWM audit reproduces published RMS formulas" begin
+    a = cis(2pi/3)
+    Ipk = 1.0
+    for m in (0.1, 0.3, 0.5), strategy in (:SPWM, :CENTERED)
+        U = (m/sqrt(2)) .* ComplexF64[1, a^-1, a]
+        I = (Ipk/sqrt(2)) .* ComplexF64[1, a^-1, a]
+        inv = AdvancedInverter(id="pwm", bus="poc", phase_terminals=["a","b","c"],
+            neutral="n", topology=:FOUR_LEG, s_max=10.0, In_max=10.0,
+            v_dc=1.0, c_dc=1.0, i_cap_max=10.0, f=0.01, f_sw=1.0,
+            pwm_strategy=strategy, pwm_fundamental_samples=720,
+            pwm_carrier_samples=512)
+        audit = PowerOptLab._pwm_ripple_audit(inv, real.(U), imag.(U),
+                                               real.(I), imag.(I))
+        expected = if strategy == :SPWM
+            m*Ipk*sqrt(15pi - 88sqrt(3)*m + 45pi*m^2)/(8sqrt(5pi))
+        else
+            m*Ipk*sqrt(120pi - 704sqrt(3)*m +
+                (540pi - 405sqrt(3))*m^2)/(16sqrt(10pi))
+        end
+        # Mandrioli et al. (2021), Eqs. (40) and (42), with Cdc=fsw=1.
+        @test audit.dv_rms ≈ expected rtol=2e-3 atol=2e-5
+        @test audit.i_rms > 0.0
+        @test audit.dv_pp >= 2*audit.dv_rms
+        @test audit.modulation_margin >= -1e-10
+    end
+
+    # Switching-current RMS is independent of fsw under the frozen-fundamental
+    # assumption; voltage ripple scales as 1/(Cdc*fsw) and both scale with I.
+    m = 0.3
+    U = (m/sqrt(2)) .* ComplexF64[1, a^-1, a]
+    I = (1/sqrt(2)) .* ComplexF64[1, a^-1, a]
+    common = (id="pwm", bus="poc", phase_terminals=["a","b","c"], neutral="n",
+              topology=:FOUR_LEG, s_max=10.0, In_max=10.0, v_dc=1.0,
+              i_cap_max=10.0, f=0.01, pwm_strategy=:CENTERED,
+              pwm_fundamental_samples=360, pwm_carrier_samples=256)
+    r1 = PowerOptLab._pwm_ripple_audit(
+        AdvancedInverter(; c_dc=1.0, f_sw=1.0, common...),
+        real.(U), imag.(U), real.(I), imag.(I))
+    r2 = PowerOptLab._pwm_ripple_audit(
+        AdvancedInverter(; c_dc=2.0, f_sw=2.0, common...),
+        real.(U), imag.(U), 2 .* real.(I), 2 .* imag.(I))
+    @test r2.i_rms ≈ 2*r1.i_rms rtol=2e-3
+    @test r2.dv_rms ≈ r1.dv_rms/2 rtol=3e-3
+    @test r2.dv_pp ≈ r1.dv_pp/2 rtol=3e-3
+end
+
+@testset "Advanced inverter: finite DC-source harmonic network" begin
+    omega, ceq = 2pi*2e3, 1.5e-3
+    ib = 3.0 + 4.0im
+    open = PowerOptLab._dc_link_harmonic_response(ib, omega, ceq, nothing, 0.0)
+    @test open.cap_current == -ib
+    @test open.source_current == 0.0im
+    @test ib + open.cap_current + open.source_current == 0.0im
+    @test open.admittance_margin == 1.0
+
+    shared = PowerOptLab._dc_link_harmonic_response(ib, omega, ceq, 0.2, 1e-3)
+    @test ib + shared.cap_current + shared.source_current ≈ 0.0im atol=1e-12
+    @test shared.admittance_margin > 0.0
+
+    # A lossless source inductor in parallel with C has a carrier-harmonic
+    # antiresonance at omega^2*L*C=1. The helper reports, rather than hides, the
+    # singularity so callers can reject that parameterisation.
+    resonant_l = inv(omega^2 * ceq)
+    resonant = PowerOptLab._dc_link_harmonic_response(
+        ib, omega, ceq, nothing, resonant_l)
+    @test resonant.admittance_margin <= 100eps(Float64)
+    @test !isfinite(resonant.voltage)
+
+    a = cis(2pi/3)
+    U = (0.3/sqrt(2)) .* ComplexF64[1, a^-1, a]
+    I = (1/sqrt(2)) .* ComplexF64[1, a^-1, a]
+    common = (id="pwm", bus="poc", phase_terminals=["a","b","c"],
+              neutral="n", topology=:FOUR_LEG, s_max=10.0, In_max=10.0,
+              v_dc=1.0, c_dc=1.0, i_cap_max=10.0, f=0.01, f_sw=1.0,
+              pwm_strategy=:CENTERED, pwm_fundamental_samples=72,
+              pwm_carrier_samples=128, pwm_dc_harmonics=64)
+    audit(inv) = PowerOptLab._pwm_ripple_audit(
+        inv, real.(U), imag.(U), real.(I), imag.(I))
+    open_audit = audit(AdvancedInverter(; common...))
+    high_z = audit(AdvancedInverter(; pwm_dc_source_r=1e6, common...))
+    low_z = audit(AdvancedInverter(; pwm_dc_source_r=0.01, common...))
+    @test high_z.i_rms ≈ open_audit.i_rms rtol=2e-4
+    @test high_z.dv_rms ≈ open_audit.dv_rms rtol=3e-2
+    @test high_z.i_source_rms < 1e-5*high_z.i_bridge_rms
+    @test low_z.i_source_rms > low_z.i_rms
+    @test low_z.i_rms < open_audit.i_rms
+    @test low_z.dv_rms < open_audit.dv_rms
+    @test low_z.source_loss ≈ 0.01*low_z.i_source_rms^2 rtol=1e-10
+    @test low_z.dc_network_margin > 0.0
+
+    cu, cl = 2.5e-3, 3.5e-3
+    split_parameters = merge(common, (topology=:SPLIT_DC,
+        c_dc=3e-3, c_dc_upper=cu, c_dc_lower=cl,
+        pwm_strategy=:SPWM, pwm_dc_source_r=0.1))
+    split = AdvancedInverter(; split_parameters...)
+    split_audit = audit(split)
+    ceq_split = cu*cl/(cu+cl)
+    @test split_audit.dv_upper_rms ≈
+          ceq_split/cu*split_audit.dv_rms rtol=1e-12
+    @test split_audit.dv_lower_rms ≈
+          ceq_split/cl*split_audit.dv_rms rtol=1e-12
+    @test split_audit.dv_upper_rms + split_audit.dv_lower_rms ≈
+          split_audit.dv_rms rtol=1e-12
+    @test split_audit.dv_upper_pp + split_audit.dv_lower_pp ≈
+          split_audit.dv_pp rtol=1e-12
+end
+
+@testset "Advanced inverter: automatic PWM reserve closes the capacitor constraint" begin
+    net = inv_grid3_bal()
+    common = (topology=:FOUR_LEG, v_dc=700.0, c_dc=1.1e-3,
+              In_max=40.0, i_cap_max=10.0, esr_dc=0.02, _TOPO_COMMON...)
+    fixed = solve_advanced_inverter(net, AdvancedInverter(; id="i", common...))
+    pwm = solve_advanced_inverter(net, AdvancedInverter(; id="i", i_sw=2.0,
+        pwm_strategy=:CENTERED, f_sw=10e3, pwm_fundamental_samples=72,
+        pwm_carrier_samples=128, common...))
+    @test pwm.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+    @test pwm.pwm_iterations >= 2
+    @test pwm.i_cap_switching > 1.0
+    @test pwm.i_cap_switching_reserved + 2e-2 >= pwm.i_cap_switching
+    @test pwm.pwm_reserve_margin >= -2e-2
+    @test pwm.i_cap_thermal <= 10.0 + 1e-3
+    @test pwm.p_poc < fixed.p_poc - 100.0
+    @test pwm.dv_switching_rms > 0.0
+    @test pwm.dv_switching_pp > 2*pwm.dv_switching_rms
+    @test pwm.pwm_modulation_margin > 0.0
+    @test pwm.p_cap_loss ≈
+          0.02*(2.0^2 + pwm.i_cap_switching_reserved^2) rtol=1e-4
+    @test pwm.p_dc ≈ pwm.p_conv + pwm.p_loss + pwm.p_cap_loss rtol=1e-9
+
+    pwm_pu = solve_advanced_inverter(net, AdvancedInverter(; id="i", i_sw=2.0,
+        pwm_strategy=:CENTERED, f_sw=10e3, pwm_fundamental_samples=72,
+        pwm_carrier_samples=128, common...); per_unit=true, s_base=100e3)
+    @test pwm_pu.p_poc ≈ pwm.p_poc rtol=3e-3
+    @test pwm_pu.i_cap_switching ≈ pwm.i_cap_switching rtol=3e-3
+    @test pwm_pu.i_cap_switching_reserved ≈ pwm.i_cap_switching_reserved rtol=3e-3
+    @test pwm_pu.dv_switching_rms ≈ pwm.dv_switching_rms rtol=3e-3
+
+    finite_parameters = (id="i", i_sw=2.0, pwm_strategy=:CENTERED,
+        f_sw=10e3, pwm_fundamental_samples=72, pwm_carrier_samples=128,
+        pwm_dc_harmonics=64, pwm_dc_source_r=0.01, common...)
+    finite = solve_advanced_inverter(net, AdvancedInverter(; finite_parameters...))
+    finite_pu = solve_advanced_inverter(net,
+        AdvancedInverter(; finite_parameters...); per_unit=true, s_base=100e3)
+    @test finite.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+    @test finite.i_dc_bridge_switching_rms > 0.0
+    @test finite.i_dc_source_switching_rms > 0.0
+    @test finite.i_cap_switching < finite.i_dc_bridge_switching_rms
+    @test finite.p_dc_source_switching_loss ≈
+          0.01*finite.i_dc_source_switching_rms^2 rtol=1e-10
+    @test finite.pwm_dc_network_margin > 0.0
+    @test finite_pu.i_dc_bridge_switching_rms ≈
+          finite.i_dc_bridge_switching_rms rtol=3e-3
+    @test finite_pu.i_dc_source_switching_rms ≈
+          finite.i_dc_source_switching_rms rtol=3e-3
+    @test finite_pu.p_dc_source_switching_loss ≈
+          finite.p_dc_source_switching_loss rtol=3e-3
+    @test finite_pu.pwm_dc_network_margin ≈
+          finite.pwm_dc_network_margin rtol=3e-3
+
+    split = solve_advanced_inverter(inv_grid3_unbal(), AdvancedInverter(; id="i",
+        topology=:SPLIT_DC, v_dc=900.0, c_dc=3e-3,
+        c_dc_upper=2.5e-3, c_dc_lower=3.5e-3, In_max=40.0,
+        i_cap_max=25.0, pwm_strategy=:SPWM, f_sw=12e3,
+        pwm_fundamental_samples=72, pwm_carrier_samples=128, _TOPO_COMMON...))
+    @test split.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+    @test split.i_cap_switching > 0.0
+    @test split.pwm_reserve_margin >= -2e-2
+    @test split.dv_switching_pp > split.dv_switching_rms > 0.0
+    @test split.pwm_modulation_margin > 0.0
+end
+
+@testset "Advanced inverter: split-link AC ripple matches published closed forms" begin
+    a = cis(2pi/3)
+    vdc, l, fsw = 100.0, 1.73e-3, 3.6e3
+    scale = vdc/(2l*fsw)
+    for m in (0.1, 0.3, 0.5)
+        U = (m*vdc/sqrt(2)) .* ComplexF64[1, a^-1, a]
+        inv = AdvancedInverter(id="acpwm", bus="poc",
+            phase_terminals=["a","b","c"], neutral="n",
+            topology=:SPLIT_DC, s_max=10e3, In_max=100.0,
+            v_dc=vdc, c_dc=2e-3, i_cap_max=100.0,
+            f=50.0, f_sw=fsw, pwm_strategy=:SPWM,
+            pwm_ac_ripple=true, pwm_fundamental_samples=72,
+            pwm_carrier_samples=256, pwm_ac_harmonics=128,
+            x_filter=2pi*50*l)
+        audit = PowerOptLab._pwm_ac_ripple_audit(
+            inv, real.(U), imag.(U))
+        phase_expected = scale/(4sqrt(3)) *
+            sqrt(1 - 4m^2 + 6m^4) # Mandrioli et al. (2021), Eq. (15)
+        neutral_expected = scale *
+            sqrt(3/16 - 9m^2/8 + 2sqrt(3)/pi*m^3) # Eq. (27)
+        @test audit.converter_rms ≈ fill(phase_expected, 3) rtol=3e-3
+        @test audit.neutral_rms ≈ neutral_expected rtol=3e-3
+        @test audit.grid_rms ≈ audit.converter_rms rtol=1e-12
+        @test maximum(audit.shunt_rms) < 1e-12
+        @test audit.converter_pp ≈ fill(vdc/(4l*fsw), 3) rtol=1e-2
+    end
+
+    # The ideal inductive result scales inversely with L and switching frequency.
+    m = 0.3
+    U = (m*vdc/sqrt(2)) .* ComplexF64[1, a^-1, a]
+    base = AdvancedInverter(id="acpwm", bus="poc",
+        phase_terminals=["a","b","c"], neutral="n",
+        topology=:SPLIT_DC, s_max=10e3, In_max=100.0,
+        v_dc=vdc, c_dc=2e-3, i_cap_max=100.0, f=50.0,
+        f_sw=fsw, pwm_strategy=:SPWM, pwm_ac_ripple=true,
+        pwm_fundamental_samples=36, pwm_carrier_samples=128,
+        pwm_ac_harmonics=64, x_filter=2pi*50*l)
+    doubled = AdvancedInverter(; merge(
+        NamedTuple{fieldnames(AdvancedInverter)}(
+            Tuple(getfield(base, n) for n in fieldnames(AdvancedInverter))),
+        (f_sw=2fsw, x_filter=2pi*50*2l))...)
+    r1 = PowerOptLab._pwm_ac_ripple_audit(base, real.(U), imag.(U))
+    r2 = PowerOptLab._pwm_ac_ripple_audit(doubled, real.(U), imag.(U))
+    @test r2.converter_rms ≈ r1.converter_rms ./ 4 rtol=2e-3
+    @test r2.neutral_rms ≈ r1.neutral_rms / 4 rtol=2e-3
+end
+
+@testset "Advanced inverter: harmonic AC ripple traverses topology and LCL circuit" begin
+    a = cis(2pi/3); vdc = 700.0; m = 0.3
+    U = (m*vdc/sqrt(2)) .* ComplexF64[1, a^-1, a]
+    common = (id="acpwm", bus="poc", phase_terminals=["a","b","c"],
+              neutral="n", s_max=20e3, v_dc=vdc, c_dc=1e-3,
+              i_cap_max=100.0, f_sw=10e3, pwm_strategy=:CENTERED,
+              pwm_ac_ripple=true, pwm_fundamental_samples=36,
+              pwm_carrier_samples=128, pwm_ac_harmonics=64)
+
+    reduced = AdvancedInverter(; topology=:FOUR_LEG, In_max=100.0,
+        x_filter=0.15, common...)
+    series_lcl = AdvancedInverter(; topology=:FOUR_LEG, In_max=100.0,
+        x_filter=0.05, x_filter_grid=0.10, common...)
+    rr = PowerOptLab._pwm_ac_ripple_audit(reduced, real.(U), imag.(U))
+    rs = PowerOptLab._pwm_ac_ripple_audit(series_lcl, real.(U), imag.(U))
+    @test rs.converter_rms ≈ rr.converter_rms rtol=2e-10
+    @test rs.grid_rms ≈ rr.grid_rms rtol=2e-10
+    matrix_reduced = AdvancedInverter(; topology=:FOUR_LEG, In_max=100.0,
+        x_filter_matrix=[0.15 0 0 0; 0 0.15 0 0;
+                         0 0 0.15 0; 0 0 0 0.0], common...)
+    rm = PowerOptLab._pwm_ac_ripple_audit(matrix_reduced, real.(U), imag.(U))
+    @test rm.converter_rms ≈ rr.converter_rms rtol=2e-10
+    @test rm.neutral_rms ≈ rr.neutral_rms rtol=2e-10
+
+    lcl = AdvancedInverter(; topology=:FOUR_LEG, In_max=100.0,
+        x_filter=0.05, x_filter_grid=0.10,
+        c_filter_mid=20e-6, r_filter_damping=1.0, common...)
+    rlcl = PowerOptLab._pwm_ac_ripple_audit(lcl, real.(U), imag.(U))
+    @test maximum(rlcl.grid_rms) < 0.1 * maximum(rlcl.converter_rms)
+    @test minimum(rlcl.shunt_rms) > 1.0
+
+    no_ln = PowerOptLab._pwm_ac_ripple_audit(
+        AdvancedInverter(; topology=:FOUR_LEG, In_max=100.0,
+            x_filter=0.15, x_filter_neutral=0.0, common...), real.(U), imag.(U))
+    with_ln = PowerOptLab._pwm_ac_ripple_audit(
+        AdvancedInverter(; topology=:FOUR_LEG, In_max=100.0,
+            x_filter=0.15, x_filter_neutral=0.30, common...), real.(U), imag.(U))
+    @test with_ln.neutral_rms < 0.4 * no_ln.neutral_rms
+
+    three = PowerOptLab._pwm_ac_ripple_audit(
+        AdvancedInverter(; merge(common, (topology=:THREE_LEG,
+            neutral=nothing, x_filter=0.15))...), real.(U), imag.(U))
+    @test three.neutral_rms < 1e-12
+    @test maximum(three.converter_rms) > 0.0
+end
+
+@testset "Advanced inverter: AC PWM reserve closes physical current ratings" begin
+    common = (bus="poc", phase_terminals=["a","b","c"], neutral="n",
+              topology=:FOUR_LEG, s_max=20e3, i_max=30.0, In_max=20.0,
+              v_dc=700.0, c_dc=1.1e-3, i_cap_max=50.0,
+              r_filter=0.05, x_filter=0.15, f_sw=10e3,
+              pwm_strategy=:CENTERED, pwm_ac_ripple=true,
+              pwm_fundamental_samples=24, pwm_carrier_samples=64,
+              pwm_ac_harmonics=32)
+    r = solve_advanced_inverter(inv_grid3_unbal(),
+        AdvancedInverter(; id="i", common...))
+    @test r.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+    @test all(r.i_ac_switching_reserved .+ 3e-2 .>= r.i_ac_switching_rms)
+    @test r.i_neutral_switching_reserved + 3e-2 >= r.i_neutral_switching_rms
+    @test maximum(r.i_ac_total_rms) <= 30.0 + 0.05
+    @test r.i_neutral_total_rms <= 20.0 + 0.05
+    @test r.pwm_iterations >= 2
+    @test maximum(r.i_ac_switching_pp) > maximum(r.i_ac_switching_rms)
+
+    rpu = solve_advanced_inverter(inv_grid3_unbal(),
+        AdvancedInverter(; id="i", common...); per_unit=true, s_base=100e3)
+    @test rpu.p_poc ≈ r.p_poc rtol=3e-3
+    @test rpu.i_ac_switching_rms ≈ r.i_ac_switching_rms rtol=3e-3
+    @test rpu.i_neutral_switching_rms ≈ r.i_neutral_switching_rms rtol=3e-3
+    @test rpu.i_ac_total_rms ≈ r.i_ac_total_rms rtol=3e-3
 end
 
 @testset "Advanced inverter: individual split half-bank ratings compose" begin

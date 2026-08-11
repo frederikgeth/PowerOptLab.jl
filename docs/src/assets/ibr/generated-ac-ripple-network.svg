@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="620" viewBox="0 0 1000 620">
+<rect width="1000" height="620" fill="#ffffff"/>
+<style>
+ .title { font:700 24px sans-serif; fill:#172033 }
+ .sub { font:14px sans-serif; fill:#526174 }
+ .head { font:700 16px sans-serif; fill:#172033 }
+ .body { font:13px sans-serif; fill:#334155 }
+ .formula { font:14px serif; fill:#172033 }
+ .wire { stroke:#172033; stroke-width:2.4; fill:none }
+ .harm { stroke:#1769aa; stroke-width:2.5; fill:none; marker-end:url(#blue) }
+ .current { stroke:#d65a31; stroke-width:2.4; fill:none; marker-end:url(#orange) }
+ .box { fill:#f7f9fc; stroke:#8ca0b8; stroke-width:1.6 }
+ .bluebox { fill:#edf7ff; stroke:#1769aa; stroke-width:1.8 }
+ .greenbox { fill:#edf8f1; stroke:#33865a; stroke-width:1.8 }
+</style>
+<defs>
+ <marker id="blue" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#1769aa"/></marker>
+ <marker id="orange" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#d65a31"/></marker>
+</defs>
+<text class="title" x="42" y="40">AC switching ripple: carrier harmonics through the physical filter</text>
+<text class="sub" x="42" y="65">Every carrier harmonic sees the conductor primitive, neutral return, LCL midpoint branch, and grid-side arm</text>
+
+<rect class="bluebox" x="45" y="115" width="180" height="155" rx="10"/>
+<text class="head" x="65" y="145">shared-carrier bridge</text>
+<text class="body" x="65" y="176">3-leg: sum-zero projection</text>
+<text class="body" x="65" y="199">split: physical midpoint</text>
+<text class="body" x="65" y="222">4-leg: phase − neutral pole</text>
+<text class="formula" x="65" y="250">Êh = F{Vdc(s−d)}</text>
+
+<path class="harm" d="M225 192 L315 192"/>
+<text class="body" x="246" y="178">Êh</text>
+
+<rect class="box" x="315" y="135" width="160" height="115" rx="8"/>
+<text class="head" x="340" y="165">converter arm</text>
+<text class="formula" x="337" y="197">Zc,h = Rc + jΩhLc</text>
+<text class="body" x="337" y="225">primitive + neutral/mutual</text>
+<path class="wire" d="M475 192 L570 192"/>
+<text class="body" x="492" y="178">midpoint Vm,h</text>
+
+<circle cx="570" cy="192" r="6" fill="#172033"/>
+<path class="wire" d="M570 192 L570 340"/>
+<rect class="box" x="500" y="340" width="140" height="92" rx="8"/>
+<text class="head" x="523" y="369">damped shunt</text>
+<text class="formula" x="520" y="400">Rd + 1/(jΩhCf)</text>
+<path class="wire" d="M570 432 L570 468"/>
+<line x1="535" y1="468" x2="605" y2="468" stroke="#172033" stroke-width="2.4"/>
+<line x1="545" y1="478" x2="595" y2="478" stroke="#172033" stroke-width="2.4"/>
+<line x1="555" y1="488" x2="585" y2="488" stroke="#172033" stroke-width="2.4"/>
+
+<path class="wire" d="M576 192 L665 192"/>
+<rect class="box" x="665" y="135" width="160" height="115" rx="8"/>
+<text class="head" x="701" y="165">grid arm</text>
+<text class="formula" x="687" y="197">Zg,h = Rg + jΩhLg</text>
+<text class="body" x="687" y="225">primitive + neutral/mutual</text>
+<path class="wire" d="M825 192 L935 192"/>
+<rect x="935" y="154" width="8" height="76" fill="#172033"/>
+<text class="body" x="866" y="178">stiff POC</text>
+
+<path class="current" d="M445 285 L335 285"/>
+<text class="body" x="348" y="307" fill="#d65a31">converter Ic,h</text>
+<path class="current" d="M805 285 L695 285"/>
+<text class="body" x="713" y="307" fill="#d65a31">grid Ig,h</text>
+<path class="current" d="M615 315 L585 340"/>
+<text class="body" x="618" y="329" fill="#d65a31">shunt Ish,h</text>
+
+<rect class="greenbox" x="70" y="515" width="860" height="72" rx="9"/>
+<text class="head" x="93" y="544">Reported and reserved separately at every physical path</text>
+<text class="formula" x="93" y="570">Isw,rms² = 2 Σh |Ih|²  →  converter, grid, shunt, and neutral RMS / peak-to-peak / total RMS</text>
+</svg>

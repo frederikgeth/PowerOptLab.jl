@@ -406,7 +406,219 @@ the same construction without the neutral term. These weights approximate the
 more general ``\sum_h ESR(f_h,T)|I_h|^2`` relation; they do not model ESR/ESL as
 electrical impedances or solve the capacitor temperature.
 
-## 9. Steady-state grid-forming constraint
+## 9. Carrier-level PWM ripple and sequential closure
+
+The low-frequency model above cannot infer switching stress from line-frequency
+RMS current alone: the DC-link current depends on correlated switch states. For
+an ideal two-level leg ``\ell`` with top-switch function
+``s_\ell(\theta,\tau)\in\{0,1\}``, frozen fundamental current
+``i_\ell(\theta)``, and duty ratio ``d_\ell(\theta)``, the instantaneous and
+switching-period-averaged converter input currents are
+
+```math
+i_{dc}(\theta,\tau)=\sum_{\ell\in\mathcal L}s_\ell i_\ell,
+\qquad
+\bar i_{dc}(\theta)=\sum_{\ell\in\mathcal L}d_\ell i_\ell,
+\qquad
+\hat i=i_{dc}-\bar i_{dc}.
+```
+
+Here ``\tau`` is position within a switching period. `:THREE_LEG` and
+`:SPLIT_DC` use the three phase legs; `:FOUR_LEG` additionally includes the
+neutral leg with ``i_n=-\sum_x i_x``. A shared triangular carrier preserves the
+cross-correlation among leg switching functions. PowerOptLab samples that
+carrier directly rather than adding independent per-leg ripple RMS values.
+
+![Carrier-level PWM audit and conservative reserve closure](../assets/ibr/generated-pwm-ripple-closure.svg)
+
+For pole command ``u_\ell^*`` and local rail voltage ``v_{dc}(\theta)``,
+
+```math
+d_\ell=\frac12+\frac{u_\ell^*}{v_{dc}(\theta)}.
+```
+
+SPWM uses zero common-mode command. Centered PWM applies
+``\gamma=-[\max_\ell u_\ell+\min_\ell u_\ell]/2`` before forming the duties;
+for a four-leg bridge the neutral reference is included in this centering. A
+split link has a fixed physical midpoint and therefore supports SPWM only in
+this audit. The predicted switching-current RMS is
+
+```math
+\boxed{I_{sw,pred}^2=\frac{1}{2\pi}\int_0^{2\pi}
+       \mathbb E_\tau\{\hat i(\theta,\tau)^2\}\,d\theta}.
+```
+
+The default high-impedance-source case closes the switching current through the
+DC-link capacitance:
+
+```math
+\frac{d\hat v}{dt}=-\frac{\hat i}{C_{eq}}.
+```
+
+The carrier integration therefore also reports total-bus switching-voltage RMS
+and the maximum local peak-to-peak excursion. These quantities scale as
+``1/(C_{eq}f_{sw})`` under the frozen-current assumption, while
+``I_{sw,pred}`` itself is independent of ``C_{eq}`` and ``f_{sw}``.
+
+Putting every carrier state inside the OPF would require a much larger
+mixed-integer switching model. The convenience solver instead uses a sequential
+majorant. At outer iteration ``r`` the smooth NLP includes
+
+```math
+I_{sw,alloc}^{(r)}=\kappa^{(r)}
+\sqrt{\sum_{\ell\in\mathcal L}|I_\ell|^2}
+```
+
+in each physical and thermal capacitor budget. A carrier audit of the solved
+point updates ``\kappa`` until ``I_{sw,alloc}\ge I_{sw,pred}`` within tolerance.
+`result.pwm_reserve_margin` reports this inequality and
+`result.pwm_modulation_margin` independently checks that all carrier references
+remain inside ``[-1/2,1/2]``. The manual `i_sw` parameter is retained as a
+quadrature residual for dead time, device commutation, unresolved output-current
+ripple, or spectral content outside the enabled ideal carrier calculations.
+
+This procedure is locally self-consistent and conservative at the returned
+operating point, but it is not a proof of the globally optimal switched system.
+It assumes ideal complementary switches, no dead time, sinusoidal current frozen
+within each switching period, and a shared triangular carrier. The optional
+finite source branch below relaxes the final open-source assumption.
+
+### 9.1 DC-source current sharing and split-bank voltage
+
+Hammami et al. and Vujacic et al. explicitly place a source R–L impedance in
+parallel with the link capacitor at switching frequencies. At retained carrier
+harmonic ``\Omega_h=2\pi h f_{sw}``, PowerOptLab uses
+
+```math
+Y_{C,h}=j\Omega_h C_{eq},\qquad
+Z_{s,h}=R_s+j\Omega_h L_s,\qquad Y_{s,h}=Z_{s,h}^{-1},
+```
+
+and solves the DC-node KCL
+
+```math
+\boxed{\hat V_h=-\frac{\hat I_{bridge,h}}{Y_{C,h}+Y_{s,h}}},\qquad
+\hat I_{C,h}=Y_{C,h}\hat V_h,\qquad
+\hat I_{s,h}=Y_{s,h}\hat V_h,}
+```
+
+so that ``\hat I_{bridge,h}+\hat I_{C,h}+\hat I_{s,h}=0`` for every retained
+harmonic. Omitting `pwm_dc_source_r` and leaving `pwm_dc_source_l=0` recovers
+the open-source limit exactly. `pwm_dc_harmonics` controls the finite-network
+bandwidth; any unretained bridge-current energy is assigned conservatively to
+the capacitor for thermal reserve closure, while voltage and source-current
+diagnostics contain the retained series only.
+
+For a split link, ``C_{eq}=C_uC_l/(C_u+C_l)`` and the same series charge crosses
+both half-banks. The rail-resolved ripple therefore obeys
+
+```math
+\hat V_{u,h}=\frac{C_{eq}}{C_u}\hat V_h,\qquad
+\hat V_{l,h}=\frac{C_{eq}}{C_l}\hat V_h,\qquad
+\hat V_{u,h}+\hat V_{l,h}=\hat V_h.
+```
+
+This exposes unequal rail stress without inventing an independent switching
+charge in each capacitor. Source-resistor dissipation is reported as
+``P_{s,sw}=R_s I_{s,sw,rms}^2`` and is not included in converter-side `p_dc`.
+
+![DC-source and capacitor current sharing at carrier harmonics](../assets/ibr/generated-dc-source-sharing.svg)
+
+A lossless source inductance can form a parallel antiresonance with the link
+capacitance. The audit reports
+
+```math
+\rho_{dc}=\min_h\frac{|Y_{C,h}+Y_{s,h}|}{|Y_{C,h}|+|Y_{s,h}|}.
+```
+
+`pwm_dc_network_margin` near zero means a retained carrier harmonic lies close
+to that undamped singularity and the result should not be published. This is a
+screening metric, not a stability margin: real batteries, DC/DC stages, cables,
+busbars, capacitors, and control loops have frequency-dependent impedance,
+ESR/ESL, and additional resonances not represented by one constant series R–L
+branch.
+
+### 9.2 AC-side carrier harmonics through the conductor network
+
+When `pwm_ac_ripple=true`, the same switch states also define pole-voltage error
+
+```math
+hat e_\ell(\theta,\tau)=V_{dc}(\theta)
+\left[s_\ell(\theta,\tau)-d_\ell(\theta)\right].
+```
+
+For a four-leg bridge, the phase-to-neutral excitation is
+``\hat e_x-\hat e_n``; a split-link phase is measured from its physical DC
+midpoint. A 3-leg bridge is projected onto the two-dimensional sum-zero current
+subspace, so common-mode pole voltage cannot create a fictitious fourth-wire
+current.
+
+Let ``\mathbf B=[\mathbf I_3;-\mathbf 1^T]`` map three phase currents to the
+four physical conductor currents. At carrier harmonic ``\Omega_h=2\pi h f_{sw}``,
+each four-wire primitive becomes
+
+```math
+\mathbf Z_{c,h}=\mathbf B^T
+\left(\mathbf R_c+j\Omega_h\mathbf L_c\right)\mathbf B,
+\qquad
+\mathbf L_c=\frac{\mathbf X_c(\omega)}{\omega},
+```
+
+with the analogous grid-side matrix ``\mathbf Z_{g,h}``. This retains unequal
+phase and neutral inductors and all supplied mutual terms. The 3-wire version
+replaces ``\mathbf B`` with an orthonormal basis ``\mathbf Q`` satisfying
+``\mathbf 1^T\mathbf Q=0``.
+
+For the explicit LCL circuit, define the damped midpoint-branch admittance
+
+```math
+Y_{d,h}=\left(R_d+\frac{1}{j\Omega_h C_f}\right)^{-1}.
+```
+
+The exact linear harmonic circuit used by the audit is then
+
+```math
+\boxed{\mathbf I_{g,h}=
+\left[\mathbf Z_{c,h}(\mathbf I+Y_{d,h}\mathbf Z_{g,h})
+      +\mathbf Z_{g,h}\right]^{-1}\mathbf E_h},
+```
+
+```math
+\mathbf V_{m,h}=\mathbf Z_{g,h}\mathbf I_{g,h},\qquad
+\mathbf I_{sh,h}=Y_{d,h}\mathbf V_{m,h},\qquad
+\mathbf I_{c,h}=\mathbf I_{g,h}+\mathbf I_{sh,h}.
+```
+
+With no explicit LCL section this reduces to
+``\mathbf I_{c,h}=\mathbf Z_{c,h}^{-1}\mathbf E_h``. The carrier waveform is
+integrated as a zero-order-held Fourier series. For any conductor quantity,
+
+```math
+I_{sw,rms}^2(\theta)=2\sum_{h=1}^{H}|I_h(\theta)|^2,
+\qquad
+I_{sw,rms}^2=\frac{1}{2\pi}\int_0^{2\pi}
+I_{sw,rms}^2(\theta)\,d\theta.
+```
+
+This construction reproduces the published split-capacitor phase and neutral
+RMS formulas and the four-leg neutral-inductor trends, while also covering the
+implemented mutually coupled LCL circuit. The sequential solver reserves these
+orthogonal RMS currents inside `i_max`, `i_grid_max`, and `In_max`; the reported
+`i_ac_total_rms`, `i_grid_total_rms`, and `i_neutral_total_rms` combine the
+fundamental and carrier contributions.
+
+![AC carrier harmonics through the reduced-L and LCL networks](../assets/ibr/generated-ac-ripple-network.svg)
+
+This remains a local harmonic audit, not broadband EMT. It freezes the
+fundamental state within each carrier period, truncates the carrier Fourier
+series at `pwm_ac_harmonics`, treats the POC as stiff at switching frequencies,
+and reuses frequency-independent R/L/C values. PWM sidebands are represented by
+averaging frozen-duty carrier spectra rather than one long asynchronous record.
+Dead time, device capacitance, magnetic saturation/core loss, skin/proximity
+effects, common-mode paths to earth, grid impedance at carrier harmonics, and
+frequency-dependent damping remain outside the model.
+
+## 10. Steady-state grid-forming constraint
 
 `grid_forming=true` constrains the internal voltages to a balanced
 positive-sequence set with a common magnitude decision variable:
@@ -421,7 +633,7 @@ It has no PLL, droop state, virtual impedance dynamics, current-priority state
 machine, or reference-frame transient. The network still needs an angle/voltage
 reference.
 
-## 10. Mathematical character
+## 11. Mathematical character
 
 The model is a smooth nonlinear program. Fundamental power and
 ``\widetilde S`` contain bilinear voltage-current products; lower voltage bounds

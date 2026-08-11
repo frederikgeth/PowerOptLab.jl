@@ -9,6 +9,11 @@ explicit.
 For many distribution studies, the ordinary IBR is the more defensible model. Use
 the advanced model only when the omitted internal physics changes the conclusion.
 
+After this overview, continue with the focused studies on [topology under
+unbalance](@ref ibr-topology-under-unbalance), [finite DC-source and split-link
+carrier stress](@ref ibr-dc-source-and-split-link), and [carrier harmonics through
+L/LCL filters](@ref ibr-ac-harmonics-lcl).
+
 ## Model-selection guide
 
 | Study question | Recommended model | Why |
@@ -268,6 +273,8 @@ ripple_limited = AdvancedInverter(
     topology = :SPLIT_DC,
     s_max = 30_000.0,
     i_max = 60.0,
+    r_filter = 0.05,
+    x_filter = 0.15,
     v_dc = 800.0,
     c_dc = 5e-3,
     c_dc_upper = 4.5e-3,
@@ -281,7 +288,13 @@ ripple_limited = AdvancedInverter(
     cap_thermal_weights = (1.4, 1.0, 0.7), # neutral, 2ω, switching ESR ratios
     esr_dc_upper = 0.030,
     esr_dc_lower = 0.025,
-    i_sw = 2.0,
+    i_sw = 2.0,                  # independent residual allowance
+    f_sw = 12e3,
+    pwm_strategy = :SPWM,        # split midpoint excludes centered injection
+    pwm_dc_source_r = 0.08,      # optional upstream carrier-frequency R–L
+    pwm_dc_source_l = 80e-6,
+    pwm_dc_harmonics = 64,
+    pwm_ac_ripple = true,
 )
 
 result = solve_advanced_inverter(network, ripple_limited;
@@ -293,6 +306,14 @@ result = solve_advanced_inverter(network, ripple_limited;
 @show result.i_cap_upper result.i_cap_lower
 @show result.i_cap_thermal_upper result.i_cap_thermal_lower
 @show result.q_mid_balance result.p_cap_loss result.switching_margin
+@show result.i_cap_switching result.i_cap_switching_reserved
+@show result.i_dc_bridge_switching_rms result.i_dc_source_switching_rms
+@show result.p_dc_source_switching_loss result.pwm_dc_network_margin
+@show result.dv_switching_rms result.dv_switching_pp
+@show result.dv_switching_upper_rms result.dv_switching_lower_rms
+@show result.pwm_reserve_margin result.pwm_modulation_margin result.pwm_iterations
+@show result.i_ac_switching_rms result.i_neutral_switching_rms
+@show result.i_ac_total_rms result.i_neutral_total_rms
 ```
 
 With balanced voltage and current, a three-phase bridge has little low-frequency
@@ -307,6 +328,31 @@ component `result.ripple/(√2*v_dc)`, and `i_sw`. Their `i_cap_thermal_*`
 counterparts apply the squared-current ESR-ratio weights and are the quantities
 checked against the ratings. `p_cap_loss` converts those weighted currents back
 to watts using the supplied reference ESRs.
+
+With PWM enabled, `i_cap_switching` is reconstructed from ideal leg switch
+states using one shared triangular carrier, while `i_cap_switching_reserved` is
+the conservative current-norm allowance closed around the optimisation. The
+manual `i_sw` above remains an independent residual term and combines in
+quadrature. Treat the result as publishable only when `pwm_reserve_margin ≥ 0`,
+`pwm_modulation_margin ≥ 0`, and a tighter carrier/fundamental sampling study
+does not materially change the diagnostics. `dv_switching_rms` and
+`dv_switching_pp` report the associated high-frequency DC-link voltage ripple.
+With a finite `pwm_dc_source_*` branch, bridge ripple divides between the source
+and capacitor at each retained harmonic. Inspect the two current diagnostics,
+the separate source-resistor loss, and `pwm_dc_network_margin`; values near zero
+indicate an inadequately damped source-capacitor antiresonance. For a split link,
+the upper/lower voltage diagnostics expose the larger ripple across the smaller
+half-bank. Increase `pwm_dc_harmonics` and `pwm_carrier_samples` together before
+using these quantities for component selection.
+
+With `pwm_ac_ripple=true`, the pole-voltage carrier harmonics are also passed
+through the phase and neutral conductor inductances. `i_ac_switching_rms` and
+`i_neutral_switching_rms` are the predicted high-frequency components;
+`i_ac_total_rms` and `i_neutral_total_rms` combine them in quadrature with the
+fundamental solution and are the quantities that should be compared with
+physical conductor/device ratings. For an explicit LCL filter, also inspect
+`i_grid_switching_rms` and `i_filter_shunt_switching_rms` rather than assuming
+the converter-side ripple reaches the grid unchanged.
 
 Unequal capacitances create a natural mean midpoint shift even at zero neutral
 current. `q_mid_balance_max` supplies bounded quasi-static charge authority to

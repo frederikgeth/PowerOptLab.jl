@@ -54,65 +54,6 @@ function _ripple_components(vre, vim, ire, iim)
             sum(vre[k]*iim[k] + vim[k]*ire[k] for k in idx))
 end
 
-"""
-    solve_advanced_inverter(net, inverter; objective=:max_export, kwargs...)
-        -> InverterResult
-
-Solve the experimental circuit-aware inverter model. When
-`inverter.pwm_strategy != :NONE`, the solver alternates between the smooth NLP
-and a carrier-level switching audit. The capacitor reserve is increased until
-it covers the quadrature sum of the modeled carrier ripple and the residual
-manual `i_sw` allowance. This is a conservative sequential closure, not a
-mixed-integer switched-converter optimisation.
-
-PWM closure keywords are `pwm_tolerance=1e-3` (relative current tolerance),
-`pwm_max_iterations=8`, and `pwm_reserve_factor=1.01`. Inspect
-`result.pwm_reserve_margin`, `result.pwm_modulation_margin`, and
-`result.pwm_iterations` for every publishable PWM-enabled solve.
-"""
-function solve_advanced_inverter(net::Dict{String,Any}, inverter::AdvancedInverter;
-                                 objective::Symbol=:max_export,
-                                 p_set::Union{Float64,Nothing}=nothing,
-                                 q_set::Union{Float64,Nothing}=nothing,
-                                 per_unit::Bool=false,
-                                 s_base::Float64=1e6,
-                                 optimizer=Ipopt.Optimizer,
-                                 verbose::Bool=false,
-                                 solver_options=(),
-                                 pwm_tolerance::Float64=1e-3,
-                                 pwm_max_iterations::Int=8,
-                                 pwm_reserve_factor::Float64=1.01)
-    validate_device(inverter, (net,); periods=1)
-    isfinite(pwm_tolerance) && pwm_tolerance >= 0 || throw(ArgumentError(
-        "pwm_tolerance must be finite and >= 0"))
-    pwm_max_iterations >= 1 || throw(ArgumentError(
-        "pwm_max_iterations must be >= 1"))
-    isfinite(pwm_reserve_factor) && pwm_reserve_factor >= 1 || throw(ArgumentError(
-        "pwm_reserve_factor must be finite and >= 1"))
-
-    common = (; objective, p_set, q_set, per_unit, s_base, optimizer,
-               verbose, solver_options)
-    if inverter.pwm_strategy == :NONE
-        return _solve_advanced_inverter_once(net, inverter; common...)
-    end
-
-    reserve = inverter.i_sw
-    last_result = nothing
-    for iteration in 1:pwm_max_iterations
-        working = _with_pwm_reserve(inverter, reserve)
-        result = _solve_advanced_inverter_once(net, working; common...,
-            pwm_audit_inverter=inverter, pwm_iterations=iteration)
-        last_result = result
-        solve_status(result).publishable || return result
-        isfinite(result.i_cap_switching) || return result
-        target = hypot(inverter.i_sw, result.i_cap_switching)
-        tolerance = pwm_tolerance * max(target, 1.0)
-        result.i_cap_switching_reserved + tolerance >= target && return result
-        reserve = max(reserve, pwm_reserve_factor * target)
-    end
-    return last_result
-end
-
 # Fortescue current components for the terminal order a-b-c. Each component is
 # returned as a (real, imaginary) pair so the helper remains generic over JuMP
 # expressions as well as ordinary numbers.
@@ -252,10 +193,37 @@ end
 # over each switching period, as in Mandrioli et al. (Energies 2021, 14, 1434).
 # The shared triangular carrier is integrated explicitly, which preserves the
 # switching-function correlation that independent-leg RMS approximations lose.
+function _dc_link_harmonic_response(i_bridge::Complex, omega::Real, ceq::Real,
+                                    source_r, source_l::Real)
+    yc = im * omega * ceq
+    source_active = source_r !== nothing || source_l > 0
+    if !source_active
+        v = -i_bridge / yc
+        return (voltage=v, cap_current=-i_bridge, source_current=0.0im,
+                admittance_margin=1.0)
+    end
+    r = something(source_r, 0.0)
+    zs = Complex(r, omega*source_l)
+    ys = inv(zs)
+    ysum = yc + ys
+    scale = abs(yc) + abs(ys)
+    margin = scale == 0 ? 0.0 : abs(ysum)/scale
+    if margin <= 100eps(Float64)
+        return (voltage=Complex(NaN, NaN), cap_current=Complex(NaN, NaN),
+                source_current=Complex(NaN, NaN), admittance_margin=margin)
+    end
+    v = -i_bridge / ysum
+    return (voltage=v, cap_current=yc*v, source_current=ys*v,
+            admittance_margin=margin)
+end
+
 function _pwm_ripple_audit(inv, ure, uim, ire, iim, dre=0.0, dim=0.0,
                            nre=0.0, nim=0.0, nmean=0.0)
     inv.pwm_strategy == :NONE && return (
-        i_rms=0.0, dv_rms=0.0, dv_pp=0.0, modulation_margin=NaN)
+        i_rms=0.0, i_bridge_rms=0.0, i_source_rms=0.0,
+        dv_rms=0.0, dv_pp=0.0, dv_upper_rms=0.0, dv_lower_rms=0.0,
+        dv_upper_pp=0.0, dv_lower_pp=0.0, source_loss=0.0,
+        dc_network_margin=NaN, modulation_margin=NaN)
     length(ure) == length(uim) == length(ire) == length(iim) == 3 ||
         throw(DimensionMismatch("PWM ripple audit requires three voltage and current phasors"))
 
@@ -269,17 +237,25 @@ function _pwm_ripple_audit(inv, ure, uim, ire, iim, dre=0.0, dim=0.0,
         inv.c_dc
     end
     i_rms_sq = 0.0
+    i_cap_rms_sq = 0.0
+    i_source_rms_sq = 0.0
     dv_rms_sq = 0.0
     dv_pp = 0.0
     modulation_margin = Inf
     ihat = zeros(nc)
     vhat = zeros(nc)
+    source_active = inv.pwm_dc_source_r !== nothing || inv.pwm_dc_source_l > 0
+    dc_network_margin = source_active ? Inf : 1.0
+    source_loss = 0.0
 
     for th in _sample_grid(nf)
         c1, s1 = cos(th), sin(th)
         c2, s2 = cos(2th), sin(2th)
         rail = inv.v_dc + dre*c2 - dim*s2
-        rail > 0 || return (i_rms=NaN, dv_rms=NaN, dv_pp=NaN,
+        rail > 0 || return (i_rms=NaN, i_bridge_rms=NaN, i_source_rms=NaN,
+                            dv_rms=NaN, dv_pp=NaN, dv_upper_rms=NaN,
+                            dv_lower_rms=NaN, dv_upper_pp=NaN, dv_lower_pp=NaN,
+                            source_loss=NaN, dc_network_margin=0.0,
                             modulation_margin=-Inf)
         uph = [sqrt(2)*(ure[k]*c1 - uim[k]*s1) for k in 1:3]
         iph = [sqrt(2)*(ire[k]*c1 - iim[k]*s1) for k in 1:3]
@@ -303,7 +279,10 @@ function _pwm_ripple_audit(inv, ure, uim, ire, iim, dre=0.0, dim=0.0,
         refs = commands ./ rail                 # carrier spans [-1/2, +1/2]
         duties = 0.5 .+ refs
         if minimum(duties) < -1e-9 || maximum(duties) > 1 + 1e-9
-            return (i_rms=NaN, dv_rms=NaN, dv_pp=NaN,
+            return (i_rms=NaN, i_bridge_rms=NaN, i_source_rms=NaN,
+                    dv_rms=NaN, dv_pp=NaN, dv_upper_rms=NaN,
+                    dv_lower_rms=NaN, dv_upper_pp=NaN, dv_lower_pp=NaN,
+                    source_loss=NaN, dc_network_margin=dc_network_margin,
                     modulation_margin=modulation_margin)
         end
         iavg = sum(duties .* currents)
@@ -319,18 +298,224 @@ function _pwm_ripple_audit(inv, ure, uim, ire, iim, dre=0.0, dim=0.0,
         # charge drift from contaminating the voltage-ripple RMS.
         ihat .-= sum(ihat) / nc
         i_rms_sq += sum(abs2, ihat) / nc
-        q = 0.0
-        dt = 1 / (fsw * nc)
-        for j in 1:nc
-            q -= ihat[j] * dt
-            vhat[j] = q / ceq
+        if source_active
+            fill!(vhat, 0.0)
+            cap_local_sq = 0.0
+            source_local_sq = 0.0
+            bridge_retained_sq = 0.0
+            nh = min(inv.pwm_dc_harmonics, nc ÷ 2)
+            for h in 1:nh
+                ih = sum(ihat[j] * cis(-2pi*h*(j - 0.5)/nc)
+                         for j in 1:nc) / nc * sinc(h/nc)
+                harmonic_weight = h == nc ÷ 2 ? 1.0 : 2.0
+                response = _dc_link_harmonic_response(
+                    ih, 2pi*h*fsw, ceq,
+                    inv.pwm_dc_source_r, inv.pwm_dc_source_l)
+                dc_network_margin = min(dc_network_margin,
+                                        response.admittance_margin)
+                isfinite(response.voltage) || return (
+                    i_rms=NaN, i_bridge_rms=sqrt(i_rms_sq), i_source_rms=NaN,
+                    dv_rms=NaN, dv_pp=NaN, dv_upper_rms=NaN,
+                    dv_lower_rms=NaN, dv_upper_pp=NaN, dv_lower_pp=NaN,
+                    source_loss=NaN, dc_network_margin=dc_network_margin,
+                    modulation_margin=modulation_margin)
+                bridge_retained_sq += harmonic_weight * abs2(ih)
+                cap_local_sq += harmonic_weight * abs2(response.cap_current)
+                source_local_sq += harmonic_weight * abs2(response.source_current)
+                source_loss += harmonic_weight *
+                               something(inv.pwm_dc_source_r, 0.0) *
+                               abs2(response.source_current)
+                for j in 1:nc
+                    vhat[j] += harmonic_weight * real(response.voltage *
+                        cis(2pi*h*(j - 0.5)/nc))
+                end
+            end
+            # The piecewise-constant bridge current also contains harmonics
+            # above the retained network bandwidth. Assign their Parseval
+            # residual to the capacitor: this preserves the exact open-source
+            # limit and keeps the thermal reserve conservative when the source
+            # impedance model is deliberately truncated.
+            bridge_sample_sq = sum(abs2, ihat) / nc
+            cap_local_sq += max(bridge_sample_sq - bridge_retained_sq, 0.0)
+            i_cap_rms_sq += cap_local_sq
+            i_source_rms_sq += source_local_sq
+            dv_rms_sq += sum(abs2, vhat) / nc
+            dv_pp = max(dv_pp, maximum(vhat) - minimum(vhat))
+        else
+            q = 0.0
+            dt = 1 / (fsw * nc)
+            for j in 1:nc
+                q -= ihat[j] * dt
+                vhat[j] = q / ceq
+            end
+            vhat .-= sum(vhat) / nc
+            i_cap_rms_sq += sum(abs2, ihat) / nc
+            dv_rms_sq += sum(abs2, vhat) / nc
+            dv_pp = max(dv_pp, maximum(vhat) - minimum(vhat))
         end
-        vhat .-= sum(vhat) / nc
-        dv_rms_sq += sum(abs2, vhat) / nc
-        dv_pp = max(dv_pp, maximum(vhat) - minimum(vhat))
     end
-    return (i_rms=sqrt(i_rms_sq / nf), dv_rms=sqrt(dv_rms_sq / nf),
-            dv_pp=dv_pp, modulation_margin=modulation_margin)
+    dv_rms = sqrt(dv_rms_sq / nf)
+    i_cap_rms = sqrt(i_cap_rms_sq / nf)
+    i_source_rms = sqrt(i_source_rms_sq / nf)
+    source_loss /= nf
+    if inv.topology == :SPLIT_DC
+        cu, cl = _split_capacitances(inv)
+        upper_scale, lower_scale = ceq/cu, ceq/cl
+        dvu, dvl = upper_scale*dv_rms, lower_scale*dv_rms
+        dpu, dpl = upper_scale*dv_pp, lower_scale*dv_pp
+    else
+        dvu = dvl = dpu = dpl = 0.0
+    end
+    return (i_rms=i_cap_rms, i_bridge_rms=sqrt(i_rms_sq / nf),
+            i_source_rms=i_source_rms, dv_rms=dv_rms, dv_pp=dv_pp,
+            dv_upper_rms=dvu, dv_lower_rms=dvl,
+            dv_upper_pp=dpu, dv_lower_pp=dpl, source_loss=source_loss,
+            dc_network_margin=dc_network_margin,
+            modulation_margin=modulation_margin)
+end
+
+# Switching-frequency AC-current audit. For each frozen fundamental angle, the
+# ideal shared-carrier pole-voltage error is expanded into carrier harmonics and
+# passed through the exact conductor-domain reduced-L or LCL network. This keeps
+# mutual phase/neutral inductance, the grid-side arm, midpoint capacitance, and
+# series damping in the frequency-domain calculation. Fundamental currents do
+# not enter: the usual high-frequency approximation neglects resistive ripple
+# voltage caused by the small switching-current perturbation itself.
+function _pwm_ac_ripple_audit(inv, ure, uim, dre=0.0, dim=0.0,
+                              nre=0.0, nim=0.0, nmean=0.0)
+    zero_result() = (
+        converter_rms=zeros(3), converter_pp=zeros(3),
+        grid_rms=zeros(3), grid_pp=zeros(3), shunt_rms=zeros(3),
+        neutral_rms=0.0, neutral_pp=0.0)
+    inv.pwm_ac_ripple || return zero_result()
+
+    nf = inv.pwm_fundamental_samples
+    nc = inv.pwm_carrier_samples
+    nh = min(inv.pwm_ac_harmonics, nc ÷ 2)
+    Rf, Xf = _series_filter_matrices(inv, 3, 1.0; side=:converter)
+    Rg, Xg = _series_filter_matrices(inv, 3, 1.0; side=:grid)
+
+    # THREE_LEG lives in the two-dimensional sum-zero subspace. Four-wire
+    # topologies use phase currents as coordinates and reduce the primitive
+    # conductor impedance with J=[ia,ib,ic,-ia-ib-ic].
+    phase_map, Rcr, Xcr, Rgr, Xgr = if inv.topology == :THREE_LEG
+        Q = [1/sqrt(2) 1/sqrt(6);
+             -1/sqrt(2) 1/sqrt(6);
+             0.0 -2/sqrt(6)]
+        Q, Q' * Rf * Q, Q' * Xf * Q, Q' * Rg * Q, Q' * Xg * Q
+    else
+        size(Rf) == (4, 4) || throw(ArgumentError(
+            "four-wire AC ripple audit requires a physical neutral conductor"))
+        B = [Matrix{Float64}(I, 3, 3); -ones(1, 3)]
+        Matrix{Float64}(I, 3, 3), B' * Rf * B, B' * Xf * B,
+            B' * Rg * B, B' * Xg * B
+    end
+    Lcr = Xcr / (2pi * inv.f)
+    Lgr = Xgr / (2pi * inv.f)
+    has_lcl = _lcl_active(inv)
+
+    conv_sq = zeros(3); grid_sq = zeros(3); shunt_sq = zeros(3)
+    conv_pp = zeros(3); grid_pp = zeros(3)
+    neutral_sq = 0.0; neutral_pp = 0.0
+    pole_error = zeros(3, nc)
+    iconv_h = zeros(ComplexF64, 3, nh)
+    igrid_h = zeros(ComplexF64, 3, nh)
+    ishunt_h = zeros(ComplexF64, 3, nh)
+
+    for th in _sample_grid(nf)
+        c1, s1 = cos(th), sin(th)
+        c2, s2 = cos(2th), sin(2th)
+        rail = inv.v_dc + dre*c2 - dim*s2
+        rail > 0 || return (
+            converter_rms=fill(NaN, 3), converter_pp=fill(NaN, 3),
+            grid_rms=fill(NaN, 3), grid_pp=fill(NaN, 3),
+            shunt_rms=fill(NaN, 3), neutral_rms=NaN, neutral_pp=NaN)
+        uph = [sqrt(2)*(ure[k]*c1 - uim[k]*s1) for k in 1:3]
+        commands = if inv.topology == :SPLIT_DC
+            nr = sqrt(2)*(nre*c1 - nim*s1) + nmean
+            uph .+ nr
+        elseif inv.topology == :FOUR_LEG
+            base = [uph; 0.0]
+            gamma = inv.pwm_strategy == :CENTERED ?
+                -(maximum(base) + minimum(base))/2 : 0.0
+            base .+ gamma
+        else
+            gamma = inv.pwm_strategy == :CENTERED ?
+                -(maximum(uph) + minimum(uph))/2 : 0.0
+            uph .+ gamma
+        end
+        refs = commands ./ rail
+        duties = 0.5 .+ refs
+        (minimum(duties) >= -1e-9 && maximum(duties) <= 1 + 1e-9) ||
+            return (converter_rms=fill(NaN, 3), converter_pp=fill(NaN, 3),
+                    grid_rms=fill(NaN, 3), grid_pp=fill(NaN, 3),
+                    shunt_rms=fill(NaN, 3), neutral_rms=NaN, neutral_pp=NaN)
+
+        for j in 1:nc
+            tau = (j - 0.5) / nc
+            carrier = tau < 0.5 ? -0.5 + 2tau : 1.5 - 2tau
+            leg_error = rail .* [
+                (refs[k] >= carrier ? 1.0 : 0.0) - duties[k]
+                for k in eachindex(refs)]
+            if inv.topology == :FOUR_LEG
+                pole_error[:, j] .= leg_error[1:3] .- leg_error[4]
+            else
+                pole_error[:, j] .= leg_error[1:3]
+            end
+        end
+
+        fill!(iconv_h, 0); fill!(igrid_h, 0); fill!(ishunt_h, 0)
+        for h in 1:nh
+            # Midpoint quadrature plus the zero-order-hold sinc gives the exact
+            # Fourier integral of the sampled piecewise-constant pole voltage.
+            eh = ComplexF64[
+                sum(pole_error[k, j] * cis(-2pi*h*(j - 0.5)/nc)
+                    for j in 1:nc) / nc * sinc(h/nc)
+                for k in 1:3]
+            ecoord = phase_map' * eh
+            wh = 2pi * h * inv.f_sw
+            Zc = Rcr + im*wh*Lcr
+            if has_lcl
+                Zg = Rgr + im*wh*Lgr
+                y = inv.c_filter_mid == 0.0 ? 0.0im :
+                    1 / Complex(inv.r_filter_damping,
+                                -1/(wh*inv.c_filter_mid))
+                A = Zc * (I + y*Zg) + Zg
+                igcoord = A \ ecoord
+                vmcoord = Zg * igcoord
+                ishcoord = y * vmcoord
+                iccoord = igcoord + ishcoord
+            else
+                iccoord = Zc \ ecoord
+                igcoord = iccoord
+                ishcoord = zero(iccoord)
+            end
+            iconv_h[:, h] .= phase_map * iccoord
+            igrid_h[:, h] .= phase_map * igcoord
+            ishunt_h[:, h] .= phase_map * ishcoord
+            conv_sq .+= 2 .* abs2.(iconv_h[:, h])
+            grid_sq .+= 2 .* abs2.(igrid_h[:, h])
+            shunt_sq .+= 2 .* abs2.(ishunt_h[:, h])
+            neutral_sq += 2 * abs2(-sum(iconv_h[:, h]))
+        end
+
+        icwave = zeros(3, nc); igwave = zeros(3, nc)
+        for j in 1:nc, h in 1:nh
+            rot = cis(2pi*h*(j - 0.5)/nc)
+            icwave[:, j] .+= 2 .* real.(iconv_h[:, h] .* rot)
+            igwave[:, j] .+= 2 .* real.(igrid_h[:, h] .* rot)
+        end
+        for k in 1:3
+            conv_pp[k] = max(conv_pp[k], maximum(icwave[k, :]) - minimum(icwave[k, :]))
+            grid_pp[k] = max(grid_pp[k], maximum(igwave[k, :]) - minimum(igwave[k, :]))
+        end
+        inwave = -vec(sum(icwave; dims=1))
+        neutral_pp = max(neutral_pp, maximum(inwave) - minimum(inwave))
+    end
+    return (converter_rms=sqrt.(conv_sq ./ nf), converter_pp=conv_pp,
+            grid_rms=sqrt.(grid_sq ./ nf), grid_pp=grid_pp,
+            shunt_rms=sqrt.(shunt_sq ./ nf),
+            neutral_rms=sqrt(neutral_sq / nf), neutral_pp=neutral_pp)
 end
 
 """
@@ -408,10 +593,28 @@ zero filter) it is a plain grid-following converter at the POC.
   uses zero common-mode injection; `:CENTERED` uses centered carrier PWM (the
   carrier-based SVM equivalent). The convenience solver closes the resulting
   capacitor-current reserve by conservative outer iteration; direct device
-  stamping continues to require a fixed `i_sw`.
+  stamping requires `pwm_strategy=:NONE` and an explicitly calibrated
+  `pwm_current_factor` (plus any independent `i_sw` residual).
 - `f_sw` — switching frequency (Hz), required when `pwm_strategy != :NONE`.
   `pwm_fundamental_samples` and `pwm_carrier_samples` set the two numerical
   quadrature grids used by the post-solve switching-state audit.
+- `pwm_dc_source_r=nothing`, `pwm_dc_source_l=0` — optional series R–L
+  impedance of the upstream DC source as seen from the link at carrier
+  frequencies. With no branch the source is open to switching ripple and the
+  capacitors carry all of it. `pwm_dc_harmonics` controls the finite-branch
+  Fourier truncation.
+- `pwm_current_factor=0` — direct-stamping approximation
+  `I_sw = pwm_current_factor*sqrt(sum(I_leg,rms^2))`. The convenience solver
+  updates this factor from the carrier audit; set it explicitly only when
+  composing a larger model around an externally calibrated operating region.
+- `pwm_ac_ripple=false` — pass the ideal pole-voltage carrier harmonics through
+  the conductor-domain reduced-L or LCL network. This reports converter/grid/
+  shunt and neutral switching currents and closes them into any supplied
+  `i_max`, `i_grid_max`, and `In_max` ratings. `pwm_ac_harmonics` truncates the
+  carrier Fourier series and must not exceed half the carrier sample count.
+- `pwm_ac_converter_reserve`, `pwm_ac_grid_reserve`, and
+  `pwm_ac_neutral_reserve` are expert direct-stamping inputs (A RMS). The
+  convenience solver calibrates them automatically; leave them zero otherwise.
 - `dv2_max` — optional cap on the 2ω bus-ripple amplitude (V).
 - `dv_mid_max` — `:SPLIT_DC` only: optional cap on the RMS fundamental
   midpoint-to-ideal-midpoint voltage ripple (V).
@@ -490,6 +693,15 @@ Base.@kwdef struct AdvancedInverter <: AbstractDevice
     f_sw::Union{Float64,Nothing} = nothing
     pwm_fundamental_samples::Int = 360
     pwm_carrier_samples::Int = 256
+    pwm_dc_harmonics::Int = 64
+    pwm_dc_source_r::Union{Float64,Nothing} = nothing
+    pwm_dc_source_l::Float64 = 0.0
+    pwm_current_factor::Float64 = 0.0
+    pwm_ac_ripple::Bool = false
+    pwm_ac_harmonics::Int = 64
+    pwm_ac_converter_reserve::NTuple{3,Float64} = (0.0, 0.0, 0.0)
+    pwm_ac_grid_reserve::NTuple{3,Float64} = (0.0, 0.0, 0.0)
+    pwm_ac_neutral_reserve::Float64 = 0.0
     dv2_max::Union{Float64,Nothing} = nothing
     dv_mid_max::Union{Float64,Nothing} = nothing
     q_mid_balance_max::Union{Float64,Nothing} = nothing
@@ -525,12 +737,19 @@ Base.@kwdef struct AdvancedInverter <: AbstractDevice
     p_ripple_max::Union{Float64,Nothing} = nothing
 end
 
-function _with_pwm_reserve(inv::AdvancedInverter, reserve::Float64)
+function _with_pwm_closure(inv::AdvancedInverter, factor::Float64,
+                           converter_reserve::NTuple{3,Float64},
+                           grid_reserve::NTuple{3,Float64},
+                           neutral_reserve::Float64)
     names = fieldnames(AdvancedInverter)
     values = Tuple(getfield(inv, name) for name in names)
     parameters = NamedTuple{names}(values)
     return AdvancedInverter(; merge(parameters,
-        (i_sw=reserve, pwm_strategy=:NONE))...)
+        (pwm_strategy=:NONE, pwm_dc_source_r=nothing, pwm_dc_source_l=0.0,
+         pwm_current_factor=factor, pwm_ac_ripple=false,
+         pwm_ac_converter_reserve=converter_reserve,
+         pwm_ac_grid_reserve=grid_reserve,
+         pwm_ac_neutral_reserve=neutral_reserve))...)
 end
 
 const _THREE_PHASE_TOPOLOGIES = (:THREE_LEG, :FOUR_LEG, :SPLIT_DC)
@@ -559,6 +778,9 @@ function _validate_inverter(inv::AdvancedInverter, nets=())
                           ("esr_dc", inv.esr_dc),
                           ("esr_dc_upper", inv.esr_dc_upper),
                           ("esr_dc_lower", inv.esr_dc_lower),
+                          ("pwm_dc_source_l", inv.pwm_dc_source_l),
+                          ("pwm_current_factor", inv.pwm_current_factor),
+                          ("pwm_ac_neutral_reserve", inv.pwm_ac_neutral_reserve),
                           ("b_filter_shunt", inv.b_filter_shunt),
                           ("m_max", inv.m_max), ("f", inv.f),
                           ("p_loss_fixed", inv.p_loss_fixed),
@@ -582,6 +804,21 @@ function _validate_inverter(inv::AdvancedInverter, nets=())
         "inverter '$(inv.id)' r_filter_damping requires c_filter_mid > 0"))
     all(x -> x >= 0, (inv.esr_dc, inv.esr_dc_upper, inv.esr_dc_lower)) ||
         throw(ArgumentError("inverter '$(inv.id)' DC-link ESR values must be >= 0"))
+    inv.pwm_dc_source_l >= 0 || throw(ArgumentError(
+        "inverter '$(inv.id)' pwm_dc_source_l must be >= 0"))
+    if inv.pwm_dc_source_r !== nothing
+        isfinite(inv.pwm_dc_source_r) && inv.pwm_dc_source_r >= 0 ||
+            throw(ArgumentError("inverter '$(inv.id)' pwm_dc_source_r must be " *
+                                "finite and >= 0 when supplied"))
+    end
+    inv.pwm_current_factor >= 0 || throw(ArgumentError(
+        "inverter '$(inv.id)' pwm_current_factor must be >= 0"))
+    all(isfinite, inv.pwm_ac_converter_reserve) &&
+        all(x -> x >= 0, inv.pwm_ac_converter_reserve) || throw(ArgumentError(
+            "inverter '$(inv.id)' pwm_ac_converter_reserve must be finite and >= 0"))
+    all(isfinite, inv.pwm_ac_grid_reserve) &&
+        all(x -> x >= 0, inv.pwm_ac_grid_reserve) || throw(ArgumentError(
+            "inverter '$(inv.id)' pwm_ac_grid_reserve must be finite and >= 0"))
     all(isfinite, inv.cap_thermal_weights) && all(x -> x >= 0, inv.cap_thermal_weights) ||
         throw(ArgumentError("inverter '$(inv.id)' cap_thermal_weights must be finite and >= 0"))
 
@@ -665,6 +902,10 @@ function _validate_inverter(inv::AdvancedInverter, nets=())
         if inv.pwm_strategy != :NONE
             inv.f_sw !== nothing || throw(ArgumentError(
                 "inverter '$(inv.id)' pwm_strategy requires f_sw"))
+            all(x -> x === nothing,
+                (inv.i_cap_max, inv.i_cap_upper_max, inv.i_cap_lower_max)) &&
+                throw(ArgumentError("inverter '$(inv.id)' pwm_strategy requires " *
+                                    "a capacitor-current rating for reserve closure"))
             inv.f_sw > inv.f || throw(ArgumentError(
                 "inverter '$(inv.id)' f_sw must exceed fundamental frequency f"))
             inv.pwm_fundamental_samples >= 12 || throw(ArgumentError(
@@ -672,9 +913,38 @@ function _validate_inverter(inv::AdvancedInverter, nets=())
             inv.pwm_carrier_samples >= 16 && iseven(inv.pwm_carrier_samples) ||
                 throw(ArgumentError("inverter '$(inv.id)' pwm_carrier_samples " *
                                     "must be even and >= 16"))
+            if inv.pwm_dc_source_r !== nothing || inv.pwm_dc_source_l > 0
+                1 <= inv.pwm_dc_harmonics <= inv.pwm_carrier_samples ÷ 2 ||
+                    throw(ArgumentError("inverter '$(inv.id)' pwm_dc_harmonics must " *
+                                        "be between 1 and pwm_carrier_samples/2"))
+            end
             inv.topology == :SPLIT_DC && inv.pwm_strategy == :CENTERED &&
                 throw(ArgumentError("inverter '$(inv.id)' :SPLIT_DC supports " *
                                     "pwm_strategy=:SPWM only; its midpoint is fixed"))
+        end
+        if inv.pwm_ac_ripple
+            inv.pwm_strategy != :NONE || throw(ArgumentError(
+                "inverter '$(inv.id)' pwm_ac_ripple requires an active pwm_strategy"))
+            1 <= inv.pwm_ac_harmonics <= inv.pwm_carrier_samples ÷ 2 ||
+                throw(ArgumentError("inverter '$(inv.id)' pwm_ac_harmonics must " *
+                                    "be between 1 and pwm_carrier_samples/2"))
+            if inv.topology != :THREE_LEG && inv.neutral === nothing
+                throw(ArgumentError("inverter '$(inv.id)' four-wire AC ripple " *
+                                    "audit requires a physical neutral terminal"))
+            end
+            _, Xf_si = _series_filter_matrices(inv, 3, 1.0; side=:converter)
+            Xactive = if inv.topology == :THREE_LEG
+                Q = [1/sqrt(2) 1/sqrt(6);
+                     -1/sqrt(2) 1/sqrt(6);
+                     0.0 -2/sqrt(6)]
+                Q' * Xf_si * Q
+            else
+                B = [Matrix{Float64}(I, 3, 3); -ones(1, 3)]
+                B' * Xf_si * B
+            end
+            minimum(eigvals(Symmetric((Xactive + Xactive')/2))) > 1e-12 ||
+                throw(ArgumentError("inverter '$(inv.id)' pwm_ac_ripple requires " *
+                                    "positive converter-side inductance in every active mode"))
         end
         # The 4-leg's neutral current flows through its fourth leg, whose device
         # rating is independent of anything on the DC side — so In_max is always
@@ -703,6 +973,23 @@ function _validate_inverter(inv::AdvancedInverter, nets=())
     if !is_3ph && inv.pwm_strategy != :NONE
         throw(ArgumentError("inverter '$(inv.id)' pwm_strategy requires a " *
                             "three-phase topology"))
+    end
+    source_active = inv.pwm_dc_source_r !== nothing || inv.pwm_dc_source_l > 0
+    source_active && inv.pwm_strategy == :NONE && throw(ArgumentError(
+        "inverter '$(inv.id)' DC-source switching impedance requires an active " *
+        "pwm_strategy"))
+    inv.pwm_dc_source_r === 0.0 && inv.pwm_dc_source_l == 0.0 &&
+        throw(ArgumentError("inverter '$(inv.id)' DC-source switching impedance " *
+                            "cannot be an ideal short; supply positive R or L"))
+    if !is_3ph && inv.pwm_current_factor != 0
+        throw(ArgumentError("inverter '$(inv.id)' pwm_current_factor requires a " *
+                            "three-phase topology"))
+    end
+    if !is_3ph && (inv.pwm_ac_ripple || any(!=(0.0), inv.pwm_ac_converter_reserve) ||
+                   any(!=(0.0), inv.pwm_ac_grid_reserve) ||
+                   inv.pwm_ac_neutral_reserve != 0.0)
+        throw(ArgumentError("inverter '$(inv.id)' AC PWM ripple parameters require " *
+                            "a three-phase topology"))
     end
     if !is_3ph && any(x -> x !== nothing, sequence_limits)
         throw(ArgumentError("inverter '$(inv.id)' symmetrical-component current " *
@@ -736,10 +1023,20 @@ function _validate_inverter(inv::AdvancedInverter, nets=())
     isfinite(inv.i_sw) && inv.i_sw >= 0 || throw(ArgumentError(
         "inverter '$(inv.id)' i_sw must be finite and >= 0"))
     cap_ratings = (inv.i_cap_max, inv.i_cap_upper_max, inv.i_cap_lower_max)
+    if inv.pwm_current_factor > 0 && all(x -> x === nothing, cap_ratings)
+        throw(ArgumentError("inverter '$(inv.id)' pwm_current_factor requires a " *
+                            "capacitor-current rating"))
+    end
     if inv.i_sw > 0 && all(x -> x === nothing, cap_ratings)
         throw(ArgumentError("inverter '$(inv.id)' i_sw is an allowance reserved out " *
                             "of a capacitor rating; supply one or leave i_sw = 0"))
     end
+    any(!=(0.0), inv.pwm_ac_converter_reserve) && inv.i_max === nothing &&
+        throw(ArgumentError("inverter '$(inv.id)' pwm_ac_converter_reserve requires i_max"))
+    any(!=(0.0), inv.pwm_ac_grid_reserve) && inv.i_grid_max === nothing &&
+        throw(ArgumentError("inverter '$(inv.id)' pwm_ac_grid_reserve requires i_grid_max"))
+    inv.pwm_ac_neutral_reserve > 0 && inv.In_max === nothing &&
+        throw(ArgumentError("inverter '$(inv.id)' pwm_ac_neutral_reserve requires In_max"))
     thermal_sw = sqrt(inv.cap_thermal_weights[3]) * inv.i_sw
     if any(rating -> rating !== nothing && thermal_sw >= rating, cap_ratings)
         throw(ArgumentError("inverter '$(inv.id)' weighted i_sw must be smaller than " *
@@ -792,16 +1089,36 @@ currents A.
 - `i_cap_upper`, `i_cap_lower`, `i_cap_thermal_upper`,
   `i_cap_thermal_lower` — split half-bank physical and thermal-equivalent
   currents (A; zero for monolithic links).
-- `i_cap_switching` — carrier-model prediction of DC-link switching-current RMS
-  (A); `i_cap_switching_reserved` is the conservative value actually allocated
-  by the NLP. `pwm_reserve_margin` is reserved minus the quadrature combination
-  of modeled ripple and the user's residual `i_sw` allowance.
+- `i_cap_switching`, `i_dc_bridge_switching_rms`, and
+  `i_dc_source_switching_rms` — carrier-model RMS currents (A) in the DC-link
+  capacitor, ideal bridge input, and optional upstream source branch.
+  `i_cap_switching_reserved` is the conservative capacitor value allocated
+  by the NLP's calibrated current-norm term. `pwm_reserve_margin` is allocated
+  modeled ripple minus the carrier prediction; the user's residual `i_sw`
+  allowance is added separately in quadrature.
+- `p_dc_source_switching_loss` — dissipation (W) in `pwm_dc_source_r`; this is
+  an upstream-network diagnostic and is deliberately not included in `p_dc`.
 - `dv_switching_rms`, `dv_switching_pp` — carrier-model total DC-bus switching
   voltage ripple (V RMS and maximum local peak-to-peak). These are distinct from
   the low-frequency `dv2` amplitude.
+- `dv_switching_upper_rms`, `dv_switching_lower_rms`,
+  `dv_switching_upper_pp`, and `dv_switching_lower_pp` resolve that total ripple
+  across the two half-banks of a split link (zero for monolithic links).
+- `pwm_dc_network_margin` — minimum normalized magnitude of the parallel
+  source-capacitor admittance. Values near zero flag a poorly damped carrier-
+  harmonic parallel resonance; it is one for the default open-source model.
 - `pwm_modulation_margin` — minimum carrier-reference headroom (V); a negative
   value or `NaN` means the selected PWM strategy cannot realize the solved
   fundamental reference. `pwm_iterations` reports outer reserve solves.
+- `i_ac_switching_rms`, `i_grid_switching_rms`, and
+  `i_filter_shunt_switching_rms` — carrier-harmonic RMS currents (A) on the
+  converter arm, grid arm, and LCL midpoint branch. The corresponding phase
+  peak-to-peak values are `i_ac_switching_pp` and `i_grid_switching_pp`.
+- `i_neutral_switching_rms`, `i_neutral_switching_pp` — converter-side neutral
+  switching ripple. `i_ac_switching_reserved`, `i_grid_switching_reserved`,
+  and `i_neutral_switching_reserved` are the values allocated by the smooth
+  current constraints. `i_ac_total_rms`, `i_grid_total_rms`, and
+  `i_neutral_total_rms` combine orthogonal fundamental and switching RMS values.
 - `switching_margin` — minimum rail headroom (V) on a dense, independent
   post-solve time grid. Positive values pass that audit; negative values reveal
   a between-sample violation accepted by the optimisation grid. This is a useful
@@ -843,12 +1160,33 @@ struct InverterResult <: AbstractSolveResult
     i_cap_thermal_upper::Float64
     i_cap_thermal_lower::Float64
     i_cap_switching::Float64
+    i_dc_bridge_switching_rms::Float64
+    i_dc_source_switching_rms::Float64
     i_cap_switching_reserved::Float64
     pwm_reserve_margin::Float64
+    p_dc_source_switching_loss::Float64
     dv_switching_rms::Float64
     dv_switching_pp::Float64
+    dv_switching_upper_rms::Float64
+    dv_switching_lower_rms::Float64
+    dv_switching_upper_pp::Float64
+    dv_switching_lower_pp::Float64
+    pwm_dc_network_margin::Float64
     pwm_modulation_margin::Float64
     pwm_iterations::Int
+    i_ac_switching_rms::Vector{Float64}
+    i_ac_switching_pp::Vector{Float64}
+    i_grid_switching_rms::Vector{Float64}
+    i_grid_switching_pp::Vector{Float64}
+    i_filter_shunt_switching_rms::Vector{Float64}
+    i_neutral_switching_rms::Float64
+    i_neutral_switching_pp::Float64
+    i_ac_switching_reserved::Vector{Float64}
+    i_grid_switching_reserved::Vector{Float64}
+    i_neutral_switching_reserved::Float64
+    i_ac_total_rms::Vector{Float64}
+    i_grid_total_rms::Vector{Float64}
+    i_neutral_total_rms::Float64
     switching_margin::Float64
     filter_resonance_hz::Float64
     bus::Dict{String,Any}
@@ -866,12 +1204,26 @@ solve_diagnostics(result::InverterResult) =
      midpoint_ripple=result.dv_mid, midpoint_mean=result.v_mid_mean,
      cap_current=result.i_cap, cap_thermal_current=result.i_cap_thermal,
      cap_switching_current=result.i_cap_switching,
+     dc_bridge_switching_current=result.i_dc_bridge_switching_rms,
+     dc_source_switching_current=result.i_dc_source_switching_rms,
      cap_switching_reserved=result.i_cap_switching_reserved,
      pwm_reserve_margin=result.pwm_reserve_margin,
+     dc_source_switching_loss=result.p_dc_source_switching_loss,
      dc_switching_ripple_rms=result.dv_switching_rms,
      dc_switching_ripple_pp=result.dv_switching_pp,
+     dc_switching_upper_ripple_rms=result.dv_switching_upper_rms,
+     dc_switching_lower_ripple_rms=result.dv_switching_lower_rms,
+     dc_switching_upper_ripple_pp=result.dv_switching_upper_pp,
+     dc_switching_lower_ripple_pp=result.dv_switching_lower_pp,
+     dc_network_margin=result.pwm_dc_network_margin,
      pwm_modulation_margin=result.pwm_modulation_margin,
      pwm_iterations=result.pwm_iterations,
+     ac_switching_current=result.i_ac_switching_rms,
+     grid_switching_current=result.i_grid_switching_rms,
+     neutral_switching_current=result.i_neutral_switching_rms,
+     ac_total_current=result.i_ac_total_rms,
+     grid_total_current=result.i_grid_total_rms,
+     neutral_total_current=result.i_neutral_total_rms,
      switching_margin=result.switching_margin,
      filter_resonance_hz=result.filter_resonance_hz)
 
@@ -1022,10 +1374,13 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
         isq = JuMP.@expression(m, cri[k]^2 + cii[k]^2)
         isq_sum += isq
         if inv.i_max !== nothing
-            JuMP.@constraint(m, isq <= (inv.i_max / ib)^2)
+            JuMP.@constraint(m, isq + (inv.pwm_ac_converter_reserve[k]/ib)^2 <=
+                                (inv.i_max / ib)^2)
         end
         if inv.i_grid_max !== nothing
-            JuMP.@constraint(m, gri[k]^2 + gii[k]^2 <= (inv.i_grid_max / ib)^2)
+            JuMP.@constraint(m, gri[k]^2 + gii[k]^2 +
+                                (inv.pwm_ac_grid_reserve[k]/ib)^2 <=
+                                (inv.i_grid_max / ib)^2)
         end
         if inv.a_loss != 0.0
             imag_eps = _IMAG_EPS_SI / ib
@@ -1214,7 +1569,9 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
         elseif inv.In_max !== nothing
             # Standalone neutral rating. Optional for :SPLIT_DC, where i_cap_max
             # can bound |I_n| instead (via the capacitor thermal budget below).
-            JuMP.@constraint(m, sumcr^2 + sumci^2 <= (inv.In_max / ib)^2)
+            JuMP.@constraint(m, sumcr^2 + sumci^2 +
+                                (inv.pwm_ac_neutral_reserve/ib)^2 <=
+                                (inv.In_max / ib)^2)
         end
         # Neutral current (SI), for reporting: I_n = −Σ I_phase.
         in_re = JuMP.@expression(m, -sum(cri[k] for k in 1:3) * ib)
@@ -1249,17 +1606,20 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
         k2w = denom / (sqrt(2) * v_dc)
         i2w_sq = JuMP.@expression(m, k2w^2 * (dre^2 + dim^2))
         wn, w2, wsw = inv.cap_thermal_weights
+        pwm_model_sq = JuMP.@expression(m,
+            inv.pwm_current_factor^2 * ib^2 * isq_sum)
+        switching_sq = JuMP.@expression(m, inv.i_sw^2 + pwm_model_sq)
         if inv.topology == :SPLIT_DC
             neutral_sq = JuMP.@expression(m, in_re^2 + in_im^2)
             au, al = cu/csum, cl/csum
             icap_upper_sq = JuMP.@expression(m,
-                i2w_sq + au^2*neutral_sq + inv.i_sw^2)
+                i2w_sq + au^2*neutral_sq + switching_sq)
             icap_lower_sq = JuMP.@expression(m,
-                i2w_sq + al^2*neutral_sq + inv.i_sw^2)
+                i2w_sq + al^2*neutral_sq + switching_sq)
             icap_thermal_upper_sq = JuMP.@expression(m,
-                w2*i2w_sq + wn*au^2*neutral_sq + wsw*inv.i_sw^2)
+                w2*i2w_sq + wn*au^2*neutral_sq + wsw*switching_sq)
             icap_thermal_lower_sq = JuMP.@expression(m,
-                w2*i2w_sq + wn*al^2*neutral_sq + wsw*inv.i_sw^2)
+                w2*i2w_sq + wn*al^2*neutral_sq + wsw*switching_sq)
             if inv.i_cap_max !== nothing
                 JuMP.@constraint(m, icap_thermal_upper_sq <= inv.i_cap_max^2)
                 if cu != cl
@@ -1276,8 +1636,8 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
                 (inv.esr_dc_upper*icap_thermal_upper_sq +
                  inv.esr_dc_lower*icap_thermal_lower_sq) / sb)
         else
-            icap_sq = JuMP.@expression(m, i2w_sq + inv.i_sw^2)
-            icap_thermal_sq = JuMP.@expression(m, w2*i2w_sq + wsw*inv.i_sw^2)
+            icap_sq = JuMP.@expression(m, i2w_sq + switching_sq)
+            icap_thermal_sq = JuMP.@expression(m, w2*i2w_sq + wsw*switching_sq)
             if inv.i_cap_max !== nothing
                 JuMP.@constraint(m, icap_thermal_sq <= inv.i_cap_max^2)
             end
@@ -1321,7 +1681,7 @@ function stamp_device!(ctx, inverter::AdvancedInverter; kwargs...)
     inverter.pwm_strategy == :NONE || throw(ArgumentError(
         "pwm_strategy=:$(inverter.pwm_strategy) uses the conservative outer " *
         "reserve iteration provided by solve_advanced_inverter; direct stamping " *
-        "requires pwm_strategy=:NONE and an explicit i_sw reserve"))
+        "requires pwm_strategy=:NONE and explicitly calibrated DC/AC reserves"))
     return _stamp_inverter!(ctx, inverter)
 end
 
@@ -1384,24 +1744,7 @@ function extract_device(inverter::AdvancedInverter, h::_InvHandles,
     )
 end
 
-"""
-    solve_advanced_inverter(net, inverter; objective=:max_export, kwargs...)
-        -> InverterResult
-
-Stamp `inverter` into `net` and solve, demonstrating the experimental internal-node
-model. The network supplies the surrounding grid (a voltage source, lines, any
-loads); the inverter injects at its POC bus.
-
-# Objective
-- `:max_export` — maximise the active power delivered to the grid at the POC.
-- `:min_loss` — minimise converter loss subject to `p_set` active-power delivery.
-
-# Keywords
-- `p_set=nothing` — required active-power target (W) for `:min_loss`.
-- `q_set=nothing` — optional reactive-power constraint at the POC (var).
-- `per_unit=false`, `s_base=1e6`, `optimizer=Ipopt.Optimizer`, `verbose=false`,
-  `solver_options=()`. Per-unit results are returned in SI regardless.
-"""
+# Single smooth-NLP solve used by the public solver and its PWM outer iteration.
 function _solve_advanced_inverter_once(net::Dict{String,Any}, inverter::AdvancedInverter;
                                        objective::Symbol=:max_export,
                                        p_set::Union{Float64,Nothing}=nothing,
@@ -1460,13 +1803,46 @@ function _solve_advanced_inverter_once(net::Dict{String,Any}, inverter::Advanced
         _pwm_ripple_audit(pwm_audit_inverter, ure, uim, ire, iim,
                           dr, di, nr, ni, nm)
     elseif pwm_audit_inverter.pwm_strategy != :NONE
-        (i_rms=NaN, dv_rms=NaN, dv_pp=NaN, modulation_margin=NaN)
+        (i_rms=NaN, i_bridge_rms=NaN, i_source_rms=NaN,
+         dv_rms=NaN, dv_pp=NaN, dv_upper_rms=NaN, dv_lower_rms=NaN,
+         dv_upper_pp=NaN, dv_lower_pp=NaN, source_loss=NaN,
+         dc_network_margin=NaN, modulation_margin=NaN)
     else
-        (i_rms=0.0, dv_rms=0.0, dv_pp=0.0, modulation_margin=NaN)
+        (i_rms=0.0, i_bridge_rms=0.0, i_source_rms=0.0,
+         dv_rms=0.0, dv_pp=0.0, dv_upper_rms=0.0, dv_lower_rms=0.0,
+         dv_upper_pp=0.0, dv_lower_pp=0.0, source_loss=0.0,
+         dc_network_margin=NaN, modulation_margin=NaN)
     end
-    pwm_target = pwm_audit_inverter.pwm_strategy == :NONE ? NaN :
-        hypot(pwm_audit_inverter.i_sw, pwm.i_rms)
-    pwm_reserve_margin = isnan(pwm_target) ? NaN : inverter.i_sw - pwm_target
+    leg_norm_sq = sum(abs2, device_result.i_mag) +
+                  (inverter.topology == :FOUR_LEG ? device_result.i_neutral^2 : 0.0)
+    pwm_allocated = inverter.pwm_current_factor * sqrt(max(leg_norm_sq, 0.0))
+    pwm_reserve_margin = pwm_audit_inverter.pwm_strategy == :NONE ? NaN :
+        pwm_allocated - pwm.i_rms
+
+    acpwm = if pwm_audit_inverter.pwm_ac_ripple && _publishable(outcome)
+        ure = [JuMP.value(h.vrint[k]) * h.vb for k in 1:3]
+        uim = [JuMP.value(h.viint[k]) * h.vb for k in 1:3]
+        dr = h.dre === nothing ? 0.0 : JuMP.value(h.dre)
+        di = h.dim === nothing ? 0.0 : JuMP.value(h.dim)
+        nr = h.nre === nothing ? 0.0 : JuMP.value(h.nre)
+        ni = h.nim === nothing ? 0.0 : JuMP.value(h.nim)
+        nm = h.nmean === nothing ? 0.0 : JuMP.value(h.nmean)
+        _pwm_ac_ripple_audit(pwm_audit_inverter, ure, uim, dr, di, nr, ni, nm)
+    elseif pwm_audit_inverter.pwm_ac_ripple
+        (converter_rms=fill(NaN, 3), converter_pp=fill(NaN, 3),
+         grid_rms=fill(NaN, 3), grid_pp=fill(NaN, 3),
+         shunt_rms=fill(NaN, 3), neutral_rms=NaN, neutral_pp=NaN)
+    else
+        (converter_rms=zeros(3), converter_pp=zeros(3),
+         grid_rms=zeros(3), grid_pp=zeros(3),
+         shunt_rms=zeros(3), neutral_rms=0.0, neutral_pp=0.0)
+    end
+    ac_converter_reserved = collect(inverter.pwm_ac_converter_reserve)
+    ac_grid_reserved = collect(inverter.pwm_ac_grid_reserve)
+    ac_neutral_reserved = inverter.pwm_ac_neutral_reserve
+    ac_total = hypot.(device_result.i_mag, acpwm.converter_rms)
+    grid_total = hypot.(device_result.i_grid_mag, acpwm.grid_rms)
+    neutral_total = hypot(device_result.i_neutral, acpwm.neutral_rms)
 
     result = _extract_result(ctx, outcome)
     return InverterResult(status, inverter.topology,
@@ -1487,10 +1863,144 @@ function _solve_advanced_inverter_once(net::Dict{String,Any}, inverter::Advanced
                           device_result.i_cap_upper, device_result.i_cap_lower,
                           device_result.i_cap_thermal_upper,
                           device_result.i_cap_thermal_lower,
-                          pwm.i_rms, inverter.i_sw, pwm_reserve_margin,
-                          pwm.dv_rms, pwm.dv_pp, pwm.modulation_margin,
+                          pwm.i_rms, pwm.i_bridge_rms, pwm.i_source_rms,
+                          pwm_allocated, pwm_reserve_margin, pwm.source_loss,
+                          pwm.dv_rms, pwm.dv_pp,
+                          pwm.dv_upper_rms, pwm.dv_lower_rms,
+                          pwm.dv_upper_pp, pwm.dv_lower_pp,
+                          pwm.dc_network_margin, pwm.modulation_margin,
                           pwm_iterations,
+                          acpwm.converter_rms, acpwm.converter_pp,
+                          acpwm.grid_rms, acpwm.grid_pp, acpwm.shunt_rms,
+                          acpwm.neutral_rms, acpwm.neutral_pp,
+                          ac_converter_reserved, ac_grid_reserved,
+                          ac_neutral_reserved, ac_total, grid_total,
+                          neutral_total,
                           device_result.switching_margin,
                           device_result.filter_resonance_hz,
                           result["bus"], SolveStatus(outcome))
+end
+
+"""
+    solve_advanced_inverter(net, inverter; objective=:max_export, kwargs...)
+        -> InverterResult
+
+Solve the experimental circuit-aware inverter model. When
+`inverter.pwm_strategy != :NONE`, the solver alternates between the smooth NLP
+and a carrier-level switching audit. A current-norm coefficient is updated until
+its capacitor allocation covers the modeled carrier ripple; the residual manual
+`i_sw` allowance then composes in quadrature. This is a conservative sequential
+closure, not a mixed-integer switched-converter optimisation.
+
+With `inverter.pwm_ac_ripple=true`, the same outer loop also updates per-path
+RMS reserves until the carrier-harmonic converter, grid, and neutral currents
+are covered by any supplied `i_max`, `i_grid_max`, and `In_max` ratings.
+
+PWM closure keywords are `pwm_tolerance=1e-3` (relative current tolerance),
+`pwm_max_iterations=8`, and `pwm_reserve_factor=1.01`. Inspect
+`result.pwm_reserve_margin`, `result.pwm_modulation_margin`, and
+`result.pwm_iterations` for every publishable PWM-enabled solve.
+
+# Objective
+- `:max_export` — maximise active power delivered to the grid at the POC.
+- `:min_loss` — minimise converter plus capacitor loss subject to `p_set`.
+
+# Other keywords
+- `p_set=nothing` — required active-power target (W) for `:min_loss`.
+- `q_set=nothing` — optional reactive-power constraint at the POC (var).
+- `per_unit=false`, `s_base=1e6`, `optimizer=Ipopt.Optimizer`, `verbose=false`,
+  `solver_options=()`. Results are returned in SI regardless of formulation.
+"""
+function solve_advanced_inverter(net::Dict{String,Any}, inverter::AdvancedInverter;
+                                 objective::Symbol=:max_export,
+                                 p_set::Union{Float64,Nothing}=nothing,
+                                 q_set::Union{Float64,Nothing}=nothing,
+                                 per_unit::Bool=false,
+                                 s_base::Float64=1e6,
+                                 optimizer=Ipopt.Optimizer,
+                                 verbose::Bool=false,
+                                 solver_options=(),
+                                 pwm_tolerance::Float64=1e-3,
+                                 pwm_max_iterations::Int=8,
+                                 pwm_reserve_factor::Float64=1.01)
+    validate_device(inverter, (net,); periods=1)
+    isfinite(pwm_tolerance) && pwm_tolerance >= 0 || throw(ArgumentError(
+        "pwm_tolerance must be finite and >= 0"))
+    pwm_max_iterations >= 1 || throw(ArgumentError(
+        "pwm_max_iterations must be >= 1"))
+    isfinite(pwm_reserve_factor) && pwm_reserve_factor >= 1 || throw(ArgumentError(
+        "pwm_reserve_factor must be finite and >= 1"))
+
+    common = (; objective, p_set, q_set, per_unit, s_base, optimizer,
+               verbose, solver_options)
+    if inverter.pwm_strategy == :NONE
+        return _solve_advanced_inverter_once(net, inverter; common...)
+    end
+
+    factor = inverter.pwm_current_factor
+    converter_reserve = inverter.pwm_ac_converter_reserve
+    grid_reserve = inverter.pwm_ac_grid_reserve
+    neutral_reserve = inverter.pwm_ac_neutral_reserve
+    last_result = nothing
+    for iteration in 1:pwm_max_iterations
+        working = _with_pwm_closure(inverter, factor, converter_reserve,
+                                    grid_reserve, neutral_reserve)
+        result = _solve_advanced_inverter_once(net, working; common...,
+            pwm_audit_inverter=inverter, pwm_iterations=iteration)
+        last_result = result
+        solve_status(result).publishable || return result
+        isfinite(result.i_cap_switching) || return result
+        target = result.i_cap_switching
+        tolerance = pwm_tolerance * max(target, 1.0)
+        excess = result.i_cap_switching_reserved - target
+        closed(allocated, predicted) = begin
+            tol = pwm_tolerance * max(predicted, 1.0)
+            gap = allocated - predicted
+            gap >= -tol &&
+                gap <= max(tol, (pwm_reserve_factor - 1)*predicted + tol)
+        end
+        dc_closed = excess >= -tolerance &&
+            excess <= max(tolerance, (pwm_reserve_factor - 1)*target + tolerance)
+        ac_closed = !inverter.pwm_ac_ripple || (
+            (inverter.i_max === nothing || all(closed.(
+                result.i_ac_switching_reserved, result.i_ac_switching_rms))) &&
+            (inverter.i_grid_max === nothing || all(closed.(
+                result.i_grid_switching_reserved, result.i_grid_switching_rms))) &&
+            (inverter.In_max === nothing || closed(
+                result.i_neutral_switching_reserved,
+                result.i_neutral_switching_rms)))
+        if dc_closed && ac_closed
+            return result
+        end
+        if !dc_closed
+            leg_norm = sqrt(sum(abs2, result.i_mag) +
+                (inverter.topology == :FOUR_LEG ? result.i_neutral^2 : 0.0))
+            leg_norm > 1e-9 || return result
+            desired = pwm_reserve_factor * target / leg_norm
+            factor = max(inverter.pwm_current_factor, 0.5*factor + 0.5*desired)
+        end
+        if inverter.pwm_ac_ripple
+            all(isfinite, result.i_ac_switching_rms) &&
+                all(isfinite, result.i_grid_switching_rms) &&
+                isfinite(result.i_neutral_switching_rms) || return result
+            if inverter.i_max !== nothing
+                converter_reserve = ntuple(k -> max(
+                    inverter.pwm_ac_converter_reserve[k],
+                    0.5*converter_reserve[k] +
+                    0.5*pwm_reserve_factor*result.i_ac_switching_rms[k]), 3)
+            end
+            if inverter.i_grid_max !== nothing
+                grid_reserve = ntuple(k -> max(
+                    inverter.pwm_ac_grid_reserve[k],
+                    0.5*grid_reserve[k] +
+                    0.5*pwm_reserve_factor*result.i_grid_switching_rms[k]), 3)
+            end
+            if inverter.In_max !== nothing
+                neutral_reserve = max(inverter.pwm_ac_neutral_reserve,
+                    0.5*neutral_reserve +
+                    0.5*pwm_reserve_factor*result.i_neutral_switching_rms)
+            end
+        end
+    end
+    return last_result
 end
