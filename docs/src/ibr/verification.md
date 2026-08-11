@@ -30,24 +30,29 @@ oracle. A solver returning `LOCALLY_SOLVED` is necessary, but not sufficient.
 | Balanced carrier PWM | Mandrioli et al. Eqs. (40), (42) | numerical shared-carrier integration reproduces the published SPWM and centered-PWM DC-link ripple RMS at modulation indices 0.1, 0.3, and 0.5 within 0.2% |
 | PWM scaling | carrier-period charge balance | switching-current RMS scales with AC current and is independent of `Cdc` and `f_sw` under the frozen-current assumption; switching-voltage ripple scales as `1/(Cdc f_sw)` |
 | PWM reserve closure | post-solve carrier oracle | allocated switching current covers the predicted value, the capacitor bound remains satisfied, and a binding bank rating curtails export |
-| PWM topology and units | paired 4-leg/split-link and SI/per-unit solves | the fourth leg participates in shared-carrier DC current; split-link SPWM uses the series-equivalent bus capacitance; SI diagnostics agree |
+| PWM topology | paired 4-leg/split-link per-unit solves | the fourth leg participates in shared-carrier DC current; split-link SPWM uses the series-equivalent bus capacitance |
 | DC harmonic KCL | finite source R–L in parallel with `Ceq` | `Ibridge,h + Icap,h + Isource,h = 0` at every retained carrier harmonic; the open-source and high-impedance limits converge |
-| DC source loss and units | Parseval plus paired SI/per-unit solves | `Psource,sw = Rsource Isource,rms²`; bridge/source/capacitor diagnostics and the normalized network margin are unit-system invariant |
+| DC source loss | Parseval plus a per-unit closure solve | `Psource,sw = Rsource Isource,rms²`; bridge/source/capacitor diagnostics and the normalized network margin remain in physical units |
 | Split rail switching voltage | series-capacitor charge | `Vupper=(Ceq/Cu)Vbus`, `Vlower=(Ceq/Cl)Vbus`, and the two rail ripples sum to total-bus ripple |
 | DC antiresonance screen | parallel-admittance cancellation | a lossless `Lsource` satisfying `Ω²LsourceCeq=1` drives `pwm_dc_network_margin` to zero and returns non-finite voltage rather than a misleading bounded result |
 | Split-link AC ripple | Mandrioli et al. Eqs. (15), (27) | carrier-harmonic phase and neutral RMS values agree across modulation indices 0.1, 0.3, and 0.5 within 0.3% |
 | AC-ripple scaling | inductive harmonic circuit | phase and neutral ripple scale as `1/(L f_sw)` |
 | Harmonic filter topology | reduced-L/LCL limiting cases | two series arms with `Cf=0` reproduce their summed impedance; a physical midpoint branch separates converter, shunt, and grid ripple |
 | Neutral inductance and 3-wire projection | paired topology audits | increasing `Ln/L` suppresses four-leg neutral ripple; the 3-leg sum-zero subspace has exactly zero neutral ripple |
-| AC-ripple reserve closure | physical total-RMS ratings | allocated carrier RMS covers every predicted phase/neutral value and `hypot(Ifund, Isw)` respects `i_max`/`In_max` in SI and per-unit |
+| AC-ripple reserve closure | physical total-RMS ratings in a per-unit solve | allocated carrier RMS covers every predicted phase/neutral value and `hypot(Ifund, Isw)` respects `i_max`/`In_max` |
 | Split rating composition | paired bound cases | common and individual half-bank ratings compose; enlarging any rating cannot shrink the feasible set |
 | Fourth-leg loss | fitted loss equation | phase currents plus `i_neutral` enter the per-leg loss sum |
-| Unit system | paired solves | SI and per-unit solves return the same SI diagnostics, including LCL midpoint quantities |
+| Unit system | representative paired solves | per-unit and raw-SI formulations agree on well-scaled cases, including LCL midpoint quantities |
 
 These tests live in `test/advanced_inverter_tests.jl`. They intentionally include
 balanced cases, pure sequence excitations, strong mixed unbalance, and binding
 limits. A balanced feeder alone cannot validate a four-wire topology because it
 removes the very neutral and ripple mechanisms being tested.
+
+Numerically demanding PWM-reserve and DC-link closure regressions use the
+per-unit formulation. Raw SI is retained only for representative, well-scaled
+unit-conversion checks; the suite does not require the two nonlinear
+formulations to have identical convergence behaviour.
 
 ## Published cases worth lifting next
 

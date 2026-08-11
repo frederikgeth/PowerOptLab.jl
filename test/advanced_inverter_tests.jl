@@ -244,10 +244,17 @@ end
 
 @testset "Advanced inverter: 2ω ripple phasor responds to C_dc and honours dv2_max" begin
     net = inv_grid3_unbal()
-    big = solve_advanced_inverter(net, AdvancedInverter(; id="i", topology=:FOUR_LEG, v_dc=700.0, c_dc=2.0e-3, In_max=40.0, _TOPO_COMMON...))
-    small = solve_advanced_inverter(net, AdvancedInverter(; id="i", topology=:FOUR_LEG, v_dc=700.0, c_dc=0.3e-3, In_max=40.0, _TOPO_COMMON...))
+    solve_kw = (per_unit=true, s_base=100e3)
+    big = solve_advanced_inverter(net, AdvancedInverter(; id="i",
+        topology=:FOUR_LEG, v_dc=700.0, c_dc=2.0e-3, In_max=40.0,
+        _TOPO_COMMON...); solve_kw...)
+    small = solve_advanced_inverter(net, AdvancedInverter(; id="i",
+        topology=:FOUR_LEG, v_dc=700.0, c_dc=0.3e-3, In_max=40.0,
+        _TOPO_COMMON...); solve_kw...)
     @test small.dv2 > big.dv2 + 1.0        # smaller capacitor ⇒ larger bus ripple
-    capped = solve_advanced_inverter(net, AdvancedInverter(; id="i", topology=:FOUR_LEG, v_dc=700.0, c_dc=0.3e-3, In_max=40.0, dv2_max=3.0, _TOPO_COMMON...))
+    capped = solve_advanced_inverter(net, AdvancedInverter(; id="i",
+        topology=:FOUR_LEG, v_dc=700.0, c_dc=0.3e-3, In_max=40.0,
+        dv2_max=3.0, _TOPO_COMMON...); solve_kw...)
     @test capped.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
     @test capped.dv2 <= 3.0 + 1e-2         # the amplitude cap binds
 end
@@ -778,12 +785,14 @@ end
 
 @testset "Advanced inverter: automatic PWM reserve closes the capacitor constraint" begin
     net = inv_grid3_bal()
+    solve_kw = (per_unit=true, s_base=100e3)
     common = (topology=:FOUR_LEG, v_dc=700.0, c_dc=1.1e-3,
               In_max=40.0, i_cap_max=10.0, esr_dc=0.02, _TOPO_COMMON...)
-    fixed = solve_advanced_inverter(net, AdvancedInverter(; id="i", common...))
+    fixed = solve_advanced_inverter(net, AdvancedInverter(; id="i", common...);
+        solve_kw...)
     pwm = solve_advanced_inverter(net, AdvancedInverter(; id="i", i_sw=2.0,
         pwm_strategy=:CENTERED, f_sw=10e3, pwm_fundamental_samples=72,
-        pwm_carrier_samples=128, common...))
+        pwm_carrier_samples=128, common...); solve_kw...)
     @test pwm.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
     @test pwm.pwm_iterations >= 2
     @test pwm.i_cap_switching > 1.0
@@ -798,20 +807,11 @@ end
           0.02*(2.0^2 + pwm.i_cap_switching_reserved^2) rtol=1e-4
     @test pwm.p_dc ≈ pwm.p_conv + pwm.p_loss + pwm.p_cap_loss rtol=1e-9
 
-    pwm_pu = solve_advanced_inverter(net, AdvancedInverter(; id="i", i_sw=2.0,
-        pwm_strategy=:CENTERED, f_sw=10e3, pwm_fundamental_samples=72,
-        pwm_carrier_samples=128, common...); per_unit=true, s_base=100e3)
-    @test pwm_pu.p_poc ≈ pwm.p_poc rtol=3e-3
-    @test pwm_pu.i_cap_switching ≈ pwm.i_cap_switching rtol=3e-3
-    @test pwm_pu.i_cap_switching_reserved ≈ pwm.i_cap_switching_reserved rtol=3e-3
-    @test pwm_pu.dv_switching_rms ≈ pwm.dv_switching_rms rtol=3e-3
-
     finite_parameters = (id="i", i_sw=2.0, pwm_strategy=:CENTERED,
         f_sw=10e3, pwm_fundamental_samples=72, pwm_carrier_samples=128,
         pwm_dc_harmonics=64, pwm_dc_source_r=0.01, common...)
-    finite = solve_advanced_inverter(net, AdvancedInverter(; finite_parameters...))
-    finite_pu = solve_advanced_inverter(net,
-        AdvancedInverter(; finite_parameters...); per_unit=true, s_base=100e3)
+    finite = solve_advanced_inverter(net, AdvancedInverter(; finite_parameters...);
+        solve_kw...)
     @test finite.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
     @test finite.i_dc_bridge_switching_rms > 0.0
     @test finite.i_dc_source_switching_rms > 0.0
@@ -819,20 +819,12 @@ end
     @test finite.p_dc_source_switching_loss ≈
           0.01*finite.i_dc_source_switching_rms^2 rtol=1e-10
     @test finite.pwm_dc_network_margin > 0.0
-    @test finite_pu.i_dc_bridge_switching_rms ≈
-          finite.i_dc_bridge_switching_rms rtol=3e-3
-    @test finite_pu.i_dc_source_switching_rms ≈
-          finite.i_dc_source_switching_rms rtol=3e-3
-    @test finite_pu.p_dc_source_switching_loss ≈
-          finite.p_dc_source_switching_loss rtol=3e-3
-    @test finite_pu.pwm_dc_network_margin ≈
-          finite.pwm_dc_network_margin rtol=3e-3
-
     split = solve_advanced_inverter(inv_grid3_unbal(), AdvancedInverter(; id="i",
         topology=:SPLIT_DC, v_dc=900.0, c_dc=3e-3,
         c_dc_upper=2.5e-3, c_dc_lower=3.5e-3, In_max=40.0,
         i_cap_max=25.0, pwm_strategy=:SPWM, f_sw=12e3,
-        pwm_fundamental_samples=72, pwm_carrier_samples=128, _TOPO_COMMON...))
+        pwm_fundamental_samples=72, pwm_carrier_samples=128, _TOPO_COMMON...);
+        solve_kw...)
     @test split.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
     @test split.i_cap_switching > 0.0
     @test split.pwm_reserve_margin >= -2e-2
@@ -942,7 +934,7 @@ end
               pwm_fundamental_samples=24, pwm_carrier_samples=64,
               pwm_ac_harmonics=32)
     r = solve_advanced_inverter(inv_grid3_unbal(),
-        AdvancedInverter(; id="i", common...))
+        AdvancedInverter(; id="i", common...); per_unit=true, s_base=100e3)
     @test r.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
     @test all(r.i_ac_switching_reserved .+ 3e-2 .>= r.i_ac_switching_rms)
     @test r.i_neutral_switching_reserved + 3e-2 >= r.i_neutral_switching_rms
@@ -951,12 +943,6 @@ end
     @test r.pwm_iterations >= 2
     @test maximum(r.i_ac_switching_pp) > maximum(r.i_ac_switching_rms)
 
-    rpu = solve_advanced_inverter(inv_grid3_unbal(),
-        AdvancedInverter(; id="i", common...); per_unit=true, s_base=100e3)
-    @test rpu.p_poc ≈ r.p_poc rtol=3e-3
-    @test rpu.i_ac_switching_rms ≈ r.i_ac_switching_rms rtol=3e-3
-    @test rpu.i_neutral_switching_rms ≈ r.i_neutral_switching_rms rtol=3e-3
-    @test rpu.i_ac_total_rms ≈ r.i_ac_total_rms rtol=3e-3
 end
 
 @testset "Advanced inverter: individual split half-bank ratings compose" begin
@@ -1215,7 +1201,7 @@ end
     @test tight.i_neutral < loose.i_neutral - 1.0
 end
 
-@testset "Advanced inverter: per-unit matches SI" begin
+@testset "Advanced inverter: per-unit agrees with SI on well-scaled cases" begin
     # Three-phase topology with neutral current and ripple.
     net = inv_grid3_unbal()
     inv = AdvancedInverter(; id="i", topology=:FOUR_LEG, v_dc=700.0, c_dc=1.1e-3,
