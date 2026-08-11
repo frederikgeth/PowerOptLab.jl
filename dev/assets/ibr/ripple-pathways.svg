@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 390" role="img" aria-labelledby="title desc">
+  <title id="title">How current sequence components load converter hardware</title>
+  <desc id="desc">Positive, negative, and zero sequence current paths through fundamental power, double-frequency DC-link ripple, neutral current, split-link midpoint ripple, capacitor heating, and semiconductor limits.</desc>
+  <defs><style>.box{fill:#f8fafc;stroke:#64748b;stroke-width:2}.seq{fill:#dbeafe;stroke:#2563eb;stroke-width:2}.stress{fill:#ffedd5;stroke:#ea580c;stroke-width:2}.limit{fill:#dcfce7;stroke:#16a34a;stroke-width:2}.t{font:16px system-ui,sans-serif;fill:#0f172a}.h{font:600 20px system-ui,sans-serif;fill:#0f172a}.s{font:14px system-ui,sans-serif;fill:#475569}.line{stroke:#334155;stroke-width:2.5;fill:none}.dash{stroke:#64748b;stroke-width:2;stroke-dasharray:7 6;fill:none}</style><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#334155"/></marker></defs>
+  <text class="h" x="560" y="30" text-anchor="middle">Sequence-to-hardware stress map</text>
+  <rect class="seq" x="35" y="70" width="190" height="65" rx="10"/><text class="t" x="130" y="97" text-anchor="middle">Positive sequence I₁</text><text class="s" x="130" y="120" text-anchor="middle">mean P and Q transfer</text>
+  <rect class="seq" x="35" y="165" width="190" height="65" rx="10"/><text class="t" x="130" y="192" text-anchor="middle">Negative sequence I₂</text><text class="s" x="130" y="215" text-anchor="middle">unbalance, ΣI = 0</text>
+  <rect class="seq" x="35" y="260" width="190" height="65" rx="10"/><text class="t" x="130" y="287" text-anchor="middle">Zero sequence I₀</text><text class="s" x="130" y="310" text-anchor="middle">Iₙ = −3I₀</text>
+
+  <rect class="box" x="325" y="70" width="220" height="65" rx="10"/><text class="t" x="435" y="97" text-anchor="middle">Converter-side S</text><text class="s" x="435" y="120" text-anchor="middle">Σ Uₓ Iₓ*</text>
+  <rect class="stress" x="325" y="165" width="220" height="65" rx="10"/><text class="t" x="435" y="192" text-anchor="middle">2ω power amplitude</text><text class="s" x="435" y="215" text-anchor="middle">|S̃| = |Σ Uₓ Iₓ|</text>
+  <rect class="stress" x="325" y="260" width="220" height="65" rx="10"/><text class="t" x="435" y="287" text-anchor="middle">Neutral path</text><text class="s" x="435" y="310" text-anchor="middle">conductor / fourth leg / midpoint</text>
+
+  <rect class="stress" x="650" y="120" width="210" height="65" rx="10"/><text class="t" x="755" y="147" text-anchor="middle">DC-bus ripple D</text><text class="s" x="755" y="170" text-anchor="middle">∝ S̃ /(2ω C_eq Vdc)</text>
+  <rect class="stress" x="650" y="235" width="210" height="65" rx="10"/><text class="t" x="755" y="262" text-anchor="middle">Midpoint ripple N</text><text class="s" x="755" y="285" text-anchor="middle">split DC: ∝ Iₙ /(2ωC)</text>
+
+  <rect class="limit" x="930" y="90" width="160" height="65" rx="10"/><text class="t" x="1010" y="117" text-anchor="middle">Rail feasibility</text><text class="s" x="1010" y="140" text-anchor="middle">sampled hull</text>
+  <rect class="limit" x="930" y="185" width="160" height="65" rx="10"/><text class="t" x="1010" y="212" text-anchor="middle">Capacitor thermal</text><text class="s" x="1010" y="235" text-anchor="middle">RMS allocation</text>
+  <rect class="limit" x="930" y="280" width="160" height="65" rx="10"/><text class="t" x="1010" y="307" text-anchor="middle">Neutral thermal</text><text class="s" x="1010" y="330" text-anchor="middle">In_max / per-leg loss</text>
+
+  <path class="line" d="M225 102H325" marker-end="url(#a)"/><path class="line" d="M225 197H325" marker-end="url(#a)"/><path class="line" d="M225 292H325" marker-end="url(#a)"/>
+  <path class="line" d="M545 197C590 197 600 152 650 152" marker-end="url(#a)"/><path class="line" d="M545 292C590 292 600 267 650 267" marker-end="url(#a)"/>
+  <path class="line" d="M860 152H900V122H930" marker-end="url(#a)"/><path class="line" d="M860 152H900V217H930" marker-end="url(#a)"/><path class="line" d="M860 267H900V217H930" marker-end="url(#a)"/><path class="line" d="M545 292H900V312H930" marker-end="url(#a)"/>
+  <path class="dash" d="M225 102C275 102 270 197 325 197" marker-end="url(#a)"/><text class="s" x="265" y="155">with V₂/V₀</text>
+  <text class="s" x="560" y="370" text-anchor="middle">The pathways are coupled at an operating point; they are not interchangeable ratings.</text>
+</svg>

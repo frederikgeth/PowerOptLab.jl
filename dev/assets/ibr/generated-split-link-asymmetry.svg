@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="610" viewBox="0 0 1000 610">
+<rect width="1000" height="610" fill="#ffffff"/>
+<style>
+ text { font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill:#172033 }
+ .title { font-size:23px; font-weight:700 }
+ .label { font-size:17px; font-weight:600 }
+ .small { font-size:14px; fill:#526071 }
+ .wire { stroke:#334155; stroke-width:3; fill:none }
+ .component { fill:#f4f7fa; stroke:#8ca0b5; stroke-width:2 }
+ .neutral { stroke:#1769aa; stroke-width:3; fill:none; marker-end:url(#blue-arrow) }
+ .common { stroke:#d65a31; stroke-width:3; fill:none; marker-end:url(#orange-arrow) }
+ .balance { stroke:#33865a; stroke-width:3; fill:none; marker-start:url(#green-back); marker-end:url(#green-arrow) }
+ .formula { fill:#f7f9fc; stroke:#ccd6e2; stroke-width:1.5 }
+</style>
+<defs>
+ <marker id="blue-arrow" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#1769aa"/></marker>
+ <marker id="orange-arrow" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#d65a31"/></marker>
+ <marker id="green-arrow" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#33865a"/></marker>
+ <marker id="green-back" markerWidth="8" markerHeight="8" refX="1" refY="3" orient="auto"><path d="M8,0 L8,6 L0,3 z" fill="#33865a"/></marker>
+</defs>
+<text class="title" x="42" y="38">Asymmetric split DC link: charge, current sharing, and thermal stress</text>
+<text class="small" x="42" y="62">Three-leg, four-wire bridge · physical RMS and thermally equivalent currents are reported separately</text>
+
+<line class="wire" x1="92" y1="102" x2="682" y2="102"/>
+<line class="wire" x1="92" y1="478" x2="682" y2="478"/>
+<text class="label" x="50" y="108">+Vdc/2</text>
+<text class="label" x="50" y="484">−Vdc/2</text>
+
+<line class="wire" x1="310" y1="102" x2="310" y2="137"/>
+<rect class="component" x="270" y="137" width="80" height="38" rx="4"/>
+<text class="small" x="279" y="162">ESR upper</text>
+<line class="wire" x1="310" y1="175" x2="310" y2="213"/>
+<line class="wire" x1="274" y1="213" x2="346" y2="213"/>
+<line class="wire" x1="274" y1="229" x2="346" y2="229"/>
+<line class="wire" x1="310" y1="229" x2="310" y2="290"/>
+<text class="label" x="360" y="227">Cu</text>
+
+<circle cx="310" cy="290" r="7" fill="#172033"/>
+<text class="label" x="270" y="278">midpoint M</text>
+
+<line class="wire" x1="310" y1="290" x2="310" y2="351"/>
+<line class="wire" x1="274" y1="351" x2="346" y2="351"/>
+<line class="wire" x1="274" y1="367" x2="346" y2="367"/>
+<line class="wire" x1="310" y1="367" x2="310" y2="405"/>
+<rect class="component" x="270" y="405" width="80" height="38" rx="4"/>
+<text class="small" x="279" y="430">ESR lower</text>
+<line class="wire" x1="310" y1="443" x2="310" y2="478"/>
+<text class="label" x="360" y="365">Cl</text>
+
+<rect class="component" x="565" y="151" width="220" height="194" rx="9"/>
+<text class="label" x="606" y="180">three phase legs</text>
+<text class="small" x="596" y="205">each leg spans the total bus</text>
+<line class="wire" x1="682" y1="102" x2="682" y2="151"/>
+<line class="wire" x1="682" y1="345" x2="682" y2="478"/>
+<line class="wire" x1="785" y1="220" x2="855" y2="220"/>
+<line class="wire" x1="785" y1="260" x2="855" y2="260"/>
+<line class="wire" x1="785" y1="300" x2="855" y2="300"/>
+<text class="label" x="866" y="226">a</text><text class="label" x="866" y="266">b</text><text class="label" x="866" y="306">c</text>
+<line class="wire" x1="317" y1="290" x2="448" y2="290"/>
+<line class="wire" x1="448" y1="290" x2="448" y2="380"/>
+<line x1="663" y1="380" x2="701" y2="380" stroke="#ffffff" stroke-width="11"/>
+<line class="wire" x1="448" y1="380" x2="855" y2="380"/>
+<text class="label" x="866" y="386">n</text>
+
+<line class="neutral" x1="538" y1="270" x2="351" y2="270"/>
+<text class="small" x="398" y="259" fill="#1769aa">neutral In</text>
+<text class="small" x="111" y="194" fill="#1769aa">upper share αu In</text>
+<line class="neutral" x1="248" y1="190" x2="248" y2="249"/>
+<text class="small" x="111" y="397" fill="#1769aa">lower share αl In</text>
+<line class="neutral" x1="248" y1="390" x2="248" y2="331"/>
+
+<line class="common" x1="393" y1="142" x2="393" y2="235"/>
+<line class="common" x1="393" y1="345" x2="393" y2="438"/>
+<text class="small" x="408" y="157" fill="#d65a31">common I2ω + Isw</text>
+<text class="small" x="408" y="424" fill="#d65a31">common I2ω + Isw</text>
+
+<line class="balance" x1="520" y1="190" x2="520" y2="360"/>
+<text class="small" x="532" y="358" fill="#33865a">bounded charge transfer qb</text>
+
+<rect class="formula" x="48" y="516" width="904" height="70" rx="8"/>
+<text class="small" x="65" y="540">Ceq = Cu Cl/(Cu+Cl)     αu = Cu/(Cu+Cl), αl = Cl/(Cu+Cl)     |N| = |In|/[ω(Cu+Cl)]</text>
+<text class="small" x="65" y="565">Nmean = Vdc(Cu−Cl)/[2(Cu+Cl)] + 2qb/(Cu+Cl)     Ih² = αh²|In|² + I2ω² + Isw²</text>
+</svg>

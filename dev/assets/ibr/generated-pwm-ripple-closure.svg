@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="640" viewBox="0 0 1000 640">
+<rect width="1000" height="640" fill="#ffffff"/>
+<style>
+ .title { font: 700 24px sans-serif; fill:#172033 }
+ .subtitle { font: 14px sans-serif; fill:#526174 }
+ .head { font: 700 16px sans-serif; fill:#172033 }
+ .body { font: 13px sans-serif; fill:#334155 }
+ .formula { font: 14px serif; fill:#172033 }
+ .box { fill:#f7f9fc; stroke:#8ca0b8; stroke-width:1.7 }
+ .audit { fill:#edf7ff; stroke:#1769aa; stroke-width:2 }
+ .constraint { fill:#fff6eb; stroke:#d65a31; stroke-width:2 }
+ .result { fill:#edf8f1; stroke:#33865a; stroke-width:2 }
+ .arrow { stroke:#1769aa; stroke-width:2.3; fill:none; marker-end:url(#arrow) }
+ .feedback { stroke:#33865a; stroke-width:2.6; fill:none; marker-end:url(#feedback) }
+ .dash { stroke:#94a3b8; stroke-width:1.5; stroke-dasharray:6 5; fill:none }
+</style>
+<defs>
+ <marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#1769aa"/></marker>
+ <marker id="feedback" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#33865a"/></marker>
+</defs>
+<text class="title" x="42" y="40">Carrier-level PWM ripple audit and conservative closure</text>
+<text class="subtitle" x="42" y="65">Fundamental phasors remain optimisation variables; ideal shared-carrier states provide an operating-point oracle</text>
+
+<rect class="box" x="45" y="105" width="230" height="174" rx="10"/>
+<text class="head" x="67" y="136">1 · Smooth phasor NLP</text>
+<text class="body" x="67" y="166">solves U, I, Vdc and 2ω ripple</text>
+<text class="body" x="67" y="190">subject to topology, filter,</text>
+<text class="body" x="67" y="214">sequence and capacitor bounds</text>
+<text class="formula" x="67" y="250">Ialloc = κ √Σ |Ileg|²</text>
+
+<path class="arrow" d="M275 192 L345 192"/>
+<text class="body" x="288" y="178">U, I, Vdc</text>
+
+<rect class="audit" x="345" y="92" width="305" height="285" rx="10"/>
+<text class="head" x="368" y="124">2 · Ideal shared-carrier audit</text>
+<text class="body" x="368" y="154">SPWM: γ = 0</text>
+<text class="body" x="368" y="177">centered PWM: γ = −(max u + min u)/2</text>
+<text class="formula" x="368" y="211">dℓ = 1/2 + (uℓ + γ)/vdc</text>
+<rect x="375" y="233" width="245" height="48" rx="5" fill="#ffffff" stroke="#77a9d1"/>
+<polyline points="390,265 420,241 450,265 480,241 510,265 540,241 570,265 600,241" fill="none" stroke="#1769aa" stroke-width="2"/>
+<text class="body" x="389" y="303">one triangular carrier → correlated sℓ</text>
+<text class="formula" x="389" y="330">î = Σ (sℓ − dℓ) iℓ</text>
+<text class="body" x="389" y="355">integrate î² and capacitor charge</text>
+
+<path class="arrow" d="M650 192 L720 192"/>
+<text class="body" x="664" y="178">audit</text>
+
+<rect class="result" x="720" y="105" width="235" height="220" rx="10"/>
+<text class="head" x="742" y="136">3 · Physical diagnostics</text>
+<text class="body" x="742" y="168">predicted switching RMS Isw</text>
+<text class="body" x="742" y="193">voltage ripple Vrms and Vpp</text>
+<text class="body" x="742" y="218">minimum duty headroom</text>
+<line x1="742" y1="240" x2="932" y2="240" stroke="#9bc7aa"/>
+<text class="formula" x="742" y="268">ΔI = Ialloc − Isw</text>
+<text class="body" x="742" y="295">publish only when ΔI ≥ 0</text>
+
+<rect class="constraint" x="95" y="445" width="810" height="108" rx="10"/>
+<text class="head" x="120" y="477">Capacitor constraint retained inside every smooth solve</text>
+<text class="formula" x="120" y="510">wn In² + w2 I2ω² + wsw (i_sw² + κ² Σ |Ileg|²) ≤ Irated²</text>
+<text class="body" x="120" y="535">manual i_sw is an independent residual · upper/lower split banks are constrained separately</text>
+
+<path class="feedback" d="M837 325 L837 405 Q837 425 817 425 L183 425 Q160 425 160 445"/>
+<text class="body" x="561" y="416" fill="#33865a">update κ from the audited operating point</text>
+<path class="feedback" d="M95 500 L60 500 Q35 500 35 475 L35 230 Q35 205 45 205"/>
+<text class="body" x="44" y="592">Repeat until the allocated reserve covers the prediction within tolerance.</text>
+<path class="dash" d="M345 590 L650 590"/>
+<text class="subtitle" x="674" y="595">not switching-network EMT</text>
+</svg>

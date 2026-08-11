@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 430" role="img" aria-labelledby="title desc">
+  <title id="title">Four-conductor internal-node filter model</title>
+  <desc id="desc">Internal converter phase and neutral nodes connect through three phase impedances and one neutral impedance to the point of connection. Phase currents flow toward the POC and the neutral current returns toward the converter.</desc>
+  <defs><style>.bus{stroke:#0f172a;stroke-width:5}.wire{stroke:#334155;stroke-width:3;fill:none}.z{fill:#dbeafe;stroke:#2563eb;stroke-width:2}.n{fill:#ffedd5;stroke:#ea580c;stroke-width:2}.node{fill:#0f172a}.h{font:600 21px system-ui,sans-serif;fill:#0f172a}.t{font:16px system-ui,sans-serif;fill:#0f172a}.s{font:14px system-ui,sans-serif;fill:#475569}.eq{font:600 16px ui-monospace,monospace;fill:#0f172a}</style><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#334155"/></marker></defs>
+  <text class="h" x="550" y="30" text-anchor="middle">Internal-node filter with an explicit neutral conductor</text>
+  <text class="t" x="120" y="65" text-anchor="middle">converter internal node</text><text class="t" x="980" y="65" text-anchor="middle">point of connection</text>
+  <line class="bus" x1="120" y1="85" x2="120" y2="330"/><line class="bus" x1="980" y1="85" x2="980" y2="330"/>
+  <g>
+    <circle class="node" cx="120" cy="115" r="6"/><circle class="node" cx="980" cy="115" r="6"/><line class="wire" x1="120" y1="115" x2="360" y2="115"/><rect class="z" x="360" y="91" width="210" height="48" rx="8"/><text class="t" x="465" y="121" text-anchor="middle">Zₐ = Rₐ + jXₐ</text><line class="wire" x1="570" y1="115" x2="980" y2="115" marker-end="url(#a)"/><text class="s" x="770" y="101">Iₐ</text>
+    <circle class="node" cx="120" cy="175" r="6"/><circle class="node" cx="980" cy="175" r="6"/><line class="wire" x1="120" y1="175" x2="360" y2="175"/><rect class="z" x="360" y="151" width="210" height="48" rx="8"/><text class="t" x="465" y="181" text-anchor="middle">Zᵦ = Rᵦ + jXᵦ</text><line class="wire" x1="570" y1="175" x2="980" y2="175" marker-end="url(#a)"/><text class="s" x="770" y="161">Iᵦ</text>
+    <circle class="node" cx="120" cy="235" r="6"/><circle class="node" cx="980" cy="235" r="6"/><line class="wire" x1="120" y1="235" x2="360" y2="235"/><rect class="z" x="360" y="211" width="210" height="48" rx="8"/><text class="t" x="465" y="241" text-anchor="middle">Z꜀ = R꜀ + jX꜀</text><line class="wire" x1="570" y1="235" x2="980" y2="235" marker-end="url(#a)"/><text class="s" x="770" y="221">I꜀</text>
+    <circle class="node" cx="120" cy="310" r="6"/><circle class="node" cx="980" cy="310" r="6"/><line class="wire" x1="120" y1="310" x2="360" y2="310" marker-start="url(#a)"/><rect class="n" x="360" y="286" width="210" height="48" rx="8"/><text class="t" x="465" y="316" text-anchor="middle">Zₙ = Rₙ + jXₙ</text><line class="wire" x1="570" y1="310" x2="980" y2="310"/><text class="s" x="770" y="296">Iₙ = −ΣIₓ</text>
+  </g>
+  <text class="s" x="88" y="120" text-anchor="end">a</text><text class="s" x="88" y="180" text-anchor="end">b</text><text class="s" x="88" y="240" text-anchor="end">c</text><text class="s" x="88" y="315" text-anchor="end">n</text>
+  <text class="s" x="1012" y="120">a</text><text class="s" x="1012" y="180">b</text><text class="s" x="1012" y="240">c</text><text class="s" x="1012" y="315">n</text>
+  <text class="eq" x="550" y="385" text-anchor="middle">Uₓₙ − Vpoc,ₓₙ = Zₓ Iₓ + Zₙ ΣIᵧ</text>
+  <text class="s" x="550" y="412" text-anchor="middle">The neutral drop is a shared term in every phase-to-neutral equation.</text>
+</svg>

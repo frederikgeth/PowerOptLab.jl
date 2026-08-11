@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="430" viewBox="0 0 1000 430">
+<rect width="1000" height="430" fill="#ffffff"/>
+<style>
+ text { font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill:#172033 }
+ .title { font-size:23px; font-weight:700 }
+ .label { font-size:17px; font-weight:600 }
+ .small { font-size:14px; fill:#526071 }
+ .wire { stroke:#334155; stroke-width:3; fill:none }
+ .arrow { stroke:#1769aa; stroke-width:2.5; fill:none; marker-end:url(#arrow) }
+ .box { fill:#f4f7fa; stroke:#8ca0b5; stroke-width:2 }
+</style>
+<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#1769aa"/></marker></defs>
+<text class="title" x="42" y="38">Explicit fundamental-frequency LCL circuit and reference directions</text>
+
+<rect class="box" x="48" y="128" width="145" height="112" rx="8"/>
+<text class="label" x="78" y="170">converter</text>
+<text class="small" x="67" y="196">internal voltage Ux</text>
+<text class="small" x="67" y="218">switching hull + loss</text>
+
+<line class="wire" x1="193" y1="184" x2="273" y2="184"/>
+<rect class="box" x="273" y="140" width="148" height="88" rx="8"/>
+<text class="label" x="303" y="174">converter arm</text>
+<text class="small" x="300" y="202">primitive Zc = Rc+jXc</text>
+<line class="wire" x1="421" y1="184" x2="512" y2="184"/>
+<circle cx="512" cy="184" r="7" fill="#172033"/>
+<text class="label" x="465" y="112">midpoint Mx</text>
+<text class="small" x="455" y="132">reported Vfilter</text>
+
+<line class="wire" x1="519" y1="184" x2="602" y2="184"/>
+<rect class="box" x="602" y="140" width="145" height="88" rx="8"/>
+<text class="label" x="635" y="174">grid arm</text>
+<text class="small" x="623" y="202">primitive Zg = Rg+jXg</text>
+<line class="wire" x1="747" y1="184" x2="824" y2="184"/>
+<circle cx="824" cy="184" r="7" fill="#172033"/>
+<rect class="box" x="824" y="128" width="128" height="112" rx="8"/>
+<text class="label" x="857" y="170">POC</text>
+<text class="small" x="844" y="196">network Vp,xn</text>
+<text class="small" x="844" y="218">grid current Ig</text>
+
+<line class="arrow" x1="215" y1="78" x2="391" y2="78"/>
+<text class="small" x="270" y="69">converter current Ic</text>
+<line class="arrow" x1="539" y1="78" x2="716" y2="78"/>
+<text class="small" x="595" y="69">grid current Ig</text>
+
+<line class="wire" x1="512" y1="191" x2="512" y2="252"/>
+<rect class="box" x="466" y="252" width="92" height="45" rx="6"/>
+<text class="small" x="483" y="280">Rd damping</text>
+<line class="wire" x1="512" y1="297" x2="512" y2="322"/>
+<line class="wire" x1="484" y1="322" x2="540" y2="322"/>
+<line class="wire" x1="484" y1="337" x2="540" y2="337"/>
+<line class="wire" x1="512" y1="337" x2="512" y2="369"/>
+<line class="wire" x1="426" y1="369" x2="598" y2="369"/>
+<text class="label" x="558" y="329">Cmid</text>
+<text class="small" x="609" y="374">midpoint neutral / reference</text>
+<line class="arrow" x1="444" y1="238" x2="444" y2="315"/>
+<text class="small" x="351" y="278">Ish=(G+jB)M</text>
+
+<rect x="57" y="312" width="315" height="76" rx="8" fill="#eef6fb" stroke="#a8c9df"/>
+<text class="small" x="75" y="337">KVL: U-M = Zc Ic; M-Vp = Zg Ig</text>
+<text class="small" x="75" y="361">KCL: Ic = Ig + Ish</text>
+<text class="small" x="75" y="383">Ysh = 1/(Rd + 1/(j omega Cmid))</text>
+
+<text class="small" x="42" y="416">Each drawn phase has a phase-to-neutral equation; both series arms may instead use full conductor-domain primitive matrices.</text>
+</svg>
