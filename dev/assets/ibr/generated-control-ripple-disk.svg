@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="600" viewBox="0 0 1000 600">
+<rect width="1000" height="600" fill="#fff"/>
+<style>.title{font:700 24px sans-serif;fill:#172033}.sub{font:14px sans-serif;fill:#526174}.axis{stroke:#526174;stroke-width:1.4}.disk{fill:#edf7ff;stroke:#1769aa;stroke-width:2.5}.arrow{stroke:#d65a31;stroke-width:2.5;fill:none;marker-end:url(#a)}.label{font:700 15px sans-serif;fill:#172033}.small{font:13px sans-serif;fill:#526174}</style>
+<defs><marker id="a" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#d65a31"/></marker></defs>
+<text class="title" x="42" y="38">2ω ripple capability as a disk in the complex I₂ plane</text>
+<text class="sub" x="42" y="63">Radius = S̃max/(3|U₁|) = 4.35 A for |U₁|=230 V and S̃max=3 kVA</text>
+<line class="axis" x1="90" y1="300.0" x2="930" y2="300.0"/><line class="axis" x1="500.0" y1="90" x2="500.0" y2="535"/>
+<circle class="disk" cx="410.0" cy="255.0" r="195.65217391304347"/>
+<circle cx="410.0" cy="255.0" r="6" fill="#1769aa"/>
+<circle cx="680.0" cy="75.0" r="7" fill="#d65a31"/>
+<circle cx="572.7924488921868" cy="146.47170073854213" r="7" fill="#33865a"/>
+<path class="arrow" d="M410.0 255.0 L680.0 75.0"/>
+<text class="label" x="419.0" y="245.0">I₂,ripple</text>
+<text class="label" x="690.0" y="75.0">request</text>
+<text class="label" x="582.7924488921868" y="166.47170073854213">disk clip</text>
+<text class="small" x="650" y="532">Research allocator geometry.</text>
+<text class="small" x="650" y="552">Implemented law uses a conservative common scale.</text>
+</svg>
