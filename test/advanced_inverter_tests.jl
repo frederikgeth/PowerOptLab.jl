@@ -215,6 +215,14 @@ end
 @testset "Advanced inverter: balanced four-leg AC reduction to three 1φ units" begin
     # This is an AC fundamental equivalence only. Three separate single-phase DC
     # links do not reproduce the shared four-leg DC-capacitor ripple physics.
+    #
+    # Both units need a current-dependent loss term. With the default
+    # p_loss_fixed=a_loss=c_loss=0, `Min p_loss + p_cap_loss` is identically
+    # zero, so the four-leg model becomes a pure feasibility problem in which
+    # any zero-sequence circulation bounded by In_max is equally optimal. The
+    # balanced reduction holds *because* a converter dissipates on circulating
+    # current; without that term the solution is not unique and which branch
+    # Ipopt returns is platform-dependent.
     four = solve_advanced_inverter(
         inv_grid3_src(
             mags=[230.0, 230.0, 230.0],
@@ -222,11 +230,12 @@ end
         AdvancedInverter(
             id="four", bus="poc", phase_terminals=["a", "b", "c"],
             neutral="n", topology=:FOUR_LEG, s_max=15e3, i_max=40.0,
-            In_max=40.0, v_dc=700.0, c_dc=1.1e-3);
+            In_max=40.0, v_dc=700.0, c_dc=1.1e-3, c_loss=1e-3);
         objective=:min_loss, p_set=9e3, q_set=3e3)
     single = solve_advanced_inverter(
         inv_grid(),
-        AdvancedInverter(id="single", bus="poc", s_max=5e3, i_max=40.0);
+        AdvancedInverter(id="single", bus="poc", s_max=5e3, i_max=40.0,
+                         c_loss=1e-3);
         objective=:min_loss, p_set=3e3, q_set=1e3)
 
     @test four.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
