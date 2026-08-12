@@ -70,6 +70,10 @@ const _CTRL_RATINGS = InverterControlRatings(s_max=20e3, i_max=40.0)
     @test_throws ArgumentError WorstPhaseVoltVarWatt(
         volt_watt_basis=:invalid)
     @test_throws ArgumentError CommonScaleLimiter(pq_priority=:invalid)
+    @test_throws ArgumentError CommonScaleLimiter(
+        priority_headroom_fraction=0.0)
+    @test_throws ArgumentError CommonScaleLimiter(
+        priority_headroom_fraction=1.0)
 end
 
 @testset "Inverter controls: exact worst-phase and sequence laws" begin
@@ -146,12 +150,37 @@ end
     guard = evaluate_exact(guarded, measurement, _CTRL_REQUEST, _CTRL_RATINGS)
     no_guard = evaluate_exact(
         unguarded, measurement, _CTRL_REQUEST, _CTRL_RATINGS)
+    smooth_avg = evaluate_smooth(
+        average, measurement, _CTRL_REQUEST, _CTRL_RATINGS)
+    smooth_guard = evaluate_smooth(
+        guarded, measurement, _CTRL_REQUEST, _CTRL_RATINGS)
 
     @test avg.p_request ≈ _CTRL_REQUEST.p_available atol=1e-9
     @test avg.q_request ≈ 0.0 atol=1e-9
     @test avg.eta == 0.0
     @test guard.p_request ≈ 0.6*_CTRL_REQUEST.p_available atol=1e-9
     @test no_guard.p_request > guard.p_request
+
+    # The numeric smooth evaluator uses the same pairwise smooth extrema as the
+    # stamped graph; the exact evaluator deliberately retains hard firmware
+    # comparisons. `voltage_min/max` always mean physical phase extrema, not a
+    # policy's curve input.
+    smooth_max(a, b, epsilon) =
+        (a+b+sqrt((a-b)^2+epsilon^2))/2
+    smooth_min(a, b, epsilon) =
+        (a+b-sqrt((a-b)^2+epsilon^2))/2
+    magnitudes = abs.(measurement.phase_voltage)
+    expected_avg_min = smooth_min(
+        smooth_min(magnitudes[1], magnitudes[2],
+                   average.positive.extrema_epsilon),
+        magnitudes[3], average.positive.extrema_epsilon)
+    expected_guard_max = smooth_max(
+        smooth_max(magnitudes[1], magnitudes[2],
+                   guarded.positive.guard_epsilon),
+        magnitudes[3], guarded.positive.guard_epsilon)
+    @test smooth_avg.voltage_min ≈ expected_avg_min atol=1e-12
+    @test smooth_guard.voltage_max ≈ expected_guard_max atol=1e-12
+    @test smooth_guard.voltage_max != guard.voltage_max
 
     dominant = SequenceController(WorstPhaseVoltVarWatt(
         volt_var=curves.volt_var, conflict_policy=:dominant))
@@ -180,6 +209,29 @@ end
         _CTRL_REQUEST, _CTRL_RATINGS).q_request for v in tie_voltages]
     @test maximum(abs, diff(tie_q)) < 130.0
     @test tie_q[1] > 0 > tie_q[end]
+end
+
+@testset "Inverter controls: stamped P/Q priority under PV oversizing" begin
+    inverter = AdvancedInverter(
+        id="priority_saturation", bus="poc",
+        phase_terminals=["a", "b", "c"], neutral="n",
+        topology=:THREE_LEG, s_max=20e3, i_max=40.0,
+        v_dc=700.0, c_dc=1.1e-3, r_filter=0.05, x_filter=0.15)
+    for priority in (:proportional, :watt, :var), p_available in (22e3, 25e3)
+        controller = SequenceController(
+            AverageVoltageVoltVarWatt();
+            limiter=CommonScaleLimiter(pq_priority=priority))
+        request = InverterControlRequest(
+            p_available=p_available, p_rated=p_available, q_scale=0.0)
+        result = solve_controlled_inverter(
+            inv_grid3_bal(), ControlledDevice(inverter, controller), request;
+            per_unit=true,
+            solver_options=("max_iter" => 500, "tol" => 1e-8))
+        @test result.solve.publishable
+        @test abs(result.converter_terminal.total_power) <=
+              inverter.s_max + 0.2
+        @test result.control.current_scale < 1.0
+    end
 end
 
 @testset "Inverter controls: Volt-watt basis and P/Q priority" begin
@@ -503,6 +555,20 @@ end
           collect(abs.(grid.control.phase_current)) atol=5e-6
     @test collect(grid.grid_phase_current) ≈
           collect(grid.control.phase_current) atol=5e-6
+    converter_numeric = evaluate_smooth(
+        converter_controller,
+        InverterControlMeasurement(collect(converter.control.phase_voltage)),
+        request, InverterControlRatings(s_max=20e3, i_max=40.0))
+    grid_numeric = evaluate_smooth(
+        grid_controller,
+        InverterControlMeasurement(collect(grid.control.phase_voltage)),
+        request, InverterControlRatings(s_max=20e3, i_max=35.0))
+    @test converter.control.voltage_min ≈
+          converter_numeric.voltage_min atol=1e-6
+    @test converter.control.voltage_max ≈
+          converter_numeric.voltage_max atol=1e-6
+    @test grid.control.voltage_min ≈ grid_numeric.voltage_min atol=1e-6
+    @test grid.control.voltage_max ≈ grid_numeric.voltage_max atol=1e-6
     @test maximum(abs.(converter.plant.i_mag .-
                        converter.plant.i_grid_mag)) > 0.01
     @test maximum(abs.(grid.plant.i_mag .- grid.plant.i_grid_mag)) > 0.01

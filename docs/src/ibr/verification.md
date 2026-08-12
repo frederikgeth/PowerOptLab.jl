@@ -50,6 +50,7 @@ oracle. A solver returning `LOCALLY_SOLVED` is necessary, but not sufficient.
 | Controller conflict continuity | dense minimum-voltage sweep through equal branch severity | deployed `:dominant` command changes continuously and reverses sign without a winner-take-all jump |
 | PWL smoothing refinement | widths 0.1, 0.05, and 0.025 V at a knot | bias is positive, approximately first order, and below 0.5% at 0.05 V for the documented curve |
 | P/Q and Volt-watt bases | exact/smooth numeric policies plus partial-irradiance OpenDSS point | all priorities satisfy the capability circle; rated and available bases separate as specified |
+| PV oversizing with P/Q priority | all three priority modes at DC/AC ratios 1.10 and 1.25 | every stamped solve is publishable and converter-terminal apparent power remains within rating |
 | Plant-aware saturation | binding converter `s_max` and binding `dv2_max` cases | the controller backs off to a publishable solution at the physical location rather than creating an infeasible equality |
 | Current-target phasors | converter- and grid-target LCL cases | full complex current phasors—not only magnitudes—equal the stamped target |
 | Selection objective | loss and zero objectives on the same controlled power flow | control requests and current phasors are invariant within solver tolerance |

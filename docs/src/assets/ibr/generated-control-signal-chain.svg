@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="360" viewBox="0 0 1000 360">
+<rect width="1000" height="360" fill="#ffffff"/>
+<style>.title{font:700 24px sans-serif;fill:#172033}.sub{font:14px sans-serif;fill:#526174}.head{font:700 15px sans-serif;fill:#172033}.body{font:13px sans-serif;fill:#526174}.box{fill:#f5f8fc;stroke:#7890aa;stroke-width:1.8}.arrow{stroke:#1769aa;stroke-width:2.5;fill:none;marker-end:url(#a)}</style>
+<defs><marker id="a" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#1769aa"/></marker></defs>
+<text class="title" x="35" y="40">Implemented phase-aware three-leg control signal chain</text>
+<text class="sub" x="35" y="66">Fixed algebraic work per inverter; no controller-side optimiser or remote measurement</text>
+<rect class="box" x="35" y="120" width="130" height="116" rx="10"/>
+<text class="head" x="100" y="151" text-anchor="middle">local RMS</text><text class="head" x="100" y="174" text-anchor="middle">phasors</text>
+<text class="body" x="100" y="211" text-anchor="middle">Ua, Ub, Uc</text>
+<rect class="box" x="193" y="120" width="130" height="116" rx="10"/>
+<text class="head" x="258" y="151" text-anchor="middle">Fortescue</text>
+<text class="body" x="258" y="211" text-anchor="middle">U1, U2</text>
+<rect class="box" x="351" y="120" width="130" height="116" rx="10"/>
+<text class="head" x="416" y="151" text-anchor="middle">PWL laws</text>
+<text class="body" x="416" y="211" text-anchor="middle">P, Q, κ</text>
+<rect class="box" x="509" y="120" width="130" height="116" rx="10"/>
+<text class="head" x="574" y="151" text-anchor="middle">conflict +</text><text class="head" x="574" y="174" text-anchor="middle">sequence blend</text>
+<text class="body" x="574" y="211" text-anchor="middle">I1req, I2req</text>
+<rect class="box" x="667" y="120" width="130" height="116" rx="10"/>
+<text class="head" x="732" y="151" text-anchor="middle">physical</text><text class="head" x="732" y="174" text-anchor="middle">backoff</text>
+<text class="body" x="732" y="211" text-anchor="middle">Iconv, Igrid, S, dv2</text>
+<rect class="box" x="825" y="120" width="130" height="116" rx="10"/>
+<text class="head" x="890" y="151" text-anchor="middle">three-leg</text><text class="head" x="890" y="174" text-anchor="middle">reconstruction</text>
+<text class="body" x="890" y="211" text-anchor="middle">Ia + Ib + Ic = 0</text>
+<path class="arrow" d="M167 178 L189 178"/>
+<path class="arrow" d="M325 178 L347 178"/>
+<path class="arrow" d="M483 178 L505 178"/>
+<path class="arrow" d="M641 178 L663 178"/>
+<path class="arrow" d="M799 178 L821 178"/>
+<rect x="510" y="282" width="455" height="48" rx="8" fill="#fff6eb" stroke="#d65a31"/>
+<text class="body" x="530" y="312">AdvancedInverter plant constraints remain authoritative backstops</text>
+</svg>

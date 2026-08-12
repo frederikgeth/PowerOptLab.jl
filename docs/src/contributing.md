@@ -91,9 +91,12 @@ snapshot with semantic IBR keys and the public smooth-PWL API) and
 together, then run the complete test and
 documentation suites on the Julia compatibility floor and current stable.
 
-`Manifest.toml` is intentionally local. If it contains
+Both the repository and `docs/Manifest.toml` files are intentionally local. If
+either contains
 `path = "../BMOPFTools.jl"`, tests use whatever branch that sibling checkout is
-currently on, not the CI pin. Before diagnosing a controller failure, verify
+currently on, not the CI pin; a stale docs manifest can therefore fail inside an
+executable `@example` even when CI is healthy. Before diagnosing a controller or
+documentation failure, verify
 that the sibling contains the public `piecewise_linear_value` and
 `opf_piecewise_linear_expression` APIs. To reproduce CI without changing either
 working tree, create a temporary environment, develop this PowerOptLab checkout,

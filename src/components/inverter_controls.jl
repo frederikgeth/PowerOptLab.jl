@@ -238,7 +238,8 @@ end
 
 """
     CommonScaleLimiter(; current_epsilon=1e-3, power_epsilon=1e-3,
-                         pq_priority=:proportional)
+                         pq_priority=:proportional,
+                         priority_headroom_fraction=1e-4)
 
 Apply a common scalar to positive- and negative-sequence current commands so
 the reconstructed currents at the configured current target respect its
@@ -249,16 +250,21 @@ power rating. The exact evaluator uses hard maxima. The smooth model represents
 every magnitude by an implicit nonnegative square root and uses the stated SI
 epsilons only in smooth maximum selectors. `pq_priority` is `:proportional`,
 `:watt`, or `:var` for the positive-sequence apparent-power allocation.
+`priority_headroom_fraction` reserves a small declared fraction of `s_max`
+before a watt- or var-priority component reaches the axis of the capability
+circle. It is a control/protection margin, not a square-root regularization.
 """
 struct CommonScaleLimiter <: AbstractLimiterPolicy
     current_epsilon::Float64
     power_epsilon::Float64
     pq_priority::Symbol
+    priority_headroom_fraction::Float64
 end
 
 function CommonScaleLimiter(; current_epsilon::Real=1e-3,
                             power_epsilon::Real=1e-3,
-                            pq_priority::Symbol=:proportional)
+                            pq_priority::Symbol=:proportional,
+                            priority_headroom_fraction::Real=1e-4)
     ieps = Float64(current_epsilon)
     seps = Float64(power_epsilon)
     isfinite(ieps) && ieps > 0 || throw(ArgumentError(
@@ -267,7 +273,10 @@ function CommonScaleLimiter(; current_epsilon::Real=1e-3,
         "power_epsilon must be finite and > 0"))
     pq_priority in (:proportional, :watt, :var) || throw(ArgumentError(
         "pq_priority must be :proportional, :watt, or :var"))
-    CommonScaleLimiter(ieps, seps, pq_priority)
+    headroom = Float64(priority_headroom_fraction)
+    isfinite(headroom) && 0 < headroom < 1 || throw(ArgumentError(
+        "priority_headroom_fraction must be finite and lie in (0, 1)"))
+    CommonScaleLimiter(ieps, seps, pq_priority, headroom)
 end
 
 """
@@ -669,17 +678,18 @@ function _unbalance_numeric_smooth(policy::NegativeSequenceAdmittanceDroop,
     return i2v, i2r, (1-blend)*i2v + blend*i2r, eta
 end
 
-function _limit_positive_power_exact(p, q, smax, priority)
+function _limit_positive_power_exact(p, q, smax, priority, headroom_fraction)
     raw_magnitude = hypot(p, q)
     if priority === :proportional
         scale = raw_magnitude > smax ? smax/raw_magnitude : 1.0
         return scale*p, scale*q, scale
     elseif priority === :watt
-        p_limited = min(p, smax)
+        p_limited = min(p, (1-headroom_fraction)*smax)
         q_capacity = sqrt(max(smax^2-p_limited^2, 0.0))
         q_limited = clamp(q, -q_capacity, q_capacity)
     else
-        q_limited = clamp(q, -smax, smax)
+        priority_limit = (1-headroom_fraction)*smax
+        q_limited = clamp(q, -priority_limit, priority_limit)
         p_capacity = sqrt(max(smax^2-q_limited^2, 0.0))
         p_limited = min(p, p_capacity)
     end
@@ -688,22 +698,24 @@ function _limit_positive_power_exact(p, q, smax, priority)
     return p_limited, q_limited, scale
 end
 
-function _limit_positive_power_numeric_smooth(p, q, smax, epsilon, priority)
+function _limit_positive_power_numeric_smooth(
+        p, q, smax, epsilon, priority, headroom_fraction)
     raw_magnitude = hypot(p, q)
     if priority === :proportional
         scale = smax/_smooth_max(smax, raw_magnitude, epsilon)
         return scale*p, scale*q, scale
     elseif priority === :watt
-        p_limited = _smooth_min(p, smax, epsilon)
+        p_limited = _smooth_min(
+            p, (1-headroom_fraction)*smax, epsilon)
         q_capacity = sqrt(max(smax^2-p_limited^2, 0.0))
-        q_scale = q_capacity/_smooth_max(q_capacity, abs(q), epsilon)
-        q_limited = q_scale*q
+        q_limited = _smooth_symmetric_clip(
+            q, q_capacity, epsilon)
     else
-        q_scale = smax/_smooth_max(smax, abs(q), epsilon)
-        q_limited = q_scale*q
+        priority_limit = (1-headroom_fraction)*smax
+        q_limited = _smooth_symmetric_clip(
+            q, priority_limit, epsilon)
         p_capacity = sqrt(max(smax^2-q_limited^2, 0.0))
-        p_scale = p_capacity/_smooth_max(p_capacity, p, epsilon)
-        p_limited = p_scale*p
+        p_limited = _smooth_min(p, p_capacity, epsilon)
     end
     scale = iszero(raw_magnitude) ? 1.0 :
         hypot(p_limited, q_limited)/raw_magnitude
@@ -734,7 +746,8 @@ function evaluate_smooth(controller::SequenceController,
 
     p, q, power_scale = _limit_positive_power_numeric_smooth(
         p_raw, q_raw, ratings.s_max, controller.limiter.power_epsilon,
-        controller.limiter.pq_priority)
+        controller.limiter.pq_priority,
+        controller.limiter.priority_headroom_fraction)
 
     floor = controller.power_voltage_floor
     denominator = 3(abs2(u1) + floor^2)
@@ -793,7 +806,8 @@ function evaluate_exact(controller::SequenceController,
     end
 
     p, q, power_scale = _limit_positive_power_exact(
-        p_raw, q_raw, ratings.s_max, controller.limiter.pq_priority)
+        p_raw, q_raw, ratings.s_max, controller.limiter.pq_priority,
+        controller.limiter.priority_headroom_fraction)
 
     floor = controller.power_voltage_floor
     denominator = 3(abs2(u1) + floor^2)
@@ -852,6 +866,9 @@ _smooth_max(a, b, epsilon) = (a + b + sqrt((a-b)^2 + epsilon^2)) / 2
 _smooth_min(a, b, epsilon) = (a + b - sqrt((a-b)^2 + epsilon^2)) / 2
 _smooth_positive(a, epsilon) = (a + sqrt(a^2 + epsilon^2)) / 2
 _smooth_negative(a, epsilon) = (a - sqrt(a^2 + epsilon^2)) / 2
+_smooth_symmetric_clip(a, limit, epsilon) =
+    _smooth_min(a, limit, epsilon) +
+    _smooth_max(a, -limit, epsilon) - a
 
 function _implicit_sqrt!(m, radicand; start::Real=1.0, scale::Real=start)
     initial = max(Float64(start), 0.0)
@@ -872,6 +889,15 @@ function _smooth_min_implicit!(m, a, b, epsilon; start::Real=1.0)
     root = _implicit_sqrt!(
         m, (a-b)^2 + epsilon^2; start=max(Float64(start), epsilon))
     return (a + b - root) / 2
+end
+
+function _smooth_symmetric_clip_implicit!(
+        m, value, limit, epsilon; start::Real=1.0)
+    upper = _smooth_min_implicit!(
+        m, value, limit, epsilon; start=start)
+    lower = _smooth_max_implicit!(
+        m, value, -limit, epsilon; start=start)
+    return upper + lower - value
 end
 
 function _smooth_positive_implicit!(m, a, epsilon; start::Real=epsilon)
@@ -994,7 +1020,7 @@ function _safe_direction_scale_implicit!(
 end
 
 function _limit_positive_power_smooth!(
-        m, p_raw, q_raw, smax, epsilon, priority)
+        m, p_raw, q_raw, smax, epsilon, priority, headroom_fraction)
     raw_magnitude = _implicit_sqrt!(
         m, p_raw^2 + q_raw^2; start=smax, scale=smax)
     if priority === :proportional
@@ -1003,26 +1029,21 @@ function _limit_positive_power_smooth!(
         scale = smax/denominator
         return scale*p_raw, scale*q_raw, scale
     elseif priority === :watt
+        priority_limit = (1-headroom_fraction)*smax
         p_limited = _smooth_min_implicit!(
-            m, p_raw, smax, epsilon; start=smax)
+            m, p_raw, priority_limit, epsilon; start=priority_limit)
         q_capacity = _implicit_sqrt!(
             m, smax^2-p_limited^2; start=0.5smax, scale=smax)
-        q_magnitude = _implicit_sqrt!(
-            m, q_raw^2; start=0.25smax, scale=smax)
-        denominator = _smooth_max_implicit!(
-            m, q_capacity, q_magnitude, epsilon; start=smax)
-        q_limited = q_raw*q_capacity/denominator
+        q_limited = _smooth_symmetric_clip_implicit!(
+            m, q_raw, q_capacity, epsilon; start=smax)
     else
-        q_magnitude = _implicit_sqrt!(
-            m, q_raw^2; start=0.25smax, scale=smax)
-        q_denominator = _smooth_max_implicit!(
-            m, smax, q_magnitude, epsilon; start=smax)
-        q_limited = q_raw*smax/q_denominator
+        priority_limit = (1-headroom_fraction)*smax
+        q_limited = _smooth_symmetric_clip_implicit!(
+            m, q_raw, priority_limit, epsilon; start=priority_limit)
         p_capacity = _implicit_sqrt!(
             m, smax^2-q_limited^2; start=0.5smax, scale=smax)
-        p_denominator = _smooth_max_implicit!(
-            m, p_capacity, p_raw, epsilon; start=smax)
-        p_limited = p_raw*p_capacity/p_denominator
+        p_limited = _smooth_min_implicit!(
+            m, p_raw, p_capacity, epsilon; start=smax)
     end
     limited_magnitude = _implicit_sqrt!(
         m, p_limited^2 + q_limited^2; start=smax, scale=smax)
@@ -1186,7 +1207,8 @@ function stamp_smooth_control!(ctx, controller::SequenceController,
             start=request.p_available/sb)
     end
     p, q, power_scale = _limit_positive_power_smooth!(
-        m, p_raw, q_raw, smax, seps, controller.limiter.pq_priority)
+        m, p_raw, q_raw, smax, seps, controller.limiter.pq_priority,
+        controller.limiter.priority_headroom_fraction)
 
     floor = controller.power_voltage_floor / vb
     denominator = 3(u1[1]^2 + u1[2]^2 + floor^2)
