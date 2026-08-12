@@ -128,11 +128,64 @@ collapsed into the present fundamental-frequency passive LCL algebraic model.
     Resources: Test Methods and Performance Metrics for Evaluating the Voltage
     Source Behavior of Grid-Forming Resources*, NREL/TP-5D00-94378, 2025.
     [report record](https://research-hub.nrel.gov/en/publications/testing-the-performance-of-grid-forming-resources-test-methods-an/).
+20. **F. Nejabatkhah, Y. W. Li, and B. Wu**, “Control strategies of three-phase
+    distributed generation inverters for grid unbalanced voltage compensation,”
+    *IEEE Transactions on Power Electronics*, vol. 31, no. 7, pp. 5228-5241,
+    2016. [doi:10.1109/TPEL.2015.2479601](https://doi.org/10.1109/TPEL.2015.2479601).
+    Basis for treating positive- and negative-sequence current references as
+    separate control degrees of freedom under unbalanced voltage.
+21. **Y. Guo, B. C. Pal, and R. A. Jabr**, “On the optimality of voltage
+    unbalance attenuation by inverters,” arXiv:2109.10974, 2021.
+    [doi:10.48550/arXiv.2109.10974](https://doi.org/10.48550/arXiv.2109.10974).
+    Demonstrates why current, active-power, feasibility, and synchronization
+    constraints belong in negative-sequence voltage-attenuation design.
+22. **N. Helaly**, “A predictive negative sequence current control algorithm
+    for voltage imbalance compensation and power oscillation minimization under
+    unbalanced conditions,” *Applied Science and Engineering Progress*, vol. 16,
+    no. 4, 6562, 2023.
+    [doi:10.14416/j.asep.2023.01.003](https://doi.org/10.14416/j.asep.2023.01.003).
+    Provides a control-oriented example of explicitly trading voltage-unbalance
+    compensation against oscillating power.
 
 Items 18-19 are guardrails on terminology and validation: a steady-state balanced
 internal EMF is only one property of a GFM resource. Dynamic voltage-source
 behaviour, current limiting, fault recovery, interaction stability, and hardware
 testing need their own models and performance tests.
+
+Items 20-22 motivate the candidate local laws in [Phase-aware local control
+laws](@ref ibr-phase-aware-control-laws). They do not by themselves validate the
+proposed PowerOptLab allocator or its interaction with the implemented switching
+and capacitor constraints.
+
+## Standards and reference implementations
+
+23. **IEEE Std 1547-2018**, *IEEE Standard for Interconnection and
+    Interoperability of Distributed Energy Resources with Associated Electric
+    Power Systems Interfaces*.
+    [IEEE record](https://standards.ieee.org/ieee/1547/5915/).
+24. **IEEE Std 1547.1-2020**, *IEEE Standard Conformance Test Procedures for
+    Equipment Interconnecting Distributed Energy Resources with Electric Power
+    Systems and Associated Interfaces*.
+    [IEEE record](https://standards.ieee.org/ieee/1547.1/6039/).
+25. **AS/NZS 4777.2**, *Grid connection of energy systems via inverters,
+    Part 2: Inverter requirements*.
+    [AEMO standards overview](https://www.aemo.com.au/initiatives/major-programs/nem-distributed-energy-resources-der-program/standards-and-connections/as-nzs-4777-2-inverter-requirements-standard).
+26. **IEC 61000-4-30:2025**, *Electromagnetic compatibility — Testing and
+    measurement techniques — Power quality measurement methods*.
+    [IEC record](https://webstore.iec.ch/en/publication/71611).
+27. **IEC TR 61000-3-13:2008**, *Assessment of emission limits for the
+    connection of unbalanced installations to MV, HV and EHV power systems*.
+    [IEC record](https://webstore.iec.ch/en/publication/4145).
+28. **EPRI OpenDSS documentation**, `InvControl` monitored-voltage,
+    Volt-watt-axis, and inverter-priority properties.
+    [monitored voltage](https://opendss.epri.com/Commonproperties.html),
+    [Volt-watt bases](https://opendss.epri.com/Propertiesofsmartinvertervolt-wa.html),
+    [capability priority](https://opendss.epri.com/ViolationofInverterCapabilityCur.html).
+
+Items 23-28 define terminology, test scope, and independent reference-tool
+behaviour. PowerOptLab does not reproduce their complete profiles or claim
+conformance; any such study must use the current licensed standard and its
+prescribed measurement and response-time procedures.
 
 ## Literature watch list
 

@@ -43,16 +43,51 @@ oracle. A solver returning `LOCALLY_SOLVED` is necessary, but not sufficient.
 | Split rating composition | paired bound cases | common and individual half-bank ratings compose; enlarging any rating cannot shrink the feasible set |
 | Fourth-leg loss | fitted loss equation | phase currents plus `i_neutral` enter the per-leg loss sum |
 | Unit system | representative paired solves | per-unit and raw-SI formulations agree on well-scaled cases, including LCL midpoint quantities |
+| Controller Fortescue algebra | prescribed `U1/U2` phasors | the transform recovers both sequences and reconstructed three-leg current sums to zero |
+| Controller closed forms | direct formulas | common power/current scales, sequence powers, voltage-oriented `I2`, and regularized ripple residual agree near machine precision |
+| Controller metamorphic tests | rotated and cyclically relabelled phasors | scalar decisions are invariant and current phasors transform with the reference frame |
+| Controller exact/smooth agreement | independent numeric evaluators plus solved local voltage | maximum phase-current residual remains below the declared tolerance |
+| Controller conflict continuity | dense minimum-voltage sweep through equal branch severity | deployed `:dominant` command changes continuously and reverses sign without a winner-take-all jump |
+| PWL smoothing refinement | widths 0.1, 0.05, and 0.025 V at a knot | bias is positive, approximately first order, and below 0.5% at 0.05 V for the documented curve |
+| P/Q and Volt-watt bases | exact/smooth numeric policies plus partial-irradiance OpenDSS point | all priorities satisfy the capability circle; rated and available bases separate as specified |
+| PV oversizing with P/Q priority | exact/smooth local-law sweep at DC/AC ratios 0.9, 1.0, 1.1, 1.25, and 1.4; stamped ratio 1.1 for all priorities | the full local capability sweep respects rating and priority identities; each representative stamped solve is publishable |
+| Plant-aware saturation | binding converter `s_max` and binding `dv2_max` cases | the controller backs off to a publishable solution at the physical location rather than creating an infeasible equality |
+| Current-target phasors | converter- and grid-target LCL cases | full complex current phasors—not only magnitudes—equal the stamped target |
+| Selection objective | loss and zero objectives on the same controlled power flow | control requests and current phasors are invariant within solver tolerance |
+| Controller formulation units | raw-SI fail-fast check and SI-valued numeric evaluators | unsupported raw-SI stamping cannot silently yield a scientific result; controller parameters and extracted results retain SI semantics |
+| Balanced AC topology reduction | one four-leg model versus three independent 1φ models | aggregate `P,Q` and per-phase current/internal voltage agree; neutral and zero sequence vanish |
+| Volt-watt external oracle | OpenDSS `PVSystem`/`InvControl` | balanced slope/saturation and a partial-irradiance rated-basis point agree in POC voltage and active power |
 
-These tests live in `test/advanced_inverter_tests.jl`. They intentionally include
-balanced cases, pure sequence excitations, strong mixed unbalance, and binding
+These tests live in `test/advanced_inverter_tests.jl` and
+`test/inverter_control_tests.jl`. They intentionally include balanced cases,
+pure sequence excitations, strong mixed unbalance, and binding
 limits. A balanced feeder alone cannot validate a four-wire topology because it
 removes the very neutral and ripple mechanisms being tested.
 
 Numerically demanding PWM-reserve and DC-link closure regressions use the
-per-unit formulation. Raw SI is retained only for representative, well-scaled
-unit-conversion checks; the suite does not require the two nonlinear
-formulations to have identical convergence behaviour.
+per-unit formulation. Raw SI is retained for representative, well-scaled
+`AdvancedInverter` unit-conversion checks. The coupled phase-aware controller
+requires per-unit stamping and rejects raw SI because its saturated convergence
+is not sufficiently reliable.
+
+The controller derivations and calling conventions are documented in the
+[phase-aware inverter-control API](@ref inverter-control-api). This page is the
+canonical claim-to-test map and publication gate. In particular, neither a balanced
+OpenDSS comparison nor the four-leg/three-single-phase reduction validates
+negative-sequence control or shared-DC-link dynamics; those are mechanism tests,
+not universal model equivalences.
+
+## Infeasibility triage for fleet studies
+
+Never discard a failed or non-publishable snapshot. Retain scenario identifiers,
+termination status, starts, and all available residuals. Re-run it in the
+following diagnostic order: zero controller objective, wider smoothing via
+continuation, relaxed experimental service commands, and finally individually
+relaxed physical limits. Classify the first relaxation that restores a solution
+as controller-equilibrium, numerical-conditioning, or physical-capability
+failure. Report each class as a fraction of every penetration cohort. Only a
+physical-limit relaxation may support a hardware-sizing conclusion, and only
+after multiple starts and a higher-fidelity representative case.
 
 ## Published cases worth lifting next
 

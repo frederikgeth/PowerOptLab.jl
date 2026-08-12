@@ -16,6 +16,9 @@ makedocs(
         "Inverter-based resources" => [
             "Overview"                 => "ibr/index.md",
             "Scientific foundations"   => "ibr/foundations.md",
+            "Phase-aware controls"      => "ibr/phase_aware_control_laws.md",
+            "Control-study methodology" => "ibr/control_study_methodology.md",
+            "Phase-aware control API"   => "components/inverter_controls.md",
             "Advanced inverter API"    => "components/advanced_inverter.md",
             "Modelling tutorial"       => "tutorials/advanced_inverter_modelling.md",
             "Topology under unbalance" => "tutorials/ibr_topology_under_unbalance.md",

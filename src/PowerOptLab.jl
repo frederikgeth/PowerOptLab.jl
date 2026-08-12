@@ -97,6 +97,7 @@ include("upstream.jl")
 # Component models — new network elements stamped via model_hook! / solution_hook!
 include("components/devices.jl")
 include("components/advanced_inverter.jl")
+include("components/inverter_controls.jl")
 include("components/battery_chemistry.jl")
 include("components/ivq_battery.jl")
 
@@ -165,6 +166,19 @@ export BilevelPVResult, BilevelPVResponse, SingleLevelPVResult,
 
 # Advanced inverter (prototype internal-node IBR)
 export AdvancedInverter, solve_advanced_inverter, InverterResult
+
+# Local phase-aware inverter controls
+export AbstractInverterControlLaw, AbstractPositiveSequencePolicy
+export AbstractUnbalancePolicy, AbstractLimiterPolicy, AbstractCurrentTarget
+export ConverterCurrentTarget, GridCurrentTarget
+export PiecewiseLinearLaw, WorstPhaseVoltVarWatt, AverageVoltageVoltVarWatt
+export PositiveSequenceVoltVarWatt
+export NoUnbalanceControl, NegativeSequenceAdmittanceDroop, CommonScaleLimiter
+export SequenceController, InverterControlMeasurement, InverterControlRequest
+export InverterControlRatings, InverterControlResult, ConverterTerminalResult
+export ControlledDevice, ControlledInverterResult
+export evaluate_exact, evaluate_smooth, stamp_smooth_control!, solve_controlled_inverter
+export inverter_spec, inverter_handles
 
 # Current–voltage (IVQ) battery storage + chemistry library
 export BatteryChemistry, thevenin_chemistry, linear_chemistry, tabulated_chemistry,

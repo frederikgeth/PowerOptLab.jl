@@ -147,6 +147,39 @@ solve_advanced_inverter
 InverterResult
 ```
 
+## Phase-aware inverter controls
+
+```@docs
+AbstractInverterControlLaw
+AbstractPositiveSequencePolicy
+AbstractUnbalancePolicy
+AbstractLimiterPolicy
+AbstractCurrentTarget
+ConverterCurrentTarget
+GridCurrentTarget
+PiecewiseLinearLaw
+WorstPhaseVoltVarWatt
+AverageVoltageVoltVarWatt
+PositiveSequenceVoltVarWatt
+NoUnbalanceControl
+NegativeSequenceAdmittanceDroop
+CommonScaleLimiter
+SequenceController
+InverterControlMeasurement
+InverterControlRequest
+InverterControlRatings
+InverterControlResult
+ConverterTerminalResult
+ControlledDevice
+ControlledInverterResult
+evaluate_exact
+evaluate_smooth
+stamp_smooth_control!
+solve_controlled_inverter
+inverter_spec
+inverter_handles
+```
+
 ## Current–voltage (IVQ) battery
 
 ```@docs

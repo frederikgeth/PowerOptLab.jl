@@ -38,6 +38,7 @@ end
     include("operating_envelope_tests.jl")
     include("bilevel_tests.jl")
     include("advanced_inverter_tests.jl")
+    include("inverter_control_tests.jl")
     include("battery_tests.jl")
     include("helm_tests.jl")
 end

@@ -483,6 +483,109 @@ function dc_source_sharing_figure(path)
     write(path, svg)
 end
 
+function control_signal_chain_figure(path)
+    labels = [
+        ("local RMS\nphasors", "Ua, Ub, Uc"),
+        ("Fortescue", "U1, U2"),
+        ("PWL laws", "P, Q, κ"),
+        ("conflict +\nsequence blend", "I1req, I2req"),
+        ("physical\nbackoff", "Iconv, Igrid, S, dv2"),
+        ("three-leg\nreconstruction", "Ia + Ib + Ic = 0"),
+    ]
+    boxes = String[]
+    arrows = String[]
+    for (k, (head, body)) in enumerate(labels)
+        x = 35 + (k-1)*158
+        push!(boxes, """<rect class="box" x="$x" y="120" width="130" height="116" rx="10"/>
+<text class="head" x="$(x+65)" y="151" text-anchor="middle">$(replace(head, "\n" => "</text><text class=\"head\" x=\"$(x+65)\" y=\"174\" text-anchor=\"middle\">"))</text>
+<text class="body" x="$(x+65)" y="211" text-anchor="middle">$body</text>""")
+        k < length(labels) && push!(arrows,
+            "<path class=\"arrow\" d=\"M$(x+132) 178 L$(x+154) 178\"/>")
+    end
+    svg = """<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="360" viewBox="0 0 1000 360">
+<rect width="1000" height="360" fill="#ffffff"/>
+<style>.title{font:700 24px sans-serif;fill:#172033}.sub{font:14px sans-serif;fill:#526174}.head{font:700 15px sans-serif;fill:#172033}.body{font:13px sans-serif;fill:#526174}.box{fill:#f5f8fc;stroke:#7890aa;stroke-width:1.8}.arrow{stroke:#1769aa;stroke-width:2.5;fill:none;marker-end:url(#a)}</style>
+<defs><marker id="a" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#1769aa"/></marker></defs>
+<text class="title" x="35" y="40">Implemented phase-aware three-leg control signal chain</text>
+<text class="sub" x="35" y="66">Fixed algebraic work per inverter; no controller-side optimiser or remote measurement</text>
+$(join(boxes, "\n"))
+$(join(arrows, "\n"))
+<rect x="510" y="282" width="455" height="48" rx="8" fill="#fff6eb" stroke="#d65a31"/>
+<text class="body" x="530" y="312">AdvancedInverter plant constraints remain authoritative backstops</text>
+</svg>"""
+    write(path, svg)
+end
+
+function control_curves_figure(path)
+    pwl(x, xs, ys) = x <= xs[1] ? ys[1] : x >= xs[end] ? ys[end] : begin
+        k = findfirst(i -> x <= xs[i+1], 1:length(xs)-1)
+        ys[k] + (ys[k+1]-ys[k])*(x-xs[k])/(xs[k+1]-xs[k])
+    end
+    voltage = collect(range(205.0, 255.0; length=301))
+    vw = [pwl(v, [230.0,240.0,250.0], [1.0,1.0,0.2]) for v in voltage]
+    vv = [pwl(v, [210.0,220.0,240.0,250.0], [0.3,0.0,0.0,-0.3]) for v in voltage]
+    x0, x1 = 90.0, 950.0
+    mapx(v) = x0 + (x1-x0)*(v-205)/50
+    mapyw(y) = 250 - 160y
+    mapyq(y) = 445 - 260y
+    vwpts = points(mapx.(voltage), mapyw.(vw))
+    vvpts = points(mapx.(voltage), mapyq.(vv))
+    vmin, vmax = 215.0, 245.0
+    svg = """<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="580" viewBox="0 0 1000 580">
+<rect width="1000" height="580" fill="#fff"/>
+<style>.title{font:700 24px sans-serif;fill:#172033}.sub{font:14px sans-serif;fill:#526174}.axis{stroke:#526174;stroke-width:1.4}.grid{stroke:#dfe5ed}.mark{stroke:#d65a31;stroke-width:1.8;stroke-dasharray:7 5}.label{font:700 15px sans-serif;fill:#172033}.small{font:13px sans-serif;fill:#526174}</style>
+<text class="title" x="42" y="36">Direction-aware curve inputs under phase-voltage spread</text>
+<text class="sub" x="42" y="60">Illustrative curves: Volt-watt observes Vmax; Volt-var evaluates injection at Vmin and absorption at Vmax</text>
+<line class="axis" x1="$x0" y1="250" x2="$x1" y2="250"/><line class="axis" x1="$x0" y1="90" x2="$x0" y2="250"/>
+<polyline points="$vwpts" fill="none" stroke="#1769aa" stroke-width="3"/>
+<text class="label" x="100" y="112">Volt-watt fraction</text>
+<line class="axis" x1="$x0" y1="445" x2="$x1" y2="445"/><line class="axis" x1="$x0" y1="355" x2="$x0" y2="525"/>
+<polyline points="$vvpts" fill="none" stroke="#33865a" stroke-width="3"/>
+<text class="label" x="100" y="376">Volt-var fraction</text>
+<rect x="$(mapx(vmin))" y="80" width="$(mapx(vmax)-mapx(vmin))" height="450" fill="#d65a31" opacity="0.07"/>
+<line class="mark" x1="$(mapx(vmin))" y1="80" x2="$(mapx(vmin))" y2="530"/>
+<line class="mark" x1="$(mapx(vmax))" y1="80" x2="$(mapx(vmax))" y2="530"/>
+<circle cx="$(mapx(vmax))" cy="$(mapyw(pwl(vmax,[230.0,240.0,250.0],[1.0,1.0,0.2])))" r="6" fill="#1769aa"/>
+<circle cx="$(mapx(vmin))" cy="$(mapyq(pwl(vmin,[210.0,220.0,240.0,250.0],[0.3,0.0,0.0,-0.3])))" r="6" fill="#33865a"/>
+<circle cx="$(mapx(vmax))" cy="$(mapyq(pwl(vmax,[210.0,220.0,240.0,250.0],[0.3,0.0,0.0,-0.3])))" r="6" fill="#33865a"/>
+<text class="small" x="$(mapx(vmin)-26)" y="552">Vmin</text><text class="small" x="$(mapx(vmax)-25)" y="552">Vmax</text>
+<text class="label" x="438" y="570">phase-voltage magnitude (V RMS)</text>
+</svg>"""
+    write(path, svg)
+end
+
+function ripple_disk_control_figure(path)
+    u1 = 230.0
+    ripple_limit = 3000.0
+    radius = ripple_limit/(3u1)
+    center = complex(-2.0, 1.0)
+    request = complex(4.0, 5.0)
+    delta = request-center
+    clipped = center + min(1.0, radius/abs(delta))*delta
+    cx, cy, scale = 500.0, 300.0, 45.0
+    px(z) = cx + scale*real(z)
+    py(z) = cy - scale*imag(z)
+    svg = """<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="600" viewBox="0 0 1000 600">
+<rect width="1000" height="600" fill="#fff"/>
+<style>.title{font:700 24px sans-serif;fill:#172033}.sub{font:14px sans-serif;fill:#526174}.axis{stroke:#526174;stroke-width:1.4}.disk{fill:#edf7ff;stroke:#1769aa;stroke-width:2.5}.arrow{stroke:#d65a31;stroke-width:2.5;fill:none;marker-end:url(#a)}.label{font:700 15px sans-serif;fill:#172033}.small{font:13px sans-serif;fill:#526174}</style>
+<defs><marker id="a" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#d65a31"/></marker></defs>
+<text class="title" x="42" y="38">2ω ripple capability as a disk in the complex I₂ plane</text>
+<text class="sub" x="42" y="63">Radius = S̃max/(3|U₁|) = $(@sprintf("%.2f", radius)) A for |U₁|=230 V and S̃max=3 kVA</text>
+<line class="axis" x1="90" y1="$cy" x2="930" y2="$cy"/><line class="axis" x1="$cx" y1="90" x2="$cx" y2="535"/>
+<circle class="disk" cx="$(px(center))" cy="$(py(center))" r="$(scale*radius)"/>
+<circle cx="$(px(center))" cy="$(py(center))" r="6" fill="#1769aa"/>
+<circle cx="$(px(request))" cy="$(py(request))" r="7" fill="#d65a31"/>
+<circle cx="$(px(clipped))" cy="$(py(clipped))" r="7" fill="#33865a"/>
+<path class="arrow" d="M$(px(center)) $(py(center)) L$(px(request)) $(py(request))"/>
+<text class="label" x="$(px(center)+9)" y="$(py(center)-10)">I₂,ripple</text>
+<text class="label" x="$(px(request)+10)" y="$(py(request))">request</text>
+<text class="label" x="$(px(clipped)+10)" y="$(py(clipped)+20)">disk clip</text>
+<text class="small" x="650" y="532">Research allocator geometry.</text>
+<text class="small" x="650" y="552">Implemented law uses a conservative common scale.</text>
+</svg>"""
+    write(path, svg)
+end
+
 mkpath(OUT)
 waveform_figure(joinpath(OUT, "generated-ripple-waveforms.svg"))
 utilisation_figure(joinpath(OUT, "generated-topology-utilisation.svg"))
@@ -491,4 +594,7 @@ split_link_figure(joinpath(OUT, "generated-split-link-asymmetry.svg"))
 pwm_ripple_figure(joinpath(OUT, "generated-pwm-ripple-closure.svg"))
 ac_ripple_network_figure(joinpath(OUT, "generated-ac-ripple-network.svg"))
 dc_source_sharing_figure(joinpath(OUT, "generated-dc-source-sharing.svg"))
+control_signal_chain_figure(joinpath(OUT, "generated-control-signal-chain.svg"))
+control_curves_figure(joinpath(OUT, "generated-control-curves.svg"))
+ripple_disk_control_figure(joinpath(OUT, "generated-control-ripple-disk.svg"))
 println("Generated IBR figures in $OUT")
