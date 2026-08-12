@@ -239,7 +239,7 @@ end
 """
     CommonScaleLimiter(; current_epsilon=1e-3, power_epsilon=1e-3,
                          pq_priority=:proportional,
-                         priority_headroom_fraction=1e-4)
+                         priority_headroom_fraction=1e-3)
 
 Apply a common scalar to positive- and negative-sequence current commands so
 the reconstructed currents at the configured current target respect its
@@ -264,7 +264,7 @@ end
 function CommonScaleLimiter(; current_epsilon::Real=1e-3,
                             power_epsilon::Real=1e-3,
                             pq_priority::Symbol=:proportional,
-                            priority_headroom_fraction::Real=1e-4)
+                            priority_headroom_fraction::Real=1e-3)
     ieps = Float64(current_epsilon)
     seps = Float64(power_epsilon)
     isfinite(ieps) && ieps > 0 || throw(ArgumentError(
@@ -726,9 +726,9 @@ end
     evaluate_smooth(controller, measurement, request, ratings)
 
 Numerically evaluate the same differentiable computation graph stamped by
-[`stamp_smooth_control!`](@ref). This is intended for inexpensive extraction,
-SI/per-unit regression, and comparison with [`evaluate_exact`](@ref); it does
-not solve an optimization problem.
+[`stamp_smooth_control!`](@ref). This is intended for inexpensive SI-valued
+extraction and comparison with [`evaluate_exact`](@ref); it does not solve an
+optimization problem.
 """
 function evaluate_smooth(controller::SequenceController,
                          measurement::InverterControlMeasurement,
@@ -1032,16 +1032,22 @@ function _limit_positive_power_smooth!(
         priority_limit = (1-headroom_fraction)*smax
         p_limited = _smooth_min_implicit!(
             m, p_raw, priority_limit, epsilon; start=priority_limit)
+        capacity_start = smax*sqrt(
+            2headroom_fraction-headroom_fraction^2)
         q_capacity = _implicit_sqrt!(
-            m, smax^2-p_limited^2; start=0.5smax, scale=smax)
+            m, smax^2-p_limited^2;
+            start=capacity_start, scale=capacity_start)
         q_limited = _smooth_symmetric_clip_implicit!(
             m, q_raw, q_capacity, epsilon; start=smax)
     else
         priority_limit = (1-headroom_fraction)*smax
         q_limited = _smooth_symmetric_clip_implicit!(
             m, q_raw, priority_limit, epsilon; start=priority_limit)
+        capacity_start = smax*sqrt(
+            2headroom_fraction-headroom_fraction^2)
         p_capacity = _implicit_sqrt!(
-            m, smax^2-q_limited^2; start=0.5smax, scale=smax)
+            m, smax^2-q_limited^2;
+            start=capacity_start, scale=capacity_start)
         p_limited = _smooth_min_implicit!(
             m, p_raw, p_capacity, epsilon; start=smax)
     end
@@ -1259,7 +1265,8 @@ function stamp_smooth_control!(ctx, controller::SequenceController,
             limit = sqrt(max((inverter.i_max/ib)^2 - reserve^2, 0.0))
             candidate = _safe_direction_scale_implicit!(
                 m, converter_offset[k], phase_pre[k], limit, scale_eps;
-                magnitude_start=max(0.25limit, scale_eps), scale=max(limit, scale_eps))
+                magnitude_start=max(0.25limit, scale_eps),
+                scale=max(limit, scale_eps))
             capability_scale = _combine_safe_scale_implicit!(
                 m, capability_scale, candidate, scale_eps)
         end
@@ -1270,7 +1277,8 @@ function stamp_smooth_control!(ctx, controller::SequenceController,
             limit = sqrt(max((inverter.i_grid_max/ib)^2 - reserve^2, 0.0))
             candidate = _safe_direction_scale_implicit!(
                 m, grid_offset[k], phase_pre[k], limit, scale_eps;
-                magnitude_start=max(0.25limit, scale_eps), scale=max(limit, scale_eps))
+                magnitude_start=max(0.25limit, scale_eps),
+                scale=max(limit, scale_eps))
             capability_scale = _combine_safe_scale_implicit!(
                 m, capability_scale, candidate, scale_eps)
         end
@@ -1530,8 +1538,9 @@ solve_diagnostics(result::ControlledInverterResult) = (
 
 Solve one network snapshot with a local phase-aware controller composed around
 an [`AdvancedInverter`](@ref). The local law uses only the inverter's POC
-voltage phasors. `per_unit=true` changes numerical coordinates only; controller
-configuration and returned results remain SI. This is a controlled power flow:
+voltage phasors. The nonlinear controller formulation requires `per_unit=true`;
+controller configuration and returned results remain SI. This is a controlled
+power flow:
 the controller equalities determine the command, while `selection_objective`
 only selects remaining plant allocation freedom (`:loss`, the default, or
 `:zero` for an objective-invariance check).
@@ -1548,6 +1557,9 @@ function solve_controlled_inverter(
         solver_options=())
     selection_objective in (:loss, :zero) || throw(ArgumentError(
         "selection_objective must be :loss or :zero"))
+    per_unit || throw(ArgumentError(
+        "solve_controlled_inverter requires per_unit=true; raw-SI scaling is " *
+        "not supported for the nonlinear controller formulation"))
     validate_device(controlled, (net,); periods=1)
     handles = Ref{_ControlledHandles}()
     hook! = ctx -> begin

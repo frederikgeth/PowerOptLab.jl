@@ -281,7 +281,8 @@ Use the existing balanced, pure-sequence, and strongly unbalanced
   a time;
 - run both converter-current and grid-current targets through an LCL filter and
   verify both physical per-leg ratings;
-- test SI/per-unit invariance;
+- verify raw-SI controller stamping fails fast and all public controller
+  inputs/outputs retain SI semantics;
 - test smoothing and sample-grid refinement; and
 - evaluate the exact firmware law at the solved point.
 
@@ -413,7 +414,7 @@ Steps 1--5 are implemented by the public BMOPFTools smooth-PWL API and the
 PowerOptLab phase-aware control component. The exact and smooth evaluators,
 three voltage-reference policies, converter/grid current targets, dominant
 conflict policy, converter-terminal power extraction, three-leg plant
-composition, SI/per-unit regression, and extracted exact-versus-smooth current
+composition, supported-unit regression, and extracted exact-versus-smooth current
 residual are covered by unit tests. The remaining sequence starts with fleet
 construction; batteries are outside this programme.
 

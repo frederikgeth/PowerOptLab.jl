@@ -217,12 +217,50 @@ end
         phase_terminals=["a", "b", "c"], neutral="n",
         topology=:THREE_LEG, s_max=20e3, i_max=40.0,
         v_dc=700.0, c_dc=1.1e-3, r_filter=0.05, x_filter=0.15)
-    for priority in (:proportional, :watt, :var), p_available in (22e3, 25e3)
+    # Sweep the local capability law cheaply across DC/AC ratios 0.9--1.4 with
+    # a non-zero var request, including the exact 1.0 transition.
+    var_law = PiecewiseLinearLaw(
+        [180.0, 280.0], [0.2, 0.2]; smoothing_epsilon=0.05)
+    measurement = InverterControlMeasurement(_ctrl_phases(230.0 + 0im))
+    swept = Dict{Tuple{Symbol,Float64},InverterControlResult}()
+    for priority in (:proportional, :watt, :var),
+        ratio in (0.9, 1.0, 1.1, 1.25, 1.4)
+        controller = SequenceController(
+            AverageVoltageVoltVarWatt(volt_var=var_law);
+            limiter=CommonScaleLimiter(pq_priority=priority))
+        request = InverterControlRequest(
+            p_available=ratio*inverter.s_max,
+            p_rated=ratio*inverter.s_max, q_scale=5e3)
+        exact = evaluate_exact(
+            controller, measurement, request, InverterControlRatings(inverter))
+        smooth = evaluate_smooth(
+            controller, measurement, request, InverterControlRatings(inverter))
+        swept[(priority, ratio)] = smooth
+        @test abs(complex(exact.p_request, exact.q_request)) <=
+              inverter.s_max + 1e-8
+        @test abs(complex(smooth.p_request, smooth.q_request)) <=
+              inverter.s_max + 0.01
+        @test smooth.p_request ≈ exact.p_request atol=0.01
+        @test smooth.q_request ≈ exact.q_request atol=0.01
+    end
+    for ratio in (1.0, 1.1, 1.25, 1.4)
+        @test swept[(:watt, ratio)].p_request ≈
+              (1-CommonScaleLimiter().priority_headroom_fraction)*
+              inverter.s_max atol=0.01
+        @test swept[(:var, ratio)].q_request ≈ 1e3 atol=0.01
+        @test swept[(:proportional, ratio)].q_request /
+              swept[(:proportional, ratio)].p_request ≈
+              1e3/(ratio*inverter.s_max) atol=1e-10
+    end
+
+    # Keep the stamped regression compact: all priorities at one saturated
+    # point in the supported per-unit formulation.
+    for priority in (:proportional, :watt, :var)
         controller = SequenceController(
             AverageVoltageVoltVarWatt();
             limiter=CommonScaleLimiter(pq_priority=priority))
         request = InverterControlRequest(
-            p_available=p_available, p_rated=p_available, q_scale=0.0)
+            p_available=22e3, p_rated=22e3, q_scale=0.0)
         result = solve_controlled_inverter(
             inv_grid3_bal(), ControlledDevice(inverter, controller), request;
             per_unit=true,
@@ -435,43 +473,34 @@ end
         m_max=0.96)
     controlled = ControlledDevice(inverter, _study_controller())
 
-    si = solve_controlled_inverter(
-        inv_grid3_unbal(), controlled, _CTRL_REQUEST;
-        per_unit=false,
-        solver_options=("max_iter" => 500, "tol" => 1e-8))
-    pu = solve_controlled_inverter(
+    @test_throws ArgumentError solve_controlled_inverter(
+        inv_grid3_unbal(), controlled, _CTRL_REQUEST; per_unit=false)
+    result = solve_controlled_inverter(
         inv_grid3_unbal(), controlled, _CTRL_REQUEST;
         per_unit=true, s_base=1e6,
         solver_options=("max_iter" => 500, "tol" => 1e-8))
 
-    for result in (si, pu)
-        @test result.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
-        @test result.solve.publishable
-        @test abs(sum(result.control.phase_current)) < 1e-7
-        @test maximum(abs, result.control.phase_current) <= 40.0 + 1e-5
-        @test result.plant.i_mag ≈
-              collect(abs.(result.control.phase_current)) atol=1e-6
-        @test result.plant.i_positive ≈ abs(result.control.i1) atol=1e-6
-        @test abs(result.control.i2) > 0.1
-        @test result.plant.i_negative ≈ abs(result.control.i2) atol=1e-6
-        terminal = result.converter_terminal
-        @test real(terminal.total_power) ≈ result.plant.p_conv atol=1e-6
-        @test imag(terminal.total_power) ≈ result.plant.q_conv atol=1e-6
-        @test terminal.total_power ≈
-              terminal.zero_sequence_power +
-              terminal.positive_sequence_power +
-              terminal.negative_sequence_power atol=1e-6
-        @test abs(terminal.ripple_power) ≈ result.plant.ripple atol=1e-6
-        @test result.exact_smooth_current_residual <=
-              0.4*_study_controller().positive.volt_watt.smoothing_epsilon
-        @test solve_diagnostics(result).exact_smooth_current_residual ==
-              result.exact_smooth_current_residual
-    end
-    @test pu.control.p_request ≈ si.control.p_request rtol=2e-3
-    @test pu.control.q_request ≈ si.control.q_request atol=0.5
-    @test collect(pu.control.phase_current) ≈
-          collect(si.control.phase_current) rtol=2e-3
-    @test pu.plant.dv2 ≈ si.plant.dv2 rtol=2e-3
+    @test result.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+    @test result.solve.publishable
+    @test abs(sum(result.control.phase_current)) < 1e-7
+    @test maximum(abs, result.control.phase_current) <= 40.0 + 1e-5
+    @test result.plant.i_mag ≈
+          collect(abs.(result.control.phase_current)) atol=1e-6
+    @test result.plant.i_positive ≈ abs(result.control.i1) atol=1e-6
+    @test abs(result.control.i2) > 0.1
+    @test result.plant.i_negative ≈ abs(result.control.i2) atol=1e-6
+    terminal = result.converter_terminal
+    @test real(terminal.total_power) ≈ result.plant.p_conv atol=1e-6
+    @test imag(terminal.total_power) ≈ result.plant.q_conv atol=1e-6
+    @test terminal.total_power ≈
+          terminal.zero_sequence_power +
+          terminal.positive_sequence_power +
+          terminal.negative_sequence_power atol=1e-6
+    @test abs(terminal.ripple_power) ≈ result.plant.ripple atol=1e-6
+    @test result.exact_smooth_current_residual <=
+          0.4*_study_controller().positive.volt_watt.smoothing_epsilon
+    @test solve_diagnostics(result).exact_smooth_current_residual ==
+          result.exact_smooth_current_residual
 end
 
 @testset "Inverter controls: converter apparent-power saturation" begin

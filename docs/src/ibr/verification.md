@@ -50,11 +50,11 @@ oracle. A solver returning `LOCALLY_SOLVED` is necessary, but not sufficient.
 | Controller conflict continuity | dense minimum-voltage sweep through equal branch severity | deployed `:dominant` command changes continuously and reverses sign without a winner-take-all jump |
 | PWL smoothing refinement | widths 0.1, 0.05, and 0.025 V at a knot | bias is positive, approximately first order, and below 0.5% at 0.05 V for the documented curve |
 | P/Q and Volt-watt bases | exact/smooth numeric policies plus partial-irradiance OpenDSS point | all priorities satisfy the capability circle; rated and available bases separate as specified |
-| PV oversizing with P/Q priority | all three priority modes at DC/AC ratios 1.10 and 1.25 | every stamped solve is publishable and converter-terminal apparent power remains within rating |
+| PV oversizing with P/Q priority | exact/smooth local-law sweep at DC/AC ratios 0.9, 1.0, 1.1, 1.25, and 1.4; stamped ratio 1.1 for all priorities | the full local capability sweep respects rating and priority identities; each representative stamped solve is publishable |
 | Plant-aware saturation | binding converter `s_max` and binding `dv2_max` cases | the controller backs off to a publishable solution at the physical location rather than creating an infeasible equality |
 | Current-target phasors | converter- and grid-target LCL cases | full complex current phasors—not only magnitudes—equal the stamped target |
 | Selection objective | loss and zero objectives on the same controlled power flow | control requests and current phasors are invariant within solver tolerance |
-| Controller unit system | paired raw-SI/per-unit solves | local requests, phase currents, negative sequence, and `dv2` agree |
+| Controller formulation units | raw-SI fail-fast check and SI-valued numeric evaluators | unsupported raw-SI stamping cannot silently yield a scientific result; controller parameters and extracted results retain SI semantics |
 | Balanced AC topology reduction | one four-leg model versus three independent 1φ models | aggregate `P,Q` and per-phase current/internal voltage agree; neutral and zero sequence vanish |
 | Volt-watt external oracle | OpenDSS `PVSystem`/`InvControl` | balanced slope/saturation and a partial-irradiance rated-basis point agree in POC voltage and active power |
 
@@ -65,9 +65,10 @@ limits. A balanced feeder alone cannot validate a four-wire topology because it
 removes the very neutral and ripple mechanisms being tested.
 
 Numerically demanding PWM-reserve and DC-link closure regressions use the
-per-unit formulation. Raw SI is retained only for representative, well-scaled
-unit-conversion checks; the suite does not require the two nonlinear
-formulations to have identical convergence behaviour.
+per-unit formulation. Raw SI is retained for representative, well-scaled
+`AdvancedInverter` unit-conversion checks. The coupled phase-aware controller
+requires per-unit stamping and rejects raw SI because its saturated convergence
+is not sufficiently reliable.
 
 The controller derivations and calling conventions are documented in the
 [phase-aware inverter-control API](@ref inverter-control-api). This page is the

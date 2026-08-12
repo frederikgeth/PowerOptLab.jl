@@ -129,7 +129,7 @@ capability allocation: `:watt` preserves active power, `:var` preserves reactive
 power, and `:proportional` preserves the requested power factor. These names are
 behavioural, not claims of compliance with a particular jurisdictional profile.
 Watt and var priority retain the declared `priority_headroom_fraction` (default
-``10^{-4}``) before the corresponding capability-circle axis. This 0.01% margin
+``10^{-3}``) before the corresponding capability-circle axis. This 0.1% margin
 keeps the remaining-component capacity well conditioned under sustained
 saturation. It is an intentional protection margin used by both firmware and
 network laws—not an epsilon inside a magnitude or square root.
@@ -234,7 +234,7 @@ The smoothing and regularisation parameters are:
 | `conflict_epsilon` | normalised severity | 0.01 | width of deployed dominant transition; sweep the equal-severity manifold |
 | `current_epsilon` | A | 0.001 | current-selector width; refine around binding legs |
 | `power_epsilon` | VA | 0.001 | power-selector width; refine around the capability circle |
-| `priority_headroom_fraction` | 1 | ``10^{-4}`` | declared watt/var-priority axis reserve; verify priority results across the intended DC/AC-ratio range |
+| `priority_headroom_fraction` | 1 | ``10^{-3}`` | declared watt/var-priority axis reserve; verify priority results across the intended DC/AC-ratio range |
 | `power_voltage_floor` | V | 1 | regularises ``P,Q\mapsto I_1``; report low-voltage sensitivity |
 | `voltage_floor` | V | 1 | regularises unbalance/ripple ratios; report balanced and low-voltage sensitivity |
 | ``\kappa`` | A/V | study specific | size from expected negative-sequence impedance and required attenuation |
@@ -277,8 +277,17 @@ conflict_only = SequenceController(WorstPhaseVoltVarWatt(
     request, ratings).q_request) for v in (214.8, 215.0, 215.2)]
 ```
 
-PowerOptLab converts these widths with the model bases, so changing `per_unit`
-changes numerical coordinates but not the physical controller.
+PowerOptLab converts these widths with the model bases inside the supported
+per-unit formulation. The controller parameters and extracted results retain
+SI semantics.
+
+`solve_controlled_inverter` requires `per_unit=true`. Raw-SI stamping of this
+coupled nonlinear controller is deliberately rejected because saturated cases
+do not have sufficiently reliable Ipopt convergence for scientific use. This
+restriction does not change the SI units of controller parameters or returned
+results, and it does not restrict the uncoupled exact and smooth numeric
+evaluators. The underlying `AdvancedInverter` retains its separate raw-SI
+support.
 
 ### Differentiable magnitude representation
 
@@ -423,7 +432,13 @@ reduction boundary, and publication gate live in
 include dominant-conflict continuity, PWL-width refinement, all P/Q priorities,
 rated-versus-available Volt-watt at partial irradiance, binding converter
 apparent power, binding DC ripple, full stamped current phasors at converter and
-grid targets, and loss-versus-zero objective invariance.
+grid targets, and loss-versus-zero objective invariance. The P/Q-priority
+regression sweeps the exact and smooth local laws over DC/AC ratios from 0.9
+through 1.4, including a non-zero var request and the exact 1.0 transition. A
+stamped saturated ratio of 1.1 is then solved for every priority in the
+supported per-unit formulation. This crosses the capability boundary without
+making the lightweight unit suite a broad Ipopt stress test. Raw-SI controller
+stamping is outside the supported scope and is covered by a fail-fast API test.
 
 ### What OpenDSS does and does not validate
 
@@ -456,7 +471,8 @@ Before drawing control or hardware conclusions, each selected law must pass:
    limiter transition;
 2. balanced, pure-negative-sequence, mixed-sequence, and phase-regime-conflict
    cases;
-3. global-angle, cyclic-phase, and SI/per-unit metamorphic checks;
+3. global-angle and cyclic-phase metamorphic checks, plus the supported-unit
+   boundary check;
 4. conductor KCL, sequence-power, filter-power, switching, and capacitor
    residual checks from the physical plant;
 5. multiple physically sensible Ipopt starts for claimed boundary points;
