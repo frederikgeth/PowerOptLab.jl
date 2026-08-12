@@ -60,16 +60,19 @@ silently folded into either existing category.
 1. [Scientific foundations](@ref ibr-scientific-foundations) derives the model
    from conductor KVL/KCL, complex power, symmetrical components, capacitor
    energy, and the ideal switching hull.
-2. [Phase-aware local control laws](@ref ibr-phase-aware-control-laws) proposes
-   topology-compatible Volt-var/Volt-watt extensions for unbalanced voltages.
-3. [Inverter-control study methodology](@ref ibr-control-study-methodology)
+2. [Phase-aware local control laws](@ref ibr-phase-aware-control-laws) derives
+   and classifies topology-compatible Volt-var/Volt-watt extensions for
+   unbalanced voltages.
+3. [Phase-aware inverter-control API](@ref inverter-control-api) constructs and
+   solves the implemented three-leg laws with executable examples.
+4. [Inverter-control study methodology](@ref ibr-control-study-methodology)
    defines the software layers, upstream seams, validation gates, scaling tests,
    and hardware-sizing experiments for network-wide comparisons.
-4. [Verification and benchmark cases](@ref ibr-verification) maps claims to unit,
+5. [Verification and benchmark cases](@ref ibr-verification) maps claims to unit,
    regression, paper, and higher-fidelity tests.
-5. [IBR references](@ref ibr-references) is the maintained bibliography and
+6. [IBR references](@ref ibr-references) is the maintained bibliography and
    literature roadmap.
-6. The [advanced inverter component reference](@ref AdvancedInverter) documents
+7. The [advanced inverter component reference](@ref AdvancedInverter) documents
    the current API and equations; the [modelling tutorial](@ref
    advanced-inverter-modelling) shows how to choose and parameterise it.
 

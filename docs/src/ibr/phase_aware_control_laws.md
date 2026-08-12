@@ -1,6 +1,6 @@
 # [Phase-aware local control laws](@id ibr-phase-aware-control-laws)
 
-This note proposes steady-state local Volt-var and Volt-watt extensions for
+This note develops and classifies steady-state local Volt-var and Volt-watt extensions for
 unbalanced three-phase voltages. The controller may use the local RMS voltage
 phasors and their relative angles, but no remote measurements or feeder-wide
 optimisation. The immediate target is a three-leg, three-wire converter. A
@@ -14,7 +14,67 @@ The proposal deliberately separates two questions:
 2. **What current can this converter actually produce?** Topology-aware
    algebraic limiters answer this question without pretending that three
    phase-power commands are independent. A numerical optimiser is useful as an
-   offline oracle, but is not required in the deployed controller.
+offline oracle, but is not required in the deployed controller.
+
+The contribution is not a new symmetrical-component controller by itself.
+Dual-sequence reference generation is established prior art; the contribution
+under study is a fixed-structure algebraic controller that can be stamped into a
+sparse network NLP while retaining a separate exact firmware oracle.
+
+!!! warning "Assumptions and validity"
+    All phasors are fundamental-frequency RMS quantities at one equilibrium.
+    Sequence extraction is ideal and instantaneous. There is no PLL,
+    measurement delay, controller bandwidth, ramp rate, hysteresis,
+    anti-windup, ride-through state machine, or dynamic-stability model. The
+    implemented controller is three-leg and therefore has ``I_0=0``. A solved
+    equilibrium establishes neither closed-loop stability nor conformance with
+    a standardised time response.
+
+## Normative conventions
+
+| Item | Convention |
+| --- | --- |
+| Phase order and rotation | ``a,b,c`` and ``\alpha=e^{j2\pi/3}`` |
+| Fortescue scaling | factor ``1/3`` in both voltage and current transforms |
+| Voltage/current phasors | RMS; current positive from converter into network |
+| Complex power | ``S=UI^*``; positive ``P,Q`` are injection |
+| Volt-var sign | positive ``Q`` injects vars at low voltage; negative ``Q`` absorbs vars at high voltage |
+| ``|\widetilde S|`` | peak Fourier amplitude of 2ω complex power, not RMS |
+| Public units | SI; per-unit is internal numerical conditioning only |
+
+## Candidate and implementation status
+
+| Candidate | Status | Role |
+| --- | --- | --- |
+| average-magnitude scalar droop | implemented | legacy comparator |
+| positive-sequence droop with maximum-phase watt guard | implemented | sequence comparator |
+| split min/max worst-phase droop | implemented | recommended phase-aware scalar law |
+| negative-sequence admittance and ripple blend | implemented | unbalance/ripple study law |
+| P/Q watt, var, proportional priority | implemented | positive-sequence capability comparison |
+| plant-aware per-leg, apparent-power, and `dv2_max` backoff | implemented | physical protection surrogate |
+| virtual-delta droop | future | line-to-line sensor comparator |
+| closest-feasible per-phase projection | future offline oracle | upper-performance benchmark |
+| power-versus-balance sequence priority | future | service allocation comparison |
+
+## Relationship to standards and reference tools
+
+This software is a research model, not a conformance implementation. The table
+maps concepts without claiming clause-level equivalence; a compliance study
+must use the licensed, current edition and its prescribed test procedure.
+
+| Source | Public scope relevant here | Mapping and non-coverage |
+| --- | --- | --- |
+| [IEEE 1547-2018](https://standards.ieee.org/ieee/1547/5915/) and [IEEE 1547.1-2020](https://standards.ieee.org/ieee/1547.1/6039/) | DER reactive capability, voltage/power control, abnormal conditions, and conformance testing | motivates explicit curve bases and P/Q priority; this steady-state model does not reproduce response-time or conformance tests |
+| [AEMO overview of AS/NZS 4777.2](https://www.aemo.com.au/initiatives/major-programs/nem-distributed-energy-resources-der-program/standards-and-connections/as-nzs-4777-2-inverter-requirements-standard) | LV inverter performance, testing, and smart-inverter functions | motivates an Australian comparator; no claim is made against a clause without the current amended licensed text |
+| [IEC 61000-4-30:2025](https://webstore.iec.ch/en/publication/71611) | power-quality measurement methods | ``|U_2|/|U_1|`` is reported from ideal phasors, not a specified measurement window or instrument class |
+| [IEC TR 61000-3-13](https://webstore.iec.ch/en/publication/4145) | negative-sequence allocation at MV/HV/EHV | useful planning context, explicitly not an LV controller specification |
+| EN 50160 | supply-voltage characteristics | a network-quality benchmark, not a local inverter-control prescription |
+| [OpenDSS `InvControl`](https://opendss.epri.com/Commonproperties.html) | monitored-voltage `AVG`, `MAX`, and `MIN` modes | independent balanced fixed-point oracle; it does not implement this split low/high Volt-var conflict law or negative-sequence droop |
+
+OpenDSS already provides a maximum-monitored-voltage Volt-watt mode, so that
+guard is not claimed as novel. The specific scalar contribution is the split
+minimum/maximum treatment of the two Volt-var branches, a declared continuous
+conflict rule, and a matching fixed-structure smooth network surrogate.
 
 ## Current behaviour in BMOPFTools
 
@@ -47,6 +107,14 @@ voltage, but it cannot inject zero-sequence current or directly correct a
 zero-sequence voltage. This is a physical boundary, not a control-design
 limitation.
 
+That four-real-degree budget is the organising constraint. Two complex current
+references consume it completely; constant active power, constant reactive
+power, balanced current, and a prescribed negative-sequence attenuation cannot
+all be imposed independently. Every practical law therefore embeds a priority
+or accepts a residual. The dual-sequence literature makes the same tradeoff
+explicit; see [Nejabatkhah, Li, and Wu](https://doi.org/10.1109/TPEL.2015.2479601)
+and the maintained [IBR references](@ref ibr-references).
+
 Using the sequence convention in `AdvancedInverter`, aggregate mean complex
 power and the double-frequency oscillating-power phasor are
 
@@ -72,8 +140,13 @@ only an aggregate apparent-power circle:
 - negative-sequence policy limits; and
 - DC-bus 2ω voltage and capacitor RMS-current limits.
 
-The controller should use converter-side `U_int` and `I_conv` for the last two
-checks. POC powers alone omit the filter voltage drop and loss.
+The physical plant should use converter-terminal `U_int` and `I_conv` for
+converter power and DC-link checks. POC powers alone omit filter voltage drop,
+loss, and LCL shunt current. PowerOptLab therefore derives total and sequence
+powers from solved converter-terminal phasors. The control law may command either
+converter-side current or grid-side current, but both converter-leg and
+grid-conductor limits remain hard constraints and take precedence over the
+requested service.
 
 ## Candidate laws
 
@@ -89,6 +162,16 @@ replace the mean-voltage input by direction-aware envelopes:
 - if low- and high-voltage requests coexist, a declared priority or deadlock
   rule resolves the conflict rather than allowing their average to select the
   wrong direction.
+
+The recommended first rule is **continuous dominant severity**. Normalise the
+positive and negative branch ordinates by their respective branch maxima, form
+their signed severity difference ``d``, and blend with
+``w=(1+d/\sqrt{d^2+\epsilon_c^2})/2``. The request
+``q=wq_\ell+(1-w)q_h`` approaches winner-take-all away from the tie but returns
+zero continuously at equal severity. This avoids both `:net` cancellation away
+from a tie and the equilibrium/conditioning problems of a discontinuous switch.
+Fixed low-voltage and fixed high-voltage priorities remain useful jurisdictional
+comparators, while `:net` is retained as a legacy scientific baseline.
 
 A conservative smooth proxy can use `|U1| ± k|U2|` instead of hard minimum and
 maximum operators. This law prevents the most harmful averaged decisions and
@@ -159,6 +242,36 @@ injected current. A fixed virtual admittance is the simplest implementation.
 An online perturb-and-observe estimate can learn the useful angle using the same
 local voltage/current sensors and measurement history, without communications.
 
+This reference family is established in the dual-sequence control literature
+([Nejabatkhah, Li, and Wu](https://doi.org/10.1109/TPEL.2015.2479601)); optimal
+attenuation under current and power constraints is treated by
+[Guo, Pal, and Jabr](https://doi.org/10.48550/arXiv.2109.10974).
+
+The static negative-sequence closed loop gives a useful sizing check. With the
+local Thévenin convention
+
+```math
+U_2=E_2+Z_2I_2,qquad I_2=-\kappa e^{-j\phi_2}U_2,
+```
+
+one obtains
+
+```math
+\frac{|U_2|}{|E_2|}
+=\frac{1}{|1+\kappa Z_2e^{-j\phi_2}|}
+=\frac{1}{\sqrt{1+g^2+2g\cos\delta}},
+\quad g=\kappa|Z_2|,\quad \delta=\arg Z_2-\phi_2.
+```
+
+For angle alignment, halving ``|U_2|`` requires ``g=1`` and hence
+``\kappa=1/|Z_2|``. For ``|Z_2|=0.2``–``0.5\ \Omega``, that is
+``2``–``5\ \mathrm{A/V}``. The illustrative ``0.08\ \mathrm{A/V}`` example
+has only ``g=0.016``–``0.04``, or about 1.6–3.8% attenuation when aligned. It is
+chosen to keep the API example lightly actuated, not as a recommended product
+setting. Angle mismatch can amplify unbalance when
+``g^2+2g\cos\delta<0``. This is a static equilibrium result only; it does not
+establish dynamic stability.
+
 The sensitivity angle matters. Pure negative-sequence reactive current is not
 generally the best voltage actuator on a resistive LV connection, and an
 incorrect high gain can worsen voltage or destabilise a weak-grid controller.
@@ -173,12 +286,12 @@ For a three-wire converter, the unconstrained choice
 I_2^{ripple}=-\frac{U_2}{U_1}I_1
 ```
 
-makes `S_tilde=0`. This is valuable as a reference policy and as one endpoint of
+makes ``\widetilde S=0``. This is valuable as a reference policy and as one endpoint of
 a tradeoff sweep. It is not automatically a voltage-unbalance controller: its
 current angle is selected to cancel DC power pulsation and may oppose the angle
 needed to attenuate `U2`.
 
-A useful blended controller chooses `I2` by minimising
+A useful research oracle chooses ``I_2`` by minimising
 
 ```math
 w_v|I_2-I_2^{unbalance}|^2
@@ -188,7 +301,11 @@ w_v|I_2-I_2^{unbalance}|^2
 
 subject to the exact converter limits. Varying `wv/wdc` produces a transparent
 Pareto frontier between voltage unbalance, semiconductor utilisation, and
-capacitor stress.
+capacitor stress. This optimisation-based form is not the implemented
+manufacturer-facing law. The implemented `ripple_blend` is a fixed algebraic
+interpolation between the two endpoints. Related voltage-unbalance/oscillating-
+power tradeoffs are discussed by
+[Helaly](https://doi.org/10.14416/j.asep.2023.01.003).
 
 ### 6. Sequence droop with algebraic limiters (recommended)
 
@@ -202,7 +319,7 @@ phasor update:
    positive-sequence `P,Q` request. Retain a maximum-phase-voltage guard for
    Volt-watt so that a single high phase cannot be hidden.
 3. Evaluate a new PWL **voltage-unbalance droop** on
-   `eta=|U2|/max(|U1|, epsilon)`. Its output `kappa(eta)` is a
+   `eta=|U2|/sqrt(|U1|^2 + Ufloor^2)`. Its output `kappa(eta)` is a
    negative-sequence admittance gain.
 4. Give that admittance a fixed configured angle relative to `U2`,
 
@@ -226,21 +343,25 @@ phasor update:
 
 6. Apply the ordinary product priority and saturation logic described below.
 
-For fixed `I1`, the 2ω power limit is especially cheap to enforce. Since
+For fixed ``I_1``, the 2ω power limit is especially cheap to enforce. Since
 
 ```math
 \widetilde S=3U_1(I_2-I_2^{ripple}),
 ```
 
-`|S_tilde| <= S_tilde_max` is just a disk in the complex `I2` plane:
+``|\widetilde S|\leq\widetilde S_{max}`` is just a disk in the complex
+``I_2`` plane:
 
 ```math
 |I_2-I_2^{ripple}|\le
 \frac{\widetilde S_{max}}{3|U_1|}.
 ```
 
-Clipping `I2_req` to this disk is one magnitude comparison and one scalar
-rescaling. No optimisation solver is involved.
+Clipping ``I_2^{req}`` to this disk is one magnitude comparison and one scalar
+rescaling. No optimisation solver is involved. The current implementation uses
+an even simpler conservative common-current scale when `dv2_max` is declared;
+the disk clip remains a candidate for a less conservative balance-priority
+allocator.
 
 The phase currents are reconstructed directly,
 
@@ -251,12 +372,23 @@ I_c=\alpha I_1+\alpha^2I_2.
 ```
 
 If any phase exceeds its limit, a common scale
-`gamma=min(1, Imax/max(|Ia|,|Ib|,|Ic|))` is a safe, very cheap fallback. A less
+``\gamma=\min(1,I_{max}/\max_\phi|I_\phi|)`` is a safe, very cheap fallback. A less
 conservative implementation can use the same familiar priority logic as
 positive/reactive current limiters: reserve either `I1` or `I2`, then find the
 largest admissible scale on the other request with a fixed small number of
 bisection steps. This is a one-dimensional limiter, not optimisation-based
 control.
+
+The reconstructed current can be applied at either side of an output filter.
+Converter-current control maps most directly to semiconductor protection and
+converter power. Grid-current control maps most directly to network response and
+is already familiar in LCL implementations. With an LCL filter the two currents
+are unequal, so a grid-current command must also be checked against converter-leg
+headroom. The implemented plant-aware allocator represents the non-target LCL
+current as a local shunt-current offset and backs off the common command against
+both per-leg ratings, converter-terminal apparent power, and a declared
+`dv2_max`. It is conservative but fixed-structure and prevents ordinary
+protection saturation from becoming an infeasible equality.
 
 Two declared modes are preferable to hidden weights:
 
@@ -266,7 +398,10 @@ Two declared modes are preferable to hidden weights:
 - **balance priority** reserves a declared negative-sequence current fraction,
   then curtails positive-sequence current if necessary.
 
-In both modes, protection retains absolute priority: phase current, DC voltage,
+These two sequence-priority modes remain future work. The implemented positive-
+sequence allocator already offers watt, var, and proportional P/Q priority;
+final physical protection may common-scale both sequences. In all modes,
+protection retains absolute priority: phase current, DC voltage,
 capacitor current, and modulation margin; then net active-power availability;
 then the selected power/balance service priority. The deployed code therefore
 consists of PWL evaluation, a Fortescue transform, complex arithmetic, and
@@ -280,23 +415,27 @@ sequence law. The deployed controller remains algebraic, so the OPF should stamp
 those equations directly. It must not embed one optimisation problem, KKT
 system, complementarity system, or integer mode selector per inverter.
 
-### Smooth sequence measurement
+### Sequence measurement
 
 The Fortescue transform is affine in rectangular voltage components and adds no
-nonlinearity. Near balanced operation, avoid the singular derivative of `|U2|`
-and the division by `|U1|` by defining
+nonlinearity. Represent each required magnitude exactly with an implicit
+nonnegative square root,
 
 ```math
-\nu_2=\sqrt{|U_2|^2+\epsilon_v^2}-\epsilon_v,
+\nu_2\geq0,\quad \nu_2^2=U_{2,r}^2+U_{2,i}^2,
 \qquad
-\nu_1=\sqrt{|U_1|^2+\epsilon_v^2},
+\nu_1\geq0,\quad
+\nu_1^2=U_{1,r}^2+U_{1,i}^2+U_{floor}^2,
 \qquad
 \eta=\frac{\nu_2}{\nu_1}.
 ```
 
-This gives `eta=0` at exact balance, has finite derivatives, and preserves
-rotational invariance. `epsilon_v` should be relative to the local voltage base,
-not a fixed SI value shared across voltage levels.
+The implementation divides both sides of each squared equality by a fixed
+physical reference magnitude for numerical scaling; this does not change its
+feasible set. `Ufloor` makes the denominator strictly positive and is a declared
+low-voltage control regularization. It does not round the `|U2|` magnitude. At
+exact `U2=0`, the implicit norm equality is algebraically exact but locally
+degenerate, so balanced initialization and robustness tests are required.
 
 The PWL curve `kappa(eta)` can then use BMOPFTools' existing smooth-ReLU/
 softplus machinery. In rectangular form, multiplication by
@@ -305,10 +444,11 @@ angle variables, `atan`, and a normalised `U2/|U2|` direction.
 
 ### Smooth worst-phase guards
 
-The three phase-voltage magnitudes can reuse the existing registered magnitude
-objects. Replace hard `max` and `min` in the model by pairwise smooth maximum and
-minimum operators using the same voltage-relative smoothing policy as the PWL
-curves. Because there are only three arguments, this adds constant work per
+Represent the three phase-voltage magnitudes by implicit nonnegative square-root
+variables. Replace hard `max` and `min` in the model by pairwise smooth maximum
+and minimum operators using a declared SI voltage width. The square roots inside
+those selectors are also implicit; epsilon smooths the selector, not a physical
+magnitude. Because there are only three arguments, this adds constant work per
 device. The firmware may retain exact comparisons; the smoothed OPF law should
 be tested against it around every transition.
 
@@ -321,34 +461,44 @@ infeasible instead of reproducing the controller's saturation. The saturation
 policy must therefore be part of the algebraic controller model.
 
 For the simple common-scale fallback, first form unconstrained sequence commands
-`I1_hat`, `I2_hat` and their phase currents. Define regularised magnitudes and
+`I1_hat`, `I2_hat` and their phase currents. Define exact implicit magnitudes and
 
 ```math
 M_I=\operatorname{smax}_\epsilon
   (|\widehat I_a|,|\widehat I_b|,|\widehat I_c|),
 \qquad
 \gamma_I=\operatorname{smin}_\epsilon
-  \left(1,\frac{I_{max}}{M_I+\epsilon_i}\right).
+  \left(1,\frac{I_{max}}{M_I}\right).
 ```
 
-Because oscillating power is linear in current for fixed voltage, an analogous
-factor is
+Because converter-terminal apparent and oscillating powers are affine in the
+command scale for fixed local voltage and filter shunt current, analogous safe
+factors can be constructed for their magnitude limits. For example,
 
 ```math
 \gamma_{dc}=\operatorname{smin}_\epsilon
 \left(1,\frac{\widetilde S_{max}}
-{|\widehat{\widetilde S}|_\epsilon}\right).
+{|\widehat{\widetilde S}|}\right).
 ```
+
+Here epsilon belongs only to the smooth min/max operator. It is not added to a
+magnitude or denominator. The implementation applies this pattern to converter
+and grid per-leg currents, converter-terminal apparent power, and—when
+`dv2_max` is configured—the corresponding 2ω power. PWM reserve is subtracted
+from each relevant fundamental-current limit before allocation.
 
 Set `gamma=smin(gamma_I,gamma_dc,...)` and
 `(I1,I2)=gamma*(I1_hat,I2_hat)`. A conservative smooth minimum should remain no
 larger than either argument. The exact squared-norm capability inequalities stay
 in the model as backstops and diagnostics.
 
-Power-priority and balance-priority limiters can be added later as smooth radial
-clips of only the lower-priority sequence command. The common-scale law is a
-better first large-network implementation because it has fixed structure,
-bounded derivatives, no active-set logic, and an obvious firmware counterpart.
+Watt/var/proportional priority is applied before this final protection scale.
+Power-versus-balance sequence priority can be added later as a smooth radial
+clip of only the lower-priority sequence command. Switching-hull, modulation,
+and capacitor thermal allocation are not yet inside the controller; their plant
+constraints can still make a snapshot infeasible and must be reported. The
+common-scale law is the first large-network implementation because it has fixed
+structure, no active-set logic, and an obvious firmware counterpart.
 
 ### Sparsity and numerical policy
 
@@ -432,34 +582,21 @@ be a real BOM, isolation, and certification change. It still does not give a
 three-leg bridge authority over zero-sequence voltage.
 
 Larger capacitance is not intrinsically required by phase-aware control. It is
-required only when the chosen negative-sequence policy leaves more `|S_tilde|`
+required only when the chosen negative-sequence policy leaves more ``|\widetilde S|``
 than the existing link and ripple specification can tolerate. The algebraic
-ripple-disk limiter can instead derate or redirect negative-sequence support
-before hardware limits are crossed. A separate scalar thermal limiter can turn
-`i_cap_max` into the corresponding allowable `S_tilde_max` after reserving the
+ripple backoff can derate the complete request; a future disk limiter can
+redirect negative-sequence support before hardware limits are crossed. A
+separate scalar thermal limiter can turn
+`i_cap_max` into the corresponding allowable ``\widetilde S_{max}`` after reserving the
 measured or modelled switching-current component.
 
-## Recommended development sequence
+## Development roadmap
 
-1. Add **worst-phase scalar droop** as the safe behavioural baseline.
-2. Implement the **sequence droop with algebraic limiters**, initially with
-   a fixed `phi2`, `lambda=0`, admittance-form `kappa(eta)`, and the smooth
-   common-scale fallback.
-3. Add the **ripple-disk clip** and balance-priority mode; both reuse the same
-   sequence-current reference generator.
-4. Retain the **closest-feasible per-phase projection** as an offline optimum
-   and regression oracle. It quantifies how much performance the simple law
-   leaves on the table without putting an optimiser in firmware.
-5. Add **virtual-delta** as the sensor-minimal comparison for products that do
-   not measure phase-to-neutral voltage.
-6. Sweep the unbalance/ripple priority to publish capability frontiers for
-   phase voltage extrema, `|U2|/|U1|`, phase-current peak, `|S_tilde|`, `dv2`,
-   capacitor RMS current, converter loss, and switching margin.
-7. Validate representative points in an averaged and switched EMT model before
-   making dynamic stability or hardware-sizing claims.
-8. Add network-size regressions that compare exact firmware evaluation with the
-   smooth OPF law and record variable/constraint growth, iteration count,
-   factorisation time, and memory as the number of controlled IBRs increases.
+The single maintained roadmap and completion status are in
+[Inverter-control study methodology](@ref ibr-control-study-methodology).
+The next library milestone is fleet construction and result extraction;
+virtual-delta, a closest-feasible offline oracle, and sequence-service priority
+remain comparison laws after that foundation is in place.
 
 The first implementation should not simply enable the existing four-leg
 per-phase equalities for `THREE_LEG`. That would confuse preferred curve values

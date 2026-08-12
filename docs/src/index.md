@@ -32,6 +32,7 @@ New network elements, stamped via `model_hook!` / `solution_hook!`.
 | [Storage / battery](components/devices.md) with state of charge | [`StorageDevice`](@ref) | promotion candidate |
 | [EV charging](components/devices.md) (V1G / V2G) with availability & departure energy | [`EVDevice`](@ref) | promotion candidate |
 | [Advanced inverter](ibr/index.md) (circuit-aware IBR) | [`AdvancedInverter`](@ref) | experimental |
+| [Phase-aware inverter controls](components/inverter_controls.md) (local three-leg laws) | [`SequenceController`](@ref) | research prototype |
 | [IVQ battery](components/ivq_battery.md) (current–voltage–charge model) | [`IVQBattery`](@ref) | prototype |
 
 ### Problem specifications
@@ -59,8 +60,8 @@ method roadmap.
 
 BMOPFTools is not yet registered. Develop both from local checkouts; automated
 builds pin BMOPFTools commit
-`b7aa9a1bb48bcc8b790d3bcf5417d6a32036352a` (the PowerIO 0.7-compatible
-snapshot with the semantic IBR power and monitored-voltage keys):
+`4c0ec8b9c947eea5cd94966f32d2c97f65115b87` (the PowerIO 0.7-compatible
+snapshot with semantic IBR keys and the public smooth-PWL API):
 
 ```julia
 using Pkg

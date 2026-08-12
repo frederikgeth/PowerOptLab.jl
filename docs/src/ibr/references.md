@@ -157,6 +157,36 @@ laws](@ref ibr-phase-aware-control-laws). They do not by themselves validate the
 proposed PowerOptLab allocator or its interaction with the implemented switching
 and capacitor constraints.
 
+## Standards and reference implementations
+
+23. **IEEE Std 1547-2018**, *IEEE Standard for Interconnection and
+    Interoperability of Distributed Energy Resources with Associated Electric
+    Power Systems Interfaces*.
+    [IEEE record](https://standards.ieee.org/ieee/1547/5915/).
+24. **IEEE Std 1547.1-2020**, *IEEE Standard Conformance Test Procedures for
+    Equipment Interconnecting Distributed Energy Resources with Electric Power
+    Systems and Associated Interfaces*.
+    [IEEE record](https://standards.ieee.org/ieee/1547.1/6039/).
+25. **AS/NZS 4777.2**, *Grid connection of energy systems via inverters,
+    Part 2: Inverter requirements*.
+    [AEMO standards overview](https://www.aemo.com.au/initiatives/major-programs/nem-distributed-energy-resources-der-program/standards-and-connections/as-nzs-4777-2-inverter-requirements-standard).
+26. **IEC 61000-4-30:2025**, *Electromagnetic compatibility — Testing and
+    measurement techniques — Power quality measurement methods*.
+    [IEC record](https://webstore.iec.ch/en/publication/71611).
+27. **IEC TR 61000-3-13:2008**, *Assessment of emission limits for the
+    connection of unbalanced installations to MV, HV and EHV power systems*.
+    [IEC record](https://webstore.iec.ch/en/publication/4145).
+28. **EPRI OpenDSS documentation**, `InvControl` monitored-voltage,
+    Volt-watt-axis, and inverter-priority properties.
+    [monitored voltage](https://opendss.epri.com/Commonproperties.html),
+    [Volt-watt bases](https://opendss.epri.com/Propertiesofsmartinvertervolt-wa.html),
+    [capability priority](https://opendss.epri.com/ViolationofInverterCapabilityCur.html).
+
+Items 23-28 define terminology, test scope, and independent reference-tool
+behaviour. PowerOptLab does not reproduce their complete profiles or claim
+conformance; any such study must use the current licensed standard and its
+prescribed measurement and response-time procedures.
+
 ## Literature watch list
 
 The highest-value additions are:

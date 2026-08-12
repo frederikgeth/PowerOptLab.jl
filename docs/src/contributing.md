@@ -85,11 +85,21 @@ and the PowerOptLab version becomes a thin re-export or is retired.
 ## BMOPFTools compatibility contract
 
 BMOPFTools is unregistered, so automated builds pin the exact tested source
-commit (`b7aa9a1bb48bcc8b790d3bcf5417d6a32036352a`, the PowerIO 0.7-compatible
-snapshot with the semantic IBR power and monitored-voltage keys) and
+commit (`4c0ec8b9c947eea5cd94966f32d2c97f65115b87`, the PowerIO 0.7-compatible
+snapshot with semantic IBR keys and the public smooth-PWL API) and
 `Project.toml` pins its package version to 0.1.0. Update both
 together, then run the complete test and
 documentation suites on the Julia compatibility floor and current stable.
+
+`Manifest.toml` is intentionally local. If it contains
+`path = "../BMOPFTools.jl"`, tests use whatever branch that sibling checkout is
+currently on, not the CI pin. Before diagnosing a controller failure, verify
+that the sibling contains the public `piecewise_linear_value` and
+`opf_piecewise_linear_expression` APIs. To reproduce CI without changing either
+working tree, create a temporary environment, develop this PowerOptLab checkout,
+and add BMOPFTools at the exact revision above. Record `versioninfo()`,
+`Pkg.status()`, the Ipopt version, and explicit solver tolerances with published
+results.
 
 Most integrations use BMOPFTools' public staged-model and admittance APIs. HELM
 also needs the engine's parsed constant-power and constant-impedance sub-loads,

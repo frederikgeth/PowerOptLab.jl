@@ -2,8 +2,8 @@
 
 This chapter turns the candidate [phase-aware local control laws](@ref
 ibr-phase-aware-control-laws) into an implementation and experimental programme.
-The goal is to compare control laws on LV networks with many PV and home-battery
-inverters, then quantify how each law changes AC conductor-current requirements,
+The goal is to compare control laws on LV networks with many PV inverters, then
+quantify how each law changes AC conductor-current requirements,
 DC-link capacitance, capacitor ripple-current rating, losses, curtailment, and
 voltage quality.
 
@@ -32,7 +32,7 @@ Primary response variables are:
 - maximum and minimum phase-to-neutral voltage;
 - negative-sequence voltage ratio `|U2|/|U1|` and, when observable, zero sequence;
 - PV energy exported and curtailed;
-- battery charge/discharge energy and state-of-charge feasibility;
+- converter-terminal total and zero/positive/negative-sequence complex power;
 - converter and filter losses;
 - per-phase fundamental and total RMS current, plus `|I1|` and `|I2|`;
 - `|S_tilde|`, `dv2`, capacitor 2ω RMS current, carrier RMS current, weighted
@@ -51,9 +51,9 @@ voltages and currents, filters, topology, switching feasibility, losses, and
 DC-link stress. Control laws must constrain its existing handles; they must not
 reimplement a simplified current-injection plant beside it.
 
-`IVQBattery` and future PV/DC-source models remain DC-side owners. They connect
-to the same advanced-inverter handles and determine available or scheduled DC
-power without duplicating the AC controller.
+The present programme treats non-negative PV availability as the DC-side input.
+Battery schedules, state of charge, and bidirectional active-power semantics are
+out of scope; they must not complicate the first control-law comparison.
 
 ### 2. Controller primitives
 
@@ -64,30 +64,43 @@ abstract type AbstractInverterControlLaw end
 abstract type AbstractPositiveSequencePolicy end
 abstract type AbstractUnbalancePolicy end
 abstract type AbstractLimiterPolicy end
+abstract type AbstractCurrentTarget end
 
 struct PiecewiseLinearLaw
     x::Vector{Float64}
     y::Vector{Float64}
 end
 
-struct SequenceController{P,U,L} <: AbstractInverterControlLaw
+struct SequenceController{P,U,L,T} <: AbstractInverterControlLaw
     positive::P
     unbalance::U
     limiter::L
+    current_target::T
+    power_voltage_floor::Float64
 end
 ```
 
 The concrete first policies should be:
 
-- `WorstPhaseVoltVarWatt` — high/low phase envelopes and conventional PWL
-  Volt-var/Volt-watt;
+- `AverageVoltageVoltVarWatt` — the legacy mean-magnitude comparator;
+- `PositiveSequenceVoltVarWatt` — ``|U_1|`` Volt-var with a maximum-phase
+  Volt-watt guard;
+- `WorstPhaseVoltVarWatt` — high/low phase envelopes and declared conflict
+  resolution for conventional PWL Volt-var/Volt-watt;
 - `NegativeSequenceAdmittanceDroop` — PWL `kappa(eta)`, fixed `phi2`, and an
   optional fixed ripple blend;
 - `NoUnbalanceControl` — balanced-current baseline; and
 - `CommonScaleLimiter` — the first smooth, fixed-structure protection law.
 
-Power-priority, balance-priority, virtual-delta, and closest-feasible projection
-policies can be added without changing the plant or study interfaces.
+`ConverterCurrentTarget` and `GridCurrentTarget` select which physical current
+the algebraic command constrains. In both cases the plant retains converter- and
+grid-side per-leg ratings. The final plant-aware backoff includes the solved LCL
+shunt-current offset and checks both locations, converter-terminal apparent
+power, and a configured `dv2_max` before imposing the target equality.
+
+Watt/var/proportional P/Q priority is implemented. Positive-sequence-power versus
+negative-sequence-balance priority, virtual-delta, and closest-feasible
+projection policies can be added without changing the plant or study interfaces.
 
 Every law needs two evaluators with the same field semantics:
 
@@ -117,25 +130,29 @@ end
 The device lifecycle becomes:
 
 ```julia
-plant_handles = stamp_device!(ctx, controlled.device; period)
-inv_handles = inverter_handles(controlled.device, plant_handles)
+inverter = inverter_spec(controlled)
+plant_handles = stamp_device!(ctx, inverter)
+inv_handles = inverter_handles(controlled, plant_handles)
 control_handles = stamp_smooth_control!(
-    ctx, controlled.controller, control_request(...),
-    inverter_spec(controlled.device), inv_handles)
+    ctx, controlled.controller, request, inverter, inv_handles)
 ```
 
-`inverter_handles` and `inverter_spec` are small PowerOptLab traits with methods
-for `AdvancedInverter` and `IVQBattery`. This lets PV and battery converters use
-the same controller without coupling controller code to battery chemistry or
-state equations. `extract_device` returns plant results plus a control diagnostic
-record.
+`inverter_handles` and `inverter_spec` are small PowerOptLab traits for the
+controlled wrapper. `extract_device` returns plant results, a control diagnostic
+record, and converter-terminal phasors and powers.
 
-The first implementation may support `ControlledDevice{AdvancedInverter}` only,
-but it should use this composition boundary so adding `IVQBattery` does not
-require a controller rewrite.
+`solve_controlled_inverter` is a controlled power flow, not an OPF over local
+control actions: controller equalities determine the command. Its default loss
+objective only selects remaining plant allocation freedom; `selection_objective=:zero`
+is provided for objective-invariance tests. Reported capacitor loss can therefore
+be a minimum-loss allocation within the plant abstraction, not a unique dynamic
+prediction.
+
+The first implementation supports `ControlledDevice{AdvancedInverter}` only.
+This composition boundary keeps local-law data out of the physical plant.
 
 Control parameters are immutable law data. Time-varying inputs such as PV
-availability, battery dispatch requests, enable flags, or firmware modes belong
+availability, enable flags, or firmware modes belong
 to a separate `ControlRequest`/schedule passed by the problem builder. This keeps
 one controller configuration reusable across thousands of snapshots and avoids
 placing arbitrary functions inside reproducibility-critical device structs.
@@ -158,9 +175,8 @@ of one research dataset.
 
 Independent PV snapshots should be solved independently, warm-started along a
 time or penetration trajectory, and parallelised outside Ipopt. Do not put a
-year of unrelated operating points into one NLP. Use one shared multi-period
-model only when battery state of charge or another genuine inter-temporal state
-couples the periods.
+year of unrelated operating points into one NLP unless a genuine inter-temporal
+state is later introduced.
 
 ## BMOPFTools integration
 
@@ -187,35 +203,33 @@ Advanced-inverter parameters not present in the BMOPF schema belong to the
 PowerOptLab study configuration during this research phase. Do not expand the
 BMOPF schema until the control and hardware interfaces have stabilised.
 
-## Proposed BMOPFTools PRs
+## BMOPFTools dependencies
 
-### PR 1 — public smooth PWL expression API (recommended before implementation)
+### Public smooth PWL expression API (complete)
 
-BMOPFTools already contains `breakpoints_to_triples`, stable exact/smooth numeric
-evaluation, context-cached softplus operators, and JuMP curve construction, but
-these functions currently live inside the private OPF extension. PowerOptLab's
-bilevel prototype already duplicates a subset for this reason.
+The pinned BMOPFTools revision exposes stable exact/smooth numeric evaluation and
+JuMP curve construction backed by its context-cached softplus operators.
 
-Expose a small supported context API, for example:
+BMOPFTools now exposes the supported context API used here:
 
 ```julia
 opf_piecewise_linear_expression(
     ctx, input, breakpoints, values;
-    epsilon, id=nothing)
+    epsilon)
 
-piecewise_linear_value(input, breakpoints, values; smooth=false, epsilon=nothing)
+piecewise_linear_value(input, breakpoints, values; epsilon=nothing)
 ```
 
-The context method should reuse the context's selected `softplus` mode and
-operator cache, validate strictly increasing knots, accept working-unit
-coefficients/expressions, and preserve fixed structure for parameterised curve
-coefficients. The numeric method provides the exact firmware oracle.
+The context method reuses the context's selected `softplus` mode and operator
+cache, validates strictly increasing knots, and accepts inputs in working units.
+The numeric method provides the exact firmware oracle when `epsilon=nothing` and
+the corresponding smooth numerical oracle when a positive width is supplied.
 
-This PR removes downstream duplication and makes the intended extension use of
-BMOPFTools' smooth curves explicit. It is the only upstream PR that should be
-treated as an early dependency.
+This removes downstream duplication and makes the intended extension use of
+BMOPFTools' smooth curves explicit. PowerOptLab's CI and documentation pin the
+tested upstream commit.
 
-### PR 2 — public cached bus sequence expressions (useful, not blocking)
+### Public cached bus sequence expressions (useful, not blocking)
 
 Add semantic keys and a helper that returns cached rectangular `U0`, `U1`, and
 `U2` expressions for a three-phase terminal ordering. BMOPFTools already forms
@@ -239,8 +253,7 @@ Do not initially upstream:
 
 Those interfaces are still research questions. A DC-coupling seam may become
 necessary if a later implementation replaces native IBRs that use BMOPFTools'
-`dc_bus` or `dc_link_coupled` features. The existing `IVQBattery` path does not
-require that PR for the first studies.
+`dc_bus` or `dc_link_coupled` features, but it is not required for the PV studies.
 
 ## Experimental methodology
 
@@ -266,6 +279,8 @@ Use the existing balanced, pure-sequence, and strongly unbalanced
 - verify that the negative-sequence droop has the intended sign and angle;
 - trigger phase-current, ripple, capacitor-current, and switching limits one at
   a time;
+- run both converter-current and grid-current targets through an LCL filter and
+  verify both physical per-leg ratings;
 - test SI/per-unit invariance;
 - test smoothing and sample-grid refinement; and
 - evaluate the exact firmware law at the solved point.
@@ -288,11 +303,10 @@ large successful case. Preserve failed runs and their diagnostics.
 ### Stage D — matched penetration study
 
 For each feeder and random seed, reuse the same customer placement, phase
-assignment, load/PV trace, battery availability, and weather sample across every
+assignment, load/PV trace, and weather sample across every
 control law. Vary at least:
 
 - PV penetration and inverter oversizing;
-- home-battery penetration and power/energy ratio;
 - phase allocation and load unbalance;
 - feeder impedance and `R/X` range;
 - negative-sequence gain and configured `phi2`;
@@ -305,19 +319,16 @@ Use paired differences between laws for each identical scenario. Report
 distributions and tails, not only averages: hardware is usually selected by a
 worst credible condition while energy and loss outcomes accumulate over time.
 
-Initially hold battery dispatch fixed or obtain it from a common baseline
-schedule. This isolates the effect of the AC voltage controller. Add
-multi-period controller/dispatch interaction only after the fixed-dispatch
-comparison is understood.
-
 ## Rating and capacitor-sizing method
 
 ### Current rating
 
-For each operating point, retain both fundamental phasor current and the
-carrier audit. The device requirement is based on the maximum physical phase
-total RMS current, not `|I1|`, aggregate apparent power, or negative sequence
-alone. Keep short-duration overload and long-term thermal ratings distinct.
+For each operating point, retain converter-side and grid-side fundamental phase
+currents plus the carrier audit. The semiconductor requirement is based on the
+maximum physical converter-leg total RMS current; grid conductors and filter
+elements have their own per-phase ratings. Neither may be replaced by `|I1|`,
+aggregate apparent power, or negative sequence alone. Keep short-duration
+overload and long-term thermal ratings distinct.
 
 First compare laws at a common current rating. Then find the minimum rating that
 satisfies a declared service criterion using an outer parameter sweep or
@@ -384,6 +395,13 @@ Every published scenario should retain:
 - KCL, device, switching, current, and capacitor residuals; and
 - solver options, starts, status, iterations, and timing.
 
+The reviewed reference environment for the initial controller suite was Julia
+1.12.6, JuMP 1.31.1, Ipopt 1.15.0, and BMOPFTools commit
+`4c0ec8b9c947eea5cd94966f32d2c97f65115b87`. Examples and publication runs
+should set `tol` explicitly (the initial cases use `1e-8`) rather than rely on a
+solver-version default, and should record all feasibility tolerances separately
+from controller smoothing widths.
+
 Before drawing hardware conclusions, validate representative balanced,
 unbalanced, current-limited, and ripple-limited points against an averaged model
 and a switched EMT model. The network-wide NLP supplies breadth; the higher-
@@ -391,18 +409,25 @@ fidelity subset supplies confidence in the mechanisms used for sizing.
 
 ## Implementation sequence
 
-1. Submit the BMOPFTools public smooth-PWL API PR.
-2. Add PowerOptLab exact sequence/curve/limiter numeric helpers and tests.
-3. Add `SequenceController`, `ControlledDevice{AdvancedInverter}`, and semantic
-   control handles.
-4. Stamp the smoothed worst-phase and negative-sequence admittance laws into one
-   advanced inverter; verify exact/smooth agreement.
-5. Add multi-device single-snapshot construction using per-component
-   `OpfDeviceBuilder` replacement for dataset IBRs.
-6. Add tidy device/network result extraction and scaling benchmarks.
-7. Run fixed-hardware PV penetration studies.
-8. Add outer current/capacitor sizing sweeps and capability frontiers.
-9. Add controlled `IVQBattery` composition and fixed-dispatch battery studies.
-10. Add multi-period battery dispatch interaction only after the preceding
-    validation gates pass.
+Steps 1--5 are implemented by the public BMOPFTools smooth-PWL API and the
+PowerOptLab phase-aware control component. The exact and smooth evaluators,
+three voltage-reference policies, converter/grid current targets, dominant
+conflict policy, converter-terminal power extraction, three-leg plant
+composition, SI/per-unit regression, and extracted exact-versus-smooth current
+residual are covered by unit tests. The remaining sequence starts with fleet
+construction; batteries are outside this programme.
 
+1. **Complete:** submit the BMOPFTools public smooth-PWL API PR.
+2. **Complete:** add PowerOptLab exact sequence/curve/limiter numeric helpers and tests.
+3. **Complete:** add `SequenceController`, `ControlledDevice{AdvancedInverter}`, and semantic
+   control handles.
+4. **Complete:** stamp the smoothed worst-phase and negative-sequence admittance laws into one
+   advanced inverter; verify exact/smooth agreement.
+5. **Complete:** add continuous normalised conflict handling, rated/available
+   Volt-watt bases, P/Q priority, plant-side converter/grid current and
+   apparent-power backoff, optional `dv2_max` backoff, and binding-limit tests.
+6. Add multi-device single-snapshot construction using per-component
+   `OpfDeviceBuilder` replacement for dataset IBRs.
+7. Add tidy device/network result extraction and scaling benchmarks.
+8. Run fixed-hardware PV penetration studies.
+9. Add outer current/capacitor sizing sweeps and capability frontiers.

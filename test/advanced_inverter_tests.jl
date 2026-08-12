@@ -212,6 +212,34 @@ const _TOPO_COMMON = (bus="poc", phase_terminals=["a","b","c"], neutral="n",
     @test r4.p_poc ≈ rs.p_poc rtol=1e-3
 end
 
+@testset "Advanced inverter: balanced four-leg AC reduction to three 1φ units" begin
+    # This is an AC fundamental equivalence only. Three separate single-phase DC
+    # links do not reproduce the shared four-leg DC-capacitor ripple physics.
+    four = solve_advanced_inverter(
+        inv_grid3_src(
+            mags=[230.0, 230.0, 230.0],
+            angs=[0.0, -2pi/3, 2pi/3]),
+        AdvancedInverter(
+            id="four", bus="poc", phase_terminals=["a", "b", "c"],
+            neutral="n", topology=:FOUR_LEG, s_max=15e3, i_max=40.0,
+            In_max=40.0, v_dc=700.0, c_dc=1.1e-3);
+        objective=:min_loss, p_set=9e3, q_set=3e3)
+    single = solve_advanced_inverter(
+        inv_grid(),
+        AdvancedInverter(id="single", bus="poc", s_max=5e3, i_max=40.0);
+        objective=:min_loss, p_set=3e3, q_set=1e3)
+
+    @test four.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+    @test single.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+    @test four.p_poc ≈ 3single.p_poc atol=1e-5
+    @test four.q_poc ≈ 3single.q_poc atol=1e-5
+    @test all(i -> isapprox(i, single.i_mag[1]; atol=1e-6), four.i_mag)
+    @test all(v -> isapprox(v, single.v_int_mag[1]; atol=1e-6),
+              four.v_int_mag)
+    @test four.i_neutral/four.i_mag[1] < 1e-4
+    @test four.i_zero/four.i_mag[1] < 1e-4
+end
+
 @testset "Advanced inverter: 4-leg draws bounded neutral current on an unbalanced grid" begin
     net = inv_grid3_unbal()
     r = solve_advanced_inverter(net, AdvancedInverter(; id="i", topology=:FOUR_LEG, v_dc=700.0, c_dc=1.1e-3, In_max=40.0, _TOPO_COMMON...))
