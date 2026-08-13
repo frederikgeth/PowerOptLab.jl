@@ -100,6 +100,15 @@ function _native_ibr_phase_count(data::AbstractDict,
             "native THREE_LEG IBR '$(inverter.id)' terminal_map $terminals " *
             "must equal the advanced inverter phase_terminals " *
             "$(inverter.phase_terminals) in the same sequence order"))
+        inverter.neutral === nothing || throw(ArgumentError(
+            "native THREE_LEG IBR '$(inverter.id)' is a line-to-line device; " *
+            "its advanced replacement must set neutral=nothing"))
+        !_lcl_active(inverter) || throw(ArgumentError(
+            "native THREE_LEG IBR '$(inverter.id)' cannot be replaced by an " *
+            "advanced inverter with a phase-to-ground LCL midpoint branch"))
+        inverter.b_filter_shunt == 0.0 || throw(ArgumentError(
+            "native THREE_LEG IBR '$(inverter.id)' cannot be replaced by an " *
+            "advanced inverter with a phase-to-ground POC shunt"))
         return length(terminals)
     elseif topology == "FOUR_LEG"
         inverter.neutral === nothing && throw(ArgumentError(
@@ -150,7 +159,24 @@ end
 # BMOPFTools declares native IBR current variables before device ownership is
 # resolved. A custom owner must make the unused native placeholders harmless;
 # fixing them also gives the study harness a direct no-double-stamping invariant.
-function _disable_native_ibr_port!(ctx, id::String, phase_count::Int)
+# Match BMOPFTools' declared-variable arity from its public, resolved neutral
+# labels. This can exceed the replacement's three physical phases when a source
+# dataset uses an unrecognised neutral spelling; every unused native variable
+# must still be fixed because native result/cost code can reference it.
+function _native_ibr_declared_current_count(ctx, id::String)
+    native = _opf_network(ctx)["ibr"][id]
+    topology = uppercase(String(get(native, "topology", "FOUR_LEG")))
+    terminals = String.(get(native, "terminal_map", String[]))
+    topology == "SINGLE_PHASE" && return 1
+    topology == "THREE_LEG" && return length(terminals)
+    topology == "FOUR_LEG" || throw(ArgumentError(
+        "unsupported native IBR topology '$topology' for '$id'"))
+    neutral_labels = Set(String.(BMOPFTools.opf_neutral_labels(ctx)))
+    count(terminal -> !(terminal in neutral_labels), terminals)
+end
+
+function _disable_native_ibr_port!(ctx, id::String)
+    phase_count = _native_ibr_declared_current_count(ctx, id)
     for phase in 1:phase_count, component in (:real, :imag)
         current = _opf_ibr_current(ctx, id, phase; component=component)
         JuMP.fix(current, 0.0; force=true)
@@ -165,7 +191,7 @@ function _controlled_inverter_result(
         handles::_ControlledHandles,
         status::SolveStatus,
         outcome::SolveOutcome,
-        bus::Dict{String,Any})
+        bus::AbstractDict)
     extracted = extract_device(controlled, handles, status)
     grid_current = _extract_grid_current(handles.plant, status)
     exact_control = status.publishable ? evaluate_exact(
@@ -186,7 +212,7 @@ function _controlled_inverter_result(
     ControlledInverterResult(
         string(outcome.termination_status), extracted.plant, extracted.control,
         extracted.converter_terminal, grid_current, exact_control, residual,
-        bus, status)
+        Dict{String,Any}(String(id) => value for (id, value) in bus), status)
 end
 
 function _network_without_replaced_ibrs(result::Dict{String,Any},
@@ -240,12 +266,12 @@ function solve_controlled_inverter_fleet(
         "scaling is not supported for the nonlinear controller formulation"))
     isfinite(s_base) && s_base > 0 || throw(ArgumentError(
         "s_base must be finite and > 0"))
-    phase_counts = _validate_controlled_fleet(net, spec)
+    _validate_controlled_fleet(net, spec)
 
     handles = Dict{String,_ControlledHandles}()
     builder = BMOPFTools.OpfDeviceBuilder(:PowerOptLab, function (ctx, ids)
         for id in ids
-            _disable_native_ibr_port!(ctx, id, phase_counts[id])
+            _disable_native_ibr_port!(ctx, id)
             handles[id] = stamp_device!(
                 ctx, spec.devices[id]; request=spec.requests[id])
         end

@@ -1,3 +1,5 @@
+import BMOPFTools
+
 function _fleet_native_ibr(; bus="poc", terminal_map=["a", "b", "c", "n"],
                            topology="FOUR_LEG", p=0.0, s_max=1.0)
     nphase = topology == "SINGLE_PHASE" ? 1 : 3
@@ -14,12 +16,14 @@ function _fleet_native_ibr(; bus="poc", terminal_map=["a", "b", "c", "n"],
     )
 end
 
-function _fleet_controlled(id, positive)
+function _fleet_controlled(id, positive; neutral="n", c_filter_mid=0.0,
+                           r_filter_grid=0.0, b_filter_shunt=0.0)
     inverter = AdvancedInverter(
-        id=id, bus="poc", phase_terminals=["a", "b", "c"], neutral="n",
+        id=id, bus="poc", phase_terminals=["a", "b", "c"], neutral=neutral,
         topology=:THREE_LEG, s_max=20e3, i_max=40.0,
         v_dc=700.0, c_dc=1.1e-3, r_filter=0.05, x_filter=0.15,
-        m_max=0.96)
+        c_filter_mid=c_filter_mid, r_filter_grid=r_filter_grid,
+        b_filter_shunt=b_filter_shunt, m_max=0.96)
     ControlledDevice(inverter, SequenceController(positive))
 end
 
@@ -57,7 +61,26 @@ end
     three_leg = inv_grid3_bal()
     three_leg["ibr"] = Dict("pv" => _fleet_native_ibr(
         terminal_map=["a", "b", "c"], topology="THREE_LEG"))
-    @test PowerOptLab._validate_controlled_fleet(three_leg, spec)["pv"] == 3
+    @test_throws ArgumentError PowerOptLab._validate_controlled_fleet(
+        three_leg, spec)
+    delta_controlled = _fleet_controlled(
+        "pv", AverageVoltageVoltVarWatt(); neutral=nothing)
+    delta_spec = ControlledInverterFleetSpec(
+        Dict("pv" => delta_controlled), Dict("pv" => request))
+    @test PowerOptLab._validate_controlled_fleet(
+        three_leg, delta_spec)["pv"] == 3
+    for shunted in (
+        _fleet_controlled("pv", AverageVoltageVoltVarWatt();
+                          neutral=nothing, c_filter_mid=1e-6,
+                          r_filter_grid=0.01),
+        _fleet_controlled("pv", AverageVoltageVoltVarWatt();
+                          neutral=nothing, b_filter_shunt=1e-6),
+    )
+        shunted_spec = ControlledInverterFleetSpec(
+            Dict("pv" => shunted), Dict("pv" => request))
+        @test_throws ArgumentError PowerOptLab._validate_controlled_fleet(
+            three_leg, shunted_spec)
+    end
     @test_throws ArgumentError solve_controlled_inverter_fleet(
         merge(inv_grid3_bal(), Dict("ibr" => Dict(
             "pv" => _fleet_native_ibr()))), spec; per_unit=false)
@@ -65,6 +88,72 @@ end
         merge(inv_grid3_bal(), Dict("ibr" => Dict(
             "pv" => _fleet_native_ibr()))), spec;
         selection_objective=:unsupported)
+end
+
+@testset "Controlled-inverter fleet: unpublished and neutral-arity regressions" begin
+    request = InverterControlRequest(p_available=8e3, q_scale=0.0)
+    controlled = _fleet_controlled("pv", AverageVoltageVoltVarWatt())
+    spec = ControlledInverterFleetSpec(
+        Dict("pv" => controlled), Dict("pv" => request))
+    net = inv_grid3_bal()
+    net["ibr"] = Dict("pv" => _fleet_native_ibr())
+
+    limited = solve_controlled_inverter_fleet(
+        net, spec; solver_options=("max_iter" => 0,))
+    @test !solve_status(limited).publishable
+    @test isnan(limited.devices["pv"].plant.p_poc)
+    @test all(isnan(phase["vm"])
+              for phase in values(limited.network["bus"]["poc"]))
+
+    # BMOPFTools resolves neutral labels when declaring native IBR variables.
+    # Rename the grounded neutral to an intentionally non-conventional label:
+    # BMOPFTools then declares four semantic current pairs for the selected
+    # FOUR_LEG placeholder. The custom owner must fix all four, including when
+    # the native-cost expression still visits those variables.
+    unusual = inv_grid3_bal()
+    for bus in values(unusual["bus"])
+        bus["terminal_names"] = replace.(bus["terminal_names"], "n" => "0")
+        bus["perfectly_grounded_terminals"] = replace.(
+            bus["perfectly_grounded_terminals"], "n" => "0")
+        haskey(bus, "v_min") && push!(bus["v_min"], last(bus["v_min"]))
+        haskey(bus, "v_max") && push!(bus["v_max"], last(bus["v_max"]))
+    end
+    for line in values(unusual["line"])
+        line["terminal_map_from"] = replace.(
+            line["terminal_map_from"], "n" => "0")
+        line["terminal_map_to"] = replace.(
+            line["terminal_map_to"], "n" => "0")
+    end
+    unusual_native = _fleet_native_ibr(
+        terminal_map=["a", "b", "c", "0"])
+    unusual_native["cost"] = ones(4)
+    unusual["ibr"] = Dict("pv" => unusual_native)
+    observed_arity = Ref(0)
+    arity_builder = BMOPFTools.OpfDeviceBuilder(
+        :PowerOptLab, function (ctx, ids)
+            observed_arity[] = PowerOptLab._native_ibr_declared_current_count(
+                ctx, only(ids))
+            PowerOptLab._disable_native_ibr_port!(ctx, only(ids))
+            ctx
+        end)
+    arity_spec = BMOPFTools.OpfBuildSpec(component_builders=Dict(
+        (:ibr, "pv") => arity_builder))
+    arity_ctx = BMOPFTools.build_opf_model(
+        unusual; build_spec=arity_spec, add_objective=false)
+    @test observed_arity[] == 4
+    @test all(JuMP.is_fixed(PowerOptLab._opf_ibr_current(
+                  arity_ctx, "pv", phase; component=component))
+              for phase in 1:4, component in (:real, :imag))
+
+    unusual_controlled = _fleet_controlled(
+        "pv", AverageVoltageVoltVarWatt(); neutral="0")
+    unusual_spec = ControlledInverterFleetSpec(
+        Dict("pv" => unusual_controlled), Dict("pv" => request))
+    unusual_result = solve_controlled_inverter_fleet(
+        unusual, unusual_spec; selection_objective=:network_cost,
+        solver_options=("max_iter" => 500, "tol" => 1e-8))
+    @test solve_status(unusual_result).publishable
+    @test unusual_result.devices["pv"].plant.p_poc > 1000.0
 end
 
 @testset "Controlled-inverter fleet: replacement, coexistence, and extraction" begin

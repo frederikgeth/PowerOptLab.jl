@@ -29,8 +29,11 @@ physics.
 
 Selecting a native `FOUR_LEG` record therefore means deliberately studying a
 three-leg replacement at the same four-wire connection; it is not a claim that
-the hardware topologies are equivalent. Use a native `THREE_LEG` record when
-the dataset topology itself must remain unchanged.
+the hardware topologies are equivalent. A native `THREE_LEG` record is accepted
+only when the replacement has `neutral=nothing` and has neither an LCL midpoint
+shunt nor a POC shunt. These conditions preserve the native line-to-line port:
+the replacement has zero summed phase current and introduces no phase-to-ground
+or neutral current path.
 
 ## Replacement, not parallel stamping
 
@@ -63,7 +66,11 @@ results then follow one unambiguous ownership rule:
 
 This contract is stronger than inferring replacement from a coincident bus or
 from a near-zero duplicate injection. A selected native record with tight
-native power bounds cannot constrain the replacement plant.
+native power bounds cannot constrain the replacement plant. The number of
+placeholders fixed is derived from BMOPFTools' resolved dataset neutral labels,
+not assumed to equal the replacement's three phases. This also closes every
+unused variable when a non-conventional neutral spelling makes BMOPFTools
+declare an additional semantic IBR-current pair.
 
 ## Input contract
 
@@ -75,7 +82,9 @@ For each selected identifier, construction validates before model mutation:
 4. native and replacement bus identifiers agree;
 5. phase order agrees exactly, and a `FOUR_LEG` record places the matching
    neutral after the three phases; and
-6. the native IBR has no DC-network coupling.
+6. a `THREE_LEG` record is paired only with a neutral-free, shunt-free
+   replacement; and
+7. the native IBR has no DC-network coupling.
 
 Phase order is a physical convention, not presentation metadata: it determines
 the symmetrical-component transform and the reconstructed phase currents.
