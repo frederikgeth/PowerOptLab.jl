@@ -1034,11 +1034,11 @@ function _smooth_extrema_implicit!(
     return vmin, vmax
 end
 
-# True only when a stamped offset component is structurally zero, i.e. a literal
-# zero or an expression whose constant and every coefficient are zero. Zero
-# coefficients survive JuMP arithmetic (`variable*0.0` keeps its term), so the
-# LCL-free case reaches the capability allocator as an identically-zero AffExpr
-# rather than as a number.
+# True when a stamped offset component is provably zero at every feasible point:
+# a literal zero, or an expression whose constant and every coefficient are zero.
+# Zero coefficients survive JuMP arithmetic (`variable*0.0` keeps its term), so a
+# filter without an explicit LCL midpoint reaches the capability allocator as an
+# identically-zero AffExpr rather than as a number.
 _is_identically_zero(x::Real) = iszero(x)
 _is_identically_zero(x::JuMP.GenericAffExpr) = iszero(x)
 _is_identically_zero(x::JuMP.GenericQuadExpr) = iszero(x)
@@ -1046,15 +1046,7 @@ _is_identically_zero(::Any) = false
 
 function _safe_direction_scale_implicit!(
         m, offset, direction, limit, epsilon; magnitude_start, scale)
-    # A structurally zero offset must not be lifted into an auxiliary magnitude.
-    # `_implicit_sqrt!` would stamp `(y/n)^2 == 0, y >= 0`, whose gradient
-    # vanishes at its own solution: the constraint pins y to 0 while destroying
-    # LICQ there. That is what the converter-target apparent-power and `dv2_max`
-    # checks did on every LCL-free device, and it is a documented source of
-    # ALMOST_LOCALLY_SOLVED and NUMERICAL_ERROR statuses in exactly the
-    # near-zero-current corners those limits create.
-    constant_offset = all(_is_identically_zero, offset)
-    offset_magnitude = constant_offset ? 0.0 :
+    offset_magnitude = all(x -> x isa Real && iszero(x), offset) ? 0.0 :
         _implicit_sqrt!(
             m, offset[1]^2 + offset[2]^2;
             start=magnitude_start, scale=scale)
@@ -1066,11 +1058,12 @@ function _safe_direction_scale_implicit!(
     # NEGATIVE factor — a reversed current command — where the exact allocator
     # in `_safe_direction_scale_exact` returns 0.
     #
-    # Two deliberate choices keep that guard from degrading the solve. A
-    # constant zero offset leaves the headroom equal to the constant `limit`,
-    # which is already non-negative, so no clamp is stamped at all and those
-    # cases remain bit-identical to the unguarded model. Where the offset is a
-    # plant expression the clamp uses the shifted smooth norm
+    # The clamp is stamped only where a nonzero offset is actually reachable.
+    # When the offset is identically zero the headroom equals the non-negative
+    # constant `limit` minus a quantity pinned to zero, so it cannot go negative
+    # and the model stays bit-identical to the unguarded one — which matters,
+    # because these paths sit next to fixtures that are one solver tolerance away
+    # from failing. Where the clamp is needed it uses the shifted smooth norm
     # `(a + sqrt(a^2 + eps^2))/2` as an expression rather than one more lifted
     # variable: lifting it was measured to push the `s_max` and `dv2_max`
     # saturation regressions from LOCALLY_SOLVED to non-publishable, the same
@@ -1079,8 +1072,17 @@ function _safe_direction_scale_implicit!(
     # the triangle bound is relaxed by no more than the selector width already
     # declared, and the returned factor stays in [0, 1] because
     # smax_eps(a, b) >= a.
+    #
+    # NOTE: lifting an identically-zero radicand stamps `(y/n)^2 == 0, y >= 0`,
+    # whose gradient vanishes at its own solution, so LICQ fails there. Removing
+    # those constraints is formally an improvement and was tried; it changed
+    # which points converge at `tol=1e-8` on a different Ipopt/MUMPS build
+    # (3 assertions in `stamped P/Q priority under PV oversizing` on
+    # ubuntu-latest, clean on aarch64-darwin). They are load-bearing as
+    # regularizers, exactly like the `a_loss == 0` epigraph in the plant. The
+    # removal therefore belongs with the limiter conditioning work, not here.
     headroom = limit - offset_magnitude
-    available = constant_offset ? Float64(limit) :
+    available = all(_is_identically_zero, offset) ? headroom :
         (headroom + sqrt(headroom^2 + epsilon^2))/2
     denominator = _smooth_max_implicit!(
         m, available, direction_magnitude, epsilon;

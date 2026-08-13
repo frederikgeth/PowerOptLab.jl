@@ -633,13 +633,22 @@ choice between them is empirical rather than aesthetic:
 Three consequences are already visible in the controller and should be treated
 as open numerical work rather than settled policy:
 
-1. A lifted magnitude of a quantity that is **structurally zero** is worse than
-   useless. ``(y/y_b)^2=0`` pins ``y=0`` while its gradient vanishes there, so
-   LICQ fails at the model's own solution. The capability allocator used to do
-   exactly this for converter-target apparent power and ``\Delta V_{2,max}`` on
-   every filter without an LCL midpoint; those offsets are now detected as
-   identically zero and stamped as constants instead. The near-zero-current
-   ``dv2_max`` regression converges cleanly as a result.
+1. A lifted magnitude of a quantity that is **structurally zero** is formally
+   defective. ``(y/y_b)^2=0`` pins ``y=0`` while its gradient vanishes there, so
+   LICQ fails at the model's own solution. The capability allocator does exactly
+   this for converter-target apparent power and ``\Delta V_{2,max}`` on every
+   filter without an explicit LCL midpoint.
+
+   Removing those constraints was tried and **reverted**. It is bit-identical on
+   one platform and moves three assertions in the saturated P/Q-priority
+   regression to a non-publishable status on another Ipopt/MUMPS build. The
+   degenerate constraints are load-bearing as regularizers — the same result
+   [`AdvancedInverter`](@ref) found when it removed the `a_loss == 0` current
+   epigraph and pushed an unrelated device into `ITERATION_LIMIT`. A formally
+   correct local change to this model can therefore cost publishable status, and
+   nothing in the model tells you which ones will. This is the clearest single
+   argument that the limiter's conditioning has to be addressed as a whole
+   rather than call site by call site.
 2. The controller's requirement for `per_unit=true` was established with the
    lifted form throughout. It should be re-measured against the shifted form
    before it is treated as an intrinsic property of the coupled controller

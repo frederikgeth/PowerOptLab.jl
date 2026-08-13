@@ -346,14 +346,19 @@ See the numerical-policy discussion in
 
 Implicit magnitude equalities are degenerate at an exact zero vector: the
 equality pins ``y=0`` while its gradient vanishes there, so LICQ fails at the
-model's own solution. Structurally zero offsets in the capability allocator —
-converter-target apparent power and ``\Delta V_{2,max}`` on any filter without
-an explicit LCL midpoint — are therefore detected and stamped as constants
-rather than lifted. The implementation likewise avoids an unnecessary `|U2|`
-variable for `NoUnbalanceControl`. Studies using negative-sequence droop should
-still include balanced cases in their solver-robustness audit and report any
-initialization dependence, because a *near*-zero ``U_2`` remains poorly
-conditioned even when the exactly-zero case has been removed.
+model's own solution. The capability allocator still contains two such
+equalities per device for any filter without an explicit LCL midpoint
+(converter-target apparent power, and ``\Delta V_{2,max}`` when configured).
+Removing them was tried and reverted: it is bit-identical on one platform and
+costs publishable status on another, so they are load-bearing as regularizers.
+See the numerical-policy discussion in
+[the design note](@ref ibr-phase-aware-control-laws).
+
+The implementation does avoid an unnecessary `|U2|` variable for
+`NoUnbalanceControl`. Studies using negative-sequence droop should include
+balanced cases in their solver-robustness audit and report any initialization
+dependence, because both the exactly-zero and *near*-zero ``U_2`` cases are
+poorly conditioned.
 
 ## Compose with the physical inverter
 
