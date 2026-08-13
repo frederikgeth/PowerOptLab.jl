@@ -43,6 +43,14 @@ end
     @test resized.devices["pv"].controller ===
           baseline_fleet.devices["pv"].controller
     @test resized.requests["pv"] === baseline_fleet.requests["pv"]
+    @test_throws ArgumentError resize_controlled_inverter_fleet(
+        baseline_fleet,
+        InverterHardwareSweepPoint(
+            id="overflow", converter_current_scale=floatmax(Float64)))
+    @test_throws ArgumentError resize_controlled_inverter_fleet(
+        baseline_fleet,
+        InverterHardwareSweepPoint(
+            id="underflow", dc_capacitance_scale=nextfloat(0.0)))
 
     no_optional = _fleet_controlled(
         "pv", AverageVoltageVoltVarWatt())
@@ -157,6 +165,12 @@ end
               for row in requirements)
     @test all(row.dc_capacitance_2omega_requirement_F > 0
               for row in requirements)
+    @test all(row.dc_2omega_capacitor_current_A > 0
+              for row in requirements)
+    @test all(row.dc_stored_energy_2omega_requirement_J > 0
+              for row in requirements)
+    @test all(row.installed_dc_stored_energy_J > 0
+              for row in requirements)
     @test Set(getproperty.(requirements, :hardware_point_id)) ==
           Set(["large", "reference"])
     @test all(row.base_scenario_id == "snapshot" for row in requirements)
@@ -188,6 +202,16 @@ end
           reference_requirement.installed_dc_capacitance_F *
           reference_plant.dv2 /
           reference_requirement.allowed_dc_ripple_voltage_V rtol=1e-8
+    @test reference_requirement.dc_2omega_capacitor_current_A ≈
+          reference_plant.ripple /
+          (sqrt(2) * reference_inverter.v_dc) rtol=1e-10
+    @test reference_requirement.installed_dc_stored_energy_J ≈
+          0.5 * reference_requirement.installed_dc_capacitance_F *
+          reference_inverter.v_dc^2 rtol=1e-12
+    @test reference_requirement.dc_stored_energy_2omega_requirement_J ≈
+          0.5 *
+          reference_requirement.dc_capacitance_2omega_requirement_F *
+          reference_inverter.v_dc^2 rtol=1e-12
     @test reference_requirement.metadata ===
           reference_case_result.case.metadata
 
@@ -198,6 +222,8 @@ end
             unpublished; allowed_dc_ripple_fraction=0.02))
     @test !unpublished_requirement.publishable
     @test isnan(unpublished_requirement.converter_current_requirement_A)
+    @test isnan(unpublished_requirement.dc_2omega_capacitor_current_A)
+    @test unpublished_requirement.installed_dc_stored_energy_J > 0
     @test ismissing(unpublished_requirement.converter_current_compliant)
     @test ismissing(unpublished_requirement.dc_capacitance_2omega_compliant)
 end

@@ -57,7 +57,11 @@ function _scaled_required_rating(value, scale, field::String, id::String)
     scale === nothing && return value
     value === nothing && throw(ArgumentError(
         "inverter '$id' has no explicit $field to scale"))
-    value * scale
+    scaled = value * scale
+    isfinite(scaled) && scaled > 0 || throw(ArgumentError(
+        "inverter '$id' $field=$value scaled by $scale produces invalid " *
+        "absolute rating $scaled; the result must be finite and > 0"))
+    scaled
 end
 
 function _replace_advanced_inverter(
@@ -262,10 +266,12 @@ publishable point, converter/grid/capacitor current requirements are the
 achieved RMS quantities multiplied by `current_margin`. Converter and grid
 requirements combine the fundamental phase currents with any declared manual
 carrier-current reserves in RMS quadrature. The monolithic three-leg DC-link
-requirement is
+quantities are
 
 ```math
-C_{2\\omega,req}=|\\widetilde S|/(2\\omega V_{dc}\\Delta V_{allow}).
+I_{2\\omega,rms}=|\\widetilde S|/(\\sqrt{2}V_{dc}),\\qquad
+C_{2\\omega,req}=|\\widetilde S|/(2\\omega V_{dc}\\Delta V_{allow}),\\qquad
+E_{2\\omega,req}=\\tfrac12 C_{2\\omega,req}V_{dc}^2.
 ```
 
 `allowed_dc_ripple_fraction` defines
@@ -312,9 +318,16 @@ function inverter_control_hardware_requirement_rows(
                     plant.i_grid_mag, inverter.pwm_ac_grid_reserve)) : NaN
             capacitor_current_requirement = publishable ?
                 margin * plant.i_cap_thermal : NaN
+            dc_2omega_current = publishable ?
+                plant.ripple / (sqrt(2) * vdc) : NaN
             capacitance_requirement = publishable ?
                 plant.ripple /
                 (2 * (2pi*inverter.f) * vdc * allowed_ripple) : NaN
+            installed_stored_energy =
+                isfinite(installed_capacitance) && isfinite(vdc) ?
+                0.5 * installed_capacitance * vdc^2 : NaN
+            stored_energy_requirement = publishable ?
+                0.5 * capacitance_requirement * vdc^2 : NaN
             push!(rows, (
                 scenario_id=case_result.case.scenario_id,
                 variant_id=case_result.case.variant_id,
@@ -334,14 +347,18 @@ function inverter_control_hardware_requirement_rows(
                 grid_current_requirement_A=grid_requirement,
                 capacitor_thermal_current_requirement_A=
                     capacitor_current_requirement,
+                dc_2omega_capacitor_current_A=dc_2omega_current,
                 dc_capacitance_2omega_requirement_F=
                     capacitance_requirement,
+                dc_stored_energy_2omega_requirement_J=
+                    stored_energy_requirement,
                 installed_converter_current_rating_A=
                     installed_converter_current,
                 installed_grid_current_rating_A=installed_grid_current,
                 installed_capacitor_current_rating_A=
                     installed_capacitor_current,
                 installed_dc_capacitance_F=installed_capacitance,
+                installed_dc_stored_energy_J=installed_stored_energy,
                 converter_current_utilization=_sizing_utilization(
                     publishable, installed_converter_current,
                     converter_requirement),

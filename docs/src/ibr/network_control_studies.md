@@ -355,15 +355,26 @@ RMS current, capacitor thermally equivalent current, and the closed-form
 monolithic-link requirement
 
 ```math
+I_{2\omega,rms} = \frac{|\widetilde S|}{\sqrt{2}V_{dc}},\qquad
 C_{2\omega,req} =
 \frac{|\widetilde S|}{2\omega V_{dc}\Delta V_{allow}},\qquad
+E_{2\omega,req}=\frac12 C_{2\omega,req}V_{dc}^2,\qquad
 \Delta V_{allow}=\epsilon_{dc}V_{dc}.
 ```
 
-The rows contain absolute requirements, installed values, requirement-to-rating
-utilizations, and nullable compliance flags. A current margin of at least one
-may be applied explicitly. Failed/non-publishable solves retain no numerical
-claim: requirements and utilizations are NaN, and compliance is `missing`.
+The explicit 2ω current separates the low-frequency ripple mechanism from the
+total thermally equivalent capacitor current, which may also contain carrier
+and neutral-current contributions. Required and installed stored energy make
+capacitance alternatives comparable at their declared DC voltage. The rows
+also contain absolute ratings, requirement-to-rating utilizations, and nullable
+compliance flags. A current margin of at least one may be applied explicitly.
+Failed/non-publishable solves retain the known installed hardware but make no
+performance claim: requirements and utilizations are NaN, and compliance is
+`missing`.
+
+Every scaled absolute rating is checked after multiplication. A scale that
+overflows to infinity or underflows to zero is rejected before model
+construction rather than becoming an invalid nameplate silently.
 
 There are two scientifically different uses:
 
