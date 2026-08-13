@@ -42,6 +42,7 @@ end
     include("inverter_control_study_tests.jl")
     include("inverter_control_experiment_tests.jl")
     include("inverter_control_sizing_tests.jl")
+    include("closed_loop_evidence_tests.jl")
     include("battery_tests.jl")
     include("helm_tests.jl")
 end

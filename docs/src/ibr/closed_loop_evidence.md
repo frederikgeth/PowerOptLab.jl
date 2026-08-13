@@ -1,0 +1,137 @@
+# Closed-loop evidence diagnostics
+
+The inverter-control evaluators are deliberately stateless: they map a local
+voltage measurement and an operating request to a current command. For a
+network study, that map can be embedded in a reduced feeder model, a
+quasi-static re-solve, or a measured/discrete-time experiment. This page
+provides two lightweight diagnostics for that outer loop:
+
+1. `fixed_point_oracle` iterates a supplied map and reports convergence,
+   residuals, and short repeated-state cycles.
+2. `screen_fixed_point_gain` computes a finite-difference Jacobian and reports
+   its spectral radius and induced infinity norm.
+
+These are evidence-generation tools, not formal dynamic stability proofs. A
+fixed point can be locally attractive while a different initial condition
+fails, and a local gain screen says nothing about response time, delays,
+sampling, ramps, protection state, or saturation outside the linearisation
+point. Those effects must be represented in the supplied map when they are
+material to the question.
+
+## Generic fixed-point oracle
+
+The callable passed to `fixed_point_oracle` accepts and returns a real vector.
+The iteration is
+
+```math
+x_{k+1} = (1-\alpha)x_k + \alpha F(x_k), \qquad 0 < \alpha \le 1.
+```
+
+Convergence is declared when the update residual is below an absolute-plus-
+relative tolerance. The optional trajectory includes the initial state and
+all iterates, making it suitable for small reproducibility plots or tabular
+evidence. A repeated state within `cycle_window` is reported as a cycle rather
+than being silently labelled a failed solve.
+
+```julia
+map(x) = feeder_resolve_or_measurement_map(x)
+oracle = fixed_point_oracle(
+    map, initial_voltage;
+    relaxation=0.8,
+    max_iterations=100,
+    atol=1e-8,
+    rtol=1e-8,
+)
+oracle.converged, oracle.residual_norm, oracle.iterations
+```
+
+The map may be a reduced sensitivity model or a complete small feeder
+re-solve. The oracle does not assume that the vector is voltage, nor does it
+assign physical time to an iteration.
+
+## Local loop-gain screen
+
+For a map `F`, `screen_fixed_point_gain(F, x₀)` evaluates
+
+```math
+J_F(x_0) = \frac{\partial F}{\partial x}(x_0).
+```
+
+The reported `spectral_radius` is the largest eigenvalue magnitude. A value
+below `threshold` is labelled `local_contractive`; the `margin` is
+`threshold - spectral_radius`. This is a local numerical screen, not a
+certificate for a nonlinear or hybrid controller.
+
+For the three-phase controller adapter, the state is six real rectangular
+coordinates in declared a-b-c order:
+
+```text
+(Re Va, Im Va, Re Vb, Im Vb, Re Vc, Im Vc).
+```
+
+`inverter_control_current_jacobian` differentiates the exact evaluator. A
+caller supplies a 6×6 real `voltage_sensitivity` matrix, `Z`, that maps a
+phase-current perturbation to a phase-voltage perturbation. The adapter then
+screens the local loop
+
+```math
+J_{loop} = Z\,\frac{\partial i}{\partial v}.
+```
+
+The units of `Z` must match the phasor convention used by the supplied
+measurement and evaluator (normally V RMS per A RMS in rectangular
+coordinates). Its sign and reference direction are part of the caller's
+network convention; PowerOptLab does not infer them from a sequence model.
+
+```julia
+controller = SequenceController(PositiveSequenceVoltVarWatt(...))
+measurement = InverterControlMeasurement(phase_voltage)
+request = InverterControlRequest(
+    p_available=p_available, p_rated=p_rated, q_scale=q_scale)
+ratings = InverterControlRatings(s_max=s_max, i_max=i_max)
+
+J_i = inverter_control_current_jacobian(
+    controller, measurement, request, ratings)
+screen = inverter_control_loop_gain(
+    controller, measurement, request, ratings, Z)
+screen.spectral_radius, screen.induced_inf_norm, screen.margin
+```
+
+The adapter uses the exact piecewise controller law, so a finite-difference
+point on a hard curve corner can be one-sided or numerically ambiguous. For
+evidence, record the finite-difference step and perturbation point, and use
+`evaluate_smooth` or a smooth feeder map when a differentiable surrogate is
+the intended object of study. The smooth surrogate is a numerical modelling
+choice; it does not change the firmware interpretation of the exact law.
+
+## Recommended evidence record
+
+For each operating point, retain:
+
+- the controller, topology, current-target, and limiter configuration;
+- the voltage phasors and request/ratings used for the evaluation;
+- the supplied feeder sensitivity or outer-loop map provenance;
+- `iterations`, `residual_norm`, and any detected `cycle_period`;
+- finite-difference step, spectral radius, induced norm, threshold, and
+  `local_contractive` result;
+- whether the point is inside a curve corner, current limit, or apparent-power
+  limit.
+
+Across a campaign, compare these diagnostics with the physical quantities in
+the network result: per-leg current, converter/grid terminal current, sequence
+power, zero/negative-sequence voltage, and DC-link ripple. This keeps the
+diagnostic layer reusable for general inverter studies while providing an
+auditable path to standards-oriented evidence when the study assumptions are
+fixed separately.
+
+## API
+
+```@docs
+FixedPointIterationResult
+FixedPointGainScreen
+fixed_point_oracle
+finite_difference_jacobian
+screen_fixed_point_gain
+inverter_control_current_jacobian
+inverter_control_loop_gain
+```
