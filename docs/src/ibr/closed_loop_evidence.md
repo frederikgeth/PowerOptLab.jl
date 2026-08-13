@@ -34,6 +34,14 @@ equilibrium before a full feeder re-solve is commissioned. `Z` is still a
 study input, not an inferred network property; use a full network callback
 when voltage sensitivity varies materially over the operating range.
 
+When a complete `Dict` network and `ControlledDevice{AdvancedInverter}` are
+available, `solve_inverter_control_network_fixed_point` performs that higher-
+fidelity callback internally. It solves the smooth controlled case first, then
+rebuilds the physical plant at every exact controller iterate with the selected
+converter- or grid-side current fixed. A non-publishable plant solve is
+retained as an equilibrium failure; it is not converted into a false
+convergence result.
+
 The `InverterControlScalingAudit` returned by
 `inverter_control_scaling_audit` records the SI starts/scales for voltage,
 sequence voltage, current, apparent power, and the priority-capacity
@@ -155,11 +163,13 @@ FixedPointIterationResult
 FixedPointGainScreen
 InverterControlScalingAudit
 InverterControlFixedPointResult
+InverterControlNetworkFixedPointResult
 fixed_point_oracle
 finite_difference_jacobian
 screen_fixed_point_gain
 inverter_control_scaling_audit
 inverter_control_current_jacobian
 inverter_control_fixed_point_oracle
+solve_inverter_control_network_fixed_point
 inverter_control_loop_gain
 ```

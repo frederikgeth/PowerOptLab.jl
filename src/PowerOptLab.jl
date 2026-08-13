@@ -202,6 +202,8 @@ export FixedPointIterationResult, FixedPointGainScreen
 export fixed_point_oracle, finite_difference_jacobian, screen_fixed_point_gain
 export InverterControlScalingAudit, inverter_control_scaling_audit
 export InverterControlFixedPointResult, inverter_control_fixed_point_oracle
+export InverterControlNetworkFixedPointResult
+export solve_inverter_control_network_fixed_point
 export inverter_control_current_jacobian, inverter_control_loop_gain
 
 # Current–voltage (IVQ) battery storage + chemistry library

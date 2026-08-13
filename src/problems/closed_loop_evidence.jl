@@ -292,6 +292,22 @@ struct InverterControlFixedPointResult
     voltage_sensitivity::Matrix{Float64}
 end
 
+"""Result of a plant-backed exact-law equilibrium iteration."""
+struct InverterControlNetworkFixedPointResult
+    smooth::ControlledInverterResult
+    converged::Bool
+    cycled::Bool
+    iterations::Int
+    cycle_period::Int
+    residual_voltage_inf_V::Float64
+    residual_current_inf_A::Float64
+    exact_control::InverterControlResult
+    plant::Union{Nothing,NamedTuple}
+    bus::Dict{String,Any}
+    solve::SolveStatus
+    voltage_trajectory::Matrix{Float64}
+end
+
 function _validated_voltage_sensitivity(voltage_sensitivity::AbstractMatrix)
     sensitivity = Matrix{Float64}(voltage_sensitivity)
     size(sensitivity) == (6, 6) || throw(DimensionMismatch(
@@ -342,6 +358,199 @@ function inverter_control_fixed_point_oracle(
         controller, final_measurement, request, ratings)
     InverterControlFixedPointResult(
         oracle, reference, final_measurement, final_control, sensitivity)
+end
+
+function _solve_exact_current_plant(
+        net::Dict{String,Any}, inverter::AdvancedInverter,
+        current::NTuple{3,ComplexF64}, target::AbstractCurrentTarget;
+        s_base::Float64=1e6, optimizer=Ipopt.Optimizer,
+        verbose::Bool=false, solver_options=())
+    handles = Ref{_InvHandles}()
+    hook! = ctx -> begin
+        h = stamp_device!(ctx, inverter)
+        handles[] = h
+        target_re, target_im = target isa ConverterCurrentTarget ?
+            (h.cri, h.cii) : (h.gri, h.gii)
+        for k in 1:3
+            JuMP.@constraint(_opf_model(ctx),
+                target_re[k] == real(current[k]) / h.ib)
+            JuMP.@constraint(_opf_model(ctx),
+                target_im[k] == imag(current[k]) / h.ib)
+        end
+        JuMP.@objective(_opf_model(ctx), Min, h.p_loss + h.p_cap_loss)
+    end
+    ctx = build_opf_model(
+        net; per_unit=true, s_base=s_base, add_objective=false,
+        model_hook! = hook!, optimizer=optimizer, verbose=verbose)
+    _set_solver_options!(_opf_model(ctx), solver_options)
+    enforce_kcl!(ctx)
+    JuMP.optimize!(_opf_model(ctx))
+    outcome = _solve_outcome(_opf_model(ctx))
+    status = SolveStatus(outcome)
+    h = handles[]
+    plant = extract_device(inverter, h, status)
+    network = _extract_result(ctx, outcome)
+    (status=status, plant=plant, network=network)
+end
+
+function _network_phase_state(
+        bus::AbstractDict, inverter::AdvancedInverter)
+    bus_data = get(bus, inverter.bus, nothing)
+    bus_data isa AbstractDict || throw(ArgumentError(
+        "network result does not contain inverter bus '$(inverter.bus)'"))
+    ntuple(3) do k
+        phase = inverter.phase_terminals[k]
+        values = get(bus_data, phase, nothing)
+        values isa AbstractDict || throw(ArgumentError(
+            "network result does not contain phase '$phase' at bus " *
+            "'$(inverter.bus)'"))
+        vr = Float64(get(values, "vr", NaN))
+        vi = Float64(get(values, "vi", NaN))
+        isfinite(vr) && isfinite(vi) || throw(ArgumentError(
+            "network result has non-finite voltage at '$phase'"))
+        ComplexF64(vr, vi)
+    end
+end
+
+"""
+    solve_inverter_control_network_fixed_point(net, controlled, request; kwargs...)
+        -> InverterControlNetworkFixedPointResult
+
+Compare the smooth controlled solve with a plant-backed fixed point of the
+exact controller law. Each iteration evaluates the exact local law, fixes the
+selected converter- or grid-side phase current in a fresh AdvancedInverter
+solve, and feeds the resulting POC voltage into the next iteration. Physical
+limits therefore remain part of the oracle rather than being replaced by a
+linear sensitivity.
+
+The result retains non-publishable final solves and cycling diagnostics. This
+is a quasi-static equilibrium comparison: it is not a dynamic stability or
+response-time simulation.
+"""
+function solve_inverter_control_network_fixed_point(
+        net::Dict{String,Any},
+        controlled::ControlledDevice{<:AdvancedInverter},
+        request::InverterControlRequest;
+        smooth_result::Union{Nothing,ControlledInverterResult}=nothing,
+        initial_voltage=nothing,
+        max_iterations::Integer=20,
+        atol_voltage::Real=1e-6,
+        atol_current::Real=1e-6,
+        rtol::Real=1e-8,
+        cycle_window::Integer=8,
+        cycle_tolerance::Real=1e-7,
+        s_base::Real=1e6,
+        optimizer=Ipopt.Optimizer,
+        verbose::Bool=false,
+        solver_options=())
+    max_iterations >= 1 || throw(ArgumentError(
+        "max_iterations must be >= 1"))
+    0 <= atol_voltage && isfinite(atol_voltage) || throw(ArgumentError(
+        "atol_voltage must be finite and >= 0"))
+    0 <= atol_current && isfinite(atol_current) || throw(ArgumentError(
+        "atol_current must be finite and >= 0"))
+    0 <= rtol && isfinite(rtol) || throw(ArgumentError(
+        "rtol must be finite and >= 0"))
+    cycle_window >= 1 || throw(ArgumentError(
+        "cycle_window must be >= 1"))
+    0 <= cycle_tolerance && isfinite(cycle_tolerance) || throw(ArgumentError(
+        "cycle_tolerance must be finite and >= 0"))
+    isfinite(s_base) && s_base > 0 || throw(ArgumentError(
+        "s_base must be finite and > 0"))
+
+    smooth = smooth_result === nothing ? solve_controlled_inverter(
+        net, controlled, request; per_unit=true, s_base=s_base,
+        optimizer=optimizer, verbose=verbose, solver_options=solver_options) :
+        smooth_result
+    if !smooth.solve.publishable
+        return InverterControlNetworkFixedPointResult(
+            smooth, false, false, 0, 0, Inf, Inf, smooth.exact_control, nothing,
+            Dict{String,Any}(), smooth.solve,
+            Matrix{Float64}(undef, 6, 0))
+    end
+    inverter = inverter_spec(controlled)
+    ratings = InverterControlRatings(inverter, controlled.controller.current_target)
+    initial = if initial_voltage === nothing
+        smooth.control.phase_voltage
+    elseif initial_voltage isa InverterControlMeasurement
+        initial_voltage.phase_voltage
+    else
+        Tuple(ComplexF64.(collect(initial_voltage)))
+    end
+    length(initial) == 3 || throw(DimensionMismatch(
+        "initial_voltage must contain three phase phasors"))
+    voltage = ComplexF64.(initial)
+    history = Vector{Vector{Float64}}([_phasor_vector(voltage)])
+    trajectory = Vector{Vector{Float64}}([_phasor_vector(voltage)])
+    exact_control = evaluate_exact(
+        controlled.controller, InverterControlMeasurement(voltage),
+        request, ratings)
+    last_plant = nothing
+    last_bus = Dict{String,Any}()
+    last_status = smooth.solve
+    converged = false
+    cycled = false
+    iterations = 0
+    cycle_period = 0
+    residual_voltage = Inf
+    residual_current = Inf
+    for iteration in 1:Int(max_iterations)
+        iterations = iteration
+        measurement = InverterControlMeasurement(voltage)
+        exact_control = evaluate_exact(
+            controlled.controller, measurement, request, ratings)
+        solved = _solve_exact_current_plant(
+            net, inverter, exact_control.phase_current,
+            controlled.controller.current_target;
+            s_base=Float64(s_base), optimizer=optimizer, verbose=verbose,
+            solver_options=solver_options)
+        last_status = solved.status
+        last_plant = solved.plant
+        network = solved.network
+        last_bus = Dict{String,Any}(
+            String(k) => v for (k, v) in network["bus"])
+        if !last_status.publishable
+            break
+        end
+        next_voltage = _network_phase_state(last_bus, inverter)
+        next_measurement = InverterControlMeasurement(next_voltage)
+        next_control = evaluate_exact(
+            controlled.controller, next_measurement, request, ratings)
+        residual_voltage = maximum(abs, next_voltage .- voltage)
+        residual_current = maximum(abs,
+            next_control.phase_current .- exact_control.phase_current)
+        push!(trajectory, _phasor_vector(next_voltage))
+        if residual_voltage <= Float64(atol_voltage) + Float64(rtol) *
+                max(maximum(abs, voltage), maximum(abs, next_voltage), 1.0) &&
+                residual_current <= Float64(atol_current) + Float64(rtol) *
+                max(maximum(abs, exact_control.phase_current),
+                    maximum(abs, next_control.phase_current), 1.0)
+            voltage = next_voltage
+            exact_control = next_control
+            converged = true
+            break
+        end
+        next_state = _phasor_vector(next_voltage)
+        history_start = max(1, length(history) - cycle_window + 1)
+        for index in history_start:length(history)
+            if norm(next_state - history[index]) <= Float64(cycle_tolerance)
+                cycled = true
+                cycle_period = length(history) - index + 1
+                voltage = next_voltage
+                exact_control = next_control
+                break
+            end
+        end
+        cycled && break
+        push!(history, next_state)
+        voltage = next_voltage
+    end
+    final_bus = last_bus
+    final_plant = last_plant === nothing ? nothing : last_plant
+    InverterControlNetworkFixedPointResult(
+        smooth, converged, cycled, iterations, cycle_period,
+        Float64(residual_voltage), Float64(residual_current), exact_control,
+        final_plant, final_bus, last_status, reduce(hcat, trajectory))
 end
 
 """

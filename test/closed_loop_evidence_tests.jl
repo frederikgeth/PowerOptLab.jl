@@ -7,6 +7,7 @@
             affine, zeros(2); max_iterations=100, atol=1e-10, rtol=1e-10)
         @test result.converged
         @test !result.cycled
+        @test result.cycle_period == 0
         @test result.iterations < 50
         @test result.final_state ≈ [1.25, -1.6666666666666667] atol=1e-8
         @test size(result.trajectory) == (2, result.iterations + 1)
@@ -88,5 +89,37 @@
         @test collect(result.final_control.phase_current) ≈ collect(
               evaluate_exact(controller, reference, request, ratings).phase_current)
         @test result.voltage_sensitivity == zeros(6, 6)
+    end
+
+    @testset "plant-backed exact equilibrium" begin
+        inverter = AdvancedInverter(
+            id="fixed_point", bus="poc", phase_terminals=["a", "b", "c"],
+            neutral="n", topology=:THREE_LEG, s_max=20e3, i_max=40.0,
+            v_dc=700.0, c_dc=1.1e-3, r_filter=0.05, x_filter=0.15,
+            m_max=0.96)
+        controlled = ControlledDevice(
+            inverter, SequenceController(AverageVoltageVoltVarWatt()))
+        request = InverterControlRequest(
+            p_available=5e3, p_rated=5e3, q_scale=0.0)
+        result = solve_inverter_control_network_fixed_point(
+            inv_grid3_bal(), controlled, request;
+            max_iterations=6, solver_options=("max_iter" => 500, "tol" => 1e-8))
+        @test result.smooth.solve.publishable
+        @test result.solve.publishable
+        @test result.converged
+        @test !result.cycled
+        @test result.plant !== nothing
+        @test result.residual_voltage_inf_V < 1e-3
+        @test result.residual_current_inf_A < 1e-3
+        @test size(result.voltage_trajectory, 1) == 6
+        @test size(result.voltage_trajectory, 2) >= 2
+        @test result.bus["poc"]["a"]["vm"] > 0
+
+        failed = solve_inverter_control_network_fixed_point(
+            inv_grid3_bal(), controlled, request;
+            max_iterations=2, solver_options=("max_iter" => 0,))
+        @test !failed.converged
+        @test !failed.solve.publishable
+        @test size(failed.voltage_trajectory) == (6, 0)
     end
 end
