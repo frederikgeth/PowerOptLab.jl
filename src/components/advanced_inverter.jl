@@ -91,17 +91,25 @@ const _HALF_SQRT3 = _SQRT3 / 2
 # the rating is expressed in working units. `_MAGNITUDE_EPS_FLOOR_SI` only
 # applies when no rating was declared.
 #
-# Background. The accuracy-versus-smoothness trade-off for a smoothing
-# parameter μ — O(μ) approximation error against an O(1/μ) gradient Lipschitz
-# constant — is the classical result in Nesterov, "Smooth minimization of
-# non-smooth functions", Math. Prog. 103(1), 2005. The `sqrt(x² + ε²)` family
-# used here and in `inverter_controls.jl` is the smoothing class of Chen &
-# Mangasarian, "A class of smoothing functions for nonlinear and mixed
-# complementarity problems", Comput. Optim. Appl. 5(2), 1996; the same
-# function is the pseudo-Huber / Charbonnier potential in imaging
-# (Charbonnier et al., IEEE Trans. Image Proc. 6(2), 1997). Ipopt's tolerance
-# and bound-relaxation design, which sets the accuracy floor measured above,
-# is documented in Wächter & Biegler, Math. Prog. 106(1), 2006.
+# Background.
+#   Nesterov, "Smooth minimization of non-smooth functions", Math. Program.
+#     103, 127–152 (2005), doi:10.1007/s10107-004-0552-5 — the classical
+#     accuracy-versus-smoothness trade-off: O(μ) approximation error against
+#     an O(1/μ) gradient Lipschitz constant.
+#   Chen & Mangasarian, "A class of smoothing functions for nonlinear and
+#     mixed complementarity problems", Comput. Optim. Appl. 5, 97–138 (1996),
+#     doi:10.1007/BF00249052 — the smoothing class that `sqrt(x² + ε²)`
+#     belongs to, and that `inverter_controls.jl` uses for smooth min/max.
+#   Charbonnier, Blanc-Féraud, Aubert & Barlaud, "Deterministic
+#     edge-preserving regularization in computed imaging", IEEE Trans. Image
+#     Process. 6(2), 298–311 (1997), doi:10.1109/83.551699 — the same
+#     function as the pseudo-Huber / Charbonnier potential.
+#   Wächter & Biegler, "On the implementation of an interior-point filter
+#     line-search algorithm for large-scale nonlinear programming", Math.
+#     Program. 106, 25–57 (2006), doi:10.1007/s10107-004-0559-y — Ipopt;
+#     its tolerance design sets the accuracy floor measured above, and its
+#     Eqn 35 is the bound relaxation discussed in the rating-constraint note
+#     in the `AdvancedInverter` docstring.
 #
 # Note that Nesterov's O(1/μ) conditioning penalty is NOT what the measurements
 # above show, because it bounds the worst case over a function class, while
@@ -765,14 +773,29 @@ zero filter) it is a plain grid-following converter at the POC.
 
 !!! note "Rating constraints and the per-unit base"
     Ratings are stamped as squared per-unit inequalities (`p² + q² ≤
-    (s_max/s_base)²` and similar). Ipopt relaxes every inequality by
-    `bound_relax_factor` (default `1e-8`) applied to that squared quantity, so
-    the admissible PHYSICAL violation is `≈ bound_relax_factor·s_base²/(2|S|)`
-    and grows quadratically with the base. At `s_base=1e6` a 20 kVA rating is
-    honoured to ~0.25 VA; at `s_base=1e8` the same rating is exceeded by ~2.4
-    kVA (12 %). Choose a base within a couple of decades of the device
-    ratings, or pass `bound_relax_factor=0`. This is independent of the
-    square-root smoothing above.
+    (s_max/s_base)²` and similar). Ipopt relaxes bounds before solving by
+    `bound_relax_factor · max(1, |bound|)` (default `1e-8`; Eqn 35 of Wächter
+    & Biegler 2006). The `max(1, ·)` floor is the problem: once the per-unit
+    squared bound `(s_max/s_base)²` falls below 1 — which it always does — the
+    relaxation stops scaling with it and becomes a fixed `1e-8` ABSOLUTE
+    slackening of a bound that keeps shrinking as `1/s_base²`. The admissible
+    physical violation is therefore
+
+        δ|S| ≈ bound_relax_factor · s_base² / (2·s_max),
+
+    quadratic in the base. A 20 kVA rating is honoured to ~0.25 VA at
+    `s_base=1e6`, but exceeded by ~2.4 kVA (12 %) at `s_base=1e8`.
+
+    This is Ipopt's documented behaviour meeting a modelling choice made here,
+    not a defect in either: a minimal `max p s.t. p² ≤ (s_max/s_base)²` in
+    plain JuMP reproduces the numbers exactly, and `bound_relax_factor=0`
+    removes them. The durable fix belongs in this layer — normalizing the
+    constraint by the rating, `(p/s_pu)² + (q/s_pu)² ≤ 1`, restores a bound of
+    exactly 1 and was measured to hold the rating to <0.1 VA at every base.
+    Until that lands: keep `s_base` within a couple of decades of the device
+    ratings, or pass `bound_relax_factor=0` (as `solve_inverse_carson` already
+    does, for the same underlying reason). Independent of the square-root
+    smoothing above.
 
 # Double-frequency ripple / current
 - `p_ripple_max` — SINGLE_PHASE only: bound on the 2ω power-ripple amplitude
