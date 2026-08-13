@@ -206,8 +206,3 @@ solve_pf_helm
 helm_series
 HelmResult
 ```
-
-## Index
-
-```@index
-```

@@ -55,6 +55,7 @@ makedocs(
         ],
         "Contributing"       => "contributing.md",
         "API reference"      => "api.md",
+        "Symbol index"       => "symbol_index.md",
     ],
     checkdocs = :exports,
 )

@@ -434,5 +434,8 @@ construction; batteries are outside this programme.
    provenance, physical-balance tests, and supported-unit checks. Large-network
    scaling benchmarks remain part of the case-study campaign rather than the
    unit suite.
-8. Run fixed-hardware PV penetration studies.
+8. **Infrastructure complete:** add deterministic matched-case execution,
+   failure retention, duration/weight-aware summaries, and paired variant
+   differences. The dataset-specific fixed-hardware penetration campaign is the
+   next research run.
 9. Add outer current/capacitor sizing sweeps and capability frontiers.

@@ -40,6 +40,7 @@ end
     include("advanced_inverter_tests.jl")
     include("inverter_control_tests.jl")
     include("inverter_control_study_tests.jl")
+    include("inverter_control_experiment_tests.jl")
     include("battery_tests.jl")
     include("helm_tests.jl")
 end

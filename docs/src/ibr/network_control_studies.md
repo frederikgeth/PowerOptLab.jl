@@ -210,6 +210,94 @@ Current and capacitor sizing conclusions require outer parameter sweeps. A
 feasible point at one installed rating does not identify the minimum rating,
 and a smooth-NLP failure is not by itself a physical infeasibility certificate.
 
+## Matched batch experiments
+
+`InverterControlStudyCase` and `run_inverter_control_study` implement the outer
+single-snapshot experiment loop without coupling unrelated operating points into
+one NLP. A case combines:
+
+- `scenario_id`: the feeder, placement, load/PV, weather, and uncertainty
+  realization that must remain common across variants;
+- `variant_id`: the controller or hardware configuration being compared;
+- one prepared BMOPF network and `ControlledInverterFleetSpec`;
+- a positive interval duration in hours and positive scenario weight; and
+- copied dataset metadata such as feeder, penetration, seed, and timestamp.
+
+```julia
+cases = [
+    InverterControlStudyCase(
+        scenario_id="feeder_01/time_0042/seed_7",
+        variant_id="average_voltage",
+        network=network,
+        fleet=average_fleet,
+        duration_h=0.5,
+        weight=1.0,
+        metadata=Dict("penetration" => 0.75, "feeder" => "feeder_01")),
+    InverterControlStudyCase(
+        scenario_id="feeder_01/time_0042/seed_7",
+        variant_id="worst_phase",
+        network=network,
+        fleet=worst_phase_fleet,
+        duration_h=0.5,
+        weight=1.0,
+        metadata=Dict("penetration" => 0.75, "feeder" => "feeder_01")),
+]
+
+study = run_inverter_control_study(
+    cases; solver_options=("max_iter" => 500, "tol" => 1e-8))
+```
+
+The returned `study.settings` records the common per-unit base, optimizer type,
+objective semantics, verbosity, and solver attributes. Retain this with exported
+tables; it is part of the computational provenance, not an incidental runtime
+detail.
+
+Cases are solved serially in deterministic `(scenario_id, variant_id)` order.
+Serial execution is the reference reproducibility path. Large campaigns should
+partition the flat case list across worker processes and combine table rows;
+there is no mutable cross-snapshot state in this layer.
+
+By default, a case-level validation, construction, or solver exception is
+retained with its exception type/message and the study continues. Set
+`continue_on_error=false` for debugging. Process interrupts, out-of-memory
+errors, and stack overflows are never converted into ordinary scientific case
+failures. A solve that returns a non-publishable status is retained as a fleet
+result with masked numerical data, distinct from a thrown error.
+
+Extraction is split by purpose:
+
+- `inverter_control_study_case_rows` contains every case, including errors and
+  non-publishable solves;
+- `inverter_control_study_device_rows` and
+  `inverter_control_study_phase_rows` prefix fleet rows with the matched case
+  keys, duration, weight, and metadata;
+- `inverter_control_study_summary_rows` always groups by control/hardware
+  variant, optionally adds metadata cohorts, reports failure fractions over all
+  cases, and computes energy/tail metrics only from publishable cases; and
+- `inverter_control_paired_rows` reports device-level `variant - baseline`
+  differences for every scenario. Missing, errored, non-publishable, or
+  device-mismatched pairs remain as rows with `publishable_pair=false` and NaN
+  differences. Duration, weight, and metadata must also agree exactly across a
+  pair; `matched_case_definition` exposes that check and prevents unmatched
+  exposure from entering a paired estimate.
+
+Summary energy is the weighted sum of power times `duration_h` and is reported
+in kWh. Current, VUF, capacitor-current, and ripple-voltage p50/p95/p99 values
+are duration-and-weight inverse empirical CDFs over publishable inverter-device
+points, not unweighted quantiles or quantiles of scenario maxima. The summary
+reports both ordinary and weight-adjusted publication fractions. Do not
+interpret metrics from different publication fractions as a fair control-law
+comparison; examine retained failure rows and paired results first.
+
+Case construction defensively copies metadata once. Extracted case, device, and
+phase rows then share that copied dictionary to avoid one metadata allocation
+per inverter or phase. Treat row metadata as immutable during analysis.
+
+The library accepts already-prepared cases. Dataset ingestion, scenario
+generation, random customer placement, persistence formats, plots, and cluster
+scheduling remain in `scripts/studies/inverter_controls/` so the core API does
+not encode one dataset's schema.
+
 ## API
 
 ```@docs
@@ -218,4 +306,13 @@ ControlledInverterFleetResult
 solve_controlled_inverter_fleet
 controlled_inverter_rows
 controlled_inverter_phase_rows
+InverterControlStudyCase
+InverterControlStudyCaseResult
+InverterControlStudyResult
+run_inverter_control_study
+inverter_control_study_case_rows
+inverter_control_study_device_rows
+inverter_control_study_phase_rows
+inverter_control_study_summary_rows
+inverter_control_paired_rows
 ```
