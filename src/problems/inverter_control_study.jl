@@ -223,9 +223,9 @@ function _controlled_inverter_result(
         bus, status)
 end
 
-function _network_without_replaced_ibrs(result::Dict{String,Any},
+function _network_without_replaced_ibrs(result::AbstractDict,
                                         selected_ids)
-    published = copy(result)
+    published = Dict{String,Any}(result)
     native = Dict{String,Any}(
         String(id) => value for (id, value) in get(result, "ibr", Dict()))
     for id in selected_ids

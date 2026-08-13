@@ -88,6 +88,17 @@ end
         merge(inv_grid3_bal(), Dict("ibr" => Dict(
             "pv" => _fleet_native_ibr()))), spec;
         selection_objective=:unsupported)
+
+    # Masking can narrow a homogeneous top-level result dictionary. Publishing
+    # the pruned network must widen it explicitly before replacing `"ibr"`.
+    narrowed = Dict(
+        "bus" => Dict("poc" => 1),
+        "ibr" => Dict("pv" => 1, "native" => 2),
+    )
+    @test narrowed isa Dict{String,Dict{String,Int}}
+    pruned = PowerOptLab._network_without_replaced_ibrs(narrowed, ("pv",))
+    @test pruned isa Dict{String,Any}
+    @test pruned["ibr"] == Dict{String,Any}("native" => 2)
 end
 
 @testset "Controlled-inverter fleet: unpublished and neutral-arity regressions" begin
