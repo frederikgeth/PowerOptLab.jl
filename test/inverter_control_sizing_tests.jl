@@ -56,6 +56,25 @@ end
         "pv", AverageVoltageVoltVarWatt())
     no_optional_fleet = ControlledInverterFleetSpec(
         Dict("pv" => no_optional), Dict("pv" => request))
+    identity = resize_controlled_inverter_fleet(
+        no_optional_fleet, InverterHardwareSweepPoint(id="identity"))
+    @test PowerOptLab._same_struct_fields(
+        inverter_spec(identity.devices["pv"]),
+        inverter_spec(no_optional_fleet.devices["pv"]))
+    optional_base = inverter_spec(no_optional_fleet.devices["pv"])
+    optional_names = fieldnames(AdvancedInverter)
+    optional_parameters = NamedTuple{optional_names}(
+        Tuple(getfield(optional_base, name) for name in optional_names))
+    without_converter_rating = AdvancedInverter(;
+        merge(optional_parameters, (i_max=nothing,))...)
+    absent_rating_fleet = ControlledInverterFleetSpec(
+        Dict("pv" => ControlledDevice(
+            without_converter_rating,
+            no_optional_fleet.devices["pv"].controller)),
+        Dict("pv" => request))
+    absent_identity = resize_controlled_inverter_fleet(
+        absent_rating_fleet, InverterHardwareSweepPoint(id="identity"))
+    @test inverter_spec(absent_identity.devices["pv"]).i_max === nothing
     @test_throws ArgumentError resize_controlled_inverter_fleet(
         no_optional_fleet,
         InverterHardwareSweepPoint(id="grid", grid_current_scale=1.1))
@@ -75,6 +94,11 @@ end
             duration_h=0.25, weight=3.0, penetration=80),
     ]
     @test isnothing(validate_inverter_control_campaign(base_cases))
+    nan_metadata_cases = [InverterControlStudyCase(
+        scenario_id="nan_metadata", variant_id=case.variant_id,
+        network=net, fleet=case.fleet,
+        metadata=Dict("sentinel" => NaN)) for case in base_cases]
+    @test isnothing(validate_inverter_control_campaign(nan_metadata_cases))
     copied_network_case = InverterControlStudyCase(
         scenario_id="snapshot", variant_id="sequence",
         network=deepcopy(net), fleet=sequence_fleet,
@@ -144,6 +168,10 @@ end
     @test length(automatic_summaries) == 4
     @test Set(row["hardware_point_id"] for row in automatic_summaries) ==
           Set(["large", "reference"])
+    @test all(haskey(row, "converter_current_utilization_p99")
+              for row in automatic_summaries)
+    @test all(isfinite(row["converter_current_utilization_p99"])
+              for row in automatic_summaries)
     pairs = inverter_control_paired_rows(study, "baseline")
     @test length(pairs) == 2
     @test all(row.publishable_pair for row in pairs)
@@ -154,9 +182,12 @@ end
         study; allowed_dc_ripple_fraction=0.0)
     @test_throws ArgumentError inverter_control_hardware_requirement_rows(
         study; allowed_dc_ripple_fraction=0.02, current_margin=0.99)
+    @test_throws ArgumentError inverter_control_hardware_requirement_rows(
+        study; allowed_dc_ripple_fraction=0.02, binding_tolerance=1.0)
     requirements = inverter_control_hardware_requirement_rows(
         study; allowed_dc_ripple_fraction=0.02, current_margin=1.1)
     @test length(requirements) == 4
+    @test isconcretetype(eltype(requirements))
     @test all(row.publishable for row in requirements)
     @test all(row.converter_current_requirement_A > 0
               for row in requirements)
@@ -171,6 +202,12 @@ end
               for row in requirements)
     @test all(row.installed_dc_stored_energy_J > 0
               for row in requirements)
+    @test all(ismissing(row.dc_ripple_binding) for row in requirements)
+    @test all(row.achieved_dc_ripple_voltage_V > 0 for row in requirements)
+    @test all(isnan(row.enforced_dc_ripple_limit_V) for row in requirements)
+    @test all(row.converter_current_binding isa Bool for row in requirements)
+    @test all(row.grid_current_binding isa Bool for row in requirements)
+    @test all(row.capacitor_current_binding isa Bool for row in requirements)
     @test Set(getproperty.(requirements, :hardware_point_id)) ==
           Set(["large", "reference"])
     @test all(row.base_scenario_id == "snapshot" for row in requirements)
@@ -225,5 +262,6 @@ end
     @test isnan(unpublished_requirement.dc_2omega_capacitor_current_A)
     @test unpublished_requirement.installed_dc_stored_energy_J > 0
     @test ismissing(unpublished_requirement.converter_current_compliant)
+    @test ismissing(unpublished_requirement.converter_current_binding)
     @test ismissing(unpublished_requirement.dc_capacitance_2omega_compliant)
 end

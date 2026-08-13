@@ -257,12 +257,13 @@ Serial execution is the reference reproducibility path. Large campaigns should
 partition the flat case list across worker processes and combine table rows;
 there is no mutable cross-snapshot state in this layer.
 
-By default, a case-level validation, construction, or solver exception is
-retained with its exception type/message and the study continues. Set
-`continue_on_error=false` for debugging. Process interrupts, out-of-memory
-errors, and stack overflows are never converted into ordinary scientific case
-failures. A solve that returns a non-publishable status is retained as a fleet
-result with masked numerical data, distinct from a thrown error.
+By default, a case-level `ArgumentError` from dataset/model validation is
+retained with `error_class=:validation`, its exception type/message, and the
+study continues. Set `continue_on_error=false` to rethrow it. Programming,
+configuration, and unexpected solver exceptions are always rethrown: they must
+not become apparent physical-failure statistics. A solve that returns a
+non-publishable status is retained as a fleet result with masked numerical
+data, distinct from a thrown error.
 
 Extraction is split by purpose:
 
@@ -277,17 +278,30 @@ Extraction is split by purpose:
 - `inverter_control_paired_rows` reports device-level `variant - baseline`
   differences for every scenario. Missing, errored, non-publishable, or
   device-mismatched pairs remain as rows with `publishable_pair=false` and NaN
-  differences. Duration, weight, and metadata must also agree exactly across a
-  pair; `matched_case_definition` exposes that check and prevents unmatched
-  exposure from entering a paired estimate.
+  differences. Duration, weight, metadata, device identifiers, physical
+  hardware, requests, and the shared network must agree across a pair;
+  `matched_case_definition` exposes that check and prevents unmatched exposure
+  or confounding from entering a paired estimate. A separately materialized
+  network may be accepted only after external equivalence validation; and
+- `inverter_control_paired_summary_rows` reports candidate, definition-matched,
+  publishable, and dropped pair counts plus exposure-weighted mean deltas and
+  negative-delta fractions. Report the attrition columns with every paired
+  estimate.
 
 Summary energy is the weighted sum of power times `duration_h` and is reported
 in kWh. Current, VUF, capacitor-current, and ripple-voltage p50/p95/p99 values
 are duration-and-weight inverse empirical CDFs over publishable inverter-device
 points, not unweighted quantiles or quantiles of scenario maxima. The summary
-reports both ordinary and weight-adjusted publication fractions. Do not
+reports both ordinary and duration-times-weight exposure-adjusted publication
+fractions. Do not
 interpret metrics from different publication fractions as a fair control-law
 comparison; examine retained failure rows and paired results first.
+
+Fleet tails include both absolute current and rating-normalized utilization.
+The total converter/grid current companions combine declared carrier reserves
+with fundamental current in RMS quadrature; capacitor utilization uses the
+thermally weighted equivalent current. This prevents a heterogeneous fleet's
+largest nameplate from being mistaken for its most highly stressed device.
 
 Case construction defensively copies metadata once. Extracted case, device, and
 phase rows then share that copied dictionary to avoid one metadata allocation
@@ -316,9 +330,7 @@ inverter's base data, so heterogeneous devices retain their relative sizes:
 ```julia
 hardware = [
     InverterHardwareSweepPoint(
-        id="reference",
-        grid_current_scale=1.0,
-        capacitor_current_scale=1.0),
+        id="reference"),
     InverterHardwareSweepPoint(
         id="more_silicon_and_capacitance",
         converter_current_scale=1.20,
@@ -344,8 +356,9 @@ reserved-key collisions. The network is still shared by reference; each fleet
 and advanced-inverter specification is new.
 
 Converter-leg current, grid-side current, DC capacitance, and capacitor thermal
-current are distinct axes. An optional rating is changed only when its scale is
-explicitly supplied. Asking to scale an absent `i_grid_max` or `i_cap_max`
+current are distinct axes. A rating is changed only when its scale is explicitly
+supplied, and the all-`nothing` default is a true identity point. Asking to scale
+an absent `i_max`, `i_grid_max`, `c_dc`, or `i_cap_max`
 throws instead of silently introducing a physical constraint. Apparent-power
 rating and DC voltage remain fixed in this sweep; study them as separately
 declared hardware factors if required.
@@ -375,6 +388,20 @@ performance claim: requirements and utilizations are NaN, and compliance is
 Every scaled absolute rating is checked after multiplication. A scale that
 overflows to infinity or underflows to zero is rejected before model
 construction rather than becoming an invalid nameplate silently.
+
+The allowed ripple is a zero-to-peak sinusoidal amplitude: a fraction of 0.02
+means ±2% and therefore 4% peak-to-peak. Rows expose both the achieved `dv2`
+and the model's enforced `dv2_max`, plus binding flags for converter current,
+grid current, capacitor thermal current, and DC ripple. A `missing` binding flag
+means that no corresponding installed limit was declared or the solve was not
+publishable.
+
+The independent `dc_capacitance_scale` changes ripple headroom only. It does not
+change `esr_dc`, capacitor-current rating, cost, tolerance, or lifetime, so it
+must not be interpreted as a realizable parallel-bank or capacitor-loss axis.
+A physical bank study must construct coupled plant alternatives—for an ideal
+parallel multiplication by `n`, typically `C → nC`, current rating `→ nI`, and
+`ESR → ESR/n`—and state its component assumptions explicitly.
 
 There are two scientifically different uses:
 
@@ -418,6 +445,7 @@ inverter_control_study_device_rows
 inverter_control_study_phase_rows
 inverter_control_study_summary_rows
 inverter_control_paired_rows
+inverter_control_paired_summary_rows
 InverterHardwareSweepPoint
 resize_controlled_inverter_fleet
 validate_inverter_control_campaign

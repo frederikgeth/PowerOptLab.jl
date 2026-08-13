@@ -60,10 +60,16 @@ end
 struct InverterControlStudyCaseResult
     case::InverterControlStudyCase
     result::Union{Nothing,ControlledInverterFleetResult}
+    error_class::Union{Nothing,Symbol}
     error_type::Union{Nothing,String}
     error_message::Union{Nothing,String}
     elapsed_seconds::Float64
 end
+
+InverterControlStudyCaseResult(case, result, error_type, error_message, elapsed) =
+    InverterControlStudyCaseResult(
+        case, result, error_type === nothing ? nothing : :unclassified,
+        error_type, error_message, elapsed)
 
 _case_publishable(case_result::InverterControlStudyCaseResult) =
     case_result.result !== nothing && solve_status(case_result.result).publishable
@@ -87,6 +93,8 @@ solve_diagnostics(result::InverterControlStudyResult) = (
         case -> case.result !== nothing && !_case_publishable(case),
         result.cases),
     error_case_count=count(case -> case.result === nothing, result.cases),
+    validation_error_case_count=count(
+        case -> case.error_class === :validation, result.cases),
     elapsed_seconds=sum(case.elapsed_seconds for case in result.cases),
 )
 
@@ -116,6 +124,12 @@ function _validate_study_cases(cases)
     nothing
 end
 
+function _same_struct_fields(left, right)
+    typeof(left) === typeof(right) || return false
+    all(name -> isequal(getfield(left, name), getfield(right, name)),
+        fieldnames(typeof(left)))
+end
+
 function _study_solver_options(solver_options)
     options = solver_options isa NamedTuple ? pairs(solver_options) :
         solver_options
@@ -132,10 +146,12 @@ end
 
 Solve independent matched cases in deterministic `(scenario_id, variant_id)`
 order. Each case invokes [`solve_controlled_inverter_fleet`](@ref); snapshots
-are not coupled into one NLP. With `continue_on_error=true` (default), model,
-validation, and solver exceptions are recorded in the case result and the
-remaining cases continue. Process interrupts, out-of-memory errors, and stack
-overflows are always rethrown.
+are not coupled into one NLP. With `continue_on_error=true` (default),
+case-specific `ArgumentError`s from dataset and model validation are recorded
+and the remaining cases continue. Programming, configuration, and unexpected
+solver exceptions are rethrown so they cannot be misreported as physical
+failure statistics. Set `continue_on_error=false` to rethrow validation errors
+as well.
 
 This implementation is deliberately serial and reproducible. Large studies
 should partition the case vector across processes outside this function and
@@ -152,6 +168,12 @@ function run_inverter_control_study(
         selection_objective::Symbol=:loss,
         solver_options=())
     _validate_study_cases(cases)
+    selection_objective in (:loss, :zero, :network_cost) || throw(ArgumentError(
+        "selection_objective must be :loss, :zero, or :network_cost"))
+    per_unit || throw(ArgumentError(
+        "run_inverter_control_study requires per_unit=true"))
+    isfinite(s_base) && s_base > 0 || throw(ArgumentError(
+        "s_base must be finite and > 0"))
     ordered = sort!(collect(cases);
         by=case -> (case.scenario_id, case.variant_id))
     canonical_options = _study_solver_options(solver_options)
@@ -166,15 +188,16 @@ function run_inverter_control_study(
                 solver_options=canonical_options)
             elapsed = (time_ns() - started) / 1e9
             push!(outcomes, InverterControlStudyCaseResult(
-                case, result, nothing, nothing, elapsed))
+                case, result, nothing, nothing, nothing, elapsed))
         catch err
             err isa Union{InterruptException,OutOfMemoryError,StackOverflowError} &&
                 rethrow()
+            err isa ArgumentError || rethrow()
             continue_on_error || rethrow()
             elapsed = (time_ns() - started) / 1e9
             push!(outcomes, InverterControlStudyCaseResult(
-                case, nothing, string(typeof(err)), sprint(showerror, err),
-                elapsed))
+                case, nothing, :validation, string(typeof(err)),
+                sprint(showerror, err), elapsed))
         end
     end
     settings = (
@@ -197,6 +220,7 @@ function inverter_control_study_case_rows(result::InverterControlStudyResult)
         weight=case_result.case.weight,
         termination_status=_case_termination(case_result),
         publishable=_case_publishable(case_result),
+        error_class=case_result.error_class,
         error_type=case_result.error_type,
         error_message=case_result.error_message,
         elapsed_seconds=case_result.elapsed_seconds,
@@ -215,41 +239,27 @@ row. Non-publishable fleet solves retain device rows with masked numerical data.
 """
 function inverter_control_study_device_rows(
         result::InverterControlStudyResult)
-    rows = NamedTuple[]
-    for case_result in result.cases
-        case_result.result === nothing && continue
-        prefix = (
-            scenario_id=case_result.case.scenario_id,
-            variant_id=case_result.case.variant_id,
-            duration_h=case_result.case.duration_h,
-            weight=case_result.case.weight,
-        )
-        for device_row in controlled_inverter_rows(case_result.result)
-            push!(rows, merge(prefix, device_row,
-                              (metadata=case_result.case.metadata,)))
-        end
-    end
-    rows
+    [merge((
+        scenario_id=case_result.case.scenario_id,
+        variant_id=case_result.case.variant_id,
+        duration_h=case_result.case.duration_h,
+        weight=case_result.case.weight,
+    ), device_row, (metadata=case_result.case.metadata,))
+     for case_result in result.cases if case_result.result !== nothing
+     for device_row in controlled_inverter_rows(case_result.result)]
 end
 
 """Return one case-prefixed long-form row per controlled inverter phase."""
 function inverter_control_study_phase_rows(
         result::InverterControlStudyResult)
-    rows = NamedTuple[]
-    for case_result in result.cases
-        case_result.result === nothing && continue
-        prefix = (
-            scenario_id=case_result.case.scenario_id,
-            variant_id=case_result.case.variant_id,
-            duration_h=case_result.case.duration_h,
-            weight=case_result.case.weight,
-        )
-        for phase_row in controlled_inverter_phase_rows(case_result.result)
-            push!(rows, merge(prefix, phase_row,
-                              (metadata=case_result.case.metadata,)))
-        end
-    end
-    rows
+    [merge((
+        scenario_id=case_result.case.scenario_id,
+        variant_id=case_result.case.variant_id,
+        duration_h=case_result.case.duration_h,
+        weight=case_result.case.weight,
+    ), phase_row, (metadata=case_result.case.metadata,))
+     for case_result in result.cases if case_result.result !== nothing
+     for phase_row in controlled_inverter_phase_rows(case_result.result)]
 end
 
 function _weighted_quantile(values, weights, probability::Float64)
@@ -276,6 +286,14 @@ function _study_group_value(case::InverterControlStudyCase, key::String)
         "grouping metadata '$key'"))
     case.metadata[key]
 end
+
+_study_sort_value(value::Real) = (0, Float64(value))
+_study_sort_value(value::AbstractString) = (1, String(value))
+_study_sort_value(value::Symbol) = (2, String(value))
+_study_sort_value(value::Nothing) = (3, "")
+_study_sort_value(value::Missing) = (4, "")
+_study_sort_value(value) = (5, repr(value))
+_study_group_sort_key(group::Tuple) = Tuple(_study_sort_value.(group))
 
 """
     inverter_control_study_summary_rows(result; group_by=String[])
@@ -312,7 +330,7 @@ function inverter_control_study_summary_rows(
     end
 
     summaries = Dict{String,Any}[]
-    for group in sort!(collect(Base.keys(groups)); by=key -> repr(key))
+    for group in sort!(collect(Base.keys(groups)); by=_study_group_sort_key)
         case_results = groups[group]
         row = Dict{String,Any}(group_keys[index] => group[index]
                                for index in eachindex(group_keys))
@@ -320,27 +338,35 @@ function inverter_control_study_summary_rows(
         publishable = count(_case_publishable, case_results)
         errors = count(case -> case.result === nothing, case_results)
         unpublished = case_count - publishable - errors
-        total_weight = sum(case.case.weight for case in case_results)
+        total_weight = sum(
+            case.case.duration_h * case.case.weight for case in case_results)
         publishable_weight = sum((
-            case.case.weight for case in case_results
+            case.case.duration_h * case.case.weight for case in case_results
             if _case_publishable(case)); init=0.0)
         row["case_count"] = case_count
         row["publishable_case_count"] = publishable
         row["unpublished_case_count"] = unpublished
         row["error_case_count"] = errors
+        row["validation_error_case_count"] = count(
+            case -> case.error_class === :validation, case_results)
         row["publishable_fraction"] = publishable / case_count
         row["weighted_publishable_fraction"] = publishable_weight / total_weight
 
-        device_rows = NamedTuple[]
+        device_rows = nothing
         exposures = Float64[]
         for case_result in case_results
             _case_publishable(case_result) || continue
             local_rows = controlled_inverter_rows(case_result.result)
-            append!(device_rows, local_rows)
+            if device_rows === nothing
+                device_rows = copy(local_rows)
+            else
+                append!(device_rows, local_rows)
+            end
             append!(exposures, fill(
                 case_result.case.duration_h * case_result.case.weight,
                 length(local_rows)))
         end
+        device_rows === nothing && (device_rows = NamedTuple[])
         row["publishable_device_points"] = length(device_rows)
         row["weighted_available_energy_kWh"] = sum((
             device_rows[index].p_available_W * exposures[index]
@@ -358,9 +384,18 @@ function inverter_control_study_summary_rows(
         metrics = (
             ("converter_current_A", :maximum_converter_current_A),
             ("grid_current_A", :maximum_grid_current_A),
+            ("converter_total_current_A",
+             :maximum_converter_total_current_A),
+            ("grid_total_current_A", :maximum_grid_total_current_A),
+            ("converter_current_utilization",
+             :converter_current_utilization),
+            ("grid_current_utilization", :grid_current_utilization),
             ("voltage_unbalance_factor", :voltage_unbalance_factor),
             ("capacitor_thermal_current_A", :capacitor_thermal_current_A),
+            ("capacitor_current_utilization",
+             :capacitor_current_utilization),
             ("dc_ripple_voltage_V", :dc_ripple_voltage_V),
+            ("dc_ripple_utilization", :dc_ripple_utilization),
         )
         for (label, field) in metrics
             values = Float64[getproperty(device_row, field)
@@ -382,17 +417,22 @@ function inverter_control_study_summary_rows(
 end
 
 """
-    inverter_control_paired_rows(result, baseline_variant)
+    inverter_control_paired_rows(result, baseline_variant;
+        require_shared_network=true)
 
 Return matched device-level differences `variant - baseline` for every
 scenario and non-baseline variant in the study. Missing, errored, or
 non-publishable pairs are retained with `publishable_pair=false` and NaN
-differences. This prevents an apparently favourable paired comparison from
-silently dropping failed scenarios.
+differences. A pair is matched only when exposure metadata, physical inverter
+specifications, requests, device identifiers, and (by default) the network
+object agree. This prevents both attrition and hardware/network confounding.
+Set `require_shared_network=false` only after an external adapter has proved
+separately materialized networks equivalent.
 """
 function inverter_control_paired_rows(
         result::InverterControlStudyResult,
-        baseline_variant::AbstractString)
+        baseline_variant::AbstractString;
+        require_shared_network::Bool=true)
     baseline = String(baseline_variant)
     lookup = Dict(
         (case.case.scenario_id, case.case.variant_id) => case
@@ -406,14 +446,25 @@ function inverter_control_paired_rows(
         throw(ArgumentError(
             "baseline variant '$baseline' is missing from one or more scenarios"))
 
-    rows = NamedTuple[]
+    rows = nothing
     for scenario in scenarios, variant in variants
         base_case = lookup[(scenario, baseline)]
         variant_case = get(lookup, (scenario, variant), nothing)
         matched_case_definition = variant_case !== nothing &&
             variant_case.case.duration_h == base_case.case.duration_h &&
             variant_case.case.weight == base_case.case.weight &&
-            variant_case.case.metadata == base_case.case.metadata
+            isequal(variant_case.case.metadata, base_case.case.metadata) &&
+            (!require_shared_network ||
+             variant_case.case.network === base_case.case.network) &&
+            Set(keys(variant_case.case.fleet.devices)) ==
+                Set(keys(base_case.case.fleet.devices)) &&
+            all(id -> _same_struct_fields(
+                    inverter_spec(variant_case.case.fleet.devices[id]),
+                    inverter_spec(base_case.case.fleet.devices[id])) &&
+                _same_struct_fields(
+                    variant_case.case.fleet.requests[id],
+                    base_case.case.fleet.requests[id]),
+                keys(base_case.case.fleet.devices))
         base_rows = _case_publishable(base_case) ? Dict(
             row.device_id => row
             for row in controlled_inverter_rows(base_case.result)) :
@@ -440,7 +491,7 @@ function inverter_control_paired_rows(
             else
                 delta = _ -> NaN
             end
-            push!(rows, (
+            row = (
                 scenario_id=scenario,
                 device_id=id,
                 baseline_variant=baseline,
@@ -462,8 +513,92 @@ function inverter_control_paired_rows(
                 delta_capacitor_thermal_current_A=
                     delta(:capacitor_thermal_current_A),
                 delta_dc_ripple_voltage_V=delta(:dc_ripple_voltage_V),
-            ))
+            )
+            if rows === nothing
+                rows = [row]
+            else
+                push!(rows, row)
+            end
         end
     end
-    rows
+    rows === nothing ? NamedTuple[] : rows
+end
+
+"""
+    inverter_control_paired_summary_rows(result, baseline_variant;
+        group_by=String[], require_shared_network=true)
+
+Summarize matched device-level `variant - baseline` rows without hiding
+attrition. Each cohort reports all candidate, definition-matched, publishable,
+and dropped device pairs. Delta means and negative-delta fractions use
+`duration_h*weight` exposure over publishable pairs only. The latter is the
+weighted fraction for which the variant has a smaller value than baseline;
+interpret whether smaller is preferable from the named metric.
+"""
+function inverter_control_paired_summary_rows(
+        result::InverterControlStudyResult,
+        baseline_variant::AbstractString;
+        group_by=String[],
+        require_shared_network::Bool=true)
+    requested = group_by isa AbstractString ? [String(group_by)] :
+        String.(collect(group_by))
+    paired = inverter_control_paired_rows(
+        result, baseline_variant;
+        require_shared_network=require_shared_network)
+    hardware_tagged = [haskey(row.metadata, "hardware_point_id") for row in paired]
+    if any(hardware_tagged)
+        all(hardware_tagged) || throw(ArgumentError(
+            "hardware_point_id metadata must be present on every pair or none"))
+        "hardware_point_id" in requested || push!(
+            requested, "hardware_point_id")
+    end
+    group_keys = unique(["variant_id"; requested])
+    PairRow = eltype(paired)
+    groups = Dict{Tuple,Vector{PairRow}}()
+    for row in paired
+        group = Tuple(key == "variant_id" ? row.variant_id :
+            haskey(row.metadata, key) ? row.metadata[key] :
+            throw(ArgumentError(
+                "paired row for scenario '$(row.scenario_id)' lacks " *
+                "grouping metadata '$key'")) for key in group_keys)
+        push!(get!(groups, group, PairRow[]), row)
+    end
+
+    metrics = (
+        "command_curtailment_W" => :delta_command_curtailment_W,
+        "poc_active_power_shortfall_W" =>
+            :delta_poc_active_power_shortfall_W,
+        "converter_loss_W" => :delta_converter_loss_W,
+        "converter_current_A" => :delta_converter_current_A,
+        "grid_current_A" => :delta_grid_current_A,
+        "voltage_unbalance_factor" => :delta_voltage_unbalance_factor,
+        "capacitor_thermal_current_A" =>
+            :delta_capacitor_thermal_current_A,
+        "dc_ripple_voltage_V" => :delta_dc_ripple_voltage_V,
+    )
+    summaries = Dict{String,Any}[]
+    for group in sort!(collect(keys(groups)); by=_study_group_sort_key)
+        cohort = groups[group]
+        row = Dict{String,Any}(group_keys[index] => group[index]
+                               for index in eachindex(group_keys))
+        publishable = filter(item -> item.publishable_pair, cohort)
+        exposures = [item.duration_h * item.weight for item in publishable]
+        exposure = sum(exposures; init=0.0)
+        row["candidate_pair_count"] = length(cohort)
+        row["matched_definition_pair_count"] = count(
+            item -> item.matched_case_definition, cohort)
+        row["publishable_pair_count"] = length(publishable)
+        row["dropped_pair_count"] = length(cohort) - length(publishable)
+        row["publishable_pair_fraction"] = length(publishable) / length(cohort)
+        for (label, field) in metrics
+            values = [getproperty(item, field) for item in publishable]
+            row["mean_delta_$label"] = isempty(values) ? NaN :
+                sum(values .* exposures) / exposure
+            row["negative_delta_fraction_$label"] = isempty(values) ? NaN :
+                sum(exposures[index] for index in eachindex(values)
+                    if values[index] < 0; init=0.0) / exposure
+        end
+        push!(summaries, row)
+    end
+    summaries
 end

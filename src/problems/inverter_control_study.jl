@@ -338,7 +338,7 @@ The ordinary VUF column is `|U₂|/|U₁|`; the controller's regularized ratio i
 reported separately as `regularized_voltage_unbalance`.
 """
 function controlled_inverter_rows(result::ControlledInverterFleetResult)
-    rows = NamedTuple[]
+    rows = nothing
     for id in sort!(collect(keys(result.devices)))
         device = result.devices[id]
         plant = device.plant
@@ -346,12 +346,16 @@ function controlled_inverter_rows(result::ControlledInverterFleetResult)
         controlled = result.spec.devices[id]
         inverter = inverter_spec(controlled)
         request = result.spec.requests[id]
+        converter_total_current = maximum(hypot.(
+            plant.i_mag, inverter.pwm_ac_converter_reserve))
+        grid_total_current = maximum(hypot.(
+            plant.i_grid_mag, inverter.pwm_ac_grid_reserve))
         u1 = abs(control.voltage_sequence[2])
         u2 = abs(control.voltage_sequence[3])
         vuf = isfinite(u1) && u1 > 0 ? u2/u1 : NaN
         stored_energy = inverter.c_dc === nothing || inverter.v_dc === nothing ?
             NaN : 0.5*inverter.c_dc*inverter.v_dc^2
-        push!(rows, (
+        row = (
             device_id=id,
             bus=inverter.bus,
             positive_sequence_policy=
@@ -389,6 +393,14 @@ function controlled_inverter_rows(result::ControlledInverterFleetResult)
                 inverter.i_grid_max === nothing ? NaN : inverter.i_grid_max,
             maximum_converter_current_A=maximum(plant.i_mag),
             maximum_grid_current_A=maximum(plant.i_grid_mag),
+            maximum_converter_total_current_A=converter_total_current,
+            maximum_grid_total_current_A=grid_total_current,
+            converter_current_utilization=
+                inverter.i_max === nothing ? NaN :
+                converter_total_current/inverter.i_max,
+            grid_current_utilization=
+                inverter.i_grid_max === nothing ? NaN :
+                grid_total_current/inverter.i_grid_max,
             positive_sequence_current_A=plant.i_positive,
             negative_sequence_current_A=plant.i_negative,
             ripple_power_VA=plant.ripple,
@@ -400,11 +412,21 @@ function controlled_inverter_rows(result::ControlledInverterFleetResult)
             dc_stored_energy_J=stored_energy,
             capacitor_current_A=plant.i_cap,
             capacitor_thermal_current_A=plant.i_cap_thermal,
+            capacitor_current_utilization=
+                inverter.i_cap_max === nothing ? NaN :
+                plant.i_cap_thermal/inverter.i_cap_max,
+            dc_ripple_utilization=
+                inverter.dv2_max === nothing ? NaN : plant.dv2/inverter.dv2_max,
             exact_smooth_current_residual_A=
                 device.exact_smooth_current_residual,
-        ))
+        )
+        if rows === nothing
+            rows = [row]
+        else
+            push!(rows, row)
+        end
     end
-    rows
+    rows === nothing ? NamedTuple[] : rows
 end
 
 """
@@ -417,14 +439,14 @@ parsing nested solver results.
 """
 function controlled_inverter_phase_rows(
         result::ControlledInverterFleetResult)
-    rows = NamedTuple[]
+    rows = nothing
     for id in sort!(collect(keys(result.devices)))
         device = result.devices[id]
         for phase in 1:3
             voltage = device.control.phase_voltage[phase]
             converter_current = device.converter_terminal.phase_current[phase]
             grid_current = device.grid_phase_current[phase]
-            push!(rows, (
+            row = (
                 device_id=id,
                 phase=phase,
                 voltage_real_V=real(voltage),
@@ -436,8 +458,13 @@ function controlled_inverter_phase_rows(
                 grid_current_real_A=real(grid_current),
                 grid_current_imag_A=imag(grid_current),
                 grid_current_magnitude_A=abs(grid_current),
-            ))
+            )
+            if rows === nothing
+                rows = [row]
+            else
+                push!(rows, row)
+            end
         end
     end
-    rows
+    rows === nothing ? NamedTuple[] : rows
 end

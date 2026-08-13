@@ -1,24 +1,25 @@
 # Counterfactual hardware grids and first-pass sizing diagnostics.
 
 """
-    InverterHardwareSweepPoint(; id, converter_current_scale=1,
-        grid_current_scale=nothing, dc_capacitance_scale=1,
+    InverterHardwareSweepPoint(; id, converter_current_scale=nothing,
+        grid_current_scale=nothing, dc_capacitance_scale=nothing,
         capacitor_current_scale=nothing)
 
 One counterfactual hardware point for an outer inverter-control study. Scales
 are applied to each device's installed rating, preserving heterogeneous fleet
-nameplates. `nothing` leaves the optional grid-current or capacitor-current
-rating absent; a numerical scale requires that the corresponding base rating
-is explicitly present.
+nameplates. `nothing` leaves the corresponding rating unchanged; a numerical
+scale requires that the base rating is explicitly present. Consequently a point
+constructed with only `id` is an identity transformation, including for legal
+plants whose optional ratings are absent.
 
 Apparent-power rating, DC voltage, ripple allowance, controller parameters, and
 all other plant data remain fixed. This isolates the four named hardware axes.
 """
 struct InverterHardwareSweepPoint
     id::String
-    converter_current_scale::Float64
+    converter_current_scale::Union{Nothing,Float64}
     grid_current_scale::Union{Nothing,Float64}
-    dc_capacitance_scale::Float64
+    dc_capacitance_scale::Union{Nothing,Float64}
     capacitor_current_scale::Union{Nothing,Float64}
 end
 
@@ -32,9 +33,9 @@ end
 
 function InverterHardwareSweepPoint(;
         id,
-        converter_current_scale::Real=1.0,
+        converter_current_scale::Union{Nothing,Real}=nothing,
         grid_current_scale::Union{Nothing,Real}=nothing,
-        dc_capacitance_scale::Real=1.0,
+        dc_capacitance_scale::Union{Nothing,Real}=nothing,
         capacitor_current_scale::Union{Nothing,Real}=nothing)
     point_id = String(id)
     isempty(strip(point_id)) && throw(ArgumentError(
@@ -42,11 +43,12 @@ function InverterHardwareSweepPoint(;
     InverterHardwareSweepPoint(
         point_id,
         _positive_sizing_scale(
-            converter_current_scale, "converter_current_scale"),
+            converter_current_scale, "converter_current_scale";
+            optional=true),
         _positive_sizing_scale(
             grid_current_scale, "grid_current_scale"; optional=true),
         _positive_sizing_scale(
-            dc_capacitance_scale, "dc_capacitance_scale"),
+            dc_capacitance_scale, "dc_capacitance_scale"; optional=true),
         _positive_sizing_scale(
             capacitor_current_scale, "capacitor_current_scale";
             optional=true),
@@ -115,12 +117,6 @@ const _HARDWARE_METADATA_KEYS = (
     "capacitor_current_scale",
 )
 
-function _same_struct_fields(left, right)
-    typeof(left) === typeof(right) || return false
-    all(name -> isequal(getfield(left, name), getfield(right, name)),
-        fieldnames(typeof(left)))
-end
-
 """
     validate_inverter_control_campaign(cases; require_shared_network=true)
 
@@ -159,7 +155,7 @@ function validate_inverter_control_campaign(
                 "scenario '$scenario' has variant-dependent duration_h"))
             case.weight == reference.weight || throw(ArgumentError(
                 "scenario '$scenario' has variant-dependent weight"))
-            case.metadata == reference.metadata || throw(ArgumentError(
+            isequal(case.metadata, reference.metadata) || throw(ArgumentError(
                 "scenario '$scenario' has variant-dependent metadata"))
             if require_shared_network && case.network !== reference.network
                 throw(ArgumentError(
@@ -257,16 +253,23 @@ function _sizing_utilization(publishable::Bool, installed, required)
     required / installed
 end
 
+function _sizing_binding(publishable::Bool, limit, achieved, tolerance::Float64)
+    publishable && isfinite(limit) && limit > 0 && isfinite(achieved) ||
+        return missing
+    achieved >= (1 - tolerance) * limit
+end
+
 """
     inverter_control_hardware_requirement_rows(study;
-        allowed_dc_ripple_fraction, current_margin=1)
+        allowed_dc_ripple_fraction, current_margin=1,
+        binding_tolerance=1e-4)
 
 Return one first-pass hardware-requirement row per extracted inverter. For a
-publishable point, converter/grid/capacitor current requirements are the
-achieved RMS quantities multiplied by `current_margin`. Converter and grid
-requirements combine the fundamental phase currents with any declared manual
-carrier-current reserves in RMS quadrature. The monolithic three-leg DC-link
-quantities are
+publishable point, converter/grid total RMS currents and the capacitor's
+thermally weighted equivalent current are multiplied by `current_margin`.
+Converter and grid requirements combine the fundamental phase currents with any
+declared manual carrier-current reserves in RMS quadrature. The monolithic
+three-leg DC-link quantities are
 
 ```math
 I_{2\\omega,rms}=|\\widetilde S|/(\\sqrt{2}V_{dc}),\\qquad
@@ -275,7 +278,8 @@ E_{2\\omega,req}=\\tfrac12 C_{2\\omega,req}V_{dc}^2.
 ```
 
 `allowed_dc_ripple_fraction` defines
-`ΔV_allow = allowed_dc_ripple_fraction*Vdc` and must lie in `(0, 1)`.
+`ΔV_allow = allowed_dc_ripple_fraction*Vdc` and must lie in `(0, 1)`. It is
+the zero-to-peak sinusoidal amplitude, so `0.02` means ±2% or 4% peak-to-peak.
 Non-publishable numerical requirements are NaN and compliance fields are
 `missing`.
 
@@ -288,15 +292,19 @@ calculation.
 function inverter_control_hardware_requirement_rows(
         study::InverterControlStudyResult;
         allowed_dc_ripple_fraction::Real,
-        current_margin::Real=1.0)
+        current_margin::Real=1.0,
+        binding_tolerance::Real=1e-4)
     fraction = Float64(allowed_dc_ripple_fraction)
     isfinite(fraction) && 0 < fraction < 1 || throw(ArgumentError(
         "allowed_dc_ripple_fraction must be finite and in (0, 1)"))
     margin = Float64(current_margin)
     isfinite(margin) && margin >= 1 || throw(ArgumentError(
         "current_margin must be finite and >= 1"))
+    tolerance = Float64(binding_tolerance)
+    isfinite(tolerance) && 0 <= tolerance < 1 || throw(ArgumentError(
+        "binding_tolerance must be finite and in [0, 1)"))
 
-    rows = NamedTuple[]
+    rows = nothing
     for case_result in study.cases
         case_result.result === nothing && continue
         publishable = _case_publishable(case_result)
@@ -309,15 +317,18 @@ function inverter_control_hardware_requirement_rows(
             installed_converter_current = something(inverter.i_max, NaN)
             installed_grid_current = something(inverter.i_grid_max, NaN)
             installed_capacitor_current = something(inverter.i_cap_max, NaN)
+            enforced_ripple_limit = something(inverter.dv2_max, NaN)
             allowed_ripple = fraction * vdc
-            converter_requirement = publishable ?
-                margin * maximum(hypot.(
-                    plant.i_mag, inverter.pwm_ac_converter_reserve)) : NaN
-            grid_requirement = publishable ?
-                margin * maximum(hypot.(
-                    plant.i_grid_mag, inverter.pwm_ac_grid_reserve)) : NaN
+            achieved_converter_current = publishable ? maximum(hypot.(
+                plant.i_mag, inverter.pwm_ac_converter_reserve)) : NaN
+            achieved_grid_current = publishable ? maximum(hypot.(
+                plant.i_grid_mag, inverter.pwm_ac_grid_reserve)) : NaN
+            achieved_capacitor_current = publishable ? plant.i_cap_thermal : NaN
+            achieved_ripple = publishable ? plant.dv2 : NaN
+            converter_requirement = margin * achieved_converter_current
+            grid_requirement = margin * achieved_grid_current
             capacitor_current_requirement = publishable ?
-                margin * plant.i_cap_thermal : NaN
+                margin * achieved_capacitor_current : NaN
             dc_2omega_current = publishable ?
                 plant.ripple / (sqrt(2) * vdc) : NaN
             capacitance_requirement = publishable ?
@@ -328,7 +339,7 @@ function inverter_control_hardware_requirement_rows(
                 0.5 * installed_capacitance * vdc^2 : NaN
             stored_energy_requirement = publishable ?
                 0.5 * capacitance_requirement * vdc^2 : NaN
-            push!(rows, (
+            row = (
                 scenario_id=case_result.case.scenario_id,
                 variant_id=case_result.case.variant_id,
                 device_id=id,
@@ -341,8 +352,11 @@ function inverter_control_hardware_requirement_rows(
                 weight=case_result.case.weight,
                 publishable=publishable,
                 current_margin=margin,
+                binding_tolerance=tolerance,
                 allowed_dc_ripple_fraction=fraction,
                 allowed_dc_ripple_voltage_V=allowed_ripple,
+                enforced_dc_ripple_limit_V=enforced_ripple_limit,
+                achieved_dc_ripple_voltage_V=achieved_ripple,
                 converter_current_requirement_A=converter_requirement,
                 grid_current_requirement_A=grid_requirement,
                 capacitor_thermal_current_requirement_A=
@@ -359,6 +373,18 @@ function inverter_control_hardware_requirement_rows(
                     installed_capacitor_current,
                 installed_dc_capacitance_F=installed_capacitance,
                 installed_dc_stored_energy_J=installed_stored_energy,
+                converter_current_binding=_sizing_binding(
+                    publishable, installed_converter_current,
+                    achieved_converter_current, tolerance),
+                grid_current_binding=_sizing_binding(
+                    publishable, installed_grid_current,
+                    achieved_grid_current, tolerance),
+                capacitor_current_binding=_sizing_binding(
+                    publishable, installed_capacitor_current,
+                    achieved_capacitor_current, tolerance),
+                dc_ripple_binding=_sizing_binding(
+                    publishable, enforced_ripple_limit, achieved_ripple,
+                    tolerance),
                 converter_current_utilization=_sizing_utilization(
                     publishable, installed_converter_current,
                     converter_requirement),
@@ -382,8 +408,13 @@ function inverter_control_hardware_requirement_rows(
                     publishable, installed_capacitance,
                     capacitance_requirement),
                 metadata=case_result.case.metadata,
-            ))
+            )
+            if rows === nothing
+                rows = [row]
+            else
+                push!(rows, row)
+            end
         end
     end
-    rows
+    rows === nothing ? NamedTuple[] : rows
 end

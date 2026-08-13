@@ -68,26 +68,35 @@ end
     @test diagnostics.case_count == 3
     @test diagnostics.publishable_case_count == 2
     @test diagnostics.error_case_count == 1
+    @test diagnostics.validation_error_case_count == 1
     @test diagnostics.unpublished_case_count == 0
     @test result.settings.selection_objective == :loss
     @test result.settings.solver_options ==
           Dict("max_iter" => 500, "tol" => 1e-8)
     @test occursin("Ipopt", result.settings.optimizer)
     @test result.cases[1].error_type !== nothing
+    @test result.cases[1].error_class == :validation
+    @test inverter_control_study_case_rows(result)[1].error_class == :validation
     @test occursin("not present in network", result.cases[1].error_message)
+    @test_throws ErrorException run_inverter_control_study(
+        [good_baseline]; optimizer=Int)
+    @test_throws ArgumentError run_inverter_control_study(
+        [good_baseline]; selection_objective=:invalid)
 
     device_rows = inverter_control_study_device_rows(result)
     phase_rows = inverter_control_study_phase_rows(result)
     @test length(device_rows) == 2
     @test length(phase_rows) == 6
+    @test isconcretetype(eltype(device_rows))
+    @test isconcretetype(eltype(phase_rows))
     @test getproperty.(device_rows, :variant_id) == ["baseline", "sequence"]
     @test all(row.metadata["penetration"] == 50 for row in device_rows)
     @test all(row.p_available_W == 8e3 for row in device_rows)
 
     summaries = inverter_control_study_summary_rows(
         result; group_by=["penetration"])
-    @test inverter_control_study_summary_rows(
-        result; group_by="penetration") == summaries
+    @test isequal(inverter_control_study_summary_rows(
+        result; group_by="penetration"), summaries)
     @test length(summaries) == 2
     baseline_summary = only(filter(
         row -> row["variant_id"] == "baseline", summaries))
@@ -121,6 +130,7 @@ end
 
     paired = inverter_control_paired_rows(result, "baseline")
     @test length(paired) == 2
+    @test isconcretetype(eltype(paired))
     @test paired[1].scenario_id == "bad"
     @test !paired[1].publishable_pair
     @test isnan(paired[1].delta_converter_current_A)
@@ -131,6 +141,14 @@ end
     @test paired[2].weight == 2.0
     @test paired[2].metadata === result.cases[2].case.metadata
     @test abs(paired[2].delta_converter_current_A) < 0.1
+    paired_summary = only(inverter_control_paired_summary_rows(
+        result, "baseline"))
+    @test paired_summary["candidate_pair_count"] == 2
+    @test paired_summary["matched_definition_pair_count"] == 1
+    @test paired_summary["publishable_pair_count"] == 1
+    @test paired_summary["dropped_pair_count"] == 1
+    @test paired_summary["publishable_pair_fraction"] == 0.5
+    @test isfinite(paired_summary["mean_delta_converter_current_A"])
     @test_throws ArgumentError inverter_control_paired_rows(
         result, "not_a_variant")
 
@@ -150,6 +168,67 @@ end
     mismatched_pairs = inverter_control_paired_rows(mismatched, "baseline")
     @test getproperty.(mismatched_pairs, :device_id) == ["extra", "pv"]
     @test all(!row.publishable_pair for row in mismatched_pairs)
+
+    scaled_comparison = resize_controlled_inverter_fleet(
+        comparison_fleet,
+        InverterHardwareSweepPoint(
+            id="confounded", converter_current_scale=2.0))
+    scaled_case = InverterControlStudyCase(
+        scenario_id="good", variant_id="sequence", network=net,
+        fleet=scaled_comparison, duration_h=good_baseline.duration_h,
+        weight=good_baseline.weight, metadata=good_baseline.metadata)
+    scaled_outcome = InverterControlStudyCaseResult(
+        scaled_case, result.cases[3].result, nothing, nothing, 0.0)
+    scaled_result = InverterControlStudyResult(
+        [result.cases[2], scaled_outcome], result.solve, result.settings)
+    scaled_pair = only(inverter_control_paired_rows(
+        scaled_result, "baseline"))
+    @test !scaled_pair.matched_case_definition
+    @test !scaled_pair.publishable_pair
+
+    network_case = InverterControlStudyCase(
+        scenario_id="good", variant_id="sequence", network=deepcopy(net),
+        fleet=comparison_fleet, duration_h=good_baseline.duration_h,
+        weight=good_baseline.weight, metadata=good_baseline.metadata)
+    network_outcome = InverterControlStudyCaseResult(
+        network_case, result.cases[3].result, nothing, nothing, 0.0)
+    network_result = InverterControlStudyResult(
+        [result.cases[2], network_outcome], result.solve, result.settings)
+    @test !only(inverter_control_paired_rows(
+        network_result, "baseline")).matched_case_definition
+    @test only(inverter_control_paired_rows(
+        network_result, "baseline";
+        require_shared_network=false)).matched_case_definition
+
+    numeric_outcomes = InverterControlStudyCaseResult[]
+    for penetration in (100, 0, 20, 10)
+        numeric_case = InverterControlStudyCase(
+            scenario_id="numeric_$penetration", variant_id="baseline",
+            network=net, fleet=baseline_fleet,
+            metadata=Dict("penetration" => penetration))
+        push!(numeric_outcomes, InverterControlStudyCaseResult(
+            numeric_case, result.cases[2].result, nothing, nothing, 0.0))
+    end
+    numeric_result = InverterControlStudyResult(
+        numeric_outcomes, result.solve, result.settings)
+    @test [row["penetration"] for row in
+           inverter_control_study_summary_rows(
+               numeric_result; group_by="penetration")] == [0, 10, 20, 100]
+
+    long_error_case = InverterControlStudyCase(
+        scenario_id="long_error", variant_id="baseline", network=bad_net,
+        fleet=baseline_fleet, duration_h=9.0, weight=1.0)
+    long_error = InverterControlStudyCaseResult(
+        long_error_case, nothing, :validation, "ArgumentError", "bad", 0.0)
+    short_good_case = InverterControlStudyCase(
+        scenario_id="short_good", variant_id="baseline", network=net,
+        fleet=baseline_fleet, duration_h=1.0, weight=1.0)
+    short_good = InverterControlStudyCaseResult(
+        short_good_case, result.cases[2].result, nothing, nothing, 0.0)
+    exposure_result = InverterControlStudyResult(
+        [long_error, short_good], result.solve, result.settings)
+    @test only(inverter_control_study_summary_rows(exposure_result))[
+        "weighted_publishable_fraction"] == 0.1
 
     exposure_case = _batch_case(
         "good", "sequence", net, comparison_fleet; duration_h=0.25)
