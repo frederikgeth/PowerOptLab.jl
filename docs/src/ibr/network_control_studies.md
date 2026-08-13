@@ -72,6 +72,14 @@ not assumed to equal the replacement's three phases. This also closes every
 unused variable when a non-conventional neutral spelling makes BMOPFTools
 declare an additional semantic IBR-current pair.
 
+One upstream qualification remains: if BMOPFTools does not recognise that
+neutral spelling, its native `:network_cost` construction also treats the
+terminal as a fourth phase. A costed record must consequently provide four cost
+entries or BMOPFTools rejects it while indexing the objective. This affects
+native and replaced IBRs alike; PowerOptLab closes the extra unused current
+pair, but does not reinterpret native cost data. Prefer BMOPFTools-recognised
+neutral metadata/spelling for production datasets.
+
 ## Input contract
 
 For each selected identifier, construction validates before model mutation:
@@ -121,6 +129,11 @@ ordinary BMOPFTools network result, plus a defensive copy of the study
 specification used for provenance. `solve_status(result)` is the authoritative
 publication gate. Do not drop infeasible or non-publishable snapshots; retain
 their scenario identifiers and classify the failure mechanism.
+
+The bus snapshot is canonicalized once per fleet result and shared by
+`result.network["bus"]` and every `result.devices[id].bus`. Treat extracted
+results as immutable: mutating that shared dictionary changes every view of the
+same snapshot.
 
 Two dependency-free extraction helpers produce table-ready named tuples:
 

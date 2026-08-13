@@ -192,6 +192,8 @@ end
     @test Set(keys(result.devices)) == Set(("pv_average", "pv_worst"))
     @test result.spec !== spec
     @test Set(keys(result.network["ibr"])) == Set(("pv_native",))
+    @test result.devices["pv_average"].bus === result.network["bus"]
+    @test result.devices["pv_worst"].bus === result.network["bus"]
     @test sum(phase["pg"] for phase in
               values(result.network["ibr"]["pv_native"])) ≈ 300.0 atol=1e-4
     @test result.devices["pv_average"].plant.p_poc > 1000.0

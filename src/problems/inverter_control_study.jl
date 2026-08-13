@@ -167,11 +167,19 @@ function _native_ibr_declared_current_count(ctx, id::String)
     native = _opf_network(ctx)["ibr"][id]
     topology = uppercase(String(get(native, "topology", "FOUR_LEG")))
     terminals = String.(get(native, "terminal_map", String[]))
+    # SINGLE_PHASE is included to keep this arity helper faithful to the public
+    # BMOPFTools declaration contract when used independently. Fleet validation
+    # currently admits only THREE_LEG and FOUR_LEG records, so the branch is not
+    # reached by solve_controlled_inverter_fleet.
     topology == "SINGLE_PHASE" && return 1
     topology == "THREE_LEG" && return length(terminals)
     topology == "FOUR_LEG" || throw(ArgumentError(
         "unsupported native IBR topology '$topology' for '$id'"))
     neutral_labels = Set(String.(BMOPFTools.opf_neutral_labels(ctx)))
+    # BMOPFTools' internal _phase_positions excludes its resolved neutral
+    # position. Counting every non-neutral terminal is equivalent here because
+    # _native_ibr_phase_count has already rejected maps with anything other than
+    # exactly three ordered phases followed by one replacement neutral.
     count(terminal -> !(terminal in neutral_labels), terminals)
 end
 
@@ -212,7 +220,7 @@ function _controlled_inverter_result(
     ControlledInverterResult(
         string(outcome.termination_status), extracted.plant, extracted.control,
         extracted.converter_terminal, grid_current, exact_control, residual,
-        Dict{String,Any}(String(id) => value for (id, value) in bus), status)
+        bus, status)
 end
 
 function _network_without_replaced_ibrs(result::Dict{String,Any},
@@ -302,7 +310,11 @@ function solve_controlled_inverter_fleet(
     outcome = _solve_outcome(_opf_model(ctx))
     status = SolveStatus(outcome)
     extracted_network = _extract_result(ctx, outcome)
-    bus = extracted_network["bus"]
+    # Canonicalize once. Every device and the network result intentionally share
+    # this read-only snapshot instead of allocating one top-level bus dictionary
+    # per controlled inverter.
+    bus = Dict{String,Any}(
+        String(id) => value for (id, value) in extracted_network["bus"])
     devices = Dict{String,ControlledInverterResult}()
     for id in sort!(collect(keys(spec.devices)))
         devices[id] = _controlled_inverter_result(
@@ -311,6 +323,7 @@ function solve_controlled_inverter_fleet(
     end
     network = _network_without_replaced_ibrs(
         extracted_network, keys(spec.devices))
+    network["bus"] = bus
     ControlledInverterFleetResult(
         string(outcome.termination_status), devices, deepcopy(spec), network,
         BMOPFTools.opf_build_manifest(ctx), status)
