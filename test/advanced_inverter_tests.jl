@@ -1250,15 +1250,17 @@ end
     si = solve_advanced_inverter(net, inv; per_unit=false)
     pu = solve_advanced_inverter(net, inv; per_unit=true)
     @test pu.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
-    @test pu.p_poc ≈ si.p_poc            rtol=1e-3
-    @test pu.q_poc ≈ si.q_poc            rtol=1e-2
-    @test pu.i_neutral ≈ si.i_neutral    rtol=1e-2
-    @test pu.i_zero ≈ si.i_zero          rtol=1e-2
-    @test pu.i_negative ≈ si.i_negative  rtol=1e-2
-    @test pu.dv2 ≈ si.dv2                rtol=1e-2
-    @test pu.i_cap ≈ si.i_cap            rtol=1e-2
-    @test pu.switching_margin ≈ si.switching_margin rtol=1e-3
-    @test pu.v_int_mag[1] ≈ si.v_int_mag[1]  rtol=1e-4
+    # Per-unit scaling is a change of variables, so these are exact identities
+    # in real arithmetic and the tolerances measure numerics only.
+    @test pu.p_poc ≈ si.p_poc            rtol=1e-4
+    @test pu.q_poc ≈ si.q_poc            rtol=1e-4
+    @test pu.i_neutral ≈ si.i_neutral    rtol=1e-4
+    @test pu.i_zero ≈ si.i_zero          rtol=1e-4
+    @test pu.i_negative ≈ si.i_negative  rtol=1e-3
+    @test pu.dv2 ≈ si.dv2                rtol=1e-3
+    @test pu.i_cap ≈ si.i_cap            rtol=1e-3
+    @test pu.switching_margin ≈ si.switching_margin rtol=1e-4
+    @test pu.v_int_mag[1] ≈ si.v_int_mag[1]  rtol=1e-5
 
     # Split link with a binding bank rating: exercises the i_base scaling of the
     # neutral share inside the capacitor allocation, which the 4-leg above lacks.
@@ -1266,6 +1268,12 @@ end
                             In_max=21.0, i_cap_max=2.5, _TOPO_COMMON...)
     csi = solve_advanced_inverter(net, invs; per_unit=false)
     cpu = solve_advanced_inverter(net, invs; per_unit=true)
+    # These stay an order looser than the four-leg case above, and that is a
+    # known limitation rather than slack: `i_cap_max` binds through a SQUARED
+    # per-unit constraint, and Ipopt's `bound_relax_factor` (1e-8, applied to
+    # the squared quantity) admits a physical error that grows like s_base^2.
+    # It is unrelated to the square-root smoothing policy; see the note on
+    # normalizing rating constraints in the component documentation.
     @test csi.i_cap ≈ 2.5                rtol=1e-3    # the rating binds in SI …
     @test cpu.i_cap ≈ csi.i_cap          rtol=1e-2    # … and per-unit agrees
     @test cpu.i_neutral ≈ csi.i_neutral  rtol=2e-2
@@ -1316,4 +1324,106 @@ end
     @test apu.i_cap_thermal_upper ≈ asi.i_cap_thermal_upper rtol=1e-2
     @test apu.i_cap_thermal_lower ≈ asi.i_cap_thermal_lower rtol=1e-2
     @test apu.p_cap_loss ≈ asi.p_cap_loss rtol=1e-2
+end
+
+@testset "Advanced inverter: square-root smoothing policy" begin
+    smooth = PowerOptLab._smooth_magnitude
+    epsilon_of = PowerOptLab._magnitude_epsilon
+
+    # The shifted norm is a UNIFORM eps-accurate UNDERestimator of sqrt(x):
+    # 0 <= sqrt(x) - f(x) <= eps for every x >= 0, exact at x = 0. This is the
+    # whole error budget of the smoothing and it is one-sided, so a reported
+    # loss can never be inflated by it.
+    for e in (1e-6, 1e-3, 1e-1)
+        @test smooth(0.0, e) == 0.0
+        for x in (0.0, 1e-12, 1e-6, 1e-2, 1.0, 25.0, 1600.0)
+            deficit = sqrt(x) - smooth(x, e)
+            @test deficit >= -1e-15
+            @test deficit <= e + 1e-15
+        end
+        # The bound is attained asymptotically, so it is tight, not merely
+        # safe. rtol is loose because differencing two ~1e6 values to recover
+        # a ~1e-6 deficit is itself cancellation-limited.
+        @test sqrt(1e12) - smooth(1e12, e) ≈ e rtol=1e-3
+    end
+    # Monotone increasing, so it cannot reorder two currents.
+    @test smooth(1.0, 1e-3) < smooth(4.0, 1e-3) < smooth(9.0, 1e-3)
+
+    # eps must be strictly positive: at an exactly-zero current the exact norm
+    # has a 0/0 AD gradient and Ipopt rejects the model (INVALID_MODEL).
+    @test epsilon_of(40.0, 1.0) > 0
+    @test epsilon_of(nothing, 1.0) > 0
+
+    # eps is declared relative to the device's own rating, so the PHYSICAL
+    # smoothing is identical in SI and per-unit, and two devices of different
+    # size get the same RELATIVE treatment.
+    ib = 4348.0
+    @test epsilon_of(40.0, 1.0) ≈ epsilon_of(40.0, ib) * ib
+    @test epsilon_of(400.0, 1.0) ≈ 10 * epsilon_of(40.0, 1.0)
+    @test epsilon_of(nothing, 1.0) == PowerOptLab._MAGNITUDE_EPS_FLOOR_SI
+
+    # End to end: the modelled loss is below the exact loss by at most
+    # a_loss * eps per conducting leg (three phases plus the fourth leg).
+    net = inv_grid3_unbal()
+    a = 0.5
+    inv = AdvancedInverter(; id="i", topology=:FOUR_LEG, v_dc=700.0,
+                           c_dc=1.1e-3, In_max=40.0, r_filter_neutral=0.03,
+                           a_loss=a, _TOPO_COMMON...)
+    pu = solve_advanced_inverter(net, inv; per_unit=true)
+    @test solve_status(pu).publishable
+    exact = a * (sum(pu.i_mag) + pu.i_neutral)
+    budget = 4 * a * PowerOptLab._MAGNITUDE_EPS_REL * 40.0
+    # The absolute slack is the solver's own accuracy floor on this quantity
+    # (measured at ~5e-12 relative on the hardest case), not the eps budget:
+    # eps is deliberately set one decade under Ipopt's tol, so the analytic
+    # bias is small but must still not be exceeded in the one-sided direction.
+    floor_abs = 1e-8 * exact
+    @test pu.p_loss <= exact + floor_abs           # one-sided: never inflated
+    @test exact - pu.p_loss <= budget + floor_abs  # within the closed form
+    @test isapprox(pu.p_loss, exact; rtol=1e-6)
+
+    # a_loss != 0 must converge in SI as well as per-unit. The previous lifted
+    # formulation hit ITERATION_LIMIT here, so this is the regression that the
+    # expression form exists to prevent.
+    si = solve_advanced_inverter(net, inv; per_unit=false)
+    @test solve_status(si).publishable
+    @test si.p_poc ≈ pu.p_poc      rtol=1e-4
+    @test si.p_loss ≈ pu.p_loss    rtol=1e-4
+
+    # The physical answer must not depend on the arbitrary per-unit base.
+    # Bases are kept within the range where the squared rating constraints
+    # stay resolvable; see the bound_relax_factor note above.
+    for sb in (1e5, 1e6)
+        r = solve_advanced_inverter(net, inv; per_unit=true, s_base=sb)
+        @test solve_status(r).publishable
+        @test r.p_poc ≈ si.p_poc   rtol=1e-4
+        @test r.p_loss ≈ si.p_loss rtol=1e-4
+    end
+
+    # A balanced grid drives the fourth leg to |I| = 0, putting one magnitude
+    # exactly on the singular point while the phase legs stay loaded.
+    for pun in (true, false)
+        r = solve_advanced_inverter(inv_grid3_bal(), inv; per_unit=pun)
+        @test solve_status(r).publishable
+        @test r.i_neutral < 1e-3
+        @test isfinite(r.p_loss)
+    end
+
+    # With a_loss == 0 no smooth-magnitude TERM enters the loss, so the loss
+    # is exactly zero and the expression stays quadratic. The boxed epigraph
+    # auxiliary is still stamped: it is a regulariser, and removing it was
+    # measured to push a single-phase device with no i_max into
+    # ITERATION_LIMIT. This case guards that, since it has no i_max either.
+    quiet = AdvancedInverter(; id="i", topology=:FOUR_LEG, v_dc=700.0,
+                             c_dc=1.1e-3, In_max=40.0, r_filter_neutral=0.03,
+                             _TOPO_COMMON...)
+    for pun in (true, false)
+        r = solve_advanced_inverter(net, quiet; per_unit=pun)
+        @test solve_status(r).publishable
+        @test r.p_loss == 0.0
+    end
+    unrated = AdvancedInverter(id="i", bus="poc", s_max=5000.0,
+                               r_filter=0.2, x_filter=0.5, v_int_max=245.0)
+    runrated = solve_advanced_inverter(inv_grid(), unrated)
+    @test solve_status(runrated).publishable
 end

@@ -41,7 +41,102 @@ const _HALF_SQRT3 = _SQRT3 / 2
 # norm sqrt(|I|² + ε²) - ε is zero at I=0 and differs from |I| by less than ε.
 # It removes the singular Jacobian of im²=|I|² at zero current without creating
 # an epigraph that an unrelated objective could inflate.
-const _IMAG_EPS_SI = 1e-3  # A
+# ── Square-root smoothing policy ──────────────────────────────────────────────
+# Current magnitudes enter the model only through the linear loss coefficient
+# `a_loss`. They are stamped as the shifted smooth norm
+#
+#     |I| ≈ sqrt(|I|² + ε²) − ε,
+#
+# which is a uniform ε-accurate UNDERestimator of the exact norm:
+# 0 ≤ √x − (√(x+ε²) − ε) ≤ ε for every x ≥ 0, with equality at x = 0. The
+# modelled loss is therefore biased low by at most `a_loss·ε` per conducting
+# leg — a closed-form, one-sided error budget rather than a tuning knob.
+#
+# The shift is written as an EXPRESSION, not as a lifted variable with an
+# auxiliary equality. Both compute the same function, but measurements on this
+# model showed the lifted equality costs 2–4× the Ipopt iterations in per-unit,
+# 1.4–19× in SI, and fails outright (ITERATION_LIMIT) for `per_unit=false`,
+# because it puts a tiny per-unit magnitude inside a squared equality whose
+# residual tolerance is absolute. The expression form adds no variable, no
+# constraint, and is insensitive to ε over the whole range tested.
+#
+# ε must be strictly positive but its magnitude is otherwise free: measured
+# iteration counts are IDENTICAL from ε_rel = 1e-2 down to 1e-18, in both unit
+# modes and both at a generic operating point and with a leg sitting exactly on
+# |I| = 0. So ε is a modelling-accuracy knob, not a numerical one.
+#
+# ε cannot be zero. At an exactly-zero current the exact norm's AD gradient is
+# u/sqrt(u²+v²) = 0/0, and Ipopt rejects the model outright (INVALID_MODEL).
+# Interior-point slacks do not rescue this: they are introduced in the barrier
+# reformulation of the INEQUALITIES, while the NaN is produced earlier, inside
+# the derivative callback for the objective.
+#
+# ε is NOT limited from below by machine precision. ε_pu = 9e-21 against
+# |I|²_pu ≈ 5e-5 is numerically invisible in the sum, and costs nothing —
+# where the shift matters (|I| ≈ 0) the ε² term is the entire radicand and is
+# evaluated exactly. The real floor is the SOLVER's achievable accuracy:
+# measured bias tracks the analytic prediction until it flattens at ≈5e-12
+# relative (at a singular leg; 1.6e-16 in benign cases). Below that, shrinking
+# ε buys nothing observable.
+#
+# ε_rel is therefore anchored to the solver tolerance, one decade under
+# Ipopt's default `tol = 1e-8`. That places the smoothing bias in the window
+# [solver noise, solver tolerance]: negligible for any result, yet still the
+# analytically KNOWN term rather than being swamped by — and mistaken for —
+# unstructured solver noise. Retune it with `tol`, not independently.
+#
+# ε is declared RELATIVE to the device's own conductor rating. That makes the
+# relative bias identical for every device in a heterogeneous fleet (an
+# absolute ε penalises small inverters), and identical in SI and per-unit once
+# the rating is expressed in working units. `_MAGNITUDE_EPS_FLOOR_SI` only
+# applies when no rating was declared.
+#
+# Background.
+#   Nesterov, "Smooth minimization of non-smooth functions", Math. Program.
+#     103, 127–152 (2005), doi:10.1007/s10107-004-0552-5 — the classical
+#     accuracy-versus-smoothness trade-off: O(μ) approximation error against
+#     an O(1/μ) gradient Lipschitz constant.
+#   Chen & Mangasarian, "A class of smoothing functions for nonlinear and
+#     mixed complementarity problems", Comput. Optim. Appl. 5, 97–138 (1996),
+#     doi:10.1007/BF00249052 — the smoothing class that `sqrt(x² + ε²)`
+#     belongs to, and that `inverter_controls.jl` uses for smooth min/max.
+#   Charbonnier, Blanc-Féraud, Aubert & Barlaud, "Deterministic
+#     edge-preserving regularization in computed imaging", IEEE Trans. Image
+#     Process. 6(2), 298–311 (1997), doi:10.1109/83.551699 — the same
+#     function as the pseudo-Huber / Charbonnier potential.
+#   Wächter & Biegler, "On the implementation of an interior-point filter
+#     line-search algorithm for large-scale nonlinear programming", Math.
+#     Program. 106, 25–57 (2006), doi:10.1007/s10107-004-0559-y — Ipopt;
+#     its tolerance design sets the accuracy floor measured above, and its
+#     Eqn 35 is the bound relaxation discussed in the rating-constraint note
+#     in the `AdvancedInverter` docstring.
+#
+# Note that Nesterov's O(1/μ) conditioning penalty is NOT what the measurements
+# above show, because it bounds the worst case over a function class, while
+# here the smoothed norm is one term in a problem whose conditioning is set by
+# the network equations. That is why ε can be pushed to the solver's accuracy
+# floor rather than being traded against convergence.
+const _MAGNITUDE_EPS_REL = 1e-9      # of the per-leg current rating
+const _MAGNITUDE_EPS_FLOOR_SI = 1e-3 # A, used only when no rating is declared
+
+"""
+    _magnitude_epsilon(rating, ib) -> ε in working units
+
+Smoothing floor for a current-magnitude square root. `rating` is the per-leg
+conductor rating in SI, `ib` the current base (1 in SI mode).
+"""
+_magnitude_epsilon(rating, ib) =
+    (rating === nothing ? _MAGNITUDE_EPS_FLOOR_SI :
+     _MAGNITUDE_EPS_REL * rating) / ib
+
+"Shifted smooth norm `sqrt(radicand + ε²) − ε`, exact at radicand = 0."
+_smooth_magnitude(radicand, epsilon) =
+    sqrt(radicand + epsilon^2) - epsilon
+
+"Accumulate one smooth magnitude, starting the sum on the first term."
+_push_magnitude(total, radicand, epsilon) =
+    total === nothing ? _smooth_magnitude(radicand, epsilon) :
+    total + _smooth_magnitude(radicand, epsilon)
 const _PAIRS_IDX = ((1, 2), (2, 3), (3, 1))
 # Relaxation weight on the previous PWM reserve in the outer closure below.
 # The audited ripple depends only weakly on the reserve already allocated, so
@@ -665,6 +760,42 @@ zero filter) it is a plain grid-following converter at the POC.
 
 # Converter losses
 - `p_loss_fixed=0.0` (W), `a_loss=0.0` (W/A), `c_loss=0.0` (W/A²).
+
+  The `a_loss` term needs the current MAGNITUDE, whose exact norm is
+  non-differentiable at zero current. It is stamped as the shifted smooth norm
+  `sqrt(|I|² + ε²) − ε`, which underestimates the exact norm by at most `ε`.
+  The modelled loss is therefore biased LOW by at most `a_loss·ε` per
+  conducting leg — a closed-form, one-sided budget, not a tuning knob. `ε` is
+  `1e-6` of the leg's own current rating, so the relative bias is identical
+  for every device in a heterogeneous fleet and identical in SI and per-unit.
+  With `a_loss == 0` no magnitude term is stamped at all. Reported currents
+  are recomputed exactly after the solve and carry none of this bias.
+
+!!! note "Rating constraints and the per-unit base"
+    Ratings are stamped as squared per-unit inequalities (`p² + q² ≤
+    (s_max/s_base)²` and similar). Ipopt relaxes bounds before solving by
+    `bound_relax_factor · max(1, |bound|)` (default `1e-8`; Eqn 35 of Wächter
+    & Biegler 2006). The `max(1, ·)` floor is the problem: once the per-unit
+    squared bound `(s_max/s_base)²` falls below 1 — which it always does — the
+    relaxation stops scaling with it and becomes a fixed `1e-8` ABSOLUTE
+    slackening of a bound that keeps shrinking as `1/s_base²`. The admissible
+    physical violation is therefore
+
+        δ|S| ≈ bound_relax_factor · s_base² / (2·s_max),
+
+    quadratic in the base. A 20 kVA rating is honoured to ~0.25 VA at
+    `s_base=1e6`, but exceeded by ~2.4 kVA (12 %) at `s_base=1e8`.
+
+    This is Ipopt's documented behaviour meeting a modelling choice made here,
+    not a defect in either: a minimal `max p s.t. p² ≤ (s_max/s_base)²` in
+    plain JuMP reproduces the numbers exactly, and `bound_relax_factor=0`
+    removes them. The durable fix belongs in this layer — normalizing the
+    constraint by the rating, `(p/s_pu)² + (q/s_pu)² ≤ 1`, restores a bound of
+    exactly 1 and was measured to hold the rating to <0.1 VA at every base.
+    Until that lands: keep `s_base` within a couple of decades of the device
+    ratings, or pass `bound_relax_factor=0` (as `solve_inverse_carson` already
+    does, for the same underlying reason). Independent of the square-root
+    smoothing above.
 
 # Double-frequency ripple / current
 - `p_ripple_max` — SINGLE_PHASE only: bound on the 2ω power-ripple amplitude
@@ -1337,7 +1468,10 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
     Pconv = zero(JuMP.QuadExpr); Qconv = zero(JuMP.QuadExpr)
     Ppoc  = zero(JuMP.QuadExpr); Qpoc  = zero(JuMP.QuadExpr)
     isq_sum = zero(JuMP.QuadExpr)     # Σ |I|²  (for c_loss)
-    imag_sum = zero(JuMP.AffExpr)     # Σ |I|   (for a_loss)
+    # Σ |I| (for a_loss) is nonlinear, so it is accumulated as `nothing` until
+    # the first term exists and is omitted from the loss expression entirely
+    # when a_loss == 0.
+    imag_terms = nothing
 
     for (k, ph) in enumerate(phases)
         # Reduced mode: Vint--Zf--POC. Explicit LCL mode inserts the midpoint,
@@ -1368,17 +1502,11 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
             BMOPFTools.add_terminal_injection!(ctx, bus, neutral, -gri[k], -gii[k])
         end
 
-        # |I|² (for the quadratic loss term and the current cap) and the current
-        # magnitude |I| via an auxiliary. The magnitude only feeds the LINEAR
-        # loss term, and how tightly it is pinned matters only there:
-        #   • a_loss ≠ 0 → the shifted smooth norm
-        #     `sqrt(isq + ε²) - ε`, ε=1 mA. An epigraph can be inflated by an
-        #     unrelated charging/price objective; the equality cannot. Smoothing
-        #     removes the singular Jacobian of the exact norm at I=0.
-        #   • a_loss == 0 → the original epigraph is retained as a benign
-        #     regularising constraint; its slack cannot affect the zero
-        #     coefficient. It is boxed by the conductor rating so that slack
-        #     stays a regulariser instead of a free ride to infinity.
+        # |I|² feeds the quadratic loss term and the current cap. |I| itself is
+        # needed only by the LINEAR loss term, so it is stamped as the shifted
+        # smooth norm above and only when `a_loss` can act on it. An epigraph
+        # would be inflatable by an unrelated charging/price objective; a
+        # function cannot be.
         isq = JuMP.@expression(m, cri[k]^2 + cii[k]^2)
         isq_sum += isq
         if inv.i_max !== nothing
@@ -1391,18 +1519,14 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
                                 (inv.i_grid_max / ib)^2)
         end
         if inv.a_loss != 0.0
-            imag_eps = _IMAG_EPS_SI / ib
-            im = JuMP.@variable(m, base_name = "imag_$(inv.id)_$(ph)",
-                                lower_bound = imag_eps)
-            JuMP.set_start_value(im, imag_eps)
-            JuMP.@constraint(m, im^2 == isq + imag_eps^2)
-            imag_sum += im - imag_eps
+            imag_terms = _push_magnitude(
+                imag_terms, isq, _magnitude_epsilon(inv.i_max, ib))
         else
-            # The epigraph is kept as a regulariser (its multiplier convexifies
-            # the current block), but it is BOXED: with a zero objective
-            # coefficient nothing pushes |I| back down, and an unbounded
-            # auxiliary lets Ipopt take enormous, useless steps. |I| can never
-            # exceed the conductor rating, so that is the honest bound.
+            # Kept even though a_loss == 0 multiplies the magnitude away: this
+            # boxed epigraph is load-bearing as a REGULARISER, not as a loss
+            # term. Removing it was measured to push otherwise healthy solves
+            # (single-phase, no i_max) into ITERATION_LIMIT. It is boxed by the
+            # conductor rating so its slack cannot run away.
             im = JuMP.@variable(m, base_name = "imag_$(inv.id)_$(ph)",
                                 lower_bound = 0.0)
             if inv.i_max !== nothing
@@ -1410,7 +1534,6 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
                 JuMP.set_start_value(im, inv.i_max / ib)
             end
             JuMP.@constraint(m, im^2 >= isq)
-            imag_sum += im
         end
 
         # Internal EMF magnitude bounds (skipped under grid-forming, which pins the
@@ -1436,15 +1559,12 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
         isq_n = JuMP.@expression(m, sumcr^2 + sumci^2)
         isq_sum += isq_n
         if inv.a_loss != 0.0
-            imag_eps = _IMAG_EPS_SI / ib
-            imn = JuMP.@variable(m, base_name = "imag_$(inv.id)_neutral",
-                                 lower_bound = imag_eps)
-            JuMP.set_start_value(imn, imag_eps)
-            JuMP.@constraint(m, imn^2 == isq_n + imag_eps^2)
-            imag_sum += imn - imag_eps
+            imag_terms = _push_magnitude(
+                imag_terms, isq_n,
+                _magnitude_epsilon(something(inv.In_max, inv.i_max), ib))
         else
-            # Boxed for the same reason as the per-phase auxiliary above; the
-            # fourth leg's current is bounded by its own rating.
+            # Same regulariser as the per-phase branch; the fourth leg is
+            # boxed by its own rating.
             imn = JuMP.@variable(m, base_name = "imag_$(inv.id)_neutral",
                                  lower_bound = 0.0)
             if inv.In_max !== nothing
@@ -1452,7 +1572,6 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
                 JuMP.set_start_value(imn, inv.In_max / ib)
             end
             JuMP.@constraint(m, imn^2 >= isq_n)
-            imag_sum += imn
         end
     end
 
@@ -1678,8 +1797,14 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
     JuMP.@constraint(m, pv^2 + qv^2 <= (inv.s_max / sb)^2)
 
     # Converter loss and DC-link power (model units): each coeff scaled to per-unit.
-    P_loss = JuMP.@expression(m,
-        inv.p_loss_fixed/sb + (inv.a_loss/vb)*imag_sum + (inv.c_loss*sb/vb^2)*isq_sum)
+    # The Σ|I| term is nonlinear and is omitted entirely when a_loss == 0, which
+    # keeps the loss expression quadratic in the common case.
+    P_loss = imag_terms === nothing ?
+        JuMP.@expression(m,
+            inv.p_loss_fixed/sb + (inv.c_loss*sb/vb^2)*isq_sum) :
+        JuMP.@expression(m,
+            inv.p_loss_fixed/sb + (inv.a_loss/vb)*imag_terms +
+            (inv.c_loss*sb/vb^2)*isq_sum)
     P_dc = JuMP.@expression(m, Pconv + P_loss + P_cap_loss)
     P_filter_loss = JuMP.@expression(m, Pconv - Ppoc)
 
