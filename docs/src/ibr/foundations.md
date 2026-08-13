@@ -499,7 +499,7 @@ and solves the DC-node KCL
 ```math
 \boxed{\hat V_h=-\frac{\hat I_{bridge,h}}{Y_{C,h}+Y_{s,h}}},\qquad
 \hat I_{C,h}=Y_{C,h}\hat V_h,\qquad
-\hat I_{s,h}=Y_{s,h}\hat V_h,}
+\hat I_{s,h}=Y_{s,h}\hat V_h,
 ```
 
 so that ``\hat I_{bridge,h}+\hat I_{C,h}+\hat I_{s,h}=0`` for every retained
@@ -543,7 +543,7 @@ branch.
 When `pwm_ac_ripple=true`, the same switch states also define pole-voltage error
 
 ```math
-hat e_\ell(\theta,\tau)=V_{dc}(\theta)
+\hat e_\ell(\theta,\tau)=V_{dc}(\theta)
 \left[s_\ell(\theta,\tau)-d_\ell(\theta)\right].
 ```
 

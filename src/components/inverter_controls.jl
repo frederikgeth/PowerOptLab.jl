@@ -78,6 +78,11 @@ of `InverterControlRequest.q_scale`. Both curves must be non-increasing.
 `conflict_epsilon` is the dimensionless transition width in normalized branch
 severity and is part of both the firmware and JuMP laws. `volt_watt_basis` is
 `:available` or `:rated`.
+
+Both curve inputs are phase magnitudes and therefore move with the local
+zero-sequence voltage — a component a three-leg bridge cannot control, and one
+whose measured value depends on the sensing reference documented in
+[`SequenceController`](@ref).
 """
 struct WorstPhaseVoltVarWatt <: AbstractPositiveSequencePolicy
     volt_watt::Union{Nothing,PiecewiseLinearLaw}
@@ -127,7 +132,10 @@ end
                                 volt_watt_basis=:available)
 
 Legacy balanced-current comparator. Both PWL laws observe the arithmetic mean
-of the three local phase-voltage magnitudes.
+of the three local phase-voltage magnitudes. Like
+[`WorstPhaseVoltVarWatt`](@ref), that input moves with the local zero-sequence
+voltage and with the sensing reference documented in
+[`SequenceController`](@ref).
 """
 struct AverageVoltageVoltVarWatt <: AbstractPositiveSequencePolicy
     volt_watt::Union{Nothing,PiecewiseLinearLaw}
@@ -285,11 +293,26 @@ end
                        power_voltage_floor=1)
 
 Closed-form three-leg controller combining a positive-sequence Volt-var/Watt
-policy, a negative-sequence policy, and an algebraic feasibility limiter. The
-curves always observe local phase-to-neutral POC voltage. `current_target`
-selects converter-leg or post-filter grid current. `power_voltage_floor` is the
-strictly positive SI voltage floor in the regularized `P,Q`-to-`I1` conversion;
-it is not a magnitude-smoothing epsilon.
+policy, a negative-sequence policy, and an algebraic feasibility limiter.
+`current_target` selects converter-leg or post-filter grid current.
+`power_voltage_floor` is the strictly positive SI voltage floor in the
+regularized `P,Q`-to-`I1` conversion; it is not a magnitude-smoothing epsilon.
+
+The curves observe the local POC voltage referred to the plant's declared
+`neutral` terminal. When the composed [`AdvancedInverter`](@ref) has
+`neutral=nothing` — the three-wire case, and the only one accepted for a native
+`THREE_LEG` fleet record — that reference is the network's ground, not a
+neutral conductor, so the measured phasors carry the local zero-sequence
+displacement. `|U_1|` and `|U_2|` are invariant to that choice, so
+[`PositiveSequenceVoltVarWatt`](@ref) Volt-var and
+[`NegativeSequenceAdmittanceDroop`](@ref) are unaffected; the phase-magnitude
+policies are not. See the sensing-reference discussion in the
+[phase-aware control design](@ref ibr-phase-aware-control-laws).
+
+The controller equalities themselves use only these voltage phasors, but the
+final plant-aware capability backoff in [`stamp_smooth_control!`](@ref)
+additionally reads converter-terminal internal voltage and both filter-arm
+currents. It is a protection surrogate, not part of the voltage-curve law.
 """
 struct SequenceController{P<:AbstractPositiveSequencePolicy,
                           U<:AbstractUnbalancePolicy,
@@ -985,6 +1008,14 @@ function _control_voltage_start(policy::AbstractPositiveSequencePolicy, vb)
     for law in _policy_laws(policy)
         law === nothing || append!(voltage_points, law.breakpoints)
     end
+    # A curve-free policy has no physical voltage to start from and falls back
+    # to an LV anchor. This is deliberately NOT the network's own 1 pu base:
+    # switching the fallback from 230/vb to 1.0 moves the start and scale of
+    # every magnitude auxiliary by 6.5% on the 245 V test fixtures and flips
+    # the near-zero-current `dv2_max` regression from LOCALLY_SOLVED to a
+    # non-publishable status. The fallback therefore stays LV-anchored until the
+    # start/scale audit noted in the phase-aware design note is done; MV studies
+    # must configure curves (or an explicit start) rather than rely on it.
     return isempty(voltage_points) ? 230.0/vb :
         (minimum(voltage_points) + maximum(voltage_points))/(2vb)
 end
@@ -1003,6 +1034,16 @@ function _smooth_extrema_implicit!(
     return vmin, vmax
 end
 
+# True when a stamped offset component is provably zero at every feasible point:
+# a literal zero, or an expression whose constant and every coefficient are zero.
+# Zero coefficients survive JuMP arithmetic (`variable*0.0` keeps its term), so a
+# filter without an explicit LCL midpoint reaches the capability allocator as an
+# identically-zero AffExpr rather than as a number.
+_is_identically_zero(x::Real) = iszero(x)
+_is_identically_zero(x::JuMP.GenericAffExpr) = iszero(x)
+_is_identically_zero(x::JuMP.GenericQuadExpr) = iszero(x)
+_is_identically_zero(::Any) = false
+
 function _safe_direction_scale_implicit!(
         m, offset, direction, limit, epsilon; magnitude_start, scale)
     offset_magnitude = all(x -> x isa Real && iszero(x), offset) ? 0.0 :
@@ -1012,7 +1053,37 @@ function _safe_direction_scale_implicit!(
     direction_magnitude = _implicit_sqrt!(
         m, direction[1]^2 + direction[2]^2;
         start=magnitude_start, scale=scale)
-    available = limit - offset_magnitude
+    # The headroom left for the command must not be allowed to go negative: an
+    # offset magnitude that already exceeds the limit would otherwise produce a
+    # NEGATIVE factor — a reversed current command — where the exact allocator
+    # in `_safe_direction_scale_exact` returns 0.
+    #
+    # The clamp is stamped only where a nonzero offset is actually reachable.
+    # When the offset is identically zero the headroom equals the non-negative
+    # constant `limit` minus a quantity pinned to zero, so it cannot go negative
+    # and the model stays bit-identical to the unguarded one — which matters,
+    # because these paths sit next to fixtures that are one solver tolerance away
+    # from failing. Where the clamp is needed it uses the shifted smooth norm
+    # `(a + sqrt(a^2 + eps^2))/2` as an expression rather than one more lifted
+    # variable: lifting it was measured to push the `s_max` and `dv2_max`
+    # saturation regressions from LOCALLY_SOLVED to non-publishable, the same
+    # failure mode that moved `AdvancedInverter`'s current-magnitude term to the
+    # expression form. The clamp exceeds max(headroom, 0) by at most eps/2, so
+    # the triangle bound is relaxed by no more than the selector width already
+    # declared, and the returned factor stays in [0, 1] because
+    # smax_eps(a, b) >= a.
+    #
+    # NOTE: lifting an identically-zero radicand stamps `(y/n)^2 == 0, y >= 0`,
+    # whose gradient vanishes at its own solution, so LICQ fails there. Removing
+    # those constraints is formally an improvement and was tried; it changed
+    # which points converge at `tol=1e-8` on a different Ipopt/MUMPS build
+    # (3 assertions in `stamped P/Q priority under PV oversizing` on
+    # ubuntu-latest, clean on aarch64-darwin). They are load-bearing as
+    # regularizers, exactly like the `a_loss == 0` epigraph in the plant. The
+    # removal therefore belongs with the limiter conditioning work, not here.
+    headroom = limit - offset_magnitude
+    available = all(_is_identically_zero, offset) ? headroom :
+        (headroom + sqrt(headroom^2 + epsilon^2))/2
     denominator = _smooth_max_implicit!(
         m, available, direction_magnitude, epsilon;
         start=max(Float64(limit), epsilon))
@@ -1177,9 +1248,17 @@ end
     stamp_smooth_control!(ctx, controller, request, inverter, handles)
 
 Constrain an already-stamped [`AdvancedInverter`](@ref) to the smooth,
-fixed-structure counterpart of [`evaluate_exact`](@ref). The controller uses
-local phase-to-neutral POC phasors and commands the configured converter- or
+fixed-structure counterpart of [`evaluate_exact`](@ref). The voltage-curve law
+uses local POC phasors referred to the plant's declared neutral (see
+[`SequenceController`](@ref)) and commands the configured converter- or
 grid-side phase currents.
+
+The subsequent plant-aware capability backoff is deliberately wider than
+[`evaluate_exact`](@ref): it also reads converter-terminal internal voltage and
+both filter-arm currents so that a per-leg, apparent-power, or `dv2_max` limit
+saturates the command instead of making the controller equality infeasible.
+[`solve_controlled_inverter`](@ref) applies the same backoff to the exact law at
+the solved point, which is why the two commands are comparable.
 """
 function stamp_smooth_control!(ctx, controller::SequenceController,
                                request::InverterControlRequest,
@@ -1537,13 +1616,21 @@ solve_diagnostics(result::ControlledInverterResult) = (
         -> ControlledInverterResult
 
 Solve one network snapshot with a local phase-aware controller composed around
-an [`AdvancedInverter`](@ref). The local law uses only the inverter's POC
-voltage phasors. The nonlinear controller formulation requires `per_unit=true`;
-controller configuration and returned results remain SI. This is a controlled
-power flow:
-the controller equalities determine the command, while `selection_objective`
-only selects remaining plant allocation freedom (`:loss`, the default, or
-`:zero` for an objective-invariance check).
+an [`AdvancedInverter`](@ref). The voltage-curve law uses only the inverter's
+own POC voltage phasors (see [`SequenceController`](@ref) for the sensing
+reference); the subsequent capability backoff also uses converter-terminal
+voltage and both filter-arm currents. The nonlinear controller formulation
+requires `per_unit=true`; controller configuration and returned results remain
+SI. This is a controlled power flow: the controller equalities determine the
+command, while `selection_objective` only selects remaining plant allocation
+freedom (`:loss`, the default, or `:zero` for an objective-invariance check).
+
+`exact_smooth_current_residual` compares the exact law with the stamped smooth
+law **at the smooth model's own solved operating point**, using the same solved
+plant phasors for both. It therefore bounds the smoothing error of the
+controller algebra, not the distance between the exact-law and smooth-law
+network equilibria; an independent fixed-point oracle is still outstanding
+research work.
 """
 function solve_controlled_inverter(
         net::Dict{String,Any},

@@ -153,7 +153,12 @@ sort identifiers lexically, independent of dictionary insertion order.
 The conventional `voltage_unbalance_factor` is ``|U_2|/|U_1|``. It is distinct
 from `regularized_voltage_unbalance`, the controller's finite-denominator
 quantity. Keeping both prevents the controller's numerical regularization from
-being mistaken for a reported power-quality metric.
+being mistaken for a reported power-quality metric. It is also distinct from the
+NEMA/IEEE maximum-deviation approximations that share the name "voltage
+unbalance"; state which definition is reported (see Pillay and Manyage, and
+Girigoudar and Roald on unbalance metrics inside optimization models, in
+[IBR references](@ref ibr-references)), and note that neither this quantity nor
+its regularized companion is measured over a standardised power-quality window.
 
 `solve_diagnostics(result)` supplies lightweight fleet aggregates, including
 total controlled POC P/Q, total selected-inverter losses, the largest

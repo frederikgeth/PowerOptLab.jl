@@ -2,8 +2,10 @@
 
 PowerOptLab implements the first manufacturer-facing law from the
 [phase-aware control design](@ref ibr-phase-aware-control-laws) as a closed-form
-controller around the existing [`AdvancedInverter`](@ref) plant. The controller
-uses only the local three-phase RMS voltage phasor. It does not solve an online
+controller around the existing [`AdvancedInverter`](@ref) plant. The
+voltage-curve law uses only the local three-phase RMS voltage phasor; the final
+plant-aware capability backoff additionally uses converter-terminal voltage and
+both filter-arm currents, as described below. Neither stage solves an online
 optimization problem.
 
 > **Kind:** Component/control composition · **Maturity:** research prototype ·
@@ -84,6 +86,19 @@ For every policy, result fields `voltage_min` and `voltage_max` mean the physica
 minimum and maximum phase magnitudes: hard extrema in `evaluate_exact`, and the
 same pairwise smooth extrema in `evaluate_smooth` and the stamped graph. They do
 not change meaning to match a policy's curve input.
+
+!!! note "Which reference the phase magnitudes are measured against"
+    The measurement is the POC voltage referred to the plant's declared
+    `neutral` terminal, and to the network's ground when the composed inverter
+    is three-wire (`neutral=nothing`). A common-mode offset therefore leaves
+    `PositiveSequenceVoltVarWatt` Volt-var and the negative-sequence droop
+    unchanged — they see only ``U_1`` and ``U_2`` — while moving every
+    phase-magnitude comparator, including the recommended
+    `WorstPhaseVoltVarWatt`. A three-leg bridge cannot control the ``U_0`` it is
+    then reacting to. Report `voltage_sequence[1]` with any study that uses a
+    phase-magnitude comparator, and see
+    [the design note](@ref ibr-phase-aware-control-laws) for why this is a
+    sensor specification rather than a modelling detail.
 
 ### Simultaneous low- and high-voltage Volt-var requests
 
@@ -245,6 +260,17 @@ The near-exact limiter defaults minimise controller bias but may be too sharp
 for a difficult fleet solve. There is no universal setting: use continuation
 from wider selectors and retain the refinement evidence for reported cases.
 
+`current_epsilon` and `power_epsilon` are **absolute** SI widths. A 1 mVA
+selector width is a different fraction of a 5 kVA inverter than of a 500 kVA
+one, and once divided by a megavolt-ampere base it is ``10^{-9}`` per unit —
+small enough that the selector is effectively a hard `max` with a curvature of
+``1/\epsilon`` at the tie. A heterogeneous fleet therefore does not share one
+relative controller bias. Declare these widths explicitly per study rather than
+inheriting the defaults across devices of different ratings; making them
+rating-relative, as [`AdvancedInverter`](@ref) already does for its own
+smoothing, is an open design decision recorded in
+[the design note](@ref ibr-phase-aware-control-laws).
+
 The documented Volt-watt knot has first-order smoothing bias. This executable
 table makes its magnitude visible rather than treating smoothing as exact:
 
@@ -300,18 +326,39 @@ y\geq0,\qquad (y/y_b)^2=x/y_b^2,
 ```
 
 where ``y_b`` is a fixed scaling quantity used only to condition the equality.
-Thus ``y=\sqrt{x}`` exactly at every feasible point. This representation is used
-for phase-voltage, sequence-voltage, apparent-power, and phase-current
-magnitudes. The same implicit construction represents square roots inside
-smooth min/max selectors. Epsilon is retained only where it defines an intended
-smooth approximation: BMOPFTools PWL corners and algebraic selection between
-two values.
+Thus ``y=\sqrt{x}`` exactly at every feasible point — to the solver's constraint
+tolerance, which is why the choice of ``y_b`` matters. This representation is
+used for phase-voltage, sequence-voltage, apparent-power, and phase-current
+magnitudes, and for the square roots inside smooth min/max selectors. Epsilon is
+retained only where it defines an intended smooth approximation: BMOPFTools PWL
+corners and algebraic selection between two values.
 
-Implicit magnitude equalities can be degenerate at an exact zero vector. The
-current implementation avoids an unnecessary `|U2|` variable for
-`NoUnbalanceControl`; studies using negative-sequence droop should nevertheless
-include balanced cases in their solver-robustness audit and report any
-initialization dependence.
+There is one deliberate exception. The zero-clamp on remaining capability
+headroom inside the plant-aware backoff uses the shifted expression
+``(a+\sqrt{a^2+\epsilon^2})/2`` rather than another lifted variable. Lifting it
+was measured to push the `s_max` and `dv2_max` saturation regressions from
+`LOCALLY_SOLVED` to non-publishable — the same failure mode that moved
+[`AdvancedInverter`](@ref)'s current-magnitude loss term to the expression form.
+The clamp exceeds ``\max(a,0)`` by at most ``\epsilon/2``, so it relaxes the
+conservative triangle bound by less than the selector width already declared.
+See the numerical-policy discussion in
+[the design note](@ref ibr-phase-aware-control-laws).
+
+Implicit magnitude equalities are degenerate at an exact zero vector: the
+equality pins ``y=0`` while its gradient vanishes there, so LICQ fails at the
+model's own solution. The capability allocator still contains two such
+equalities per device for any filter without an explicit LCL midpoint
+(converter-target apparent power, and ``\Delta V_{2,max}`` when configured).
+Removing them was tried and reverted: it is bit-identical on one platform and
+costs publishable status on another, so they are load-bearing as regularizers.
+See the numerical-policy discussion in
+[the design note](@ref ibr-phase-aware-control-laws).
+
+The implementation does avoid an unnecessary `|U2|` variable for
+`NoUnbalanceControl`. Studies using negative-sequence droop should include
+balanced cases in their solver-robustness audit and report any initialization
+dependence, because both the exactly-zero and *near*-zero ``U_2`` cases are
+poorly conditioned.
 
 ## Compose with the physical inverter
 
@@ -414,8 +461,28 @@ objective semantics, tidy extraction, and verification obligations.
 
 Result extraction reads the stamped JuMP graph directly. `exact_control`
 reevaluates the firmware law at the solved phasor and applies the same
-plant-aware backoff, so `exact_smooth_current_residual` measures the actual
-firmware-versus-network surrogate difference.
+plant-aware backoff.
+
+!!! warning "What the exact/smooth residual does and does not bound"
+    Both laws are evaluated at the **smooth model's own solved operating
+    point**, and the exact law reuses that solve's converter voltage, converter
+    current, and grid current. `exact_smooth_current_residual` therefore bounds
+    the smoothing error of the controller algebra — PWL corners, smooth
+    selectors, lifted magnitudes — given the plant solution. It does not bound
+    the distance between the exact-law network equilibrium and the smooth-law
+    network equilibrium, because a firmware controller iterating against the
+    real network would settle at a different voltage.
+
+    Closing that gap needs an independent oracle: a Picard/Gauss–Seidel
+    iteration that evaluates [`evaluate_exact`](@ref) at the current voltage,
+    imposes the resulting current on an otherwise uncontrolled power flow, and
+    repeats to a fixed point, then reports ``\|\Delta V\|`` against the smooth
+    equilibrium. That oracle is not implemented. Until it is, equilibrium-level
+    agreement between the firmware law and the network surrogate is an
+    assumption of every study on this page, not a tested property. Local
+    Volt-var droop is known to have equilibrium existence, uniqueness, and
+    convergence conditions of its own; see Farivar, Chen, and Low and Zhu and
+    Liu in [IBR references](@ref ibr-references).
 
 `converter_terminal` is the authoritative power record. It computes
 
@@ -438,7 +505,9 @@ reduction boundary, and publication gate live in
 include dominant-conflict continuity, PWL-width refinement, all P/Q priorities,
 rated-versus-available Volt-watt at partial irradiance, binding converter
 apparent power, binding DC ripple, full stamped current phasors at converter and
-grid targets, and loss-versus-zero objective invariance. The P/Q-priority
+grid targets, loss-versus-zero objective invariance, common-mode
+(zero-sequence) invariance of the sequence-referred law, and sign safety of the
+capability backoff when a per-leg limit is already exhausted. The P/Q-priority
 regression sweeps the exact and smooth local laws over DC/AC ratios from 0.9
 through 1.4, including a non-zero var request and the exact 1.0 transition. A
 stamped saturated ratio of 1.1 is then solved for every priority in the
@@ -477,8 +546,8 @@ Before drawing control or hardware conclusions, each selected law must pass:
    limiter transition;
 2. balanced, pure-negative-sequence, mixed-sequence, and phase-regime-conflict
    cases;
-3. global-angle and cyclic-phase metamorphic checks, plus the supported-unit
-   boundary check;
+3. global-angle, cyclic-phase, and common-mode metamorphic checks, plus the
+   supported-unit boundary check;
 4. conductor KCL, sequence-power, filter-power, switching, and capacitor
    residual checks from the physical plant;
 5. multiple physically sensible Ipopt starts for claimed boundary points;
