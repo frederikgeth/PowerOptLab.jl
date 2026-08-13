@@ -115,6 +115,7 @@ include("problems/operating_envelope.jl")
 include("problems/bilevel.jl")
 include("problems/inverter_control_study.jl")
 include("problems/inverter_control_experiments.jl")
+include("problems/inverter_control_sizing.jl")
 
 # Bespoke algorithms — new solution methods (custom solve loops)
 include("algorithms/pade.jl")
@@ -193,6 +194,9 @@ export InverterControlStudyResult, run_inverter_control_study
 export inverter_control_study_case_rows, inverter_control_study_device_rows
 export inverter_control_study_phase_rows, inverter_control_study_summary_rows
 export inverter_control_paired_rows
+export InverterHardwareSweepPoint, resize_controlled_inverter_fleet
+export validate_inverter_control_campaign, expand_inverter_hardware_cases
+export inverter_control_hardware_requirement_rows
 
 # Current–voltage (IVQ) battery storage + chemistry library
 export BatteryChemistry, thevenin_chemistry, linear_chemistry, tabulated_chemistry,

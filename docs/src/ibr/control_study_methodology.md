@@ -438,4 +438,8 @@ construction; batteries are outside this programme.
    failure retention, duration/weight-aware summaries, and paired variant
    differences. The dataset-specific fixed-hardware penetration campaign is the
    next research run.
-9. Add outer current/capacitor sizing sweeps and capability frontiers.
+9. **Initial infrastructure complete:** expand matched cases over explicit
+   converter-current, grid-current, DC-capacitance, and capacitor-current
+   counterfactuals; report achieved-current and closed-form 2ω requirements.
+   Dataset-specific service predicates and complete capability frontiers are
+   the next research run.

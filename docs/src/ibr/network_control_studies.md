@@ -298,6 +298,98 @@ generation, random customer placement, persistence formats, plots, and cluster
 scheduling remain in `scripts/studies/inverter_controls/` so the core API does
 not encode one dataset's schema.
 
+## Outer hardware grids and sizing diagnostics
+
+Hardware is varied outside the nonlinear network problem. First call
+`validate_inverter_control_campaign(cases)` to enforce a complete controller
+matrix and identical snapshot, hardware, request, duration, weight, and
+metadata across variants. By default it requires variants to share the same
+network object; this is a cheap drift guard, while a dataset adapter may opt out
+only after independently proving network equivalence.
+
+This keeps every
+solve interpretable as one realizable nameplate design and avoids treating a
+current or capacitance rating as a freely optimized operating variable.
+`InverterHardwareSweepPoint` scales installed ratings relative to each
+inverter's base data, so heterogeneous devices retain their relative sizes:
+
+```julia
+hardware = [
+    InverterHardwareSweepPoint(
+        id="reference",
+        grid_current_scale=1.0,
+        capacitor_current_scale=1.0),
+    InverterHardwareSweepPoint(
+        id="more_silicon_and_capacitance",
+        converter_current_scale=1.20,
+        grid_current_scale=1.20,
+        dc_capacitance_scale=1.50,
+        capacitor_current_scale=1.20),
+]
+
+sweep_cases = expand_inverter_hardware_cases(cases, hardware)
+sweep = run_inverter_control_study(sweep_cases)
+
+requirements = inverter_control_hardware_requirement_rows(
+    sweep; allowed_dc_ripple_fraction=0.02, current_margin=1.10)
+summaries = inverter_control_study_summary_rows(
+    sweep; group_by=["penetration", "hardware_point_id"])
+```
+
+The expansion appends the hardware identifier to `scenario_id` but leaves
+`variant_id` as the control-law identifier. Paired rows therefore compare laws
+only at the same feeder snapshot and hardware point. The expansion records the
+base scenario, hardware identifier, and every scale in metadata and rejects
+reserved-key collisions. The network is still shared by reference; each fleet
+and advanced-inverter specification is new.
+
+Converter-leg current, grid-side current, DC capacitance, and capacitor thermal
+current are distinct axes. An optional rating is changed only when its scale is
+explicitly supplied. Asking to scale an absent `i_grid_max` or `i_cap_max`
+throws instead of silently introducing a physical constraint. Apparent-power
+rating and DC voltage remain fixed in this sweep; study them as separately
+declared hardware factors if required.
+
+`inverter_control_hardware_requirement_rows` reports achieved converter/grid
+RMS current, capacitor thermally equivalent current, and the closed-form
+monolithic-link requirement
+
+```math
+C_{2\omega,req} =
+\frac{|\widetilde S|}{2\omega V_{dc}\Delta V_{allow}},\qquad
+\Delta V_{allow}=\epsilon_{dc}V_{dc}.
+```
+
+The rows contain absolute requirements, installed values, requirement-to-rating
+utilizations, and nullable compliance flags. A current margin of at least one
+may be applied explicitly. Failed/non-publishable solves retain no numerical
+claim: requirements and utilizations are NaN, and compliance is `missing`.
+
+There are two scientifically different uses:
+
+1. Run every law at one common, demonstrably non-binding oversized hardware
+   point. The achieved-current and closed-form capacitance columns are useful
+   first-pass requirements.
+2. When a rating changes dispatch, limiter activation, switching feasibility,
+   or network voltage, run the explicit hardware grid and judge each point
+   using publication status plus the declared voltage, unbalance, curtailment,
+   loss, and ripple service criteria.
+
+Do not infer a minimum rating from the current achieved at a binding rating;
+that is circular because the controller may curtail to satisfy the installed
+limit. Do not apply bisection unless the chosen service predicate has been
+shown monotone for that controller and scenario. Retain the full grid when
+active regimes change.
+
+Hardware points are counterfactual alternatives, not additional time samples.
+Study summaries automatically add `"hardware_point_id"` to their grouping when
+all cases carry that metadata; summing energy across hardware points would
+multiply the represented exposure. The 2ω formula assumes the
+modeled monolithic three-leg link supplies the ripple. It does not size split
+half-banks, hold-up energy, transients, tolerance/ageing, thermal lifetime, or a
+frequency-dependent DC source, and it does not replace averaged-model and EMT
+validation.
+
 ## API
 
 ```@docs
@@ -315,4 +407,9 @@ inverter_control_study_device_rows
 inverter_control_study_phase_rows
 inverter_control_study_summary_rows
 inverter_control_paired_rows
+InverterHardwareSweepPoint
+resize_controlled_inverter_fleet
+validate_inverter_control_campaign
+expand_inverter_hardware_cases
+inverter_control_hardware_requirement_rows
 ```

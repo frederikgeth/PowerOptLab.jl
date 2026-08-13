@@ -282,8 +282,10 @@ end
 
 Return scalar cohort summaries as dictionaries. Every cohort is always grouped
 by `variant_id`; `group_by` may add standard case fields or metadata keys such
-as `"penetration"` and `"feeder"`. Failure fractions use all cases. Electrical
-and energy metrics use publishable device rows only.
+as `"penetration"` and `"feeder"`. If every case carries
+`"hardware_point_id"` metadata, that counterfactual axis is added
+automatically; partial hardware tagging is rejected. Failure fractions use all
+cases. Electrical and energy metrics use publishable device rows only.
 
 Energy totals weight power by `duration_h*weight`. Current/VUF/capacitor tails
 are duration-and-weight empirical inverse-CDF quantiles at 50, 95, and 99 %.
@@ -293,6 +295,14 @@ function inverter_control_study_summary_rows(
         group_by=String[])
     requested = group_by isa AbstractString ? [String(group_by)] :
         String.(collect(group_by))
+    hardware_tagged = [haskey(case.case.metadata, "hardware_point_id")
+                       for case in result.cases]
+    if any(hardware_tagged)
+        all(hardware_tagged) || throw(ArgumentError(
+            "hardware_point_id metadata must be present on every case or none"))
+        "hardware_point_id" in requested || push!(
+            requested, "hardware_point_id")
+    end
     group_keys = unique(["variant_id"; requested])
     groups = Dict{Tuple,Vector{InverterControlStudyCaseResult}}()
     for case_result in result.cases
