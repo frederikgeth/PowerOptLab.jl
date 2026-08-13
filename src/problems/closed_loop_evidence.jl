@@ -30,10 +30,80 @@ struct FixedPointGainScreen
     finite_difference_step::Float64
 end
 
+"""
+    InverterControlScalingAudit
+
+SI-valued audit of the auxiliary starts, scales, and smoothing widths used by
+the smooth sequence-controller formulation. The report is intentionally pure
+numeric: it can be recorded with a study manifest without constructing a
+JuMP model.
+"""
+struct InverterControlScalingAudit
+    voltage_start_V::Float64
+    voltage_scale_V::Float64
+    sequence_voltage_start_V::Float64
+    power_start_VA::Float64
+    power_scale_VA::Float64
+    capacity_aux_start_VA::Float64
+    current_start_A::Float64
+    current_scale_A::Float64
+    voltage_floor_V::Float64
+    current_epsilon_A::Float64
+    power_epsilon_VA::Float64
+    priority_headroom_fraction::Float64
+end
+
 function _real_state(x, name::String)
     values = Float64.(collect(x))
     all(isfinite, values) || throw(ArgumentError("$name must be finite"))
     values
+end
+
+function _control_voltage_anchor(policy::AbstractPositiveSequencePolicy,
+                                fallback::Real)
+    anchor = Float64(fallback)
+    isfinite(anchor) && anchor > 0 || throw(ArgumentError(
+        "voltage_fallback must be finite and > 0"))
+    points = Float64[]
+    for law in _policy_laws(policy)
+        law === nothing || append!(points, law.breakpoints)
+    end
+    isempty(points) ? anchor : (minimum(points) + maximum(points))/2
+end
+
+"""
+    inverter_control_scaling_audit(controller, ratings; voltage_fallback=230)
+        -> InverterControlScalingAudit
+
+Return the physical scales used by the smooth controller auxiliaries. Curve
+breakpoints determine the voltage anchor when present; otherwise
+`voltage_fallback` is used. The capacity-auxiliary start is the small residual
+capability at the declared P/Q-priority headroom, rather than the full
+apparent-power rating. This makes heterogeneous fleets auditable and exposes
+poorly conditioned starts before a network solve is attempted.
+"""
+function inverter_control_scaling_audit(
+        controller::SequenceController,
+        ratings::InverterControlRatings;
+        voltage_fallback::Real=230.0)
+    voltage_start = _control_voltage_anchor(
+        controller.positive, voltage_fallback)
+    headroom = controller.limiter.priority_headroom_fraction
+    capacity_start = ratings.s_max * sqrt(2headroom - headroom^2)
+    InverterControlScalingAudit(
+        voltage_start,
+        voltage_start,
+        0.05voltage_start,
+        ratings.s_max,
+        ratings.s_max,
+        capacity_start,
+        max(0.5ratings.i_max,
+            _current_epsilon(controller.limiter, ratings)),
+        ratings.i_max,
+        controller.power_voltage_floor,
+        _current_epsilon(controller.limiter, ratings),
+        _power_epsilon(controller.limiter, ratings),
+        headroom)
 end
 
 """
@@ -77,6 +147,7 @@ function fixed_point_oracle(
     rtol_value = Float64(rtol)
     cycle_tolerance_value = Float64(cycle_tolerance)
     states = Vector{Vector{Float64}}()
+    history = Vector{Tuple{Int,Vector{Float64}}}([(0, copy(x))])
     store_trajectory && push!(states, copy(x))
     converged = false
     cycled = false
@@ -94,23 +165,25 @@ function fixed_point_oracle(
         residual = norm(next - x)
         threshold = atol_value + rtol_value * max(norm(x), norm(next), 1.0)
         iterations = iteration
+        push!(history, (iteration, copy(next)))
         store_trajectory && push!(states, copy(next))
         if residual <= threshold
             x = next
             converged = true
             break
         end
-        if cycle_window > 0 && length(states) > 1 &&
+        if cycle_window > 0 && length(history) > 1 &&
                 residual > threshold && residual > cycle_tolerance_value
-            first_index = max(1, length(states) - 1 - cycle_window)
-            for index in first_index:(length(states) - 1)
-                if norm(next - states[index]) <= cycle_tolerance_value
-                    cycle_period = length(states) - index
+            first_index = max(1, length(history) - 1 - cycle_window)
+            for index in first_index:(length(history) - 1)
+                if norm(next - history[index][2]) <= cycle_tolerance_value
+                    cycle_period = iteration - history[index][1]
                     cycled = true
                     break
                 end
             end
         end
+        length(history) > cycle_window + 1 && deleteat!(history, 1)
         x = next
         cycled && break
     end
@@ -210,6 +283,67 @@ function inverter_control_current_jacobian(
         map, point; step=step, relative_step=relative_step)
 end
 
+"""Result of the reduced affine-feeder exact controller fixed-point oracle."""
+struct InverterControlFixedPointResult
+    oracle::FixedPointIterationResult
+    reference_measurement::InverterControlMeasurement
+    final_measurement::InverterControlMeasurement
+    final_control::InverterControlResult
+    voltage_sensitivity::Matrix{Float64}
+end
+
+function _validated_voltage_sensitivity(voltage_sensitivity::AbstractMatrix)
+    sensitivity = Matrix{Float64}(voltage_sensitivity)
+    size(sensitivity) == (6, 6) || throw(DimensionMismatch(
+        "voltage_sensitivity must be a 6×6 real matrix"))
+    all(isfinite, sensitivity) || throw(ArgumentError(
+        "voltage_sensitivity must be finite"))
+    sensitivity
+end
+
+"""
+    inverter_control_fixed_point_oracle(controller, initial, request, ratings,
+        reference, voltage_sensitivity; kwargs...) -> InverterControlFixedPointResult
+
+Run the exact controller law against a supplied affine feeder sensitivity. The
+reduced map is
+
+``v_next = v_ref + Z (i_exact(v) - i_exact(v_ref))``
+
+in six real rectangular phase-voltage coordinates. `reference` is the voltage
+at which the feeder operating point and the reference controller current are
+defined; it is not inferred from the initial condition. This is a lightweight
+equilibrium oracle for campaign screening. It does not replace a full network
+re-solve, and its convergence has no physical time interpretation unless the
+supplied sensitivity/map is itself dynamic.
+"""
+function inverter_control_fixed_point_oracle(
+        controller::SequenceController,
+        initial::InverterControlMeasurement,
+        request::InverterControlRequest,
+        ratings::InverterControlRatings,
+        reference::InverterControlMeasurement,
+        voltage_sensitivity::AbstractMatrix;
+        kwargs...)
+    sensitivity = _validated_voltage_sensitivity(voltage_sensitivity)
+    reference_state = _phasor_vector(reference.phase_voltage)
+    initial_state = _phasor_vector(initial.phase_voltage)
+    reference_current = _phasor_vector(evaluate_exact(
+        controller, reference, request, ratings).phase_current)
+    current_map = state -> _phasor_vector(evaluate_exact(
+        controller, InverterControlMeasurement(_phasor_state(state)),
+        request, ratings).phase_current)
+    map = state -> reference_state + sensitivity *
+        (current_map(state) - reference_current)
+    oracle = fixed_point_oracle(map, initial_state; kwargs...)
+    final_measurement = InverterControlMeasurement(
+        _phasor_state(oracle.final_state))
+    final_control = evaluate_exact(
+        controller, final_measurement, request, ratings)
+    InverterControlFixedPointResult(
+        oracle, reference, final_measurement, final_control, sensitivity)
+end
+
 """
     inverter_control_loop_gain(controller, measurement, request, ratings,
         voltage_sensitivity; kwargs...) -> FixedPointGainScreen
@@ -230,11 +364,7 @@ function inverter_control_loop_gain(
         step::Real=1e-6,
         relative_step::Bool=true,
         threshold::Real=1.0)
-    sensitivity = Matrix{Float64}(voltage_sensitivity)
-    size(sensitivity) == (6, 6) || throw(DimensionMismatch(
-        "voltage_sensitivity must be a 6×6 real matrix"))
-    all(isfinite, sensitivity) || throw(ArgumentError(
-        "voltage_sensitivity must be finite"))
+    sensitivity = _validated_voltage_sensitivity(voltage_sensitivity)
     controller_jacobian = inverter_control_current_jacobian(
         controller, measurement, request, ratings;
         step=step, relative_step=relative_step)

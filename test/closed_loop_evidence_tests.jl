@@ -28,6 +28,13 @@
         @test result.cycled
         @test result.cycle_period == 2
         @test result.iterations == 2
+
+        no_trajectory = fixed_point_oracle(
+            x -> -x, [1.0]; max_iterations=20, atol=0.0, rtol=0.0,
+            cycle_window=4, cycle_tolerance=1e-12,
+            store_trajectory=false)
+        @test no_trajectory.cycled
+        @test size(no_trajectory.trajectory) == (1, 0)
     end
 
     @testset "sequence-controller loop adapter" begin
@@ -49,5 +56,37 @@
         @test screen.jacobian ≈ zeros(6, 6) atol=1e-10
         @test screen.spectral_radius == 0.0
         @test screen.local_contractive
+    end
+
+    @testset "scaling audit and exact equilibrium adapter" begin
+        controller = SequenceController(AverageVoltageVoltVarWatt())
+        ratings = InverterControlRatings(s_max=20e3, i_max=40.0)
+        audit = inverter_control_scaling_audit(controller, ratings)
+        @test audit.voltage_start_V == 230.0
+        @test audit.voltage_scale_V == 230.0
+        @test audit.sequence_voltage_start_V == 11.5
+        @test audit.power_start_VA == ratings.s_max
+        @test audit.power_scale_VA == ratings.s_max
+        @test audit.current_scale_A == ratings.i_max
+        @test audit.capacity_aux_start_VA ≈ ratings.s_max *
+              sqrt(2e-3 - 1e-6) atol=1e-10
+        @test audit.power_epsilon_VA ≈
+              CommonScaleLimiter().power_epsilon_fraction*ratings.s_max
+
+        reference = InverterControlMeasurement(ComplexF64[
+            230.0 + 0im, 230.0cis(-2pi/3), 230.0cis(2pi/3)])
+        initial = InverterControlMeasurement(ComplexF64[
+            240.0 + 0im, 240.0cis(-2pi/3), 240.0cis(2pi/3)])
+        request = InverterControlRequest(
+            p_available=5e3, p_rated=5e3, q_scale=2e3)
+        result = inverter_control_fixed_point_oracle(
+            controller, initial, request, ratings, reference, zeros(6, 6);
+            max_iterations=10, atol=1e-10, rtol=1e-10)
+        @test result.oracle.converged
+        @test result.oracle.iterations == 2
+        @test result.final_measurement.phase_voltage == reference.phase_voltage
+        @test collect(result.final_control.phase_current) ≈ collect(
+              evaluate_exact(controller, reference, request, ratings).phase_current)
+        @test result.voltage_sensitivity == zeros(6, 6)
     end
 end

@@ -18,6 +18,30 @@ sampling, ramps, protection state, or saturation outside the linearisation
 point. Those effects must be represented in the supplied map when they are
 material to the question.
 
+## Inverter-specific campaign adapters
+
+`inverter_control_fixed_point_oracle` wraps the exact three-phase controller
+law around a supplied affine feeder sensitivity. It makes the reference
+operating voltage explicit and iterates
+
+```math
+v_{k+1} = v_{ref} + Z\,[i_{exact}(v_k)-i_{exact}(v_{ref})].
+```
+
+This is the smallest useful equilibrium oracle for a campaign: it can expose
+cycling, multiple initial-condition basins, and the distance from a smooth
+equilibrium before a full feeder re-solve is commissioned. `Z` is still a
+study input, not an inferred network property; use a full network callback
+when voltage sensitivity varies materially over the operating range.
+
+The `InverterControlScalingAudit` returned by
+`inverter_control_scaling_audit` records the SI starts/scales for voltage,
+sequence voltage, current, apparent power, and the priority-capacity
+auxiliary, together with the rating-relative smoothing widths. Record it with
+each campaign manifest. In particular, the capacity auxiliary is scaled to
+the residual capability implied by `priority_headroom_fraction`, not to the
+full apparent-power rating.
+
 ## Generic fixed-point oracle
 
 The callable passed to `fixed_point_oracle` accepts and returns a real vector.
@@ -129,9 +153,13 @@ fixed separately.
 ```@docs
 FixedPointIterationResult
 FixedPointGainScreen
+InverterControlScalingAudit
+InverterControlFixedPointResult
 fixed_point_oracle
 finite_difference_jacobian
 screen_fixed_point_gain
+inverter_control_scaling_audit
 inverter_control_current_jacobian
+inverter_control_fixed_point_oracle
 inverter_control_loop_gain
 ```
