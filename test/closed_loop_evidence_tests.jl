@@ -122,4 +122,40 @@
         @test !failed.solve.publishable
         @test size(failed.voltage_trajectory) == (6, 0)
     end
+
+    @testset "simultaneous fleet exact equilibrium" begin
+        inverter = AdvancedInverter(
+            id="pv", bus="poc", phase_terminals=["a", "b", "c"],
+            neutral="n", topology=:THREE_LEG, s_max=20e3, i_max=40.0,
+            v_dc=700.0, c_dc=1.1e-3, r_filter=0.05, x_filter=0.15,
+            m_max=0.96)
+        controlled = ControlledDevice(
+            inverter, SequenceController(AverageVoltageVoltVarWatt()))
+        spec = ControlledInverterFleetSpec(
+            Dict("pv" => controlled),
+            Dict("pv" => InverterControlRequest(
+                p_available=5e3, p_rated=5e3, q_scale=0.0)))
+        net = inv_grid3_bal()
+        net["ibr"] = Dict("pv" => Dict{String,Any}(
+            "bus" => "poc", "terminal_map" => ["a", "b", "c", "n"],
+            "topology" => "FOUR_LEG", "prime_mover" => "PV",
+            "s_max" => fill(20e3, 3), "p_min" => zeros(3),
+            "p_max" => fill(20e3, 3), "q_min" => zeros(3),
+            "q_max" => zeros(3)))
+        result = solve_controlled_inverter_fleet_network_fixed_point(
+            net, spec; max_iterations=6,
+            solver_options=("max_iter" => 500, "tol" => 1e-8))
+        @test result.smooth.solve.publishable
+        @test result.solve.publishable
+        @test result.converged
+        @test !result.cycled
+        @test result.cycle_period == 0
+        @test result.residual_voltage_inf_V < 1e-3
+        @test result.residual_current_inf_A < 1e-3
+        rows = controlled_inverter_network_fixed_point_rows(result)
+        @test length(rows) == 1
+        @test rows[1].device_id == "pv"
+        @test rows[1].converged
+        @test rows[1].exact_p_poc_W ≈ result.plants["pv"].p_poc atol=1e-8
+    end
 end

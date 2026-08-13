@@ -553,6 +553,251 @@ function solve_inverter_control_network_fixed_point(
         final_plant, final_bus, last_status, reduce(hcat, trajectory))
 end
 
+"""Result of a simultaneous plant-backed exact-law fleet iteration."""
+struct ControlledInverterFleetNetworkFixedPointResult
+    smooth::ControlledInverterFleetResult
+    converged::Bool
+    cycled::Bool
+    iterations::Int
+    cycle_period::Int
+    residual_voltage_inf_V::Float64
+    residual_current_inf_A::Float64
+    exact_controls::Dict{String,InverterControlResult}
+    plants::Dict{String,Any}
+    bus::Dict{String,Any}
+    solve::SolveStatus
+    voltage_trajectory::Matrix{Float64}
+end
+
+function _solve_exact_current_fleet_plant(
+        net::Dict{String,Any}, spec::ControlledInverterFleetSpec,
+        currents::Dict{String,NTuple{3,ComplexF64}};
+        s_base::Float64=1e6, optimizer=Ipopt.Optimizer,
+        verbose::Bool=false, solver_options=())
+    handles = Dict{String,_InvHandles}()
+    builder = BMOPFTools.OpfDeviceBuilder(:PowerOptLab, function (ctx, ids)
+        for id in ids
+            _disable_native_ibr_port!(ctx, id)
+            inverter = inverter_spec(spec.devices[id])
+            h = stamp_device!(ctx, inverter)
+            handles[id] = h
+            target = spec.devices[id].controller.current_target
+            target_re, target_im = target isa ConverterCurrentTarget ?
+                (h.cri, h.cii) : (h.gri, h.gii)
+            current = currents[id]
+            for k in 1:3
+                JuMP.@constraint(_opf_model(ctx),
+                    target_re[k] == real(current[k]) / h.ib)
+                JuMP.@constraint(_opf_model(ctx),
+                    target_im[k] == imag(current[k]) / h.ib)
+            end
+        end
+        ctx
+    end)
+    build_spec = BMOPFTools.OpfBuildSpec(component_builders=Dict(
+        (:ibr, id) => builder for id in keys(spec.devices)))
+    hook! = ctx -> JuMP.@objective(_opf_model(ctx), Min,
+        sum(h.p_loss + h.p_cap_loss
+            for h in values(handles)))
+    ctx = build_opf_model(
+        net; per_unit=true, s_base=s_base, add_objective=false,
+        build_spec=build_spec, model_hook! = hook!, optimizer=optimizer,
+        verbose=verbose)
+    _set_solver_options!(_opf_model(ctx), solver_options)
+    enforce_kcl!(ctx)
+    JuMP.optimize!(_opf_model(ctx))
+    outcome = _solve_outcome(_opf_model(ctx))
+    status = SolveStatus(outcome)
+    plants = Dict{String,Any}()
+    for id in sort!(collect(keys(spec.devices)))
+        plants[id] = extract_device(
+            inverter_spec(spec.devices[id]), handles[id], status)
+    end
+    (status=status, plants=plants, network=_extract_result(ctx, outcome))
+end
+
+function _fleet_voltage_state(voltage_by_id::Dict{String,NTuple{3,ComplexF64}}, ids)
+    reduce(vcat, [_phasor_vector(voltage_by_id[id]) for id in ids])
+end
+
+"""
+    solve_controlled_inverter_fleet_network_fixed_point(net, spec; kwargs...)
+        -> ControlledInverterFleetNetworkFixedPointResult
+
+Run a simultaneous plant-backed fixed point for every selected fleet device.
+The smooth fleet solve is used as the initial state; each exact iteration fixes
+all selected converter/grid current targets in one fresh network solve. This
+preserves feeder coupling and native unselected IBRs, and is the campaign-scale
+equilibrium comparison for [`solve_controlled_inverter_fleet`](@ref).
+"""
+function solve_controlled_inverter_fleet_network_fixed_point(
+        net::Dict{String,Any}, spec::ControlledInverterFleetSpec;
+        smooth_result::Union{Nothing,ControlledInverterFleetResult}=nothing,
+        max_iterations::Integer=20,
+        atol_voltage::Real=1e-6,
+        atol_current::Real=1e-6,
+        rtol::Real=1e-8,
+        cycle_window::Integer=8,
+        cycle_tolerance::Real=1e-7,
+        s_base::Real=1e6,
+        optimizer=Ipopt.Optimizer,
+        verbose::Bool=false,
+        selection_objective::Symbol=:loss,
+        solver_options=())
+    max_iterations >= 1 || throw(ArgumentError(
+        "max_iterations must be >= 1"))
+    0 <= atol_voltage && isfinite(atol_voltage) || throw(ArgumentError(
+        "atol_voltage must be finite and >= 0"))
+    0 <= atol_current && isfinite(atol_current) || throw(ArgumentError(
+        "atol_current must be finite and >= 0"))
+    0 <= rtol && isfinite(rtol) || throw(ArgumentError(
+        "rtol must be finite and >= 0"))
+    cycle_window >= 1 || throw(ArgumentError(
+        "cycle_window must be >= 1"))
+    0 <= cycle_tolerance && isfinite(cycle_tolerance) || throw(ArgumentError(
+        "cycle_tolerance must be finite and >= 0"))
+    isfinite(s_base) && s_base > 0 || throw(ArgumentError(
+        "s_base must be finite and > 0"))
+    _validate_controlled_fleet(net, spec)
+    smooth = smooth_result === nothing ? solve_controlled_inverter_fleet(
+        net, spec; s_base=s_base, optimizer=optimizer, verbose=verbose,
+        selection_objective=selection_objective, solver_options=solver_options) :
+        smooth_result
+    ids = sort!(collect(keys(spec.devices)))
+    if !smooth.solve.publishable
+        return ControlledInverterFleetNetworkFixedPointResult(
+            smooth, false, false, 0, 0, Inf, Inf,
+            Dict{String,InverterControlResult}(), Dict{String,Any}(),
+            Dict{String,Any}(), smooth.solve,
+            Matrix{Float64}(undef, 3*length(ids), 0))
+    end
+    voltage_by_id = Dict{String,NTuple{3,ComplexF64}}(
+        id => smooth.devices[id].control.phase_voltage for id in ids)
+    history = Vector{Vector{Float64}}([_fleet_voltage_state(voltage_by_id, ids)])
+    trajectory = Vector{Vector{Float64}}(copy(history))
+    exact_controls = Dict{String,InverterControlResult}()
+    plants = Dict{String,Any}()
+    last_bus = Dict{String,Any}()
+    last_status = smooth.solve
+    converged = false
+    cycled = false
+    iterations = 0
+    cycle_period = 0
+    residual_voltage = Inf
+    residual_current = Inf
+    for iteration in 1:Int(max_iterations)
+        iterations = iteration
+        currents = Dict{String,NTuple{3,ComplexF64}}()
+        for id in ids
+            inverter = inverter_spec(spec.devices[id])
+            ratings = InverterControlRatings(
+                inverter, spec.devices[id].controller.current_target)
+            control = evaluate_exact(
+                spec.devices[id].controller,
+                InverterControlMeasurement(voltage_by_id[id]),
+                spec.requests[id], ratings)
+            exact_controls[id] = control
+            currents[id] = control.phase_current
+        end
+        solved = _solve_exact_current_fleet_plant(
+            net, spec, currents; s_base=Float64(s_base), optimizer=optimizer,
+            verbose=verbose, solver_options=solver_options)
+        last_status = solved.status
+        plants = solved.plants
+        last_bus = Dict{String,Any}(
+            String(k) => v for (k, v) in solved.network["bus"])
+        if !last_status.publishable
+            break
+        end
+        next_voltage_by_id = Dict{String,NTuple{3,ComplexF64}}(
+            id => _network_phase_state(last_bus, inverter_spec(spec.devices[id]))
+            for id in ids)
+        next_controls = Dict{String,InverterControlResult}()
+        for id in ids
+            inverter = inverter_spec(spec.devices[id])
+            ratings = InverterControlRatings(
+                inverter, spec.devices[id].controller.current_target)
+            next_controls[id] = evaluate_exact(
+                spec.devices[id].controller,
+                InverterControlMeasurement(next_voltage_by_id[id]),
+                spec.requests[id], ratings)
+        end
+        residual_voltage = maximum(abs,
+            _fleet_voltage_state(next_voltage_by_id, ids) -
+            _fleet_voltage_state(voltage_by_id, ids))
+        residual_current = maximum(abs,
+            reduce(vcat, [collect(next_controls[id].phase_current .-
+                exact_controls[id].phase_current) for id in ids]))
+        next_state = _fleet_voltage_state(next_voltage_by_id, ids)
+        push!(trajectory, next_state)
+        voltage_threshold = Float64(atol_voltage) + Float64(rtol) *
+            max(maximum(abs, _fleet_voltage_state(voltage_by_id, ids)),
+                maximum(abs, next_state), 1.0)
+        current_threshold = Float64(atol_current) + Float64(rtol) *
+            max(maximum(abs, reduce(vcat, [collect(exact_controls[id].phase_current)
+                for id in ids])),
+                maximum(abs, reduce(vcat, [collect(next_controls[id].phase_current)
+                for id in ids])), 1.0)
+        if residual_voltage <= voltage_threshold &&
+                residual_current <= current_threshold
+            voltage_by_id = next_voltage_by_id
+            exact_controls = next_controls
+            converged = true
+            break
+        end
+        history_start = max(1, length(history) - cycle_window + 1)
+        for index in history_start:length(history)
+            if norm(next_state - history[index]) <= Float64(cycle_tolerance)
+                cycled = true
+                cycle_period = length(history) - index + 1
+                break
+            end
+        end
+        voltage_by_id = next_voltage_by_id
+        exact_controls = next_controls
+        cycled && break
+        push!(history, next_state)
+    end
+    ControlledInverterFleetNetworkFixedPointResult(
+        smooth, converged, cycled, iterations, cycle_period,
+        Float64(residual_voltage), Float64(residual_current), exact_controls,
+        plants, last_bus, last_status, reduce(hcat, trajectory))
+end
+
+"""Deterministic per-device comparison rows for a fleet fixed-point result."""
+function controlled_inverter_network_fixed_point_rows(
+        result::ControlledInverterFleetNetworkFixedPointResult)
+    rows = NamedTuple[]
+    for id in sort!(collect(keys(result.smooth.devices)))
+        smooth = result.smooth.devices[id]
+        exact = get(result.exact_controls, id, nothing)
+        plant = get(result.plants, id, nothing)
+        push!(rows, (
+            device_id=id,
+            converged=result.converged,
+            cycled=result.cycled,
+            cycle_period=result.cycle_period,
+            iterations=result.iterations,
+            residual_voltage_inf_V=result.residual_voltage_inf_V,
+            residual_current_inf_A=result.residual_current_inf_A,
+            solve_publishable=result.solve.publishable,
+            smooth_exact_current_residual_A=
+                smooth.exact_smooth_current_residual,
+            exact_smooth_voltage_inf_V=exact === nothing ? NaN :
+                maximum(abs, exact.phase_voltage .-
+                    smooth.control.phase_voltage),
+            exact_smooth_current_inf_A=exact === nothing ? NaN :
+                maximum(abs, exact.phase_current .-
+                    smooth.control.phase_current),
+            smooth_p_poc_W=smooth.plant.p_poc,
+            exact_p_poc_W=plant === nothing ? NaN : plant.p_poc,
+            smooth_q_poc_var=smooth.plant.q_poc,
+            exact_q_poc_var=plant === nothing ? NaN : plant.q_poc,
+        ))
+    end
+    rows
+end
+
 """
     inverter_control_loop_gain(controller, measurement, request, ratings,
         voltage_sensitivity; kwargs...) -> FixedPointGainScreen

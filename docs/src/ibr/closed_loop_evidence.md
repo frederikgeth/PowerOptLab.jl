@@ -42,6 +42,13 @@ converter- or grid-side current fixed. A non-publishable plant solve is
 retained as an equilibrium failure; it is not converted into a false
 convergence result.
 
+For a selected fleet, use `solve_controlled_inverter_fleet_network_fixed_point`.
+All exact current targets are fixed in one re-solve, so voltage coupling between
+controlled devices and unselected native IBRs is preserved. The deterministic
+`controlled_inverter_network_fixed_point_rows` output is intended for campaign
+tables and includes smooth-versus-exact voltage/current and P/Q differences,
+iteration, cycle, and publishability fields.
+
 The `InverterControlScalingAudit` returned by
 `inverter_control_scaling_audit` records the SI starts/scales for voltage,
 sequence voltage, current, apparent power, and the priority-capacity
@@ -171,5 +178,8 @@ inverter_control_scaling_audit
 inverter_control_current_jacobian
 inverter_control_fixed_point_oracle
 solve_inverter_control_network_fixed_point
+ControlledInverterFleetNetworkFixedPointResult
+solve_controlled_inverter_fleet_network_fixed_point
+controlled_inverter_network_fixed_point_rows
 inverter_control_loop_gain
 ```
