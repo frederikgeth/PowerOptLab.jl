@@ -60,6 +60,10 @@ A different objective/variable/constraint structure on the same physics.
 - **Bilevel PV/tap POC** ([`solve_bilevel_pv_tap`](@ref)) — differentiated
   aggregate-export and local-controller lower levels with native Volt-var/
   Volt-watt controls, compared with a centralized single-level tap/export solve.
+- **Network-scale inverter-control studies**
+  ([`solve_controlled_inverter_fleet`](@ref)) — selected dataset IBRs are
+  replaced by phase-aware advanced inverters in one simultaneous snapshot,
+  with explicit ownership provenance and table-ready hardware-stress results.
 
 ### Bespoke algorithms — new solution methods (`src/algorithms/`)
 
@@ -109,6 +113,7 @@ include("problems/parameter_estimation.jl")
 include("problems/inverse_carson.jl")
 include("problems/operating_envelope.jl")
 include("problems/bilevel.jl")
+include("problems/inverter_control_study.jl")
 
 # Bespoke algorithms — new solution methods (custom solve loops)
 include("algorithms/pade.jl")
@@ -179,6 +184,9 @@ export InverterControlRatings, InverterControlResult, ConverterTerminalResult
 export ControlledDevice, ControlledInverterResult
 export evaluate_exact, evaluate_smooth, stamp_smooth_control!, solve_controlled_inverter
 export inverter_spec, inverter_handles
+export ControlledInverterFleetSpec, ControlledInverterFleetResult
+export solve_controlled_inverter_fleet, controlled_inverter_rows
+export controlled_inverter_phase_rows
 
 # Current–voltage (IVQ) battery storage + chemistry library
 export BatteryChemistry, thevenin_chemistry, linear_chemistry, tabulated_chemistry,

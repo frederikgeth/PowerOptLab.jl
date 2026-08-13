@@ -395,6 +395,12 @@ The plant remains responsible for filter KVL, internal voltage, modulation,
 apparent power, conductor currents, losses, negative-sequence limits, 2ω ripple,
 and DC-capacitor constraints. No parallel current-injection plant is introduced.
 
+For simultaneous network snapshots with many controlled devices, use
+[`ControlledInverterFleetSpec`](@ref) and
+[`solve_controlled_inverter_fleet`](@ref). The [network-scale study
+contract](../ibr/network_control_studies.md) explains native-IBR replacement,
+objective semantics, tidy extraction, and verification obligations.
+
 [`ControlledInverterResult`](@ref) contains:
 
 - `plant`: the usual advanced-inverter result tuple;
