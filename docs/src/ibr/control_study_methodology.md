@@ -159,7 +159,8 @@ placing arbitrary functions inside reproducibility-critical device structs.
 
 ### 4. Problem and study orchestration
 
-Add `src/problems/inverter_control_fleet.jl` for formulation-level work:
+The implemented `src/problems/inverter_control_study.jl` provides the first
+formulation-level slice:
 
 - stamp many controlled devices into one BMOPFTools context;
 - bind per-snapshot availability/request data;
@@ -427,8 +428,11 @@ construction; batteries are outside this programme.
 5. **Complete:** add continuous normalised conflict handling, rated/available
    Volt-watt bases, P/Q priority, plant-side converter/grid current and
    apparent-power backoff, optional `dv2_max` backoff, and binding-limit tests.
-6. Add multi-device single-snapshot construction using per-component
-   `OpfDeviceBuilder` replacement for dataset IBRs.
-7. Add tidy device/network result extraction and scaling benchmarks.
+6. **Complete:** add multi-device single-snapshot construction using
+   per-component `OpfDeviceBuilder` replacement for dataset IBRs.
+7. **Complete:** add deterministic tidy device/phase extraction, ownership
+   provenance, physical-balance tests, and supported-unit checks. Large-network
+   scaling benchmarks remain part of the case-study campaign rather than the
+   unit suite.
 8. Run fixed-hardware PV penetration studies.
 9. Add outer current/capacitor sizing sweeps and capability frontiers.
