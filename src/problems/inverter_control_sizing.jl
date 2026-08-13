@@ -192,7 +192,8 @@ Each hardware point is appended to `scenario_id`, while `variant_id` remains the
 controller identifier. Consequently [`inverter_control_paired_rows`](@ref)
 continues to compare controllers at identical hardware.
 
-The original scenario identifier and hardware scales are added to metadata.
+The original scenario identifier and effective hardware scales are added to
+metadata (`1.0` for an unchanged axis).
 Expanded cases retain the original network by reference. Hardware points are
 counterfactual alternatives: aggregate summaries must group by
 `"hardware_point_id"` and must never sum their energy as if they were successive
@@ -223,10 +224,13 @@ function expand_inverter_hardware_cases(
         metadata = merge(case.metadata, Dict{String,Any}(
             "base_scenario_id" => case.scenario_id,
             "hardware_point_id" => point.id,
-            "converter_current_scale" => point.converter_current_scale,
-            "grid_current_scale" => point.grid_current_scale,
-            "dc_capacitance_scale" => point.dc_capacitance_scale,
-            "capacitor_current_scale" => point.capacitor_current_scale,
+            "converter_current_scale" => something(
+                point.converter_current_scale, 1.0),
+            "grid_current_scale" => something(point.grid_current_scale, 1.0),
+            "dc_capacitance_scale" => something(
+                point.dc_capacitance_scale, 1.0),
+            "capacitor_current_scale" => something(
+                point.capacitor_current_scale, 1.0),
         ))
         push!(expanded, InverterControlStudyCase(
             scenario_id="$(case.scenario_id)::hardware[$(point.id)]",
@@ -259,6 +263,17 @@ function _sizing_binding(publishable::Bool, limit, achieved, tolerance::Float64)
     achieved >= (1 - tolerance) * limit
 end
 
+function _sizing_curtailment_active(
+        publishable::Bool, available, requested, tolerance::Float64)
+    publishable && isfinite(available) && isfinite(requested) || return missing
+    available - requested > tolerance * max(abs(available), 1.0)
+end
+
+function _sizing_scale_active(publishable::Bool, scale, tolerance::Float64)
+    publishable && isfinite(scale) || return missing
+    scale < 1 - tolerance
+end
+
 """
     inverter_control_hardware_requirement_rows(study;
         allowed_dc_ripple_fraction, current_margin=1,
@@ -282,6 +297,14 @@ E_{2\\omega,req}=\\tfrac12 C_{2\\omega,req}V_{dc}^2.
 the zero-to-peak sinusoidal amplitude, so `0.02` means ±2% or 4% peak-to-peak.
 Non-publishable numerical requirements are NaN and compliance fields are
 `missing`.
+
+Binding diagnostics cover the installed converter/grid/capacitor/ripple
+ratings and the converter apparent-power circle. Separate controller flags
+identify command curtailment and activation of its power/current allocation
+scales. A `false` value for one rating says only that particular rating is not
+active; it never proves that the operating point is free of other limits.
+Sampled modulation rails, internal-voltage bounds, sequence/neutral limits, and
+other optional plant constraints are not exhaustively classified here.
 
 This diagnostic is a sizing result only when evaluated at a common hardware
 point that does not alter dispatch or activate a limiter. Otherwise use it to
@@ -325,6 +348,10 @@ function inverter_control_hardware_requirement_rows(
                 plant.i_grid_mag, inverter.pwm_ac_grid_reserve)) : NaN
             achieved_capacitor_current = publishable ? plant.i_cap_thermal : NaN
             achieved_ripple = publishable ? plant.dv2 : NaN
+            achieved_apparent_power = publishable ?
+                hypot(plant.p_conv, plant.q_conv) : NaN
+            requested_power = publishable ?
+                device.control.p_request : NaN
             converter_requirement = margin * achieved_converter_current
             grid_requirement = margin * achieved_grid_current
             capacitor_current_requirement = publishable ?
@@ -357,6 +384,9 @@ function inverter_control_hardware_requirement_rows(
                 allowed_dc_ripple_voltage_V=allowed_ripple,
                 enforced_dc_ripple_limit_V=enforced_ripple_limit,
                 achieved_dc_ripple_voltage_V=achieved_ripple,
+                achieved_converter_apparent_power_VA=
+                    achieved_apparent_power,
+                installed_converter_apparent_power_rating_VA=inverter.s_max,
                 converter_current_requirement_A=converter_requirement,
                 grid_current_requirement_A=grid_requirement,
                 capacitor_thermal_current_requirement_A=
@@ -385,17 +415,29 @@ function inverter_control_hardware_requirement_rows(
                 dc_ripple_binding=_sizing_binding(
                     publishable, enforced_ripple_limit, achieved_ripple,
                     tolerance),
-                converter_current_utilization=_sizing_utilization(
+                apparent_power_binding=_sizing_binding(
+                    publishable, inverter.s_max, achieved_apparent_power,
+                    tolerance),
+                command_curtailment_active=_sizing_curtailment_active(
+                    publishable,
+                    case_result.result.spec.requests[id].p_available,
+                    requested_power, tolerance),
+                controller_power_limiter_active=_sizing_scale_active(
+                    publishable, device.control.power_scale, tolerance),
+                controller_current_limiter_active=_sizing_scale_active(
+                    publishable, device.control.current_scale, tolerance),
+                converter_current_requirement_utilization=_sizing_utilization(
                     publishable, installed_converter_current,
                     converter_requirement),
-                grid_current_utilization=_sizing_utilization(
+                grid_current_requirement_utilization=_sizing_utilization(
                     publishable, installed_grid_current, grid_requirement),
-                capacitor_current_utilization=_sizing_utilization(
+                capacitor_current_requirement_utilization=_sizing_utilization(
                     publishable, installed_capacitor_current,
                     capacitor_current_requirement),
-                dc_capacitance_2omega_utilization=_sizing_utilization(
-                    publishable, installed_capacitance,
-                    capacitance_requirement),
+                dc_capacitance_2omega_requirement_utilization=
+                    _sizing_utilization(
+                        publishable, installed_capacitance,
+                        capacitance_requirement),
                 converter_current_compliant=_sizing_assessment(
                     publishable, installed_converter_current,
                     converter_requirement),

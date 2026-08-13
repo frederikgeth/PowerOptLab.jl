@@ -69,8 +69,10 @@ end
     @test diagnostics.publishable_case_count == 2
     @test diagnostics.error_case_count == 1
     @test diagnostics.validation_error_case_count == 1
+    @test diagnostics.unexpected_error_case_count == 0
     @test diagnostics.unpublished_case_count == 0
     @test result.settings.selection_objective == :loss
+    @test result.settings.continue_on_error == :validation
     @test result.settings.solver_options ==
           Dict("max_iter" => 500, "tol" => 1e-8)
     @test occursin("Ipopt", result.settings.optimizer)
@@ -80,6 +82,14 @@ end
     @test occursin("not present in network", result.cases[1].error_message)
     @test_throws ErrorException run_inverter_control_study(
         [good_baseline]; optimizer=Int)
+    unexpected = run_inverter_control_study(
+        [good_baseline]; optimizer=Int, continue_on_error=:all)
+    @test unexpected.cases[1].error_class == :unexpected
+    @test solve_diagnostics(unexpected).unexpected_error_case_count == 1
+    @test only(inverter_control_study_summary_rows(unexpected))[
+        "unexpected_error_case_count"] == 1
+    @test_throws ArgumentError run_inverter_control_study(
+        [good_baseline]; continue_on_error=:unsupported)
     @test_throws ArgumentError run_inverter_control_study(
         [good_baseline]; selection_objective=:invalid)
 
@@ -110,6 +120,10 @@ end
     @test sequence_summary["case_count"] == 1
     @test sequence_summary["weighted_available_energy_kWh"] ≈ 8.0
     @test isfinite(sequence_summary["converter_current_A_p95"])
+    @test sequence_summary["converter_current_A_finite_points"] == 1
+    @test sequence_summary[
+        "capacitor_current_utilization_finite_points"] == 0
+    @test isnan(sequence_summary["capacitor_current_utilization_p50"])
     @test_throws ArgumentError inverter_control_study_summary_rows(
         result; group_by=["missing_metadata"])
 
@@ -149,8 +163,45 @@ end
     @test paired_summary["dropped_pair_count"] == 1
     @test paired_summary["publishable_pair_fraction"] == 0.5
     @test isfinite(paired_summary["mean_delta_converter_current_A"])
+    @test paired_summary["converter_current_A_finite_pair_count"] == 1
+    @test paired_summary["negative_delta_fraction_converter_current_A"] +
+          paired_summary["positive_delta_fraction_converter_current_A"] +
+          paired_summary[
+              "indistinguishable_delta_fraction_converter_current_A"] ≈ 1.0
+    @test isfinite(paired_summary["delta_converter_current_A_p50"])
+    @test_throws ArgumentError inverter_control_paired_summary_rows(
+        result, "baseline"; delta_relative_tolerance=-1)
+    @test length(inverter_control_paired_summary_rows(
+        result, "baseline"; group_by="scenario_id")) == 2
+    @test length(inverter_control_paired_summary_rows(
+        result, "baseline"; group_by="duration_h")) == 1
+    @test length(inverter_control_paired_summary_rows(
+        result, "baseline"; group_by="weight")) == 1
     @test_throws ArgumentError inverter_control_paired_rows(
         result, "not_a_variant")
+
+    identical_variant_case = _batch_case(
+        "tie", "identical", net, baseline_fleet)
+    identical_baseline_case = _batch_case(
+        "tie", "baseline", net, baseline_fleet)
+    identical_result = InverterControlStudyResult([
+        InverterControlStudyCaseResult(
+            identical_baseline_case, result.cases[2].result,
+            nothing, nothing, nothing, 0.0),
+        InverterControlStudyCaseResult(
+            identical_variant_case, result.cases[2].result,
+            nothing, nothing, nothing, 0.0),
+    ], result.solve, result.settings)
+    tie_summary = only(inverter_control_paired_summary_rows(
+        identical_result, "baseline"))
+    @test tie_summary["mean_delta_converter_current_A"] == 0.0
+    @test tie_summary["negative_delta_fraction_converter_current_A"] == 0.0
+    @test tie_summary["positive_delta_fraction_converter_current_A"] == 0.0
+    @test tie_summary[
+        "indistinguishable_delta_fraction_converter_current_A"] == 1.0
+    @test tie_summary["delta_converter_current_A_p05"] == 0.0
+    @test tie_summary["delta_converter_current_A_p50"] == 0.0
+    @test tie_summary["delta_converter_current_A_p95"] == 0.0
 
     @test PowerOptLab._weighted_quantile(
         [1.0, 2.0, 3.0], [1.0, 8.0, 1.0], 0.50) == 2.0
@@ -178,7 +229,7 @@ end
         fleet=scaled_comparison, duration_h=good_baseline.duration_h,
         weight=good_baseline.weight, metadata=good_baseline.metadata)
     scaled_outcome = InverterControlStudyCaseResult(
-        scaled_case, result.cases[3].result, nothing, nothing, 0.0)
+        scaled_case, result.cases[3].result, nothing, nothing, nothing, 0.0)
     scaled_result = InverterControlStudyResult(
         [result.cases[2], scaled_outcome], result.solve, result.settings)
     scaled_pair = only(inverter_control_paired_rows(
@@ -191,7 +242,7 @@ end
         fleet=comparison_fleet, duration_h=good_baseline.duration_h,
         weight=good_baseline.weight, metadata=good_baseline.metadata)
     network_outcome = InverterControlStudyCaseResult(
-        network_case, result.cases[3].result, nothing, nothing, 0.0)
+        network_case, result.cases[3].result, nothing, nothing, nothing, 0.0)
     network_result = InverterControlStudyResult(
         [result.cases[2], network_outcome], result.solve, result.settings)
     @test !only(inverter_control_paired_rows(
@@ -207,7 +258,8 @@ end
             network=net, fleet=baseline_fleet,
             metadata=Dict("penetration" => penetration))
         push!(numeric_outcomes, InverterControlStudyCaseResult(
-            numeric_case, result.cases[2].result, nothing, nothing, 0.0))
+            numeric_case, result.cases[2].result,
+            nothing, nothing, nothing, 0.0))
     end
     numeric_result = InverterControlStudyResult(
         numeric_outcomes, result.solve, result.settings)
@@ -224,7 +276,8 @@ end
         scenario_id="short_good", variant_id="baseline", network=net,
         fleet=baseline_fleet, duration_h=1.0, weight=1.0)
     short_good = InverterControlStudyCaseResult(
-        short_good_case, result.cases[2].result, nothing, nothing, 0.0)
+        short_good_case, result.cases[2].result,
+        nothing, nothing, nothing, 0.0)
     exposure_result = InverterControlStudyResult(
         [long_error, short_good], result.solve, result.settings)
     @test only(inverter_control_study_summary_rows(exposure_result))[
@@ -233,7 +286,8 @@ end
     exposure_case = _batch_case(
         "good", "sequence", net, comparison_fleet; duration_h=0.25)
     exposure_outcome = InverterControlStudyCaseResult(
-        exposure_case, result.cases[3].result, nothing, nothing, 0.0)
+        exposure_case, result.cases[3].result,
+        nothing, nothing, nothing, 0.0)
     exposure_result = InverterControlStudyResult(
         [result.cases[2], exposure_outcome], result.solve, result.settings)
     exposure_pair = only(inverter_control_paired_rows(

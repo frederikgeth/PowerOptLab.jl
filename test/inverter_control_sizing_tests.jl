@@ -147,6 +147,11 @@ end
     @test all(case.network === net for case in expanded)
     @test expanded[1].metadata["base_scenario_id"] == "snapshot"
     @test expanded[1].metadata["hardware_point_id"] == "large"
+    reference_expanded = only(filter(
+        case -> case.scenario_id == "snapshot::hardware[reference]" &&
+                case.variant_id == "baseline", expanded))
+    @test reference_expanded.metadata["converter_current_scale"] == 1.0
+    @test reference_expanded.metadata["dc_capacitance_scale"] == 1.0
     @test expanded[1].metadata == expanded[3].metadata
     @test inverter_spec(expanded[1].fleet.devices["pv"]).i_max == 44.0
     @test inverter_spec(expanded[1].fleet.devices["pv"]).c_dc == 1.65e-3
@@ -211,9 +216,15 @@ end
     @test Set(getproperty.(requirements, :hardware_point_id)) ==
           Set(["large", "reference"])
     @test all(row.base_scenario_id == "snapshot" for row in requirements)
-    @test all(row.converter_current_utilization > 0
+    @test all(row.converter_current_requirement_utilization > 0
               for row in requirements)
-    @test all(row.dc_capacitance_2omega_utilization > 0
+    @test all(row.dc_capacitance_2omega_requirement_utilization > 0
+              for row in requirements)
+    @test all(row.apparent_power_binding isa Bool for row in requirements)
+    @test all(row.command_curtailment_active isa Bool for row in requirements)
+    @test all(row.controller_power_limiter_active isa Bool
+              for row in requirements)
+    @test all(row.controller_current_limiter_active isa Bool
               for row in requirements)
     reference_requirement = only(filter(
         row -> row.scenario_id == "snapshot::hardware[reference]" &&
@@ -263,5 +274,32 @@ end
     @test unpublished_requirement.installed_dc_stored_energy_J > 0
     @test ismissing(unpublished_requirement.converter_current_compliant)
     @test ismissing(unpublished_requirement.converter_current_binding)
+    @test ismissing(unpublished_requirement.apparent_power_binding)
+    @test ismissing(unpublished_requirement.command_curtailment_active)
     @test ismissing(unpublished_requirement.dc_capacitance_2omega_compliant)
+
+    limited_inverter = AdvancedInverter(
+        id="limited", bus="poc", phase_terminals=["a", "b", "c"],
+        neutral="n", topology=:THREE_LEG, s_max=7e3, i_max=40.0,
+        v_dc=700.0, c_dc=1.1e-3, r_filter=0.05, x_filter=0.15,
+        m_max=0.96)
+    limited_fleet = ControlledInverterFleetSpec(
+        Dict("limited" => ControlledDevice(
+            limited_inverter,
+            SequenceController(AverageVoltageVoltVarWatt()))),
+        Dict("limited" => request))
+    limited_net = inv_grid3_bal()
+    limited_net["ibr"] = Dict("limited" => _fleet_native_ibr())
+    limited_study = run_inverter_control_study([
+        InverterControlStudyCase(
+            scenario_id="limited", variant_id="baseline",
+            network=limited_net, fleet=limited_fleet),
+    ]; solver_options=("max_iter" => 500, "tol" => 1e-8))
+    limited_requirement = only(inverter_control_hardware_requirement_rows(
+        limited_study; allowed_dc_ripple_fraction=0.02))
+    @test limited_requirement.publishable
+    @test limited_requirement.apparent_power_binding
+    @test limited_requirement.command_curtailment_active
+    @test !limited_requirement.converter_current_binding
+    @test limited_requirement.achieved_converter_apparent_power_VA ≈ 7e3 rtol=1e-4
 end

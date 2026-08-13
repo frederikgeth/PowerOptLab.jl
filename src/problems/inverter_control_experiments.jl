@@ -66,11 +66,6 @@ struct InverterControlStudyCaseResult
     elapsed_seconds::Float64
 end
 
-InverterControlStudyCaseResult(case, result, error_type, error_message, elapsed) =
-    InverterControlStudyCaseResult(
-        case, result, error_type === nothing ? nothing : :unclassified,
-        error_type, error_message, elapsed)
-
 _case_publishable(case_result::InverterControlStudyCaseResult) =
     case_result.result !== nothing && solve_status(case_result.result).publishable
 
@@ -95,6 +90,8 @@ solve_diagnostics(result::InverterControlStudyResult) = (
     error_case_count=count(case -> case.result === nothing, result.cases),
     validation_error_case_count=count(
         case -> case.error_class === :validation, result.cases),
+    unexpected_error_case_count=count(
+        case -> case.error_class === :unexpected, result.cases),
     elapsed_seconds=sum(case.elapsed_seconds for case in result.cases),
 )
 
@@ -146,12 +143,14 @@ end
 
 Solve independent matched cases in deterministic `(scenario_id, variant_id)`
 order. Each case invokes [`solve_controlled_inverter_fleet`](@ref); snapshots
-are not coupled into one NLP. With `continue_on_error=true` (default),
-case-specific `ArgumentError`s from dataset and model validation are recorded
-and the remaining cases continue. Programming, configuration, and unexpected
-solver exceptions are rethrown so they cannot be misreported as physical
-failure statistics. Set `continue_on_error=false` to rethrow validation errors
-as well.
+are not coupled into one NLP. `continue_on_error=true` (the default, equivalent
+to `:validation`) records case-specific `ArgumentError`s from dataset and model
+validation and continues. `continue_on_error=false` aborts on every exception.
+The explicit unattended-campaign mode `continue_on_error=:all` also records
+non-validation exceptions as `error_class=:unexpected`; fatal process-level
+exceptions are always rethrown. Use `:all` deliberately: unexpected errors are
+software/data failures, not physical infeasibility, and must be reported
+separately.
 
 This implementation is deliberately serial and reproducible. Large studies
 should partition the case vector across processes outside this function and
@@ -160,7 +159,7 @@ across cases.
 """
 function run_inverter_control_study(
         cases::AbstractVector;
-        continue_on_error::Bool=true,
+        continue_on_error::Union{Bool,Symbol}=true,
         per_unit::Bool=true,
         s_base::Real=1e6,
         optimizer=Ipopt.Optimizer,
@@ -174,6 +173,10 @@ function run_inverter_control_study(
         "run_inverter_control_study requires per_unit=true"))
     isfinite(s_base) && s_base > 0 || throw(ArgumentError(
         "s_base must be finite and > 0"))
+    error_mode = continue_on_error === true ? :validation :
+        continue_on_error === false ? :none : continue_on_error
+    error_mode in (:none, :validation, :all) || throw(ArgumentError(
+        "continue_on_error must be false, true/:validation, or :all"))
     ordered = sort!(collect(cases);
         by=case -> (case.scenario_id, case.variant_id))
     canonical_options = _study_solver_options(solver_options)
@@ -192,11 +195,13 @@ function run_inverter_control_study(
         catch err
             err isa Union{InterruptException,OutOfMemoryError,StackOverflowError} &&
                 rethrow()
-            err isa ArgumentError || rethrow()
-            continue_on_error || rethrow()
+            error_class = err isa ArgumentError ? :validation : :unexpected
+            (error_mode === :all ||
+             (error_mode === :validation && error_class === :validation)) ||
+                rethrow()
             elapsed = (time_ns() - started) / 1e9
             push!(outcomes, InverterControlStudyCaseResult(
-                case, nothing, :validation, string(typeof(err)),
+                case, nothing, error_class, string(typeof(err)),
                 sprint(showerror, err), elapsed))
         end
     end
@@ -206,6 +211,7 @@ function run_inverter_control_study(
         optimizer=string(optimizer),
         verbose=verbose,
         selection_objective=selection_objective,
+        continue_on_error=error_mode,
         solver_options=Dict{String,Any}(canonical_options),
     )
     InverterControlStudyResult(outcomes, _study_status(outcomes), settings)
@@ -307,6 +313,8 @@ cases. Electrical and energy metrics use publishable device rows only.
 
 Energy totals weight power by `duration_h*weight`. Current/VUF/capacitor tails
 are duration-and-weight empirical inverse-CDF quantiles at 50, 95, and 99 %.
+Every tail metric reports its own `*_finite_points` denominator; this is
+essential for utilization metrics whose optional rating may be absent.
 """
 function inverter_control_study_summary_rows(
         result::InverterControlStudyResult;
@@ -349,6 +357,8 @@ function inverter_control_study_summary_rows(
         row["error_case_count"] = errors
         row["validation_error_case_count"] = count(
             case -> case.error_class === :validation, case_results)
+        row["unexpected_error_case_count"] = count(
+            case -> case.error_class === :unexpected, case_results)
         row["publishable_fraction"] = publishable / case_count
         row["weighted_publishable_fraction"] = publishable_weight / total_weight
 
@@ -403,6 +413,7 @@ function inverter_control_study_summary_rows(
             finite = findall(isfinite, values)
             finite_values = values[finite]
             finite_weights = exposures[finite]
+            row["$(label)_finite_points"] = length(finite_values)
             for (suffix, probability) in (("p50", 0.50), ("p95", 0.95),
                                           ("p99", 0.99))
                 row["$(label)_$suffix"] = _weighted_quantile(
@@ -486,9 +497,13 @@ function inverter_control_paired_rows(
             if pair_publishable
                 base_row = base_rows[id]
                 variant_row = variant_rows[id]
+                baseline_value = field -> getproperty(base_row, field)
+                variant_value = field -> getproperty(variant_row, field)
                 delta = field -> getproperty(variant_row, field) -
                                    getproperty(base_row, field)
             else
+                baseline_value = _ -> NaN
+                variant_value = _ -> NaN
                 delta = _ -> NaN
             end
             row = (
@@ -501,17 +516,47 @@ function inverter_control_paired_rows(
                 metadata=base_case.case.metadata,
                 matched_case_definition=matched_case_definition,
                 publishable_pair=pair_publishable,
+                baseline_command_curtailment_W=
+                    baseline_value(:command_curtailment_W),
+                variant_command_curtailment_W=
+                    variant_value(:command_curtailment_W),
                 delta_command_curtailment_W=delta(:command_curtailment_W),
+                baseline_poc_active_power_shortfall_W=
+                    baseline_value(:poc_active_power_shortfall_W),
+                variant_poc_active_power_shortfall_W=
+                    variant_value(:poc_active_power_shortfall_W),
                 delta_poc_active_power_shortfall_W=
                     delta(:poc_active_power_shortfall_W),
+                baseline_converter_loss_W=baseline_value(:converter_loss_W),
+                variant_converter_loss_W=variant_value(:converter_loss_W),
                 delta_converter_loss_W=delta(:converter_loss_W),
+                baseline_converter_current_A=
+                    baseline_value(:maximum_converter_current_A),
+                variant_converter_current_A=
+                    variant_value(:maximum_converter_current_A),
                 delta_converter_current_A=
                     delta(:maximum_converter_current_A),
+                baseline_grid_current_A=
+                    baseline_value(:maximum_grid_current_A),
+                variant_grid_current_A=
+                    variant_value(:maximum_grid_current_A),
                 delta_grid_current_A=delta(:maximum_grid_current_A),
+                baseline_voltage_unbalance_factor=
+                    baseline_value(:voltage_unbalance_factor),
+                variant_voltage_unbalance_factor=
+                    variant_value(:voltage_unbalance_factor),
                 delta_voltage_unbalance_factor=
                     delta(:voltage_unbalance_factor),
+                baseline_capacitor_thermal_current_A=
+                    baseline_value(:capacitor_thermal_current_A),
+                variant_capacitor_thermal_current_A=
+                    variant_value(:capacitor_thermal_current_A),
                 delta_capacitor_thermal_current_A=
                     delta(:capacitor_thermal_current_A),
+                baseline_dc_ripple_voltage_V=
+                    baseline_value(:dc_ripple_voltage_V),
+                variant_dc_ripple_voltage_V=
+                    variant_value(:dc_ripple_voltage_V),
                 delta_dc_ripple_voltage_V=delta(:dc_ripple_voltage_V),
             )
             if rows === nothing
@@ -524,22 +569,47 @@ function inverter_control_paired_rows(
     rows === nothing ? NamedTuple[] : rows
 end
 
+function _paired_group_value(row, key::String)
+    key == "scenario_id" && return row.scenario_id
+    key == "variant_id" && return row.variant_id
+    key == "duration_h" && return row.duration_h
+    key == "weight" && return row.weight
+    haskey(row.metadata, key) || throw(ArgumentError(
+        "paired row for scenario '$(row.scenario_id)' lacks " *
+        "grouping metadata '$key'"))
+    row.metadata[key]
+end
+
 """
     inverter_control_paired_summary_rows(result, baseline_variant;
-        group_by=String[], require_shared_network=true)
+        group_by=String[], require_shared_network=true,
+        delta_relative_tolerance=1e-6)
 
 Summarize matched device-level `variant - baseline` rows without hiding
 attrition. Each cohort reports all candidate, definition-matched, publishable,
-and dropped device pairs. Delta means and negative-delta fractions use
-`duration_h*weight` exposure over publishable pairs only. The latter is the
-weighted fraction for which the variant has a smaller value than baseline;
-interpret whether smaller is preferable from the named metric.
+and dropped device pairs. Delta means, p05/p50/p95 quantiles, and direction
+fractions use `duration_h*weight` exposure over finite publishable pairs only.
+A delta is indistinguishable when its magnitude is at most
+`delta_relative_tolerance*max(abs(baseline), abs(variant), 1)` in the metric's
+reported unit; the unit floor gives zero-valued comparisons a numerical band.
+Negative, positive, and indistinguishable fractions are all reported so ties
+and solver-scale noise are not conflated with one-sided effects. Per-metric
+finite-pair counts expose structurally unavailable quantities.
+
+`group_by` accepts the same standard case fields as
+[`inverter_control_study_summary_rows`](@ref), or baseline metadata keys.
+Unmatched pairs are assigned to the baseline case's cohort because their row
+retains baseline exposure/provenance.
 """
 function inverter_control_paired_summary_rows(
         result::InverterControlStudyResult,
         baseline_variant::AbstractString;
         group_by=String[],
-        require_shared_network::Bool=true)
+        require_shared_network::Bool=true,
+        delta_relative_tolerance::Real=1e-6)
+    delta_rtol = Float64(delta_relative_tolerance)
+    isfinite(delta_rtol) && delta_rtol >= 0 || throw(ArgumentError(
+        "delta_relative_tolerance must be finite and >= 0"))
     requested = group_by isa AbstractString ? [String(group_by)] :
         String.(collect(group_by))
     paired = inverter_control_paired_rows(
@@ -556,25 +626,32 @@ function inverter_control_paired_summary_rows(
     PairRow = eltype(paired)
     groups = Dict{Tuple,Vector{PairRow}}()
     for row in paired
-        group = Tuple(key == "variant_id" ? row.variant_id :
-            haskey(row.metadata, key) ? row.metadata[key] :
-            throw(ArgumentError(
-                "paired row for scenario '$(row.scenario_id)' lacks " *
-                "grouping metadata '$key'")) for key in group_keys)
+        group = Tuple(_paired_group_value(row, key) for key in group_keys)
         push!(get!(groups, group, PairRow[]), row)
     end
 
     metrics = (
-        "command_curtailment_W" => :delta_command_curtailment_W,
-        "poc_active_power_shortfall_W" =>
-            :delta_poc_active_power_shortfall_W,
-        "converter_loss_W" => :delta_converter_loss_W,
-        "converter_current_A" => :delta_converter_current_A,
-        "grid_current_A" => :delta_grid_current_A,
-        "voltage_unbalance_factor" => :delta_voltage_unbalance_factor,
-        "capacitor_thermal_current_A" =>
-            :delta_capacitor_thermal_current_A,
-        "dc_ripple_voltage_V" => :delta_dc_ripple_voltage_V,
+        ("command_curtailment_W", :delta_command_curtailment_W,
+         :baseline_command_curtailment_W, :variant_command_curtailment_W),
+        ("poc_active_power_shortfall_W",
+         :delta_poc_active_power_shortfall_W,
+         :baseline_poc_active_power_shortfall_W,
+         :variant_poc_active_power_shortfall_W),
+        ("converter_loss_W", :delta_converter_loss_W,
+         :baseline_converter_loss_W, :variant_converter_loss_W),
+        ("converter_current_A", :delta_converter_current_A,
+         :baseline_converter_current_A, :variant_converter_current_A),
+        ("grid_current_A", :delta_grid_current_A,
+         :baseline_grid_current_A, :variant_grid_current_A),
+        ("voltage_unbalance_factor", :delta_voltage_unbalance_factor,
+         :baseline_voltage_unbalance_factor,
+         :variant_voltage_unbalance_factor),
+        ("capacitor_thermal_current_A",
+         :delta_capacitor_thermal_current_A,
+         :baseline_capacitor_thermal_current_A,
+         :variant_capacitor_thermal_current_A),
+        ("dc_ripple_voltage_V", :delta_dc_ripple_voltage_V,
+         :baseline_dc_ripple_voltage_V, :variant_dc_ripple_voltage_V),
     )
     summaries = Dict{String,Any}[]
     for group in sort!(collect(keys(groups)); by=_study_group_sort_key)
@@ -583,20 +660,49 @@ function inverter_control_paired_summary_rows(
                                for index in eachindex(group_keys))
         publishable = filter(item -> item.publishable_pair, cohort)
         exposures = [item.duration_h * item.weight for item in publishable]
-        exposure = sum(exposures; init=0.0)
         row["candidate_pair_count"] = length(cohort)
         row["matched_definition_pair_count"] = count(
             item -> item.matched_case_definition, cohort)
         row["publishable_pair_count"] = length(publishable)
         row["dropped_pair_count"] = length(cohort) - length(publishable)
         row["publishable_pair_fraction"] = length(publishable) / length(cohort)
-        for (label, field) in metrics
-            values = [getproperty(item, field) for item in publishable]
-            row["mean_delta_$label"] = isempty(values) ? NaN :
-                sum(values .* exposures) / exposure
-            row["negative_delta_fraction_$label"] = isempty(values) ? NaN :
-                sum(exposures[index] for index in eachindex(values)
-                    if values[index] < 0; init=0.0) / exposure
+        for (label, delta_field, baseline_field, variant_field) in metrics
+            values = Float64[getproperty(item, delta_field)
+                             for item in publishable]
+            baselines = Float64[getproperty(item, baseline_field)
+                                for item in publishable]
+            variants = Float64[getproperty(item, variant_field)
+                               for item in publishable]
+            finite = findall(index -> isfinite(values[index]) &&
+                isfinite(baselines[index]) && isfinite(variants[index]),
+                eachindex(values))
+            finite_values = values[finite]
+            finite_baselines = baselines[finite]
+            finite_variants = variants[finite]
+            finite_exposures = exposures[finite]
+            finite_exposure = sum(finite_exposures; init=0.0)
+            tolerances = delta_rtol .* max.(
+                abs.(finite_baselines), abs.(finite_variants), 1.0)
+            row["$(label)_finite_pair_count"] = length(finite_values)
+            row["mean_delta_$label"] = isempty(finite_values) ? NaN :
+                sum(finite_values .* finite_exposures) / finite_exposure
+            for (suffix, probability) in (("p05", 0.05), ("p50", 0.50),
+                                          ("p95", 0.95))
+                row["delta_$(label)_$suffix"] = _weighted_quantile(
+                    finite_values, finite_exposures, probability)
+            end
+            for (direction, predicate) in (
+                    ("negative", (value, tolerance) -> value < -tolerance),
+                    ("positive", (value, tolerance) -> value > tolerance),
+                    ("indistinguishable",
+                     (value, tolerance) -> abs(value) <= tolerance))
+                row["$(direction)_delta_fraction_$label"] =
+                    isempty(finite_values) ? NaN :
+                    sum(finite_exposures[index]
+                        for index in eachindex(finite_values)
+                        if predicate(finite_values[index], tolerances[index]);
+                        init=0.0) / finite_exposure
+            end
         end
         push!(summaries, row)
     end
