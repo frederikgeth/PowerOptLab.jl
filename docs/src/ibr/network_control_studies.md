@@ -143,12 +143,14 @@ phase_rows = controlled_inverter_phase_rows(result)
 ```
 
 `device_rows` has one row per inverter and scalar SI columns for POC and
-converter power, losses, voltage extrema and sequences, VUF, requested power,
-limiter scales, maximum converter/grid current, sequence current, 2ω ripple,
-DC-link ripple voltage, capacitor current, and the exact-versus-smooth current
-residual. `phase_rows` has one row per inverter and phase, retaining rectangular
-and magnitude voltage, converter-current, and grid-current values. Both helpers
-sort identifiers lexically, independent of dictionary insertion order.
+converter power, losses, voltage extrema and sequences (including `U₀`), VUF,
+requested power, limiter scales, maximum converter/grid current, sequence
+current, negative-sequence current angle, peak-phase/positive-sequence current
+ratio, 2ω ripple, DC-link ripple voltage, capacitor current, and the
+exact-versus-smooth current residual. `phase_rows` has one row per inverter and
+phase, retaining rectangular and magnitude voltage, converter-current, and
+grid-current values. Both helpers sort identifiers lexically, independent of
+dictionary insertion order.
 
 The conventional `voltage_unbalance_factor` is ``|U_2|/|U_1|``. It is distinct
 from `regularized_voltage_unbalance`, the controller's finite-denominator

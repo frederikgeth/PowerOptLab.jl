@@ -346,6 +346,14 @@ function controlled_inverter_rows(result::ControlledInverterFleetResult)
         controlled = result.spec.devices[id]
         inverter = inverter_spec(controlled)
         request = result.spec.requests[id]
+        positive_current = abs(control.i1)
+        negative_current_angle = isfinite(positive_current) &&
+                positive_current > 0 && isfinite(abs(control.i2)) ?
+            angle(control.i2 / control.i1) : NaN
+        peak_positive_current_ratio = isfinite(positive_current) &&
+                positive_current > 0 &&
+                all(isfinite, abs.(control.phase_current)) ?
+            maximum(abs, control.phase_current) / positive_current : NaN
         converter_total_current = maximum(hypot.(
             plant.i_mag, inverter.pwm_ac_converter_reserve))
         grid_total_current = maximum(hypot.(
@@ -376,6 +384,7 @@ function controlled_inverter_rows(result::ControlledInverterFleetResult)
             converter_loss_W=plant.p_loss + plant.p_cap_loss,
             voltage_min_V=control.voltage_min,
             voltage_max_V=control.voltage_max,
+            zero_sequence_voltage_V=abs(control.voltage_sequence[1]),
             positive_sequence_voltage_V=u1,
             negative_sequence_voltage_V=u2,
             voltage_unbalance_factor=vuf,
@@ -403,6 +412,8 @@ function controlled_inverter_rows(result::ControlledInverterFleetResult)
                 grid_total_current/inverter.i_grid_max,
             positive_sequence_current_A=plant.i_positive,
             negative_sequence_current_A=plant.i_negative,
+            negative_sequence_current_angle_rad=negative_current_angle,
+            peak_phase_to_positive_current_ratio=peak_positive_current_ratio,
             ripple_power_VA=plant.ripple,
             dc_ripple_voltage_V=plant.dv2,
             dc_capacitance_F=

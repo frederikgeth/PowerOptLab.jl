@@ -220,6 +220,11 @@ end
               for row in requirements)
     @test all(row.dc_capacitance_2omega_requirement_utilization > 0
               for row in requirements)
+    @test all(row.zero_sequence_voltage_V >= 0 for row in requirements)
+    @test all(isfinite(row.negative_sequence_current_angle_rad)
+              for row in requirements)
+    @test all(row.peak_phase_to_positive_current_ratio >= 1.0
+              for row in requirements)
     @test all(row.apparent_power_binding isa Bool for row in requirements)
     @test all(row.command_curtailment_active isa Bool for row in requirements)
     @test all(row.controller_power_limiter_active isa Bool

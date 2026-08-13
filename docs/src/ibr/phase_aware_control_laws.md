@@ -221,9 +221,11 @@ replace the mean-voltage input by direction-aware envelopes:
 The recommended first rule is **continuous dominant severity**. Normalise the
 positive and negative branch ordinates by their respective branch maxima, form
 their signed severity difference ``d``, and blend with
-``w=(1+d/\sqrt{d^2+\epsilon_c^2})/2``. The request
-``q=wq_\ell+(1-w)q_h`` approaches winner-take-all away from the tie but returns
-zero continuously at equal severity. This avoids both `:net` cancellation away
+``w=(1+d/\sqrt{d^2+\epsilon_c^2})/2``. The implementation blends the signed
+normalized command and then maps it through the same smooth branch-scale
+selector. The request approaches winner-take-all away from the tie and returns
+zero continuously at equal normalized severity, including for asymmetric
+injecting and absorbing curve ranges. This avoids both `:net` cancellation away
 from a tie and the equilibrium/conditioning problems of a discontinuous switch.
 The equilibrium half of that argument is a known property of local Volt-var
 feedback rather than a claim made here: Farivar, Chen, and Low give existence and
@@ -653,12 +655,12 @@ as open numerical work rather than settled policy:
    lifted form throughout. It should be re-measured against the shifted form
    before it is treated as an intrinsic property of the coupled controller
    rather than of this representation.
-3. `current_epsilon` and `power_epsilon` are absolute SI widths, so they mean
-   different things on a 5 kVA and a 500 kVA inverter and are effectively zero
-   once divided by a megavolt-ampere base. The plant already declares its
-   smoothing relative to each leg's own rating. Making the controller selectors
-   rating-relative would give a heterogeneous fleet one common relative bias;
-   it is a deliberate open decision, not an oversight.
+3. `CommonScaleLimiter` now uses rating-relative current and power smoothing
+   fractions by default, so heterogeneous fleets receive one dimensionless
+   regularization convention. Explicit `current_epsilon` and
+   `power_epsilon` values remain available as absolute-SI overrides for
+   reproducibility or legacy comparisons. The fractions and overrides should be
+   recorded with study settings.
 
 The starts and scales handed to each lifted magnitude are likewise chosen per
 call site and are not yet audited. Their sensitivity is real: changing only the
