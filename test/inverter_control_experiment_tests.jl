@@ -124,6 +124,14 @@ end
     @test sequence_summary[
         "capacitor_current_utilization_finite_points"] == 0
     @test isnan(sequence_summary["capacitor_current_utilization_p50"])
+    # A failure fraction is uninterpretable without knowing whether the
+    # non-publishable cases were infeasible or merely unconverged.
+    @test baseline_summary["termination_status_counts"]["ERROR"] == 1
+    @test sum(values(baseline_summary["termination_status_counts"])) ==
+          baseline_summary["case_count"]
+    @test baseline_summary["iteration_limit_case_count"] == 0
+    @test baseline_summary["locally_infeasible_case_count"] == 0
+    @test baseline_summary["numerical_error_case_count"] == 0
     @test_throws ArgumentError inverter_control_study_summary_rows(
         result; group_by=["missing_metadata"])
 
@@ -141,6 +149,12 @@ end
     @test solve_diagnostics(unpublished).error_case_count == 0
     @test length(inverter_control_study_device_rows(unpublished)) == 1
     @test isnan(inverter_control_study_device_rows(unpublished)[1].p_poc_W)
+    unpublished_summary = only(
+        inverter_control_study_summary_rows(unpublished))
+    @test unpublished_summary["iteration_limit_case_count"] == 1
+    @test unpublished_summary["error_case_count"] == 0
+    @test unpublished_summary["termination_status_counts"] ==
+          Dict("ITERATION_LIMIT" => 1)
 
     paired = inverter_control_paired_rows(result, "baseline")
     @test length(paired) == 2
@@ -219,6 +233,24 @@ end
     mismatched_pairs = inverter_control_paired_rows(mismatched, "baseline")
     @test getproperty.(mismatched_pairs, :device_id) == ["extra", "pv"]
     @test all(!row.publishable_pair for row in mismatched_pairs)
+    # Both arms solved; only the pairing is invalid. Each arm therefore keeps
+    # its own achieved value on the device it actually owns, so a dropped pair
+    # can be inspected rather than merely counted. The difference stays NaN.
+    extra_row = only(filter(
+        row -> row.device_id == "extra", mismatched_pairs))
+    pv_row = only(filter(row -> row.device_id == "pv", mismatched_pairs))
+    @test extra_row.variant_published && !extra_row.baseline_published
+    @test pv_row.baseline_published && !pv_row.variant_published
+    @test isfinite(extra_row.variant_converter_current_A)
+    @test isnan(extra_row.baseline_converter_current_A)
+    @test isfinite(pv_row.baseline_converter_current_A)
+    @test isnan(pv_row.variant_converter_current_A)
+    @test all(isnan(row.delta_converter_current_A)
+              for row in mismatched_pairs)
+    mismatched_summary = only(inverter_control_paired_summary_rows(
+        mismatched, "baseline"))
+    @test mismatched_summary["dropped_pair_count"] == 2
+    @test mismatched_summary["dropped_pair_known_baseline_count"] == 1
 
     scaled_comparison = resize_controlled_inverter_fleet(
         comparison_fleet,
@@ -234,6 +266,12 @@ end
         [result.cases[2], scaled_outcome], result.solve, result.settings)
     scaled_pair = only(inverter_control_paired_rows(
         scaled_result, "baseline"))
+    # A confounded pair: both arms published the same device, so both values
+    # are retained for inspection, but the difference is refused.
+    @test scaled_pair.baseline_published && scaled_pair.variant_published
+    @test isfinite(scaled_pair.baseline_converter_current_A)
+    @test isfinite(scaled_pair.variant_converter_current_A)
+    @test isnan(scaled_pair.delta_converter_current_A)
     @test !scaled_pair.matched_case_definition
     @test !scaled_pair.publishable_pair
 

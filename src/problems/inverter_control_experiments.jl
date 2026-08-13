@@ -315,6 +315,14 @@ Energy totals weight power by `duration_h*weight`. Current/VUF/capacitor tails
 are duration-and-weight empirical inverse-CDF quantiles at 50, 95, and 99 %.
 Every tail metric reports its own `*_finite_points` denominator; this is
 essential for utilization metrics whose optional rating may be absent.
+
+`termination_status_counts` is the authoritative per-cohort histogram of case
+termination statuses, with `"ERROR"` covering thrown cases. The named
+`iteration_limit_case_count`, `locally_infeasible_case_count`, and
+`numerical_error_case_count` are conveniences drawn from it. Report them with
+any failure fraction: a non-publishable case may be a physical infeasibility or
+merely a solver that did not converge, and the second is toolchain-dependent
+rather than a property of the controller under test.
 """
 function inverter_control_study_summary_rows(
         result::InverterControlStudyResult;
@@ -361,6 +369,24 @@ function inverter_control_study_summary_rows(
             case -> case.error_class === :unexpected, case_results)
         row["publishable_fraction"] = publishable / case_count
         row["weighted_publishable_fraction"] = publishable_weight / total_weight
+        # A non-publishable count alone conflates "this controller is
+        # physically infeasible here" with "the smooth NLP did not converge
+        # here". Those have opposite scientific meanings, and the second is
+        # toolchain-dependent. The per-case status already distinguishes them;
+        # aggregating it is what makes the distinction usable at the altitude
+        # where cohort conclusions are drawn.
+        status_counts = Dict{String,Int}()
+        for case_result in case_results
+            status = _case_termination(case_result)
+            status_counts[status] = get(status_counts, status, 0) + 1
+        end
+        row["termination_status_counts"] = status_counts
+        for (label, status) in (
+                ("iteration_limit", "ITERATION_LIMIT"),
+                ("locally_infeasible", "LOCALLY_INFEASIBLE"),
+                ("numerical_error", "NUMERICAL_ERROR"))
+            row["$(label)_case_count"] = get(status_counts, status, 0)
+        end
 
         device_rows = nothing
         exposures = Float64[]
@@ -434,7 +460,18 @@ end
 Return matched device-level differences `variant - baseline` for every
 scenario and non-baseline variant in the study. Missing, errored, or
 non-publishable pairs are retained with `publishable_pair=false` and NaN
-differences. A pair is matched only when exposure metadata, physical inverter
+differences.
+
+The `baseline_*` and `variant_*` columns report each arm's own achieved value
+whenever that arm published, whether or not the pair itself is publishable, and
+`baseline_published`/`variant_published` state which arms those are without
+inferring it from a NaN. A dropped pair whose baseline solved is therefore
+characterizable, so the attrition counts can be turned into a selection-bias
+argument instead of only a caveat. Only `delta_*` is gated on
+`publishable_pair`, because only the difference is a matched estimate; never
+difference the two arms of an unmatched row by hand.
+
+A pair is matched only when exposure metadata, physical inverter
 specifications, requests, device identifiers, and (by default) the network
 object agree. This prevents both attrition and hardware/network confounding.
 Set `require_shared_network=false` only after an external adapter has proved
@@ -494,18 +531,19 @@ function inverter_control_paired_rows(
                 variant_case !== nothing && _case_publishable(variant_case) &&
                 matched_case_definition && haskey(base_rows, id) &&
                 haskey(variant_rows, id)
-            if pair_publishable
-                base_row = base_rows[id]
-                variant_row = variant_rows[id]
-                baseline_value = field -> getproperty(base_row, field)
-                variant_value = field -> getproperty(variant_row, field)
-                delta = field -> getproperty(variant_row, field) -
-                                   getproperty(base_row, field)
-            else
-                baseline_value = _ -> NaN
-                variant_value = _ -> NaN
-                delta = _ -> NaN
-            end
+            # Each arm's own achieved values are reported whenever that arm
+            # published, independently of pair status. A dropped pair whose
+            # baseline solved is then characterizable, which is what bounds
+            # the selection bias its count implies. Only the difference is
+            # gated on the pair, because only the difference is a matched
+            # estimate.
+            baseline_value = haskey(base_rows, id) ?
+                field -> getproperty(base_rows[id], field) : _ -> NaN
+            variant_value = haskey(variant_rows, id) ?
+                field -> getproperty(variant_rows[id], field) : _ -> NaN
+            delta = pair_publishable ?
+                field -> getproperty(variant_rows[id], field) -
+                         getproperty(base_rows[id], field) : _ -> NaN
             row = (
                 scenario_id=scenario,
                 device_id=id,
@@ -516,6 +554,8 @@ function inverter_control_paired_rows(
                 metadata=base_case.case.metadata,
                 matched_case_definition=matched_case_definition,
                 publishable_pair=pair_publishable,
+                baseline_published=haskey(base_rows, id),
+                variant_published=haskey(variant_rows, id),
                 baseline_command_curtailment_W=
                     baseline_value(:command_curtailment_W),
                 variant_command_curtailment_W=
@@ -666,6 +706,12 @@ function inverter_control_paired_summary_rows(
         row["publishable_pair_count"] = length(publishable)
         row["dropped_pair_count"] = length(cohort) - length(publishable)
         row["publishable_pair_fraction"] = length(publishable) / length(cohort)
+        # How many dropped pairs can actually be inspected. Comparing those
+        # baselines against the retained ones is what turns the drop count
+        # into a selection-bias argument; the per-row baseline_* columns carry
+        # the values, this states whether the comparison is possible at all.
+        row["dropped_pair_known_baseline_count"] = count(
+            item -> !item.publishable_pair && item.baseline_published, cohort)
         for (label, delta_field, baseline_field, variant_field) in metrics
             values = Float64[getproperty(item, delta_field)
                              for item in publishable]

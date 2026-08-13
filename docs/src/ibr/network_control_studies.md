@@ -287,14 +287,23 @@ Extraction is split by purpose:
   hardware, requests, and the shared network must agree across a pair;
   `matched_case_definition` exposes that check and prevents unmatched exposure
   or confounding from entering a paired estimate. A separately materialized
-  network may be accepted only after external equivalence validation; and
+  network may be accepted only after external equivalence validation. The
+  `baseline_*` and `variant_*` columns retain each arm's own achieved value
+  whenever that arm published, even when the pair is refused, with
+  `baseline_published`/`variant_published` naming which arms those are, so a
+  dropped pair can be characterized rather than only counted. Only `delta_*`
+  is gated on `publishable_pair`; do not difference the two arms of an
+  unmatched row by hand, because the refusal is the finding; and
 - `inverter_control_paired_summary_rows` reports candidate, definition-matched,
   publishable, and dropped pair counts plus exposure-weighted mean and
   p05/p50/p95 deltas. Negative, positive, and numerically indistinguishable
   fractions use a declared magnitude-relative tolerance with a one-unit floor
   in each metric's reported unit. Per-metric finite-pair counts expose
-  unavailable quantities. Unmatched rows retain the baseline metadata, so they
-  are attributed to the baseline cohort when grouped.
+  unavailable quantities. `dropped_pair_known_baseline_count` states how many
+  dropped pairs have an inspectable baseline; comparing those baselines with
+  the retained ones is what turns an attrition count into a bound on selection
+  bias. Unmatched rows retain the baseline metadata, so they are attributed to
+  the baseline cohort when grouped.
 
 Summary energy is the weighted sum of power times `duration_h` and is reported
 in kWh. Current, VUF, capacitor-current, and ripple-voltage p50/p95/p99 values
@@ -306,6 +315,19 @@ undisclosed subset. The summary reports both ordinary and duration-times-weight
 exposure-adjusted publication fractions. Do not
 interpret metrics from different publication fractions as a fair control-law
 comparison; examine retained failure rows and paired results first.
+
+A publication fraction on its own does not say why cases failed, and the two
+reasons are scientifically opposite. `termination_status_counts` gives the
+per-cohort histogram of case termination statuses (with `"ERROR"` for thrown
+cases), and `iteration_limit_case_count`,
+`locally_infeasible_case_count`, and `numerical_error_case_count` are named
+conveniences drawn from it. A `LOCALLY_INFEASIBLE` case is a candidate physical
+statement about the controller and hardware under test. An `ITERATION_LIMIT` or
+`NUMERICAL_ERROR` case is a statement about the smooth NLP's conditioning, and
+it is not portable: the same source, Julia version, and pinned dependencies can
+converge on one platform's linear-solver build and not on another's. Report the
+histogram beside any failure fraction, and never attribute unconverged cases to
+a control law without first re-solving them from a different start.
 
 Fleet tails include both absolute current and rating-normalized utilization.
 The total converter/grid current companions combine declared carrier reserves
