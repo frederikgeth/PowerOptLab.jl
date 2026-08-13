@@ -30,7 +30,11 @@ current or DC ripple should not be reported as an unconditional improvement.
 Primary response variables are:
 
 - maximum and minimum phase-to-neutral voltage;
-- negative-sequence voltage ratio `|U2|/|U1|` and, when observable, zero sequence;
+- negative-sequence voltage ratio `|U2|/|U1|`, stating which unbalance
+  definition is used, and the zero-sequence voltage `|U0|`. `|U0|` is mandatory
+  for any phase-magnitude comparator: those laws respond to it, a three-leg
+  bridge cannot control it, and its measured value depends on the voltage-sensing
+  reference;
 - PV energy exported and curtailed;
 - converter-terminal total and zero/positive/negative-sequence complex power;
 - converter and filter losses;
@@ -443,3 +447,19 @@ construction; batteries are outside this programme.
    counterfactuals; report achieved-current and closed-form 2ω requirements.
    Dataset-specific service predicates and complete capability frontiers are
    the next research run.
+10. **Open:** implement the exact-law fixed-point oracle described in
+    [Verification and benchmark cases](@ref ibr-verification) and report
+    ``\|\Delta V\|_\infty`` between the firmware-law and smooth-law equilibria on
+    at least one unbalanced feeder per control law. Until this exists, the
+    reported exact/smooth residual bounds controller-algebra smoothing only, and
+    equilibrium agreement is an assumption of every comparison above.
+11. **Open:** audit the starts and scales of every lifted magnitude, decide
+    whether the controller selectors become rating-relative, and re-measure the
+    `per_unit=true` restriction against the shifted-expression representation.
+    The evidence and the three specific defects are in the numerical-policy
+    section of [Phase-aware local control laws](@ref
+    ibr-phase-aware-control-laws). This gates any study on devices whose ratings
+    differ by more than about a decade, and any MV study.
+12. **Open:** read the licensed AS/NZS 4777.2 and IEEE 1547-2018 clauses that
+    specify the monitored voltage for a multi-phase DER, and settle the novelty
+    framing of the worst-phase envelope before writing it up.

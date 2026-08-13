@@ -46,7 +46,9 @@ oracle. A solver returning `LOCALLY_SOLVED` is necessary, but not sufficient.
 | Controller Fortescue algebra | prescribed `U1/U2` phasors | the transform recovers both sequences and reconstructed three-leg current sums to zero |
 | Controller closed forms | direct formulas | common power/current scales, sequence powers, voltage-oriented `I2`, and regularized ripple residual agree near machine precision |
 | Controller metamorphic tests | rotated and cyclically relabelled phasors | scalar decisions are invariant and current phasors transform with the reference frame |
-| Controller exact/smooth agreement | independent numeric evaluators plus solved local voltage | maximum phase-current residual remains below the declared tolerance |
+| Controller zero-sequence reference | common-mode offset added to all three phasors | `U1`/`U2`, both curve outputs of the sequence comparator, and the whole command are invariant; the physical extrema and every phase-magnitude comparator move |
+| Capability-backoff sign safety | offsets at, below, and above the per-leg limit | the smooth allocation factor stays in `[0,1]` and matches the exact allocator within the declared selector width, so an exhausted limit cannot reverse the command |
+| Controller exact/smooth agreement | independent numeric evaluators plus solved local voltage | maximum phase-current residual remains below the declared tolerance; this bounds controller-algebra smoothing at the solved point, **not** the distance between the two network equilibria |
 | Controller conflict continuity | dense minimum-voltage sweep through equal branch severity | deployed `:dominant` command changes continuously and reverses sign without a winner-take-all jump |
 | PWL smoothing refinement | widths 0.1, 0.05, and 0.025 V at a knot | bias is positive, approximately first order, and below 0.5% at 0.05 V for the documented curve |
 | P/Q and Volt-watt bases | exact/smooth numeric policies plus partial-irradiance OpenDSS point | all priorities satisfy the capability circle; rated and available bases separate as specified |
@@ -160,6 +162,31 @@ common-mode injections and hundreds of simulation/experimental operating
 conditions. Its published numeric archive would be the best next fixture for
 DPWM, THIPWM, and strategy-dependent neutral-inductor validation.
 
+## Outstanding oracle: the exact-law fixed point
+
+The controller suite compares the exact and smooth laws **at the smooth model's
+own solved point**, reusing that solve's converter voltage and both filter-arm
+currents for the exact evaluation. That is the right test for the smoothing of
+the controller algebra, and it is not a test of the equilibrium.
+
+A firmware controller does not evaluate its law at the smooth model's solution;
+it iterates against the network until its own command and the resulting voltage
+agree. The missing oracle is therefore a Picard/Gauss–Seidel iteration:
+
+1. start from an uncontrolled power flow;
+2. evaluate [`evaluate_exact`](@ref) at the current POC phasors;
+3. impose the resulting phase currents on the plant and re-solve;
+4. repeat to a fixed point, recording the iteration count and any cycling; and
+5. report ``\|\Delta V\|_\infty`` and the phase-current difference against the
+   stamped smooth equilibrium for the same case.
+
+Until that exists, equilibrium-level agreement between the deployed law and the
+network surrogate is an assumption, not a tested property, and it should be
+stated as such in any paper using these results. The iteration is also the
+natural place to observe non-existence or non-uniqueness of the local-droop
+equilibrium, which has its own literature (Farivar, Chen, and Low; Zhu and Liu)
+and is not addressed anywhere in this package.
+
 ## Recommended higher-fidelity test harness
 
 For each topology, build one parameter-identical averaged or switched model in
@@ -192,15 +219,24 @@ and whether the DC source absorbs 2ω power.
 
 For every claimed boundary point:
 
-1. require non-negative `switching_margin`, increase `n_samples`, and demonstrate convergence;
-2. for PWM-enabled points, require non-negative `pwm_reserve_margin` and
+1. check the per-unit base against the device ratings. Ratings are stamped as
+   squared per-unit inequalities, and Ipopt's `bound_relax_factor` floors its
+   relaxation at `max(1, |bound|)`, so the admissible physical violation grows
+   as `s_base²`: a 20 kVA rating is honoured to ~0.25 VA at `s_base=1e6` but
+   exceeded by ~2.4 kVA (12 %) at `s_base=1e8`. Keep `s_base` within a couple of
+   decades of the ratings or pass `bound_relax_factor=0`. The mechanism and the
+   durable fix are documented on [`AdvancedInverter`](@ref). No hardware-sizing
+   claim should be published from a base that has not been checked this way;
+2. require non-negative `switching_margin`, increase `n_samples`, and
+   demonstrate convergence;
+3. for PWM-enabled points, require non-negative `pwm_reserve_margin` and
    `pwm_modulation_margin`, require every AC `*_reserved` value to cover its
    predicted ripple, then refine both sampling grids and `pwm_ac_harmonics`;
-3. resolve from more than one physically sensible initial point;
-4. check all reported conductor, sequence, rail, and capacitor residuals;
-5. perturb the operating point inside and outside the claimed boundary;
-6. state whether each value is RMS, peak amplitude, or Fourier magnitude; and
-7. compare at least one representative point with a higher-fidelity oracle.
+4. resolve from more than one physically sensible initial point;
+5. check all reported conductor, sequence, rail, and capacitor residuals;
+6. perturb the operating point inside and outside the claimed boundary;
+7. state whether each value is RMS, peak amplitude, or Fourier magnitude; and
+8. compare at least one representative point with a higher-fidelity oracle.
 
 For an explicit LCL case, also verify that the fundamental frequency is well
 separated from every passive modal resonance and that the resonance remains

@@ -17,9 +17,14 @@ The proposal deliberately separates two questions:
 offline oracle, but is not required in the deployed controller.
 
 The contribution is not a new symmetrical-component controller by itself.
-Dual-sequence reference generation is established prior art; the contribution
-under study is a fixed-structure algebraic controller that can be stamped into a
-sparse network NLP while retaining a separate exact firmware oracle.
+Dual-sequence reference generation is established prior art — dual current
+control (Song and Nam), the unbalanced-power algebra and its four real degrees of
+freedom (Suh and Lipo), scalar-weighted flexible positive/negative-sequence
+reference generation (Rodríguez et al.), and the negative-sequence
+virtual-admittance family (Savaghebi et al.); see [IBR
+references](@ref ibr-references). The contribution under study is a
+fixed-structure algebraic controller that can be stamped into a sparse network
+NLP while retaining a separate exact firmware oracle.
 
 !!! warning "Assumptions and validity"
     All phasors are fundamental-frequency RMS quantities at one equilibrium.
@@ -67,16 +72,62 @@ must use the licensed, current edition and its prescribed test procedure.
 | Source | Public scope relevant here | Mapping and non-coverage |
 | --- | --- | --- |
 | [IEEE 1547-2018](https://standards.ieee.org/ieee/1547/5915/) and [IEEE 1547.1-2020](https://standards.ieee.org/ieee/1547.1/6039/) | DER reactive capability, voltage/power control, abnormal conditions, and conformance testing | motivates explicit curve bases and P/Q priority; this steady-state model does not reproduce response-time or conformance tests |
+| [IEEE 2800-2022](https://standards.ieee.org/ieee/2800/10453/) | interconnection and capability of IBRs on transmission systems, including required behaviour under unbalanced conditions and negative-sequence current injection | the only cited standard that addresses negative-sequence current behaviour normatively; it is a bulk-system document and is not an LV controller specification |
 | [AEMO overview of AS/NZS 4777.2](https://www.aemo.com.au/initiatives/major-programs/nem-distributed-energy-resources-der-program/standards-and-connections/as-nzs-4777-2-inverter-requirements-standard) | LV inverter performance, testing, and smart-inverter functions | motivates an Australian comparator; no claim is made against a clause without the current amended licensed text |
+| EN 50549-1/-2 and VDE-AR-N 4105 | European LV/MV connection requirements for generating plants | jurisdictional comparator for fixed low-voltage/high-voltage priority; cited for scope only, and their designations/editions are unverified here |
 | [IEC 61000-4-30:2025](https://webstore.iec.ch/en/publication/71611) | power-quality measurement methods | ``|U_2|/|U_1|`` is reported from ideal phasors, not a specified measurement window or instrument class |
 | [IEC TR 61000-3-13](https://webstore.iec.ch/en/publication/4145) | negative-sequence allocation at MV/HV/EHV | useful planning context, explicitly not an LV controller specification |
-| EN 50160 | supply-voltage characteristics | a network-quality benchmark, not a local inverter-control prescription |
+| EN 50160 | supply-voltage characteristics | a network-quality benchmark, not a local inverter-control prescription; the designation and edition are listed unverified in [IBR references](@ref ibr-references) and must be pinned before use |
 | [OpenDSS `InvControl`](https://opendss.epri.com/Commonproperties.html) | monitored-voltage `AVG`, `MAX`, and `MIN` modes | independent balanced fixed-point oracle; it does not implement this split low/high Volt-var conflict law or negative-sequence droop |
 
+!!! danger "Open novelty check — do this before submission"
+    The scalar contribution below is stated against *public* summaries of
+    AS/NZS 4777.2 and IEEE 1547-2018, because their normative text is licensed
+    and is not reproduced here. Both standards prescribe which voltage a
+    multi-phase DER shall observe for Volt-var and Volt-watt, and at least one
+    of them may already require an extreme-phase (rather than averaged)
+    reference. **Someone must read the current licensed clause in both
+    documents.** If extreme-phase monitoring is already normative, the split
+    minimum/maximum envelope is prior art and only the conflict rule, its
+    continuity argument, and the smooth network surrogate remain as
+    contributions. That would not invalidate any result on this page, but it
+    would change the claim.
+
 OpenDSS already provides a maximum-monitored-voltage Volt-watt mode, so that
-guard is not claimed as novel. The specific scalar contribution is the split
-minimum/maximum treatment of the two Volt-var branches, a declared continuous
-conflict rule, and a matching fixed-structure smooth network surrogate.
+guard is not claimed as novel. Subject to the check above, the specific scalar
+contribution is the split minimum/maximum treatment of the two Volt-var
+branches, a declared continuous conflict rule, and a matching fixed-structure
+smooth network surrogate.
+
+### The measured voltage reference is part of the law
+
+Every phase-magnitude comparator on this page is stated in phase-to-neutral
+voltage, but a magnitude only has meaning relative to a reference conductor.
+The implemented controller measures the POC voltage referred to the plant's
+declared `neutral` terminal; when the composed inverter is three-wire
+(`neutral=nothing`, which is also the only form accepted for a native
+`THREE_LEG` fleet record) that reference is the network's ground.
+
+The distinction is the local zero-sequence displacement ``U_0``, and it is not
+cosmetic:
+
+- ``U_1`` and ``U_2`` are invariant to it, so the positive-sequence Volt-var
+  comparator and the negative-sequence droop give identical commands under any
+  common-mode offset;
+- the minimum, maximum, and mean phase magnitudes are **not** invariant, so the
+  worst-phase and average comparators respond to ``U_0``; and
+- a three-leg bridge has ``I_0=0`` and therefore cannot act on the very
+  component it is reacting to.
+
+This is the same objection raised against averaged references in §"Virtual-delta
+line-to-line droop", applied to the recommended law itself. It is a sensor
+specification, not a modelling artefact: a product that senses phase-to-neutral
+and a product that senses phase-to-ground implement different laws on the same
+feeder. Studies using a phase-magnitude comparator should therefore report
+``U_0`` alongside ``|U_2|`` — `InverterControlResult.voltage_sequence[1]` — so
+the reference-dependent share of each curtailment decision is visible. The
+invariance contract is pinned by a common-mode metamorphic test; see
+[Verification and benchmark cases](@ref ibr-verification).
 
 ## Current behaviour in BMOPFTools
 
@@ -113,9 +164,11 @@ That four-real-degree budget is the organising constraint. Two complex current
 references consume it completely; constant active power, constant reactive
 power, balanced current, and a prescribed negative-sequence attenuation cannot
 all be imposed independently. Every practical law therefore embeds a priority
-or accepts a residual. The dual-sequence literature makes the same tradeoff
-explicit; see [Nejabatkhah, Li, and Wu](https://doi.org/10.1109/TPEL.2015.2479601)
-and the maintained [IBR references](@ref ibr-references).
+or accepts a residual. This degree-of-freedom accounting is the standard
+unbalanced-converter result rather than a new observation here; see Suh and Lipo
+for the derivation, [Nejabatkhah, Li, and
+Wu](https://doi.org/10.1109/TPEL.2015.2479601) for the control taxonomy, and the
+maintained [IBR references](@ref ibr-references).
 
 Using the sequence convention in `AdvancedInverter`, aggregate mean complex
 power and the double-frequency oscillating-power phasor are
@@ -172,6 +225,11 @@ their signed severity difference ``d``, and blend with
 ``q=wq_\ell+(1-w)q_h`` approaches winner-take-all away from the tie but returns
 zero continuously at equal severity. This avoids both `:net` cancellation away
 from a tie and the equilibrium/conditioning problems of a discontinuous switch.
+The equilibrium half of that argument is a known property of local Volt-var
+feedback rather than a claim made here: Farivar, Chen, and Low give existence and
+convergence conditions for local voltage control, and Zhu and Liu bound the droop
+slope under limited reactive power. Neither result has been applied to this law,
+which is why the continuity argument is stated as motivation and not as a proof.
 Fixed low-voltage and fixed high-voltage priorities remain useful jurisdictional
 comparators, while `:net` is retained as a legacy scientific baseline.
 
@@ -229,7 +287,11 @@ counter unbalance. The realised phase powers will not in general lie exactly on
 all three curves; the projection residual is therefore a required diagnostic,
 not an error to hide. Because the fully constrained projection is an online
 optimisation, this law is better retained initially as a research benchmark and
-offline oracle than as the manufacturer-facing implementation.
+offline oracle than as the manufacturer-facing implementation. Local controllers
+that track the solution of an optimisation problem online are an established
+family — see Dall'Anese and Simonetto in [IBR references](@ref ibr-references) —
+and this candidate should be positioned inside it rather than as a bespoke
+construction.
 
 ### 4. Dual-sequence droop
 
@@ -255,7 +317,7 @@ The static negative-sequence closed loop gives a useful sizing check. With the
 local Thévenin convention
 
 ```math
-U_2=E_2+Z_2I_2,qquad I_2=-\kappa e^{-j\phi_2}U_2,
+U_2=E_2+Z_2I_2,\qquad I_2=-\kappa e^{-j\phi_2}U_2,
 ```
 
 one obtains
@@ -290,8 +352,21 @@ For a three-wire converter, the unconstrained choice
 I_2^{ripple}=-\frac{U_2}{U_1}I_1
 ```
 
-makes ``\widetilde S=0``. This is valuable as a reference policy and as one endpoint of
-a tradeoff sweep. It is not automatically a voltage-unbalance controller: its
+makes ``\widetilde S=0``. The implemented law does not divide by ``U_1``. It uses
+the regularized target
+
+```math
+I_2^{ripple}=-\frac{U_2U_1^*}{|U_1|^2+U_{floor}^2}I_1,
+\qquad
+\widetilde S=3U_2I_1\frac{U_{floor}^2}{|U_1|^2+U_{floor}^2},
+```
+
+with ``U_{floor}`` taken from `NegativeSequenceAdmittanceDroop.voltage_floor` —
+a *different* declared floor from the `power_voltage_floor` used in the
+``P,Q\mapsto I_1`` conversion. The closed-form residual, not an assertion of
+exact zero, is the unit-test oracle, and the disk radius quoted below inherits
+the same regularization. This is valuable as a reference policy and as one
+endpoint of a tradeoff sweep. It is not automatically a voltage-unbalance controller: its
 current angle is selected to cancel DC power pulsation and may oppose the angle
 needed to attenuate ``U_2``.
 
@@ -344,6 +419,10 @@ phasor update:
    I_2^{req}=(1-\lambda)I_2^v+\lambda I_2^{ripple},
    \qquad 0\le\lambda\le1.
    ```
+
+   A single scalar weighting between two sequence-current references is the
+   flexible positive/negative-sequence construction of Rodríguez et al.; ``\lambda``
+   should be presented as an instance of it, not as a new knob.
 
 6. Apply the ordinary product priority and saturation logic described below.
 
@@ -534,6 +613,52 @@ equilibrium/optimum. Large-scale validation should include multiple starts or
 continuation for difficult cases and explicit scaling sweeps in both device
 count and controller gain.
 
+### Two magnitude representations, and which one to use where
+
+PowerOptLab now contains both standard smoothings of a Euclidean norm, and the
+choice between them is empirical rather than aesthetic:
+
+- the **lifted** form introduces ``y\ge0`` with ``(y/y_b)^2=x/y_b^2``. It is
+  exact at every feasible point and adds no bias, and it is what the controller
+  uses for phase-voltage, sequence-voltage, apparent-power, and phase-current
+  magnitudes.
+- the **shifted expression** ``\sqrt{x+\epsilon^2}-\epsilon`` adds no variable
+  and no constraint, at the cost of a closed-form one-sided bias of at most
+  ``\epsilon``. [`AdvancedInverter`](@ref) moved its current-magnitude loss term
+  to this form after measuring that the lifted form cost 2–4× the Ipopt
+  iterations in per unit and failed outright in raw SI, because it places a
+  small per-unit magnitude inside a squared equality whose residual tolerance is
+  absolute.
+
+Three consequences are already visible in the controller and should be treated
+as open numerical work rather than settled policy:
+
+1. A lifted magnitude of a quantity that is **structurally zero** is worse than
+   useless. ``(y/y_b)^2=0`` pins ``y=0`` while its gradient vanishes there, so
+   LICQ fails at the model's own solution. The capability allocator used to do
+   exactly this for converter-target apparent power and ``\Delta V_{2,max}`` on
+   every filter without an LCL midpoint; those offsets are now detected as
+   identically zero and stamped as constants instead. The near-zero-current
+   ``dv2_max`` regression converges cleanly as a result.
+2. The controller's requirement for `per_unit=true` was established with the
+   lifted form throughout. It should be re-measured against the shifted form
+   before it is treated as an intrinsic property of the coupled controller
+   rather than of this representation.
+3. `current_epsilon` and `power_epsilon` are absolute SI widths, so they mean
+   different things on a 5 kVA and a 500 kVA inverter and are effectively zero
+   once divided by a megavolt-ampere base. The plant already declares its
+   smoothing relative to each leg's own rating. Making the controller selectors
+   rating-relative would give a heterogeneous fleet one common relative bias;
+   it is a deliberate open decision, not an oversight.
+
+The starts and scales handed to each lifted magnitude are likewise chosen per
+call site and are not yet audited. Their sensitivity is real: changing only the
+fallback start of a curve-free policy from 230 V to the network's own 1 pu base
+— 6.5 % on the 245 V test fixtures — is enough to move the near-zero-current
+``dv2_max`` case from `LOCALLY_SOLVED` to a non-publishable status. A systematic
+start/scale audit, normalizing each auxiliary to its own expected magnitude
+rather than to a convenient nearby rating, is the next numerical work item.
+
 ## DC capacitor implications
 
 For a monolithic link with a DC source that contributes negligibly at 2ω, the
@@ -599,10 +724,11 @@ measured or modelled switching-current component.
 ## Development roadmap
 
 The single maintained roadmap and completion status are in
-[Inverter-control study methodology](@ref ibr-control-study-methodology).
-The next library milestone is fleet construction and result extraction;
-virtual-delta, a closest-feasible offline oracle, and sequence-service priority
-remain comparison laws after that foundation is in place.
+[Inverter-control study methodology](@ref ibr-control-study-methodology). Fleet
+construction, matched-case execution, and hardware sweeps are in place. The next
+milestones are the exact-law fixed-point oracle, the magnitude start/scale audit,
+and the licensed-clause novelty check; virtual-delta, a closest-feasible offline
+oracle, and sequence-service priority remain comparison laws after those.
 
 The first implementation should not simply enable the existing four-leg
 per-phase equalities for `THREE_LEG`. That would confuse preferred curve values

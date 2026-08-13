@@ -409,6 +409,94 @@ end
           collect(original.phase_current .* cis(angle)) atol=1e-10
 end
 
+@testset "Inverter controls: zero-sequence reference sensitivity" begin
+    # A common-mode offset on all three phase phasors moves U0 only, so a
+    # sequence-referred law must be invariant to it while a phase-magnitude law
+    # must not be. This pins the sensing-reference contract: with
+    # `neutral=nothing` the POC measurement is referred to ground, not to a
+    # neutral conductor, and therefore carries the local zero-sequence
+    # displacement that a three-leg bridge cannot control.
+    u1 = 243cis(0.1)
+    u2 = 4cis(-0.6)
+    offset = 3cis(0.9)
+    base = InverterControlMeasurement(_ctrl_phases(u1, u2))
+    shifted = InverterControlMeasurement(
+        collect(base.phase_voltage) .+ offset)
+
+    volt_var = PiecewiseLinearLaw(
+        [210.0, 220.0, 240.0, 250.0], [0.3, 0.0, 0.0, -0.3];
+        smoothing_epsilon=0.05)
+    negative_gain = PiecewiseLinearLaw(
+        [0.0, 0.01, 0.10], [0.0, 0.0, 0.08]; smoothing_epsilon=1e-4)
+    unbalance = NegativeSequenceAdmittanceDroop(
+        negative_gain; impedance_angle=0.0, ripple_blend=0.0)
+
+    sequence = SequenceController(
+        PositiveSequenceVoltVarWatt(
+            volt_var=volt_var, worst_phase_watt_guard=false),
+        unbalance, CommonScaleLimiter())
+    seq_base = evaluate_exact(
+        sequence, base, _CTRL_REQUEST, _CTRL_RATINGS)
+    seq_shifted = evaluate_exact(
+        sequence, shifted, _CTRL_REQUEST, _CTRL_RATINGS)
+
+    # Only the zero-sequence channel absorbs the offset.
+    @test seq_shifted.voltage_sequence[1] ≈
+          seq_base.voltage_sequence[1] + offset atol=1e-10
+    @test seq_shifted.voltage_sequence[2] ≈
+          seq_base.voltage_sequence[2] atol=1e-10
+    @test seq_shifted.voltage_sequence[3] ≈
+          seq_base.voltage_sequence[3] atol=1e-10
+
+    # Sequence-referred decisions and the resulting command are invariant.
+    @test seq_shifted.p_request ≈ seq_base.p_request atol=1e-9
+    @test seq_shifted.q_request ≈ seq_base.q_request atol=1e-9
+    @test seq_shifted.eta ≈ seq_base.eta atol=1e-12
+    @test collect(seq_shifted.phase_current) ≈
+          collect(seq_base.phase_current) atol=1e-9
+
+    # The reported extrema are physical measured magnitudes, so they do move.
+    @test !isapprox(seq_shifted.voltage_max, seq_base.voltage_max; atol=1e-2)
+
+    # The recommended phase-magnitude law is reference-dependent by construction.
+    worst = SequenceController(
+        WorstPhaseVoltVarWatt(volt_var=volt_var, conflict_policy=:dominant),
+        unbalance, CommonScaleLimiter())
+    worst_base = evaluate_exact(
+        worst, base, _CTRL_REQUEST, _CTRL_RATINGS)
+    worst_shifted = evaluate_exact(
+        worst, shifted, _CTRL_REQUEST, _CTRL_RATINGS)
+    @test abs(worst_shifted.q_request - worst_base.q_request) > 100.0
+end
+
+@testset "Inverter controls: capability backoff cannot reverse the command" begin
+    # An offset magnitude that already exceeds the per-leg limit leaves no
+    # headroom. The exact allocator returns exactly zero; the smooth allocator
+    # must agree to within its declared selector width and must never return a
+    # negative factor, which would reverse the commanded current.
+    epsilon = 1e-3
+    limit = 5.0
+    for (offset, direction) in (
+            (6.0 + 0im, 4.0 + 0im),      # no headroom at all
+            (5.0 + 0im, 4.0 + 0im),      # exactly no headroom
+            (0.0 + 0im, 4.0 + 0im),      # unconstrained
+            (1.0 + 0im, 9.0 + 0im))      # ordinary saturation
+        model = Model(Ipopt.Optimizer)
+        set_silent(model)
+        smooth = PowerOptLab._safe_direction_scale_implicit!(
+            model, (real(offset), imag(offset)),
+            (real(direction), imag(direction)), limit, epsilon;
+            magnitude_start=limit, scale=limit)
+        @objective(model, Min, 0.0)
+        optimize!(model)
+        @test is_solved_and_feasible(model; allow_almost=true)
+        exact = PowerOptLab._safe_direction_scale_exact(
+            offset, direction, limit)
+        @test 0.0 <= value(smooth) <= 1.0
+        @test value(smooth) ≈ exact atol=epsilon
+    end
+end
+
 @testset "Inverter controls: closed-form sequence and limiter identities" begin
     u1 = 228cis(0.2)
     u2 = 13cis(-0.4)
