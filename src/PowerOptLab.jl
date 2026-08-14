@@ -116,6 +116,7 @@ include("problems/bilevel.jl")
 include("problems/inverter_control_study.jl")
 include("problems/inverter_control_experiments.jl")
 include("problems/inverter_control_sizing.jl")
+include("problems/closed_loop_evidence.jl")
 
 # Bespoke algorithms — new solution methods (custom solve loops)
 include("algorithms/pade.jl")
@@ -197,6 +198,25 @@ export inverter_control_paired_rows, inverter_control_paired_summary_rows
 export InverterHardwareSweepPoint, resize_controlled_inverter_fleet
 export validate_inverter_control_campaign, expand_inverter_hardware_cases
 export inverter_control_hardware_requirement_rows
+export FixedPointIterationResult, FixedPointGainScreen
+export fixed_point_oracle, finite_difference_jacobian, screen_fixed_point_gain
+export InverterControlScalingAudit, inverter_control_scaling_audit
+export InverterControlFixedPointResult, inverter_control_fixed_point_oracle
+export InverterControlNetworkFixedPointResult
+export solve_inverter_control_network_fixed_point
+export ControlledInverterFleetNetworkFixedPointResult
+export solve_controlled_inverter_fleet_network_fixed_point
+export controlled_inverter_network_fixed_point_rows
+export ControlledInverterFleetMultiStartResult
+export solve_controlled_inverter_fleet_multistart
+export controlled_inverter_fleet_multistart_rows
+export inverter_control_current_jacobian, inverter_control_loop_gain
+export InverterControlNetworkSensitivityResult
+export inverter_control_network_voltage_sensitivity
+export ControlledInverterFleetNetworkSensitivityResult
+export controlled_inverter_fleet_network_voltage_sensitivity
+export controlled_inverter_fleet_network_sensitivity_rows
+export controlled_inverter_fleet_loop_gain
 
 # Current–voltage (IVQ) battery storage + chemistry library
 export BatteryChemistry, thevenin_chemistry, linear_chemistry, tabulated_chemistry,

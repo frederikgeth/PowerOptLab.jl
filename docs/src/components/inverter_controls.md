@@ -116,16 +116,19 @@ the conflict rule is part of the control law rather than a numerical detail:
 
 For `:dominant`, let ``q_\ell\geq0`` and ``q_h\leq0`` be the two branch
 ordinates and let ``q_+`` and ``q_-`` be their respective maximum magnitudes.
-The deployed law and network model use
+The deployed law and network model form normalized low/high severities
+``a=q_\ell/q_+`` and ``b=-q_h/q_-``, then use
 
 ```math
-d={q_\ell\over q_+}+{q_h\over q_-},\qquad
+d=a-b,\qquad
 w={1\over2}\left(1+{d\over\sqrt{d^2+\epsilon_c^2}}\right),\qquad
-q=wq_\ell+(1-w)q_h.
+q=\bigl(wa-(1-w)b\bigr)\bigl(wq_+ +(1-w)q_-\bigr).
 ```
 
 Thus a normalised-severity tie returns zero continuously rather than choosing
-one side. At that single tie, `:dominant` and `:net` coincide; away from it,
+one side, including when the positive and negative curve ranges are
+asymmetric. For symmetric curve ranges, the tie also coincides with `:net`;
+away from it,
 `:dominant` suppresses cancellation by moving rapidly toward the more severe
 normalised branch. `conflict_epsilon` is dimensionless and sets a real firmware
 transition width; it is not model-only smoothing. This deliberately rejects the
@@ -138,6 +141,19 @@ remain hard plant constraints.
 `request.p_available`. `:rated` multiplies by `request.p_rated` and then caps at
 availability. The second convention is needed for rated-power curves at partial
 irradiance; the first is retained as an explicit scientific comparator.
+
+`CommonScaleLimiter` uses rating-relative current and power smoothing fractions
+by default (`current_epsilon_fraction=2.5\times10^{-5}` and
+`power_epsilon_fraction=5\times10^{-8}`). Explicit `current_epsilon` or
+`power_epsilon` values override the
+corresponding relative width with an absolute SI width. Study exports should
+retain these limiter settings because they affect only the smooth NLP graph,
+not the exact firmware evaluator.
+
+When PWM AC current reserves are declared, the exact evaluator's common current
+rating is reduced by the corresponding RMS reserve before it allocates the
+fundamental sequence command; the plant-level capability backoff remains the
+final authority for simultaneous converter/grid constraints.
 
 `CommonScaleLimiter(pq_priority=...)` declares the positive-sequence
 capability allocation: `:watt` preserves active power, `:var` preserves reactive
@@ -247,8 +263,9 @@ The smoothing and regularisation parameters are:
 | `smoothing_epsilon` | curve-input units | user supplied; 0.05 V in example | PWL corner bias/curvature; halve repeatedly and report observable convergence |
 | `extrema_epsilon`, `guard_epsilon` | V | 0.05 | smooth phase min/max; sweep relative to voltage-data precision |
 | `conflict_epsilon` | normalised severity | 0.01 | width of deployed dominant transition; sweep the equal-severity manifold |
-| `current_epsilon` | A | 0.001 | current-selector width; refine around binding legs |
-| `power_epsilon` | VA | 0.001 | power-selector width; refine around the capability circle |
+| `current_epsilon_fraction` | 1 | ``2.5\times10^{-5}`` | rating-relative current-selector width; refine around binding legs |
+| `power_epsilon_fraction` | 1 | ``5\times10^{-8}`` | rating-relative power-selector width; refine around the capability circle |
+| `current_epsilon`, `power_epsilon` | A, VA | `nothing` | optional absolute-SI overrides for legacy/calibrated studies |
 | `priority_headroom_fraction` | 1 | ``10^{-3}`` | declared watt/var-priority axis reserve; verify priority results across the intended DC/AC-ratio range |
 | `power_voltage_floor` | V | 1 | regularises ``P,Q\mapsto I_1``; report low-voltage sensitivity |
 | `voltage_floor` | V | 1 | regularises unbalance/ripple ratios; report balanced and low-voltage sensitivity |
@@ -260,16 +277,12 @@ The near-exact limiter defaults minimise controller bias but may be too sharp
 for a difficult fleet solve. There is no universal setting: use continuation
 from wider selectors and retain the refinement evidence for reported cases.
 
-`current_epsilon` and `power_epsilon` are **absolute** SI widths. A 1 mVA
-selector width is a different fraction of a 5 kVA inverter than of a 500 kVA
-one, and once divided by a megavolt-ampere base it is ``10^{-9}`` per unit —
-small enough that the selector is effectively a hard `max` with a curvature of
-``1/\epsilon`` at the tie. A heterogeneous fleet therefore does not share one
-relative controller bias. Declare these widths explicitly per study rather than
-inheriting the defaults across devices of different ratings; making them
-rating-relative, as [`AdvancedInverter`](@ref) already does for its own
-smoothing, is an open design decision recorded in
-[the design note](@ref ibr-phase-aware-control-laws).
+The default `current_epsilon_fraction` and `power_epsilon_fraction` are
+rating-relative, so a heterogeneous fleet shares one dimensionless controller
+bias. `current_epsilon` and `power_epsilon` remain available as **absolute** SI
+overrides when reproducing a legacy study or matching a calibrated firmware
+width. Whichever convention is used must be retained in the study settings;
+the widths affect only the smooth NLP graph, not the exact evaluator.
 
 The documented Volt-watt knot has first-order smoothing bias. This executable
 table makes its magnitude visible rather than treating smoothing as exact:

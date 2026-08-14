@@ -222,6 +222,11 @@ end
     @test all(getproperty.(rows, :dc_capacitance_F) .== 1.1e-3)
     @test all(isapprox(row.dc_stored_energy_J, 0.5*1.1e-3*700.0^2)
               for row in rows)
+    @test all(row.zero_sequence_voltage_V >= 0 for row in rows)
+    @test all(isfinite(row.negative_sequence_current_angle_rad)
+              for row in rows)
+    @test all(row.peak_phase_to_positive_current_ratio >= 1.0
+              for row in rows)
     @test length(phase_rows) == 6
     @test getproperty.(phase_rows, :device_id) ==
           repeat(["pv_average", "pv_worst"], inner=3)

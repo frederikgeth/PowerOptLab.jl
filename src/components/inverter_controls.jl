@@ -245,7 +245,9 @@ function NegativeSequenceAdmittanceDroop(gain::PiecewiseLinearLaw;
 end
 
 """
-    CommonScaleLimiter(; current_epsilon=1e-3, power_epsilon=1e-3,
+    CommonScaleLimiter(; current_epsilon=nothing, power_epsilon=nothing,
+                         current_epsilon_fraction=2.5e-5,
+                         power_epsilon_fraction=5e-8,
                          pq_priority=:proportional,
                          priority_headroom_fraction=1e-3)
 
@@ -258,34 +260,60 @@ power rating. The exact evaluator uses hard maxima. The smooth model represents
 every magnitude by an implicit nonnegative square root and uses the stated SI
 epsilons only in smooth maximum selectors. `pq_priority` is `:proportional`,
 `:watt`, or `:var` for the positive-sequence apparent-power allocation.
-`priority_headroom_fraction` reserves a small declared fraction of `s_max`
+By default, smoothing widths are rating-relative fractions, so heterogeneous
+fleets receive the same dimensionless regularization. Supplying
+`current_epsilon` or `power_epsilon` explicitly opts into an absolute SI width
+for that quantity. `priority_headroom_fraction` reserves a small declared fraction of `s_max`
 before a watt- or var-priority component reaches the axis of the capability
 circle. It is a control/protection margin, not a square-root regularization.
 """
 struct CommonScaleLimiter <: AbstractLimiterPolicy
-    current_epsilon::Float64
-    power_epsilon::Float64
+    current_epsilon::Union{Nothing,Float64}
+    power_epsilon::Union{Nothing,Float64}
+    current_epsilon_fraction::Float64
+    power_epsilon_fraction::Float64
     pq_priority::Symbol
     priority_headroom_fraction::Float64
 end
 
-function CommonScaleLimiter(; current_epsilon::Real=1e-3,
-                            power_epsilon::Real=1e-3,
+function CommonScaleLimiter(;
+                            current_epsilon::Union{Nothing,Real}=nothing,
+                            power_epsilon::Union{Nothing,Real}=nothing,
+                            current_epsilon_fraction::Real=2.5e-5,
+                            # Calibrated to the former 1e-3 VA width at 20 kVA;
+                            # at megavolt-ampere OPF bases this is intentionally
+                            # below Ipopt's tolerance and is only a declared
+                            # numerical regularisation bound.
+                            power_epsilon_fraction::Real=5e-8,
                             pq_priority::Symbol=:proportional,
                             priority_headroom_fraction::Real=1e-3)
-    ieps = Float64(current_epsilon)
-    seps = Float64(power_epsilon)
-    isfinite(ieps) && ieps > 0 || throw(ArgumentError(
-        "current_epsilon must be finite and > 0"))
-    isfinite(seps) && seps > 0 || throw(ArgumentError(
-        "power_epsilon must be finite and > 0"))
+    ieps = current_epsilon === nothing ? nothing : Float64(current_epsilon)
+    seps = power_epsilon === nothing ? nothing : Float64(power_epsilon)
+    ieps === nothing || (isfinite(ieps) && ieps > 0) || throw(ArgumentError(
+        "current_epsilon must be nothing or finite and > 0"))
+    seps === nothing || (isfinite(seps) && seps > 0) || throw(ArgumentError(
+        "power_epsilon must be nothing or finite and > 0"))
+    ief = Float64(current_epsilon_fraction)
+    sef = Float64(power_epsilon_fraction)
+    isfinite(ief) && ief > 0 || throw(ArgumentError(
+        "current_epsilon_fraction must be finite and > 0"))
+    isfinite(sef) && sef > 0 || throw(ArgumentError(
+        "power_epsilon_fraction must be finite and > 0"))
     pq_priority in (:proportional, :watt, :var) || throw(ArgumentError(
         "pq_priority must be :proportional, :watt, or :var"))
     headroom = Float64(priority_headroom_fraction)
     isfinite(headroom) && 0 < headroom < 1 || throw(ArgumentError(
         "priority_headroom_fraction must be finite and lie in (0, 1)"))
-    CommonScaleLimiter(ieps, seps, pq_priority, headroom)
+    CommonScaleLimiter(ieps, seps, ief, sef, pq_priority, headroom)
 end
+
+_current_epsilon(limiter::CommonScaleLimiter, ratings) =
+    something(limiter.current_epsilon,
+              limiter.current_epsilon_fraction*ratings.i_max)
+
+_power_epsilon(limiter::CommonScaleLimiter, ratings) =
+    something(limiter.power_epsilon,
+              limiter.power_epsilon_fraction*ratings.s_max)
 
 """
     SequenceController(positive, unbalance, limiter;
@@ -423,7 +451,9 @@ end
 function InverterControlRatings(inverter::AdvancedInverter)
     inverter.i_max === nothing && throw(ArgumentError(
         "a controlled AdvancedInverter requires a finite i_max"))
-    InverterControlRatings(s_max=inverter.s_max, i_max=inverter.i_max)
+    effective = minimum(sqrt(max(inverter.i_max^2 - reserve^2, 0.0))
+                        for reserve in inverter.pwm_ac_converter_reserve)
+    InverterControlRatings(s_max=inverter.s_max, i_max=effective)
 end
 
 InverterControlRatings(
@@ -438,8 +468,14 @@ function InverterControlRatings(
     grid_limit = something(inverter.i_grid_max, converter_limit)
     grid_limit === nothing && throw(ArgumentError(
         "a grid-current-controlled AdvancedInverter requires i_grid_max or i_max"))
+    converter_effective = minimum(
+        sqrt(max(converter_limit^2 - reserve^2, 0.0))
+        for reserve in inverter.pwm_ac_converter_reserve)
+    grid_effective = minimum(
+        sqrt(max(grid_limit^2 - reserve^2, 0.0))
+        for reserve in inverter.pwm_ac_grid_reserve)
     InverterControlRatings(
-        s_max=inverter.s_max, i_max=min(converter_limit, grid_limit))
+        s_max=inverter.s_max, i_max=min(converter_effective, grid_effective))
 end
 
 """
@@ -540,11 +576,15 @@ end
 
 function _dominant_blend_numeric(low, high, policy::WorstPhaseVoltVarWatt)
     positive_scale, negative_scale = _volt_var_branch_scales(policy)
-    severity_difference = low/positive_scale + high/negative_scale
+    low_severity = low/positive_scale
+    high_severity = -high/negative_scale
+    severity_difference = low_severity - high_severity
     epsilon = policy.conflict_epsilon
     weight = (1 + severity_difference /
               sqrt(severity_difference^2 + epsilon^2))/2
-    return weight*low + (1-weight)*high
+    normalized_command = weight*low_severity - (1-weight)*high_severity
+    selected_scale = weight*positive_scale + (1-weight)*negative_scale
+    return normalized_command*selected_scale
 end
 
 function _volt_var_conflict_exact(policy::WorstPhaseVoltVarWatt, low, high)
@@ -764,11 +804,13 @@ function evaluate_smooth(controller::SequenceController,
         controller.positive, u1, magnitudes, request)
     if _volt_watt_basis(controller.positive) === :rated
         p_raw = _smooth_min(
-            request.p_available, p_raw, controller.limiter.power_epsilon)
+            request.p_available, p_raw,
+            _power_epsilon(controller.limiter, ratings))
     end
 
+    power_epsilon = _power_epsilon(controller.limiter, ratings)
     p, q, power_scale = _limit_positive_power_numeric_smooth(
-        p_raw, q_raw, ratings.s_max, controller.limiter.power_epsilon,
+        p_raw, q_raw, ratings.s_max, power_epsilon,
         controller.limiter.pq_priority,
         controller.limiter.priority_headroom_fraction)
 
@@ -779,7 +821,7 @@ function evaluate_smooth(controller::SequenceController,
         controller.unbalance, u1, u2, i1_request)
     phase_request = _phase_from_sequences(i1_request, i2_request)
 
-    ieps = controller.limiter.current_epsilon
+    ieps = _current_epsilon(controller.limiter, ratings)
     imags = abs.(phase_request)
     current_denominator = foldl(
         (a, b) -> _smooth_max(a, b, ieps), imags; init=ratings.i_max)
@@ -938,12 +980,16 @@ end
 function _smooth_dominant_implicit!(
         m, low, high, policy::WorstPhaseVoltVarWatt)
     positive_scale, negative_scale = _volt_var_branch_scales(policy)
-    difference = low/positive_scale + high/negative_scale
+    low_severity = low/positive_scale
+    high_severity = -high/negative_scale
+    difference = low_severity - high_severity
     epsilon = policy.conflict_epsilon
     root = _implicit_sqrt!(
         m, difference^2 + epsilon^2; start=epsilon, scale=1.0)
     weight = (1 + difference/root)/2
-    return weight*low + (1-weight)*high
+    normalized_command = weight*low_severity - (1-weight)*high_severity
+    selected_scale = weight*positive_scale + (1-weight)*negative_scale
+    return normalized_command*selected_scale
 end
 
 function _pwl_smooth(ctx, law::PiecewiseLinearLaw, input, input_scale)
@@ -1285,7 +1331,8 @@ function stamp_smooth_control!(ctx, controller::SequenceController,
     p_raw, q_raw, vmin, vmax = _positive_smooth(
         ctx, controller.positive, magnitudes, u1, request, sb, vb)
     smax = ratings.s_max / sb
-    seps = controller.limiter.power_epsilon / sb
+    power_epsilon = _power_epsilon(controller.limiter, ratings)
+    seps = power_epsilon / sb
     if _volt_watt_basis(controller.positive) === :rated
         p_raw = _smooth_min_implicit!(
             m, request.p_available/sb, p_raw, seps;
@@ -1303,7 +1350,7 @@ function stamp_smooth_control!(ctx, controller::SequenceController,
         ctx, controller.unbalance, u1, u2, i1_request, vb, ib, voltage_start)
     phase_request = _phase_pairs(i1_request, i2_request)
 
-    ieps = controller.limiter.current_epsilon / ib
+    ieps = _current_epsilon(controller.limiter, ratings) / ib
     imax = ratings.i_max / ib
     imags = [_implicit_sqrt!(
         m, pair[1]^2 + pair[2]^2;

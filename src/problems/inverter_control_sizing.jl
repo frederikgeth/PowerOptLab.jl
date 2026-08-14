@@ -352,6 +352,15 @@ function inverter_control_hardware_requirement_rows(
                 hypot(plant.p_conv, plant.q_conv) : NaN
             requested_power = publishable ?
                 device.control.p_request : NaN
+            positive_current = publishable ? abs(device.control.i1) : NaN
+            negative_current_angle = publishable &&
+                    isfinite(positive_current) && positive_current > 0 &&
+                    isfinite(abs(device.control.i2)) ?
+                angle(device.control.i2 / device.control.i1) : NaN
+            peak_positive_current_ratio = publishable &&
+                    isfinite(positive_current) && positive_current > 0 &&
+                    all(isfinite, abs.(device.control.phase_current)) ?
+                maximum(abs, device.control.phase_current) / positive_current : NaN
             converter_requirement = margin * achieved_converter_current
             grid_requirement = margin * achieved_grid_current
             capacitor_current_requirement = publishable ?
@@ -384,6 +393,9 @@ function inverter_control_hardware_requirement_rows(
                 allowed_dc_ripple_voltage_V=allowed_ripple,
                 enforced_dc_ripple_limit_V=enforced_ripple_limit,
                 achieved_dc_ripple_voltage_V=achieved_ripple,
+                zero_sequence_voltage_V=abs(device.control.voltage_sequence[1]),
+                negative_sequence_current_angle_rad=negative_current_angle,
+                peak_phase_to_positive_current_ratio=peak_positive_current_ratio,
                 achieved_converter_apparent_power_VA=
                     achieved_apparent_power,
                 installed_converter_apparent_power_rating_VA=inverter.s_max,

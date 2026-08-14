@@ -19,6 +19,7 @@ makedocs(
             "Phase-aware controls"      => "ibr/phase_aware_control_laws.md",
             "Control-study methodology" => "ibr/control_study_methodology.md",
             "Network control studies"   => "ibr/network_control_studies.md",
+            "Closed-loop evidence"      => "ibr/closed_loop_evidence.md",
             "Phase-aware control API"   => "components/inverter_controls.md",
             "Advanced inverter API"    => "components/advanced_inverter.md",
             "Modelling tutorial"       => "tutorials/advanced_inverter_modelling.md",

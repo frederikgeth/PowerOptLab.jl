@@ -74,6 +74,15 @@ const _CTRL_RATINGS = InverterControlRatings(s_max=20e3, i_max=40.0)
         priority_headroom_fraction=0.0)
     @test_throws ArgumentError CommonScaleLimiter(
         priority_headroom_fraction=1.0)
+    @test_throws ArgumentError CommonScaleLimiter(
+        current_epsilon_fraction=0.0)
+    @test CommonScaleLimiter().current_epsilon === nothing
+    @test CommonScaleLimiter().power_epsilon === nothing
+    @test CommonScaleLimiter(current_epsilon=2.0).current_epsilon == 2.0
+    reserve_inverter = AdvancedInverter(
+        id="reserve", bus="poc", s_max=10e3, i_max=10.0,
+        pwm_ac_converter_reserve=(6.0, 8.0, 0.0))
+    @test InverterControlRatings(reserve_inverter).i_max ≈ 6.0
 end
 
 @testset "Inverter controls: exact worst-phase and sequence laws" begin
@@ -198,6 +207,15 @@ end
         dominant, low_dominant_measurement, _CTRL_REQUEST, _CTRL_RATINGS)
     @test smooth_dominant.q_request > 0.0
     @test abs(smooth_dominant.q_request-low_dominant.q_request) < 2.0
+
+    asymmetric = SequenceController(WorstPhaseVoltVarWatt(
+        volt_var=PiecewiseLinearLaw(
+            [210.0, 220.0, 240.0, 250.0], [0.44, 0.0, 0.0, -0.60];
+            smoothing_epsilon=0.05),
+        conflict_policy=:dominant, conflict_epsilon=1e-6))
+    asymmetric_tie = evaluate_exact(
+        asymmetric, measurement, _CTRL_REQUEST, _CTRL_RATINGS)
+    @test abs(asymmetric_tie.q_request) < 1e-6
 
     # The deployed dominant law itself is continuous. It is not a discontinuous
     # winner-take-all firmware law hidden behind a model-only smoothing.
