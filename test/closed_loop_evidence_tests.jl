@@ -157,5 +157,20 @@
         @test rows[1].device_id == "pv"
         @test rows[1].converged
         @test rows[1].exact_p_poc_W ≈ result.plants["pv"].p_poc atol=1e-8
+
+        starts = Dict(
+            "high" => Dict("pv" => ComplexF64[
+                232.0 + 0im, 232.0cis(-2pi/3), 232.0cis(2pi/3)]),
+            "low" => Dict("pv" => ComplexF64[
+                228.0 + 0im, 228.0cis(-2pi/3), 228.0cis(2pi/3)]))
+        multi = solve_controlled_inverter_fleet_multistart(
+            net, spec, starts; smooth_result=result.smooth, max_iterations=6,
+            solver_options=("max_iter" => 500, "tol" => 1e-8))
+        @test multi.start_ids == ["high", "low"]
+        @test length(multi.results) == 2
+        multi_rows = controlled_inverter_fleet_multistart_rows(multi)
+        @test [row.start_id for row in multi_rows] == ["high", "low"]
+        @test all(row.converged for row in multi_rows)
+        @test all(isfinite(row.residual_voltage_inf_V) for row in multi_rows)
     end
 end

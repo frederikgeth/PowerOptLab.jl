@@ -633,6 +633,7 @@ equilibrium comparison for [`solve_controlled_inverter_fleet`](@ref).
 function solve_controlled_inverter_fleet_network_fixed_point(
         net::Dict{String,Any}, spec::ControlledInverterFleetSpec;
         smooth_result::Union{Nothing,ControlledInverterFleetResult}=nothing,
+        initial_voltage=nothing,
         max_iterations::Integer=20,
         atol_voltage::Real=1e-6,
         atol_current::Real=1e-6,
@@ -673,6 +674,22 @@ function solve_controlled_inverter_fleet_network_fixed_point(
     end
     voltage_by_id = Dict{String,NTuple{3,ComplexF64}}(
         id => smooth.devices[id].control.phase_voltage for id in ids)
+    if initial_voltage !== nothing
+        initial_voltage isa AbstractDict || throw(ArgumentError(
+            "initial_voltage must map fleet device ids to three phase phasors"))
+        Set(String.(collect(keys(initial_voltage)))) == Set(ids) || throw(ArgumentError(
+            "initial_voltage keys must match the controlled fleet ids"))
+        for id in ids
+            value = initial_voltage[id]
+            phase_voltage = value isa InverterControlMeasurement ?
+                value.phase_voltage : Tuple(ComplexF64.(collect(value)))
+            length(phase_voltage) == 3 || throw(DimensionMismatch(
+                "initial_voltage[$id] must contain three phase phasors"))
+            all(v -> isfinite(real(v)) && isfinite(imag(v)), phase_voltage) ||
+                throw(ArgumentError("initial_voltage[$id] must be finite"))
+            voltage_by_id[id] = phase_voltage
+        end
+    end
     history = Vector{Vector{Float64}}([_fleet_voltage_state(voltage_by_id, ids)])
     trajectory = Vector{Vector{Float64}}(copy(history))
     exact_controls = Dict{String,InverterControlResult}()
@@ -793,6 +810,117 @@ function controlled_inverter_network_fixed_point_rows(
             exact_p_poc_W=plant === nothing ? NaN : plant.p_poc,
             smooth_q_poc_var=smooth.plant.q_poc,
             exact_q_poc_var=plant === nothing ? NaN : plant.q_poc,
+        ))
+    end
+    rows
+end
+
+"""Deterministic collection of exact fleet equilibrium runs from multiple starts."""
+struct ControlledInverterFleetMultiStartResult
+    smooth::ControlledInverterFleetResult
+    start_ids::Vector{String}
+    results::Vector{ControlledInverterFleetNetworkFixedPointResult}
+end
+
+function _fleet_result_voltage_vector(
+        result::ControlledInverterFleetNetworkFixedPointResult)
+    ids = sort!(collect(keys(result.smooth.spec.devices)))
+    isempty(result.bus) && return nothing
+    try
+        reduce(vcat, [
+            _phasor_vector(_network_phase_state(
+                result.bus, inverter_spec(result.smooth.spec.devices[id])))
+            for id in ids])
+    catch error
+        error isa ArgumentError || rethrow()
+        nothing
+    end
+end
+
+"""
+    solve_controlled_inverter_fleet_multistart(net, spec, starts; kwargs...)
+        -> ControlledInverterFleetMultiStartResult
+
+Run the simultaneous exact fleet equilibrium oracle from several named initial
+voltage states. `starts` is a dictionary from a reproducible string label to a
+dictionary keyed by controlled device id, with each value a three-phase phasor
+vector or `InverterControlMeasurement`. The smooth fleet solve is constructed
+once and reused for every start. This makes initial-condition dependence
+visible without conflating repeated smooth solves with equilibrium evidence.
+"""
+function solve_controlled_inverter_fleet_multistart(
+        net::Dict{String,Any}, spec::ControlledInverterFleetSpec,
+        starts::AbstractDict;
+        smooth_result::Union{Nothing,ControlledInverterFleetResult}=nothing,
+        max_iterations::Integer=20,
+        atol_voltage::Real=1e-6,
+        atol_current::Real=1e-6,
+        rtol::Real=1e-8,
+        cycle_window::Integer=8,
+        cycle_tolerance::Real=1e-7,
+        s_base::Real=1e6,
+        optimizer=Ipopt.Optimizer,
+        verbose::Bool=false,
+        selection_objective::Symbol=:loss,
+        solver_options=())
+    isempty(starts) && throw(ArgumentError(
+        "a multi-start equilibrium audit needs at least one start"))
+    smooth = smooth_result === nothing ? solve_controlled_inverter_fleet(
+        net, spec; s_base=s_base, optimizer=optimizer, verbose=verbose,
+        selection_objective=selection_objective, solver_options=solver_options) :
+        smooth_result
+    labels = String[]
+    canonical = Dict{String,Any}()
+    for (label, value) in starts
+        id = String(label)
+        isempty(strip(id)) && throw(ArgumentError(
+            "multi-start labels must be non-empty"))
+        haskey(canonical, id) && throw(ArgumentError(
+            "duplicate multi-start label '$id' after string conversion"))
+        canonical[id] = value
+        push!(labels, id)
+    end
+    sort!(labels)
+    results = ControlledInverterFleetNetworkFixedPointResult[]
+    for label in labels
+        initial = canonical[label]
+        initial isa AbstractDict || throw(ArgumentError(
+            "multi-start '$label' must map device ids to phasors"))
+        result = solve_controlled_inverter_fleet_network_fixed_point(
+            net, spec; smooth_result=smooth, initial_voltage=initial,
+            max_iterations=max_iterations, atol_voltage=atol_voltage,
+            atol_current=atol_current, rtol=rtol, cycle_window=cycle_window,
+            cycle_tolerance=cycle_tolerance, s_base=s_base, optimizer=optimizer,
+            verbose=verbose, selection_objective=selection_objective,
+            solver_options=solver_options)
+        push!(results, result)
+    end
+    ControlledInverterFleetMultiStartResult(smooth, labels, results)
+end
+
+"""Return one deterministic robustness row per multi-start initial condition."""
+function controlled_inverter_fleet_multistart_rows(
+        result::ControlledInverterFleetMultiStartResult)
+    baseline = nothing
+    rows = NamedTuple[]
+    for (label, run) in zip(result.start_ids, result.results)
+        state = _fleet_result_voltage_vector(run)
+        spread = if state === nothing || baseline === nothing
+            NaN
+        else
+            maximum(abs, state - baseline)
+        end
+        run.converged && baseline === nothing && (baseline = state)
+        push!(rows, (
+            start_id=label,
+            converged=run.converged,
+            cycled=run.cycled,
+            cycle_period=run.cycle_period,
+            iterations=run.iterations,
+            publishable=run.solve.publishable,
+            residual_voltage_inf_V=run.residual_voltage_inf_V,
+            residual_current_inf_A=run.residual_current_inf_A,
+            final_equilibrium_voltage_spread_inf_V=spread,
         ))
     end
     rows

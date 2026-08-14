@@ -207,6 +207,9 @@ export solve_inverter_control_network_fixed_point
 export ControlledInverterFleetNetworkFixedPointResult
 export solve_controlled_inverter_fleet_network_fixed_point
 export controlled_inverter_network_fixed_point_rows
+export ControlledInverterFleetMultiStartResult
+export solve_controlled_inverter_fleet_multistart
+export controlled_inverter_fleet_multistart_rows
 export inverter_control_current_jacobian, inverter_control_loop_gain
 
 # Current–voltage (IVQ) battery storage + chemistry library

@@ -49,6 +49,13 @@ controlled devices and unselected native IBRs is preserved. The deterministic
 tables and includes smooth-versus-exact voltage/current and P/Q differences,
 iteration, cycle, and publishability fields.
 
+Use `solve_controlled_inverter_fleet_multistart` when one initial condition is
+not enough evidence. Starts are named and sorted deterministically, and the
+smooth fleet solve is reused. `controlled_inverter_fleet_multistart_rows`
+reports convergence, cycles, residuals, and final voltage spread relative to
+the first converged start. A nonzero spread is evidence of initial-condition
+dependence; it is not by itself a proof of multiple physical equilibria.
+
 The `InverterControlScalingAudit` returned by
 `inverter_control_scaling_audit` records the SI starts/scales for voltage,
 sequence voltage, current, apparent power, and the priority-capacity
@@ -181,5 +188,8 @@ solve_inverter_control_network_fixed_point
 ControlledInverterFleetNetworkFixedPointResult
 solve_controlled_inverter_fleet_network_fixed_point
 controlled_inverter_network_fixed_point_rows
+ControlledInverterFleetMultiStartResult
+solve_controlled_inverter_fleet_multistart
+controlled_inverter_fleet_multistart_rows
 inverter_control_loop_gain
 ```
