@@ -41,6 +41,9 @@ rebuilds the physical plant at every exact controller iterate with the selected
 converter- or grid-side current fixed. A non-publishable plant solve is
 retained as an equilibrium failure; it is not converted into a false
 convergence result.
+The returned and iterated voltages use the controller's declared sensing
+reference: phase-to-neutral when `neutral` is present, otherwise
+phase-to-ground.
 
 For a selected fleet, use `solve_controlled_inverter_fleet_network_fixed_point`.
 All exact current targets are fixed in one re-solve, so voltage coupling between
@@ -53,7 +56,9 @@ Use `solve_controlled_inverter_fleet_multistart` when one initial condition is
 not enough evidence. Starts are named and sorted deterministically, and the
 smooth fleet solve is reused. `controlled_inverter_fleet_multistart_rows`
 reports convergence, cycles, residuals, and final voltage spread relative to
-the first converged start. A nonzero spread is evidence of initial-condition
+the first converged start, plus the maximum pairwise spread across all
+converged starts. Non-converged iterates are not labelled as equilibria and
+receive `NaN` spread fields. A nonzero spread is evidence of initial-condition
 dependence; it is not by itself a proof of multiple physical equilibria.
 
 `inverter_control_network_voltage_sensitivity` estimates the feeder matrix
@@ -61,10 +66,19 @@ directly by perturbing the selected physical current target and rebuilding the
 plant. It records plus/minus `SolveStatus` values for every column and leaves
 failed columns as `NaN`; this makes current-limit boundaries visible in the
 loop-gain evidence instead of silently extrapolating through them.
+The result uses a 6×6 phase-rectangular matrix for four-leg devices and a 4×4
+positive/negative-sequence matrix for three-leg converter-current targets,
+because independent phase-current perturbations violate the three-leg
+zero-neutral-current constraint.
+The reduced screen intentionally projects sensed phase voltage onto `U₁/U₂`;
+if a study's controller is materially sensitive to common-mode voltage, retain
+that channel in a separate phase-ground study rather than treating the 4×4
+screen as a complete six-coordinate model.
 
 For a selected fleet, `controlled_inverter_fleet_network_voltage_sensitivity`
 performs the same audit with all selected current targets fixed simultaneously.
-Its `6N × 6N` matrix retains cross-device coupling, rather than assembling
+Its `6N × 6N` four-leg or `4N × 4N` three-leg converter-current matrix retains
+cross-device coupling, rather than assembling
 independent one-device sensitivities. Device blocks and perturbation columns
 are ordered by sorted device id, and failed columns remain `NaN` with their
 plus/minus statuses retained. Feed the resulting matrix to
@@ -123,11 +137,14 @@ J_F(x_0) = \frac{\partial F}{\partial x}(x_0).
 ```
 
 The reported `spectral_radius` is the largest eigenvalue magnitude. A value
-below `threshold` is labelled `local_contractive`; the `margin` is
-`threshold - spectral_radius`. This is a local numerical screen, not a
-certificate for a nonlinear or hybrid controller.
+below `threshold` is labelled `local_contractive`; this is explicitly the
+unrelaxed Picard screen and the `margin` is `threshold - spectral_radius`.
+`maximum_real_eigenvalue` and `continuous_time_margin` apply the ideal
+first-order response model, while `alpha_max` gives the largest update-to-
+response-time ratio predicted by the relaxed discrete iteration. These are
+local numerical screens, not certificates for a nonlinear or hybrid controller.
 
-For the three-phase controller adapter, the state is six real rectangular
+For a four-leg controller adapter, the state is six real rectangular
 coordinates in declared a-b-c order:
 
 ```text
@@ -143,10 +160,21 @@ screens the local loop
 J_{loop} = Z\,\frac{\partial i}{\partial v}.
 ```
 
+For a three-leg converter-current target, use the reduced four-coordinate
+positive/negative-sequence basis `(Re U₁, Im U₁, Re U₂, Im U₂)` and the
+corresponding 4×4 network sensitivity. Independent phase-current perturbations
+are not physically realizable because the converter enforces zero neutral
+current. Grid-current targets may have a different realizable subspace when
+phase-to-ground shunts or an LCL are present; the sensitivity result records
+the coordinate system selected for the target.
+
 The units of `Z` must match the phasor convention used by the supplied
 measurement and evaluator (normally V RMS per A RMS in rectangular
 coordinates). Its sign and reference direction are part of the caller's
-network convention; PowerOptLab does not infer them from a sequence model.
+network convention; physical network sensitivities returned by
+`inverter_control_network_voltage_sensitivity` and its fleet counterpart use
+the network's positive-current injection convention and phase-to-neutral
+voltages whenever the inverter declares a neutral.
 
 ```julia
 controller = SequenceController(PositiveSequenceVoltVarWatt(...))
@@ -159,7 +187,8 @@ J_i = inverter_control_current_jacobian(
     controller, measurement, request, ratings)
 screen = inverter_control_loop_gain(
     controller, measurement, request, ratings, Z)
-screen.spectral_radius, screen.induced_inf_norm, screen.margin
+screen.spectral_radius, screen.maximum_real_eigenvalue,
+screen.continuous_time_margin, screen.alpha_max
 ```
 
 The adapter uses the exact piecewise controller law, so a finite-difference
@@ -178,7 +207,8 @@ For each operating point, retain:
 - the supplied feeder sensitivity or outer-loop map provenance;
 - `iterations`, `residual_norm`, and any detected `cycle_period`;
 - finite-difference step, spectral radius, induced norm, threshold, and
-  `local_contractive` result;
+`local_contractive` unrelaxed Picard result, `maximum_real_eigenvalue`,
+`continuous_time_margin`, and `alpha_max` response-rate screen;
 - whether the point is inside a curve corner, current limit, or apparent-power
   limit.
 

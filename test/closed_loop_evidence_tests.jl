@@ -1,3 +1,5 @@
+using LinearAlgebra
+
 @testset "Closed-loop evidence diagnostics" begin
     @testset "fixed-point oracle and local gain screen" begin
         A = [0.2 0.0; 0.0 0.4]
@@ -19,6 +21,16 @@
         @test screen.induced_inf_norm ≈ 0.4 atol=1e-8
         @test screen.local_contractive
         @test screen.margin ≈ 0.6 atol=1e-8
+        @test screen.maximum_real_eigenvalue ≈ 0.4 atol=1e-8
+        @test screen.continuous_time_margin ≈ 0.6 atol=1e-8
+        @test screen.alpha_max ≈ 2 / 0.8 atol=1e-8
+
+        negative_gain = screen_fixed_point_gain(
+            x -> -2.0 .* x, [1.0]; step=1e-6)
+        @test !negative_gain.local_contractive
+        @test negative_gain.maximum_real_eigenvalue ≈ -2.0 atol=1e-8
+        @test negative_gain.continuous_time_margin ≈ 3.0 atol=1e-8
+        @test negative_gain.alpha_max ≈ 2 / 3 atol=1e-8
     end
 
     @testset "cycle detection" begin
@@ -115,6 +127,43 @@
         @test size(result.voltage_trajectory, 2) >= 2
         @test result.bus["poc"]["a"]["vm"] > 0
 
+        volt_watt = PiecewiseLinearLaw(
+            [200.0, 220.0, 240.0, 260.0], [1.0, 1.0, 0.5, 0.0];
+            smoothing_epsilon=0.05)
+        volt_var = PiecewiseLinearLaw(
+            [200.0, 220.0, 240.0, 260.0], [0.4, 0.2, -0.2, -0.4];
+            smoothing_epsilon=0.05)
+        curved = ControlledDevice(
+            inverter,
+            SequenceController(AverageVoltageVoltVarWatt(
+                volt_watt=volt_watt, volt_var=volt_var)))
+        curved_result = solve_inverter_control_network_fixed_point(
+            inv_grid3_bal(), curved, request;
+            max_iterations=4,
+            solver_options=("max_iter" => 2000, "tol" => 1e-7))
+        @test curved_result.smooth.solve.publishable
+        @test curved_result.solve.publishable
+        @test curved_result.converged || curved_result.cycled
+        @test isfinite(curved_result.exact_control.p_request)
+
+        floating_result = solve_inverter_control_network_fixed_point(
+            inv_grid3_floating_neutral(), curved, request;
+            max_iterations=4,
+            solver_options=("max_iter" => 2000, "tol" => 1e-7))
+        @test floating_result.smooth.solve.publishable
+        @test floating_result.solve.publishable
+        @test floating_result.converged || floating_result.cycled
+        neutral = floating_result.bus["poc"]["n"]
+        @test hypot(neutral["vr"], neutral["vi"]) > 1e-4
+        sensed = ntuple(3) do k
+            phase = ("a", "b", "c")[k]
+            floating_result.bus["poc"][phase]["vr"] +
+                im*floating_result.bus["poc"][phase]["vi"] -
+                (neutral["vr"] + im*neutral["vi"])
+        end
+        @test maximum(abs, sensed .-
+            floating_result.exact_control.phase_voltage) < 1e-6
+
         failed = solve_inverter_control_network_fixed_point(
             inv_grid3_bal(), controlled, request;
             max_iterations=2, solver_options=("max_iter" => 0,))
@@ -172,6 +221,9 @@
         @test [row.start_id for row in multi_rows] == ["high", "low"]
         @test all(row.converged for row in multi_rows)
         @test all(isfinite(row.residual_voltage_inf_V) for row in multi_rows)
+        @test all(isfinite(
+            row.maximum_pairwise_equilibrium_voltage_spread_inf_V)
+            for row in multi_rows)
 
         @test_throws ArgumentError inverter_control_network_voltage_sensitivity(
             net, controlled, zeros(3); step=0.0)
@@ -183,25 +235,51 @@
         @test isempty(sensitivity_failure.plus_status)
         @test isempty(sensitivity_failure.minus_status)
 
+        sensitivity_success = inverter_control_network_voltage_sensitivity(
+            inv_grid3_bal(), controlled,
+            result.smooth.devices["pv"].control.phase_current;
+            step=1e-3,
+            solver_options=("max_iter" => 500, "tol" => 1e-8))
+        @test sensitivity_success.coordinate_system ==
+              :positive_negative_sequence
+        @test size(sensitivity_success.sensitivity) == (4, 4)
+        @test sensitivity_success.base_status.publishable
+        @test all(s -> s.publishable, sensitivity_success.plus_status)
+        @test all(s -> s.publishable, sensitivity_success.minus_status)
+        @test all(isfinite, sensitivity_success.sensitivity)
+        @test sensitivity_success.sensitivity ≈
+              0.05 .* Matrix{Float64}(I, 4, 4) atol=1e-5
+        sequence_screen = inverter_control_loop_gain(
+            controlled.controller,
+            InverterControlMeasurement(
+                result.smooth.devices["pv"].control.phase_voltage),
+            spec.requests["pv"],
+            InverterControlRatings(inverter, controlled.controller.current_target),
+            sensitivity_success;
+            step=1e-5)
+        @test size(sequence_screen.jacobian) == (4, 4)
+        @test all(isfinite, sequence_screen.jacobian)
+
         fleet_sensitivity_failure =
             controlled_inverter_fleet_network_voltage_sensitivity(
                 net, spec, Dict("pv" => zeros(3)); step=1e-3,
                 solver_options=("max_iter" => 0,))
         @test fleet_sensitivity_failure.device_ids == ["pv"]
-        @test size(fleet_sensitivity_failure.sensitivity) == (6, 6)
+        @test fleet_sensitivity_failure.coordinate_system == :positive_negative_sequence
+        @test size(fleet_sensitivity_failure.sensitivity) == (4, 4)
         @test all(isnan, fleet_sensitivity_failure.sensitivity)
         @test isempty(fleet_sensitivity_failure.plus_status)
         @test isempty(fleet_sensitivity_failure.minus_status)
         sensitivity_rows = controlled_inverter_fleet_network_sensitivity_rows(
             fleet_sensitivity_failure)
-        @test length(sensitivity_rows) == 36
+        @test length(sensitivity_rows) == 16
         @test all(isnan, getfield.(sensitivity_rows,
             :voltage_sensitivity_V_per_A))
         @test all(!row.plus_publishable && !row.minus_publishable
             for row in sensitivity_rows)
 
-        diagonal_sensitivity = zeros(6, 6)
-        for k in 1:6
+        diagonal_sensitivity = zeros(4, 4)
+        for k in 1:4
             diagonal_sensitivity[k, k] = 0.01
         end
         fleet_screen = controlled_inverter_fleet_loop_gain(

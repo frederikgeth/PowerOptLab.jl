@@ -28,6 +28,9 @@ struct FixedPointGainScreen
     local_contractive::Bool
     margin::Float64
     finite_difference_step::Float64
+    maximum_real_eigenvalue::Float64
+    continuous_time_margin::Float64
+    alpha_max::Float64
 end
 
 """
@@ -227,10 +230,14 @@ end
 """
     screen_fixed_point_gain(map, point; step=1e-6, threshold=1.0)
 
-Return the finite-difference Jacobian and local spectral-radius screen for a
-fixed-point map. `local_contractive` means only that the computed linearization
-has spectral radius below `threshold`; it is not a global or nonlinear
-stability certificate.
+Return the finite-difference Jacobian and local screens for a fixed-point map.
+`local_contractive` and `margin` retain the unrelaxed Picard screen
+(`spectral_radius < threshold`). `maximum_real_eigenvalue` and
+`continuous_time_margin = 1 - maximum_real_eigenvalue` describe the ideal
+first-order response model ``ẋ = (G-I)x``. `alpha_max` is the largest
+update-to-response-time ratio predicted by the discrete relaxed iteration,
+``minᵢ 2/|1-λᵢ(G)|``. These are local numerical diagnostics, not global or
+nonlinear stability certificates.
 """
 function screen_fixed_point_gain(
         map, point;
@@ -245,10 +252,15 @@ function screen_fixed_point_gain(
     eigenvalues = ComplexF64.(eigvals(jacobian))
     spectral_radius = isempty(eigenvalues) ? 0.0 : maximum(abs, eigenvalues)
     induced_inf_norm = opnorm(jacobian, Inf)
+    maximum_real_eigenvalue = isempty(eigenvalues) ? -Inf : maximum(real, eigenvalues)
+    alpha_max = isempty(eigenvalues) ? Inf : minimum(
+        iszero(abs(1 - λ)) ? Inf : 2 / abs(1 - λ)
+        for λ in eigenvalues)
     FixedPointGainScreen(
         jacobian, eigenvalues, spectral_radius, induced_inf_norm,
         spectral_radius < threshold_value, threshold_value - spectral_radius,
-        Float64(step))
+        Float64(step), maximum_real_eigenvalue,
+        1.0 - maximum_real_eigenvalue, alpha_max)
 end
 
 function _phasor_state(values)
@@ -279,6 +291,29 @@ function inverter_control_current_jacobian(
     map = state -> _phasor_vector(evaluate_exact(
         controller, InverterControlMeasurement(_phasor_state(state)),
         request, ratings).phase_current)
+    finite_difference_jacobian(
+        map, point; step=step, relative_step=relative_step)
+end
+
+function _inverter_control_coordinate_jacobian(
+        controller::SequenceController,
+        measurement::InverterControlMeasurement,
+        request::InverterControlRequest,
+        ratings::InverterControlRatings,
+        coordinate_system::Symbol;
+        step::Real=1e-6,
+        relative_step::Bool=true)
+    point = _coordinate_voltage_state(measurement.phase_voltage, coordinate_system)
+    map = state -> begin
+        phase_voltage = coordinate_system === :phase_rectangular ?
+            _phasor_state(state) : _coordinate_phase_from_state(state, coordinate_system)
+        # For the sequence-reduced voltage map, `_coordinate_phase_from_state` is the
+        # same inverse Fortescue map used for the zero-sequence-free physical
+        # current subspace; it reconstructs the phase phasors from U1/U2.
+        control = evaluate_exact(
+            controller, InverterControlMeasurement(phase_voltage), request, ratings)
+        _coordinate_state(control.phase_current, coordinate_system)
+    end
     finite_difference_jacobian(
         map, point; step=step, relative_step=relative_step)
 end
@@ -396,6 +431,7 @@ end
 """Finite-difference feeder voltage-sensitivity result with solve provenance."""
 struct InverterControlNetworkSensitivityResult
     sensitivity::Matrix{Float64}
+    coordinate_system::Symbol
     base_voltage::NTuple{3,ComplexF64}
     base_current::NTuple{3,ComplexF64}
     perturbation_step_A::Float64
@@ -407,6 +443,7 @@ end
 """Finite-difference fleet voltage-sensitivity result with solve provenance."""
 struct ControlledInverterFleetNetworkSensitivityResult
     sensitivity::Matrix{Float64}
+    coordinate_system::Symbol
     device_ids::Vector{String}
     base_voltage::Dict{String,NTuple{3,ComplexF64}}
     base_currents::Dict{String,NTuple{3,ComplexF64}}
@@ -415,6 +452,50 @@ struct ControlledInverterFleetNetworkSensitivityResult
     plus_status::Vector{SolveStatus}
     minus_status::Vector{SolveStatus}
 end
+
+function _sensitivity_coordinate_system(
+        inverter::AdvancedInverter, target::AbstractCurrentTarget)
+    inverter.topology == :THREE_LEG && target isa ConverterCurrentTarget ?
+        :positive_negative_sequence : :phase_rectangular
+end
+
+function _coordinate_state(values::NTuple{3,ComplexF64}, coordinate_system::Symbol)
+    if coordinate_system === :phase_rectangular
+        return _phasor_vector(values)
+    elseif coordinate_system === :positive_negative_sequence
+        sequence = _phasor_sequences(values)
+        return _phasor_vector((sequence[2], sequence[3], 0.0 + 0.0im))[1:4]
+    end
+    throw(ArgumentError("unsupported sensitivity coordinate system '$coordinate_system'"))
+end
+
+function _coordinate_phase_from_state(state::AbstractVector, coordinate_system::Symbol)
+    if coordinate_system === :phase_rectangular
+        return _phasor_state(state)
+    elseif coordinate_system === :positive_negative_sequence
+        length(state) == 4 || throw(DimensionMismatch(
+            "positive/negative-sequence state needs four real coordinates"))
+        i1 = complex(state[1], state[2])
+        i2 = complex(state[3], state[4])
+        return _phase_from_sequences(i1, i2)
+    end
+    throw(ArgumentError("unsupported sensitivity coordinate system '$coordinate_system'"))
+end
+
+function _coordinate_voltage_state(values::NTuple{3,ComplexF64}, coordinate_system::Symbol)
+    if coordinate_system === :phase_rectangular
+        return _phasor_vector(values)
+    elseif coordinate_system === :positive_negative_sequence
+        sequence = _phasor_sequences(values)
+        return _phasor_vector((sequence[2], sequence[3], 0.0 + 0.0im))[1:4]
+    end
+    throw(ArgumentError("unsupported sensitivity coordinate system '$coordinate_system'"))
+end
+
+_coordinate_dimension(coordinate_system::Symbol) =
+    coordinate_system === :phase_rectangular ? 6 :
+    coordinate_system === :positive_negative_sequence ? 4 :
+    throw(ArgumentError("unsupported sensitivity coordinate system '$coordinate_system'"))
 
 function _current_tuple(current)
     values = ComplexF64.(collect(current))
@@ -429,11 +510,13 @@ end
     inverter_control_network_voltage_sensitivity(net, controlled,
         operating_current; step=1e-3, kwargs...) -> InverterControlNetworkSensitivityResult
 
-Estimate the 6×6 real rectangular POC voltage sensitivity to the selected
-converter/grid current target by central finite differences of fresh physical
-AdvancedInverter solves. Columns are ordered
-`(Re Ia, Im Ia, Re Ib, Im Ib, Re Ic, Im Ic)` and rows use the same voltage
-ordering. The perturbation is `step * max(abs(component), 1 A)` in amperes.
+Estimate the physical POC voltage sensitivity to the selected converter/grid
+current target by central finite differences of fresh AdvancedInverter solves.
+Four-leg devices use a 6×6 real rectangular matrix with columns ordered
+`(Re Ia, Im Ia, Re Ib, Im Ib, Re Ic, Im Ic)`. Three-leg converter-current
+targets use a 4×4 positive/negative-sequence matrix ordered
+`(Re I₁, Im I₁, Re I₂, Im I₂)`, which stays inside the zero-neutral-current
+subspace. The perturbation is `step * max(abs(component), 1 A)` in amperes.
 
 Failed plus/minus solves leave the corresponding column as `NaN` and retain
 their full `SolveStatus`; the function does not turn a physically infeasible
@@ -457,6 +540,8 @@ function inverter_control_network_voltage_sensitivity(
     base_current = _current_tuple(operating_current)
     inverter = inverter_spec(controlled)
     target = controlled.controller.current_target
+    coordinate_system = _sensitivity_coordinate_system(inverter, target)
+    dimension = _coordinate_dimension(coordinate_system)
     solve_current(current) = _solve_exact_current_plant(
         net, inverter, Tuple(current), target; s_base=Float64(s_base),
         optimizer=optimizer, verbose=verbose, solver_options=solver_options)
@@ -464,20 +549,21 @@ function inverter_control_network_voltage_sensitivity(
     nan_voltage = ntuple(_ -> ComplexF64(NaN, NaN), 3)
     if !base.status.publishable
         return InverterControlNetworkSensitivityResult(
-            fill(NaN, 6, 6), nan_voltage, base_current, h,
+            fill(NaN, dimension, dimension), coordinate_system,
+            nan_voltage, base_current, h,
             base.status, SolveStatus[], SolveStatus[])
     end
     base_voltage = _network_phase_state(base.network["bus"], inverter)
-    point = _phasor_vector(base_current)
-    sensitivity = fill(NaN, 6, 6)
+    point = _coordinate_state(base_current, coordinate_system)
+    sensitivity = fill(NaN, dimension, dimension)
     plus_status = SolveStatus[]
     minus_status = SolveStatus[]
-    for column in 1:6
+    for column in 1:dimension
         delta = h * max(abs(point[column]), 1.0)
         plus = copy(point); plus[column] += delta
         minus = copy(point); minus[column] -= delta
-        plus_result = solve_current(_phasor_state(plus))
-        minus_result = solve_current(_phasor_state(minus))
+        plus_result = solve_current(_coordinate_phase_from_state(plus, coordinate_system))
+        minus_result = solve_current(_coordinate_phase_from_state(minus, coordinate_system))
         push!(plus_status, plus_result.status)
         push!(minus_status, minus_result.status)
         if plus_result.status.publishable && minus_result.status.publishable
@@ -485,12 +571,13 @@ function inverter_control_network_voltage_sensitivity(
                 plus_result.network["bus"], inverter)
             minus_voltage = _network_phase_state(
                 minus_result.network["bus"], inverter)
-            sensitivity[:, column] = (_phasor_vector(plus_voltage) -
-                _phasor_vector(minus_voltage)) / (2delta)
+            sensitivity[:, column] = (_coordinate_voltage_state(
+                plus_voltage, coordinate_system) -
+                _coordinate_voltage_state(minus_voltage, coordinate_system)) / (2delta)
         end
     end
     InverterControlNetworkSensitivityResult(
-        sensitivity, base_voltage, base_current, h, base.status,
+        sensitivity, coordinate_system, base_voltage, base_current, h, base.status,
         plus_status, minus_status)
 end
 
@@ -510,15 +597,18 @@ function _validated_fleet_currents(
 end
 
 function _fleet_current_state(
-        currents::Dict{String,NTuple{3,ComplexF64}}, ids)
-    reduce(vcat, [_phasor_vector(currents[id]) for id in ids])
+        currents::Dict{String,NTuple{3,ComplexF64}}, ids,
+        coordinate_system::Symbol)
+    reduce(vcat, [_coordinate_state(currents[id], coordinate_system) for id in ids])
 end
 
-function _fleet_current_dict(state::AbstractVector, ids)
-    length(state) == 6 * length(ids) || throw(DimensionMismatch(
+function _fleet_current_dict(state::AbstractVector, ids, coordinate_system::Symbol)
+    dimension = _coordinate_dimension(coordinate_system)
+    length(state) == dimension * length(ids) || throw(DimensionMismatch(
         "fleet current state has length $(length(state)); expected " *
-        "$(6 * length(ids))"))
-    Dict(id => _phasor_state(state[6 * (index - 1) + 1:6 * index])
+        "$(dimension * length(ids))"))
+    Dict(id => _coordinate_phase_from_state(
+        state[dimension * (index - 1) + 1:dimension * index], coordinate_system)
          for (index, id) in enumerate(ids))
 end
 
@@ -533,13 +623,13 @@ end
         operating_currents; step=1e-3, kwargs...)
         -> ControlledInverterFleetNetworkSensitivityResult
 
-Estimate the real rectangular feeder voltage sensitivity for a selected fleet
-by central finite differences of simultaneous physical fleet solves. The
-returned matrix has `6N` rows and columns for `N` devices, with blocks ordered
-by sorted device id and each device using
-`(Re Ia, Im Ia, Re Ib, Im Ib, Re Ic, Im Ic)`. A column is retained only when
-both fresh solves are publishable; failed perturbations remain `NaN` while
-their `SolveStatus` values are preserved for auditability.
+Estimate the feeder voltage sensitivity for a selected fleet by central finite
+differences of simultaneous physical fleet solves. Four-leg fleets return a
+`6N × 6N` phase-rectangular matrix; three-leg converter-current fleets return a
+`4N × 4N` positive/negative-sequence matrix. Blocks are ordered by sorted
+device id. A column is retained only when both fresh solves are publishable;
+failed perturbations remain `NaN` while their `SolveStatus` values are
+preserved for auditability.
 """
 function controlled_inverter_fleet_network_voltage_sensitivity(
         net::Dict{String,Any}, spec::ControlledInverterFleetSpec,
@@ -556,19 +646,26 @@ function controlled_inverter_fleet_network_voltage_sensitivity(
         "s_base must be finite and > 0"))
     _validate_controlled_fleet(net, spec)
     base_currents, ids = _validated_fleet_currents(spec, operating_currents)
+    coordinate_systems = Set(_sensitivity_coordinate_system(
+        inverter_spec(spec.devices[id]), spec.devices[id].controller.current_target)
+        for id in ids)
+    length(coordinate_systems) == 1 || throw(ArgumentError(
+        "fleet sensitivity requires one common current coordinate system"))
+    coordinate_system = first(coordinate_systems)
+    dimension = _coordinate_dimension(coordinate_system)
     solve_currents(values) = _solve_exact_current_fleet_plant(
         net, spec, values; s_base=Float64(s_base), optimizer=optimizer,
         verbose=verbose, solver_options=solver_options)
     base = solve_currents(base_currents)
-    n = 6 * length(ids)
+    n = dimension * length(ids)
     nan_voltage = Dict(id => ntuple(_ -> ComplexF64(NaN, NaN), 3) for id in ids)
     if !base.status.publishable
         return ControlledInverterFleetNetworkSensitivityResult(
-            fill(NaN, n, n), ids, nan_voltage, base_currents, h,
+            fill(NaN, n, n), coordinate_system, ids, nan_voltage, base_currents, h,
             base.status, SolveStatus[], SolveStatus[])
     end
     base_voltage = _fleet_bus_voltage(base.network["bus"], spec, ids)
-    point = _fleet_current_state(base_currents, ids)
+    point = _fleet_current_state(base_currents, ids, coordinate_system)
     sensitivity = fill(NaN, n, n)
     plus_status = SolveStatus[]
     minus_status = SolveStatus[]
@@ -576,29 +673,46 @@ function controlled_inverter_fleet_network_voltage_sensitivity(
         delta = h * max(abs(point[column]), 1.0)
         plus = copy(point); plus[column] += delta
         minus = copy(point); minus[column] -= delta
-        plus_result = solve_currents(_fleet_current_dict(plus, ids))
-        minus_result = solve_currents(_fleet_current_dict(minus, ids))
+        plus_result = solve_currents(_fleet_current_dict(plus, ids, coordinate_system))
+        minus_result = solve_currents(_fleet_current_dict(minus, ids, coordinate_system))
         push!(plus_status, plus_result.status)
         push!(minus_status, minus_result.status)
         if plus_result.status.publishable && minus_result.status.publishable
             plus_voltage = _fleet_bus_voltage(plus_result.network["bus"], spec, ids)
             minus_voltage = _fleet_bus_voltage(minus_result.network["bus"], spec, ids)
-            sensitivity[:, column] = (_fleet_voltage_state(plus_voltage, ids) -
-                _fleet_voltage_state(minus_voltage, ids)) / (2delta)
+            sensitivity[:, column] = (_fleet_coordinate_voltage_state(
+                plus_voltage, ids, coordinate_system) -
+                _fleet_coordinate_voltage_state(
+                    minus_voltage, ids, coordinate_system)) / (2delta)
         end
     end
     ControlledInverterFleetNetworkSensitivityResult(
-        sensitivity, ids, base_voltage, base_currents, h, base.status,
+        sensitivity, coordinate_system, ids, base_voltage, base_currents, h,
+        base.status,
         plus_status, minus_status)
+end
+
+function _fleet_coordinate_voltage_state(
+        voltage_by_id::Dict{String,NTuple{3,ComplexF64}}, ids,
+        coordinate_system::Symbol)
+    reduce(vcat, [_coordinate_voltage_state(
+        voltage_by_id[id], coordinate_system) for id in ids])
 end
 
 """Return deterministic long-form rows for a fleet sensitivity matrix."""
 function controlled_inverter_fleet_network_sensitivity_rows(
         result::ControlledInverterFleetNetworkSensitivityResult)
-    coordinates = NamedTuple[
-        (device_id=id, phase=phase, component=component)
-        for id in result.device_ids for phase in 1:3
-        for component in (:real, :imag)]
+    coordinates = if result.coordinate_system === :phase_rectangular
+        NamedTuple[
+            (device_id=id, coordinate=Symbol("phase_", phase), component=component)
+            for id in result.device_ids for phase in 1:3
+            for component in (:real, :imag)]
+    else
+        NamedTuple[
+            (device_id=id, coordinate=coordinate, component=component)
+            for id in result.device_ids for coordinate in (:positive_sequence,
+                :negative_sequence) for component in (:real, :imag)]
+    end
     rows = NamedTuple[]
     n = length(coordinates)
     for output in 1:n, input in 1:n
@@ -609,11 +723,12 @@ function controlled_inverter_fleet_network_sensitivity_rows(
         output_coordinate = coordinates[output]
         input_coordinate = coordinates[input]
         push!(rows, (
+            coordinate_system=result.coordinate_system,
             output_device_id=output_coordinate.device_id,
-            output_phase=output_coordinate.phase,
+            output_coordinate=output_coordinate.coordinate,
             output_component=output_coordinate.component,
             input_device_id=input_coordinate.device_id,
-            input_phase=input_coordinate.phase,
+            input_coordinate=input_coordinate.coordinate,
             input_component=input_coordinate.component,
             voltage_sensitivity_V_per_A=result.sensitivity[output, input],
             base_publishable=result.base_status.publishable,
@@ -645,12 +760,13 @@ end
         voltage_sensitivity; kwargs...) -> FixedPointGainScreen
 
 Screen the simultaneous fleet loop
-`Δv ↦ Z⋅diag(∂iₖ/∂vₖ)⋅Δv` in real rectangular coordinates. Device blocks are
-ordered by sorted fleet id and each block uses the declared a-b-c phase order.
-The supplied `voltage_sensitivity` must therefore be the `6N × 6N` matrix
-returned by [`controlled_inverter_fleet_network_voltage_sensitivity`](@ref),
-or an equivalent reduced/network map. This is a local quasi-static diagnostic,
-not a dynamic stability certificate.
+`Δv ↦ Z⋅diag(∂iₖ/∂vₖ)⋅Δv`. Device blocks are ordered by sorted fleet id. The
+supplied `voltage_sensitivity` must be the `6N × 6N` phase-rectangular matrix
+for four-leg devices or the `4N × 4N` positive/negative-sequence matrix for a
+three-leg converter-current fleet, as returned by
+[`controlled_inverter_fleet_network_voltage_sensitivity`](@ref), or an
+equivalent reduced/network map. This is a local quasi-static diagnostic, not a
+dynamic stability certificate.
 """
 function controlled_inverter_fleet_loop_gain(
         spec::ControlledInverterFleetSpec,
@@ -660,14 +776,22 @@ function controlled_inverter_fleet_loop_gain(
         relative_step::Bool=true,
         threshold::Real=1.0)
     validated, ids = _validated_fleet_measurements(spec, measurements)
-    n = 6 * length(ids)
+    coordinate_systems = Set(_sensitivity_coordinate_system(
+        inverter_spec(spec.devices[id]), spec.devices[id].controller.current_target)
+        for id in ids)
+    length(coordinate_systems) == 1 || throw(ArgumentError(
+        "fleet loop gain requires one common current coordinate system"))
+    coordinate_system = first(coordinate_systems)
+    dimension = _coordinate_dimension(coordinate_system)
+    n = dimension * length(ids)
     sensitivity = Matrix{Float64}(voltage_sensitivity)
     size(sensitivity) == (n, n) || throw(DimensionMismatch(
         "fleet voltage_sensitivity must be a $(n)×$(n) real matrix"))
     all(isfinite, sensitivity) || throw(ArgumentError(
         "fleet voltage_sensitivity must be finite"))
-    point = _fleet_voltage_state(
-        Dict(id => validated[id].phase_voltage for id in ids), ids)
+    point = _fleet_coordinate_voltage_state(
+        Dict(id => validated[id].phase_voltage for id in ids), ids,
+        coordinate_system)
     controller_jacobian = zeros(Float64, n, n)
     current0 = Vector{Float64}(undef, n)
     for (index, id) in enumerate(ids)
@@ -676,13 +800,15 @@ function controlled_inverter_fleet_loop_gain(
             inverter_spec(controlled), controlled.controller.current_target)
         request = spec.requests[id]
         measurement = validated[id]
-        local_jacobian = inverter_control_current_jacobian(
-            controlled.controller, measurement, request, ratings;
+        local_jacobian = _inverter_control_coordinate_jacobian(
+            controlled.controller, measurement, request, ratings,
+            coordinate_system;
             step=step, relative_step=relative_step)
-        block = 6 * (index - 1) + 1:6 * index
+        block = dimension * (index - 1) + 1:dimension * index
         controller_jacobian[block, block] = local_jacobian
-        current0[block] = _phasor_vector(evaluate_exact(
-            controlled.controller, measurement, request, ratings).phase_current)
+        current0[block] = _coordinate_state(evaluate_exact(
+            controlled.controller, measurement, request, ratings).phase_current,
+            coordinate_system)
     end
     map = state -> begin
         currents = Vector{Float64}(undef, n)
@@ -691,11 +817,14 @@ function controlled_inverter_fleet_loop_gain(
             ratings = InverterControlRatings(
                 inverter_spec(controlled), controlled.controller.current_target)
             request = spec.requests[id]
-            block = 6 * (index - 1) + 1:6 * index
+            block = dimension * (index - 1) + 1:dimension * index
             measurement = InverterControlMeasurement(
-                _phasor_state(state[block]))
-            currents[block] = _phasor_vector(evaluate_exact(
-                controlled.controller, measurement, request, ratings).phase_current)
+                coordinate_system === :phase_rectangular ?
+                    _phasor_state(state[block]) :
+                    _coordinate_phase_from_state(state[block], coordinate_system))
+            currents[block] = _coordinate_state(evaluate_exact(
+                controlled.controller, measurement, request, ratings).phase_current,
+                coordinate_system)
         end
         point + sensitivity * (currents - current0)
     end
@@ -713,6 +842,15 @@ function _network_phase_state(
     bus_data = get(bus, inverter.bus, nothing)
     bus_data isa AbstractDict || throw(ArgumentError(
         "network result does not contain inverter bus '$(inverter.bus)'"))
+    neutral_values = inverter.neutral === nothing ? nothing : get(bus_data, inverter.neutral, nothing)
+    inverter.neutral === nothing || neutral_values isa AbstractDict || throw(ArgumentError(
+        "network result does not contain neutral '$(inverter.neutral)' at bus " *
+        "'$(inverter.bus)'"))
+    neutral_voltage = inverter.neutral === nothing ? 0.0 + 0.0im : ComplexF64(
+        Float64(get(neutral_values, "vr", NaN)),
+        Float64(get(neutral_values, "vi", NaN)))
+    isfinite(real(neutral_voltage)) && isfinite(imag(neutral_voltage)) ||
+        throw(ArgumentError("network result has non-finite neutral voltage at '$(inverter.bus)'"))
     ntuple(3) do k
         phase = inverter.phase_terminals[k]
         values = get(bus_data, phase, nothing)
@@ -723,7 +861,7 @@ function _network_phase_state(
         vi = Float64(get(values, "vi", NaN))
         isfinite(vr) && isfinite(vi) || throw(ArgumentError(
             "network result has non-finite voltage at '$phase'"))
-        ComplexF64(vr, vi)
+        ComplexF64(vr, vi) - neutral_voltage
     end
 end
 
@@ -1217,15 +1355,25 @@ end
 function controlled_inverter_fleet_multistart_rows(
         result::ControlledInverterFleetMultiStartResult)
     baseline = nothing
+    states = Vector{Union{Nothing,Vector{Float64}}}()
+    for run in result.results
+        push!(states, run.converged ? _fleet_result_voltage_vector(run) : nothing)
+    end
+    converged_states = [state for state in states if state !== nothing]
+    pairwise_spread = length(converged_states) < 2 ? NaN :
+        maximum(maximum(abs, first - second)
+            for first in converged_states for second in converged_states)
     rows = NamedTuple[]
     for (label, run) in zip(result.start_ids, result.results)
-        state = _fleet_result_voltage_vector(run)
+        state = states[length(rows) + 1]
         spread = if state === nothing || baseline === nothing
             NaN
         else
             maximum(abs, state - baseline)
         end
-        run.converged && baseline === nothing && (baseline = state)
+        if state !== nothing
+            baseline === nothing && (baseline = state)
+        end
         push!(rows, (
             start_id=label,
             converged=run.converged,
@@ -1236,6 +1384,7 @@ function controlled_inverter_fleet_multistart_rows(
             residual_voltage_inf_V=run.residual_voltage_inf_V,
             residual_current_inf_A=run.residual_current_inf_A,
             final_equilibrium_voltage_spread_inf_V=spread,
+            maximum_pairwise_equilibrium_voltage_spread_inf_V=pairwise_spread,
         ))
     end
     rows
@@ -1243,14 +1392,18 @@ end
 
 """
     inverter_control_loop_gain(controller, measurement, request, ratings,
-        voltage_sensitivity; kwargs...) -> FixedPointGainScreen
+        voltage_sensitivity; coordinate_system=:phase_rectangular, kwargs...)
+        -> FixedPointGainScreen
 
-Screen the local loop ``Δv ↦ Z⋅(∂i/∂v)⋅Δv`` in real rectangular coordinates.
-`voltage_sensitivity` is a 6×6 real matrix mapping phase-current perturbations
-to phase-voltage perturbations. The exact controller evaluator supplies the
-current-command Jacobian. This is a local diagnostic for the supplied
-quasi-static sensitivity; it does not include dynamics absent from `Z` or the
-controller map.
+Screen the local loop ``Δv ↦ Z⋅(∂i/∂v)⋅Δv``. With
+`coordinate_system=:phase_rectangular`, `voltage_sensitivity` is a 6×6 real
+matrix in rectangular a-b-c coordinates. With
+`coordinate_system=:positive_negative_sequence`, it is a 4×4 real matrix in
+the real/imaginary positive- and negative-sequence coordinates. The latter is
+the physically realizable converter-current subspace of a three-leg inverter.
+The exact controller evaluator supplies the current-command Jacobian. This is
+a local diagnostic for the supplied quasi-static sensitivity; it does not
+include dynamics absent from `Z` or the controller map.
 """
 function inverter_control_loop_gain(
         controller::SequenceController,
@@ -1260,17 +1413,30 @@ function inverter_control_loop_gain(
         voltage_sensitivity::AbstractMatrix;
         step::Real=1e-6,
         relative_step::Bool=true,
-        threshold::Real=1.0)
-    sensitivity = _validated_voltage_sensitivity(voltage_sensitivity)
-    controller_jacobian = inverter_control_current_jacobian(
-        controller, measurement, request, ratings;
+        threshold::Real=1.0,
+        coordinate_system::Symbol=:phase_rectangular)
+    dimension = _coordinate_dimension(coordinate_system)
+    sensitivity = Matrix{Float64}(voltage_sensitivity)
+    size(sensitivity) == (dimension, dimension) || throw(DimensionMismatch(
+        "voltage_sensitivity must be a $(dimension)×$(dimension) real matrix " *
+        "for coordinate_system=:$(coordinate_system)"))
+    all(isfinite, sensitivity) || throw(ArgumentError(
+        "voltage_sensitivity must be finite"))
+    controller_jacobian = _inverter_control_coordinate_jacobian(
+        controller, measurement, request, ratings, coordinate_system;
         step=step, relative_step=relative_step)
-    point = _phasor_vector(measurement.phase_voltage)
-    current0 = _phasor_vector(evaluate_exact(
-        controller, measurement, request, ratings).phase_current)
-    map = state -> point + sensitivity * (_phasor_vector(evaluate_exact(
-        controller, InverterControlMeasurement(_phasor_state(state)),
-        request, ratings).phase_current) - current0)
+    point = _coordinate_voltage_state(measurement.phase_voltage, coordinate_system)
+    current0 = _coordinate_state(evaluate_exact(
+        controller, measurement, request, ratings).phase_current,
+        coordinate_system)
+    map = state -> begin
+        phase_voltage = coordinate_system === :phase_rectangular ?
+            _phasor_state(state) : _coordinate_phase_from_state(state, coordinate_system)
+        current = _coordinate_state(evaluate_exact(
+            controller, InverterControlMeasurement(phase_voltage),
+            request, ratings).phase_current, coordinate_system)
+        point + sensitivity * (current - current0)
+    end
     screen = screen_fixed_point_gain(
         map, point; step=step, relative_step=relative_step,
         threshold=threshold)
@@ -1281,3 +1447,13 @@ function inverter_control_loop_gain(
         throw(ArgumentError("loop-gain finite-difference inconsistency"))
     screen
 end
+
+inverter_control_loop_gain(
+        controller::SequenceController,
+        measurement::InverterControlMeasurement,
+        request::InverterControlRequest,
+        ratings::InverterControlRatings,
+        result::InverterControlNetworkSensitivityResult;
+        kwargs...) = inverter_control_loop_gain(
+            controller, measurement, request, ratings, result.sensitivity;
+            coordinate_system=result.coordinate_system, kwargs...)

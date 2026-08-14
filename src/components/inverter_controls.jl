@@ -280,6 +280,10 @@ function CommonScaleLimiter(;
                             current_epsilon::Union{Nothing,Real}=nothing,
                             power_epsilon::Union{Nothing,Real}=nothing,
                             current_epsilon_fraction::Real=2.5e-5,
+                            # Calibrated to the former 1e-3 VA width at 20 kVA;
+                            # at megavolt-ampere OPF bases this is intentionally
+                            # below Ipopt's tolerance and is only a declared
+                            # numerical regularisation bound.
                             power_epsilon_fraction::Real=5e-8,
                             pq_priority::Symbol=:proportional,
                             priority_headroom_fraction::Real=1e-3)
