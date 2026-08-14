@@ -62,6 +62,19 @@ plant. It records plus/minus `SolveStatus` values for every column and leaves
 failed columns as `NaN`; this makes current-limit boundaries visible in the
 loop-gain evidence instead of silently extrapolating through them.
 
+For a selected fleet, `controlled_inverter_fleet_network_voltage_sensitivity`
+performs the same audit with all selected current targets fixed simultaneously.
+Its `6N × 6N` matrix retains cross-device coupling, rather than assembling
+independent one-device sensitivities. Device blocks and perturbation columns
+are ordered by sorted device id, and failed columns remain `NaN` with their
+plus/minus statuses retained. Feed the resulting matrix to
+`controlled_inverter_fleet_loop_gain` together with the fleet's local voltage
+measurements to obtain a block-diagonal controller Jacobian composed with the
+physical network response.
+`controlled_inverter_fleet_network_sensitivity_rows` converts the matrix and
+its per-column solve provenance to deterministic long-form records for CSV,
+Arrow, or `DataFrame` campaign outputs.
+
 The `InverterControlScalingAudit` returned by
 `inverter_control_scaling_audit` records the SI starts/scales for voltage,
 sequence voltage, current, apparent power, and the priority-capacity
@@ -199,5 +212,9 @@ solve_controlled_inverter_fleet_multistart
 controlled_inverter_fleet_multistart_rows
 InverterControlNetworkSensitivityResult
 inverter_control_network_voltage_sensitivity
+ControlledInverterFleetNetworkSensitivityResult
+controlled_inverter_fleet_network_voltage_sensitivity
+controlled_inverter_fleet_network_sensitivity_rows
+controlled_inverter_fleet_loop_gain
 inverter_control_loop_gain
 ```

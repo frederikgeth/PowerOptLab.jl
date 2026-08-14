@@ -182,5 +182,34 @@
         @test all(isnan, sensitivity_failure.sensitivity)
         @test isempty(sensitivity_failure.plus_status)
         @test isempty(sensitivity_failure.minus_status)
+
+        fleet_sensitivity_failure =
+            controlled_inverter_fleet_network_voltage_sensitivity(
+                net, spec, Dict("pv" => zeros(3)); step=1e-3,
+                solver_options=("max_iter" => 0,))
+        @test fleet_sensitivity_failure.device_ids == ["pv"]
+        @test size(fleet_sensitivity_failure.sensitivity) == (6, 6)
+        @test all(isnan, fleet_sensitivity_failure.sensitivity)
+        @test isempty(fleet_sensitivity_failure.plus_status)
+        @test isempty(fleet_sensitivity_failure.minus_status)
+        sensitivity_rows = controlled_inverter_fleet_network_sensitivity_rows(
+            fleet_sensitivity_failure)
+        @test length(sensitivity_rows) == 36
+        @test all(isnan, getfield.(sensitivity_rows,
+            :voltage_sensitivity_V_per_A))
+        @test all(!row.plus_publishable && !row.minus_publishable
+            for row in sensitivity_rows)
+
+        diagonal_sensitivity = zeros(6, 6)
+        for k in 1:6
+            diagonal_sensitivity[k, k] = 0.01
+        end
+        fleet_screen = controlled_inverter_fleet_loop_gain(
+            spec,
+            Dict("pv" => result.smooth.devices["pv"].control.phase_voltage),
+            diagonal_sensitivity; step=1e-5)
+        @test all(isfinite, fleet_screen.jacobian)
+        @test fleet_screen.spectral_radius >= 0.0
+        @test fleet_screen.local_contractive
     end
 end
