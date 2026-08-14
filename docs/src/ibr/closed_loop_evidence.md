@@ -56,6 +56,12 @@ reports convergence, cycles, residuals, and final voltage spread relative to
 the first converged start. A nonzero spread is evidence of initial-condition
 dependence; it is not by itself a proof of multiple physical equilibria.
 
+`inverter_control_network_voltage_sensitivity` estimates the feeder matrix
+directly by perturbing the selected physical current target and rebuilding the
+plant. It records plus/minus `SolveStatus` values for every column and leaves
+failed columns as `NaN`; this makes current-limit boundaries visible in the
+loop-gain evidence instead of silently extrapolating through them.
+
 The `InverterControlScalingAudit` returned by
 `inverter_control_scaling_audit` records the SI starts/scales for voltage,
 sequence voltage, current, apparent power, and the priority-capacity
@@ -191,5 +197,7 @@ controlled_inverter_network_fixed_point_rows
 ControlledInverterFleetMultiStartResult
 solve_controlled_inverter_fleet_multistart
 controlled_inverter_fleet_multistart_rows
+InverterControlNetworkSensitivityResult
+inverter_control_network_voltage_sensitivity
 inverter_control_loop_gain
 ```

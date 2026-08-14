@@ -393,6 +393,95 @@ function _solve_exact_current_plant(
     (status=status, plant=plant, network=network)
 end
 
+"""Finite-difference feeder voltage-sensitivity result with solve provenance."""
+struct InverterControlNetworkSensitivityResult
+    sensitivity::Matrix{Float64}
+    base_voltage::NTuple{3,ComplexF64}
+    base_current::NTuple{3,ComplexF64}
+    perturbation_step_A::Float64
+    base_status::SolveStatus
+    plus_status::Vector{SolveStatus}
+    minus_status::Vector{SolveStatus}
+end
+
+function _current_tuple(current)
+    values = ComplexF64.(collect(current))
+    length(values) == 3 || throw(DimensionMismatch(
+        "operating_current must contain three phase phasors"))
+    all(v -> isfinite(real(v)) && isfinite(imag(v)), values) ||
+        throw(ArgumentError("operating_current must be finite"))
+    Tuple(values)
+end
+
+"""
+    inverter_control_network_voltage_sensitivity(net, controlled,
+        operating_current; step=1e-3, kwargs...) -> InverterControlNetworkSensitivityResult
+
+Estimate the 6×6 real rectangular POC voltage sensitivity to the selected
+converter/grid current target by central finite differences of fresh physical
+AdvancedInverter solves. Columns are ordered
+`(Re Ia, Im Ia, Re Ib, Im Ib, Re Ic, Im Ic)` and rows use the same voltage
+ordering. The perturbation is `step * max(abs(component), 1 A)` in amperes.
+
+Failed plus/minus solves leave the corresponding column as `NaN` and retain
+their full `SolveStatus`; the function does not turn a physically infeasible
+perturbation into a numerical sensitivity. Use the returned matrix with
+[`inverter_control_loop_gain`](@ref) only when all required columns are finite.
+"""
+function inverter_control_network_voltage_sensitivity(
+        net::Dict{String,Any},
+        controlled::ControlledDevice{<:AdvancedInverter},
+        operating_current;
+        step::Real=1e-3,
+        s_base::Real=1e6,
+        optimizer=Ipopt.Optimizer,
+        verbose::Bool=false,
+        solver_options=())
+    h = Float64(step)
+    isfinite(h) && h > 0 || throw(ArgumentError(
+        "step must be finite and > 0"))
+    isfinite(s_base) && s_base > 0 || throw(ArgumentError(
+        "s_base must be finite and > 0"))
+    base_current = _current_tuple(operating_current)
+    inverter = inverter_spec(controlled)
+    target = controlled.controller.current_target
+    solve_current(current) = _solve_exact_current_plant(
+        net, inverter, Tuple(current), target; s_base=Float64(s_base),
+        optimizer=optimizer, verbose=verbose, solver_options=solver_options)
+    base = solve_current(base_current)
+    nan_voltage = ntuple(_ -> ComplexF64(NaN, NaN), 3)
+    if !base.status.publishable
+        return InverterControlNetworkSensitivityResult(
+            fill(NaN, 6, 6), nan_voltage, base_current, h,
+            base.status, SolveStatus[], SolveStatus[])
+    end
+    base_voltage = _network_phase_state(base.network["bus"], inverter)
+    point = _phasor_vector(base_current)
+    sensitivity = fill(NaN, 6, 6)
+    plus_status = SolveStatus[]
+    minus_status = SolveStatus[]
+    for column in 1:6
+        delta = h * max(abs(point[column]), 1.0)
+        plus = copy(point); plus[column] += delta
+        minus = copy(point); minus[column] -= delta
+        plus_result = solve_current(_phasor_state(plus))
+        minus_result = solve_current(_phasor_state(minus))
+        push!(plus_status, plus_result.status)
+        push!(minus_status, minus_result.status)
+        if plus_result.status.publishable && minus_result.status.publishable
+            plus_voltage = _network_phase_state(
+                plus_result.network["bus"], inverter)
+            minus_voltage = _network_phase_state(
+                minus_result.network["bus"], inverter)
+            sensitivity[:, column] = (_phasor_vector(plus_voltage) -
+                _phasor_vector(minus_voltage)) / (2delta)
+        end
+    end
+    InverterControlNetworkSensitivityResult(
+        sensitivity, base_voltage, base_current, h, base.status,
+        plus_status, minus_status)
+end
+
 function _network_phase_state(
         bus::AbstractDict, inverter::AdvancedInverter)
     bus_data = get(bus, inverter.bus, nothing)

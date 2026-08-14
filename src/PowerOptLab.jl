@@ -211,6 +211,8 @@ export ControlledInverterFleetMultiStartResult
 export solve_controlled_inverter_fleet_multistart
 export controlled_inverter_fleet_multistart_rows
 export inverter_control_current_jacobian, inverter_control_loop_gain
+export InverterControlNetworkSensitivityResult
+export inverter_control_network_voltage_sensitivity
 
 # Current–voltage (IVQ) battery storage + chemistry library
 export BatteryChemistry, thevenin_chemistry, linear_chemistry, tabulated_chemistry,

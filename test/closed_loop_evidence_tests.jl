@@ -172,5 +172,15 @@
         @test [row.start_id for row in multi_rows] == ["high", "low"]
         @test all(row.converged for row in multi_rows)
         @test all(isfinite(row.residual_voltage_inf_V) for row in multi_rows)
+
+        @test_throws ArgumentError inverter_control_network_voltage_sensitivity(
+            net, controlled, zeros(3); step=0.0)
+        sensitivity_failure = inverter_control_network_voltage_sensitivity(
+            net, controlled, zeros(3); step=1e-3,
+            solver_options=("max_iter" => 0,))
+        @test !sensitivity_failure.base_status.publishable
+        @test all(isnan, sensitivity_failure.sensitivity)
+        @test isempty(sensitivity_failure.plus_status)
+        @test isempty(sensitivity_failure.minus_status)
     end
 end
