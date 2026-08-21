@@ -73,6 +73,13 @@ pseudo.status
 pseudo.provenance["continuation"]["pseudo_arclength"]
 pseudo.provenance["continuation"]["arclength_state_scale"]
 
+# To continue the declared stress path beyond the audited endpoint:
+stress = continue_opf_operability_pseudo_arclength(net, pf;
+    spec = OperabilitySpec(scaling_policy = SIUnitsScaling()),
+    continuation = OperabilityPseudoArclengthSpec(max_steps = 200),
+    stop_at_target = false)
+stress.events
+
 validated = check_opf_operability(net, pf;
     spec = OperabilitySpec(
         scaling_policy = SIUnitsScaling(),

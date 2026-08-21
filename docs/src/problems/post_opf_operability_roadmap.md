@@ -38,6 +38,8 @@ The current branch contains the first bounded implementation slice in
   high-/low-voltage branch regression now checks
   that a locally feasible low branch is distinguished from the no-load-connected
   high branch; and
+- an explicit `stop_at_target=false` stress mode now continues past the audited
+  λ=1 crossing and exercises bordered fold localization on the analytic nose;
 - an opt-in bordered-equation fold localizer solving ``F=0``, ``Jv=0``, and
   ``‖v‖₂=1`` from a declared approximate fold state; pseudo-arclength fold
   candidates now retain its localized status and residual evidence when invoked.

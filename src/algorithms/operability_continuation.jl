@@ -576,13 +576,15 @@ left/right singular-mode participation attached to those events. Endpoint crossi
 are reported with their bracketing λ values and refined at fixed λ when the
 crossing step does not land within `target_lambda_tol`. The result retains the
 separate voltage-normalized arclength metric alongside the audited scaling
-provenance.
+provenance. Pass `stop_at_target=false` to continue the stress path after λ=1;
+the default remains endpoint matching.
 """
 function continue_opf_operability_pseudo_arclength(
         net::Dict{String,Any}, solution::AbstractDict;
         spec::OperabilitySpec,
         continuation::OperabilityPseudoArclengthSpec=
-            OperabilityPseudoArclengthSpec(), context=nothing)
+            OperabilityPseudoArclengthSpec(), context=nothing,
+        stop_at_target::Bool=true)
     coords = _operability_coordinates(net, spec; context)
     unsupported = _operability_preflight(net)
     !isempty(unsupported) && return _continuation_empty_result(
@@ -642,7 +644,9 @@ function continue_opf_operability_pseudo_arclength(
     events = _continuation_voltage_events(net_zero, base_point.node_voltages, 0.0, spec)
     step = continuation.initial_step
     endpoint_match = nothing; endpoint_distance = NaN; status = :inconclusive
-    message = "pseudo-arclength trace did not produce a corrected λ=1 point"
+    message = stop_at_target ?
+        "pseudo-arclength trace did not produce a corrected λ=1 point" :
+        "pseudo-arclength stress trace reached its step horizon"
     for _ in 1:continuation.max_steps
         ypred = y .+ step .* tangent
         ynew, ok, iterations = _pseudo_corrector(
@@ -671,7 +675,7 @@ function continue_opf_operability_pseudo_arclength(
             # endpoint comparison is made on an actual equilibrium, rather
             # than on a secant interpolation (which is especially important
             # when the crossing is close to a fold).
-            if abs(λnew - 1.0) > continuation.target_lambda_tol
+            if stop_at_target && abs(λnew - 1.0) > continuation.target_lambda_tol
                 lin_endpoint = BMOPFTools.ybus_linearized(net; fold=:constant_z)
                 xendpoint, endpoint_ok, endpoint_iterations, _ =
                     _continuation_corrector(lin_endpoint, meta, xnew, coords, natural_cfg)
@@ -755,7 +759,7 @@ function continue_opf_operability_pseudo_arclength(
         elseif iterations >= continuation.max_corrector_iterations ÷ 2
             step = max(continuation.min_step, step / 1.5)
         end
-        if abs(λnew - 1.0) <= continuation.target_lambda_tol
+        if stop_at_target && abs(λnew - 1.0) <= continuation.target_lambda_tol
             endpoint_distance = maximum(abs(point.node_voltages[node] - target_vmap[node])
                                         for node in keys(target_vmap))
             endpoint_limit = continuation.endpoint_atol + continuation.endpoint_rtol * max(
@@ -772,7 +776,8 @@ function continue_opf_operability_pseudo_arclength(
     provenance["continuation"] = Dict("homotopy" => "uniform_load_scale_0_to_1",
         "source_buses" => sort!(collect(source_buses)), "state_nodes" => meta.state_nodes,
         "natural_parameter" => false, "pseudo_arclength" => true,
-        "arclength_state_scale" => arc_state_scale)
+        "arclength_state_scale" => arc_state_scale,
+        "stop_at_target" => stop_at_target)
     OperabilityContinuationResult(status, message, lambdas, states, node_voltages,
         residuals, singular_values, condition_numbers, corrector_iterations, events,
         meta.state_nodes, endpoint_match, endpoint_distance, provenance)
