@@ -110,7 +110,7 @@ dominant terms:
 | Residual evaluation | approximately ``O(nnz(Y)+m)`` when the upstream Ybus is sparse |
 | finite-difference Jacobian | ``O(n)`` residual evaluations, then a dense ``n×n`` matrix |
 | singular values and dense linear solves | ``O(n^3)`` worst-case time and ``O(n^2)`` memory |
-| named P/Q sensitivities | one perturbed Ybus and linear solve per requested direction (up to ``1+2m``) |
+| named P/Q sensitivities | one perturbed Ybus and right-hand side per requested direction (up to ``1+2m``); the dense Jacobian factorization is reused when regular |
 | fixed-point certificate | explicit dense ``Z=Y_{ll}^{-1}`` storage ``O(n_f^2)`` plus four deterministic 2001-point geometry scans; the scan arithmetic is roughly linear in ``m`` and ``n_f`` after connection products are cached |
 | continuation / stress campaigns | multiply snapshot cost by accepted steps or finite ``(direction, λ)`` rows; independent validation adds two nonlinear re-solves per validated direction |
 

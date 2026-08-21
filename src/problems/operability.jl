@@ -406,7 +406,7 @@ function _operability_perturb_load(net::Dict{String,Any}, id::String, k::Int,
     result
 end
 
-function _operability_directional_sensitivity(net, lin, meta, x, J,
+function _operability_directional_sensitivity(net, lin, meta, x, J, linear_solver,
                                               residual_scale, state_scale, spec,
                                               id::String, k::Int, field::String)
     load = net["load"][id]
@@ -420,7 +420,8 @@ function _operability_directional_sensitivity(net, lin, meta, x, J,
     lm = BMOPFTools.ybus_linearized(minus; fold=:constant_z)
     dF = (_operability_residual(lp, meta, x) - _operability_residual(lm, meta, x)) / (2h)
     dF_scaled = dF ./ residual_scale
-    dx_scaled = -(J \ dF_scaled)
+    dx_scaled = linear_solver === nothing ? -(J \ dF_scaled) :
+        -(linear_solver \ dF_scaled)
     dx = dx_scaled .* state_scale
     dvmap = _operability_node_derivative(lin, meta, dx)
     Dict{String,Any}(
@@ -1412,6 +1413,19 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
         Inf : first(singular_values) / last(singular_values)
     rank_tol = isempty(singular_values) ? Inf :
         spec.jacobian_rank_rtol * max(first(singular_values), 1.0)
+    # Factor the dense scaled Jacobian once and reuse it for the uniform and
+    # named P/Q sensitivities. This preserves the reference dense result while
+    # avoiding one O(n³) refactorization per direction.
+    linear_solver = if !isempty(J) && !isempty(singular_values) &&
+        last(singular_values) > rank_tol
+        try
+            lu(J)
+        catch
+            nothing
+        end
+    else
+        nothing
+    end
     if isempty(x)
         checks["jacobian_regular"] = OperabilityCheck(:not_applicable, nothing, nothing,
             "no non-source voltage state remains after source/reference elimination")
@@ -1432,7 +1446,8 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
         fp = _operability_residual(lp, meta, x); fm = _operability_residual(lm, meta, x)
         dF = (fp - fm) / (2h)
         dF_scaled = dF ./ residual_scale
-        dx_scaled = -(J \ dF_scaled)
+        dx_scaled = linear_solver === nothing ? -(J \ dF_scaled) :
+            -(linear_solver \ dF_scaled)
         dx = dx_scaled .* state_scale
         load_scale_dx = dx
         dvmap = _operability_node_derivative(lin, meta, dx)
@@ -1473,7 +1488,8 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
                 family_records = get!(directions, family, Dict{String,Any}())
                 for k in 1:nconn
                     family_records["$id/$k"] = _operability_directional_sensitivity(
-                        net, lin, meta, x, J, residual_scale, state_scale, spec, id, k, field)
+                        net, lin, meta, x, J, linear_solver,
+                        residual_scale, state_scale, spec, id, k, field)
                 end
             end
         end
@@ -1523,6 +1539,7 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
         "real_state_dimension" => nreal,
         "load_connection_count" => nconnections,
         "sensitivity_direction_count" => ndirections,
+        "linear_solver_factorization_reused" => linear_solver !== nothing,
         "jacobian_storage_bytes_dense" => sizeof(Float64) * nreal * nreal,
         "zbus_storage_bytes_dense" => spec.compute_fixed_point_certificate ?
             sizeof(ComplexF64) * nfree * nfree : 0,

@@ -123,6 +123,7 @@ using BMOPFTools
     @test complexity["real_state_dimension"] == length(certificate_report.state)
     @test complexity["load_connection_count"] == 1
     @test complexity["sensitivity_direction_count"] == 3
+    @test complexity["linear_solver_factorization_reused"] === true
     @test complexity["jacobian_storage_bytes_dense"] ==
           sizeof(Float64) * length(certificate_report.state)^2
     @test complexity["zbus_storage_bytes_dense"] > 0
