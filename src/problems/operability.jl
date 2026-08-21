@@ -219,6 +219,17 @@ function _operability_coordinates(net::Dict{String,Any}, spec::OperabilitySpec;
             "non-SI operability checking requires scaling_bases or an OPF context"))
     end
 
+    # A non-SI audit must not silently fall back to unit bases for buses that
+    # were omitted from the caller's coordinate contract.  SI audits may use
+    # the unit defaults, but every bus needs an explicit base under any other
+    # policy (or a context that supplies one for each bus).
+    if !(policy isa BMOPFTools.SIUnitsScaling)
+        for (bus, _) in get(net, "bus", Dict())
+            haskey(bases, String(bus)) || throw(ArgumentError(
+                "scaling_bases is missing voltage/current bases for bus $(repr(String(bus)))"))
+        end
+    end
+
     vbase = Dict{String,Float64}(); ibase = Dict{String,Float64}()
     for (bus, _) in get(net, "bus", Dict())
         bid = String(bus)
@@ -1146,12 +1157,22 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
     base
 end
 
-function _operability_empty_result(coords, unsupported, message)
+function _operability_empty_result(coords, unsupported, message; net=nothing)
     checks = Dict("scope" => OperabilityCheck(:not_applicable, unsupported, nothing, message))
+    provenance = deepcopy(coords.provenance)
+    if net !== nothing
+        provenance["operability"] = Dict(
+            "scope" => "static_ybus_linearized",
+            "status" => :not_applicable,
+            "unsupported_reasons" => copy(unsupported),
+            "model_inventory" => _operability_scope_inventory(net),
+            "coordinate_policy" => BMOPFTools.opf_scaling_policy_data(coords.policy),
+        )
+    end
     OperabilityResult(:not_applicable, NaN, NaN, _Node[], Float64[], zeros(0, 0),
         Float64[], Inf, Dict{_Node,ComplexF64}(), Dict{String,Any}(),
         Dict{String,Any}(), Dict{String,Any}(), Dict{String,Any}(), checks,
-        coords.provenance, unsupported)
+        provenance, unsupported)
 end
 
 function _operability_overall(checks::Dict{String,OperabilityCheck})
@@ -1180,7 +1201,8 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
     coords = _operability_coordinates(net, spec; context)
     unsupported = _operability_preflight(net)
     !isempty(unsupported) && return _operability_empty_result(coords, unsupported,
-        "candidate contains physics outside the first operability residual scope")
+        "candidate contains physics outside the first operability residual scope";
+        net=net)
     source_buses = _operability_source_buses(net)
     isempty(source_buses) && throw(ArgumentError("operability checking requires a voltage source"))
 

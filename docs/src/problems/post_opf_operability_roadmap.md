@@ -87,6 +87,12 @@ The current branch contains the first bounded implementation slice in
   explicit frozen-dispatch provenance now align the numerical checks with the
   audited scaling and closure contracts; aggregate status no longer reports a
   bare `:pass` when all primary operational claims are `:not_applicable`;
+- non-SI audits now reject incomplete per-bus coordinate-base maps instead of
+  silently falling back to unit bases; focused covariance regressions verify
+  that equivalent SI/classic-per-unit audits preserve physical snapshot
+  conclusions while retaining coordinate-dependent residual evidence, and
+  unsupported generators, IBRs, and load configurations retain structured
+  `:not_applicable` scope provenance;
 - an opt-in bordered-equation fold localizer solving ``F=0``, ``Jv=0``, and
   ``‖v‖₂=1`` from a declared approximate fold state; pseudo-arclength fold
   candidates now retain its localized status and residual evidence when invoked.
@@ -611,7 +617,9 @@ provenance; no derivative is reported through an unacknowledged discontinuity.
 - Keep `OperabilityResult` and `operability_snapshot_row` complete enough for a
   study table without requiring contingency-specific fields.
 - Close remaining native-static fixture gaps and verify scale/unit covariance,
-  unsupported-physics reporting, and snapshot status aggregation.
+  unsupported-physics reporting, and snapshot status aggregation. In
+  particular, a non-SI audit must provide bases for every bus and physically
+  equivalent SI/per-unit audits must agree on the snapshot claim outcomes.
 
 **Exit criterion:** one snapshot produces reproducible, scale-audited,
 connection-aware evidence with explicit claim scope and no implicit

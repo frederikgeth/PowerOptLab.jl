@@ -42,6 +42,38 @@ using BMOPFTools
     @test snapshot_row.minimum_terminal_voltage ≈ report.load_connections["ld1/1"]["magnitude"]
     @test snapshot_row.high_side_indicator_count == 1
     @test snapshot_row.fixed_point_certificate_status == :not_applicable
+
+    # Scaling changes coordinates, not the physical snapshot conclusion.  The
+    # checker receives the same SI-valued solution under both policies; the
+    # normalized residual is expected to change with the declared current
+    # base, while physical voltages, branch indicators, and claims must not.
+    classic_spec = OperabilitySpec(
+        scaling_policy=ClassicPerUnitScaling(1.0e6),
+        scaling_bases=Dict(
+            "sourcebus" => (voltage=1000.0, current=1000.0),
+            "bus1" => (voltage=1000.0, current=1000.0)),
+        voltage_min=800.0,
+        voltage_max=1100.0,
+        compute_fixed_point_certificate=true)
+    classic_report = check_opf_operability(net, pf; spec=classic_spec)
+    @test classic_report.status == report.status
+    @test classic_report.checks["endpoint"].status == report.checks["endpoint"].status
+    @test classic_report.checks["terminal_voltage_bounds"].status ==
+          report.checks["terminal_voltage_bounds"].status
+    @test classic_report.checks["fixed_point_certificate"].status ==
+          :pass
+    @test classic_report.load_connections["ld1/1"]["magnitude"] ≈
+          report.load_connections["ld1/1"]["magnitude"] atol=1e-10
+    @test classic_report.branch_evidence["dP_dV"]["connections"]["ld1/1"]["classification"] ==
+          report.branch_evidence["dP_dV"]["connections"]["ld1/1"]["classification"]
+    @test classic_report.branch_evidence["dP_dV"]["connections"]["ld1/1"]["path_dP_dV"] ≈
+          report.branch_evidence["dP_dV"]["connections"]["ld1/1"]["path_dP_dV"] atol=1e-8
+    @test classic_report.endpoint_residual_normalized ≈
+          report.endpoint_residual_normalized / 1000.0 atol=1e-12
+    @test_throws ArgumentError check_opf_operability(net, pf;
+        spec=OperabilitySpec(scaling_policy=ClassicPerUnitScaling(1.0e6),
+            scaling_bases=Dict("bus1" => (voltage=1000.0, current=1000.0))))
+
     certificate_report = check_opf_operability(net, pf;
         spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
             compute_fixed_point_certificate=true))
@@ -394,6 +426,8 @@ using BMOPFTools
     @test ibr_report.status == :not_applicable
     @test !isempty(ibr_report.unsupported)
     @test ibr_report.checks["scope"].status == :not_applicable
+    @test ibr_report.provenance["operability"]["status"] == :not_applicable
+    @test any(occursin("IBR", reason) for reason in ibr_report.unsupported)
     ibr_trace = continue_opf_operability(ibr_net, ibr_pf; spec=spec)
     @test ibr_trace.status == :not_applicable
     @test ibr_trace.events[1]["kind"] == "unsupported_physics"
@@ -406,4 +440,14 @@ using BMOPFTools
     @test ibr_fold.status == :not_applicable
     @test_throws ArgumentError locate_opf_operability_fold(
         net, pf; spec=spec, lambda=0.0)
+
+    unsupported_config_net = deepcopy(net)
+    unsupported_config_net["load"]["ld1"]["configuration"] = "BOGUS"
+    unsupported_config_report = check_opf_operability(unsupported_config_net, pf; spec)
+    @test unsupported_config_report.status == :not_applicable
+    @test unsupported_config_report.checks["scope"].status == :not_applicable
+    @test any(occursin("unsupported configuration", reason)
+              for reason in unsupported_config_report.unsupported)
+    @test unsupported_config_report.provenance["operability"]["model_inventory"][
+        "load_configurations"] == ["BOGUS"]
 end

@@ -51,7 +51,11 @@ The checker reports:
 Scaling is part of the evidence contract. Supply the staged OPF `context` so
 the audited policy, AC coordinate bases, and research provenance are inherited,
 or pass an explicit `OperabilitySpec(scaling_policy=...)`. Non-SI policies also
-require `scaling_bases` keyed by bus; the checker never invents a per-unit base.
+require `scaling_bases` keyed by every bus; the checker rejects an incomplete
+base map and never invents a per-unit base. Equivalent SI and per-unit audits
+should preserve the physical conclusion (endpoint claim, voltage/VUF limits,
+branch-indicator classification, and certificate status), while normalized
+residuals and singular values remain coordinate-dependent evidence.
 The current equilibrium closure is explicitly `:frozen_dispatch` and is
 recorded in provenance; other closures are rejected until their equations are
 available through a public upstream seam.
@@ -60,6 +64,12 @@ The aggregate result is `:pass` only when a requested primary operational claim
 (terminal-voltage bounds, sequence-unbalance bounds, HELM reachability, or the
 fixed-point certificate) has passed. If no such claim was requested, the result
 remains `:not_applicable` even when endpoint and Jacobian evidence are good.
+
+If the network contains a generator, IBR, unsupported load law, or unsupported
+connection, the checker returns `:not_applicable` before evaluating a partial
+residual. The reasons are retained in `result.unsupported`, the `scope` check,
+and `result.provenance["operability"]`; this is explicit scope evidence, not a
+pass and not a claim that the omitted equations are feasible.
 
 The fixed-point certificate is a sufficient, local-in-model-region result. It
 uses the source-eliminated implicit Z-bus map and conservative connection-aware
