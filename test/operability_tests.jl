@@ -65,6 +65,9 @@ using BMOPFTools
     @test report3.checks["sequence_unbalance"].status == :pass
     @test report3.sequences["poc"]["vuf"] < 1e-4
     @test abs(report3.sequences["poc"]["v1"]) > 200.0
+    sequence_sensitivity = report3.branch_evidence["sequence_sensitivity"]["buses"]["poc"]
+    @test isfinite(sequence_sensitivity["positive_sequence_magnitude_derivative"])
+    @test isfinite(sequence_sensitivity["vuf_derivative"])
 
     delta_net = inv_grid3_bal()
     delta_net["load"] = Dict("dΔ" => Dict{String,Any}(

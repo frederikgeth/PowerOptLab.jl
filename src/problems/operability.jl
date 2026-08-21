@@ -585,6 +585,34 @@ function _operability_sequences(net, vmap; dvmap=nothing)
     out
 end
 
+function _operability_sequence_sensitivity_evidence(sensitivities)
+    records = get(get(sensitivities, "load_scale", Dict{String,Any}()),
+                  "sequences", Dict{String,Any}())
+    buses = Dict{String,Any}()
+    for (bus_raw, record) in records
+        bus = String(bus_raw)
+        v1 = ComplexF64(get(record, "v1", NaN + im * NaN))
+        v2 = ComplexF64(get(record, "v2", NaN + im * NaN))
+        dv1 = ComplexF64(get(record, "v1_derivative", NaN + im * NaN))
+        dv2 = ComplexF64(get(record, "v2_derivative", NaN + im * NaN))
+        dmag1 = isfinite(abs(v1)) && abs(v1) > eps(Float64) ?
+            real(conj(v1) * dv1) / abs(v1) : NaN
+        dmag2 = isfinite(abs(v2)) && abs(v2) > eps(Float64) ?
+            real(conj(v2) * dv2) / abs(v2) : NaN
+        buses[bus] = Dict{String,Any}(
+            "v1" => v1, "v2" => v2,
+            "positive_sequence_magnitude_derivative" => dmag1,
+            "negative_sequence_magnitude_derivative" => dmag2,
+            "vuf" => get(record, "vuf", NaN),
+            "vuf_derivative" => get(record, "vuf_derivative", NaN),
+            "interpretation" => "uniform-load path derivative; positive sequence can hide phase-level weakness")
+    end
+    Dict{String,Any}(
+        "status" => isempty(buses) ? :not_applicable : :available,
+        "buses" => buses,
+        "interpretation" => "positive/negative sequence summaries complement terminal and phase evidence")
+end
+
 function _operability_scales(lin, meta, coords::_OperabilityCoordinates)
     vs = Float64[coords.voltage_base[node[1]] for node in meta.state_nodes]
     is = Float64[coords.current_base[node[1]] for node in meta.state_nodes]
@@ -893,7 +921,8 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
 
     branch_evidence = Dict{String,Any}(
         "critical_mode" => _operability_critical_mode(jacobian_factorization, meta.state_nodes),
-        "dP_dV" => _operability_path_dpdv_evidence(sensitivities))
+        "dP_dV" => _operability_path_dpdv_evidence(sensitivities),
+        "sequence_sensitivity" => _operability_sequence_sensitivity_evidence(sensitivities))
     if spec.compute_helm
         reachability = _operability_helm_reachability(net, node_voltages, spec)
         branch_evidence["reachability"] = reachability

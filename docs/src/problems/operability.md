@@ -17,6 +17,8 @@ The checker reports:
   uniform-load and named P/Q sensitivities; and
 * path-qualified `dP/dV` branch indicators, with explicit sign convention and
   high-side/near-nose/low-side classifications; and
+* positive-/negative-sequence magnitude and VUF path derivatives, retained as
+  complementary evidence rather than a replacement for per-phase checks; and
 * positive-, negative-, and zero-sequence voltages and VUF on complete
   three-phase buses; and
 * an opt-in HELM cross-check of the no-load-connected branch for supported
@@ -55,6 +57,7 @@ report.sensitivities["load_scale"]
 report.sensitivities["directions"]["P"]
 report.branch_evidence["critical_mode"]
 report.branch_evidence["dP_dV"]
+report.branch_evidence["sequence_sensitivity"]
 report.branch_evidence["reachability"]
 
 trace = continue_opf_operability(net, pf;
