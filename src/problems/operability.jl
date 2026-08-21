@@ -45,7 +45,12 @@ cross-check on its narrower constant-power/constant-impedance scope. A HELM
 failure is retained as `:inconclusive`; unsupported physics is
 `:not_applicable`. Set `compute_sensitivity_validation=true` to re-solve small
 uniform-load and named P/Q perturbations and compare the implicit derivatives
-with independent finite differences.
+with independent finite differences. Set
+`compute_fixed_point_certificate=true` to evaluate a conservative
+Bernstein-style Z-bus contraction condition. The certificate is intentionally
+restricted to constant-power and constant-impedance sub-loads; a failed
+sufficient condition is `:inconclusive`, never a collapse or multiplicity
+claim.
 """
 struct OperabilitySpec
     scaling_policy::Union{Nothing,_OPERABILITY_SCALING_POLICY}
@@ -69,6 +74,7 @@ struct OperabilitySpec
     helm_tol::Float64
     helm_endpoint_atol::Float64
     helm_endpoint_rtol::Float64
+    compute_fixed_point_certificate::Bool
     function OperabilitySpec(;
             scaling_policy=nothing,
             scaling_bases=nothing,
@@ -90,7 +96,8 @@ struct OperabilitySpec
             helm_max_order::Integer=40,
             helm_tol::Real=1e-8,
             helm_endpoint_atol::Real=1e-6,
-            helm_endpoint_rtol::Real=1e-6)
+            helm_endpoint_rtol::Real=1e-6,
+            compute_fixed_point_certificate::Bool=false)
         scaling_policy === nothing ||
             (_OPERABILITY_SCALING_POLICY !== Any && scaling_policy isa _OPERABILITY_SCALING_POLICY) ||
             throw(ArgumentError("scaling_policy must be an AbstractOpfScalingPolicy"))
@@ -118,7 +125,8 @@ struct OperabilitySpec
             compute_sensitivity, compute_sensitivity_validation,
             Float64(sensitivity_validation_atol), Float64(sensitivity_validation_rtol),
             compute_helm, Int(helm_max_order), Float64(helm_tol),
-            Float64(helm_endpoint_atol), Float64(helm_endpoint_rtol))
+            Float64(helm_endpoint_atol), Float64(helm_endpoint_rtol),
+            compute_fixed_point_certificate)
     end
 end
 
@@ -753,6 +761,160 @@ function _operability_helm_reachability(net, node_voltages, spec::OperabilitySpe
     evidence
 end
 
+function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
+                                              spec::OperabilitySpec)
+    reasons = String[]
+    for (id_raw, load) in get(net, "load", Dict())
+        model = lowercase(string(get(load, "model", "constant_power")))
+        model in ("constant_power", "constant_impedance") || push!(reasons,
+            "load $(repr(String(id_raw))) uses $(repr(model)); the certificate " *
+            "currently supports only constant-power and constant-impedance parts")
+    end
+    assumptions = [
+        "frozen-dispatch native ybus_linearized equilibrium",
+        "source terminals are fixed and all non-source voltage nodes are included",
+        "constant-power compensation currents are represented by connection incidence",
+        "constant-impedance parts are folded into the linear Ybus",
+        "the contraction region is a uniform complex-voltage polydisc around the no-load solution",
+    ]
+    base = Dict{String,Any}(
+        "status" => :not_applicable,
+        "method" => "bernstein_style_zbus_contraction",
+        "theorem" => "sufficient existence, uniqueness, and Jacobian nonsingularity condition",
+        "assumptions" => assumptions,
+        "scope" => "constant_power_and_constant_impedance",
+    )
+    if !isempty(reasons)
+        base["reasons"] = reasons
+        base["message"] = "fixed-point certificate is outside the supported load-model scope"
+        return base
+    end
+    nf = length(meta.free)
+    if nf == 0
+        base["message"] = "no non-source voltage state is available for a Z-bus certificate"
+        return base
+    end
+    Yll = Matrix{ComplexF64}(lin.Y[meta.free, meta.free])
+    Yls = isempty(meta.fixed) ? zeros(ComplexF64, nf, 0) :
+        Matrix{ComplexF64}(lin.Y[meta.free, meta.fixed])
+    Z = try
+        Yll \ Matrix{ComplexF64}(I, nf, nf)
+    catch err
+        base["status"] = :inconclusive
+        base["message"] = "source-eliminated Ybus is singular; contraction region is unavailable"
+        base["error"] = sprint(showerror, err)
+        return base
+    end
+    w = isempty(meta.fixed) ? zeros(ComplexF64, nf) :
+        -(Yll \ (Yls * meta.fixed_values))
+    wfull = zeros(ComplexF64, length(lin.nodes))
+    wfull[meta.fixed] = meta.fixed_values
+    wfull[meta.free] = w
+    local_index = Dict{Int,Int}(gi => li for
+        (li, gi) in enumerate(meta.free))
+    edges = NamedTuple[]
+    for (id_raw, load) in sort!(collect(get(net, "load", Dict())); by=x -> String(x[1]))
+        id = String(id_raw)
+        for (k, sl) in enumerate(_load_subloads(load, net))
+            # The constant-Z component has already been absorbed into Y.
+            s = ComplexF64(sl.pt.cc + im * sl.qt.cc)
+            abs(s) == 0.0 && continue
+            pi = get(lin.index, sl.pos, 0)
+            ni = sl.neg === nothing ? 0 : get(lin.index, sl.neg, 0)
+            a = zeros(Float64, nf)
+            haskey(local_index, pi) && (a[local_index[pi]] += 1.0)
+            haskey(local_index, ni) && (a[local_index[ni]] -= 1.0)
+            anorm = sum(abs, a)
+            anorm == 0.0 && continue
+            vp = pi == 0 ? 0.0im : wfull[pi]
+            vn = ni == 0 ? 0.0im : wfull[ni]
+            dv0 = vp - vn
+            push!(edges, (key="$id/$k", pos=sl.pos, neg=sl.neg,
+                sabs=abs(s), dv0=dv0, a=a, anorm=anorm,
+                zalpha=abs.(Z * a)))
+        end
+    end
+    base["state_nodes"] = copy(meta.state_nodes)
+    base["coordinate_order"] = "complex free nodes in LinearizedYbus order"
+    base["no_load_voltage"] = copy(w)
+    base["edge_count"] = length(edges)
+    if isempty(edges)
+        candidate = _operability_voltage_vector(lin, meta, meta.state)
+        distance = maximum(abs.(candidate[meta.free] .- w))
+        base["radius"] = 0.0
+        base["candidate_distance"] = distance
+        base["contraction_factor"] = 0.0
+        base["invariance_bound"] = 0.0
+        base["status"] = distance <= spec.residual_atol ? :pass : :inconclusive
+        base["message"] = base["status"] === :pass ?
+            "zero constant-power injection gives the exact no-load certificate" :
+            "candidate is not the no-load solution"
+        return base
+    end
+    radius_limit = minimum(abs(e.dv0) / e.anorm for e in edges)
+    if !(isfinite(radius_limit) && radius_limit > 0.0)
+        base["message"] = "the no-load connection voltage is zero or has no positive safety radius"
+        return base
+    end
+    contribution(rho) = begin
+        lower = [abs(e.dv0) - e.anorm * rho for e in edges]
+        any(v -> v <= 0.0, lower) && return (Inf, Inf, lower)
+        b = maximum(sum(e.zalpha[i] * e.sabs / lower[j]
+                        for (j, e) in enumerate(edges)) for i in 1:nf)
+        q = maximum(sum(e.zalpha[i] * e.anorm * e.sabs / lower[j]^2
+                        for (j, e) in enumerate(edges)) for i in 1:nf)
+        b, q, lower
+    end
+    selected = nothing
+    for rho in range(0.0, stop=0.999radius_limit, length=2001)
+        b, q, lower = contribution(rho)
+        if isfinite(b) && isfinite(q) && b <= rho && q < 1.0
+            selected = (rho=rho, b=b, q=q, lower=lower)
+            break
+        end
+    end
+    # The map is independently iterated from the energized no-load germ. This
+    # is evidence recorded alongside, but not substituted for, the theorem.
+    map_complex(vfree) = begin
+        vfull = copy(wfull); vfull[meta.free] = vfree
+        w + Z * lin.i_comp(vfull)[meta.free]
+    end
+    pack(v) = vcat(real.(v), imag.(v))
+    unpack(x) = ComplexF64.(x[1:nf] .+ im .* x[nf+1:end])
+    oracle = try
+        fixed_point_oracle(x -> pack(map_complex(unpack(x))), pack(w);
+            max_iterations=200, atol=spec.residual_atol, rtol=spec.residual_rtol,
+            store_trajectory=false)
+    catch err
+        nothing
+    end
+    oracle !== nothing && (base["oracle"] = Dict(
+        "converged" => oracle.converged, "cycled" => oracle.cycled,
+        "iterations" => oracle.iterations, "residual_norm" => oracle.residual_norm))
+    candidate = _operability_voltage_vector(lin, meta, meta.state)
+    distance = maximum(abs.(candidate[meta.free] .- w))
+    base["candidate_distance"] = distance
+    if selected === nothing
+        base["message"] = "no invariant contraction polydisc was found; sufficient condition is inconclusive"
+        return base
+    end
+    base["radius"] = selected.rho
+    base["invariance_bound"] = selected.b
+    base["contraction_factor"] = selected.q
+    base["minimum_connection_voltage"] = minimum(selected.lower)
+    base["condition_margin"] = 1.0 - selected.q
+    inside = distance <= selected.rho + spec.residual_atol
+    base["candidate_inside_region"] = inside
+    if inside
+        base["status"] = :pass
+        base["message"] = "Bernstein-style Z-bus contraction certifies a unique no-load-connected solution containing the candidate"
+    else
+        base["status"] = :inconclusive
+        base["message"] = "the contraction condition holds around the no-load germ, but the candidate lies outside its certified region"
+    end
+    base
+end
+
 function _operability_empty_result(coords, unsupported, message)
     checks = Dict("scope" => OperabilityCheck(:not_applicable, unsupported, nothing, message))
     OperabilityResult(:not_applicable, NaN, NaN, _Node[], Float64[], zeros(0, 0),
@@ -764,7 +926,8 @@ end
 function _operability_overall(checks::Dict{String,OperabilityCheck})
     any(c.status === :fail for c in values(checks)) && return :fail
     any(c.status === :inconclusive for c in values(checks)) && return :inconclusive
-    claim_keys = ("terminal_voltage_bounds", "sequence_unbalance", "helm_reachability")
+    claim_keys = ("terminal_voltage_bounds", "sequence_unbalance", "helm_reachability",
+                  "fixed_point_certificate")
     claim_statuses = [checks[key].status for key in claim_keys if haskey(checks, key)]
     any(status === :pass for status in claim_statuses) ? :pass : :not_applicable
 end
@@ -961,6 +1124,20 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
             "message" => "HELM cross-check was not requested")
         checks["helm_reachability"] = OperabilityCheck(:not_applicable, nothing, nothing,
             "HELM cross-check was not requested")
+    end
+    if spec.compute_fixed_point_certificate
+        certificate = _operability_fixed_point_certificate(net, lin, meta, spec)
+        branch_evidence["fixed_point_certificate"] = certificate
+        certificate_status = Symbol(certificate["status"])
+        checks["fixed_point_certificate"] = OperabilityCheck(
+            certificate_status, get(certificate, "contraction_factor", nothing), 1.0,
+            String(certificate["message"]))
+    else
+        branch_evidence["fixed_point_certificate"] = Dict{String,Any}(
+            "status" => :not_applicable,
+            "message" => "fixed-point certificate was not requested")
+        checks["fixed_point_certificate"] = OperabilityCheck(:not_applicable,
+            nothing, nothing, "fixed-point certificate was not requested")
     end
 
     provenance = deepcopy(coords.provenance)

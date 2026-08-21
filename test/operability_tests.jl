@@ -35,6 +35,16 @@ using BMOPFTools
     @test report.provenance["operability"]["closure"] == "frozen_dispatch"
     @test report.provenance["operability"]["model_inventory"]["load_models"] ==
           ["constant_power"]
+    certificate_report = check_opf_operability(net, pf;
+        spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
+            compute_fixed_point_certificate=true))
+    @test certificate_report.checks["fixed_point_certificate"].status == :pass
+    certificate = certificate_report.branch_evidence["fixed_point_certificate"]
+    @test certificate["method"] == "bernstein_style_zbus_contraction"
+    @test certificate["candidate_inside_region"] === true
+    @test certificate["contraction_factor"] < 1.0
+    @test certificate["candidate_distance"] <= certificate["radius"]
+    @test certificate_report.status == :pass
     critical = report.branch_evidence["critical_mode"]
     @test critical["status"] == :pass
     @test length(critical["left_vector"]) == 2 * length(report.state_nodes)
@@ -88,6 +98,11 @@ using BMOPFTools
     @test all(r["positive"] !== r["negative"] for r in values(delta_report.load_connections))
     @test delta_report.provenance["operability"]["model_inventory"]["load_configurations"] ==
           ["DELTA"]
+    delta_certificate = check_opf_operability(delta_net, delta_pf;
+        spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
+            compute_fixed_point_certificate=true))
+    @test delta_certificate.checks["fixed_point_certificate"].status == :pass
+    @test delta_certificate.branch_evidence["fixed_point_certificate"]["edge_count"] == 3
 
     helm_report = check_opf_operability(net, pf;
         spec=OperabilitySpec(scaling_policy=SIUnitsScaling(), compute_helm=true))
@@ -104,6 +119,10 @@ using BMOPFTools
     @test current_report.checks["helm_reachability"].status == :not_applicable
     @test any(occursin("constant_current", reason) for reason in
         current_report.branch_evidence["reachability"]["reasons"])
+    current_certificate = check_opf_operability(current_net, current_pf;
+        spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
+            compute_fixed_point_certificate=true))
+    @test current_certificate.checks["fixed_point_certificate"].status == :not_applicable
 
     for model in ("constant_current", "constant_impedance")
         model_net = single_bus_net(pload=100.0)
@@ -201,6 +220,12 @@ using BMOPFTools
     @test low_report.status == :not_applicable
     @test low_report.branch_evidence["dP_dV"]["connections"]["ld1/1"]["classification"] ==
           "positive_low_side_indicator"
+    low_certificate_report = check_opf_operability(nose_net, low_solution;
+        spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
+            compute_fixed_point_certificate=true))
+    @test low_certificate_report.checks["fixed_point_certificate"].status == :inconclusive
+    @test low_certificate_report.branch_evidence["fixed_point_certificate"][
+        "candidate_inside_region"] === false
     low_trace = continue_opf_operability_pseudo_arclength(nose_net, low_solution;
         spec=OperabilitySpec(scaling_policy=SIUnitsScaling()),
         continuation=OperabilityPseudoArclengthSpec(

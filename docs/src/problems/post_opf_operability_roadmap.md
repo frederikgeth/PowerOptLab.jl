@@ -56,6 +56,14 @@ The current branch contains the first bounded implementation slice in
   declared lower λ-domain boundary (default 0), and can finish with a localized
   fold plus model-domain termination rather than spending the stress budget in
   negative-load territory;
+- an opt-in Bernstein-style fixed-point certificate now uses the native
+  source-eliminated Z-bus map. On constant-power/constant-impedance scope it
+  builds a conservative connection-aware contraction region around the
+  energized no-load solution, records the invariant-radius and contraction
+  margins, checks that the candidate lies inside the region, and retains an
+  independent `fixed_point_oracle` trace. Wye and delta incidence are handled
+  explicitly; current/ZIP/exponential models remain `:not_applicable` for this
+  certificate until their Lipschitz bounds are implemented;
 - relative singular-value-ratio evidence, normalized residual verdicts, and
   explicit frozen-dispatch provenance now align the numerical checks with the
   audited scaling and closure contracts; aggregate status no longer reports a
@@ -73,6 +81,11 @@ does not certify uniqueness or global reachability. The pinned documentation
 environment does not yet expose the staged BMOPFTools scaling-policy seam, so
 the executable documentation example and the final scaling-contract release
 remain blocked on that upstream compatibility step.
+
+The fixed-point certificate is a sufficient contraction result, not a
+necessary test. Its `:inconclusive` outcome is deliberately conservative when
+the norm bound cannot be satisfied, when the candidate is outside the certified
+polydisc, or when the load law is outside the implemented constant-P/Z scope.
 
 ## Research question and intended claims
 
@@ -459,6 +472,15 @@ conditions of Bernstein et al. as a sufficient existence/uniqueness and
 Jacobian-nonsingularity certificate. A passed condition is valuable evidence;
 a failed condition is `inconclusive`, not evidence of multiplicity or collapse.
 
+The first implementation instantiates this idea as a connection-aware
+source-eliminated Z-bus contraction bound. For each load connection it bounds
+the current-map derivative using the no-load connection voltage and the
+incidence vector (so delta edges are not silently treated as grounded wye
+loads). The reported invariant radius, lower connection-voltage margin, and
+row-sum contraction factor are sufficient-condition evidence; they are not
+replacements for the full theorem when additional load laws or controller
+closures are introduced.
+
 HELM convergence, fixed-point certificates, local Jacobian regularity, and CPF
 each establish different claims. The report will not silently substitute one
 for another.
@@ -564,7 +586,10 @@ provenance; no derivative is reported through an unacknowledged discontinuity.
 
 ### Milestone 5 — certificates, robustness, and studies
 
-- Add the sufficient multiphase fixed-point certificate on its supported scope.
+- Extend the landed sufficient multiphase fixed-point certificate to ZIP,
+  exponential, and current-law Lipschitz bounds where the compiled model and
+  voltage-domain assumptions permit; retain `:inconclusive` semantics when they
+  do not.
 - Run multiple named stress directions and model ensembles for ZIP/exponential
   uncertainty.
 - Add selected contingency workflows without treating a finite list as a global

@@ -31,6 +31,10 @@ The checker reports:
   left/right mode participation and optional bordered fold localization; and
 * a path-specific continuation-margin summary that identifies the first
   declared voltage-limit or localized fold boundary relative to λ=1; and
+* an opt-in Bernstein-style Z-bus fixed-point certificate on the narrower
+  constant-power/constant-impedance scope, with connection-aware wye/delta
+  incidence, an invariant contraction region around the energized no-load
+  solution, and an independent fixed-point oracle trace; and
 * deterministic one-row-per-point continuation records for table-ready
   residual, conditioning, curvature, and event summaries; and
 * explicit `:not_applicable` scope evidence when generator or IBR equations are
@@ -45,9 +49,18 @@ recorded in provenance; other closures are rejected until their equations are
 available through a public upstream seam.
 
 The aggregate result is `:pass` only when a requested primary operational claim
-(terminal-voltage bounds, sequence-unbalance bounds, or HELM reachability) has
-passed. If no such claim was requested, the result remains `:not_applicable`
-even when endpoint and Jacobian evidence are good.
+(terminal-voltage bounds, sequence-unbalance bounds, HELM reachability, or the
+fixed-point certificate) has passed. If no such claim was requested, the result
+remains `:not_applicable` even when endpoint and Jacobian evidence are good.
+
+The fixed-point certificate is a sufficient, local-in-model-region result. It
+uses the source-eliminated implicit Z-bus map and a conservative uniform
+complex-voltage polydisc around the no-load solution. A `:pass` means the
+candidate lies inside a contraction region that contains a unique equilibrium
+and has a nonsingular equilibrium Jacobian on that region. A failed sufficient
+condition, unsupported load model, or candidate outside the region is
+`:inconclusive`; it is not evidence of non-existence, multiplicity, or a
+low-voltage branch.
 
 ```julia
 using BMOPFTools
@@ -61,6 +74,7 @@ report = check_opf_operability(net, pf;
         voltage_max = 1.05 * vbase,
         vuf_max = 0.02,
         compute_helm = true,
+        compute_fixed_point_certificate = true,
     ))
 
 report.status                    # :pass, :fail, :inconclusive, or :not_applicable
@@ -71,6 +85,7 @@ report.branch_evidence["critical_mode"]
 report.branch_evidence["dP_dV"]
 report.branch_evidence["sequence_sensitivity"]
 report.branch_evidence["reachability"]
+report.branch_evidence["fixed_point_certificate"]
 report.provenance["operability"]["model_inventory"]
 
 trace = continue_opf_operability(net, pf;
