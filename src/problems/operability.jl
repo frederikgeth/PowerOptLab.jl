@@ -1532,8 +1532,11 @@ function _operability_empty_result(coords, unsupported, message; net=nothing)
         provenance["operability"] = Dict(
             "scope" => "static_ybus_linearized",
             "status" => :not_applicable,
+            "closure" => "frozen_dispatch",
+            "control_closure" => "outside_native_static_seam",
             "unsupported_reasons" => copy(unsupported),
             "model_inventory" => _operability_scope_inventory(net),
+            "topology" => _operability_scope_source_inventory(net),
             "coordinate_policy" => BMOPFTools.opf_scaling_policy_data(coords.policy),
         )
     end
@@ -1883,12 +1886,15 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
 
     provenance = deepcopy(coords.provenance)
     provenance["operability"] = Dict("scope" => "static_ybus_linearized",
+        "status" => :supported,
         "closure" => String(spec.closure),
+        "control_closure" => "frozen_dispatch_native_static",
         "jacobian_spectrum_mode" => String(spec.jacobian_spectrum),
         "jacobian_storage_mode" => String(spec.jacobian_storage),
         "source_buses" => sort!(collect(source_buses)), "state_nodes" => meta.state_nodes,
         "coordinate_policy" => BMOPFTools.opf_scaling_policy_data(coords.policy),
-        "model_inventory" => _operability_scope_inventory(net))
+        "model_inventory" => _operability_scope_inventory(net),
+        "topology" => _operability_scope_source_inventory(net))
     OperabilityResult(_operability_overall(checks), endpoint_residual,
         endpoint_normalized, meta.state_nodes, x, J, singular_values, condition_number,
         node_voltages, load_records, sequence_records, sensitivities, branch_evidence, checks,
@@ -2126,7 +2132,9 @@ Return one compact, table-ready row for a single [`OperabilityResult`](@ref).
 The row preserves the snapshot label, endpoint/regularity evidence, voltage
 and VUF extrema, branch-indicator counts, no-load and candidate-local
 certificate/HELM statuses, scaling/storage metadata, and the number of
-unsupported-scope reasons. It is a reporting projection of one snapshot, not a
+unsupported-scope reasons. It also retains scope status, closure/control
+closure, and source-topology readiness so pooled rows cannot hide an
+out-of-scope snapshot. It is a reporting projection of one snapshot, not a
 contingency or operating-envelope assessment.
 """
 function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing)
@@ -2145,6 +2153,8 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
     euclidean_certificate = get(certificate, "euclidean_region", Dict{String,Any}())
     reachability = get(result.branch_evidence, "reachability", Dict{String,Any}())
     complexity = get(result.branch_evidence, "complexity", Dict{String,Any}())
+    operability = get(result.provenance, "operability", Dict{String,Any}())
+    topology = get(operability, "topology", Dict{String,Any}())
     (
         snapshot_id=snapshot_id,
         status=result.status,
@@ -2172,6 +2182,14 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
         jacobian_storage_bytes_estimate=get(complexity, "jacobian_storage_bytes_estimate", missing),
         zbus_storage_mode=String(get(complexity, "zbus_storage_mode", "not_applicable")),
         unsupported_count=length(result.unsupported),
+        scope_status=Symbol(get(operability, "status",
+            result.status === :not_applicable ? :not_applicable : :supported)),
+        equilibrium_scope=String(get(operability, "scope", "static_ybus_linearized")),
+        closure=Symbol(get(operability, "closure", "frozen_dispatch")),
+        control_closure=String(get(operability, "control_closure",
+            "frozen_dispatch_native_static")),
+        topology_has_voltage_source=Bool(get(topology, "has_voltage_source", false)),
+        topology_missing_source_buses=get(topology, "missing_source_buses", String[]),
         scope="single_snapshot_static_ybus",
     )
 end

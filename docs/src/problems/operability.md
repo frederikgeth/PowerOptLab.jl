@@ -121,7 +121,8 @@ with its scientific evidence.
 The table-ready `operability_snapshot_row(report)` projection carries the same
 review context in compact form: `jacobian_spectrum_mode`,
 `jacobian_storage_mode`, `jacobian_nonzero_count`,
-`jacobian_storage_bytes_estimate`, and `zbus_storage_mode`. Sparse reports also
+`jacobian_storage_bytes_estimate`, `zbus_storage_mode`, `scope_status`,
+`closure`, `control_closure`, and source-topology readiness. Sparse reports also
 retain the finite-difference row/column pattern in
 `complexity["jacobian_pattern"]`; this is an operating-point diagnostic, not a
 topology-invariant symbolic sparsity pattern. Set

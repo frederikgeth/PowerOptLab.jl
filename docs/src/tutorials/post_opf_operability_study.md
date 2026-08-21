@@ -115,6 +115,10 @@ row.maximum_vuf
 row.high_side_indicator_count
 row.near_nose_indicator_count
 row.fixed_point_certificate_status
+row.scope_status
+row.closure
+row.control_closure
+row.topology_has_voltage_source
 row.helm_reachability_status
 row.scope                    # "single_snapshot_static_ybus"
 ```

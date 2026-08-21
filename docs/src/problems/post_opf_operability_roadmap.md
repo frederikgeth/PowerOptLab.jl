@@ -66,7 +66,8 @@ The current branch contains the first bounded implementation slice in
 - `operability_snapshot_row` now provides a compact single-snapshot projection
   for study tables, keeping endpoint, regularity, voltage/VUF, branch-indicator,
   certificate, HELM, and scope evidence together without adding contingency
-  semantics;
+  semantics; scope status, closure/control closure, and source-topology
+  readiness are retained explicitly so pooled rows cannot hide applicability;
 - `operability_snapshot_rows` now provides a deterministic dictionary/paired-
   iterable adapter for pooling solved snapshots while preserving each row's
   explicit snapshot label and single-snapshot scope;

@@ -70,6 +70,12 @@ using SparseArrays
     @test snapshot_row.snapshot_id == "base"
     @test snapshot_row.status == :pass
     @test snapshot_row.scope == "single_snapshot_static_ybus"
+    @test snapshot_row.scope_status == :supported
+    @test snapshot_row.equilibrium_scope == "static_ybus_linearized"
+    @test snapshot_row.closure == :frozen_dispatch
+    @test snapshot_row.control_closure == "frozen_dispatch_native_static"
+    @test snapshot_row.topology_has_voltage_source === true
+    @test isempty(snapshot_row.topology_missing_source_buses)
     @test snapshot_row.minimum_terminal_voltage ≈ report.load_connections["ld1/1"]["magnitude"]
     @test snapshot_row.high_side_indicator_count == 1
     @test snapshot_row.fixed_point_certificate_status == :not_applicable
@@ -698,6 +704,10 @@ using SparseArrays
     @test !isempty(ibr_report.unsupported)
     @test ibr_report.checks["scope"].status == :not_applicable
     @test ibr_report.provenance["operability"]["status"] == :not_applicable
+    ibr_row = operability_snapshot_row(ibr_report; snapshot_id="ibr")
+    @test ibr_row.scope_status == :not_applicable
+    @test ibr_row.control_closure == "outside_native_static_seam"
+    @test ibr_row.topology_has_voltage_source === true
     @test any(occursin("IBR", reason) for reason in ibr_report.unsupported)
     ibr_trace = continue_opf_operability(ibr_net, ibr_pf; spec=spec)
     @test ibr_trace.status == :not_applicable
