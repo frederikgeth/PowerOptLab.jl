@@ -21,7 +21,8 @@ engine's admittance-matrix primitives) in a custom loop.
   candidate with bordered equations, and `stop_on_voltage_limit=true` can
   terminate at the first declared terminal-voltage violation. The
   `operability_continuation_margin` helper summarizes the first declared
-  voltage-limit or localized fold boundary relative to λ=1.
+  voltage-limit or localized fold boundary relative to λ=1; pseudo-arclength
+  traces also retain tangent-turning curvature and accepted-step histories.
 
 ## Question-driven candidates not yet built
 

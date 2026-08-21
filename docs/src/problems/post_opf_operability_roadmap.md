@@ -48,6 +48,8 @@ The current branch contains the first bounded implementation slice in
 - continuation results now retain a path-specific margin summary for the first
   declared voltage-limit or localized fold boundary relative to λ=1, while
   reporting `:not_observed` when the recorded trace did not establish one;
+- pseudo-arclength results now retain tangent-turning curvature and accepted
+  arclength-step histories, with conservative curvature-aware step control;
 - an opt-in bordered-equation fold localizer solving ``F=0``, ``Jv=0``, and
   ``‖v‖₂=1`` from a declared approximate fold state; pseudo-arclength fold
   candidates now retain its localized status and residual evidence when invoked.
@@ -373,8 +375,10 @@ same connection-aware equilibrium model:
 
 The current implementation covers the static native-ybus slice and records
 items 1, 2, 4, and 6 provisionally, with fixed-λ refinement when a target
-crossing is bracketed. Fold refinement, deflation, curvature-based step control,
-and controller/generator closures remain Milestone 3 work.
+crossing is bracketed. Curvature-aware step control is now a conservative first
+slice with recorded turning history; fold refinement beyond the local bordered
+candidate, deflation, and controller/generator closures remain Milestone 3
+work.
 
 The initial default homotopy proposed for review is:
 

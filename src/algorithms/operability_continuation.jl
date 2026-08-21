@@ -394,6 +394,8 @@ struct OperabilityPseudoArclengthSpec
     target_lambda_tol::Float64
     endpoint_atol::Float64
     endpoint_rtol::Float64
+    curvature_low::Float64
+    curvature_high::Float64
     function OperabilityPseudoArclengthSpec(;
             initial_step::Real=0.05,
             min_step::Real=1e-4,
@@ -406,10 +408,12 @@ struct OperabilityPseudoArclengthSpec
             tangent_lambda_tol::Real=1e-3,
             target_lambda_tol::Real=5e-3,
             endpoint_atol::Real=1e-5,
-            endpoint_rtol::Real=1e-5)
+            endpoint_rtol::Real=1e-5,
+            curvature_low::Real=2.0,
+            curvature_high::Real=5.0)
         vals = (initial_step, min_step, max_step, corrector_tol, jacobian_step,
                 fold_sigma_tol, tangent_lambda_tol, target_lambda_tol,
-                endpoint_atol, endpoint_rtol)
+                endpoint_atol, endpoint_rtol, curvature_low, curvature_high)
         all(x -> isfinite(Float64(x)) && Float64(x) > 0, vals) ||
             throw(ArgumentError("pseudo-arclength steps and tolerances must be finite and > 0"))
         min_step <= initial_step <= max_step || throw(ArgumentError(
@@ -417,10 +421,13 @@ struct OperabilityPseudoArclengthSpec
         max_steps >= 1 || throw(ArgumentError("max_steps must be >= 1"))
         max_corrector_iterations >= 1 || throw(ArgumentError(
             "max_corrector_iterations must be >= 1"))
+        curvature_low <= curvature_high || throw(ArgumentError(
+            "curvature_low must be <= curvature_high"))
         new(Float64(initial_step), Float64(min_step), Float64(max_step), Int(max_steps),
             Float64(corrector_tol), Int(max_corrector_iterations), Float64(jacobian_step),
             Float64(fold_sigma_tol), Float64(tangent_lambda_tol),
-            Float64(target_lambda_tol), Float64(endpoint_atol), Float64(endpoint_rtol))
+            Float64(target_lambda_tol), Float64(endpoint_atol), Float64(endpoint_rtol),
+            Float64(curvature_low), Float64(curvature_high))
     end
 end
 
@@ -665,7 +672,11 @@ left/right singular-mode participation attached to those events. Endpoint crossi
 are reported with their bracketing λ values and refined at fixed λ when the
 crossing step does not land within `target_lambda_tol`. The result retains the
 separate voltage-normalized arclength metric alongside the audited scaling
-provenance. Pass `stop_at_target=false` to continue the stress path after λ=1;
+provenance, accepted arclength steps, and tangent-turning curvature history.
+The step controller reduces the next step when curvature exceeds
+`continuation.curvature_high`; when the corrector is cheap it uses faster
+growth below `curvature_low` and conservative growth otherwise. Pass
+`stop_at_target=false` to continue the stress path after λ=1;
 the default remains endpoint matching. Pass `stop_on_voltage_limit=true` to
 terminate with `:fail` at the first declared terminal-voltage violation.
 """
@@ -734,12 +745,15 @@ function continue_opf_operability_pseudo_arclength(
     corrector_iterations = [base_iterations]
     events = _continuation_voltage_events(net_zero, base_point.node_voltages, 0.0, spec)
     step = continuation.initial_step
+    curvature_history = Float64[]
+    arclength_steps = Float64[]
     voltage_limit_stop = false
     endpoint_match = nothing; endpoint_distance = NaN; status = :inconclusive
     message = stop_at_target ?
         "pseudo-arclength trace did not produce a corrected λ=1 point" :
         "pseudo-arclength stress trace reached its step horizon"
     for _ in 1:continuation.max_steps
+        step_used = step
         ypred = y .+ step .* tangent
         ynew, ok, iterations = _pseudo_corrector(
             net, ypred, tangent, meta, arc_state_scale, residual_scale, coords, continuation)
@@ -853,9 +867,16 @@ function continue_opf_operability_pseudo_arclength(
                 "iterations" => localized.iterations)
             push!(events, fold_event)
         end
+        turning_angle = acos(clamp(real(dot(tangent, tangent_new)), -1.0, 1.0))
+        curvature = turning_angle / max(step_used, eps(Float64))
+        push!(curvature_history, curvature)
+        push!(arclength_steps, step_used)
         y = ynew; tangent = tangent_new
-        if iterations <= 4
-            step = min(continuation.max_step, step * 1.3)
+        if curvature >= continuation.curvature_high
+            step = max(continuation.min_step, step / 1.5)
+        elseif iterations <= 4
+            growth = curvature <= continuation.curvature_low ? 1.3 : 1.15
+            step = min(continuation.max_step, step * growth)
         elseif iterations >= continuation.max_corrector_iterations ÷ 2
             step = max(continuation.min_step, step / 1.5)
         end
@@ -881,6 +902,10 @@ function continue_opf_operability_pseudo_arclength(
         "source_buses" => sort!(collect(source_buses)), "state_nodes" => meta.state_nodes,
         "natural_parameter" => false, "pseudo_arclength" => true,
         "arclength_state_scale" => arc_state_scale,
+        "arclength_steps" => arclength_steps,
+        "curvature_history" => curvature_history,
+        "curvature_control" => Dict("low" => continuation.curvature_low,
+                                     "high" => continuation.curvature_high),
         "stop_at_target" => stop_at_target,
         "stop_on_voltage_limit" => stop_on_voltage_limit,
         "margin" => _continuation_margin(events))

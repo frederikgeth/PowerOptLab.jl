@@ -75,6 +75,7 @@ pseudo = continue_opf_operability_pseudo_arclength(net, pf;
 pseudo.status
 pseudo.provenance["continuation"]["pseudo_arclength"]
 pseudo.provenance["continuation"]["arclength_state_scale"]
+pseudo.provenance["continuation"]["curvature_history"]
 
 # To continue the declared stress path beyond the audited endpoint:
 stress = continue_opf_operability_pseudo_arclength(net, pf;

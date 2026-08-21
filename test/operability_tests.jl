@@ -144,9 +144,17 @@ using BMOPFTools
     @test maximum(pseudo_trace.residuals) < 1e-5
     @test pseudo_trace.provenance["continuation"]["pseudo_arclength"] === true
     @test all(>(0.0), pseudo_trace.provenance["continuation"]["arclength_state_scale"])
+    @test !isempty(pseudo_trace.provenance["continuation"]["curvature_history"])
+    @test all(isfinite, pseudo_trace.provenance["continuation"]["curvature_history"])
+    @test length(pseudo_trace.provenance["continuation"]["curvature_history"]) ==
+          length(pseudo_trace.provenance["continuation"]["arclength_steps"])
+    @test pseudo_trace.provenance["continuation"]["curvature_control"] ==
+          Dict("low" => 2.0, "high" => 5.0)
     @test pseudo_trace.provenance["continuation"]["margin"]["status"] == :not_observed
     @test_throws ArgumentError OperabilityPseudoArclengthSpec(initial_step=0.01,
                                                                min_step=0.1)
+    @test_throws ArgumentError OperabilityPseudoArclengthSpec(
+        curvature_low=2.0, curvature_high=1.0)
 
     # Analytic two-bus resistive feeder: P = V(E - V) / R has a high branch
     # at 600 V and a low branch at 400 V for P = 2.4 MW.  Both are valid
