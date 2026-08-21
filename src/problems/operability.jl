@@ -51,6 +51,10 @@ Bernstein-style Z-bus contraction condition. The certificate covers the
 native constant-P, constant-I, ZIP, exponential, and constant-Z load laws
 when their declared voltage-domain parameters are finite; a failed sufficient
 condition is `:inconclusive`, never a collapse or multiplicity claim.
+The same report includes `fixed_point_local_region`, a separate
+candidate-centered contraction result for local uniqueness evidence; it does
+not establish reachability from the energized no-load germ and does not
+downgrade the aggregate snapshot status.
 """
 struct OperabilitySpec
     scaling_policy::Union{Nothing,_OPERABILITY_SCALING_POLICY}
@@ -1038,6 +1042,69 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
     end
     candidate = _operability_voltage_vector(lin, meta, meta.state)
     candidate_delta = abs.(candidate[meta.free] .- w)
+    # In addition to the no-load-connected region, evaluate a local
+    # candidate-centered contraction region.  Its invariance bound includes
+    # the fixed-point residual at the candidate, so it can certify local
+    # uniqueness even when the candidate is outside the no-load-connected
+    # region.  This is deliberately reported as separate evidence: it says
+    # nothing about reachability from the energized germ.
+    local_region = try
+        candidate_free = candidate[meta.free]
+        center_full = copy(wfull); center_full[meta.free] = candidate_free
+        map_center = w + Z * lin.i_comp(center_full)[meta.free]
+        offset = abs.(map_center .- candidate_free)
+        local_dv0 = [begin
+            pi = get(lin.index, e.pos, 0)
+            ni = e.neg === nothing ? 0 : get(lin.index, e.neg, 0)
+            vp = pi == 0 ? 0.0im : center_full[pi]
+            vn = ni == 0 ? 0.0im : center_full[ni]
+            vp - vn
+        end for e in edges]
+        local_limit = minimum(abs(local_dv0[j]) / e.anorm
+                              for (j, e) in enumerate(edges)
+                              if e.anorm > 0.0)
+        if !(isfinite(local_limit) && local_limit > 0.0)
+            nothing
+        else
+            local_contribution(radii) = begin
+                lower = [abs(local_dv0[j]) - sum(abs.(e.a) .* radii)
+                         for (j, e) in enumerate(edges)]
+                upper = [abs(local_dv0[j]) + sum(abs.(e.a) .* radii)
+                         for (j, e) in enumerate(edges)]
+                any(v -> v <= 0.0, lower) && return (fill(Inf, nf), Inf, lower, upper)
+                derivative_bounds = [term_bounds(term, lower[j], upper[j])[2]
+                                     for (j, e) in enumerate(edges) for term in e.terms]
+                offsets = cumsum(vcat(0, [length(e.terms) for e in edges]))
+                edge_delta = [sum(abs.(e.a) .* radii) for e in edges]
+                b = [offset[i] + sum(e.zalpha[i] *
+                        derivative_bounds[offsets[j] + t] * edge_delta[j]
+                        for (j, e) in enumerate(edges) for t in eachindex(e.terms))
+                     for i in 1:nf]
+                q = maximum(sum(e.zalpha[i] *
+                        derivative_bounds[offsets[j] + t] * edge_delta[j] / radii[i]
+                        for (j, e) in enumerate(edges) for t in eachindex(e.terms))
+                            for i in 1:nf)
+                b, q, lower, upper
+            end
+            selected_local = nothing
+            for rho in range(max(1e-9, local_limit / 2000.0),
+                             stop=0.999local_limit, length=2001)
+                radii = fill(rho, nf)
+                b, q, lower, upper = local_contribution(radii)
+                if isfinite(q) && all(isfinite, b) && all(b .<= radii) && q < 1.0
+                    selected_local = (radii=radii, b=b, q=q,
+                                      lower=lower, upper=upper)
+                end
+            end
+            selected_local === nothing ? nothing :
+                (kind=:candidate_local, radii=selected_local.radii,
+                 b=selected_local.b, q=selected_local.q,
+                 lower=selected_local.lower, upper=selected_local.upper,
+                 offset=offset)
+        end
+    catch
+        nothing
+    end
     uniform_region = if selected === nothing
         nothing
     else
@@ -1133,6 +1200,16 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
         "radii" => component_region.radii, "contraction_factor" => component_region.q,
         "invariance_bound" => maximum(component_region.b),
         "candidate_ratio" => candidate_ratio(component_region))
+    base["local_candidate_region"] = local_region === nothing ? Dict(
+        "status" => :inconclusive,
+        "message" => "no candidate-centered invariant contraction region was found") : Dict(
+        "status" => :pass,
+        "radii" => local_region.radii,
+        "contraction_factor" => local_region.q,
+        "invariance_bound" => maximum(local_region.b),
+        "condition_margin" => 1.0 - local_region.q,
+        "candidate_residual_offset" => local_region.offset,
+        "interpretation" => "local uniqueness evidence around the candidate; does not establish no-load reachability")
     if chosen === nothing
         base["message"] = "no invariant contraction polydisc was found; sufficient condition is inconclusive"
         return base
@@ -1176,8 +1253,13 @@ function _operability_empty_result(coords, unsupported, message; net=nothing)
 end
 
 function _operability_overall(checks::Dict{String,OperabilityCheck})
-    any(c.status === :fail for c in values(checks)) && return :fail
-    any(c.status === :inconclusive for c in values(checks)) && return :inconclusive
+    # Candidate-centered local uniqueness is complementary evidence. It must
+    # not downgrade the primary snapshot verdict when the no-load-connected
+    # certificate or another requested operational claim has its own outcome.
+    primary = (c for (key, c) in checks if key != "fixed_point_local_region")
+    any(c.status === :fail for c in primary) && return :fail
+    primary = (c for (key, c) in checks if key != "fixed_point_local_region")
+    any(c.status === :inconclusive for c in primary) && return :inconclusive
     claim_keys = ("terminal_voltage_bounds", "sequence_unbalance", "helm_reachability",
                   "fixed_point_certificate")
     claim_statuses = [checks[key].status for key in claim_keys if haskey(checks, key)]
@@ -1385,6 +1467,14 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
         checks["fixed_point_certificate"] = OperabilityCheck(
             certificate_status, get(certificate, "contraction_factor", nothing), 1.0,
             String(certificate["message"]))
+        local_region = get(certificate, "local_candidate_region", Dict{String,Any}())
+        local_status = Symbol(get(local_region, "status",
+            haskey(certificate, "local_candidate_region") ? :inconclusive : :not_applicable))
+        checks["fixed_point_local_region"] = OperabilityCheck(
+            local_status, get(local_region, "contraction_factor", nothing), 1.0,
+            local_status === :pass ?
+                "candidate-centered contraction gives local uniqueness evidence; reachability remains separate" :
+                "no candidate-centered contraction region was certified")
     else
         branch_evidence["fixed_point_certificate"] = Dict{String,Any}(
             "status" => :not_applicable,
@@ -1610,9 +1700,10 @@ end
 
 Return one compact, table-ready row for a single [`OperabilityResult`](@ref).
 The row preserves the snapshot label, endpoint/regularity evidence, voltage
-and VUF extrema, branch-indicator counts, certificate/HELM statuses, and the
-number of unsupported-scope reasons. It is a reporting projection of one
-snapshot, not a contingency or operating-envelope assessment.
+and VUF extrema, branch-indicator counts, no-load and candidate-local
+certificate/HELM statuses, and the number of unsupported-scope reasons. It is a
+reporting projection of one snapshot, not a contingency or operating-envelope
+assessment.
 """
 function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing)
     magnitudes = Float64[Float64(get(record, "magnitude", NaN))
@@ -1626,6 +1717,7 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
     classifications = String[get(record, "classification", "not_available")
                              for record in values(dpdv)]
     certificate = get(result.branch_evidence, "fixed_point_certificate", Dict{String,Any}())
+    local_certificate = get(certificate, "local_candidate_region", Dict{String,Any}())
     reachability = get(result.branch_evidence, "reachability", Dict{String,Any}())
     (
         snapshot_id=snapshot_id,
@@ -1643,6 +1735,8 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
         fixed_point_certificate_status=Symbol(get(certificate, "status", :not_applicable)),
         fixed_point_condition_margin=Float64(get(certificate, "condition_margin", NaN)),
         fixed_point_selected_region=String(get(certificate, "selected_region", "")),
+        fixed_point_local_region_status=Symbol(get(local_certificate, "status", :not_applicable)),
+        fixed_point_local_condition_margin=Float64(get(local_certificate, "condition_margin", NaN)),
         helm_reachability_status=Symbol(get(reachability, "status", :not_applicable)),
         unsupported_count=length(result.unsupported),
         scope="single_snapshot_static_ybus",

@@ -101,6 +101,7 @@ using BMOPFTools
         spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
             compute_fixed_point_certificate=true))
     @test certificate_report.checks["fixed_point_certificate"].status == :pass
+    @test certificate_report.checks["fixed_point_local_region"].status == :pass
     certificate = certificate_report.branch_evidence["fixed_point_certificate"]
     @test certificate["method"] == "bernstein_style_zbus_contraction"
     @test certificate["candidate_inside_region"] === true
@@ -112,10 +113,14 @@ using BMOPFTools
     @test haskey(certificate, "componentwise_region")
     @test certificate["law_bound_validation"]["status"] == :pass
     @test maximum(certificate["law_bound_validation"]["connections"]["ld1/1"]["ratio"]) <= 1.001
+    @test certificate["local_candidate_region"]["status"] == :pass
+    @test certificate["local_candidate_region"]["condition_margin"] > 0.0
     @test certificate_report.status == :pass
     certificate_row = operability_snapshot_row(certificate_report)
     @test certificate_row.fixed_point_certificate_status == :pass
     @test certificate_row.fixed_point_condition_margin > 0.0
+    @test certificate_row.fixed_point_local_region_status == :pass
+    @test certificate_row.fixed_point_local_condition_margin > 0.0
     direction = OperabilityStressDirection(:phase_selective;
         p_scale=1.0, q_scale=0.0, connection_weights=Dict("ld1" => [0.0]))
     stressed = operability_stress_network(net, 0.5, direction)
@@ -372,6 +377,7 @@ using BMOPFTools
         spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
             compute_fixed_point_certificate=true))
     @test low_certificate_report.checks["fixed_point_certificate"].status == :inconclusive
+    @test low_certificate_report.checks["fixed_point_local_region"].status == :inconclusive
     @test low_certificate_report.branch_evidence["fixed_point_certificate"][
         "candidate_inside_region"] === false
     low_trace = continue_opf_operability_pseudo_arclength(nose_net, low_solution;

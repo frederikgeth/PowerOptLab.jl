@@ -153,6 +153,7 @@ for row in snapshot_rows
         " Vmin=", round(row.minimum_terminal_voltage; digits=3),
         " VUFmax=", row.maximum_vuf,
         " certificate=", row.fixed_point_certificate_status,
+        " local_certificate=", row.fixed_point_local_region_status,
         " dP/dV(high,near,low)=",
         (row.high_side_indicator_count, row.near_nose_indicator_count,
          row.low_side_indicator_count))

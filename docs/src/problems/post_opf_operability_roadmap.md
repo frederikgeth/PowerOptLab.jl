@@ -83,6 +83,10 @@ The current branch contains the first bounded implementation slice in
   `:not_applicable`; each accepted contraction region also records a
   three-radius finite-difference validation of the connection current-law
   Jacobian against its analytic Lipschitz bound;
+- the certificate now also reports a separate candidate-centered contraction
+  region for local uniqueness evidence. Its status is deliberately independent
+  of the no-load-connected reachability certificate, so a low-branch candidate
+  can remain locally regular without being called reachable;
 - relative singular-value-ratio evidence, normalized residual verdicts, and
   explicit frozen-dispatch provenance now align the numerical checks with the
   audited scaling and closure contracts; aggregate status no longer reports a
@@ -637,8 +641,9 @@ contingency or operating-envelope guarantee.
 
 - Use the landed `law_bound_validation` evidence in study campaigns, and
   broaden the certified voltage-domain geometry beyond the landed
-  componentwise polydisc where useful; retain `:inconclusive` semantics when
-  the sufficient condition does not hold.
+  componentwise polydisc where useful; the candidate-centered region now adds
+  a separate local-uniqueness geometry while retaining `:inconclusive`
+  semantics when the no-load-connected sufficient condition does not hold.
 - Run multiple named stress directions and model ensembles for ZIP/exponential
   uncertainty using `operability_stress_rows`, then aggregate finite path
   margins without promoting them to a global guarantee.
