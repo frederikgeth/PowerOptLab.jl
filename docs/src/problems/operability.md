@@ -101,6 +101,14 @@ enabled. The result records diagnostic size indicators in
 `report.branch_evidence["complexity"]` so a study can retain the cost context
 with its scientific evidence.
 
+The table-ready `operability_snapshot_row(report)` projection carries the same
+review context in compact form: `jacobian_spectrum_mode`,
+`jacobian_storage_mode`, `jacobian_nonzero_count`,
+`jacobian_storage_bytes_estimate`, and `zbus_storage_mode`. A row therefore
+remains interpretable when reports from different storage/spectrum policies are
+combined, while `not_requested` distinguishes an intentionally disabled
+certificate from an unsupported claim.
+
 For a network with ``n_f`` free complex nodes (real state dimension
 ``n=2n_f``) and ``m`` load connections, the current implementation has these
 dominant terms:

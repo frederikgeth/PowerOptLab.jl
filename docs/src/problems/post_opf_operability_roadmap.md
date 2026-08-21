@@ -112,6 +112,9 @@ The current branch contains the first bounded implementation slice in
 - the fixed-point certificate now reuses an implicit Ybus factorization for
   no-load solves, connection products, and map iterations instead of forming
   an explicit dense inverse; sparse LU fill-in remains an observed study cost;
+- table-ready snapshot rows now retain the Jacobian spectrum/storage mode,
+  nonzero count, byte estimate, and implicit Zbus storage mode so pooled
+  reports preserve computational-cost context;
 - relative singular-value-ratio evidence, normalized residual verdicts, and
   explicit frozen-dispatch provenance now align the numerical checks with the
   audited scaling and closure contracts; aggregate status no longer reports a

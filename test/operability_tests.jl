@@ -43,6 +43,11 @@ using SparseArrays
     @test snapshot_row.minimum_terminal_voltage ≈ report.load_connections["ld1/1"]["magnitude"]
     @test snapshot_row.high_side_indicator_count == 1
     @test snapshot_row.fixed_point_certificate_status == :not_applicable
+    @test snapshot_row.jacobian_spectrum_mode == "full"
+    @test snapshot_row.jacobian_storage_mode == "dense"
+    @test snapshot_row.jacobian_nonzero_count > 0
+    @test snapshot_row.jacobian_storage_bytes_estimate > 0
+    @test snapshot_row.zbus_storage_mode == "not_requested"
 
     # Scaling changes coordinates, not the physical snapshot conclusion.  The
     # checker receives the same SI-valued solution under both policies; the
@@ -157,6 +162,17 @@ using SparseArrays
     @test sparse_spectrum_report.branch_evidence["complexity"]["jacobian_storage_mode"] ==
           "sparse"
     @test sparse_spectrum_report.branch_evidence["complexity"]["jacobian_nonzero_count"] > 0
+    sparse_certificate_report = check_opf_operability(net, pf;
+        spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
+            voltage_min=800.0, voltage_max=1100.0,
+            compute_sensitivity=false,
+            compute_fixed_point_certificate=true,
+            jacobian_spectrum=:extremes, jacobian_storage=:sparse))
+    @test sparse_certificate_report.status == :pass
+    @test issparse(sparse_certificate_report.jacobian)
+    @test sparse_certificate_report.checks["fixed_point_certificate"].status == :pass
+    @test sparse_certificate_report.branch_evidence["fixed_point_certificate"]["zbus_storage_mode"] in
+          ("implicit_sparse_factorization", "implicit_dense_factorization")
     certificate_row = operability_snapshot_row(certificate_report)
     @test certificate_row.fixed_point_certificate_status == :pass
     @test certificate_row.fixed_point_condition_margin > 0.0
@@ -164,6 +180,11 @@ using SparseArrays
     @test certificate_row.fixed_point_local_condition_margin > 0.0
     @test certificate_row.fixed_point_euclidean_region_status == :pass
     @test certificate_row.fixed_point_euclidean_condition_margin > 0.0
+    @test certificate_row.jacobian_spectrum_mode == "full"
+    @test certificate_row.jacobian_storage_mode == "dense"
+    @test certificate_row.jacobian_storage_bytes_estimate > 0
+    @test certificate_row.zbus_storage_mode in
+          ("implicit_dense_factorization", "implicit_sparse_factorization")
     direction = OperabilityStressDirection(:phase_selective;
         p_scale=1.0, q_scale=0.0, connection_weights=Dict("ld1" => [0.0]))
     stressed = operability_stress_network(net, 0.5, direction)

@@ -1947,9 +1947,9 @@ end
 Return one compact, table-ready row for a single [`OperabilityResult`](@ref).
 The row preserves the snapshot label, endpoint/regularity evidence, voltage
 and VUF extrema, branch-indicator counts, no-load and candidate-local
-certificate/HELM statuses, and the number of unsupported-scope reasons. It is a
-reporting projection of one snapshot, not a contingency or operating-envelope
-assessment.
+certificate/HELM statuses, scaling/storage metadata, and the number of
+unsupported-scope reasons. It is a reporting projection of one snapshot, not a
+contingency or operating-envelope assessment.
 """
 function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing)
     magnitudes = Float64[Float64(get(record, "magnitude", NaN))
@@ -1966,6 +1966,7 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
     local_certificate = get(certificate, "local_candidate_region", Dict{String,Any}())
     euclidean_certificate = get(certificate, "euclidean_region", Dict{String,Any}())
     reachability = get(result.branch_evidence, "reachability", Dict{String,Any}())
+    complexity = get(result.branch_evidence, "complexity", Dict{String,Any}())
     (
         snapshot_id=snapshot_id,
         status=result.status,
@@ -1987,6 +1988,11 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
         fixed_point_euclidean_region_status=Symbol(get(euclidean_certificate, "status", :not_applicable)),
         fixed_point_euclidean_condition_margin=Float64(get(euclidean_certificate, "condition_margin", NaN)),
         helm_reachability_status=Symbol(get(reachability, "status", :not_applicable)),
+        jacobian_spectrum_mode=String(get(complexity, "jacobian_spectrum_mode", "not_available")),
+        jacobian_storage_mode=String(get(complexity, "jacobian_storage_mode", "not_available")),
+        jacobian_nonzero_count=Int(get(complexity, "jacobian_nonzero_count", 0)),
+        jacobian_storage_bytes_estimate=Int(get(complexity, "jacobian_storage_bytes_estimate", 0)),
+        zbus_storage_mode=String(get(complexity, "zbus_storage_mode", "not_applicable")),
         unsupported_count=length(result.unsupported),
         scope="single_snapshot_static_ybus",
     )
