@@ -12,6 +12,28 @@ using SparseArrays
     @test scope_audit["control_closure"] == "frozen_dispatch_native_static"
     @test scope_audit["generator_count"] == 0
     @test scope_audit["ibr_count"] == 0
+    @test scope_audit["topology"]["has_voltage_source"] === true
+    @test scope_audit["topology"]["voltage_source_count"] == 1
+    @test scope_audit["topology"]["source_buses"] == ["sourcebus"]
+    @test isempty(scope_audit["topology"]["missing_source_buses"])
+
+    no_source_net = deepcopy(net)
+    delete!(no_source_net, "voltage_source")
+    no_source_audit = operability_scope_audit(no_source_net)
+    @test no_source_audit["status"] == :not_applicable
+    @test no_source_audit["topology"]["has_voltage_source"] === false
+    @test no_source_audit["topology"]["voltage_source_count"] == 0
+    @test any(occursin("no voltage source", reason)
+              for reason in no_source_audit["unsupported_reasons"])
+
+    dangling_source_net = deepcopy(net)
+    dangling_source_net["voltage_source"]["vs"]["bus"] = "missing_bus"
+    dangling_source_audit = operability_scope_audit(dangling_source_net)
+    @test dangling_source_audit["status"] == :not_applicable
+    @test dangling_source_audit["topology"]["has_voltage_source"] === false
+    @test dangling_source_audit["topology"]["missing_source_buses"] == ["missing_bus"]
+    @test any(occursin("missing bus", reason)
+              for reason in dangling_source_audit["unsupported_reasons"])
 
     @test_throws ArgumentError check_opf_operability(net, pf)
 

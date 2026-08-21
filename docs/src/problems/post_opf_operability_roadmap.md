@@ -141,7 +141,9 @@ The current branch contains the first bounded implementation slice in
   while avoiding four full 2001-point sweeps;
 - `operability_scope_audit` now exposes a pre-solve, serialisable readiness
   contract for the frozen-dispatch native seam, including explicit generator/
-  IBR/control-closure reasons before a solution is audited;
+  IBR/control-closure reasons before a solution is audited; its topology
+  inventory also catches missing or dangling voltage-source references before
+  the residual checker is called;
 - relative singular-value-ratio evidence, normalized residual verdicts, and
   explicit frozen-dispatch provenance now align the numerical checks with the
   audited scaling and closure contracts; aggregate status no longer reports a

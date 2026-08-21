@@ -57,8 +57,10 @@ The checker reports:
 Call `operability_scope_audit(net)` before solving when a workflow needs a
 machine-readable readiness check. It reports the native equilibrium scope,
 frozen-dispatch closure, generator/IBR counts, load inventory, and retained
-reasons for any extension requirement. An out-of-scope result is a readiness
-diagnostic, not an infeasibility claim.
+topology evidence (including voltage-source presence and source-bus references),
+and retained reasons for any extension requirement. An out-of-scope result is a
+readiness diagnostic, not an infeasibility claim. A missing or dangling voltage
+source is reported here before the full checker is invoked.
 
 Scaling is part of the evidence contract. Supply the staged OPF `context` so
 the audited policy, AC coordinate bases, and research provenance are inherited,

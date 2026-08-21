@@ -336,6 +336,22 @@ function _operability_scope_inventory(net::Dict{String,Any})
         "equilibrium_scope" => "native_ybus_linearized")
 end
 
+function _operability_scope_source_inventory(net::Dict{String,Any})
+    bus_ids = Set{String}(String(id) for id in keys(get(net, "bus", Dict())))
+    source_buses = sort!(collect(_operability_source_buses(net)))
+    missing_source_buses = sort!(filter(bus -> !isempty(bus) && !(bus in bus_ids), source_buses))
+    isempty(source_buses) && push!(missing_source_buses, "<none>")
+    has_voltage_source = !isempty(source_buses) && isempty(
+        filter(bus -> !isempty(bus) && !(bus in bus_ids), source_buses))
+    Dict{String,Any}(
+        "bus_count" => length(bus_ids),
+        "voltage_source_count" => length(get(net, "voltage_source", Dict())),
+        "source_buses" => source_buses,
+        "missing_source_buses" => missing_source_buses,
+        "has_voltage_source" => has_voltage_source,
+    )
+end
+
 """
     operability_scope_audit(net)
 
@@ -347,6 +363,13 @@ model seam that would need to be extended before a snapshot can be checked.
 function operability_scope_audit(net::Dict{String,Any})
     reasons = _operability_preflight(net)
     inventory = _operability_scope_inventory(net)
+    source_inventory = _operability_scope_source_inventory(net)
+    if source_inventory["voltage_source_count"] == 0
+        push!(reasons, "network has no voltage source for a native ybus_linearized equilibrium")
+    elseif !isempty(source_inventory["missing_source_buses"])
+        push!(reasons, "voltage source references missing bus(es) " *
+            repr(source_inventory["missing_source_buses"]))
+    end
     generator_count = length(get(net, "generator", Dict()))
     ibr_count = length(get(net, "ibr", Dict()))
     control_closure = generator_count == 0 && ibr_count == 0 ?
@@ -356,6 +379,7 @@ function operability_scope_audit(net::Dict{String,Any})
         "scope" => "native_ybus_linearized",
         "closure" => :frozen_dispatch,
         "control_closure" => control_closure,
+        "topology" => source_inventory,
         "generator_count" => generator_count,
         "ibr_count" => ibr_count,
         "model_inventory" => inventory,

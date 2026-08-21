@@ -44,6 +44,18 @@ dynamic voltage instability.
 
 ## 2. Audit one solved point
 
+For a workflow that may receive heterogeneous network dictionaries, run the
+cheap scope audit before solving. It distinguishes native frozen-dispatch
+readiness from an unsupported control seam and catches missing or dangling
+voltage-source references without treating them as infeasibility:
+
+```julia
+scope = operability_scope_audit(net)
+scope["status"]
+scope["topology"]
+scope["unsupported_reasons"]
+```
+
 The checker consumes the SI-valued solution returned by BMOPFTools. Pass the
 audited scaling policy explicitly when the solution is detached from its OPF
 context. For a non-SI policy, provide voltage and current bases for every bus;
