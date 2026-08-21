@@ -79,6 +79,18 @@ using BMOPFTools
     @test any(occursin("constant_current", reason) for reason in
         current_report.branch_evidence["reachability"]["reasons"])
 
+    trace = continue_opf_operability(net, pf;
+        spec=spec,
+        continuation=OperabilityContinuationSpec(initial_step=0.2, max_step=0.25))
+    @test trace.status == :pass
+    @test first(trace.lambdas) == 0.0
+    @test last(trace.lambdas) == 1.0
+    @test trace.endpoint_match === true
+    @test trace.endpoint_distance < 1e-4
+    @test maximum(trace.residuals) < 1e-5
+    @test trace.provenance["continuation"]["pseudo_arclength"] === false
+    @test_throws ArgumentError OperabilityContinuationSpec(initial_step=0.01, min_step=0.1)
+
     # Scope exclusions are explicit evidence rather than a silent partial pass.
     ibr_net = doe_ibr_feeder()
     ibr_pf = solve_pf(ibr_net; per_unit=false)
@@ -86,4 +98,7 @@ using BMOPFTools
     @test ibr_report.status == :not_applicable
     @test !isempty(ibr_report.unsupported)
     @test ibr_report.checks["scope"].status == :not_applicable
+    ibr_trace = continue_opf_operability(ibr_net, ibr_pf; spec=spec)
+    @test ibr_trace.status == :not_applicable
+    @test ibr_trace.events[1]["kind"] == "unsupported_physics"
 end

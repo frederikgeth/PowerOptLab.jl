@@ -21,9 +21,12 @@ The current branch contains the first bounded implementation slice in
   participation;
 - connection-level and sequence-level observables plus uniform load-scale and
   named P/Q sensitivities, with requested-versus-realized power records and
-  path-qualified `dP/dV`; and
+  path-qualified `dP/dV`;
 - an opt-in HELM endpoint cross-check that records the energized no-load
-  homotopy, supported-physics preflight, HELM status, and endpoint mismatch.
+  homotopy, supported-physics preflight, HELM status, and endpoint mismatch; and
+- a natural-parameter load-scale continuation trace with damped Newton
+  correctors, residual/singular-value history, and explicit near-singular or
+  corrector-failure events.
 
 These additions are evidence-producing diagnostics, not a claim that general
 pseudo-arclength continuation or high-voltage reachability has been completed.

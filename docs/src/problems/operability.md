@@ -17,6 +17,8 @@ The checker reports:
   three-phase buses; and
 * an opt-in HELM cross-check of the no-load-connected branch for supported
   constant-power/constant-impedance cases; and
+* an explicit natural-parameter load-scale continuation trace with corrector,
+  residual, singular-value, and event history; and
 * explicit `:not_applicable` scope evidence when generator or IBR equations are
   outside the residual seam.
 
@@ -45,6 +47,12 @@ report.sensitivities["load_scale"]
 report.sensitivities["directions"]["P"]
 report.branch_evidence["critical_mode"]
 report.branch_evidence["reachability"]
+
+trace = continue_opf_operability(net, pf;
+    spec = OperabilitySpec(scaling_policy = SIUnitsScaling()),
+    continuation = OperabilityContinuationSpec(initial_step = 0.1))
+trace.status
+trace.events
 ```
 
 This is a local post-solve screen, not a proof of global solvability or dynamic
@@ -58,4 +66,7 @@ OperabilitySpec
 OperabilityCheck
 OperabilityResult
 check_opf_operability
+OperabilityContinuationSpec
+OperabilityContinuationResult
+continue_opf_operability
 ```

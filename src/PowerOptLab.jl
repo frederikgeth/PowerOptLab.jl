@@ -122,6 +122,7 @@ include("problems/operability.jl")
 # Bespoke algorithms — new solution methods (custom solve loops)
 include("algorithms/pade.jl")
 include("algorithms/helm.jl")
+include("algorithms/operability_continuation.jl")
 
 # Shared extension interfaces
 export AbstractDevice, AbstractMeasurement, AbstractSolveResult
@@ -232,5 +233,9 @@ export solve_multiperiod_ivq, MultiperiodIVQResult
 
 # HELM power flow (holomorphic embedding load-flow, a bespoke solution method)
 export helm_series, HelmResult, solve_pf_helm
+
+# Static operability continuation (natural load-scale first slice)
+export OperabilityContinuationSpec, OperabilityContinuationResult,
+       continue_opf_operability
 
 end # module PowerOptLab
