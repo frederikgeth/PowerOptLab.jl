@@ -59,13 +59,15 @@ The current branch contains the first bounded implementation slice in
 - an opt-in Bernstein-style fixed-point certificate now uses the native
   source-eliminated Z-bus map. On the native constant-P/I/Z, ZIP, and finite
   exponential-law scope it builds a conservative connection-aware contraction
-  region around the energized no-load solution, records the invariant-radius,
-  lower-voltage, and contraction margins, checks that the candidate lies inside
-  the region, and retains an independent `fixed_point_oracle` trace. Wye and
-  delta incidence are handled explicitly; non-finite or unsupported law
-  parameters remain `:not_applicable`; each accepted contraction region also
-  records a three-radius finite-difference validation of the connection
-  current-law Jacobian against its analytic Lipschitz bound;
+  region around the energized no-load solution, now using a deterministic
+  componentwise polydisc search with the prior uniform-radius result retained
+  as a fallback. It records invariant-radius, lower-voltage, and contraction
+  margins, checks that the candidate lies inside the selected region, and
+  retains an independent `fixed_point_oracle` trace. Wye and delta incidence
+  are handled explicitly; non-finite or unsupported law parameters remain
+  `:not_applicable`; each accepted contraction region also records a
+  three-radius finite-difference validation of the connection current-law
+  Jacobian against its analytic Lipschitz bound;
 - relative singular-value-ratio evidence, normalized residual verdicts, and
   explicit frozen-dispatch provenance now align the numerical checks with the
   audited scaling and closure contracts; aggregate status no longer reports a
@@ -87,7 +89,8 @@ remain blocked on that upstream compatibility step.
 The fixed-point certificate is a sufficient contraction result, not a
 necessary test. Its `:inconclusive` outcome is deliberately conservative when
 the norm bound cannot be satisfied, when the candidate is outside the certified
-polydisc, or when the load law is outside the implemented constant-P/Z scope.
+  polydisc, or when the load law is outside the implemented native static
+  scope.
 
 ## Research question and intended claims
 
@@ -589,9 +592,9 @@ provenance; no derivative is reported through an unacknowledged discontinuity.
 ### Milestone 5 — certificates, robustness, and studies
 
 - Use the landed `law_bound_validation` evidence in study campaigns, and
-  broaden the certified voltage-domain geometry beyond the uniform polydisc
-  where useful; retain `:inconclusive` semantics when the sufficient condition
-  does not hold.
+  broaden the certified voltage-domain geometry beyond the landed
+  componentwise polydisc where useful; retain `:inconclusive` semantics when
+  the sufficient condition does not hold.
 - Run multiple named stress directions and model ensembles for ZIP/exponential
   uncertainty.
 - Add selected contingency workflows without treating a finite list as a global

@@ -777,7 +777,7 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
         "non-constant-Z compensation currents are represented by connection incidence",
         "constant-impedance parts are folded into the linear Ybus",
         "power/current/exponential current laws use conservative real Lipschitz bounds",
-        "the contraction region is a uniform complex-voltage polydisc around the no-load solution",
+        "the contraction region is a connection-aware componentwise complex-voltage polydisc around the no-load solution",
     ]
     base = Dict{String,Any}(
         "status" => :not_applicable,
@@ -898,6 +898,26 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
                  derivative_radius^derivative_exponent)
         end
     end
+    component_contribution(radii) = begin
+        lower = [abs(e.dv0) - sum(abs.(e.a) .* radii)
+                 for e in edges]
+        upper = [abs(e.dv0) + sum(abs.(e.a) .* radii)
+                 for e in edges]
+        any(v -> v <= 0.0, lower) &&
+            return (fill(Inf, nf), Inf, lower, upper)
+        bounds = [term_bounds(term, lower[j], upper[j])
+                  for (j, e) in enumerate(edges) for term in e.terms]
+        offsets = cumsum(vcat(0, [length(e.terms) for e in edges]))
+        b = [sum(e.zalpha[i] * bounds[offsets[j] + t][1]
+                 for (j, e) in enumerate(edges) for t in eachindex(e.terms))
+             for i in 1:nf]
+        q = maximum(
+            sum(e.zalpha[i] * bounds[offsets[j] + t][2]
+                * sum(abs.(e.a) .* radii) / radii[i]
+                for (j, e) in enumerate(edges) for t in eachindex(e.terms))
+            for i in 1:nf)
+        b, q, lower, upper
+    end
     contribution(rho) = begin
         lower = [abs(e.dv0) - e.anorm * rho for e in edges]
         upper = [abs(e.dv0) + e.anorm * rho for e in edges]
@@ -921,7 +941,59 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
             break
         end
     end
-    if selected !== nothing
+    # A one-parameter family of componentwise polydiscs preserves the
+    # connection-aware voltage geometry while allowing weak phases/nodes to
+    # receive larger radii than the scalar uniform search. The scalar alpha
+    # search keeps the certificate deterministic and auditable.
+    b0, _, _, _ = component_contribution(fill(0.0, nf) .+ eps(Float64))
+    componentwise = nothing
+    if all(isfinite, b0) && any(>(0.0), b0)
+        direction = max.(b0, eps(Float64))
+        alpha_limit = minimum(abs(e.dv0) /
+            sum(abs.(e.a) .* direction) for e in edges if
+            sum(abs.(e.a) .* direction) > 0.0)
+        if isfinite(alpha_limit) && alpha_limit > 1.0
+            for alpha in range(1.0, stop=0.999alpha_limit, length=2001)
+                radii = alpha .* direction
+                b, q, lower, upper = component_contribution(radii)
+                if all(isfinite, b) && isfinite(q) && all(b .<= radii) && q < 1.0
+                    componentwise = (radii=radii, b=b, q=q,
+                                     lower=lower, upper=upper,
+                                     alpha=alpha)
+                    break
+                end
+            end
+        end
+    end
+    candidate = _operability_voltage_vector(lin, meta, meta.state)
+    candidate_delta = abs.(candidate[meta.free] .- w)
+    uniform_region = if selected === nothing
+        nothing
+    else
+        radii = fill(selected.rho, nf)
+        b, q, lower, upper = component_contribution(radii)
+        (kind=:uniform, radii=radii, b=b, q=q, lower=lower, upper=upper)
+    end
+    component_region = if componentwise === nothing
+        nothing
+    else
+        (kind=:componentwise, radii=componentwise.radii, b=componentwise.b,
+         q=componentwise.q, lower=componentwise.lower, upper=componentwise.upper)
+    end
+    candidate_ratio(region) = maximum(candidate_delta ./ region.radii)
+    candidate_regions = [(region, candidate_ratio(region)) for region in
+                         (uniform_region, component_region) if region !== nothing]
+    inside_regions = [(region, ratio) for (region, ratio) in candidate_regions
+                      if ratio <= 1.0 + spec.residual_atol]
+    chosen = if !isempty(inside_regions)
+        first(sort(inside_regions; by=x -> -sum(log, x[1].radii)))
+    elseif !isempty(candidate_regions)
+        first(sort(candidate_regions; by=x -> -sum(log, x[1].radii)))
+    else
+        nothing
+    end
+    chosen_region = chosen === nothing ? nothing : chosen[1]
+    if chosen !== nothing
         current_jacobian(sl, dv) = begin
             h = 1e-6 * max(abs(dv), 1.0)
             current(z) = conj(_subload_S_nz(sl, abs(z))) / conj(z)
@@ -932,8 +1004,8 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
         validation_rows = Dict{String,Any}()
         validation_ok = true
         for (j, edge) in enumerate(edges)
-            lower = selected.lower[j]
-            upper = abs(edge.dv0) + edge.anorm * selected.rho
+            lower = chosen_region.lower[j]
+            upper = chosen_region.upper[j]
             radii = (lower, (lower + upper) / 2.0, upper)
             ratios = Float64[]; numerical = Float64[]; bounds = Float64[]
             for radius in radii
@@ -980,19 +1052,29 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
     oracle !== nothing && (base["oracle"] = Dict(
         "converged" => oracle.converged, "cycled" => oracle.cycled,
         "iterations" => oracle.iterations, "residual_norm" => oracle.residual_norm))
-    candidate = _operability_voltage_vector(lin, meta, meta.state)
-    distance = maximum(abs.(candidate[meta.free] .- w))
+    distance = maximum(candidate_delta)
     base["candidate_distance"] = distance
-    if selected === nothing
+    base["uniform_region"] = uniform_region === nothing ? nothing : Dict(
+        "radii" => uniform_region.radii, "contraction_factor" => uniform_region.q,
+        "invariance_bound" => maximum(uniform_region.b),
+        "candidate_ratio" => candidate_ratio(uniform_region))
+    base["componentwise_region"] = component_region === nothing ? nothing : Dict(
+        "radii" => component_region.radii, "contraction_factor" => component_region.q,
+        "invariance_bound" => maximum(component_region.b),
+        "candidate_ratio" => candidate_ratio(component_region))
+    if chosen === nothing
         base["message"] = "no invariant contraction polydisc was found; sufficient condition is inconclusive"
         return base
     end
-    base["radius"] = selected.rho
-    base["invariance_bound"] = selected.b
-    base["contraction_factor"] = selected.q
-    base["minimum_connection_voltage"] = minimum(selected.lower)
-    base["condition_margin"] = 1.0 - selected.q
-    inside = distance <= selected.rho + spec.residual_atol
+    region, region_ratio = chosen
+    base["selected_region"] = String(region.kind)
+    base["region_radii"] = copy(region.radii)
+    base["radius"] = maximum(region.radii)
+    base["invariance_bound"] = maximum(region.b)
+    base["contraction_factor"] = region.q
+    base["minimum_connection_voltage"] = minimum(region.lower)
+    base["condition_margin"] = 1.0 - region.q
+    inside = region_ratio <= 1.0 + spec.residual_atol
     base["candidate_inside_region"] = inside
     if inside
         base["status"] = :pass

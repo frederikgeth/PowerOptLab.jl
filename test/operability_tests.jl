@@ -44,6 +44,10 @@ using BMOPFTools
     @test certificate["candidate_inside_region"] === true
     @test certificate["contraction_factor"] < 1.0
     @test certificate["candidate_distance"] <= certificate["radius"]
+    @test certificate["selected_region"] == "componentwise"
+    @test length(certificate["region_radii"]) == length(report.state_nodes)
+    @test haskey(certificate, "uniform_region")
+    @test haskey(certificate, "componentwise_region")
     @test certificate["law_bound_validation"]["status"] == :pass
     @test maximum(certificate["law_bound_validation"]["connections"]["ld1/1"]["ratio"]) <= 1.001
     @test certificate_report.status == :pass
@@ -105,6 +109,19 @@ using BMOPFTools
             compute_fixed_point_certificate=true))
     @test delta_certificate.checks["fixed_point_certificate"].status == :pass
     @test delta_certificate.branch_evidence["fixed_point_certificate"]["edge_count"] == 3
+    @test length(delta_certificate.branch_evidence["fixed_point_certificate"]["region_radii"]) ==
+          length(delta_certificate.state_nodes)
+    unbalanced_delta_net = deepcopy(delta_net)
+    unbalanced_delta_net["load"]["dΔ"]["p_nom"] = [100.0, 200.0, 300.0]
+    unbalanced_delta_pf = solve_pf(unbalanced_delta_net; per_unit=false)
+    unbalanced_delta_certificate = check_opf_operability(unbalanced_delta_net,
+        unbalanced_delta_pf; spec=OperabilitySpec(
+            scaling_policy=SIUnitsScaling(), compute_fixed_point_certificate=true))
+    unbalanced_region = unbalanced_delta_certificate.branch_evidence[
+        "fixed_point_certificate"]["region_radii"]
+    @test unbalanced_delta_certificate.checks["fixed_point_certificate"].status == :pass
+    @test length(unbalanced_region) == 3
+    @test maximum(unbalanced_region) > minimum(unbalanced_region)
 
     helm_report = check_opf_operability(net, pf;
         spec=OperabilitySpec(scaling_policy=SIUnitsScaling(), compute_helm=true))

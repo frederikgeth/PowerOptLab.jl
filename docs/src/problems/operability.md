@@ -55,8 +55,9 @@ fixed-point certificate) has passed. If no such claim was requested, the result
 remains `:not_applicable` even when endpoint and Jacobian evidence are good.
 
 The fixed-point certificate is a sufficient, local-in-model-region result. It
-uses the source-eliminated implicit Z-bus map and conservative uniform
-complex-voltage polydisc bounds around the no-load solution. A `:pass` means the
+uses the source-eliminated implicit Z-bus map and conservative connection-aware
+componentwise complex-voltage polydisc bounds around the no-load solution,
+retaining a uniform-radius fallback. A `:pass` means the
 candidate lies inside a contraction region that contains a unique equilibrium
 and has a nonsingular equilibrium Jacobian on that region. A failed sufficient
 condition, unsupported load model, or candidate outside the region is
