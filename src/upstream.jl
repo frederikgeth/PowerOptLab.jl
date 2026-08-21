@@ -6,6 +6,7 @@
 # that decomposition. Keep every private import in this file so an upstream
 # change fails in one obvious place and the adapter can be deleted once the
 # public load API lands.
-using BMOPFTools: _Node, _SubLoad, _load_subloads, _subload_S, _subload_yz,
+using BMOPFTools: _Node, _SubLoad, _load_subloads, _subload_S, _subload_S_nz,
+    _subload_yz,
     _stamp_pair!, _neutral_terminal, _neutral_labels, _neutral_pos,
     _phase_positions, _DEFAULT_CONFIG

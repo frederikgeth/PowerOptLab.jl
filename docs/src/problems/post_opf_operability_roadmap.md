@@ -63,7 +63,9 @@ The current branch contains the first bounded implementation slice in
   lower-voltage, and contraction margins, checks that the candidate lies inside
   the region, and retains an independent `fixed_point_oracle` trace. Wye and
   delta incidence are handled explicitly; non-finite or unsupported law
-  parameters remain `:not_applicable`;
+  parameters remain `:not_applicable`; each accepted contraction region also
+  records a three-radius finite-difference validation of the connection
+  current-law Jacobian against its analytic Lipschitz bound;
 - relative singular-value-ratio evidence, normalized residual verdicts, and
   explicit frozen-dispatch provenance now align the numerical checks with the
   audited scaling and closure contracts; aggregate status no longer reports a
@@ -586,10 +588,10 @@ provenance; no derivative is reported through an unacknowledged discontinuity.
 
 ### Milestone 5 — certificates, robustness, and studies
 
-- Validate the landed current/ZIP/exponential Lipschitz bounds against
-  independent device-law derivatives and broaden the certified voltage-domain
-  geometry beyond the uniform polydisc where useful; retain
-  `:inconclusive` semantics when the sufficient condition does not hold.
+- Use the landed `law_bound_validation` evidence in study campaigns, and
+  broaden the certified voltage-domain geometry beyond the uniform polydisc
+  where useful; retain `:inconclusive` semantics when the sufficient condition
+  does not hold.
 - Run multiple named stress directions and model ensembles for ZIP/exponential
   uncertainty.
 - Add selected contingency workflows without treating a finite list as a global

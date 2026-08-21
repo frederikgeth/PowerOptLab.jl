@@ -88,7 +88,8 @@ report.branch_evidence["sequence_sensitivity"]
 report.branch_evidence["reachability"]
 report.branch_evidence["fixed_point_certificate"]
 # Includes `connection_law_terms`, the certified radius, lower connection
-# voltage, contraction factor, and the independent Z-bus oracle summary.
+# voltage, contraction factor, finite-difference `law_bound_validation`, and
+# the independent Z-bus oracle summary.
 report.provenance["operability"]["model_inventory"]
 
 trace = continue_opf_operability(net, pf;

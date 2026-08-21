@@ -847,7 +847,7 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
             vp = pi == 0 ? 0.0im : wfull[pi]
             vn = ni == 0 ? 0.0im : wfull[ni]
             dv0 = vp - vn
-            push!(edges, (key="$id/$k", pos=sl.pos, neg=sl.neg,
+            push!(edges, (key="$id/$k", pos=sl.pos, neg=sl.neg, sl=sl,
                 terms=terms, dv0=dv0, a=a, anorm=anorm,
                 zalpha=abs.(Z * a)))
         end
@@ -920,6 +920,47 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
             selected = (rho=rho, b=b, q=q, lower=lower)
             break
         end
+    end
+    if selected !== nothing
+        current_jacobian(sl, dv) = begin
+            h = 1e-6 * max(abs(dv), 1.0)
+            current(z) = conj(_subload_S_nz(sl, abs(z))) / conj(z)
+            plus_r = (current(dv + h) - current(dv - h)) / (2h)
+            plus_i = (current(dv + im * h) - current(dv - im * h)) / (2h)
+            [real(plus_r) real(plus_i); imag(plus_r) imag(plus_i)]
+        end
+        validation_rows = Dict{String,Any}()
+        validation_ok = true
+        for (j, edge) in enumerate(edges)
+            lower = selected.lower[j]
+            upper = abs(edge.dv0) + edge.anorm * selected.rho
+            radii = (lower, (lower + upper) / 2.0, upper)
+            ratios = Float64[]; numerical = Float64[]; bounds = Float64[]
+            for radius in radii
+                dv = radius * edge.dv0 / abs(edge.dv0)
+                numerical_norm = opnorm(current_jacobian(edge.sl, dv), 2)
+                bound = sum(term_bounds(term, radius, radius)[2]
+                            for term in edge.terms)
+                ratio = bound == 0.0 ? 0.0 : numerical_norm / bound
+                push!(ratios, ratio); push!(numerical, numerical_norm); push!(bounds, bound)
+            end
+            row_status = all(isfinite, ratios) && maximum(ratios) <= 1.0 + 1e-3
+            validation_ok &= row_status
+            validation_rows[edge.key] = Dict{String,Any}(
+                "radii" => collect(radii), "numerical_operator_norm" => numerical,
+                "analytic_bound" => bounds, "ratio" => ratios,
+                "status" => row_status ? :pass : :inconclusive)
+        end
+        base["law_bound_validation"] = Dict{String,Any}(
+            "status" => validation_ok ? :pass : :inconclusive,
+            "method" => "central_finite_difference_real_current_jacobian",
+            "samples_per_connection" => 3,
+            "connections" => validation_rows,
+            "interpretation" => "diagnostic validation of the analytic Lipschitz bound; not the sufficient-condition proof")
+    else
+        base["law_bound_validation"] = Dict{String,Any}(
+            "status" => :not_applicable,
+            "message" => "no invariant contraction region was available for law-bound validation")
     end
     # The map is independently iterated from the energized no-load germ. This
     # is evidence recorded alongside, but not substituted for, the theorem.

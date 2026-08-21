@@ -44,6 +44,8 @@ using BMOPFTools
     @test certificate["candidate_inside_region"] === true
     @test certificate["contraction_factor"] < 1.0
     @test certificate["candidate_distance"] <= certificate["radius"]
+    @test certificate["law_bound_validation"]["status"] == :pass
+    @test maximum(certificate["law_bound_validation"]["connections"]["ld1/1"]["ratio"]) <= 1.001
     @test certificate_report.status == :pass
     critical = report.branch_evidence["critical_mode"]
     @test critical["status"] == :pass
@@ -124,6 +126,8 @@ using BMOPFTools
             compute_fixed_point_certificate=true))
     @test current_certificate.checks["fixed_point_certificate"].status == :pass
     @test current_certificate.branch_evidence["fixed_point_certificate"]["contraction_factor"] < 1.0
+    @test current_certificate.branch_evidence["fixed_point_certificate"][
+        "law_bound_validation"]["status"] == :pass
 
     for model in ("zip", "exponential")
         model_net = single_bus_net(pload=100.0)
@@ -143,6 +147,8 @@ using BMOPFTools
                 compute_fixed_point_certificate=true))
         @test model_certificate.checks["fixed_point_certificate"].status == :pass
         @test model_certificate.branch_evidence["fixed_point_certificate"]["edge_count"] == 1
+        @test model_certificate.branch_evidence["fixed_point_certificate"][
+            "law_bound_validation"]["status"] == :pass
     end
 
     for model in ("constant_current", "constant_impedance")
