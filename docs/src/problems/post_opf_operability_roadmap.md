@@ -25,7 +25,10 @@ The current branch contains the first bounded implementation slice in
   validate the implicit uniform-load and named P/Q state derivatives, and the
   report now classifies the path slope as a high-side/near-nose/low-side
   indicator under its declared sign convention, with complementary positive-/
-  negative-sequence magnitude and VUF derivatives;
+  negative-sequence magnitude and VUF derivatives; focused regressions now also
+  exercise constant-current and constant-impedance continuation/sensitivity
+  paths alongside the constant-power and delta/three-phase cases; reports now
+  retain a machine-readable load-model/connection inventory in provenance;
 - an opt-in HELM endpoint cross-check that records the energized no-load
   homotopy, supported-physics preflight, HELM status, and endpoint mismatch; and
 - a natural-parameter load-scale continuation trace with damped Newton

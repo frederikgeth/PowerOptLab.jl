@@ -59,6 +59,7 @@ report.branch_evidence["critical_mode"]
 report.branch_evidence["dP_dV"]
 report.branch_evidence["sequence_sensitivity"]
 report.branch_evidence["reachability"]
+report.provenance["operability"]["model_inventory"]
 
 trace = continue_opf_operability(net, pf;
     spec = OperabilitySpec(scaling_policy = SIUnitsScaling()),

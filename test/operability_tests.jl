@@ -31,6 +31,8 @@ using BMOPFTools
     @test p_direction["units"] == "W"
     @test p_direction["load_connections"]["ld1/1"]["magnitude_derivative"] < 0.0
     @test report.provenance["operability"]["scope"] == "static_ybus_linearized"
+    @test report.provenance["operability"]["model_inventory"]["load_models"] ==
+          ["constant_power"]
     critical = report.branch_evidence["critical_mode"]
     @test critical["status"] == :pass
     @test length(critical["left_vector"]) == 2 * length(report.state_nodes)
@@ -80,6 +82,8 @@ using BMOPFTools
     @test delta_report.status == :pass
     @test length(delta_report.load_connections) == 3
     @test all(r["positive"] !== r["negative"] for r in values(delta_report.load_connections))
+    @test delta_report.provenance["operability"]["model_inventory"]["load_configurations"] ==
+          ["DELTA"]
 
     helm_report = check_opf_operability(net, pf;
         spec=OperabilitySpec(scaling_policy=SIUnitsScaling(), compute_helm=true))
@@ -96,6 +100,25 @@ using BMOPFTools
     @test current_report.checks["helm_reachability"].status == :not_applicable
     @test any(occursin("constant_current", reason) for reason in
         current_report.branch_evidence["reachability"]["reasons"])
+
+    for model in ("constant_current", "constant_impedance")
+        model_net = single_bus_net(pload=100.0)
+        model_net["load"]["ld1"]["model"] = model
+        model_net["load"]["ld1"]["v_nom"] = [1000.0]
+        model_pf = solve_pf(model_net; per_unit=false)
+        model_report = check_opf_operability(model_net, model_pf;
+            spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
+                compute_sensitivity_validation=true))
+        @test model_report.status == :pass
+        @test model_report.provenance["operability"]["model_inventory"]["load_models"] == [model]
+        @test model_report.checks["load_scale_sensitivity_validation"].status == :pass
+        @test model_report.checks["directional_sensitivity_validation"].status == :pass
+        model_trace = continue_opf_operability(model_net, model_pf;
+            spec=OperabilitySpec(scaling_policy=SIUnitsScaling()),
+            continuation=OperabilityContinuationSpec(initial_step=0.2))
+        @test model_trace.status == :pass
+        @test last(model_trace.lambdas) == 1.0
+    end
 
     trace = continue_opf_operability(net, pf;
         spec=spec,

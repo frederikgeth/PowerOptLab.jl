@@ -262,6 +262,18 @@ function _operability_preflight(net::Dict{String,Any})
     reasons
 end
 
+function _operability_scope_inventory(net::Dict{String,Any})
+    models = Set{String}(); configurations = Set{String}()
+    for (_, load) in get(net, "load", Dict())
+        push!(models, lowercase(string(get(load, "model", "constant_power"))))
+        push!(configurations, uppercase(string(get(load, "configuration", "WYE"))))
+    end
+    Dict{String,Any}(
+        "load_models" => sort!(collect(models)),
+        "load_configurations" => sort!(collect(configurations)),
+        "equilibrium_scope" => "native_ybus_linearized")
+end
+
 function _operability_scale_network(net::Dict{String,Any}, λ::Real)
     result = deepcopy(net)
     scale = Float64(λ)
@@ -942,7 +954,8 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
     provenance = deepcopy(coords.provenance)
     provenance["operability"] = Dict("scope" => "static_ybus_linearized",
         "source_buses" => sort!(collect(source_buses)), "state_nodes" => meta.state_nodes,
-        "coordinate_policy" => BMOPFTools.opf_scaling_policy_data(coords.policy))
+        "coordinate_policy" => BMOPFTools.opf_scaling_policy_data(coords.policy),
+        "model_inventory" => _operability_scope_inventory(net))
     OperabilityResult(_operability_overall(checks), endpoint_residual,
         endpoint_normalized, meta.state_nodes, x, J, singular_values, condition_number,
         node_voltages, load_records, sequence_records, sensitivities, branch_evidence, checks,
