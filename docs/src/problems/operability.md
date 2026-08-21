@@ -81,6 +81,14 @@ stress = continue_opf_operability_pseudo_arclength(net, pf;
     stop_at_target = false)
 stress.events
 
+# Optionally terminate when a declared terminal-voltage limit is first crossed:
+limited = continue_opf_operability_pseudo_arclength(net, pf;
+    spec = OperabilitySpec(scaling_policy = SIUnitsScaling(), voltage_min = 0.95vbase),
+    continuation = OperabilityPseudoArclengthSpec(),
+    stop_on_voltage_limit = true)
+limited.status
+limited.events
+
 validated = check_opf_operability(net, pf;
     spec = OperabilitySpec(
         scaling_policy = SIUnitsScaling(),

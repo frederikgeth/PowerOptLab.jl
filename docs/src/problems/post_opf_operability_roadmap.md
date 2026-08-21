@@ -43,6 +43,8 @@ The current branch contains the first bounded implementation slice in
   high branch; and
 - an explicit `stop_at_target=false` stress mode now continues past the audited
   λ=1 crossing and exercises bordered fold localization on the analytic nose;
+- optional `stop_on_voltage_limit=true` termination distinguishes a declared
+  operational voltage-limit failure from an inconclusive corrector failure;
 - an opt-in bordered-equation fold localizer solving ``F=0``, ``Jv=0``, and
   ``‖v‖₂=1`` from a declared approximate fold state; pseudo-arclength fold
   candidates now retain its localized status and residual evidence when invoked.

@@ -196,6 +196,16 @@ using BMOPFTools
     @test localized_fold["lambda"] ≈ 25 / 24 atol=1e-6
     @test localized_fold["sigma_min"] < 1e-7
 
+    limit_trace = continue_opf_operability_pseudo_arclength(nose_net, nose_pf;
+        spec=OperabilitySpec(scaling_policy=SIUnitsScaling(), voltage_min=800.0),
+        continuation=OperabilityPseudoArclengthSpec(
+            initial_step=0.05, max_step=0.1, max_steps=40),
+        stop_on_voltage_limit=true)
+    @test limit_trace.status == :fail
+    @test limit_trace.provenance["continuation"]["stop_on_voltage_limit"] === true
+    @test any(get(event, "kind", "") == "voltage_limit" for event in limit_trace.events)
+    @test last(limit_trace.lambdas) < 1.0
+
     fold_guess = deepcopy(nose_pf)
     fold_guess["bus"]["bus1"]["1"]["vr"] = 500.0
     fold = locate_opf_operability_fold(nose_net, fold_guess;

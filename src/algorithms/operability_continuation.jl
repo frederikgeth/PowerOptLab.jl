@@ -167,13 +167,16 @@ corrector/near-singular/voltage-limit events.
 
 This is a natural-parameter predictor-corrector trace. It is useful branch
 evidence and a high-voltage preflight, but it does not cross folds and is not a
-pseudo-arclength reachability certificate.
+pseudo-arclength reachability certificate. Pass `stop_on_voltage_limit=true`
+to terminate with `:fail` at the first declared terminal-voltage violation;
+the default keeps collecting the trace through such events.
 """
 function continue_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
                                   spec::OperabilitySpec,
                                   continuation::OperabilityContinuationSpec=
                                       OperabilityContinuationSpec(),
-                                  context=nothing)
+                                  context=nothing,
+                                  stop_on_voltage_limit::Bool=false)
     coords = _operability_coordinates(net, spec; context)
     unsupported = _operability_preflight(net)
     !isempty(unsupported) && return _continuation_empty_result(
@@ -219,6 +222,7 @@ function continue_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
 
     λ = 0.0; x = base_x; step = continuation.initial_step
     previous_step = nothing; previous_delta = nothing
+    voltage_limit_stop = false
     reached = false; endpoint_match = nothing; endpoint_distance = NaN
     message = "continuation did not reach λ=1"
     while λ < 1.0 - eps(Float64)
@@ -245,7 +249,14 @@ function continue_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
         push!(singular_values, isempty(point.singular_values) ? NaN : last(point.singular_values))
         push!(condition_numbers, point.condition_number)
         push!(corrector_iterations, iterations); push!(node_voltages, point.node_voltages)
-        append!(events, _continuation_voltage_events(net_trial, point.node_voltages, λtrial, spec))
+        voltage_events = _continuation_voltage_events(
+            net_trial, point.node_voltages, λtrial, spec)
+        append!(events, voltage_events)
+        if stop_on_voltage_limit && !isempty(voltage_events)
+            voltage_limit_stop = true
+            message = "continuation stopped at a declared voltage limit"
+            break
+        end
         if !isempty(point.singular_values) && last(point.singular_values) <= continuation.fold_sigma_tol
             push!(events, Dict{String,Any}("kind" => "near_singular", "lambda" => λtrial,
                                            "sigma_min" => last(point.singular_values)))
@@ -260,7 +271,10 @@ function continue_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
     end
 
     reached = !isempty(lambdas) && last(lambdas) >= 1.0 - eps(Float64)
-    if reached
+    if reached && voltage_limit_stop
+        status = :fail
+        message = "natural load-scale trace reached a declared voltage limit"
+    elseif reached
         endpoint_distance = maximum(abs(node_voltages[end][node] - target_vmap[node])
                                     for node in keys(target_vmap))
         endpoint_limit = continuation.endpoint_atol + continuation.endpoint_rtol * max(
@@ -279,13 +293,16 @@ function continue_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
             message = "natural load-scale endpoint does not match the audited solution"
             status = :fail
         end
+    elseif voltage_limit_stop
+        status = :fail
     else
         status = :inconclusive
     end
     provenance = deepcopy(coords.provenance)
     provenance["continuation"] = Dict("homotopy" => "uniform_load_scale_0_to_1",
         "source_buses" => sort!(collect(source_buses)), "state_nodes" => meta.state_nodes,
-        "natural_parameter" => true, "pseudo_arclength" => false)
+        "natural_parameter" => true, "pseudo_arclength" => false,
+        "stop_on_voltage_limit" => stop_on_voltage_limit)
     OperabilityContinuationResult(status, message, lambdas, states, node_voltages,
         residuals, singular_values, condition_numbers, corrector_iterations, events,
         meta.state_nodes, endpoint_match, endpoint_distance, provenance)
@@ -577,14 +594,16 @@ are reported with their bracketing λ values and refined at fixed λ when the
 crossing step does not land within `target_lambda_tol`. The result retains the
 separate voltage-normalized arclength metric alongside the audited scaling
 provenance. Pass `stop_at_target=false` to continue the stress path after λ=1;
-the default remains endpoint matching.
+the default remains endpoint matching. Pass `stop_on_voltage_limit=true` to
+terminate with `:fail` at the first declared terminal-voltage violation.
 """
 function continue_opf_operability_pseudo_arclength(
         net::Dict{String,Any}, solution::AbstractDict;
         spec::OperabilitySpec,
         continuation::OperabilityPseudoArclengthSpec=
             OperabilityPseudoArclengthSpec(), context=nothing,
-        stop_at_target::Bool=true)
+        stop_at_target::Bool=true,
+        stop_on_voltage_limit::Bool=false)
     coords = _operability_coordinates(net, spec; context)
     unsupported = _operability_preflight(net)
     !isempty(unsupported) && return _continuation_empty_result(
@@ -643,6 +662,7 @@ function continue_opf_operability_pseudo_arclength(
     corrector_iterations = [base_iterations]
     events = _continuation_voltage_events(net_zero, base_point.node_voltages, 0.0, spec)
     step = continuation.initial_step
+    voltage_limit_stop = false
     endpoint_match = nothing; endpoint_distance = NaN; status = :inconclusive
     message = stop_at_target ?
         "pseudo-arclength trace did not produce a corrected λ=1 point" :
@@ -692,8 +712,11 @@ function continue_opf_operability_pseudo_arclength(
                         NaN : last(endpoint_point.singular_values))
                     push!(condition_numbers, endpoint_point.condition_number)
                     push!(corrector_iterations, endpoint_iterations)
-                    append!(events, _continuation_voltage_events(
-                        net, endpoint_point.node_voltages, 1.0, spec))
+                    endpoint_voltage_events = _continuation_voltage_events(
+                        net, endpoint_point.node_voltages, 1.0, spec)
+                    append!(events, endpoint_voltage_events)
+                    voltage_limit_stop = stop_on_voltage_limit &&
+                        !isempty(endpoint_voltage_events)
                     endpoint_distance = maximum(
                         abs(endpoint_point.node_voltages[node] - target_vmap[node])
                         for node in keys(target_vmap))
@@ -713,8 +736,13 @@ function continue_opf_operability_pseudo_arclength(
         push!(residuals, point.residual_norm)
         push!(singular_values, isempty(point.singular_values) ? NaN : last(point.singular_values))
         push!(condition_numbers, point.condition_number); push!(corrector_iterations, iterations)
-        append!(events, _continuation_voltage_events(
-            _operability_scale_network(net, λnew), point.node_voltages, λnew, spec))
+        voltage_events = _continuation_voltage_events(
+            _operability_scale_network(net, λnew), point.node_voltages, λnew, spec)
+        append!(events, voltage_events)
+        if stop_on_voltage_limit && !isempty(voltage_events)
+            voltage_limit_stop = true
+            message = "pseudo-arclength trace stopped at a declared voltage limit"
+        end
         sigma = isempty(point.singular_values) ? NaN : last(point.singular_values)
         fλ_new = _pseudo_lambda_residual(net, λnew, meta, xnew, residual_scale, 1e-5)
         Jnew, _ = _pseudo_arclength_jacobian(
@@ -765,19 +793,24 @@ function continue_opf_operability_pseudo_arclength(
             endpoint_limit = continuation.endpoint_atol + continuation.endpoint_rtol * max(
                 1.0, maximum(abs, values(target_vmap)))
             endpoint_match = endpoint_distance <= endpoint_limit
-            status = endpoint_match ? :pass : :fail
-            message = endpoint_match ?
+            status = voltage_limit_stop ? :fail : (endpoint_match ? :pass : :fail)
+            message = voltage_limit_stop ?
+                "pseudo-arclength trace reached a declared voltage limit" :
+                (endpoint_match ?
                 "pseudo-arclength trace reached and matched a λ=1 endpoint" :
-                "pseudo-arclength trace reached λ=1 but did not match the audited endpoint"
+                "pseudo-arclength trace reached λ=1 but did not match the audited endpoint")
             break
         end
+        voltage_limit_stop && break
     end
+    voltage_limit_stop && status === :inconclusive && (status = :fail)
     provenance = deepcopy(coords.provenance)
     provenance["continuation"] = Dict("homotopy" => "uniform_load_scale_0_to_1",
         "source_buses" => sort!(collect(source_buses)), "state_nodes" => meta.state_nodes,
         "natural_parameter" => false, "pseudo_arclength" => true,
         "arclength_state_scale" => arc_state_scale,
-        "stop_at_target" => stop_at_target)
+        "stop_at_target" => stop_at_target,
+        "stop_on_voltage_limit" => stop_on_voltage_limit)
     OperabilityContinuationResult(status, message, lambdas, states, node_voltages,
         residuals, singular_values, condition_numbers, corrector_iterations, events,
         meta.state_nodes, endpoint_match, endpoint_distance, provenance)

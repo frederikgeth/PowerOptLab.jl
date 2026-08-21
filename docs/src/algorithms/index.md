@@ -18,7 +18,8 @@ engine's admittance-matrix primitives) in a custom loop.
   native static-load scope, including fixed-λ refinement when a target crossing
   is bracketed; `stop_at_target=false` continues a declared stress path beyond
   λ=1. `locate_opf_operability_fold` separately refines a declared fold
-  candidate with bordered equations.
+  candidate with bordered equations, and `stop_on_voltage_limit=true` can
+  terminate at the first declared terminal-voltage violation.
 
 ## Question-driven candidates not yet built
 
