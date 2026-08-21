@@ -105,6 +105,38 @@ using BMOPFTools
     @test_throws ArgumentError OperabilityPseudoArclengthSpec(initial_step=0.01,
                                                                min_step=0.1)
 
+    # Analytic two-bus resistive feeder: P = V(E - V) / R has a high branch
+    # at 600 V and a low branch at 400 V for P = 2.4 MW.  Both are valid
+    # equilibria, but only the high branch is connected to the energized germ
+    # before the λ=1 target crossing.
+    nose_net = single_bus_net(pload=2.4e6)
+    nose_pf = solve_pf(nose_net; per_unit=false)
+    @test nose_pf["bus"]["bus1"]["1"]["vr"] ≈ 600.0 atol=1e-6
+    nose_trace = continue_opf_operability_pseudo_arclength(nose_net, nose_pf;
+        spec=OperabilitySpec(scaling_policy=SIUnitsScaling()),
+        continuation=OperabilityPseudoArclengthSpec(
+            initial_step=0.05, max_step=0.1, max_steps=40, target_lambda_tol=0.01))
+    @test nose_trace.status == :pass
+    @test nose_trace.endpoint_match === true
+    @test any(get(event, "kind", "") == "target_crossing" for event in nose_trace.events)
+    @test any(get(event, "kind", "") == "target_refinement" &&
+              get(event, "status", nothing) == :pass for event in nose_trace.events)
+
+    low_solution = deepcopy(nose_pf)
+    low_solution["bus"]["bus1"]["1"]["vr"] = 400.0
+    low_report = check_opf_operability(nose_net, low_solution;
+        spec=OperabilitySpec(scaling_policy=SIUnitsScaling()))
+    @test low_report.status == :pass
+    low_trace = continue_opf_operability_pseudo_arclength(nose_net, low_solution;
+        spec=OperabilitySpec(scaling_policy=SIUnitsScaling()),
+        continuation=OperabilityPseudoArclengthSpec(
+            initial_step=0.05, max_step=0.1, max_steps=40, target_lambda_tol=0.01))
+    @test low_trace.status == :fail
+    @test low_trace.endpoint_match === false
+    @test low_trace.endpoint_distance ≈ 200.0 atol=1e-6
+    @test any(get(event, "kind", "") == "target_refinement" &&
+              get(event, "status", nothing) == :pass for event in low_trace.events)
+
     # Scope exclusions are explicit evidence rather than a silent partial pass.
     ibr_net = doe_ibr_feeder()
     ibr_pf = solve_pf(ibr_net; per_unit=false)

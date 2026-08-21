@@ -28,12 +28,17 @@ The current branch contains the first bounded implementation slice in
   correctors, residual/singular-value history, and explicit near-singular or
   corrector-failure events; and
 - a first static pseudo-arclength predictor/corrector slice that records
-  target-parameter crossings, tangent-based fold candidates, and the same
-  endpoint evidence.
+  target-parameter crossings, fixed-λ target refinements, tangent-based fold
+  candidates, voltage-normalized arclength provenance, and the same endpoint
+  evidence. An analytic two-bus high-/low-voltage branch regression now checks
+  that a locally feasible low branch is distinguished from the no-load-connected
+  high branch.
 
 These additions are evidence-producing diagnostics, not a claim of globally
 complete branch discovery or a production-grade fold certificate. The current
-pseudo-arclength slice is limited to the native static ybus load scope.
+pseudo-arclength slice is limited to the native static ybus load scope; target
+refinement improves endpoint matching but does not replace fold refinement or
+global branch discovery.
 
 ## Research question and intended claims
 
@@ -348,8 +353,9 @@ same connection-aware equilibrium model:
    controller states.
 
 The current implementation covers the static native-ybus slice and records
-items 1, 2, 4, and 6 provisionally. Fold refinement, deflation, curvature-based
-step control, and controller/generator closures remain Milestone 3 work.
+items 1, 2, 4, and 6 provisionally, with fixed-λ refinement when a target
+crossing is bracketed. Fold refinement, deflation, curvature-based step control,
+and controller/generator closures remain Milestone 3 work.
 
 The initial default homotopy proposed for review is:
 

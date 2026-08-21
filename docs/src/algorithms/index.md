@@ -15,7 +15,8 @@ engine's admittance-matrix primitives) in a custom loop.
 - **Static operability continuation** — `continue_opf_operability` provides the
   natural-parameter trace, while `continue_opf_operability_pseudo_arclength`
   provides an opt-in first fold-capable predictor/corrector slice for the same
-  native static-load scope.
+  native static-load scope, including fixed-λ refinement when a target crossing
+  is bracketed.
 
 ## Question-driven candidates not yet built
 

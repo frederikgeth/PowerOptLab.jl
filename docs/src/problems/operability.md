@@ -20,7 +20,8 @@ The checker reports:
 * an explicit natural-parameter load-scale continuation trace with corrector,
   residual, singular-value, and event history; and
 * an opt-in pseudo-arclength predictor/corrector trace for the same static
-  load-scale path, including target crossings and fold-candidate events; and
+  load-scale path, including voltage-normalized arclength provenance, target
+  crossings, fixed-λ target refinement, and fold-candidate events; and
 * explicit `:not_applicable` scope evidence when generator or IBR equations are
   outside the residual seam.
 
@@ -61,6 +62,7 @@ pseudo = continue_opf_operability_pseudo_arclength(net, pf;
     continuation = OperabilityPseudoArclengthSpec(initial_step = 0.05))
 pseudo.status
 pseudo.provenance["continuation"]["pseudo_arclength"]
+pseudo.provenance["continuation"]["arclength_state_scale"]
 ```
 
 This is a local post-solve screen, not a proof of global solvability or dynamic
@@ -68,7 +70,10 @@ voltage stability. HELM agreement is path-qualified evidence for its energized
 no-load homotopy; HELM non-convergence is inconclusive, not a non-existence
 certificate. The current pseudo-arclength implementation is a first static
 slice: it does not yet provide refined fold points, deflation/global branch
-discovery, controller closures, or fuller generator/IBR equilibrium seams.
+discovery, controller closures, or fuller generator/IBR equilibrium seams. A
+low-voltage equilibrium can still pass the local endpoint residual check while
+failing the no-load-connected target comparison; that distinction is deliberate
+branch evidence, not a claim that the low branch is infeasible.
 
 ```@docs
 OperabilitySpec
