@@ -138,6 +138,18 @@ using BMOPFTools
     @test any(get(event, "kind", "") == "target_refinement" &&
               get(event, "status", nothing) == :pass for event in low_trace.events)
 
+    fold_guess = deepcopy(nose_pf)
+    fold_guess["bus"]["bus1"]["1"]["vr"] = 500.0
+    fold = locate_opf_operability_fold(nose_net, fold_guess;
+        lambda=1.04, spec=OperabilitySpec(scaling_policy=SIUnitsScaling()))
+    @test fold.status == :pass
+    @test fold.lambda ≈ 25 / 24 atol=1e-7
+    @test fold.node_voltages[("bus1", "1")] ≈ 500.0 + 0.0im atol=1e-5
+    @test fold.residual_norm < 1e-8
+    @test fold.sigma_min < 1e-8
+    @test fold.critical_mode["coordinate_order"] == "[real(state_nodes); imag(state_nodes)]"
+    @test fold.provenance["fold_localization"]["equations"] == "F=0,Jv=0,norm(v)=1"
+
     # Scope exclusions are explicit evidence rather than a silent partial pass.
     ibr_net = doe_ibr_feeder()
     ibr_pf = solve_pf(ibr_net; per_unit=false)
@@ -152,4 +164,9 @@ using BMOPFTools
         ibr_net, ibr_pf; spec=spec)
     @test ibr_pseudo_trace.status == :not_applicable
     @test ibr_pseudo_trace.events[1]["kind"] == "unsupported_physics"
+    ibr_fold = locate_opf_operability_fold(ibr_net, ibr_pf;
+        spec=spec, lambda=1.0)
+    @test ibr_fold.status == :not_applicable
+    @test_throws ArgumentError locate_opf_operability_fold(
+        net, pf; spec=spec, lambda=0.0)
 end

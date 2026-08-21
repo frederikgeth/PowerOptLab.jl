@@ -16,7 +16,8 @@ engine's admittance-matrix primitives) in a custom loop.
   natural-parameter trace, while `continue_opf_operability_pseudo_arclength`
   provides an opt-in first fold-capable predictor/corrector slice for the same
   native static-load scope, including fixed-λ refinement when a target crossing
-  is bracketed.
+  is bracketed. `locate_opf_operability_fold` separately refines a declared
+  fold candidate with bordered equations.
 
 ## Question-driven candidates not yet built
 

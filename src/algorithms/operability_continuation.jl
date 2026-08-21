@@ -335,6 +335,143 @@ struct OperabilityPseudoArclengthSpec
     end
 end
 
+"""Result of an opt-in bordered-equation fold localization."""
+struct OperabilityFoldResult <: AbstractSolveResult
+    status::Symbol
+    message::String
+    lambda::Float64
+    state::Vector{Float64}
+    node_voltages::Dict{_Node,ComplexF64}
+    residual_norm::Float64
+    sigma_min::Float64
+    iterations::Int
+    critical_mode::Dict{String,Any}
+    provenance::Dict{String,Any}
+end
+
+function solve_status(result::OperabilityFoldResult)
+    publishable = result.status === :pass
+    _result_solve_status(string(result.status), publishable;
+        primal_status=publishable ? "FEASIBLE_POINT" : "DIAGNOSTIC_POINT")
+end
+
+solve_diagnostics(result::OperabilityFoldResult) = (
+    status=result.status, lambda=result.lambda, residual_norm=result.residual_norm,
+    sigma_min=result.sigma_min, iterations=result.iterations)
+
+Base.show(io::IO, result::OperabilityFoldResult) = print(io,
+    "OperabilityFoldResult(status=$(result.status), lambda=$(result.lambda), " *
+    "residual=$(result.residual_norm))")
+
+function _operability_fold_empty(status, message, provenance)
+    OperabilityFoldResult(status, message, NaN, Float64[],
+        Dict{_Node,ComplexF64}(), NaN, NaN, 0,
+        Dict{String,Any}(), provenance)
+end
+
+function _fold_equations(net, u, meta, coords, cfg)
+    n = length(meta.state)
+    x_scaled = u[1:n]; λ = u[n + 1]; v = u[n + 2:end]
+    lin = BMOPFTools.ybus_linearized(_operability_scale_network(net, λ);
+                                    fold=:constant_z)
+    state_scale, residual_scale = _operability_scales(lin, meta, coords)
+    x = x_scaled .* state_scale
+    f = _operability_residual(lin, meta, x) ./ residual_scale
+    Jphys = finite_difference_jacobian(
+        y -> _operability_residual(lin, meta, y), x; step=cfg.jacobian_step)
+    J = _operability_scaled_jacobian(Jphys, state_scale, residual_scale)
+    vcat(f, J * v, dot(v, v) - 1.0)
+end
+
+"""
+    locate_opf_operability_fold(net, solution; spec, lambda=1.0,
+        max_iterations=30, tol=1e-8, jacobian_step=1e-6, context=nothing)
+
+Refine a supplied fold candidate with the bordered equations ``F=0``, ``Jv=0``,
+and ``‖v‖₂=1``. `solution` supplies the initial voltage state and `lambda`
+specifies the load-scale at that candidate. This is a local diagnostic
+localization, not a global fold or branch-discovery certificate.
+"""
+function locate_opf_operability_fold(
+        net::Dict{String,Any}, solution::AbstractDict;
+        spec::OperabilitySpec, lambda::Real=1.0, max_iterations::Integer=30,
+        tol::Real=1e-8, jacobian_step::Real=1e-6, context=nothing)
+    isfinite(Float64(lambda)) && lambda > 0 ||
+        throw(ArgumentError("lambda must be finite and > 0"))
+    max_iterations >= 1 || throw(ArgumentError("max_iterations must be >= 1"))
+    isfinite(Float64(tol)) && tol > 0 || throw(ArgumentError("tol must be finite and > 0"))
+    isfinite(Float64(jacobian_step)) && jacobian_step > 0 ||
+        throw(ArgumentError("jacobian_step must be finite and > 0"))
+    coords = _operability_coordinates(net, spec; context)
+    unsupported = _operability_preflight(net)
+    !isempty(unsupported) && return _operability_fold_empty(
+        :not_applicable, "candidate contains physics outside the continuation scope",
+        coords.provenance)
+    source_buses = _operability_source_buses(net)
+    isempty(source_buses) && throw(ArgumentError("fold localization requires a voltage source"))
+    lin_nominal = BMOPFTools.ybus_linearized(net; fold=:constant_z)
+    vmap = _operability_solution_map(solution, lin_nominal.nodes)
+    meta = _operability_state_meta(lin_nominal, vmap, source_buses)
+    isempty(meta.state) && return _operability_fold_empty(
+        :not_applicable, "network has no free non-source voltage state", coords.provenance)
+    state_scale, _ = _operability_scales(lin_nominal, meta, coords)
+    J0, _, residual_scale = _continuation_scaled_jacobian(
+        BMOPFTools.ybus_linearized(_operability_scale_network(net, lambda);
+                                   fold=:constant_z), meta, meta.state, coords,
+        OperabilityContinuationSpec(jacobian_step=jacobian_step))
+    factorization = svd(J0)
+    v0 = Float64.(factorization.V[:, end])
+    u = vcat(meta.state ./ state_scale, Float64(lambda), v0)
+    cfg = (jacobian_step=Float64(jacobian_step),)
+    converged = false; last_norm = Inf; iterations = 0
+    for iteration in 1:max_iterations
+        iterations = iteration
+        g = _fold_equations(net, u, meta, coords, cfg)
+        last_norm = isempty(g) ? 0.0 : maximum(abs, g)
+        last_norm <= tol && (converged = true; break)
+        G = finite_difference_jacobian(
+            w -> _fold_equations(net, w, meta, coords, cfg), u;
+            step=Float64(jacobian_step))
+        du = try
+            -(G \ g)
+        catch
+            break
+        end
+        all(isfinite, du) || break
+        α = 1.0; accepted = false
+        while α >= 1 / 64
+            candidate = u .+ α .* du
+            gc = _fold_equations(net, candidate, meta, coords, cfg)
+            nc = isempty(gc) ? 0.0 : maximum(abs, gc)
+            if all(isfinite, gc) && nc < last_norm
+                u = candidate; accepted = true; break
+            end
+            α /= 2
+        end
+        accepted || break
+    end
+    n = length(meta.state); λ = u[n + 1]; x = u[1:n] .* state_scale
+    lin = BMOPFTools.ybus_linearized(_operability_scale_network(net, λ);
+                                     fold=:constant_z)
+    J, _, _ = _continuation_scaled_jacobian(
+        lin, meta, x, coords, OperabilityContinuationSpec(jacobian_step=jacobian_step))
+    sigma = isempty(J) ? NaN : last(svdvals(J))
+    residual = _operability_complex_residual(lin, meta, x)
+    residual_norm = isempty(residual) ? 0.0 : maximum(abs, residual)
+    mode = isempty(J) ? Dict{String,Any}() :
+        _operability_critical_mode(svd(J), meta.state_nodes)
+    voltages = _operability_node_map(lin, _operability_voltage_vector(lin, meta, x))
+    provenance = deepcopy(coords.provenance)
+    provenance["fold_localization"] = Dict("equations" => "F=0,Jv=0,norm(v)=1",
+        "source_buses" => sort!(collect(source_buses)), "state_nodes" => meta.state_nodes,
+        "initial_lambda" => Float64(lambda), "iterations" => iterations)
+    status = converged ? :pass : :inconclusive
+    message = converged ? "bordered fold equations converged" :
+        "bordered fold equations did not converge"
+    OperabilityFoldResult(status, message, Float64(λ), x, voltages, residual_norm,
+        Float64(sigma), iterations, mode, provenance)
+end
+
 function _pseudo_lambda_residual(net, λ, meta, x, residual_scale, h)
     if λ <= h
         lp = BMOPFTools.ybus_linearized(_operability_scale_network(net, λ + h);

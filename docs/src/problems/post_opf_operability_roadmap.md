@@ -33,13 +33,16 @@ The current branch contains the first bounded implementation slice in
   arclength provenance, and the same endpoint evidence. An analytic two-bus
   high-/low-voltage branch regression now checks
   that a locally feasible low branch is distinguished from the no-load-connected
-  high branch.
+  high branch; and
+- an opt-in bordered-equation fold localizer solving ``F=0``, ``Jv=0``, and
+  ``‖v‖₂=1`` from a declared approximate fold state.
 
 These additions are evidence-producing diagnostics, not a claim of globally
 complete branch discovery or a production-grade fold certificate. The current
 pseudo-arclength slice is limited to the native static ybus load scope; target
 refinement improves endpoint matching but does not replace fold refinement or
-global branch discovery.
+global branch discovery. The bordered localizer is a local candidate solver and
+does not certify uniqueness or global reachability.
 
 ## Research question and intended claims
 

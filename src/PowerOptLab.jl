@@ -234,9 +234,10 @@ export solve_multiperiod_ivq, MultiperiodIVQResult
 # HELM power flow (holomorphic embedding load-flow, a bespoke solution method)
 export helm_series, HelmResult, solve_pf_helm
 
-# Static operability continuation (natural and first pseudo-arclength slices)
+# Static operability continuation and local fold evidence
 export OperabilityContinuationSpec, OperabilityContinuationResult,
        continue_opf_operability, OperabilityPseudoArclengthSpec,
-       continue_opf_operability_pseudo_arclength
+       continue_opf_operability_pseudo_arclength, OperabilityFoldResult,
+       locate_opf_operability_fold
 
 end # module PowerOptLab

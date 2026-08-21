@@ -64,6 +64,15 @@ pseudo = continue_opf_operability_pseudo_arclength(net, pf;
 pseudo.status
 pseudo.provenance["continuation"]["pseudo_arclength"]
 pseudo.provenance["continuation"]["arclength_state_scale"]
+
+# Starting from a voltage/state near a suspected nose, solve the bordered
+# equations F=0, J*v=0, ||v||₂=1 at a declared load scale.
+fold = locate_opf_operability_fold(net, approximate_fold_solution;
+    lambda = 1.04,
+    spec = OperabilitySpec(scaling_policy = SIUnitsScaling()))
+fold.status
+fold.lambda
+fold.critical_mode
 ```
 
 This is a local post-solve screen, not a proof of global solvability or dynamic
@@ -75,6 +84,9 @@ discovery, controller closures, or fuller generator/IBR equilibrium seams. A
 low-voltage equilibrium can still pass the local endpoint residual check while
 failing the no-load-connected target comparison; that distinction is deliberate
 branch evidence, not a claim that the low branch is infeasible.
+`locate_opf_operability_fold` is likewise local: convergence establishes a
+bordered-equation fold candidate for the declared static model and initial
+guess, not uniqueness or global reachability.
 
 ```@docs
 OperabilitySpec
@@ -86,4 +98,6 @@ OperabilityContinuationResult
 continue_opf_operability
 OperabilityPseudoArclengthSpec
 continue_opf_operability_pseudo_arclength
+OperabilityFoldResult
+locate_opf_operability_fold
 ```
