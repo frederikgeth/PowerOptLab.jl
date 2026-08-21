@@ -44,7 +44,7 @@ function radial_net(n::Int)
     parse_bmopf(String(take!(io)); from_string=true)
 end
 
-function benchmark_case(n::Int, storage::Symbol, spectrum::Symbol)
+function benchmark_case(n::Int, storage::Symbol, spectrum::Symbol; warmup::Bool=false)
     net = radial_net(n)
     solution = solve_pf(net; per_unit=false)
     spec = OperabilitySpec(
@@ -55,24 +55,35 @@ function benchmark_case(n::Int, storage::Symbol, spectrum::Symbol)
         compute_fixed_point_certificate=false,
         jacobian_storage=storage,
         jacobian_spectrum=spectrum)
+    warmup && check_opf_operability(net, solution; spec=spec)
     timed = @timed check_opf_operability(net, solution; spec=spec)
     report = timed.value
     complexity = report.branch_evidence["complexity"]
+    non_pass_checks = sort!(String[key for (key, check) in report.checks
+                                   if check.status !== :pass])
     (nodes=n, storage=String(storage), spectrum=String(spectrum), status=String(report.status),
+     non_pass_checks=join(non_pass_checks, "|"),
      seconds=timed.time, allocated_bytes=timed.bytes,
      real_state=complexity["real_state_dimension"],
-     jacobian_kib=complexity["jacobian_storage_bytes_dense"] / 1024)
+     jacobian_nnz=complexity["jacobian_nonzero_count"],
+     jacobian_storage_kib=complexity["jacobian_storage_bytes_estimate"] / 1024,
+     jacobian_dense_kib=complexity["jacobian_storage_bytes_dense"] / 1024)
 end
 
 sizes = isempty(ARGS) ? [4, 8, 16, 32, 64] : parse.(Int, ARGS)
 all(>(0), sizes) || throw(ArgumentError("benchmark sizes must be positive integers"))
-println("n,storage,spectrum,status,seconds,allocated_bytes,real_state,jacobian_kib")
+for (storage, spectrum) in ((:dense, :full), (:dense, :extremes),
+                            (:sparse, :extremes))
+    benchmark_case(first(sizes), storage, spectrum; warmup=true)
+end
+println("n,storage,spectrum,status,non_pass_checks,seconds,allocated_bytes,real_state,jacobian_nnz,jacobian_storage_kib,jacobian_dense_kib")
 for n in sizes
     for (storage, spectrum) in ((:dense, :full), (:dense, :extremes),
                                 (:sparse, :extremes))
         row = benchmark_case(n, storage, spectrum)
         println(row.nodes, ",", row.storage, ",", row.spectrum, ",", row.status, ",",
-            row.seconds, ",", row.allocated_bytes, ",", row.real_state, ",",
-            row.jacobian_kib)
+            row.non_pass_checks, ",", row.seconds, ",", row.allocated_bytes, ",",
+            row.real_state, ",", row.jacobian_nnz, ",", row.jacobian_storage_kib, ",",
+            row.jacobian_dense_kib)
     end
 end

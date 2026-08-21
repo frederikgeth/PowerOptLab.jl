@@ -1,4 +1,5 @@
 using BMOPFTools
+using LinearAlgebra
 using SparseArrays
 
 @testset "post-OPF operability checker" begin
@@ -168,6 +169,10 @@ using SparseArrays
     @test sparse_spectrum_report.branch_evidence["complexity"]["jacobian_storage_mode"] ==
           "sparse"
     @test sparse_spectrum_report.branch_evidence["complexity"]["jacobian_nonzero_count"] > 0
+    sparse_pattern = sparse_spectrum_report.branch_evidence["complexity"]["jacobian_pattern"]
+    @test length(sparse_pattern["rows"]) ==
+          sparse_spectrum_report.branch_evidence["complexity"]["jacobian_nonzero_count"]
+    @test length(sparse_pattern["columns"]) == length(sparse_pattern["rows"])
     sparse_certificate_report = check_opf_operability(net, pf;
         spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
             voltage_min=800.0, voltage_max=1100.0,
@@ -206,6 +211,20 @@ using SparseArrays
     @test [row.lambda for row in stress_rows] == [0.0, 1.0, 0.0, 1.0]
     @test all(row.status == :pass for row in stress_rows)
     @test all(row.endpoint_status == :pass for row in stress_rows)
+    vararg_stress_rows = operability_stress_rows(net, pf;
+        spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
+            compute_fixed_point_certificate=true),
+        directions=[OperabilityStressDirection(:vararg)], lambdas=[1.0],
+        solve=(args...) -> solve_pf(args[1]; per_unit=false), solve_arity=1)
+    @test only(vararg_stress_rows).status == :pass
+    @test_throws UndefVarError operability_stress_rows(net, pf;
+        spec=OperabilitySpec(scaling_policy=SIUnitsScaling()),
+        directions=[OperabilityStressDirection(:broken)], lambdas=[1.0],
+        solve=network -> definitely_missing_solver_name(network))
+    @test_throws ArgumentError operability_stress_rows(net, pf;
+        spec=OperabilitySpec(scaling_policy=SIUnitsScaling()),
+        directions=[OperabilityStressDirection(:bad_arity)], lambdas=[1.0],
+        solve=network -> solve_pf(network; per_unit=false), solve_arity=5)
     stress_summary = operability_stress_summary(stress_rows)
     @test [row.direction for row in stress_summary] == [:reactive_removed, :uniform]
     @test all(row.status == :pass for row in stress_summary)
@@ -315,8 +334,62 @@ using SparseArrays
         spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
             compute_fixed_point_certificate=true))
     @test floating_certificate.checks["fixed_point_certificate"].status == :pass
+    # The floating-neutral incidence has ||a||₂=√2; the assembly-level probe
+    # below guards the corrected Euclidean bound for this multi-state edge.
     @test floating_certificate.checks["fixed_point_euclidean_region"].status == :pass
     @test length(floating_certificate.state_nodes) == 4
+
+    # Assembly-level regression: on a lightly loaded copy where the Euclidean
+    # region is certified, probe the fixed-point map along the floating-neutral
+    # incidence direction and ensure the reported q bounds its real Jacobian.
+    floating_light_net = deepcopy(floating_net)
+    floating_light_net["load"]["ld"]["p_nom"] = [100.0]
+    floating_light_pf = solve_pf(floating_light_net; per_unit=false)
+    floating_light = check_opf_operability(floating_light_net, floating_light_pf;
+        spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
+            compute_fixed_point_certificate=true))
+    euclidean = floating_light.branch_evidence["fixed_point_certificate"]["euclidean_region"]
+    @test euclidean["status"] == :pass
+    lin_light = BMOPFTools.ybus_linearized(floating_light_net; fold=:constant_z)
+    vmap_light = PowerOptLab._operability_solution_map(floating_light_pf, lin_light.nodes)
+    meta_light = PowerOptLab._operability_state_meta(lin_light, vmap_light,
+        PowerOptLab._operability_source_buses(floating_light_net))
+    nf_light = length(meta_light.free)
+    yll_light = ComplexF64.(lin_light.Y[meta_light.free, meta_light.free])
+    yls_light = ComplexF64.(lin_light.Y[meta_light.free, meta_light.fixed])
+    yll_factor_light = lu(yll_light)
+    w_light = -(yll_factor_light \ (yls_light * meta_light.fixed_values))
+    map_light(vfree) = begin
+        vfull = zeros(ComplexF64, length(lin_light.nodes))
+        vfull[meta_light.fixed] = meta_light.fixed_values
+        vfull[meta_light.free] = vfree
+        w_light + yll_factor_light \ ComplexF64.(lin_light.i_comp(vfull)[meta_light.free])
+    end
+    sl_light = only(PowerOptLab._load_subloads(floating_light_net["load"]["ld"], floating_light_net))
+    a_light = zeros(Float64, nf_light)
+    pi_light = lin_light.index[sl_light.pos]
+    ni_light = lin_light.index[sl_light.neg]
+    haskey(Dict(gi => li for (li, gi) in enumerate(meta_light.free)), pi_light) &&
+        (a_light[findfirst(==(pi_light), meta_light.free)] += 1.0)
+    haskey(Dict(gi => li for (li, gi) in enumerate(meta_light.free)), ni_light) &&
+        (a_light[findfirst(==(ni_light), meta_light.free)] -= 1.0)
+    probe = w_light .+ (0.999 * euclidean["radius"]) .* ComplexF64.(a_light ./ norm(a_light))
+    pack_light(v) = vcat(real.(v), imag.(v))
+    unpack_light(z) = ComplexF64.(z[1:nf_light] .+ im .* z[nf_light+1:end])
+    map_jacobian = finite_difference_jacobian(
+        z -> pack_light(map_light(unpack_light(z))), pack_light(probe); step=1e-6)
+    @test opnorm(map_jacobian, 2) <= euclidean["contraction_factor"] * (1.0 + 1e-3)
+
+    four_wire_net = operability_four_wire_radial()
+    four_wire_pf = solve_pf(four_wire_net; per_unit=false)
+    four_wire_report = check_opf_operability(four_wire_net, four_wire_pf;
+        spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
+            voltage_min=180.0, voltage_max=280.0,
+            compute_fixed_point_certificate=true))
+    @test four_wire_report.status == :pass
+    @test four_wire_report.checks["fixed_point_certificate"].status == :pass
+    @test length(four_wire_report.state_nodes) == 8
+    @test four_wire_report.branch_evidence["fixed_point_certificate"]["edge_count"] == 3
 
     helm_report = check_opf_operability(net, pf;
         spec=OperabilitySpec(scaling_policy=SIUnitsScaling(), compute_helm=true))

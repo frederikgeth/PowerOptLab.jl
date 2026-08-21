@@ -1012,8 +1012,10 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
             for component in (sl.pt, sl.qt)
                 component.nl === nothing && continue
                 coefficient, gamma = component.nl
-                isfinite(Float64(coefficient)) && isfinite(Float64(gamma)) ||
-            push!(reasons, "load $(repr(id))/$k has non-finite exponential parameters")
+                if !(isfinite(Float64(coefficient)) && isfinite(Float64(gamma)))
+                    push!(reasons, "load $(repr(id))/$k has non-finite exponential parameters")
+                    continue
+                end
                 coefficient_abs = abs(Float64(coefficient)) / sl.Vnom^Float64(gamma)
                 coefficient_abs > 0.0 && push!(terms,
                     (kind=:exponential, coefficient=coefficient_abs, gamma=Float64(gamma)))
@@ -1075,6 +1077,11 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
             derivative_exponent = term.gamma - 2.0
             magnitude_radius = magnitude_exponent >= 0.0 ? upper : lower
             derivative_radius = derivative_exponent >= 0.0 ? upper : lower
+            # In the radial/tangential frame of an exponential current law,
+            # the two real Jacobian singular values are |γ-1| and 1 times
+            # |C|m^(γ-2); the operator norm is therefore max(1, |γ-1|),
+            # including the constant-power (γ=0) and constant-current (γ=1)
+            # limits.
             (coefficient * magnitude_radius^magnitude_exponent,
              coefficient * max(1.0, abs(term.gamma - 1.0)) *
                  derivative_radius^derivative_exponent)
@@ -1147,7 +1154,11 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
                 # `zalpha = |Z aⱼ|` is precomputed when the connection edge is
                 # built; reusing it keeps the scan linear in the number of
                 # edges and free states instead of repeating dense matvecs.
-                output_bound .+= e.zalpha .* derivative_bounds[j]
+                # A connection perturbation is bounded by ||a_j||₂ times the
+                # free-state perturbation.  This incidence factor is essential
+                # for phase-to-neutral edges with a floating neutral (and for
+                # phase-to-phase/delta edges), where ||a_j||₂ can exceed one.
+                output_bound .+= e.zalpha .* derivative_bounds[j] * connection_norms[j]
             end
             q = norm(output_bound)
             invariance = offset_norm + q * rho
@@ -1164,8 +1175,9 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
     for rho in range(0.0, stop=0.999radius_limit, length=2001)
         b, q, lower = contribution(rho)
         if isfinite(b) && isfinite(q) && b <= rho && q < 1.0
+            # Keep scanning: the largest certified radius is the useful one
+            # for candidate containment and deterministic margin reporting.
             selected = (rho=rho, b=b, q=q, lower=lower)
-            break
         end
     end
     # A one-parameter family of componentwise polydiscs preserves the
@@ -1184,10 +1196,12 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
                 radii = alpha .* direction
                 b, q, lower, upper = component_contribution(radii)
                 if all(isfinite, b) && isfinite(q) && all(b .<= radii) && q < 1.0
+                    # Keep scanning for the largest certified member of this
+                    # one-parameter family; the first feasible point can be
+                    # unnecessarily conservative for candidate containment.
                     componentwise = (radii=radii, b=b, q=q,
                                      lower=lower, upper=upper,
                                      alpha=alpha)
-                    break
                 end
             end
         end
@@ -1206,6 +1220,7 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
             "contraction_factor" => euclidean.q,
             "condition_margin" => 1.0 - euclidean.q,
             "invariance_bound" => euclidean.invariance_bound,
+            "invariance_form" => "offset_norm + q * radius <= radius in the Euclidean state norm",
             "candidate_ratio" => euclidean_ratio,
             "candidate_inside_region" => euclidean_ratio <= 1.0 + spec.residual_atol,
             "lower_connection_voltages" => euclidean.lower,
@@ -1371,10 +1386,12 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
     base["uniform_region"] = uniform_region === nothing ? nothing : Dict(
         "radii" => uniform_region.radii, "contraction_factor" => uniform_region.q,
         "invariance_bound" => maximum(uniform_region.b),
+        "invariance_form" => "componentwise b_i <= radius_i in the weighted infinity norm",
         "candidate_ratio" => candidate_ratio(uniform_region))
     base["componentwise_region"] = component_region === nothing ? nothing : Dict(
         "radii" => component_region.radii, "contraction_factor" => component_region.q,
         "invariance_bound" => maximum(component_region.b),
+        "invariance_form" => "componentwise b_i <= radius_i in the weighted infinity norm",
         "candidate_ratio" => candidate_ratio(component_region))
     base["local_candidate_region"] = local_region === nothing ? Dict(
         "status" => :inconclusive,
@@ -1383,6 +1400,7 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
         "radii" => local_region.radii,
         "contraction_factor" => local_region.q,
         "invariance_bound" => maximum(local_region.b),
+        "invariance_form" => "candidate-centered offset + q * radius <= radius in the componentwise norm",
         "condition_margin" => 1.0 - local_region.q,
         "candidate_residual_offset" => local_region.offset,
         "interpretation" => "local uniqueness evidence around the candidate; does not establish no-load reachability")
@@ -1395,6 +1413,7 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
     base["region_radii"] = copy(region.radii)
     base["radius"] = maximum(region.radii)
     base["invariance_bound"] = maximum(region.b)
+    base["invariance_form"] = "componentwise b_i <= radius_i in the weighted infinity norm"
     base["contraction_factor"] = region.q
     base["minimum_connection_voltage"] = minimum(region.lower)
     base["condition_margin"] = 1.0 - region.q
@@ -1536,8 +1555,11 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
     end
     condition_number = isempty(singular_values) || last(singular_values) == 0 ?
         Inf : first(singular_values) / last(singular_values)
-    rank_tol = isempty(singular_values) ? Inf :
-        spec.jacobian_rank_rtol * max(first(singular_values), 1.0)
+    rank_tol = if isempty(singular_values) || !(first(singular_values) > 0.0)
+        Inf
+    else
+        spec.jacobian_rank_rtol * first(singular_values)
+    end
     if isempty(x)
         checks["jacobian_regular"] = OperabilityCheck(:not_applicable, nothing, nothing,
             "no non-source voltage state remains after source/reference elimination")
@@ -1652,6 +1674,13 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
                         for load in values(get(net, "load", Dict()))); init=0)
     ndirections = spec.compute_sensitivity && !isempty(x) &&
         last(singular_values) > rank_tol ? 1 + 2nconnections : 0
+    jacobian_pattern = if issparse(J)
+        rows, columns, _ = findnz(J)
+        Dict("rows" => rows, "columns" => columns,
+             "interpretation" => "finite-difference nonzero pattern at this snapshot")
+    else
+        nothing
+    end
     branch_complexity = Dict{String,Any}(
         "free_node_count" => nfree,
         "real_state_dimension" => nreal,
@@ -1660,6 +1689,7 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
         "jacobian_spectrum_mode" => String(spec.jacobian_spectrum),
         "jacobian_storage_mode" => String(spec.jacobian_storage),
         "jacobian_nonzero_count" => jacobian_nonzero_count,
+        "jacobian_pattern" => jacobian_pattern,
         "linear_solver_factorization_reused" => linear_solver !== nothing,
         "jacobian_storage_bytes_dense" => sizeof(Float64) * nreal * nreal,
         "jacobian_storage_bytes_estimate" => Base.summarysize(J),
@@ -1760,8 +1790,11 @@ end
 
 Run a bounded, deterministic campaign of named native-static stress snapshots.
 `solve` is an explicit caller-supplied callback accepting either
-`(network, previous_solution, direction, lambda)`, `(network, previous_solution)`,
-or `(network)`, and must return an SI-valued solution dictionary. Each row
+`(network, previous_solution, direction, lambda)`,
+`(network, previous_solution, direction)`, `(network, previous_solution)`, or
+`(network)`, and must return an SI-valued solution dictionary. Set
+`solve_arity` to `1`, `2`, `3`, or `4` when the callback is variadic or its
+intended arity cannot be inferred safely. Each row
 retains the stress name, lambda, endpoint residual, certificate status, region
 margin, and any solver/checking error. These rows are finite study evidence;
 they do not establish a global operating envelope or a continuation branch.
@@ -1770,7 +1803,7 @@ function operability_stress_rows(net::Dict{String,Any}, solution::AbstractDict;
                                  spec::OperabilitySpec,
                                  directions=(OperabilityStressDirection(),),
                                  lambdas=(0.0, 0.5, 1.0), solve=nothing,
-                                 context=nothing)
+                                 context=nothing, solve_arity=nothing)
     solve === nothing && throw(ArgumentError(
         "operability_stress_rows requires an explicit solve callback"))
     direction_list = collect(directions)
@@ -1784,18 +1817,27 @@ function operability_stress_rows(net::Dict{String,Any}, solution::AbstractDict;
     isempty(lambda_list) && throw(ArgumentError("lambdas cannot be empty"))
     all(λ -> isfinite(λ) && λ >= 0.0, lambda_list) ||
         throw(ArgumentError("lambdas must be finite and >= 0"))
+    if solve_arity !== nothing
+        solve_arity isa Integer && solve_arity in 1:4 || throw(ArgumentError(
+            "solve_arity must be nothing or an integer in 1:4"))
+    end
     rows = NamedTuple[]
     for direction in direction_list
         previous = solution
         for λ in lambda_list
             stressed = operability_stress_network(net, λ, direction)
             try
-                solved = if applicable(solve, stressed, previous, direction, λ)
+                solved = if solve_arity === 4 ||
+                    (solve_arity === nothing && applicable(solve, stressed, previous, direction, λ))
                     solve(stressed, previous, direction, λ)
-                elseif applicable(solve, stressed, previous)
+                elseif solve_arity === 2 ||
+                    (solve_arity === nothing && applicable(solve, stressed, previous))
                     solve(stressed, previous)
-                elseif applicable(solve, stressed)
+                elseif solve_arity === 1 ||
+                    (solve_arity === nothing && applicable(solve, stressed))
                     solve(stressed)
+                elseif solve_arity === 3
+                    solve(stressed, previous, direction)
                 else
                     throw(ArgumentError("solve callback has no supported arity"))
                 end
@@ -1815,23 +1857,29 @@ function operability_stress_rows(net::Dict{String,Any}, solution::AbstractDict;
                         OperabilityCheck(:not_applicable, nothing, nothing,
                             "certificate unavailable")).status,
                     endpoint_residual_normalized=report.endpoint_residual_normalized,
-                    selected_region=String(get(certificate, "selected_region", "")),
+                    selected_region=get(certificate, "selected_region", missing),
                     contraction_factor=Float64(get(certificate, "contraction_factor", NaN)),
                     minimum_connection_voltage=Float64(get(certificate,
                         "minimum_connection_voltage", NaN)),
-                    candidate_inside_region=Bool(get(certificate,
-                        "candidate_inside_region", false)),
+                    candidate_inside_region=get(certificate,
+                        "candidate_inside_region", missing),
                     message="stress snapshot checked", error=nothing))
             catch err
+                if err isa InterruptException || err isa MethodError ||
+                    err isa UndefVarError || err isa ArgumentError ||
+                    err isa TypeError || err isa DimensionMismatch ||
+                    err isa BoundsError || err isa LoadError
+                    rethrow()
+                end
                 push!(rows, (
                     direction=direction.name, lambda=λ, status=:inconclusive,
                     p_scale=direction.p_scale, q_scale=direction.q_scale,
                     load_weights=deepcopy(direction.load_weights),
                     connection_weights=deepcopy(direction.connection_weights),
                     endpoint_status=:inconclusive, certificate_status=:inconclusive,
-                    endpoint_residual_normalized=NaN, selected_region="",
+                    endpoint_residual_normalized=NaN, selected_region=missing,
                     contraction_factor=NaN, minimum_connection_voltage=NaN,
-                    candidate_inside_region=false, message="stress snapshot failed",
+                    candidate_inside_region=missing, message="stress snapshot failed",
                     error=sprint(showerror, err)))
             end
         end
@@ -1982,7 +2030,7 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
         low_side_indicator_count=count(==("positive_low_side_indicator"), classifications),
         fixed_point_certificate_status=Symbol(get(certificate, "status", :not_applicable)),
         fixed_point_condition_margin=Float64(get(certificate, "condition_margin", NaN)),
-        fixed_point_selected_region=String(get(certificate, "selected_region", "")),
+        fixed_point_selected_region=get(certificate, "selected_region", missing),
         fixed_point_local_region_status=Symbol(get(local_certificate, "status", :not_applicable)),
         fixed_point_local_condition_margin=Float64(get(local_certificate, "condition_margin", NaN)),
         fixed_point_euclidean_region_status=Symbol(get(euclidean_certificate, "status", :not_applicable)),
@@ -1990,8 +2038,8 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
         helm_reachability_status=Symbol(get(reachability, "status", :not_applicable)),
         jacobian_spectrum_mode=String(get(complexity, "jacobian_spectrum_mode", "not_available")),
         jacobian_storage_mode=String(get(complexity, "jacobian_storage_mode", "not_available")),
-        jacobian_nonzero_count=Int(get(complexity, "jacobian_nonzero_count", 0)),
-        jacobian_storage_bytes_estimate=Int(get(complexity, "jacobian_storage_bytes_estimate", 0)),
+        jacobian_nonzero_count=get(complexity, "jacobian_nonzero_count", missing),
+        jacobian_storage_bytes_estimate=get(complexity, "jacobian_storage_bytes_estimate", missing),
         zbus_storage_mode=String(get(complexity, "zbus_storage_mode", "not_applicable")),
         unsupported_count=length(result.unsupported),
         scope="single_snapshot_static_ybus",
@@ -2002,9 +2050,11 @@ end
     operability_snapshot_rows(results)
 
 Project a dictionary or iterable of `(snapshot_id, result)` pairs into a
-deterministically ordered vector of table-ready snapshot rows. This adapter is
-intentionally limited to already-solved single snapshots; it does not infer
-contingency, temporal, or operating-envelope semantics.
+deterministically ordered vector of table-ready snapshot rows. Ordering is
+lexicographic on `String(snapshot_id)`, so callers using numeric labels should
+zero-pad them when numeric order matters. This adapter is intentionally limited
+to already-solved single snapshots; it does not infer contingency, temporal, or
+operating-envelope semantics.
 """
 function operability_snapshot_rows(results)
     entries = results isa AbstractDict ? collect(results) : collect(results)

@@ -91,6 +91,12 @@ inconclusive, but it never establishes reachability from the energized germ.
 `checks["fixed_point_euclidean_region"]` is an alternative no-load-connected
 sufficient condition using a Euclidean ball in the complex free-voltage state;
 its `:pass` likewise requires the candidate to lie inside that ball.
+The uniform and componentwise polydisc searches retain the largest feasible
+radius found on their deterministic scan, because containment is the useful
+claim. Their invariance bound is componentwise (`b_i ≤ radius_i`), whereas the
+Euclidean and candidate-local regions use an offset-plus-Lipschitz bound
+(`offset + q·radius ≤ radius`). The reported margins are therefore comparable
+within a geometry family, not interchangeable across geometries.
 
 ## Computational scaling and size guidance
 
@@ -104,7 +110,10 @@ with its scientific evidence.
 The table-ready `operability_snapshot_row(report)` projection carries the same
 review context in compact form: `jacobian_spectrum_mode`,
 `jacobian_storage_mode`, `jacobian_nonzero_count`,
-`jacobian_storage_bytes_estimate`, and `zbus_storage_mode`. A row therefore
+`jacobian_storage_bytes_estimate`, and `zbus_storage_mode`. Sparse reports also
+retain the finite-difference row/column pattern in
+`complexity["jacobian_pattern"]`; this is an operating-point diagnostic, not a
+topology-invariant symbolic sparsity pattern. A row therefore
 remains interpretable when reports from different storage/spectrum policies are
 combined, while `not_requested` distinguishes an intentionally disabled
 certificate from an unsupported claim.
@@ -171,10 +180,13 @@ For local size evidence, run the generated radial-feeder benchmark:
 julia --project=. scripts/benchmark_post_opf_operability_scaling.jl 8 16 32 64
 ```
 
-It emits CSV-style timing, allocation, state-dimension, and dense-Jacobian
-size rows for dense/full, dense/reduced, and sparse/reduced modes. The
-benchmark is a reproducibility aid for choosing study settings on the target
-machine, not a universal performance claim.
+It emits CSV-style timing, allocation, state-dimension, nonzero-count, actual
+Jacobian-storage, dense-equivalent-storage, and non-pass-check rows for
+dense/full, dense/reduced, and sparse/reduced modes. The first case in each
+mode is warmed up to remove most compilation cost from the reported timings.
+The benchmark is a reproducibility aid for choosing study settings on the
+target machine, not a universal performance claim; a `fail` row is retained
+with its failing check names rather than being silently discarded.
 
 ```julia
 using BMOPFTools

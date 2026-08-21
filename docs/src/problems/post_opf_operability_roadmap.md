@@ -118,6 +118,17 @@ The current branch contains the first bounded implementation slice in
 - table-ready snapshot rows now retain the Jacobian spectrum/storage mode,
   nonzero count, byte estimate, and implicit Zbus storage mode so pooled
   reports preserve computational-cost context;
+- the Euclidean fixed-point certificate now includes the connection-incidence
+  ``\ell_2`` factor in its state-space Lipschitz assembly; a lightly loaded
+  floating-neutral map probe and a multi-bus four-wire fixture regress this
+  claim, while region reports identify their distinct invariance formulations;
+- contraction scans now retain the largest certified member of each geometry
+  family, and Jacobian regularity uses a relative singular-value threshold
+  without an absolute ``σ_max`` floor;
+- finite stress campaigns now support explicit callback arity and rethrow
+  programming/interrupt errors instead of converting them to inconclusive
+  science rows; benchmark output records warm-up state, nonzero count,
+  storage-specific bytes, and failing-check annotations;
 - relative singular-value-ratio evidence, normalized residual verdicts, and
   explicit frozen-dispatch provenance now align the numerical checks with the
   audited scaling and closure contracts; aggregate status no longer reports a
