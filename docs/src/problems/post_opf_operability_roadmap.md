@@ -98,6 +98,9 @@ The current branch contains the first bounded implementation slice in
 - regular snapshot sensitivities now reuse one dense Jacobian factorization
   across the uniform and named P/Q right-hand sides, avoiding repeated cubic
   refactorization while retaining the reference dense result contract;
+- an opt-in `jacobian_spectrum=:extremes` reduced mode now estimates only the
+  largest and smallest singular values iteratively, explicitly omitting
+  critical singular-vector participation while retaining the full-SVD default;
 - relative singular-value-ratio evidence, normalized residual verdicts, and
   explicit frozen-dispatch provenance now align the numerical checks with the
   audited scaling and closure contracts; aggregate status no longer reports a

@@ -129,6 +129,19 @@ using BMOPFTools
     @test complexity["zbus_storage_bytes_dense"] > 0
     @test complexity["fixed_point_scan_points_per_geometry"] == 2001
     @test certificate_report.status == :pass
+
+    reduced_spectrum_report = check_opf_operability(net, pf;
+        spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
+            voltage_min=800.0, voltage_max=1100.0,
+            jacobian_spectrum=:extremes))
+    @test reduced_spectrum_report.status == :pass
+    @test length(reduced_spectrum_report.singular_values) == 2
+    @test reduced_spectrum_report.singular_values[1] >=
+          reduced_spectrum_report.singular_values[2] > 0.0
+    @test reduced_spectrum_report.branch_evidence["critical_mode"]["status"] ==
+          :not_applicable
+    @test reduced_spectrum_report.branch_evidence["complexity"]["jacobian_spectrum_mode"] ==
+          "extremes"
     certificate_row = operability_snapshot_row(certificate_report)
     @test certificate_row.fixed_point_certificate_status == :pass
     @test certificate_row.fixed_point_condition_margin > 0.0
@@ -175,6 +188,8 @@ using BMOPFTools
         spec=OperabilitySpec(scaling_policy=SIUnitsScaling()),
         directions=[OperabilityStressDirection(:duplicate),
             OperabilityStressDirection(:duplicate)], solve=n -> solve_pf(n; per_unit=false))
+    @test_throws ArgumentError OperabilitySpec(
+        scaling_policy=SIUnitsScaling(), jacobian_spectrum=:unknown)
     critical = report.branch_evidence["critical_mode"]
     @test critical["status"] == :pass
     @test length(critical["left_vector"]) == 2 * length(report.state_nodes)

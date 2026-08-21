@@ -57,6 +57,9 @@ not establish reachability from the energized no-load germ and does not
 downgrade the aggregate snapshot status. `fixed_point_euclidean_region`
 provides an alternative no-load-connected sufficient condition using a
 conservative Euclidean ball in the complex free-voltage state.
+For large snapshots, `jacobian_spectrum=:extremes` estimates only the largest
+and smallest singular values with deterministic iterative solves; the default
+`:full` mode retains the complete SVD and critical-mode participation.
 """
 struct OperabilitySpec
     scaling_policy::Union{Nothing,_OPERABILITY_SCALING_POLICY}
@@ -67,6 +70,7 @@ struct OperabilitySpec
     residual_rtol::Float64
     jacobian_step::Float64
     jacobian_rank_rtol::Float64
+    jacobian_spectrum::Symbol
     sensitivity_step::Float64
     voltage_min::Float64
     voltage_max::Float64
@@ -90,6 +94,7 @@ struct OperabilitySpec
             residual_rtol::Real=1e-6,
             jacobian_step::Real=1e-6,
             jacobian_rank_rtol::Real=1e-8,
+            jacobian_spectrum::Symbol=:full,
             sensitivity_step::Real=1e-5,
             voltage_min::Real=0.0,
             voltage_max::Real=Inf,
@@ -109,6 +114,8 @@ struct OperabilitySpec
             throw(ArgumentError("scaling_policy must be an AbstractOpfScalingPolicy"))
         closure === :frozen_dispatch || throw(ArgumentError(
             "only closure=:frozen_dispatch is supported in the native static scope"))
+        jacobian_spectrum in (:full, :extremes) || throw(ArgumentError(
+            "jacobian_spectrum must be :full or :extremes"))
         vals = (residual_atol, residual_rtol, jacobian_step,
                 jacobian_rank_rtol, sensitivity_step,
                 sensitivity_validation_atol, sensitivity_validation_rtol)
@@ -126,7 +133,7 @@ struct OperabilitySpec
             throw(ArgumentError("HELM tolerances must be finite and > 0"))
         new(scaling_policy, scaling_bases, provenance, closure,
             Float64(residual_atol), Float64(residual_rtol), Float64(jacobian_step),
-            Float64(jacobian_rank_rtol), Float64(sensitivity_step),
+            Float64(jacobian_rank_rtol), jacobian_spectrum, Float64(sensitivity_step),
             Float64(voltage_min), Float64(voltage_max), Float64(vuf_max),
             compute_sensitivity, compute_sensitivity_validation,
             Float64(sensitivity_validation_atol), Float64(sensitivity_validation_rtol),
@@ -765,6 +772,64 @@ function _operability_critical_mode(factorization, state_nodes)
         "state_nodes" => copy(state_nodes),
         "coordinate_order" => "[real(state_nodes); imag(state_nodes)]",
         "message" => "critical left/right singular vectors for the smallest scaled singular value")
+end
+
+"""Estimate the extreme singular values without materializing a full SVD.
+
+The largest value uses power iteration on ``J'J``. The smallest value uses
+inverse iteration through a caller-supplied LU factorization. This is a
+reduced diagnostic, not a replacement for the full singular spectrum or its
+left/right mode participation.
+"""
+function _operability_extreme_singular_values(J, factorization;
+                                             max_iterations::Int=80,
+                                             rtol::Float64=1e-8)
+    isempty(J) && return Float64[]
+    n = size(J, 2)
+    n == 0 && return Float64[]
+    x = fill(inv(sqrt(Float64(n))), n)
+    sigma_max = NaN
+    max_converged = false
+    for _ in 1:max_iterations
+        y = J' * (J * x)
+        ynorm = norm(y)
+        isfinite(ynorm) && ynorm > 0.0 || return nothing
+        xnext = y / ynorm
+        sigma_next = sqrt(max(dot(xnext, J' * (J * xnext)), 0.0))
+        if isfinite(sigma_max) && abs(sigma_next - sigma_max) <=
+            rtol * max(1.0, sigma_next)
+            sigma_max = sigma_next
+            x = xnext
+            max_converged = true
+            break
+        end
+        sigma_max = sigma_next
+        x = xnext
+    end
+    max_converged || return nothing
+    factorization === nothing && return nothing
+    y = fill(inv(sqrt(Float64(n))), n)
+    sigma_min = NaN
+    min_converged = false
+    for _ in 1:max_iterations
+        z = factorization \ (factorization' \ y)
+        znorm = norm(z)
+        isfinite(znorm) && znorm > 0.0 || return nothing
+        ynext = z / znorm
+        inverse_value = dot(ynext, factorization \ (factorization' \ ynext))
+        sigma_next = inverse_value > 0.0 ? inv(sqrt(inverse_value)) : NaN
+        if isfinite(sigma_min) && isfinite(sigma_next) &&
+            abs(sigma_next - sigma_min) <= rtol * max(1.0, sigma_next)
+            sigma_min = sigma_next
+            y = ynext
+            min_converged = true
+            break
+        end
+        sigma_min = sigma_next
+        y = ynext
+    end
+    max_converged && min_converged && isfinite(sigma_max) && isfinite(sigma_min) ?
+        [sigma_max, sigma_min] : nothing
 end
 
 function _operability_helm_preflight(net::Dict{String,Any})
@@ -1406,18 +1471,8 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
     Jphys = isempty(x) ? zeros(0, 0) : finite_difference_jacobian(
         y -> _operability_residual(lin, meta, y), x; step=spec.jacobian_step)
     J = _operability_scaled_jacobian(Jphys, state_scale, residual_scale)
-    jacobian_factorization = isempty(J) ? nothing : svd(J)
-    singular_values = jacobian_factorization === nothing ? Float64[] :
-        Float64.(jacobian_factorization.S)
-    condition_number = isempty(singular_values) || last(singular_values) == 0 ?
-        Inf : first(singular_values) / last(singular_values)
-    rank_tol = isempty(singular_values) ? Inf :
-        spec.jacobian_rank_rtol * max(first(singular_values), 1.0)
-    # Factor the dense scaled Jacobian once and reuse it for the uniform and
-    # named P/Q sensitivities. This preserves the reference dense result while
-    # avoiding one O(n³) refactorization per direction.
-    linear_solver = if !isempty(J) && !isempty(singular_values) &&
-        last(singular_values) > rank_tol
+    linear_solver = if !isempty(J) &&
+        (spec.compute_sensitivity || spec.jacobian_spectrum === :extremes)
         try
             lu(J)
         catch
@@ -1426,9 +1481,23 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
     else
         nothing
     end
+    jacobian_factorization = spec.jacobian_spectrum === :full && !isempty(J) ? svd(J) : nothing
+    singular_values = if spec.jacobian_spectrum === :full
+        jacobian_factorization === nothing ? Float64[] : Float64.(jacobian_factorization.S)
+    else
+        extremes = _operability_extreme_singular_values(J, linear_solver)
+        extremes === nothing ? Float64[] : extremes
+    end
+    condition_number = isempty(singular_values) || last(singular_values) == 0 ?
+        Inf : first(singular_values) / last(singular_values)
+    rank_tol = isempty(singular_values) ? Inf :
+        spec.jacobian_rank_rtol * max(first(singular_values), 1.0)
     if isempty(x)
         checks["jacobian_regular"] = OperabilityCheck(:not_applicable, nothing, nothing,
             "no non-source voltage state remains after source/reference elimination")
+    elseif isempty(singular_values)
+        checks["jacobian_regular"] = OperabilityCheck(:inconclusive, nothing, rank_tol,
+            "reduced Jacobian spectrum could not estimate both extreme singular values")
     else
         checks["jacobian_regular"] = OperabilityCheck(last(singular_values) > rank_tol ?
             :pass : :inconclusive, last(singular_values), rank_tol,
@@ -1437,7 +1506,8 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
 
     sensitivities = Dict{String,Any}()
     load_scale_dx = nothing
-    if spec.compute_sensitivity && !isempty(x) && last(singular_values) > rank_tol
+    if spec.compute_sensitivity && !isempty(x) && !isempty(singular_values) &&
+        last(singular_values) > rank_tol
         h = spec.sensitivity_step
         plus = _operability_scale_network(net, 1.0 + h)
         minus = _operability_scale_network(net, 1.0 - h)
@@ -1479,7 +1549,8 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
     end
 
     directions = Dict{String,Any}()
-    if spec.compute_sensitivity && !isempty(x) && last(singular_values) > rank_tol
+    if spec.compute_sensitivity && !isempty(x) && !isempty(singular_values) &&
+        last(singular_values) > rank_tol
         for (id_raw, load) in sort!(collect(get(net, "load", Dict())); by=x -> String(x[1]))
             id = String(id_raw)
             nconn = _operability_load_connection_count(load)
@@ -1539,6 +1610,7 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
         "real_state_dimension" => nreal,
         "load_connection_count" => nconnections,
         "sensitivity_direction_count" => ndirections,
+        "jacobian_spectrum_mode" => String(spec.jacobian_spectrum),
         "linear_solver_factorization_reused" => linear_solver !== nothing,
         "jacobian_storage_bytes_dense" => sizeof(Float64) * nreal * nreal,
         "zbus_storage_bytes_dense" => spec.compute_fixed_point_certificate ?
@@ -1546,8 +1618,14 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
         "fixed_point_scan_points_per_geometry" => spec.compute_fixed_point_certificate ? 2001 : 0,
         "fixed_point_geometry_count" => spec.compute_fixed_point_certificate ? 4 : 0,
         "interpretation" => "diagnostic size indicators; dense Jacobian/SVD and Z-bus certificate storage can dominate large-network runs")
+    critical_mode = spec.jacobian_spectrum === :full ?
+        _operability_critical_mode(jacobian_factorization, meta.state_nodes) :
+        Dict{String,Any}(
+            "status" => :not_applicable,
+            "message" => "critical singular vectors are omitted in jacobian_spectrum=:extremes mode",
+            "spectrum_mode" => String(spec.jacobian_spectrum))
     branch_evidence = Dict{String,Any}(
-        "critical_mode" => _operability_critical_mode(jacobian_factorization, meta.state_nodes),
+        "critical_mode" => critical_mode,
         "dP_dV" => _operability_path_dpdv_evidence(sensitivities),
         "sequence_sensitivity" => _operability_sequence_sensitivity_evidence(sensitivities),
         "complexity" => branch_complexity)
@@ -1599,6 +1677,7 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
     provenance = deepcopy(coords.provenance)
     provenance["operability"] = Dict("scope" => "static_ybus_linearized",
         "closure" => String(spec.closure),
+        "jacobian_spectrum_mode" => String(spec.jacobian_spectrum),
         "source_buses" => sort!(collect(source_buses)), "state_nodes" => meta.state_nodes,
         "coordinate_policy" => BMOPFTools.opf_scaling_policy_data(coords.policy),
         "model_inventory" => _operability_scope_inventory(net))

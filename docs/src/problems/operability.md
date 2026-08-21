@@ -124,12 +124,23 @@ should be treated as a scaling risk rather than an automatic rejection; use a
 smaller diagnostic subset or a redesigned sparse/iterative backend. The
 reported byte estimates are warnings, not hard safety limits, and hardware,
 sparsity, and requested campaign size must be measured for the target study.
+As an intermediate option, `jacobian_spectrum=:extremes` avoids the full SVD
+and retains only iterative estimates of the largest and smallest singular
+values. It still constructs the dense finite-difference Jacobian, so it reduces
+spectral work but is not yet a sparse-memory backend; critical singular-vector
+participation is marked `:not_applicable` in that mode.
 
 ```julia
 complexity = report.branch_evidence["complexity"]
 complexity["real_state_dimension"]
 complexity["jacobian_storage_bytes_dense"]
 complexity["zbus_storage_bytes_dense"]
+
+reduced = check_opf_operability(net, pf;
+    spec = OperabilitySpec(scaling_policy = SIUnitsScaling(),
+                           jacobian_spectrum = :extremes))
+reduced.singular_values       # [σmax, σmin] estimates
+reduced.branch_evidence["critical_mode"] # explicitly not applicable
 ```
 
 ```julia
