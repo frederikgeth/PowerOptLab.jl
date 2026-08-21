@@ -31,6 +31,8 @@ The checker reports:
   left/right mode participation and optional bordered fold localization; and
 * a path-specific continuation-margin summary that identifies the first
   declared voltage-limit or localized fold boundary relative to λ=1; and
+* deterministic one-row-per-point continuation records for table-ready
+  residual, conditioning, curvature, and event summaries; and
 * explicit `:not_applicable` scope evidence when generator or IBR equations are
   outside the residual seam.
 
@@ -92,6 +94,9 @@ limited = continue_opf_operability_pseudo_arclength(net, pf;
 limited.status
 limited.events
 limited.provenance["continuation"]["margin"]
+rows = operability_continuation_rows(pseudo)
+rows[1].lambda
+rows[end].event_kinds
 
 validated = check_opf_operability(net, pf;
     spec = OperabilitySpec(
@@ -138,4 +143,5 @@ continue_opf_operability_pseudo_arclength
 OperabilityFoldResult
 locate_opf_operability_fold
 operability_continuation_margin
+operability_continuation_rows
 ```

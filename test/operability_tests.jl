@@ -150,6 +150,12 @@ using BMOPFTools
           length(pseudo_trace.provenance["continuation"]["arclength_steps"])
     @test pseudo_trace.provenance["continuation"]["curvature_control"] ==
           Dict("low" => 2.0, "high" => 5.0)
+    pseudo_rows = operability_continuation_rows(pseudo_trace)
+    @test length(pseudo_rows) == length(pseudo_trace.lambdas)
+    @test pseudo_rows[1].index == 1
+    @test pseudo_rows[1].lambda == 0.0
+    @test isnan(pseudo_rows[1].curvature)
+    @test [row.lambda for row in pseudo_rows] == pseudo_trace.lambdas
     @test pseudo_trace.provenance["continuation"]["margin"]["status"] == :not_observed
     @test_throws ArgumentError OperabilityPseudoArclengthSpec(initial_step=0.01,
                                                                min_step=0.1)
@@ -209,6 +215,8 @@ using BMOPFTools
     @test stress_trace.provenance["continuation"]["margin"]["parameter_margin"] ≈ 1 / 24 atol=1e-6
     @test operability_continuation_margin(stress_trace)["lambda"] ≈ 25 / 24 atol=1e-6
     @test solve_diagnostics(stress_trace).margin["mechanism"] == :fold_candidate
+    stress_rows = operability_continuation_rows(stress_trace)
+    @test any(:fold_candidate in row.event_kinds for row in stress_rows)
     @test_throws ArgumentError operability_continuation_margin(stress_trace;
                                                                reference_lambda=0.0)
 

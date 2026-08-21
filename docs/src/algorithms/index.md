@@ -23,6 +23,7 @@ engine's admittance-matrix primitives) in a custom loop.
   `operability_continuation_margin` helper summarizes the first declared
   voltage-limit or localized fold boundary relative to λ=1; pseudo-arclength
   traces also retain tangent-turning curvature and accepted-step histories.
+  `operability_continuation_rows` provides deterministic table-ready records.
 
 ## Question-driven candidates not yet built
 

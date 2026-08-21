@@ -50,6 +50,8 @@ The current branch contains the first bounded implementation slice in
   reporting `:not_observed` when the recorded trace did not establish one;
 - pseudo-arclength results now retain tangent-turning curvature and accepted
   arclength-step histories, with conservative curvature-aware step control;
+- `operability_continuation_rows` exposes deterministic one-row-per-point
+  records so study tables can retain the trace ordering and event evidence;
 - an opt-in bordered-equation fold localizer solving ``F=0``, ``Jv=0``, and
   ``‖v‖₂=1`` from a declared approximate fold state; pseudo-arclength fold
   candidates now retain its localized status and residual evidence when invoked.

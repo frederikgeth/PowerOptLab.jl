@@ -155,6 +155,53 @@ operability_continuation_margin(
     result::OperabilityContinuationResult; reference_lambda::Real=1.0) =
     _continuation_margin(result.events; reference_lambda)
 
+"""
+    operability_continuation_rows(result)
+
+Return deterministic, one-row-per-accepted-point records for a continuation
+trace. Each row preserves the index into `result.lambdas`, `result.states`, and
+`result.node_voltages`, and includes residual, conditioning, corrector, and
+curvature evidence plus event kinds observed at that λ. Curvature and
+arclength are `NaN` for the no-load base and any fixed-λ endpoint refinement
+that has no predictor tangent.
+"""
+function operability_continuation_rows(result::OperabilityContinuationResult)
+    continuation = get(result.provenance, "continuation", Dict{String,Any}())
+    curvature_history = get(continuation, "curvature_history", Float64[])
+    arclength_steps = get(continuation, "arclength_steps", Float64[])
+    rows = NamedTuple[]
+    for index in eachindex(result.lambdas)
+        λ = result.lambdas[index]
+        event_kinds = Symbol[]
+        for event in result.events
+            event_lambda = get(event, "lambda", NaN)
+            event_lambda isa Real || continue
+            isfinite(Float64(event_lambda)) || continue
+            tolerance = max(1e-10, 1e-8 * max(1.0, abs(λ)))
+            abs(Float64(event_lambda) - λ) <= tolerance || continue
+            kind = Symbol(get(event, "kind", ""))
+            kind in event_kinds || push!(event_kinds, kind)
+        end
+        tangent_index = index - 1
+        curvature = tangent_index >= 1 && tangent_index <= length(curvature_history) ?
+            Float64(curvature_history[tangent_index]) : NaN
+        arclength_step = tangent_index >= 1 && tangent_index <= length(arclength_steps) ?
+            Float64(arclength_steps[tangent_index]) : NaN
+        push!(rows, (
+            index=index,
+            lambda=Float64(λ),
+            residual_norm=Float64(result.residuals[index]),
+            sigma_min=Float64(result.singular_values[index]),
+            condition_number=Float64(result.condition_numbers[index]),
+            corrector_iterations=Int(result.corrector_iterations[index]),
+            curvature=curvature,
+            arclength_step=arclength_step,
+            event_kinds=event_kinds,
+        ))
+    end
+    rows
+end
+
 function _continuation_scaled_jacobian(lin, meta, x, coords, cfg)
     state_scale, residual_scale = _operability_scales(lin, meta, coords)
     Jphys = finite_difference_jacobian(

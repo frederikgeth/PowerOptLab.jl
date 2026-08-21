@@ -238,6 +238,7 @@ export helm_series, HelmResult, solve_pf_helm
 export OperabilityContinuationSpec, OperabilityContinuationResult,
        continue_opf_operability, OperabilityPseudoArclengthSpec,
        continue_opf_operability_pseudo_arclength, OperabilityFoldResult,
-       locate_opf_operability_fold, operability_continuation_margin
+       locate_opf_operability_fold, operability_continuation_margin,
+       operability_continuation_rows
 
 end # module PowerOptLab
