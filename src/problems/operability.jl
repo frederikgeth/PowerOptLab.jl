@@ -288,9 +288,69 @@ function _operability_scope_inventory(net::Dict{String,Any})
         "equilibrium_scope" => "native_ybus_linearized")
 end
 
+"""Named finite stress direction for native static-load campaigns."""
+struct OperabilityStressDirection
+    name::Symbol
+    p_scale::Float64
+    q_scale::Float64
+    load_weights::Dict{String,Float64}
+    connection_weights::Dict{String,Vector{Float64}}
+    function OperabilityStressDirection(name::Symbol=:uniform_load;
+            p_scale::Real=1.0, q_scale::Real=1.0,
+            load_weights=Dict{String,Float64}(), connection_weights=Dict())
+        isfinite(Float64(p_scale)) && isfinite(Float64(q_scale)) ||
+            throw(ArgumentError("stress-direction P/Q scales must be finite"))
+        lw = Dict{String,Float64}()
+        for (id, weight) in load_weights
+            isfinite(Float64(weight)) || throw(ArgumentError(
+                "stress-direction load weights must be finite"))
+            lw[String(id)] = Float64(weight)
+        end
+        cw = Dict{String,Vector{Float64}}()
+        for (id, weights) in connection_weights
+            values = Float64.(collect(weights))
+            all(isfinite, values) || throw(ArgumentError(
+                "stress-direction connection weights must be finite"))
+            isempty(values) && throw(ArgumentError(
+                "stress-direction connection weights cannot be empty"))
+            cw[String(id)] = values
+        end
+        new(name, Float64(p_scale), Float64(q_scale), lw, cw)
+    end
+end
+
+function _operability_stress_network(net::Dict{String,Any}, λ::Real,
+                                     direction::OperabilityStressDirection)
+    result = deepcopy(net)
+    scale = Float64(λ)
+    isfinite(scale) && scale >= 0.0 || throw(ArgumentError(
+        "stress λ must be finite and >= 0"))
+    for (id_raw, load) in get(result, "load", Dict())
+        id = String(id_raw)
+        load_weight = get(direction.load_weights, id, 1.0)
+        connection_weight = get(direction.connection_weights, id, nothing)
+        nconn = _operability_load_connection_count(load)
+        if connection_weight !== nothing && length(connection_weight) < nconn
+            throw(ArgumentError("stress connection weights for $(repr(id)) need at least $nconn entries"))
+        end
+        for (key, factor) in (("p_nom", direction.p_scale),
+                              ("q_nom", direction.q_scale))
+            value = get(load, key, nothing)
+            value === nothing && continue
+            values = value isa AbstractVector ? Float64.(value) : [Float64(value)]
+            load[key] = [scale * factor * load_weight *
+                         (connection_weight === nothing ? 1.0 :
+                          (k <= length(connection_weight) ? connection_weight[k] : 0.0)) *
+                         values[k] for k in eachindex(values)]
+        end
+    end
+    result
+end
+
 function _operability_scale_network(net::Dict{String,Any}, λ::Real)
     result = deepcopy(net)
     scale = Float64(λ)
+    isfinite(scale) || throw(ArgumentError("load-scale λ must be finite"))
     for (_, load) in get(result, "load", Dict())
         for key in ("p_nom", "q_nom")
             value = get(load, key, nothing)
@@ -1321,4 +1381,102 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
         endpoint_normalized, meta.state_nodes, x, J, singular_values, condition_number,
         node_voltages, load_records, sequence_records, sensitivities, branch_evidence, checks,
         provenance, unsupported)
+end
+
+"""
+    operability_stress_network(net, lambda, direction)
+
+Return a copied native-load network with a named finite stress direction
+applied. Every nameplate P/Q term is zero at `lambda=0`; at other values it is
+multiplied by the direction's P/Q scale, optional load weight, and optional
+connection weight. This builder does not solve the network or claim that the
+resulting endpoint is the audited OPF point.
+"""
+function operability_stress_network(net::Dict{String,Any}, lambda::Real,
+                                    direction::OperabilityStressDirection)
+    _operability_stress_network(net, lambda, direction)
+end
+
+"""
+    operability_stress_rows(net, solution; spec, directions, lambdas, solve)
+
+Run a bounded, deterministic campaign of named native-static stress snapshots.
+`solve` is an explicit caller-supplied callback accepting either
+`(network, previous_solution, direction, lambda)`, `(network, previous_solution)`,
+or `(network)`, and must return an SI-valued solution dictionary. Each row
+retains the stress name, lambda, endpoint residual, certificate status, region
+margin, and any solver/checking error. These rows are finite study evidence;
+they do not establish a global operating envelope or a continuation branch.
+"""
+function operability_stress_rows(net::Dict{String,Any}, solution::AbstractDict;
+                                 spec::OperabilitySpec,
+                                 directions=(OperabilityStressDirection(),),
+                                 lambdas=(0.0, 0.5, 1.0), solve=nothing,
+                                 context=nothing)
+    solve === nothing && throw(ArgumentError(
+        "operability_stress_rows requires an explicit solve callback"))
+    direction_list = collect(directions)
+    isempty(direction_list) && throw(ArgumentError("directions cannot be empty"))
+    all(direction -> direction isa OperabilityStressDirection, direction_list) ||
+        throw(ArgumentError("directions must contain OperabilityStressDirection values"))
+    names = Symbol[direction.name for direction in direction_list]
+    length(unique(names)) == length(names) ||
+        throw(ArgumentError("stress-direction names must be unique"))
+    lambda_list = sort!(Float64.(collect(lambdas)))
+    isempty(lambda_list) && throw(ArgumentError("lambdas cannot be empty"))
+    all(λ -> isfinite(λ) && λ >= 0.0, lambda_list) ||
+        throw(ArgumentError("lambdas must be finite and >= 0"))
+    rows = NamedTuple[]
+    for direction in direction_list
+        previous = solution
+        for λ in lambda_list
+            stressed = operability_stress_network(net, λ, direction)
+            try
+                solved = if applicable(solve, stressed, previous, direction, λ)
+                    solve(stressed, previous, direction, λ)
+                elseif applicable(solve, stressed, previous)
+                    solve(stressed, previous)
+                elseif applicable(solve, stressed)
+                    solve(stressed)
+                else
+                    throw(ArgumentError("solve callback has no supported arity"))
+                end
+                solved isa AbstractDict || throw(ArgumentError(
+                    "solve callback must return an AbstractDict solution"))
+                report = check_opf_operability(stressed, solved; spec, context)
+                certificate = get(report.branch_evidence, "fixed_point_certificate", Dict())
+                previous = solved
+                push!(rows, (
+                    direction=direction.name, lambda=λ, status=report.status,
+                    p_scale=direction.p_scale, q_scale=direction.q_scale,
+                    load_weights=deepcopy(direction.load_weights),
+                    connection_weights=deepcopy(direction.connection_weights),
+                    endpoint_status=get(report.checks, "endpoint", OperabilityCheck(
+                        :not_applicable, nothing, nothing, "endpoint unavailable")).status,
+                    certificate_status=get(report.checks, "fixed_point_certificate",
+                        OperabilityCheck(:not_applicable, nothing, nothing,
+                            "certificate unavailable")).status,
+                    endpoint_residual_normalized=report.endpoint_residual_normalized,
+                    selected_region=String(get(certificate, "selected_region", "")),
+                    contraction_factor=Float64(get(certificate, "contraction_factor", NaN)),
+                    minimum_connection_voltage=Float64(get(certificate,
+                        "minimum_connection_voltage", NaN)),
+                    candidate_inside_region=Bool(get(certificate,
+                        "candidate_inside_region", false)),
+                    message="stress snapshot checked", error=nothing))
+            catch err
+                push!(rows, (
+                    direction=direction.name, lambda=λ, status=:inconclusive,
+                    p_scale=direction.p_scale, q_scale=direction.q_scale,
+                    load_weights=deepcopy(direction.load_weights),
+                    connection_weights=deepcopy(direction.connection_weights),
+                    endpoint_status=:inconclusive, certificate_status=:inconclusive,
+                    endpoint_residual_normalized=NaN, selected_region="",
+                    contraction_factor=NaN, minimum_connection_voltage=NaN,
+                    candidate_inside_region=false, message="stress snapshot failed",
+                    error=sprint(showerror, err)))
+            end
+        end
+    end
+    rows
 end

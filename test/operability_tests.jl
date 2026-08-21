@@ -51,6 +51,25 @@ using BMOPFTools
     @test certificate["law_bound_validation"]["status"] == :pass
     @test maximum(certificate["law_bound_validation"]["connections"]["ld1/1"]["ratio"]) <= 1.001
     @test certificate_report.status == :pass
+    direction = OperabilityStressDirection(:phase_selective;
+        p_scale=1.0, q_scale=0.0, connection_weights=Dict("ld1" => [0.0]))
+    stressed = operability_stress_network(net, 0.5, direction)
+    @test stressed["load"]["ld1"]["p_nom"] == [0.0]
+    @test stressed["load"]["ld1"]["q_nom"] == [0.0]
+    stress_rows = operability_stress_rows(net, pf;
+        spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
+            compute_fixed_point_certificate=true),
+        directions=[OperabilityStressDirection(:uniform),
+            OperabilityStressDirection(:reactive_removed; p_scale=1.0, q_scale=0.0)],
+        lambdas=[1.0, 0.0], solve=n -> solve_pf(n; per_unit=false))
+    @test length(stress_rows) == 4
+    @test [row.lambda for row in stress_rows] == [0.0, 1.0, 0.0, 1.0]
+    @test all(row.status == :pass for row in stress_rows)
+    @test all(row.endpoint_status == :pass for row in stress_rows)
+    @test_throws ArgumentError operability_stress_rows(net, pf;
+        spec=OperabilitySpec(scaling_policy=SIUnitsScaling()),
+        directions=[OperabilityStressDirection(:duplicate),
+            OperabilityStressDirection(:duplicate)], solve=n -> solve_pf(n; per_unit=false))
     critical = report.branch_evidence["critical_mode"]
     @test critical["status"] == :pass
     @test length(critical["left_vector"]) == 2 * length(report.state_nodes)

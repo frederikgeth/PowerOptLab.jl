@@ -38,6 +38,9 @@ The checker reports:
   independent fixed-point oracle trace; and
 * deterministic one-row-per-point continuation records for table-ready
   residual, conditioning, curvature, and event summaries; and
+* bounded named stress-direction snapshots with explicit P/Q and
+  connection-weight transformations, caller-supplied solve callbacks, and
+  table-ready residual/certificate rows; and
 * explicit `:not_applicable` scope evidence when generator or IBR equations are
   outside the residual seam.
 
@@ -127,6 +130,18 @@ rows = operability_continuation_rows(pseudo)
 rows[1].lambda
 rows[end].event_kinds
 
+directions = [
+    OperabilityStressDirection(:uniform),
+    OperabilityStressDirection(:reactive_removed; p_scale=1.0, q_scale=0.0),
+]
+stress_rows = operability_stress_rows(net, pf;
+    spec = OperabilitySpec(scaling_policy = SIUnitsScaling(),
+                           compute_fixed_point_certificate = true),
+    directions = directions,
+    lambdas = [0.0, 0.5, 1.0],
+    solve = network -> solve_pf(network; per_unit=false))
+stress_rows
+
 validated = check_opf_operability(net, pf;
     spec = OperabilitySpec(
         scaling_policy = SIUnitsScaling(),
@@ -173,4 +188,7 @@ OperabilityFoldResult
 locate_opf_operability_fold
 operability_continuation_margin
 operability_continuation_rows
+OperabilityStressDirection
+operability_stress_network
+operability_stress_rows
 ```

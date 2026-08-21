@@ -171,7 +171,8 @@ export ConnectionPoint, FairnessPolicy, solve_operating_envelope,
 
 # Post-OPF static voltage operability (first slice: native ybus load scope)
 export OperabilitySpec, OperabilityCheck, OperabilityResult,
-       check_opf_operability
+       check_opf_operability, OperabilityStressDirection,
+       operability_stress_network, operability_stress_rows
 
 # Bilevel distribution-network proof of concept
 export BilevelPVResult, BilevelPVResponse, SingleLevelPVResult,

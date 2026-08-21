@@ -52,6 +52,11 @@ The current branch contains the first bounded implementation slice in
   arclength-step histories, with conservative curvature-aware step control;
 - `operability_continuation_rows` exposes deterministic one-row-per-point
   records so study tables can retain the trace ordering and event evidence;
+- named finite stress directions now have an explicit network builder and a
+  bounded `operability_stress_rows` campaign adapter. P/Q scales, optional
+  load weights, and connection weights are recorded by direction; the solver
+  remains an explicit callback, and rows retain endpoint/certificate status
+  plus errors without implying a global envelope;
 - pseudo-arclength stress traces now refine every λ=1 crossing, enforce a
   declared lower λ-domain boundary (default 0), and can finish with a localized
   fold plus model-domain termination rather than spending the stress budget in
@@ -596,7 +601,8 @@ provenance; no derivative is reported through an unacknowledged discontinuity.
   componentwise polydisc where useful; retain `:inconclusive` semantics when
   the sufficient condition does not hold.
 - Run multiple named stress directions and model ensembles for ZIP/exponential
-  uncertainty.
+- uncertainty using `operability_stress_rows`, then aggregate finite path
+  margins without promoting them to a global guarantee.
 - Add selected contingency workflows without treating a finite list as a global
   guarantee.
 - Provide table-ready rows and a documented research-study tutorial.
