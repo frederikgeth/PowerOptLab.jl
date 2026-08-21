@@ -54,6 +54,12 @@ The checker reports:
 * explicit `:not_applicable` scope evidence when generator or IBR equations are
   outside the residual seam.
 
+Call `operability_scope_audit(net)` before solving when a workflow needs a
+machine-readable readiness check. It reports the native equilibrium scope,
+frozen-dispatch closure, generator/IBR counts, load inventory, and retained
+reasons for any extension requirement. An out-of-scope result is a readiness
+diagnostic, not an infeasibility claim.
+
 Scaling is part of the evidence contract. Supply the staged OPF `context` so
 the audited policy, AC coordinate bases, and research provenance are inherited,
 or pass an explicit `OperabilitySpec(scaling_policy=...)`. Non-SI policies also
@@ -319,6 +325,7 @@ OperabilityCheck
 OperabilityModelError
 OperabilityResult
 check_opf_operability
+operability_scope_audit
 OperabilityContinuationSpec
 OperabilityContinuationResult
 continue_opf_operability

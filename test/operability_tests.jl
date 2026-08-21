@@ -6,6 +6,13 @@ using SparseArrays
     net = single_bus_net(pload=100.0)
     pf = solve_pf(net; per_unit=false)
 
+    scope_audit = operability_scope_audit(net)
+    @test scope_audit["status"] == :supported
+    @test scope_audit["closure"] == :frozen_dispatch
+    @test scope_audit["control_closure"] == "frozen_dispatch_native_static"
+    @test scope_audit["generator_count"] == 0
+    @test scope_audit["ibr_count"] == 0
+
     @test_throws ArgumentError check_opf_operability(net, pf)
 
     spec = OperabilitySpec(
@@ -659,6 +666,11 @@ using SparseArrays
     # Scope exclusions are explicit evidence rather than a silent partial pass.
     ibr_net = doe_ibr_feeder()
     ibr_pf = solve_pf(ibr_net; per_unit=false)
+    ibr_scope_audit = operability_scope_audit(ibr_net)
+    @test ibr_scope_audit["status"] == :not_applicable
+    @test ibr_scope_audit["ibr_count"] == 1
+    @test ibr_scope_audit["control_closure"] == "outside_native_static_seam"
+    @test any(occursin("IBR", reason) for reason in ibr_scope_audit["unsupported_reasons"])
     ibr_report = check_opf_operability(ibr_net, ibr_pf; spec)
     @test ibr_report.status == :not_applicable
     @test !isempty(ibr_report.unsupported)

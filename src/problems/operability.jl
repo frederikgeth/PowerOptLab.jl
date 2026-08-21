@@ -336,6 +336,35 @@ function _operability_scope_inventory(net::Dict{String,Any})
         "equilibrium_scope" => "native_ybus_linearized")
 end
 
+"""
+    operability_scope_audit(net)
+
+Return a serialisable preflight record for the native frozen-dispatch
+operability checker. This audit does not inspect a solved voltage state and does
+not claim that an out-of-scope network is infeasible; it identifies the exact
+model seam that would need to be extended before a snapshot can be checked.
+"""
+function operability_scope_audit(net::Dict{String,Any})
+    reasons = _operability_preflight(net)
+    inventory = _operability_scope_inventory(net)
+    generator_count = length(get(net, "generator", Dict()))
+    ibr_count = length(get(net, "ibr", Dict()))
+    control_closure = generator_count == 0 && ibr_count == 0 ?
+        "frozen_dispatch_native_static" : "outside_native_static_seam"
+    Dict{String,Any}(
+        "status" => isempty(reasons) ? :supported : :not_applicable,
+        "scope" => "native_ybus_linearized",
+        "closure" => :frozen_dispatch,
+        "control_closure" => control_closure,
+        "generator_count" => generator_count,
+        "ibr_count" => ibr_count,
+        "model_inventory" => inventory,
+        "unsupported_reasons" => reasons,
+        "message" => isempty(reasons) ?
+            "network is eligible for the native frozen-dispatch snapshot checker" :
+            "network requires an extended equilibrium seam before operability claims can be evaluated")
+end
+
 """Named finite stress direction for native static-load campaigns."""
 struct OperabilityStressDirection
     name::Symbol
