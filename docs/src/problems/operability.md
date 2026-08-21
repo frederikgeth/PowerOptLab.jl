@@ -111,7 +111,7 @@ dominant terms:
 | finite-difference Jacobian | ``O(n)`` residual evaluations, then a dense ``n×n`` matrix |
 | singular values and dense linear solves | ``O(n^3)`` worst-case time and ``O(n^2)`` memory |
 | named P/Q sensitivities | one perturbed Ybus and right-hand side per requested direction (up to ``1+2m``); the dense Jacobian factorization is reused when regular |
-| fixed-point certificate | explicit dense ``Z=Y_{ll}^{-1}`` storage ``O(n_f^2)`` plus four deterministic 2001-point geometry scans; the scan arithmetic is roughly linear in ``m`` and ``n_f`` after connection products are cached |
+| fixed-point certificate | one Ybus factorization plus four deterministic 2001-point geometry scans; dense factorization storage is ``O(n_f^2)``, while sparse input uses sparse LU with topology-dependent fill-in |
 | continuation / stress campaigns | multiply snapshot cost by accepted steps or finite ``(direction, λ)`` rows; independent validation adds two nonlinear re-solves per validated direction |
 
 As a practical policy, run the default single-snapshot checks freely on small
@@ -132,8 +132,9 @@ participation is marked `:not_applicable` in that mode.
 For a sparse-memory Jacobian path, pair `jacobian_storage=:sparse` with
 `jacobian_spectrum=:extremes`. This stores the finite-difference matrix in
 compressed sparse form and uses sparse LU right-hand-side solves, but it still
-requires one residual pair per state coordinate and the explicit fixed-point
-certificate remains dense-Zbus work when requested.
+requires one residual pair per state coordinate. The fixed-point certificate
+also reuses a Ybus factorization rather than explicitly materializing an inverse;
+sparse LU fill-in remains network-dependent and should be measured.
 
 ```julia
 using SparseArrays

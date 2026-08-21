@@ -128,6 +128,8 @@ using SparseArrays
     @test complexity["jacobian_storage_bytes_dense"] ==
           sizeof(Float64) * length(certificate_report.state)^2
     @test complexity["zbus_storage_bytes_dense"] > 0
+    @test complexity["zbus_storage_mode"] in
+          ("implicit_dense_factorization", "implicit_sparse_factorization")
     @test complexity["fixed_point_scan_points_per_geometry"] == 2001
     @test certificate_report.status == :pass
 

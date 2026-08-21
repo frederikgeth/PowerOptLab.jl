@@ -109,6 +109,9 @@ The current branch contains the first bounded implementation slice in
   mode, retaining compressed finite-difference structure and sparse LU solves;
   full SVD and sparse-storage combinations are rejected explicitly until a
   sparse spectral contract is defined;
+- the fixed-point certificate now reuses an implicit Ybus factorization for
+  no-load solves, connection products, and map iterations instead of forming
+  an explicit dense inverse; sparse LU fill-in remains an observed study cost;
 - relative singular-value-ratio evidence, normalized residual verdicts, and
   explicit frozen-dispatch provenance now align the numerical checks with the
   audited scaling and closure contracts; aggregate status no longer reports a

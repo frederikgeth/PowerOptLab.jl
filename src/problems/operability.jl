@@ -975,19 +975,22 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
         base["message"] = "no non-source voltage state is available for a Z-bus certificate"
         return base
     end
-    Yll = Matrix{ComplexF64}(lin.Y[meta.free, meta.free])
+    Yll = ComplexF64.(lin.Y[meta.free, meta.free])
     Yls = isempty(meta.fixed) ? zeros(ComplexF64, nf, 0) :
-        Matrix{ComplexF64}(lin.Y[meta.free, meta.fixed])
-    Z = try
-        Yll \ Matrix{ComplexF64}(I, nf, nf)
+        ComplexF64.(lin.Y[meta.free, meta.fixed])
+    Yll_factor = try
+        lu(Yll)
     catch err
         base["status"] = :inconclusive
         base["message"] = "source-eliminated Ybus is singular; contraction region is unavailable"
         base["error"] = sprint(showerror, err)
         return base
     end
+    zsolve(rhs) = Yll_factor \ ComplexF64.(rhs)
+    base["zbus_storage_mode"] = issparse(Yll) ?
+        "implicit_sparse_factorization" : "implicit_dense_factorization"
     w = isempty(meta.fixed) ? zeros(ComplexF64, nf) :
-        -(Yll \ (Yls * meta.fixed_values))
+        -(Yll_factor \ (Yls * meta.fixed_values))
     wfull = zeros(ComplexF64, length(lin.nodes))
     wfull[meta.fixed] = meta.fixed_values
     wfull[meta.free] = w
@@ -1010,7 +1013,7 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
                 component.nl === nothing && continue
                 coefficient, gamma = component.nl
                 isfinite(Float64(coefficient)) && isfinite(Float64(gamma)) ||
-                    push!(reasons, "load $(repr(id))/$k has non-finite exponential parameters")
+            push!(reasons, "load $(repr(id))/$k has non-finite exponential parameters")
                 coefficient_abs = abs(Float64(coefficient)) / sl.Vnom^Float64(gamma)
                 coefficient_abs > 0.0 && push!(terms,
                     (kind=:exponential, coefficient=coefficient_abs, gamma=Float64(gamma)))
@@ -1028,7 +1031,7 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
             dv0 = vp - vn
             push!(edges, (key="$id/$k", pos=sl.pos, neg=sl.neg, sl=sl,
                 terms=terms, dv0=dv0, a=a, anorm=anorm,
-                zalpha=abs.(Z * a)))
+                zalpha=abs.(zsolve(a))))
         end
     end
     if !isempty(reasons)
@@ -1118,7 +1121,7 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
     # load-law derivative bounds gives a conservative output Lipschitz factor
     # without assuming a componentwise box shape.
     euclidean_region = function(center_free, center_full, center_dv)
-        offset = abs.(w + Z * lin.i_comp(center_full)[meta.free] - center_free)
+        offset = abs.(w + zsolve(lin.i_comp(center_full)[meta.free]) - center_free)
         offset_norm = norm(offset)
         connection_norms = Float64[norm(e.a) for e in edges]
         radius_limit = minimum(abs(center_dv[j]) / connection_norms[j]
@@ -1218,7 +1221,7 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
     local_region = try
         candidate_free = candidate[meta.free]
         center_full = copy(wfull); center_full[meta.free] = candidate_free
-        map_center = w + Z * lin.i_comp(center_full)[meta.free]
+        map_center = w + zsolve(lin.i_comp(center_full)[meta.free])
         offset = abs.(map_center .- candidate_free)
         local_dv0 = [begin
             pi = get(lin.index, e.pos, 0)
@@ -1349,7 +1352,7 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
     # is evidence recorded alongside, but not substituted for, the theorem.
     map_complex(vfree) = begin
         vfull = copy(wfull); vfull[meta.free] = vfree
-        w + Z * lin.i_comp(vfull)[meta.free]
+        w + zsolve(lin.i_comp(vfull)[meta.free])
     end
     pack(v) = vcat(real.(v), imag.(v))
     unpack(x) = ComplexF64.(x[1:nf] .+ im .* x[nf+1:end])
@@ -1662,6 +1665,9 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
         "jacobian_storage_bytes_estimate" => Base.summarysize(J),
         "zbus_storage_bytes_dense" => spec.compute_fixed_point_certificate ?
             sizeof(ComplexF64) * nfree * nfree : 0,
+        "zbus_storage_mode" => !spec.compute_fixed_point_certificate ? "not_requested" :
+            (issparse(lin.Y) ? "implicit_sparse_factorization" :
+             "implicit_dense_factorization"),
         "fixed_point_scan_points_per_geometry" => spec.compute_fixed_point_certificate ? 2001 : 0,
         "fixed_point_geometry_count" => spec.compute_fixed_point_certificate ? 4 : 0,
         "interpretation" => "diagnostic size indicators; dense Jacobian/SVD and Z-bus certificate storage can dominate large-network runs")
