@@ -51,6 +51,7 @@ makedocs(
             "HELM power flow" => "algorithms/helm.md",
         ],
         "Tutorials" => [
+            "Single-snapshot post-OPF operability study" => "tutorials/post_opf_operability_study.md",
             "Dynamic operating envelopes" => "tutorials/dynamic_operating_envelopes.md",
             "Constrained NLLS state estimation" => "tutorials/constrained_nlls_state_estimation.md",
             "Inverse Carson reconstruction" => "tutorials/inverse_carson_reconstruction.md",

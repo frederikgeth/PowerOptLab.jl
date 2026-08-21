@@ -93,6 +93,9 @@ The current branch contains the first bounded implementation slice in
   conclusions while retaining coordinate-dependent residual evidence, and
   unsupported generators, IBRs, and load configurations retain structured
   `:not_applicable` scope provenance;
+- a single-snapshot research-study tutorial now documents the stable checker,
+  table-row projection, finite stress/model ensembles, scaling evidence, and
+  explicit scope semantics without introducing contingency claims;
 - an opt-in bordered-equation fold localizer solving ``F=0``, ``Jv=0``, and
   ``‖v‖₂=1`` from a declared approximate fold state; pseudo-arclength fold
   candidates now retain its localized status and residual evidence when invoked.
@@ -634,7 +637,7 @@ contingency or operating-envelope guarantee.
 - Run multiple named stress directions and model ensembles for ZIP/exponential
   uncertainty using `operability_stress_rows`, then aggregate finite path
   margins without promoting them to a global guarantee.
-- Provide table-ready rows and a documented research-study tutorial.
+- Provide table-ready rows and maintain the documented research-study tutorial.
 
 **Exit criterion:** every positive claim is tied to a theorem, continuation
 trace, or declared finite study; conservative certificate failures remain
