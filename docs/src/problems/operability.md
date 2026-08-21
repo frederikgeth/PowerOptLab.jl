@@ -11,7 +11,8 @@ The checker reports:
 * the independent non-source current-balance residual;
 * a coordinate-scaled voltage Jacobian, singular values, condition number, and
   a rank/regularity check with critical left/right singular-mode participation;
-* connection-level terminal voltages and derivatives under uniform load scaling;
+* connection-level terminal voltages, requested-versus-realized powers, and
+  derivatives under uniform load scaling plus named P/Q perturbations;
 * positive-, negative-, and zero-sequence voltages and VUF on complete
   three-phase buses; and
 * an opt-in HELM cross-check of the no-load-connected branch for supported
@@ -41,6 +42,7 @@ report = check_opf_operability(net, pf;
 report.status                    # :pass, :fail, :inconclusive, or :not_applicable
 report.checks["jacobian_regular"]
 report.sensitivities["load_scale"]
+report.sensitivities["directions"]["P"]
 report.branch_evidence["critical_mode"]
 report.branch_evidence["reachability"]
 ```

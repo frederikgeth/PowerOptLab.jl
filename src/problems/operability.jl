@@ -264,6 +264,56 @@ function _operability_scale_network(net::Dict{String,Any}, λ::Real)
     result
 end
 
+function _operability_perturb_load(net::Dict{String,Any}, id::String, k::Int,
+                                   field::String, delta::Real)
+    result = deepcopy(net)
+    loads = get(result, "load", Dict{String,Any}())
+    haskey(loads, id) || throw(ArgumentError("unknown load $(repr(id))"))
+    load = loads[id]
+    values = get(load, field, nothing)
+    if values === nothing
+        field == "q_nom" || throw(ArgumentError(
+            "load $(repr(id)) has no $(repr(field)) vector to perturb"))
+        values = zeros(length(get(load, "p_nom", Any[])))
+    end
+    vector = values isa AbstractVector ? Float64.(values) : [Float64(values)]
+    if field == "q_nom" && length(vector) < k
+        append!(vector, zeros(k - length(vector)))
+    end
+    1 <= k <= length(vector) || throw(BoundsError(vector, k))
+    vector[k] += Float64(delta)
+    load[field] = vector
+    result
+end
+
+function _operability_directional_sensitivity(net, lin, meta, x, J,
+                                              residual_scale, state_scale, spec,
+                                              id::String, k::Int, field::String)
+    load = net["load"][id]
+    values = get(load, field, nothing)
+    base = values === nothing || (values isa AbstractVector && k > length(values)) ? 0.0 :
+        Float64(values isa AbstractVector ? values[k] : values)
+    h = spec.sensitivity_step * max(abs(base), 1.0)
+    plus = _operability_perturb_load(net, id, k, field, h)
+    minus = _operability_perturb_load(net, id, k, field, -h)
+    lp = BMOPFTools.ybus_linearized(plus; fold=:constant_z)
+    lm = BMOPFTools.ybus_linearized(minus; fold=:constant_z)
+    dF = (_operability_residual(lp, meta, x) - _operability_residual(lm, meta, x)) / (2h)
+    dF_scaled = dF ./ residual_scale
+    dx_scaled = -(J \ dF_scaled)
+    dx = dx_scaled .* state_scale
+    dvmap = _operability_node_derivative(lin, meta, dx)
+    Dict{String,Any}(
+        "parameter" => field, "connection" => "$id/$k", "step" => h,
+        "units" => field == "p_nom" ? "W" : "var",
+        "state_derivative" => dx,
+        "node_voltage_derivative" => dvmap,
+        "load_connections" => _operability_load_records(net,
+            _operability_node_map(lin, _operability_voltage_vector(lin, meta, x)); dvmap),
+        "sequences" => _operability_sequences(net,
+            _operability_node_map(lin, _operability_voltage_vector(lin, meta, x)); dvmap))
+end
+
 function _operability_state_meta(lin, vmap, source_buses)
     fixed = [i for (i, node) in enumerate(lin.nodes) if node[1] in source_buses]
     free = [i for i in eachindex(lin.nodes) if !(i in fixed)]
@@ -306,7 +356,14 @@ function _operability_node_derivative(lin, meta, dx)
     _operability_node_map(lin, dV)
 end
 
-function _operability_load_records(net, vmap; dvmap=nothing)
+function _operability_connection_power_slope(sl, magnitude)
+    magnitude == 0.0 && return 0.0im
+    h = 1e-6 * max(abs(magnitude), 1.0)
+    (_subload_S(sl, magnitude + h) - _subload_S(sl, max(magnitude - h, 0.0))) /
+        (magnitude + h - max(magnitude - h, 0.0))
+end
+
+function _operability_load_records(net, vmap; dvmap=nothing, uniform_scale=false)
     records = Dict{String,Any}()
     for (id_raw, load) in sort!(collect(get(net, "load", Dict())); by=x -> String(x[1]))
         id = String(id_raw)
@@ -318,13 +375,28 @@ function _operability_load_records(net, vmap; dvmap=nothing)
                  (sl.neg === nothing ? 0.0im : get(dvmap, sl.neg, 0.0im)))
             u = vp - vn; mag = abs(u)
             dmag = dvmap === nothing || mag == 0 ? NaN : real(conj(u) * dv) / mag
+            requested = ComplexF64(sl.p0 + im * sl.q0)
+            realized = ComplexF64(_subload_S(sl, mag))
+            local_dS_dmag = ComplexF64(_operability_connection_power_slope(sl, mag))
+            path_dS = if uniform_scale && dvmap !== nothing
+                realized + local_dS_dmag * dmag
+            else
+                ComplexF64(NaN + im * NaN)
+            end
+            path_dP_dV = uniform_scale && dvmap !== nothing && isfinite(dmag) &&
+                abs(dmag) > eps(Float64) ? real(path_dS) / dmag : NaN
             key = "$id/$k"
             records[key] = Dict{String,Any}(
                 "load" => id, "connection_index" => k,
                 "positive" => sl.pos, "negative" => sl.neg,
                 "voltage" => ComplexF64(u), "magnitude" => mag,
+                "requested_power" => requested, "realized_power" => realized,
+                "power_error" => realized - requested,
+                "realized_power_local_derivative" => local_dS_dmag,
                 "voltage_derivative" => ComplexF64(dv),
                 "magnitude_derivative" => dmag,
+                "realized_power_derivative" => path_dS,
+                "path_dP_dV" => path_dP_dV,
             )
         end
     end
@@ -598,7 +670,8 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
         sensitivities["load_scale"] = Dict{String,Any}(
             "state_derivative" => dx,
             "node_voltage_derivative" => dvmap,
-            "load_connections" => _operability_load_records(net, node_voltages; dvmap),
+            "load_connections" => _operability_load_records(net, node_voltages;
+                dvmap, uniform_scale=true),
             "sequences" => _operability_sequences(net, node_voltages; dvmap))
         checks["load_scale_sensitivity"] = OperabilityCheck(:pass,
             sensitivities["load_scale"]["state_derivative"], nothing,
@@ -606,6 +679,24 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
     else
         checks["load_scale_sensitivity"] = OperabilityCheck(:not_applicable, nothing, nothing,
             isempty(x) ? "no state to differentiate" : "Jacobian is too close to singular")
+    end
+
+    directions = Dict{String,Any}()
+    if spec.compute_sensitivity && !isempty(x) && last(singular_values) > rank_tol
+        for (id_raw, load) in sort!(collect(get(net, "load", Dict())); by=x -> String(x[1]))
+            id = String(id_raw)
+            p_nom = get(load, "p_nom", Float64[])
+            nconn = p_nom isa AbstractVector ? length(p_nom) : 1
+            for field in ("p_nom", "q_nom")
+                family = field == "p_nom" ? "P" : "Q"
+                family_records = get!(directions, family, Dict{String,Any}())
+                for k in 1:nconn
+                    family_records["$id/$k"] = _operability_directional_sensitivity(
+                        net, lin, meta, x, J, residual_scale, state_scale, spec, id, k, field)
+                end
+            end
+        end
+        sensitivities["directions"] = directions
     end
 
     branch_evidence = Dict{String,Any}(

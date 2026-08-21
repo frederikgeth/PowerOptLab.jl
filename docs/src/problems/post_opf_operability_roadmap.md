@@ -19,8 +19,9 @@ The current branch contains the first bounded implementation slice in
 - independent static-load endpoint residuals with explicit scope exclusions;
 - audited-policy-scaled Jacobian evidence, singular values, and critical-mode
   participation;
-- connection-level and sequence-level observables plus uniform load-scale
-  sensitivities; and
+- connection-level and sequence-level observables plus uniform load-scale and
+  named P/Q sensitivities, with requested-versus-realized power records and
+  path-qualified `dP/dV`; and
 - an opt-in HELM endpoint cross-check that records the energized no-load
   homotopy, supported-physics preflight, HELM status, and endpoint mismatch.
 

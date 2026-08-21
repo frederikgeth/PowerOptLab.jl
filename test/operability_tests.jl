@@ -17,8 +17,17 @@ using BMOPFTools
     @test report.endpoint_residual < 1e-6
     @test report.checks["jacobian_regular"].status == :pass
     @test report.checks["load_scale_sensitivity"].status == :pass
-    @test report.sensitivities["load_scale"]["load_connections"]["ld1/1"][
-        "magnitude_derivative"] < 0.0
+    connection = report.load_connections["ld1/1"]
+    @test connection["requested_power"] ≈ connection["realized_power"] atol=1e-8
+    load_scale_connection = report.sensitivities["load_scale"]["load_connections"]["ld1/1"]
+    @test load_scale_connection["magnitude_derivative"] < 0.0
+    @test isfinite(load_scale_connection["path_dP_dV"])
+    @test load_scale_connection["path_dP_dV"] < 0.0
+    @test haskey(report.sensitivities["directions"], "P")
+    @test haskey(report.sensitivities["directions"], "Q")
+    p_direction = report.sensitivities["directions"]["P"]["ld1/1"]
+    @test p_direction["units"] == "W"
+    @test p_direction["load_connections"]["ld1/1"]["magnitude_derivative"] < 0.0
     @test report.provenance["operability"]["scope"] == "static_ybus_linearized"
     critical = report.branch_evidence["critical_mode"]
     @test critical["status"] == :pass
