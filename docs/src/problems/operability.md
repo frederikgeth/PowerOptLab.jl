@@ -13,6 +13,8 @@ The checker reports:
   a rank/regularity check with critical left/right singular-mode participation;
 * connection-level terminal voltages, requested-versus-realized powers, and
   derivatives under uniform load scaling plus named P/Q perturbations;
+* optional independent finite-difference re-solves that validate the implicit
+  uniform-load sensitivity; and
 * positive-, negative-, and zero-sequence voltages and VUF on complete
   three-phase buses; and
 * an opt-in HELM cross-check of the no-load-connected branch for supported
@@ -64,6 +66,13 @@ pseudo = continue_opf_operability_pseudo_arclength(net, pf;
 pseudo.status
 pseudo.provenance["continuation"]["pseudo_arclength"]
 pseudo.provenance["continuation"]["arclength_state_scale"]
+
+validated = check_opf_operability(net, pf;
+    spec = OperabilitySpec(
+        scaling_policy = SIUnitsScaling(),
+        compute_sensitivity_validation = true))
+validated.checks["load_scale_sensitivity_validation"]
+validated.sensitivities["validation"]["load_scale"]
 
 # Starting from a voltage/state near a suspected nose, solve the bordered
 # equations F=0, J*v=0, ||v||₂=1 at a declared load scale.

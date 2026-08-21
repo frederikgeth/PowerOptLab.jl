@@ -34,6 +34,15 @@ using BMOPFTools
     @test length(critical["left_vector"]) == 2 * length(report.state_nodes)
     @test length(critical["right_node_participation"]) == length(report.state_nodes)
 
+    validation_report = check_opf_operability(net, pf;
+        spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
+            compute_sensitivity_validation=true))
+    @test validation_report.checks["load_scale_sensitivity_validation"].status == :pass
+    validation = validation_report.sensitivities["validation"]["load_scale"]
+    @test validation["absolute_error"] < validation["tolerance"]
+    @test validation["plus_residual"] < 1e-6
+    @test validation["minus_residual"] < 1e-6
+
     bad = deepcopy(pf)
     bad["bus"]["bus1"]["1"]["vr"] += 10.0
     bad_report = check_opf_operability(net, bad; spec)

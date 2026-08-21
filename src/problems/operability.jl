@@ -41,7 +41,9 @@ endogenous-control equations are reported as outside this scope until a public
 Set `compute_helm=true` to request an independent no-load-connected HELM
 cross-check on its narrower constant-power/constant-impedance scope. A HELM
 failure is retained as `:inconclusive`; unsupported physics is
-`:not_applicable`.
+`:not_applicable`. Set `compute_sensitivity_validation=true` to re-solve small
+uniform-load perturbations and compare the implicit load-scale derivative with
+an independent finite difference.
 """
 struct OperabilitySpec
     scaling_policy::Union{Nothing,_OPERABILITY_SCALING_POLICY}
@@ -56,6 +58,9 @@ struct OperabilitySpec
     voltage_max::Float64
     vuf_max::Float64
     compute_sensitivity::Bool
+    compute_sensitivity_validation::Bool
+    sensitivity_validation_atol::Float64
+    sensitivity_validation_rtol::Float64
     compute_helm::Bool
     helm_max_order::Int
     helm_tol::Float64
@@ -74,6 +79,9 @@ struct OperabilitySpec
             voltage_max::Real=Inf,
             vuf_max::Real=Inf,
             compute_sensitivity::Bool=true,
+            compute_sensitivity_validation::Bool=false,
+            sensitivity_validation_atol::Real=1e-6,
+            sensitivity_validation_rtol::Real=1e-3,
             compute_helm::Bool=false,
             helm_max_order::Integer=40,
             helm_tol::Real=1e-8,
@@ -83,7 +91,8 @@ struct OperabilitySpec
             (_OPERABILITY_SCALING_POLICY !== Any && scaling_policy isa _OPERABILITY_SCALING_POLICY) ||
             throw(ArgumentError("scaling_policy must be an AbstractOpfScalingPolicy"))
         vals = (residual_atol, residual_rtol, jacobian_step,
-                jacobian_rank_rtol, sensitivity_step)
+                jacobian_rank_rtol, sensitivity_step,
+                sensitivity_validation_atol, sensitivity_validation_rtol)
         all(x -> isfinite(Float64(x)) && Float64(x) > 0, vals) ||
             throw(ArgumentError("operability tolerances and steps must be finite and > 0"))
         isfinite(Float64(voltage_min)) && voltage_min >= 0 ||
@@ -100,7 +109,9 @@ struct OperabilitySpec
             Float64(residual_atol), Float64(residual_rtol), Float64(jacobian_step),
             Float64(jacobian_rank_rtol), Float64(sensitivity_step),
             Float64(voltage_min), Float64(voltage_max), Float64(vuf_max),
-            compute_sensitivity, compute_helm, Int(helm_max_order), Float64(helm_tol),
+            compute_sensitivity, compute_sensitivity_validation,
+            Float64(sensitivity_validation_atol), Float64(sensitivity_validation_rtol),
+            compute_helm, Int(helm_max_order), Float64(helm_tol),
             Float64(helm_endpoint_atol), Float64(helm_endpoint_rtol))
     end
 end
@@ -312,6 +323,73 @@ function _operability_directional_sensitivity(net, lin, meta, x, J,
             _operability_node_map(lin, _operability_voltage_vector(lin, meta, x)); dvmap),
         "sequences" => _operability_sequences(net,
             _operability_node_map(lin, _operability_voltage_vector(lin, meta, x)); dvmap))
+end
+
+function _operability_sensitivity_corrector(lin, meta, x0, coords, spec)
+    x = copy(x0); last_residual = Inf
+    for iteration in 1:20
+        residual = _operability_residual(lin, meta, x)
+        last_residual = isempty(residual) ? 0.0 : maximum(abs, residual)
+        tolerance = spec.residual_atol + spec.residual_rtol * max(
+            1.0, isempty(residual) ? 0.0 : maximum(abs, residual))
+        last_residual <= tolerance && return x, true, iteration, last_residual
+        state_scale, residual_scale = _operability_scales(lin, meta, coords)
+        Jphys = finite_difference_jacobian(
+            y -> _operability_residual(lin, meta, y), x; step=spec.jacobian_step)
+        J = _operability_scaled_jacobian(Jphys, state_scale, residual_scale)
+        step_scaled = try
+            -(J \ (residual ./ residual_scale))
+        catch
+            return x, false, iteration, last_residual
+        end
+        all(isfinite, step_scaled) || return x, false, iteration, last_residual
+        step = step_scaled .* state_scale
+        α = 1.0; accepted = false
+        while α >= 1 / 64
+            candidate = x .+ α .* step
+            candidate_residual = _operability_residual(lin, meta, candidate)
+            candidate_norm = isempty(candidate_residual) ? 0.0 : maximum(abs, candidate_residual)
+            if all(isfinite, candidate_residual) && candidate_norm < last_residual
+                x = candidate; accepted = true; break
+            end
+            α /= 2
+        end
+        accepted || return x, false, iteration, last_residual
+    end
+    x, false, 20, last_residual
+end
+
+function _operability_validate_load_scale(net, lin, meta, x, coords, spec, analytic_dx)
+    # The implicit derivative uses the small configured residual perturbation;
+    # an independent equilibrium re-solve needs a larger parameter step so the
+    # voltage change is not lost beneath the current-balance corrector tolerance.
+    h = max(100.0 * spec.sensitivity_step, sqrt(eps(Float64)))
+    plus = BMOPFTools.ybus_linearized(_operability_scale_network(net, 1.0 + h);
+                                      fold=:constant_z)
+    minus = BMOPFTools.ybus_linearized(_operability_scale_network(net, 1.0 - h);
+                                       fold=:constant_z)
+    xp, okp, ip, rp = _operability_sensitivity_corrector(plus, meta, x, coords, spec)
+    xm, okm, im, rm = _operability_sensitivity_corrector(minus, meta, x, coords, spec)
+    if !(okp && okm)
+        return Dict{String,Any}(
+            "status" => :inconclusive, "step" => h,
+            "plus_iterations" => ip, "minus_iterations" => im,
+            "plus_residual" => rp, "minus_residual" => rm,
+            "message" => "finite-difference perturbed equilibrium corrector failed")
+    end
+    finite_difference_dx = (xp - xm) / (2h)
+    absolute_error = maximum(abs.(analytic_dx .- finite_difference_dx))
+    scale = max(1.0, maximum(abs, analytic_dx), maximum(abs, finite_difference_dx))
+    relative_error = absolute_error / scale
+    tolerance = spec.sensitivity_validation_atol + spec.sensitivity_validation_rtol * scale
+    Dict{String,Any}(
+        "status" => absolute_error <= tolerance ? :pass : :fail,
+        "step" => h, "analytic_state_derivative" => analytic_dx,
+        "finite_difference_state_derivative" => finite_difference_dx,
+        "absolute_error" => absolute_error, "relative_error" => relative_error,
+        "tolerance" => tolerance, "plus_iterations" => ip, "minus_iterations" => im,
+        "plus_residual" => rp, "minus_residual" => rm,
+        "message" => "implicit load-scale sensitivity versus re-solved finite difference")
 end
 
 function _operability_state_meta(lin, vmap, source_buses)
@@ -655,6 +733,7 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
     end
 
     sensitivities = Dict{String,Any}()
+    load_scale_dx = nothing
     if spec.compute_sensitivity && !isempty(x) && last(singular_values) > rank_tol
         h = spec.sensitivity_step
         plus = _operability_scale_network(net, 1.0 + h)
@@ -666,6 +745,7 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
         dF_scaled = dF ./ residual_scale
         dx_scaled = -(J \ dF_scaled)
         dx = dx_scaled .* state_scale
+        load_scale_dx = dx
         dvmap = _operability_node_derivative(lin, meta, dx)
         sensitivities["load_scale"] = Dict{String,Any}(
             "state_derivative" => dx,
@@ -679,6 +759,19 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
     else
         checks["load_scale_sensitivity"] = OperabilityCheck(:not_applicable, nothing, nothing,
             isempty(x) ? "no state to differentiate" : "Jacobian is too close to singular")
+    end
+
+    if spec.compute_sensitivity_validation && load_scale_dx !== nothing
+        validation = _operability_validate_load_scale(
+            net, lin, meta, x, coords, spec, load_scale_dx)
+        sensitivities["validation"] = Dict("load_scale" => validation)
+        checks["load_scale_sensitivity_validation"] = OperabilityCheck(
+            Symbol(validation["status"]), get(validation, "absolute_error", nothing),
+            get(validation, "tolerance", nothing), String(validation["message"]))
+    elseif spec.compute_sensitivity_validation
+        checks["load_scale_sensitivity_validation"] = OperabilityCheck(
+            :not_applicable, nothing, nothing,
+            "load-scale sensitivity is unavailable for independent validation")
     end
 
     directions = Dict{String,Any}()
