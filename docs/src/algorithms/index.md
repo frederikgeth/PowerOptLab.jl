@@ -18,7 +18,9 @@ engine's admittance-matrix primitives) in a custom loop.
 The next algorithms should support the [research program](../research_program.md),
 rather than form an unconnected catalogue:
 
-- **Continuation and branch discovery** — pseudo-arclength continuation,
+- **Continuation and branch discovery** — the staged design is maintained in the
+  [Post-OPF voltage operability roadmap](../problems/post_opf_operability_roadmap.md);
+  it calls for pseudo-arclength continuation,
   singular-point handling, deflation, and systematic multistart to identify which
   nonlinear solution a sensitivity or decision uses.
 - **Sensitivity validation** — KKT regularity, active-set transition, and

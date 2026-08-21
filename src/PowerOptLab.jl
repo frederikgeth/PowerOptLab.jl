@@ -117,6 +117,7 @@ include("problems/inverter_control_study.jl")
 include("problems/inverter_control_experiments.jl")
 include("problems/inverter_control_sizing.jl")
 include("problems/closed_loop_evidence.jl")
+include("problems/operability.jl")
 
 # Bespoke algorithms — new solution methods (custom solve loops)
 include("algorithms/pade.jl")
@@ -166,6 +167,10 @@ export SequenceLineObservation, OverheadCarsonCandidate,
 export ConnectionPoint, FairnessPolicy, solve_operating_envelope,
        verify_operating_envelope, compare_operating_envelope_policies,
        OperatingEnvelopeResult, OperatingEnvelopeVerification
+
+# Post-OPF static voltage operability (first slice: native ybus load scope)
+export OperabilitySpec, OperabilityCheck, OperabilityResult,
+       check_opf_operability
 
 # Bilevel distribution-network proof of concept
 export BilevelPVResult, BilevelPVResponse, SingleLevelPVResult,
