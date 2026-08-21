@@ -132,4 +132,8 @@ end
 @assert all(report.status == :pass for report in values(reports))
 @assert all(row.status == :pass for row in ensemble)
 @assert all(row.boundary_status == :not_observed for row in ensemble)
+delta_report = reports["unbalanced_delta"]
+@assert delta_report.provenance["operability"]["model_inventory"][
+    "load_configurations"] == ["DELTA"]
+@assert length(delta_report.load_connections) == 3
 println("  result: PASS (finite declared study only)")
