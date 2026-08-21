@@ -42,6 +42,10 @@ using BMOPFTools
     @test validation["absolute_error"] < validation["tolerance"]
     @test validation["plus_residual"] < 1e-6
     @test validation["minus_residual"] < 1e-6
+    @test validation_report.checks["directional_sensitivity_validation"].status == :pass
+    direction_validation = validation_report.sensitivities["validation"]["directions"]
+    @test all(v["status"] == :pass for family in values(direction_validation)
+              for v in values(family))
 
     bad = deepcopy(pf)
     bad["bus"]["bus1"]["1"]["vr"] += 10.0

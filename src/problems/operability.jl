@@ -42,8 +42,8 @@ Set `compute_helm=true` to request an independent no-load-connected HELM
 cross-check on its narrower constant-power/constant-impedance scope. A HELM
 failure is retained as `:inconclusive`; unsupported physics is
 `:not_applicable`. Set `compute_sensitivity_validation=true` to re-solve small
-uniform-load perturbations and compare the implicit load-scale derivative with
-an independent finite difference.
+uniform-load and named P/Q perturbations and compare the implicit derivatives
+with independent finite differences.
 """
 struct OperabilitySpec
     scaling_policy::Union{Nothing,_OPERABILITY_SCALING_POLICY}
@@ -390,6 +390,43 @@ function _operability_validate_load_scale(net, lin, meta, x, coords, spec, analy
         "tolerance" => tolerance, "plus_iterations" => ip, "minus_iterations" => im,
         "plus_residual" => rp, "minus_residual" => rm,
         "message" => "implicit load-scale sensitivity versus re-solved finite difference")
+end
+
+function _operability_validate_direction(net, lin, meta, x, coords, spec,
+                                         analytic_dx, id::String, k::Int, field::String)
+    load = net["load"][id]
+    values = get(load, field, nothing)
+    base = values === nothing || (values isa AbstractVector && k > length(values)) ? 0.0 :
+        Float64(values isa AbstractVector ? values[k] : values)
+    h = max(100.0 * spec.sensitivity_step, 1e-3) * max(abs(base), 1.0)
+    plus = BMOPFTools.ybus_linearized(_operability_perturb_load(net, id, k, field, h);
+                                      fold=:constant_z)
+    minus = BMOPFTools.ybus_linearized(_operability_perturb_load(net, id, k, field, -h);
+                                       fold=:constant_z)
+    xp, okp, ip, rp = _operability_sensitivity_corrector(plus, meta, x, coords, spec)
+    xm, okm, im, rm = _operability_sensitivity_corrector(minus, meta, x, coords, spec)
+    if !(okp && okm)
+        return Dict{String,Any}(
+            "status" => :inconclusive, "parameter" => field,
+            "connection" => "$id/$k", "step" => h,
+            "plus_iterations" => ip, "minus_iterations" => im,
+            "plus_residual" => rp, "minus_residual" => rm,
+            "message" => "finite-difference directional corrector failed")
+    end
+    finite_difference_dx = (xp - xm) / (2h)
+    absolute_error = maximum(abs.(analytic_dx .- finite_difference_dx))
+    scale = max(1.0, maximum(abs, analytic_dx), maximum(abs, finite_difference_dx))
+    relative_error = absolute_error / scale
+    tolerance = spec.sensitivity_validation_atol + spec.sensitivity_validation_rtol * scale
+    Dict{String,Any}(
+        "status" => absolute_error <= tolerance ? :pass : :fail,
+        "parameter" => field, "connection" => "$id/$k", "step" => h,
+        "analytic_state_derivative" => analytic_dx,
+        "finite_difference_state_derivative" => finite_difference_dx,
+        "absolute_error" => absolute_error, "relative_error" => relative_error,
+        "tolerance" => tolerance, "plus_iterations" => ip, "minus_iterations" => im,
+        "plus_residual" => rp, "minus_residual" => rm,
+        "message" => "implicit directional sensitivity versus re-solved finite difference")
 end
 
 function _operability_state_meta(lin, vmap, source_buses)
@@ -790,6 +827,39 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
             end
         end
         sensitivities["directions"] = directions
+    end
+
+    if spec.compute_sensitivity_validation && !isempty(directions)
+        direction_validation = Dict{String,Any}()
+        statuses = Symbol[]
+        for (id_raw, load) in sort!(collect(get(net, "load", Dict())); by=x -> String(x[1]))
+            id = String(id_raw)
+            p_nom = get(load, "p_nom", Float64[])
+            nconn = p_nom isa AbstractVector ? length(p_nom) : 1
+            for (field, family) in (("p_nom", "P"), ("q_nom", "Q"))
+                family_validation = get!(direction_validation, family, Dict{String,Any}())
+                for k in 1:nconn
+                    key = "$id/$k"
+                    record = directions[family][key]
+                    validation = _operability_validate_direction(
+                        net, lin, meta, x, coords, spec,
+                        record["state_derivative"], id, k, field)
+                    family_validation[key] = validation
+                    push!(statuses, Symbol(validation["status"]))
+                end
+            end
+        end
+        sensitivities["validation"] = get(sensitivities, "validation", Dict{String,Any}())
+        sensitivities["validation"]["directions"] = direction_validation
+        aggregate = any(status -> status === :fail, statuses) ? :fail :
+            (any(status -> status === :inconclusive, statuses) ? :inconclusive : :pass)
+        checks["directional_sensitivity_validation"] = OperabilityCheck(
+            aggregate, direction_validation, nothing,
+            "implicit P/Q sensitivities versus re-solved finite differences")
+    elseif spec.compute_sensitivity_validation
+        checks["directional_sensitivity_validation"] = OperabilityCheck(
+            :not_applicable, nothing, nothing,
+            "directional sensitivities are unavailable for independent validation")
     end
 
     branch_evidence = Dict{String,Any}(

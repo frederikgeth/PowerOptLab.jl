@@ -14,7 +14,7 @@ The checker reports:
 * connection-level terminal voltages, requested-versus-realized powers, and
   derivatives under uniform load scaling plus named P/Q perturbations;
 * optional independent finite-difference re-solves that validate the implicit
-  uniform-load sensitivity; and
+  uniform-load and named P/Q sensitivities; and
 * positive-, negative-, and zero-sequence voltages and VUF on complete
   three-phase buses; and
 * an opt-in HELM cross-check of the no-load-connected branch for supported
@@ -72,7 +72,9 @@ validated = check_opf_operability(net, pf;
         scaling_policy = SIUnitsScaling(),
         compute_sensitivity_validation = true))
 validated.checks["load_scale_sensitivity_validation"]
+validated.checks["directional_sensitivity_validation"]
 validated.sensitivities["validation"]["load_scale"]
+validated.sensitivities["validation"]["directions"]
 
 # Starting from a voltage/state near a suspected nose, solve the bordered
 # equations F=0, J*v=0, ||v||₂=1 at a declared load scale.
