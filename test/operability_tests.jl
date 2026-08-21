@@ -48,7 +48,6 @@ using SparseArrays
     @test snapshot_row.jacobian_nonzero_count > 0
     @test snapshot_row.jacobian_storage_bytes_estimate > 0
     @test snapshot_row.zbus_storage_mode == "not_requested"
-
     # Scaling changes coordinates, not the physical snapshot conclusion.  The
     # checker receives the same SI-valued solution under both policies; the
     # normalized residual is expected to change with the declared current
@@ -106,6 +105,13 @@ using SparseArrays
     certificate_report = check_opf_operability(net, pf;
         spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
             compute_fixed_point_certificate=true))
+    snapshot_rows = operability_snapshot_rows(Dict(
+        "z_certificate" => certificate_report,
+        "a_base" => report))
+    @test [row.snapshot_id for row in snapshot_rows] == ["a_base", "z_certificate"]
+    @test snapshot_rows[1].status == report.status
+    @test snapshot_rows[2].fixed_point_certificate_status == :pass
+    @test_throws ArgumentError operability_snapshot_rows([report])
     @test certificate_report.checks["fixed_point_certificate"].status == :pass
     @test certificate_report.checks["fixed_point_local_region"].status == :pass
     @test certificate_report.checks["fixed_point_euclidean_region"].status == :pass

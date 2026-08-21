@@ -265,6 +265,7 @@ validated.checks["load_scale_sensitivity_validation"]
 validated.checks["directional_sensitivity_validation"]
 validated.sensitivities["validation"]["load_scale"]
 validated.sensitivities["validation"]["directions"]
+operability_snapshot_rows(Dict("base" => report, "validated" => validated))
 
 # Starting from a voltage/state near a suspected nose, solve the bordered
 # equations F=0, J*v=0, ||v||₂=1 at a declared load scale.
@@ -309,4 +310,5 @@ operability_stress_rows
 operability_stress_summary
 operability_stress_ensemble_rows
 operability_snapshot_row
+operability_snapshot_rows
 ```

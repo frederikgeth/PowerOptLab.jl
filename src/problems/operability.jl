@@ -1997,3 +1997,25 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
         scope="single_snapshot_static_ybus",
     )
 end
+
+"""
+    operability_snapshot_rows(results)
+
+Project a dictionary or iterable of `(snapshot_id, result)` pairs into a
+deterministically ordered vector of table-ready snapshot rows. This adapter is
+intentionally limited to already-solved single snapshots; it does not infer
+contingency, temporal, or operating-envelope semantics.
+"""
+function operability_snapshot_rows(results)
+    entries = results isa AbstractDict ? collect(results) : collect(results)
+    rows = NamedTuple[]
+    for entry in entries
+        entry isa Pair || throw(ArgumentError(
+            "operability_snapshot_rows expects (snapshot_id, OperabilityResult) pairs"))
+        snapshot_id, result = entry
+        result isa OperabilityResult || throw(ArgumentError(
+            "snapshot $(repr(snapshot_id)) is not an OperabilityResult"))
+        push!(rows, operability_snapshot_row(result; snapshot_id=String(snapshot_id)))
+    end
+    sort!(rows; by=row -> String(row.snapshot_id))
+end

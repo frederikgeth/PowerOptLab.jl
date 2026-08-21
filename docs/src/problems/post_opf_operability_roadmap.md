@@ -67,6 +67,9 @@ The current branch contains the first bounded implementation slice in
   for study tables, keeping endpoint, regularity, voltage/VUF, branch-indicator,
   certificate, HELM, and scope evidence together without adding contingency
   semantics;
+- `operability_snapshot_rows` now provides a deterministic dictionary/paired-
+  iterable adapter for pooling solved snapshots while preserving each row's
+  explicit snapshot label and single-snapshot scope;
 - pseudo-arclength stress traces now refine every λ=1 crossing, enforce a
   declared lower λ-domain boundary (default 0), and can finish with a localized
   fold plus model-domain termination rather than spending the stress budget in
