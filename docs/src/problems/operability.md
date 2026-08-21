@@ -21,7 +21,8 @@ The checker reports:
   residual, singular-value, and event history; and
 * an opt-in pseudo-arclength predictor/corrector trace for the same static
   load-scale path, including voltage-normalized arclength provenance, target
-  crossings, fixed-λ target refinement, and fold-candidate events; and
+  crossings, fixed-λ target refinement, and fold-candidate events with critical
+  left/right mode participation; and
 * explicit `:not_applicable` scope evidence when generator or IBR equations are
   outside the residual seam.
 

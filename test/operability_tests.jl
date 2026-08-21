@@ -102,6 +102,7 @@ using BMOPFTools
     @test pseudo_trace.endpoint_distance < 1e-4
     @test maximum(pseudo_trace.residuals) < 1e-5
     @test pseudo_trace.provenance["continuation"]["pseudo_arclength"] === true
+    @test all(>(0.0), pseudo_trace.provenance["continuation"]["arclength_state_scale"])
     @test_throws ArgumentError OperabilityPseudoArclengthSpec(initial_step=0.01,
                                                                min_step=0.1)
 

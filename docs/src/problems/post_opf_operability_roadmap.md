@@ -29,8 +29,9 @@ The current branch contains the first bounded implementation slice in
   corrector-failure events; and
 - a first static pseudo-arclength predictor/corrector slice that records
   target-parameter crossings, fixed-λ target refinements, tangent-based fold
-  candidates, voltage-normalized arclength provenance, and the same endpoint
-  evidence. An analytic two-bus high-/low-voltage branch regression now checks
+  candidates with critical left/right mode participation, voltage-normalized
+  arclength provenance, and the same endpoint evidence. An analytic two-bus
+  high-/low-voltage branch regression now checks
   that a locally feasible low branch is distinguished from the no-load-connected
   high branch.
 

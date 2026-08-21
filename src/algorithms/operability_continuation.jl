@@ -423,7 +423,8 @@ end
 Trace the same static load-scale equilibrium with a pseudo-arclength
 predictor/corrector. The path may continue through a fold because λ is treated
 as an unknown; fold candidates are recorded when the tangent reverses λ
-direction or the scaled Jacobian becomes nearly singular. Endpoint crossings
+direction or the scaled Jacobian becomes nearly singular, with critical
+left/right singular-mode participation attached to those events. Endpoint crossings
 are reported with their bracketing λ values and refined at fixed λ when the
 crossing step does not land within `target_lambda_tol`. The result retains the
 separate voltage-normalized arclength metric alongside the audited scaling
@@ -563,25 +564,34 @@ function continue_opf_operability_pseudo_arclength(
         append!(events, _continuation_voltage_events(
             _operability_scale_network(net, λnew), point.node_voltages, λnew, spec))
         sigma = isempty(point.singular_values) ? NaN : last(point.singular_values)
-        if isfinite(sigma) && sigma <= continuation.fold_sigma_tol
-            push!(events, Dict{String,Any}("kind" => "near_singular",
-                                           "lambda" => λnew, "sigma_min" => sigma))
-        end
         fλ_new = _pseudo_lambda_residual(net, λnew, meta, xnew, residual_scale, 1e-5)
         Jnew, _ = _pseudo_arclength_jacobian(
             lin_new, meta, xnew, coords, natural_cfg, arc_state_scale)
+        factorization_new = isempty(Jnew) ? nothing : svd(Jnew)
+        near_singular = isfinite(sigma) && sigma <= continuation.fold_sigma_tol
+        near_singular && push!(events, Dict{String,Any}(
+            "kind" => "near_singular", "lambda" => λnew, "sigma_min" => sigma,
+            "critical_mode" => _operability_critical_mode(
+                factorization_new, meta.state_nodes)))
         dxλ_new = try -(Jnew \ fλ_new) catch; zeros(length(xnew)) end
         tangent_new = vcat(dxλ_new, 1.0); tangent_new ./= max(norm(tangent_new), eps())
         dot(tangent_new, tangent) < 0 && (tangent_new .*= -1)
+        fold_event = nothing
         if abs(tangent[end]) > continuation.tangent_lambda_tol &&
             abs(tangent_new[end]) > continuation.tangent_lambda_tol &&
             signbit(tangent[end]) != signbit(tangent_new[end])
-            push!(events, Dict{String,Any}("kind" => "fold_candidate",
+            fold_event = Dict{String,Any}("kind" => "fold_candidate",
                 "lambda" => λnew, "tangent_lambda_before" => tangent[end],
-                "tangent_lambda_after" => tangent_new[end]))
+                "tangent_lambda_after" => tangent_new[end])
         elseif abs(tangent_new[end]) <= continuation.tangent_lambda_tol
-            push!(events, Dict{String,Any}("kind" => "fold_candidate",
-                "lambda" => λnew, "tangent_lambda" => tangent_new[end]))
+            fold_event = Dict{String,Any}("kind" => "fold_candidate",
+                "lambda" => λnew, "tangent_lambda" => tangent_new[end])
+        end
+        if fold_event !== nothing
+            fold_event["sigma_min"] = sigma
+            fold_event["critical_mode"] = _operability_critical_mode(
+                factorization_new, meta.state_nodes)
+            push!(events, fold_event)
         end
         y = ynew; tangent = tangent_new
         if iterations <= 4
