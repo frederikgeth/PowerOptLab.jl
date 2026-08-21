@@ -80,8 +80,10 @@ using SparseArrays
           ["constant_power"]
     snapshot_row = operability_snapshot_row(report; snapshot_id="base")
     @test snapshot_row.snapshot_id == "base"
+    @test snapshot_row.schema_version == "operability_snapshot_row/v1"
     @test snapshot_row.status == :pass
     @test snapshot_row.endpoint_status == :pass
+    @test snapshot_row.claim_scope == "one_solved_equilibrium_only"
     @test snapshot_row.jacobian_regular_status == :pass
     @test snapshot_row.terminal_voltage_bounds_status == :pass
     @test snapshot_row.sequence_unbalance_status == :not_applicable

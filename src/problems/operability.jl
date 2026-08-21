@@ -2215,6 +2215,7 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
         OperabilityCheck(:not_applicable, nothing, nothing, "check unavailable")).status
     (
         snapshot_id=snapshot_id,
+        schema_version="operability_snapshot_row/v1",
         status=result.status,
         endpoint_status=check_status("endpoint"),
         jacobian_regular_status=check_status("jacobian_regular"),
@@ -2262,6 +2263,7 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
         topology_missing_source_buses=get(topology, "missing_source_buses", String[]),
         unsupported_reasons=copy(result.unsupported),
         scope="single_snapshot_static_ybus",
+        claim_scope="one_solved_equilibrium_only",
     )
 end
 

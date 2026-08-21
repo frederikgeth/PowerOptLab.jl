@@ -110,6 +110,8 @@ counts. It is intentionally not a contingency or envelope row.
 row = operability_snapshot_row(report; snapshot_id="base")
 
 row.status
+row.schema_version
+row.claim_scope
 row.minimum_terminal_voltage
 row.maximum_vuf
 row.maximum_vuf_status       # :not_applicable when no complete 3-phase bus exists

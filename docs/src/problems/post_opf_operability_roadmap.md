@@ -70,7 +70,9 @@ The current branch contains the first bounded implementation slice in
   readiness are retained explicitly so pooled rows cannot hide applicability;
   primary endpoint, limit, regularity, and sensitivity check statuses are also
   retained as row fields, and the exact unsupported-reason list is preserved
-  alongside its count;
+  alongside its count. Rows now carry an explicit schema version and
+  one-solved-equilibrium claim scope so future contingency layers can remain
+  separate;
 - `operability_snapshot_rows` now provides a deterministic dictionary/paired-
   iterable adapter for pooling solved snapshots while preserving each row's
   explicit snapshot label and single-snapshot scope;
