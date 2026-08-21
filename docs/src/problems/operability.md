@@ -22,7 +22,7 @@ The checker reports:
 * an opt-in pseudo-arclength predictor/corrector trace for the same static
   load-scale path, including voltage-normalized arclength provenance, target
   crossings, fixed-λ target refinement, and fold-candidate events with critical
-  left/right mode participation; and
+  left/right mode participation and optional bordered fold localization; and
 * explicit `:not_applicable` scope evidence when generator or IBR equations are
   outside the residual seam.
 

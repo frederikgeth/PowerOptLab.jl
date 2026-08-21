@@ -383,6 +383,17 @@ function _fold_equations(net, u, meta, coords, cfg)
     vcat(f, J * v, dot(v, v) - 1.0)
 end
 
+function _operability_solution_from_state(lin, meta, x)
+    V = _operability_voltage_vector(lin, meta, x)
+    buses = Dict{String,Any}()
+    for (i, (bus, terminal)) in enumerate(lin.nodes)
+        bus_data = get!(buses, bus, Dict{String,Any}())
+        value = V[i]
+        bus_data[terminal] = Dict{String,Any}("vr" => real(value), "vi" => imag(value))
+    end
+    Dict{String,Any}("bus" => buses)
+end
+
 """
     locate_opf_operability_fold(net, solution; spec, lambda=1.0,
         max_iterations=30, tol=1e-8, jacobian_step=1e-6, context=nothing)
@@ -728,6 +739,14 @@ function continue_opf_operability_pseudo_arclength(
             fold_event["sigma_min"] = sigma
             fold_event["critical_mode"] = _operability_critical_mode(
                 factorization_new, meta.state_nodes)
+            fold_solution = _operability_solution_from_state(lin_new, meta, xnew)
+            localized = locate_opf_operability_fold(net, fold_solution;
+                spec=spec, lambda=λnew, context=context)
+            fold_event["fold_localization"] = Dict{String,Any}(
+                "status" => localized.status, "lambda" => localized.lambda,
+                "residual_norm" => localized.residual_norm,
+                "sigma_min" => localized.sigma_min,
+                "iterations" => localized.iterations)
             push!(events, fold_event)
         end
         y = ynew; tangent = tangent_new

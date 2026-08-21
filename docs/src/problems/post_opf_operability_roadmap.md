@@ -35,7 +35,8 @@ The current branch contains the first bounded implementation slice in
   that a locally feasible low branch is distinguished from the no-load-connected
   high branch; and
 - an opt-in bordered-equation fold localizer solving ``F=0``, ``Jv=0``, and
-  ``‖v‖₂=1`` from a declared approximate fold state.
+  ``‖v‖₂=1`` from a declared approximate fold state; pseudo-arclength fold
+  candidates now retain its localized status and residual evidence when invoked.
 
 These additions are evidence-producing diagnostics, not a claim of globally
 complete branch discovery or a production-grade fold certificate. The current
