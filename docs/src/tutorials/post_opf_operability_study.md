@@ -13,7 +13,8 @@ The repository includes a runnable companion study at
 `scripts/run_post_opf_operability_study.jl`. It builds a small balanced
 four-wire feeder, evaluates constant-power and ZIP load models, and prints the
 snapshot rows plus finite stress summaries. It also includes an unbalanced
-DELTA case so the connection-level voltage and sequence evidence are exercised:
+DELTA case and a floating-neutral WYE case so the connection-level voltage,
+sequence, and neutral-displacement evidence are exercised:
 
 ```sh
 julia --project=. scripts/run_post_opf_operability_study.jl

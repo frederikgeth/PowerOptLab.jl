@@ -6,8 +6,8 @@
 #   julia --project=. scripts/run_post_opf_operability_study.jl
 #
 # The study intentionally evaluates one solved snapshot at a time. It then
-# runs two finite loading directions for constant-power, ZIP, and unbalanced
-# DELTA load cases.
+# runs two finite loading directions for constant-power, ZIP, unbalanced DELTA,
+# and floating-neutral load cases.
 # The output is finite study evidence, not a contingency or operating-envelope
 # guarantee.
 
@@ -16,18 +16,22 @@ using BMOPFTools: parse_bmopf, solve_pf, SIUnitsScaling
 
 function study_net(model::AbstractString)
     is_delta = model == "unbalanced_delta"
-    load_model = is_delta ? "constant_power" : model
+    is_floating = model == "floating_neutral"
+    load_model = (is_delta || is_floating) ? "constant_power" : model
     configuration = is_delta ? "DELTA" : "WYE"
-    terminal_map = is_delta ? "[\"a\",\"b\",\"c\"]" :
+    terminal_map = is_delta ? "[\"a\",\"b\",\"c\"]" : is_floating ?
+        "[\"a\",\"n\"]" :
         "[\"a\",\"b\",\"c\",\"n\"]"
-    p_nom = is_delta ? "[9000.0,14000.0,11000.0]" :
+    p_nom = is_delta ? "[9000.0,14000.0,11000.0]" : is_floating ? "[15000.0]" :
         "[12000.0,12000.0,12000.0]"
-    q_nom = is_delta ? "[2500.0,4000.0,3000.0]" :
+    q_nom = is_delta ? "[2500.0,4000.0,3000.0]" : is_floating ? "[5000.0]" :
         "[3000.0,3000.0,3000.0]"
+    loadbus_grounding = is_floating ? "" :
+        "\"perfectly_grounded_terminals\":[\"n\"],"
     net = parse_bmopf("""
     {"bus":{
       "source":{"terminal_names":["a","b","c","n"],"perfectly_grounded_terminals":["n"]},
-      "loadbus":{"terminal_names":["a","b","c","n"],"perfectly_grounded_terminals":["n"],
+      "loadbus":{"terminal_names":["a","b","c","n"],$loadbus_grounding
                   "v_min":[190.0,190.0,190.0],"v_max":[260.0,260.0,260.0]}},
      "voltage_source":{"vs":{"bus":"source","terminal_map":["a","b","c"],
          "v_magnitude":[230.0,230.0,230.0],"v_angle":[0.0,-2.0943951023931953,2.0943951023931953]}},
@@ -66,6 +70,13 @@ function study_spec(model::AbstractString)
             voltage_max=450.0,
             vuf_max=0.10,
             compute_fixed_point_certificate=true)
+    elseif model == "floating_neutral"
+        return OperabilitySpec(
+            scaling_policy=SIUnitsScaling(),
+            voltage_min=190.0,
+            voltage_max=260.0,
+            vuf_max=Inf,
+            compute_fixed_point_certificate=true)
     end
     OperabilitySpec(
         scaling_policy=SIUnitsScaling(),
@@ -96,7 +107,7 @@ end
 campaigns = Dict{String,Vector{NamedTuple}}()
 reports = Dict{String,OperabilityResult}()
 snapshot_rows = NamedTuple[]
-for model in ("constant_power", "zip", "unbalanced_delta")
+for model in ("constant_power", "zip", "unbalanced_delta", "floating_neutral")
     report, row, rows = run_campaign(model)
     reports[model] = report
     campaigns[model] = rows
@@ -136,4 +147,9 @@ delta_report = reports["unbalanced_delta"]
 @assert delta_report.provenance["operability"]["model_inventory"][
     "load_configurations"] == ["DELTA"]
 @assert length(delta_report.load_connections) == 3
+floating_report = reports["floating_neutral"]
+neutral_voltage = abs(floating_report.node_voltages[("loadbus", "n")])
+@assert isfinite(neutral_voltage) && neutral_voltage > 0.0
+@assert length(floating_report.load_connections) == 1
+println("  floating-neutral displacement [V]: ", round(neutral_voltage; digits=6))
 println("  result: PASS (finite declared study only)")
