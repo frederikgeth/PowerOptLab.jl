@@ -57,6 +57,11 @@ The current branch contains the first bounded implementation slice in
   load weights, and connection weights are recorded by direction; the solver
   remains an explicit callback, and rows retain endpoint/certificate status
   plus errors without implying a global envelope;
+- `operability_stress_summary` and
+  `operability_stress_ensemble_rows` now aggregate finite campaigns with
+  explicit status precedence, first non-pass boundary, condition/voltage
+  minima, and model labels. A missing boundary is `:not_observed`, not an
+  unlimited-margin claim;
 - pseudo-arclength stress traces now refine every λ=1 crossing, enforce a
   declared lower λ-domain boundary (default 0), and can finish with a localized
   fold plus model-domain termination rather than spending the stress budget in

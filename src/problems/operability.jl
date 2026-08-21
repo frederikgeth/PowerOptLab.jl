@@ -1480,3 +1480,105 @@ function operability_stress_rows(net::Dict{String,Any}, solution::AbstractDict;
     end
     rows
 end
+
+function _operability_stress_status(rows)
+    statuses = Symbol[get(row, :status, :inconclusive) for row in rows]
+    any(==(:fail), statuses) && return :fail
+    any(==(:inconclusive), statuses) && return :inconclusive
+    any(==(:pass), statuses) && return :pass
+    :not_applicable
+end
+
+"""
+    operability_stress_summary(rows; reference_lambda=1.0)
+
+Aggregate one finite stress campaign into deterministic direction-level rows.
+Status precedence is `:fail` > `:inconclusive` > `:pass` >
+`:not_applicable`. The first failing or inconclusive row in ascending lambda
+order is a path-specific observed boundary; absence of one is reported as
+`:not_observed`, never as unlimited margin.
+"""
+function operability_stress_summary(rows; reference_lambda::Real=1.0)
+    reference = Float64(reference_lambda)
+    isfinite(reference) && reference > 0.0 || throw(ArgumentError(
+        "reference_lambda must be finite and > 0"))
+    row_list = collect(rows)
+    isempty(row_list) && return NamedTuple[]
+    all(hasproperty(row, :direction) && hasproperty(row, :lambda) for row in row_list) ||
+        throw(ArgumentError("stress rows need direction and lambda fields"))
+    grouped = Dict{Symbol,Vector{Any}}()
+    for row in row_list
+        push!(get!(grouped, Symbol(row.direction), Any[]), row)
+    end
+    summaries = NamedTuple[]
+    for direction in sort!(collect(keys(grouped)); by=string)
+        direction_rows = sort(grouped[direction]; by=row -> Float64(row.lambda))
+        status = _operability_stress_status(direction_rows)
+        boundary = nothing
+        for row in direction_rows
+            get(row, :status, :inconclusive) in (:fail, :inconclusive) || continue
+            boundary = row
+            break
+        end
+        finite_margins = Float64[1.0 - Float64(row.contraction_factor)
+                                 for row in direction_rows
+                                 if hasproperty(row, :contraction_factor) &&
+                                    isfinite(Float64(row.contraction_factor))]
+        finite_voltages = Float64[Float64(row.minimum_connection_voltage)
+                                  for row in direction_rows
+                                  if hasproperty(row, :minimum_connection_voltage) &&
+                                     isfinite(Float64(row.minimum_connection_voltage))]
+        residuals = Float64[Float64(row.endpoint_residual_normalized)
+                            for row in direction_rows
+                            if hasproperty(row, :endpoint_residual_normalized) &&
+                               isfinite(Float64(row.endpoint_residual_normalized))]
+        errors = count(row -> hasproperty(row, :error) && row.error !== nothing,
+                       direction_rows)
+        push!(summaries, (
+            direction=direction, status=status, row_count=length(direction_rows),
+            pass_count=count(row -> get(row, :status, :inconclusive) === :pass,
+                             direction_rows),
+            fail_count=count(row -> get(row, :status, :inconclusive) === :fail,
+                             direction_rows),
+            inconclusive_count=count(row ->
+                get(row, :status, :inconclusive) === :inconclusive, direction_rows),
+            error_count=errors, boundary_status=boundary === nothing ? :not_observed :
+                get(boundary, :status, :inconclusive),
+            boundary_lambda=boundary === nothing ? NaN : Float64(boundary.lambda),
+            reference_lambda=reference,
+            parameter_margin=boundary === nothing ? NaN :
+                Float64(boundary.lambda) - reference,
+            relative_margin=boundary === nothing ? NaN :
+                (Float64(boundary.lambda) - reference) / reference,
+            minimum_condition_margin=isempty(finite_margins) ? NaN : minimum(finite_margins),
+            minimum_connection_voltage=isempty(finite_voltages) ? NaN : minimum(finite_voltages),
+            maximum_endpoint_residual_normalized=isempty(residuals) ? NaN : maximum(residuals),
+            p_scale=Float64(get(first(direction_rows), :p_scale, NaN)),
+            q_scale=Float64(get(first(direction_rows), :q_scale, NaN)),
+            message=boundary === nothing ?
+                "no non-pass boundary observed on the finite stress rows" :
+                "first non-pass row in the finite stress campaign"))
+    end
+    summaries
+end
+
+"""
+    operability_stress_ensemble_rows(campaigns; reference_lambda=1.0)
+
+Summarize multiple finite stress campaigns, supplied as a dictionary or
+iterable of `(model_id, rows)` pairs. The returned rows retain the model label
+and direction-level path margins; differences are campaign comparisons, not a
+robustness guarantee over an uncertainty set.
+"""
+function operability_stress_ensemble_rows(campaigns; reference_lambda::Real=1.0)
+    entries = campaigns isa AbstractDict ? collect(campaigns) : collect(campaigns)
+    rows = NamedTuple[]
+    for (model_id, campaign_rows) in entries
+        summaries = operability_stress_summary(campaign_rows;
+            reference_lambda=reference_lambda)
+        for summary in summaries
+            push!(rows, merge((model=String(model_id),), summary))
+        end
+    end
+    sort!(rows; by=row -> (row.model, String(row.direction)))
+end

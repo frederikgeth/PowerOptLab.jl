@@ -41,6 +41,8 @@ The checker reports:
 * bounded named stress-direction snapshots with explicit P/Q and
   connection-weight transformations, caller-supplied solve callbacks, and
   table-ready residual/certificate rows; and
+* deterministic direction-level and model-ensemble summaries with first
+  observed non-pass boundaries and finite path-specific margins; and
 * explicit `:not_applicable` scope evidence when generator or IBR equations are
   outside the residual seam.
 
@@ -141,6 +143,8 @@ stress_rows = operability_stress_rows(net, pf;
     lambdas = [0.0, 0.5, 1.0],
     solve = network -> solve_pf(network; per_unit=false))
 stress_rows
+operability_stress_summary(stress_rows)
+operability_stress_ensemble_rows(Dict("base" => stress_rows))
 
 validated = check_opf_operability(net, pf;
     spec = OperabilitySpec(
@@ -191,4 +195,6 @@ operability_continuation_rows
 OperabilityStressDirection
 operability_stress_network
 operability_stress_rows
+operability_stress_summary
+operability_stress_ensemble_rows
 ```

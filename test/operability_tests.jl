@@ -66,6 +66,26 @@ using BMOPFTools
     @test [row.lambda for row in stress_rows] == [0.0, 1.0, 0.0, 1.0]
     @test all(row.status == :pass for row in stress_rows)
     @test all(row.endpoint_status == :pass for row in stress_rows)
+    stress_summary = operability_stress_summary(stress_rows)
+    @test [row.direction for row in stress_summary] == [:reactive_removed, :uniform]
+    @test all(row.status == :pass for row in stress_summary)
+    @test all(row.boundary_status == :not_observed for row in stress_summary)
+    @test all(isfinite(row.minimum_condition_margin) for row in stress_summary)
+    failed_rows = [row.direction == :uniform && row.lambda == 1.0 ?
+        merge(row, (status=:fail, endpoint_status=:fail,
+                    message="declared voltage-limit boundary")) : row
+        for row in stress_rows]
+    failed_summary = operability_stress_summary(failed_rows)
+    uniform_failed = only(filter(row -> row.direction == :uniform, failed_summary))
+    @test uniform_failed.status == :fail
+    @test uniform_failed.boundary_status == :fail
+    @test uniform_failed.boundary_lambda == 1.0
+    ensemble = operability_stress_ensemble_rows(
+        Dict("base" => stress_rows, "failed" => failed_rows))
+    @test length(ensemble) == 4
+    @test ensemble[1].model == "base"
+    @test any(row.model == "failed" && row.status == :fail for row in ensemble)
+    @test isempty(operability_stress_summary(NamedTuple[]))
     @test_throws ArgumentError operability_stress_rows(net, pf;
         spec=OperabilitySpec(scaling_policy=SIUnitsScaling()),
         directions=[OperabilityStressDirection(:duplicate),
