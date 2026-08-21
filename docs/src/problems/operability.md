@@ -29,6 +29,8 @@ The checker reports:
   load-scale path, including voltage-normalized arclength provenance, target
   crossings, fixed-λ target refinement, and fold-candidate events with critical
   left/right mode participation and optional bordered fold localization; and
+* a path-specific continuation-margin summary that identifies the first
+  declared voltage-limit or localized fold boundary relative to λ=1; and
 * explicit `:not_applicable` scope evidence when generator or IBR equations are
   outside the residual seam.
 
@@ -88,6 +90,7 @@ limited = continue_opf_operability_pseudo_arclength(net, pf;
     stop_on_voltage_limit = true)
 limited.status
 limited.events
+limited.provenance["continuation"]["margin"]
 
 validated = check_opf_operability(net, pf;
     spec = OperabilitySpec(
@@ -133,4 +136,5 @@ OperabilityPseudoArclengthSpec
 continue_opf_operability_pseudo_arclength
 OperabilityFoldResult
 locate_opf_operability_fold
+operability_continuation_margin
 ```

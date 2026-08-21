@@ -45,6 +45,9 @@ The current branch contains the first bounded implementation slice in
   λ=1 crossing and exercises bordered fold localization on the analytic nose;
 - optional `stop_on_voltage_limit=true` termination distinguishes a declared
   operational voltage-limit failure from an inconclusive corrector failure;
+- continuation results now retain a path-specific margin summary for the first
+  declared voltage-limit or localized fold boundary relative to λ=1, while
+  reporting `:not_observed` when the recorded trace did not establish one;
 - an opt-in bordered-equation fold localizer solving ``F=0``, ``Jv=0``, and
   ``‖v‖₂=1`` from a declared approximate fold state; pseudo-arclength fold
   candidates now retain its localized status and residual evidence when invoked.
@@ -397,7 +400,10 @@ Continue beyond the endpoint, when requested, to find the first of:
 - a tap, deadband, or other discrete-control event; or
 - a model-domain failure such as a device terminal approaching zero voltage.
 
-Margins are path-specific. Initial stress directions should include uniform
+Margins are path-specific. The current continuation margin summary is only a
+first-boundary report for the recorded uniform load-scale trace; it does not
+interpolate an unseen boundary or imply unlimited margin when no event was
+observed. Initial stress directions should include uniform
 fixed-power-factor demand, feeder/area demand, weakest-phase demand, DER trip or
 export increase, and reactive-power loss. A later closest-boundary calculation
 in a multidimensional injection space is a different and harder research task.

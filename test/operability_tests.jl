@@ -144,6 +144,7 @@ using BMOPFTools
     @test maximum(pseudo_trace.residuals) < 1e-5
     @test pseudo_trace.provenance["continuation"]["pseudo_arclength"] === true
     @test all(>(0.0), pseudo_trace.provenance["continuation"]["arclength_state_scale"])
+    @test pseudo_trace.provenance["continuation"]["margin"]["status"] == :not_observed
     @test_throws ArgumentError OperabilityPseudoArclengthSpec(initial_step=0.01,
                                                                min_step=0.1)
 
@@ -195,6 +196,13 @@ using BMOPFTools
     @test localized_fold["status"] == :pass
     @test localized_fold["lambda"] ≈ 25 / 24 atol=1e-6
     @test localized_fold["sigma_min"] < 1e-7
+    @test stress_trace.provenance["continuation"]["margin"]["mechanism"] == :fold_candidate
+    @test stress_trace.provenance["continuation"]["margin"]["lambda"] ≈ 25 / 24 atol=1e-6
+    @test stress_trace.provenance["continuation"]["margin"]["parameter_margin"] ≈ 1 / 24 atol=1e-6
+    @test operability_continuation_margin(stress_trace)["lambda"] ≈ 25 / 24 atol=1e-6
+    @test solve_diagnostics(stress_trace).margin["mechanism"] == :fold_candidate
+    @test_throws ArgumentError operability_continuation_margin(stress_trace;
+                                                               reference_lambda=0.0)
 
     limit_trace = continue_opf_operability_pseudo_arclength(nose_net, nose_pf;
         spec=OperabilitySpec(scaling_policy=SIUnitsScaling(), voltage_min=800.0),
@@ -205,6 +213,8 @@ using BMOPFTools
     @test limit_trace.provenance["continuation"]["stop_on_voltage_limit"] === true
     @test any(get(event, "kind", "") == "voltage_limit" for event in limit_trace.events)
     @test last(limit_trace.lambdas) < 1.0
+    @test limit_trace.provenance["continuation"]["margin"]["mechanism"] == :voltage_limit
+    @test limit_trace.provenance["continuation"]["margin"]["pre_reference"] === true
 
     fold_guess = deepcopy(nose_pf)
     fold_guess["bus"]["bus1"]["1"]["vr"] = 500.0

@@ -71,6 +71,7 @@ solve_diagnostics(result::OperabilityContinuationResult) = (
     smallest_singular_value=isempty(result.singular_values) ? NaN : last(result.singular_values),
     endpoint_match=result.endpoint_match,
     endpoint_distance=result.endpoint_distance,
+    margin=operability_continuation_margin(result),
     event_count=length(result.events),
 )
 
@@ -83,6 +84,76 @@ function _continuation_empty_result(status, message, provenance, events=Dict{Str
         Dict{_Node,ComplexF64}[], Float64[], Float64[], Float64[], Int[], events,
         _Node[], nothing, NaN, provenance)
 end
+
+"""
+    operability_continuation_margin(result; reference_lambda=1.0)
+
+Summarize the first declared path boundary observed in a continuation trace.
+The summary considers voltage-limit and fold-candidate events; a localized
+bordered fold uses its refined λ when available. The returned margin is
+relative to `reference_lambda` (normally the audited endpoint λ=1), so it is a
+path-specific diagnostic rather than a global transfer-capacity certificate.
+If the trace ended before observing one of these mechanisms, the result has
+`status == :not_observed` rather than implying unlimited margin.
+"""
+function _continuation_margin(events; reference_lambda::Real=1.0)
+    reference = Float64(reference_lambda)
+    isfinite(reference) && reference > 0 || throw(ArgumentError(
+        "reference_lambda must be finite and > 0"))
+    candidates = NamedTuple{(:lambda, :kind, :event),
+                            Tuple{Float64,Symbol,Dict{String,Any}}}[]
+    for event in events
+        kind_string = get(event, "kind", "")
+        kind = Symbol(kind_string)
+        kind in (:voltage_limit, :fold_candidate) || continue
+        λ = get(event, "lambda", NaN)
+        if kind === :fold_candidate
+            localized = get(event, "fold_localization", nothing)
+            if localized isa AbstractDict && get(localized, "status", nothing) === :pass
+                λ = get(localized, "lambda", λ)
+            end
+        end
+        isfinite(Float64(λ)) || continue
+        push!(candidates, (lambda=Float64(λ), kind=kind, event=deepcopy(event)))
+    end
+    isempty(candidates) && return Dict{String,Any}(
+        "status" => :not_observed,
+        "mechanism" => nothing,
+        "lambda" => NaN,
+        "reference_lambda" => reference,
+        "parameter_margin" => NaN,
+        "relative_margin" => NaN,
+        "pre_reference" => false,
+        "message" => "no declared voltage-limit or fold boundary was observed")
+    first_boundary = findmin(getfield.(candidates, :lambda))[2]
+    candidate = candidates[first_boundary]
+    parameter_margin = candidate.lambda - reference
+    Dict{String,Any}(
+        "status" => :observed,
+        "mechanism" => candidate.kind,
+        "lambda" => candidate.lambda,
+        "reference_lambda" => reference,
+        "parameter_margin" => parameter_margin,
+        "relative_margin" => parameter_margin / reference,
+        "pre_reference" => candidate.lambda < reference,
+        "event" => candidate.event,
+        "message" => "first declared path boundary on the recorded trace")
+end
+
+"""
+    operability_continuation_margin(result; reference_lambda=1.0)
+
+Summarize the first declared path boundary observed in a continuation result.
+The summary considers voltage-limit and fold-candidate events; a localized
+bordered fold uses its refined λ when available. The returned margin is
+relative to `reference_lambda` (normally the audited endpoint λ=1), so it is a
+path-specific diagnostic rather than a global transfer-capacity certificate.
+If the trace ended before observing one of these mechanisms, the result has
+`status == :not_observed` rather than implying unlimited margin.
+"""
+operability_continuation_margin(
+    result::OperabilityContinuationResult; reference_lambda::Real=1.0) =
+    _continuation_margin(result.events; reference_lambda)
 
 function _continuation_scaled_jacobian(lin, meta, x, coords, cfg)
     state_scale, residual_scale = _operability_scales(lin, meta, coords)
@@ -302,7 +373,8 @@ function continue_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
     provenance["continuation"] = Dict("homotopy" => "uniform_load_scale_0_to_1",
         "source_buses" => sort!(collect(source_buses)), "state_nodes" => meta.state_nodes,
         "natural_parameter" => true, "pseudo_arclength" => false,
-        "stop_on_voltage_limit" => stop_on_voltage_limit)
+        "stop_on_voltage_limit" => stop_on_voltage_limit,
+        "margin" => _continuation_margin(events))
     OperabilityContinuationResult(status, message, lambdas, states, node_voltages,
         residuals, singular_values, condition_numbers, corrector_iterations, events,
         meta.state_nodes, endpoint_match, endpoint_distance, provenance)
@@ -810,7 +882,8 @@ function continue_opf_operability_pseudo_arclength(
         "natural_parameter" => false, "pseudo_arclength" => true,
         "arclength_state_scale" => arc_state_scale,
         "stop_at_target" => stop_at_target,
-        "stop_on_voltage_limit" => stop_on_voltage_limit)
+        "stop_on_voltage_limit" => stop_on_voltage_limit,
+        "margin" => _continuation_margin(events))
     OperabilityContinuationResult(status, message, lambdas, states, node_voltages,
         residuals, singular_values, condition_numbers, corrector_iterations, events,
         meta.state_nodes, endpoint_match, endpoint_distance, provenance)
