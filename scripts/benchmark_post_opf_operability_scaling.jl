@@ -44,7 +44,7 @@ function radial_net(n::Int)
     parse_bmopf(String(take!(io)); from_string=true)
 end
 
-function benchmark_case(n::Int, spectrum::Symbol)
+function benchmark_case(n::Int, storage::Symbol, spectrum::Symbol)
     net = radial_net(n)
     solution = solve_pf(net; per_unit=false)
     spec = OperabilitySpec(
@@ -53,11 +53,12 @@ function benchmark_case(n::Int, spectrum::Symbol)
         voltage_max=280.0,
         compute_sensitivity=false,
         compute_fixed_point_certificate=false,
+        jacobian_storage=storage,
         jacobian_spectrum=spectrum)
     timed = @timed check_opf_operability(net, solution; spec=spec)
     report = timed.value
     complexity = report.branch_evidence["complexity"]
-    (nodes=n, spectrum=String(spectrum), status=String(report.status),
+    (nodes=n, storage=String(storage), spectrum=String(spectrum), status=String(report.status),
      seconds=timed.time, allocated_bytes=timed.bytes,
      real_state=complexity["real_state_dimension"],
      jacobian_kib=complexity["jacobian_storage_bytes_dense"] / 1024)
@@ -65,11 +66,12 @@ end
 
 sizes = isempty(ARGS) ? [4, 8, 16, 32, 64] : parse.(Int, ARGS)
 all(>(0), sizes) || throw(ArgumentError("benchmark sizes must be positive integers"))
-println("n,spectrum,status,seconds,allocated_bytes,real_state,jacobian_kib")
+println("n,storage,spectrum,status,seconds,allocated_bytes,real_state,jacobian_kib")
 for n in sizes
-    for spectrum in (:full, :extremes)
-        row = benchmark_case(n, spectrum)
-        println(row.nodes, ",", row.spectrum, ",", row.status, ",",
+    for (storage, spectrum) in ((:dense, :full), (:dense, :extremes),
+                                (:sparse, :extremes))
+        row = benchmark_case(n, storage, spectrum)
+        println(row.nodes, ",", row.storage, ",", row.spectrum, ",", row.status, ",",
             row.seconds, ",", row.allocated_bytes, ",", row.real_state, ",",
             row.jacobian_kib)
     end

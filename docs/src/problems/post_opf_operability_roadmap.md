@@ -105,6 +105,10 @@ The current branch contains the first bounded implementation slice in
   state-size, and dense-Jacobian evidence for full versus reduced spectrum
   modes; it is explicitly diagnostic and machine-specific, not a performance
   guarantee;
+- an opt-in sparse Jacobian storage path now pairs with the reduced spectrum
+  mode, retaining compressed finite-difference structure and sparse LU solves;
+  full SVD and sparse-storage combinations are rejected explicitly until a
+  sparse spectral contract is defined;
 - relative singular-value-ratio evidence, normalized residual verdicts, and
   explicit frozen-dispatch provenance now align the numerical checks with the
   audited scaling and closure contracts; aggregate status no longer reports a

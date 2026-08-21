@@ -1,4 +1,5 @@
 using BMOPFTools
+using SparseArrays
 
 @testset "post-OPF operability checker" begin
     net = single_bus_net(pload=100.0)
@@ -142,6 +143,18 @@ using BMOPFTools
           :not_applicable
     @test reduced_spectrum_report.branch_evidence["complexity"]["jacobian_spectrum_mode"] ==
           "extremes"
+    sparse_spectrum_report = check_opf_operability(net, pf;
+        spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
+            voltage_min=800.0, voltage_max=1100.0,
+            compute_sensitivity=false,
+            jacobian_spectrum=:extremes, jacobian_storage=:sparse))
+    @test sparse_spectrum_report.status == :pass
+    @test issparse(sparse_spectrum_report.jacobian)
+    @test sparse_spectrum_report.singular_values ≈
+          reduced_spectrum_report.singular_values rtol=1e-6
+    @test sparse_spectrum_report.branch_evidence["complexity"]["jacobian_storage_mode"] ==
+          "sparse"
+    @test sparse_spectrum_report.branch_evidence["complexity"]["jacobian_nonzero_count"] > 0
     certificate_row = operability_snapshot_row(certificate_report)
     @test certificate_row.fixed_point_certificate_status == :pass
     @test certificate_row.fixed_point_condition_margin > 0.0
@@ -190,6 +203,8 @@ using BMOPFTools
             OperabilityStressDirection(:duplicate)], solve=n -> solve_pf(n; per_unit=false))
     @test_throws ArgumentError OperabilitySpec(
         scaling_policy=SIUnitsScaling(), jacobian_spectrum=:unknown)
+    @test_throws ArgumentError OperabilitySpec(
+        scaling_policy=SIUnitsScaling(), jacobian_storage=:sparse)
     critical = report.branch_evidence["critical_mode"]
     @test critical["status"] == :pass
     @test length(critical["left_vector"]) == 2 * length(report.state_nodes)

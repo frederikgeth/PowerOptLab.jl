@@ -60,6 +60,9 @@ conservative Euclidean ball in the complex free-voltage state.
 For large snapshots, `jacobian_spectrum=:extremes` estimates only the largest
 and smallest singular values with deterministic iterative solves; the default
 `:full` mode retains the complete SVD and critical-mode participation.
+Set `jacobian_storage=:sparse` together with `jacobian_spectrum=:extremes` to
+retain the finite-difference Jacobian as a sparse matrix and use sparse LU
+right-hand-side solves; this reduced path omits the full SVD by design.
 """
 struct OperabilitySpec
     scaling_policy::Union{Nothing,_OPERABILITY_SCALING_POLICY}
@@ -71,6 +74,7 @@ struct OperabilitySpec
     jacobian_step::Float64
     jacobian_rank_rtol::Float64
     jacobian_spectrum::Symbol
+    jacobian_storage::Symbol
     sensitivity_step::Float64
     voltage_min::Float64
     voltage_max::Float64
@@ -95,6 +99,7 @@ struct OperabilitySpec
             jacobian_step::Real=1e-6,
             jacobian_rank_rtol::Real=1e-8,
             jacobian_spectrum::Symbol=:full,
+            jacobian_storage::Symbol=:dense,
             sensitivity_step::Real=1e-5,
             voltage_min::Real=0.0,
             voltage_max::Real=Inf,
@@ -116,6 +121,10 @@ struct OperabilitySpec
             "only closure=:frozen_dispatch is supported in the native static scope"))
         jacobian_spectrum in (:full, :extremes) || throw(ArgumentError(
             "jacobian_spectrum must be :full or :extremes"))
+        jacobian_storage in (:dense, :sparse) || throw(ArgumentError(
+            "jacobian_storage must be :dense or :sparse"))
+        jacobian_storage === :sparse && jacobian_spectrum !== :extremes &&
+            throw(ArgumentError("jacobian_storage=:sparse requires jacobian_spectrum=:extremes"))
         vals = (residual_atol, residual_rtol, jacobian_step,
                 jacobian_rank_rtol, sensitivity_step,
                 sensitivity_validation_atol, sensitivity_validation_rtol)
@@ -133,7 +142,8 @@ struct OperabilitySpec
             throw(ArgumentError("HELM tolerances must be finite and > 0"))
         new(scaling_policy, scaling_bases, provenance, closure,
             Float64(residual_atol), Float64(residual_rtol), Float64(jacobian_step),
-            Float64(jacobian_rank_rtol), jacobian_spectrum, Float64(sensitivity_step),
+            Float64(jacobian_rank_rtol), jacobian_spectrum, jacobian_storage,
+            Float64(sensitivity_step),
             Float64(voltage_min), Float64(voltage_max), Float64(vuf_max),
             compute_sensitivity, compute_sensitivity_validation,
             Float64(sensitivity_validation_atol), Float64(sensitivity_validation_rtol),
@@ -157,7 +167,7 @@ struct OperabilityResult <: AbstractSolveResult
     endpoint_residual_normalized::Float64
     state_nodes::Vector{_Node}
     state::Vector{Float64}
-    jacobian::Matrix{Float64}
+    jacobian::AbstractMatrix{Float64}
     singular_values::Vector{Float64}
     condition_number::Float64
     node_voltages::Dict{_Node,ComplexF64}
@@ -609,6 +619,31 @@ function _operability_complex_residual(lin, meta, x)
     r[meta.free]
 end
 
+function _operability_sparse_finite_difference_jacobian(map, point; step::Real)
+    x = Float64.(point)
+    h = Float64(step)
+    isfinite(h) && h > 0.0 || throw(ArgumentError("step must be finite and > 0"))
+    y = Float64.(map(x))
+    n = length(x)
+    length(y) == n || throw(DimensionMismatch(
+        "finite-difference map output length must equal input length"))
+    rows = Int[]; columns = Int[]; values = Float64[]
+    for column in 1:n
+        delta = h * max(abs(x[column]), 1.0)
+        plus = copy(x); plus[column] += delta
+        minus = copy(x); minus[column] -= delta
+        difference = (Float64.(map(plus)) - Float64.(map(minus))) / (2delta)
+        length(difference) == n || throw(DimensionMismatch(
+            "finite-difference map output length changed"))
+        for row in eachindex(difference)
+            value = difference[row]
+            value == 0.0 && continue
+            push!(rows, row); push!(columns, column); push!(values, value)
+        end
+    end
+    sparse(rows, columns, values, n, n)
+end
+
 function _operability_node_map(lin, V)
     Dict{_Node,ComplexF64}(lin.nodes[i] => ComplexF64(V[i]) for i in eachindex(lin.nodes))
 end
@@ -739,6 +774,11 @@ function _operability_scales(lin, meta, coords::_OperabilityCoordinates)
 end
 
 function _operability_scaled_jacobian(J, state_scale, residual_scale)
+    if issparse(J)
+        left = spdiagm(0 => 1.0 ./ residual_scale)
+        right = spdiagm(0 => state_scale)
+        return left * J * right
+    end
     result = similar(J)
     for i in axes(J, 1), j in axes(J, 2)
         result[i, j] = J[i, j] * state_scale[j] / residual_scale[i]
@@ -1464,8 +1504,15 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
             maximum(vufs), spec.vuf_max, "maximum |V₂|/|V₁| over complete three-phase buses")
     end
 
-    Jphys = isempty(x) ? zeros(0, 0) : finite_difference_jacobian(
-        y -> _operability_residual(lin, meta, y), x; step=spec.jacobian_step)
+    Jphys = if isempty(x)
+        zeros(0, 0)
+    elseif spec.jacobian_storage === :sparse
+        _operability_sparse_finite_difference_jacobian(
+            y -> _operability_residual(lin, meta, y), x; step=spec.jacobian_step)
+    else
+        finite_difference_jacobian(
+            y -> _operability_residual(lin, meta, y), x; step=spec.jacobian_step)
+    end
     J = _operability_scaled_jacobian(Jphys, state_scale, residual_scale)
     linear_solver = if !isempty(J) &&
         (spec.compute_sensitivity || spec.jacobian_spectrum === :extremes)
@@ -1597,6 +1644,7 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
 
     nfree = length(meta.free)
     nreal = length(x)
+    jacobian_nonzero_count = issparse(J) ? nnz(J) : count(v -> v != 0.0, J)
     nconnections = sum((_operability_load_connection_count(load)
                         for load in values(get(net, "load", Dict()))); init=0)
     ndirections = spec.compute_sensitivity && !isempty(x) &&
@@ -1607,8 +1655,11 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
         "load_connection_count" => nconnections,
         "sensitivity_direction_count" => ndirections,
         "jacobian_spectrum_mode" => String(spec.jacobian_spectrum),
+        "jacobian_storage_mode" => String(spec.jacobian_storage),
+        "jacobian_nonzero_count" => jacobian_nonzero_count,
         "linear_solver_factorization_reused" => linear_solver !== nothing,
         "jacobian_storage_bytes_dense" => sizeof(Float64) * nreal * nreal,
+        "jacobian_storage_bytes_estimate" => Base.summarysize(J),
         "zbus_storage_bytes_dense" => spec.compute_fixed_point_certificate ?
             sizeof(ComplexF64) * nfree * nfree : 0,
         "fixed_point_scan_points_per_geometry" => spec.compute_fixed_point_certificate ? 2001 : 0,
@@ -1674,6 +1725,7 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
     provenance["operability"] = Dict("scope" => "static_ybus_linearized",
         "closure" => String(spec.closure),
         "jacobian_spectrum_mode" => String(spec.jacobian_spectrum),
+        "jacobian_storage_mode" => String(spec.jacobian_storage),
         "source_buses" => sort!(collect(source_buses)), "state_nodes" => meta.state_nodes,
         "coordinate_policy" => BMOPFTools.opf_scaling_policy_data(coords.policy),
         "model_inventory" => _operability_scope_inventory(net))

@@ -129,8 +129,15 @@ and retains only iterative estimates of the largest and smallest singular
 values. It still constructs the dense finite-difference Jacobian, so it reduces
 spectral work but is not yet a sparse-memory backend; critical singular-vector
 participation is marked `:not_applicable` in that mode.
+For a sparse-memory Jacobian path, pair `jacobian_storage=:sparse` with
+`jacobian_spectrum=:extremes`. This stores the finite-difference matrix in
+compressed sparse form and uses sparse LU right-hand-side solves, but it still
+requires one residual pair per state coordinate and the explicit fixed-point
+certificate remains dense-Zbus work when requested.
 
 ```julia
+using SparseArrays
+
 complexity = report.branch_evidence["complexity"]
 complexity["real_state_dimension"]
 complexity["jacobian_storage_bytes_dense"]
@@ -141,6 +148,12 @@ reduced = check_opf_operability(net, pf;
                            jacobian_spectrum = :extremes))
 reduced.singular_values       # [σmax, σmin] estimates
 reduced.branch_evidence["critical_mode"] # explicitly not applicable
+
+sparse_reduced = check_opf_operability(net, pf;
+    spec = OperabilitySpec(scaling_policy = SIUnitsScaling(),
+                           jacobian_spectrum = :extremes,
+                           jacobian_storage = :sparse))
+issparse(sparse_reduced.jacobian)
 ```
 
 For local size evidence, run the generated radial-feeder benchmark:
@@ -150,9 +163,9 @@ julia --project=. scripts/benchmark_post_opf_operability_scaling.jl 8 16 32 64
 ```
 
 It emits CSV-style timing, allocation, state-dimension, and dense-Jacobian
-size rows for both spectrum modes. The benchmark is a reproducibility aid for
-choosing study settings on the target machine, not a universal performance
-claim.
+size rows for dense/full, dense/reduced, and sparse/reduced modes. The
+benchmark is a reproducibility aid for choosing study settings on the target
+machine, not a universal performance claim.
 
 ```julia
 using BMOPFTools
