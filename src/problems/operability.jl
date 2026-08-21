@@ -2189,7 +2189,8 @@ and VUF extrema, branch-indicator counts, no-load and candidate-local
 certificate/HELM statuses, scaling/storage metadata, and the number of
 unsupported-scope reasons. It also retains scope status, closure/control
 closure, and source-topology readiness so pooled rows cannot hide an
-out-of-scope snapshot. It is a reporting projection of one snapshot, not a
+out-of-scope snapshot; the original unsupported-reason list is retained
+alongside its count. It is a reporting projection of one snapshot, not a
 contingency or operating-envelope assessment.
 """
 function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing)
@@ -2259,6 +2260,7 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
             "frozen_dispatch_native_static")),
         topology_has_voltage_source=Bool(get(topology, "has_voltage_source", false)),
         topology_missing_source_buses=get(topology, "missing_source_buses", String[]),
+        unsupported_reasons=copy(result.unsupported),
         scope="single_snapshot_static_ybus",
     )
 end

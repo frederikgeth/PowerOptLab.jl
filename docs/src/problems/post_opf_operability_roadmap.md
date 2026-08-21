@@ -69,7 +69,8 @@ The current branch contains the first bounded implementation slice in
   semantics; scope status, closure/control closure, and source-topology
   readiness are retained explicitly so pooled rows cannot hide applicability;
   primary endpoint, limit, regularity, and sensitivity check statuses are also
-  retained as row fields;
+  retained as row fields, and the exact unsupported-reason list is preserved
+  alongside its count;
 - `operability_snapshot_rows` now provides a deterministic dictionary/paired-
   iterable adapter for pooling solved snapshots while preserving each row's
   explicit snapshot label and single-snapshot scope;

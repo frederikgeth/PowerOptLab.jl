@@ -125,6 +125,7 @@ row.scope_status
 row.closure
 row.control_closure
 row.topology_has_voltage_source
+row.unsupported_reasons
 row.helm_reachability_status
 row.scope                    # "single_snapshot_static_ybus"
 ```

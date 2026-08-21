@@ -95,6 +95,7 @@ using SparseArrays
     @test snapshot_row.control_closure == "frozen_dispatch_native_static"
     @test snapshot_row.topology_has_voltage_source === true
     @test isempty(snapshot_row.topology_missing_source_buses)
+    @test isempty(snapshot_row.unsupported_reasons)
     @test snapshot_row.minimum_terminal_voltage ≈ report.load_connections["ld1/1"]["magnitude"]
     @test snapshot_row.maximum_vuf === missing
     @test snapshot_row.maximum_vuf_status == :not_applicable
@@ -782,6 +783,7 @@ using SparseArrays
     @test ibr_row.scope_status == :not_applicable
     @test ibr_row.control_closure == "outside_native_static_seam"
     @test ibr_row.topology_has_voltage_source === true
+    @test ibr_row.unsupported_reasons == ibr_report.unsupported
     @test any(occursin("IBR", reason) for reason in ibr_report.unsupported)
     ibr_trace = continue_opf_operability(ibr_net, ibr_pf; spec=spec)
     @test ibr_trace.status == :not_applicable

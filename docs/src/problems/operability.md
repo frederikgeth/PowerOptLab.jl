@@ -130,7 +130,8 @@ review context in compact form: `jacobian_spectrum_mode`,
 `fixed_point_max_condition_margin`, `scope_status`,
 `closure`, `control_closure`, source-topology readiness, and the explicit
 statuses of endpoint, Jacobian regularity, voltage bounds, sequence unbalance,
-and sensitivity checks. Sparse reports also
+and sensitivity checks. It also retains the exact `unsupported_reasons` list,
+not just its count. Sparse reports also
 retain the finite-difference row/column pattern in
 `complexity["jacobian_pattern"]`; this is an operating-point diagnostic, not a
 topology-invariant symbolic sparsity pattern. Set
