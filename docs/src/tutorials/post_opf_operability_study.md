@@ -9,6 +9,19 @@ contingencies and operating envelopes are not implied. If several cases are
 available, evaluate each case independently and attach the case label outside
 the processor.
 
+The repository includes a runnable companion study at
+`scripts/run_post_opf_operability_study.jl`. It builds a small balanced
+four-wire feeder, evaluates constant-power and ZIP load models, and prints the
+snapshot rows plus finite stress summaries:
+
+```sh
+julia --project=. scripts/run_post_opf_operability_study.jl
+```
+
+The script asserts that all declared snapshots and finite rows pass. Its final
+`PASS` line means only that this finite, declared study completed; it is not a
+global solvability or operating-envelope claim.
+
 ## 1. Define the claim before running the checker
 
 `check_opf_operability` separates several claims that are often conflated:

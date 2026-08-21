@@ -96,6 +96,9 @@ The current branch contains the first bounded implementation slice in
 - a single-snapshot research-study tutorial now documents the stable checker,
   table-row projection, finite stress/model ensembles, scaling evidence, and
   explicit scope semantics without introducing contingency claims;
+- a runnable `scripts/run_post_opf_operability_study.jl` fixture now exercises
+  constant-power/ZIP model ensembles, named loading directions, fixed-point
+  margins, and table-ready snapshot output with finite-study assertions;
 - an opt-in bordered-equation fold localizer solving ``F=0``, ``Jv=0``, and
   ``‖v‖₂=1`` from a declared approximate fold state; pseudo-arclength fold
   candidates now retain its localized status and residual evidence when invoked.
