@@ -142,7 +142,9 @@ using SparseArrays
     @test complexity["zbus_storage_bytes_dense"] > 0
     @test complexity["zbus_storage_mode"] in
           ("implicit_dense_factorization", "implicit_sparse_factorization")
-    @test complexity["fixed_point_scan_points_per_geometry"] == 2001
+    @test complexity["fixed_point_scan_points_per_geometry"] == 33
+    @test complexity["fixed_point_refinement_iterations"] == 12
+    @test complexity["fixed_point_scan_strategy"] == "coarse_grid_bisection"
     @test certificate_report.status == :pass
 
     reduced_spectrum_report = check_opf_operability(net, pf;

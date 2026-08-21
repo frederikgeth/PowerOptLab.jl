@@ -1136,6 +1136,42 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
                     for i in 1:nf)
         b, q, lower
     end
+    # The sufficient-condition predicates are monotone over each declared
+    # scalar geometry family: once the voltage-domain or contraction bound
+    # fails, enlarging the radius cannot restore feasibility. A coarse scan
+    # followed by bisection therefore recovers the largest certified member
+    # with O(coarse_points + refinement_iterations) evaluations instead of the
+    # former fixed 2001-point scan.
+    largest_feasible_scalar = function(start, stop, evaluate, feasible;
+                                        coarse_points::Int=33,
+                                        refinement_iterations::Int=12)
+        start < stop || return nothing
+        grid = collect(range(start, stop=stop, length=coarse_points))
+        values = [evaluate(value) for value in grid]
+        feasible_indices = findall(feasible, values)
+        isempty(feasible_indices) && return nothing
+        index = last(feasible_indices)
+        best = values[index]
+        lo_scalar = grid[index]
+        hi_scalar = index == length(grid) ? stop : grid[index + 1]
+        if index == length(grid)
+            endpoint = evaluate(hi_scalar)
+            if feasible(endpoint)
+                return endpoint
+            end
+        end
+        for _ in 1:refinement_iterations
+            midpoint = (lo_scalar + hi_scalar) / 2.0
+            candidate = evaluate(midpoint)
+            if feasible(candidate)
+                lo_scalar = midpoint
+                best = candidate
+            else
+                hi_scalar = midpoint
+            end
+        end
+        best
+    end
     # A second sufficient geometry uses a Euclidean ball in the complex free
     # voltage state.  For a state perturbation of norm ρ, connection j moves
     # by at most ||aⱼ||₂ρ.  Combining those bounds with |Z| and the scalar
@@ -1149,14 +1185,12 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
                                for j in eachindex(edges)
                                if connection_norms[j] > 0.0)
         isfinite(radius_limit) && radius_limit > 0.0 || return nothing
-        selected = nothing
-        for rho in range(max(1e-9, radius_limit / 2000.0),
-                         stop=0.999radius_limit, length=2001)
+        evaluate = rho -> begin
             lower = [abs(center_dv[j]) - connection_norms[j] * rho
                      for j in eachindex(edges)]
             upper = [abs(center_dv[j]) + connection_norms[j] * rho
                      for j in eachindex(edges)]
-            any(v -> v <= 0.0, lower) && continue
+            any(v -> v <= 0.0, lower) && return nothing
             derivative_bounds = [sum(term_bounds(term, lower[j], upper[j])[2]
                                      for term in e.terms)
                                  for (j, e) in enumerate(edges)]
@@ -1176,24 +1210,22 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
             end
             q = norm(output_bound)
             invariance = offset_norm + q * rho
-            if isfinite(q) && q < 1.0 && invariance <= rho
-                selected = (radius=rho, q=q, offset_norm=offset_norm,
-                            lower=lower, upper=upper,
-                            invariance_bound=invariance)
-            end
+            isfinite(q) && q < 1.0 && invariance <= rho || return nothing
+            (radius=rho, q=q, offset_norm=offset_norm,
+             lower=lower, upper=upper, invariance_bound=invariance)
         end
-        selected
+        largest_feasible_scalar(max(1e-9, radius_limit / 2000.0),
+            0.999radius_limit, evaluate,
+            value -> value !== nothing)
     end
     euclidean = euclidean_region(w, wfull, ComplexF64[e.dv0 for e in edges])
-    selected = nothing
-    for rho in range(0.0, stop=0.999radius_limit, length=2001)
-        b, q, lower = contribution(rho)
-        if isfinite(b) && isfinite(q) && b <= rho && q < 1.0
-            # Keep scanning: the largest certified radius is the useful one
-            # for candidate containment and deterministic margin reporting.
-            selected = (rho=rho, b=b, q=q, lower=lower)
-        end
-    end
+    selected = largest_feasible_scalar(0.0, 0.999radius_limit,
+        rho -> begin
+            b, q, lower = contribution(rho)
+            isfinite(b) && isfinite(q) && b <= rho && q < 1.0 || return nothing
+            (rho=rho, b=b, q=q, lower=lower)
+        end,
+        value -> value !== nothing)
     # A one-parameter family of componentwise polydiscs preserves the
     # connection-aware voltage geometry while allowing weak phases/nodes to
     # receive larger radii than the scalar uniform search. The scalar alpha
@@ -1206,18 +1238,15 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
             sum(abs.(e.a) .* direction) for e in edges if
             sum(abs.(e.a) .* direction) > 0.0)
         if isfinite(alpha_limit) && alpha_limit > 1.0
-            for alpha in range(1.0, stop=0.999alpha_limit, length=2001)
-                radii = alpha .* direction
-                b, q, lower, upper = component_contribution(radii)
-                if all(isfinite, b) && isfinite(q) && all(b .<= radii) && q < 1.0
-                    # Keep scanning for the largest certified member of this
-                    # one-parameter family; the first feasible point can be
-                    # unnecessarily conservative for candidate containment.
-                    componentwise = (radii=radii, b=b, q=q,
-                                     lower=lower, upper=upper,
-                                     alpha=alpha)
-                end
-            end
+            componentwise = largest_feasible_scalar(1.0, 0.999alpha_limit,
+                alpha -> begin
+                    radii = alpha .* direction
+                    b, q, lower, upper = component_contribution(radii)
+                    all(isfinite, b) && isfinite(q) && all(b .<= radii) && q < 1.0 ||
+                        return nothing
+                    (radii=radii, b=b, q=q, lower=lower, upper=upper, alpha=alpha)
+                end,
+                value -> value !== nothing)
         end
     end
     candidate = _operability_voltage_vector(lin, meta, meta.state)
@@ -1285,16 +1314,16 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
                             for i in 1:nf)
                 b, q, lower, upper
             end
-            selected_local = nothing
-            for rho in range(max(1e-9, local_limit / 2000.0),
-                             stop=0.999local_limit, length=2001)
-                radii = fill(rho, nf)
-                b, q, lower, upper = local_contribution(radii)
-                if isfinite(q) && all(isfinite, b) && all(b .<= radii) && q < 1.0
-                    selected_local = (radii=radii, b=b, q=q,
-                                      lower=lower, upper=upper)
-                end
-            end
+            selected_local = largest_feasible_scalar(
+                max(1e-9, local_limit / 2000.0), 0.999local_limit,
+                rho -> begin
+                    radii = fill(rho, nf)
+                    b, q, lower, upper = local_contribution(radii)
+                    isfinite(q) && all(isfinite, b) && all(b .<= radii) && q < 1.0 ||
+                        return nothing
+                    (radii=radii, b=b, q=q, lower=lower, upper=upper)
+                end,
+                value -> value !== nothing)
             selected_local === nothing ? nothing :
                 (kind=:candidate_local, radii=selected_local.radii,
                  b=selected_local.b, q=selected_local.q,
@@ -1737,7 +1766,10 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
         "zbus_storage_mode" => !spec.compute_fixed_point_certificate ? "not_requested" :
             (issparse(lin.Y) ? "implicit_sparse_factorization" :
              "implicit_dense_factorization"),
-        "fixed_point_scan_points_per_geometry" => spec.compute_fixed_point_certificate ? 2001 : 0,
+        "fixed_point_scan_points_per_geometry" => spec.compute_fixed_point_certificate ? 33 : 0,
+        "fixed_point_refinement_iterations" => spec.compute_fixed_point_certificate ? 12 : 0,
+        "fixed_point_scan_strategy" => spec.compute_fixed_point_certificate ?
+            "coarse_grid_bisection" : "not_requested",
         "fixed_point_geometry_count" => spec.compute_fixed_point_certificate ? 4 : 0,
         "interpretation" => "diagnostic size indicators; dense Jacobian/SVD and Z-bus certificate storage can dominate large-network runs")
     critical_mode = jacobian_factorization !== nothing ?

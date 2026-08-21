@@ -133,7 +133,7 @@ dominant terms:
 | finite-difference Jacobian | ``O(n)`` residual evaluations, then a dense ``n×n`` matrix |
 | singular values and dense linear solves | ``O(n^3)`` worst-case time and ``O(n^2)`` memory |
 | named P/Q sensitivities | one perturbed Ybus and right-hand side per requested direction (up to ``1+2m``); the dense Jacobian factorization is reused when regular |
-| fixed-point certificate | one Ybus factorization plus four deterministic 2001-point geometry scans; dense factorization storage is ``O(n_f^2)``, while sparse input uses sparse LU with topology-dependent fill-in |
+| fixed-point certificate | one Ybus factorization plus four deterministic coarse-grid/bisection geometry searches (33 coarse points + 12 refinements each); dense factorization storage is ``O(n_f^2)``, while sparse input uses sparse LU with topology-dependent fill-in |
 | continuation / stress campaigns | multiply snapshot cost by accepted steps or finite ``(direction, λ)`` rows; independent validation adds two nonlinear re-solves per validated direction |
 
 As a practical policy, run the default single-snapshot checks freely on small
