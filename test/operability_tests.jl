@@ -91,6 +91,20 @@ using BMOPFTools
     @test trace.provenance["continuation"]["pseudo_arclength"] === false
     @test_throws ArgumentError OperabilityContinuationSpec(initial_step=0.01, min_step=0.1)
 
+    pseudo_trace = continue_opf_operability_pseudo_arclength(net, pf;
+        spec=spec,
+        continuation=OperabilityPseudoArclengthSpec(
+            initial_step=0.05, max_step=0.1, target_lambda_tol=0.01))
+    @test pseudo_trace.status == :pass
+    @test first(pseudo_trace.lambdas) == 0.0
+    @test abs(last(pseudo_trace.lambdas) - 1.0) <= 0.01
+    @test pseudo_trace.endpoint_match === true
+    @test pseudo_trace.endpoint_distance < 1e-4
+    @test maximum(pseudo_trace.residuals) < 1e-5
+    @test pseudo_trace.provenance["continuation"]["pseudo_arclength"] === true
+    @test_throws ArgumentError OperabilityPseudoArclengthSpec(initial_step=0.01,
+                                                               min_step=0.1)
+
     # Scope exclusions are explicit evidence rather than a silent partial pass.
     ibr_net = doe_ibr_feeder()
     ibr_pf = solve_pf(ibr_net; per_unit=false)
@@ -101,4 +115,8 @@ using BMOPFTools
     ibr_trace = continue_opf_operability(ibr_net, ibr_pf; spec=spec)
     @test ibr_trace.status == :not_applicable
     @test ibr_trace.events[1]["kind"] == "unsupported_physics"
+    ibr_pseudo_trace = continue_opf_operability_pseudo_arclength(
+        ibr_net, ibr_pf; spec=spec)
+    @test ibr_pseudo_trace.status == :not_applicable
+    @test ibr_pseudo_trace.events[1]["kind"] == "unsupported_physics"
 end

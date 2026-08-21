@@ -26,10 +26,14 @@ The current branch contains the first bounded implementation slice in
   homotopy, supported-physics preflight, HELM status, and endpoint mismatch; and
 - a natural-parameter load-scale continuation trace with damped Newton
   correctors, residual/singular-value history, and explicit near-singular or
-  corrector-failure events.
+  corrector-failure events; and
+- a first static pseudo-arclength predictor/corrector slice that records
+  target-parameter crossings, tangent-based fold candidates, and the same
+  endpoint evidence.
 
-These additions are evidence-producing diagnostics, not a claim that general
-pseudo-arclength continuation or high-voltage reachability has been completed.
+These additions are evidence-producing diagnostics, not a claim of globally
+complete branch discovery or a production-grade fold certificate. The current
+pseudo-arclength slice is limited to the native static ybus load scope.
 
 ## Research question and intended claims
 
@@ -331,8 +335,8 @@ inconclusiveness.
 
 ### General continuation
 
-Implement predictor-corrector pseudo-arclength continuation on the same
-connection-aware equilibrium model:
+Harden and extend the first predictor-corrector pseudo-arclength slice on the
+same connection-aware equilibrium model:
 
 1. construct and verify the energized base equilibrium;
 2. orient a homotopy from that base toward the OPF endpoint;
@@ -342,6 +346,10 @@ connection-aware equilibrium model:
 6. detect every crossing of the target parameter ``\lambda=1``; and
 7. compare the first pre-fold target crossing with the OPF voltage and retained
    controller states.
+
+The current implementation covers the static native-ybus slice and records
+items 1, 2, 4, and 6 provisionally. Fold refinement, deflation, curvature-based
+step control, and controller/generator closures remain Milestone 3 work.
 
 The initial default homotopy proposed for review is:
 

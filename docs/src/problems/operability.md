@@ -19,6 +19,8 @@ The checker reports:
   constant-power/constant-impedance cases; and
 * an explicit natural-parameter load-scale continuation trace with corrector,
   residual, singular-value, and event history; and
+* an opt-in pseudo-arclength predictor/corrector trace for the same static
+  load-scale path, including target crossings and fold-candidate events; and
 * explicit `:not_applicable` scope evidence when generator or IBR equations are
   outside the residual seam.
 
@@ -53,13 +55,20 @@ trace = continue_opf_operability(net, pf;
     continuation = OperabilityContinuationSpec(initial_step = 0.1))
 trace.status
 trace.events
+
+pseudo = continue_opf_operability_pseudo_arclength(net, pf;
+    spec = OperabilitySpec(scaling_policy = SIUnitsScaling()),
+    continuation = OperabilityPseudoArclengthSpec(initial_step = 0.05))
+pseudo.status
+pseudo.provenance["continuation"]["pseudo_arclength"]
 ```
 
 This is a local post-solve screen, not a proof of global solvability or dynamic
 voltage stability. HELM agreement is path-qualified evidence for its energized
 no-load homotopy; HELM non-convergence is inconclusive, not a non-existence
-certificate. General pseudo-arclength continuation, controller closures, and
-fuller generator/IBR equilibrium seams remain future slices.
+certificate. The current pseudo-arclength implementation is a first static
+slice: it does not yet provide refined fold points, deflation/global branch
+discovery, controller closures, or fuller generator/IBR equilibrium seams.
 
 ```@docs
 OperabilitySpec
@@ -69,4 +78,6 @@ check_opf_operability
 OperabilityContinuationSpec
 OperabilityContinuationResult
 continue_opf_operability
+OperabilityPseudoArclengthSpec
+continue_opf_operability_pseudo_arclength
 ```

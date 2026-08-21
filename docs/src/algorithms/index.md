@@ -12,9 +12,10 @@ engine's admittance-matrix primitives) in a custom loop.
   a load-scaling parameter and evaluates it by Padé analytic continuation, with
   physical-residual, Padé-spread, coefficient-tail, and heuristic singularity
   diagnostics exposed for independent validation.
-- **Static operability continuation** — `continue_opf_operability` traces the
-  native static-load equilibrium from the energized no-load state to an audited
-  endpoint with damped Newton correctors and explicit event history.
+- **Static operability continuation** — `continue_opf_operability` provides the
+  natural-parameter trace, while `continue_opf_operability_pseudo_arclength`
+  provides an opt-in first fold-capable predictor/corrector slice for the same
+  native static-load scope.
 
 ## Question-driven candidates not yet built
 
@@ -23,9 +24,9 @@ rather than form an unconnected catalogue:
 
 - **Continuation and branch discovery** — the staged design is maintained in the
   [Post-OPF voltage operability roadmap](../problems/post_opf_operability_roadmap.md);
-  the current trace still needs pseudo-arclength continuation,
-  singular-point handling, deflation, and systematic multistart to identify which
-  nonlinear solution a sensitivity or decision uses.
+  the current pseudo-arclength slice still needs refined singular-point
+  handling, deflation, and systematic multistart to identify which nonlinear
+  solution a sensitivity or decision uses.
 - **Sensitivity validation** — KKT regularity, active-set transition, and
   finite-difference/continuation comparisons for DiffOpt and, where useful,
   direct sensitivities through the HELM coefficient recursion.

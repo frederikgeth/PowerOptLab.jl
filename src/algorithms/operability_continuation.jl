@@ -1,9 +1,9 @@
 # Static load-scale continuation for the post-OPF operability processor.
 #
-# This first slice follows the natural loading parameter λ from the energized
-# no-load state to λ=1. It records corrector failures and near-singular points,
-# but deliberately does not call a natural-parameter trace a pseudo-arclength
-# certificate. A full fold-crossing continuation engine remains a follow-up.
+# The natural trace follows loading parameter λ from the energized no-load state
+# to the audited endpoint. The opt-in pseudo-arclength trace below follows the
+# same static scope with an augmented corrector; it is a first fold-capable
+# diagnostic slice, not a global branch-discovery or fold-certification engine.
 
 """Validated options for a static operability continuation trace."""
 struct OperabilityContinuationSpec
@@ -286,6 +286,262 @@ function continue_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
     provenance["continuation"] = Dict("homotopy" => "uniform_load_scale_0_to_1",
         "source_buses" => sort!(collect(source_buses)), "state_nodes" => meta.state_nodes,
         "natural_parameter" => true, "pseudo_arclength" => false)
+    OperabilityContinuationResult(status, message, lambdas, states, node_voltages,
+        residuals, singular_values, condition_numbers, corrector_iterations, events,
+        meta.state_nodes, endpoint_match, endpoint_distance, provenance)
+end
+
+"""Validated options for the pseudo-arclength operability trace."""
+struct OperabilityPseudoArclengthSpec
+    initial_step::Float64
+    min_step::Float64
+    max_step::Float64
+    max_steps::Int
+    corrector_tol::Float64
+    max_corrector_iterations::Int
+    jacobian_step::Float64
+    fold_sigma_tol::Float64
+    tangent_lambda_tol::Float64
+    target_lambda_tol::Float64
+    endpoint_atol::Float64
+    endpoint_rtol::Float64
+    function OperabilityPseudoArclengthSpec(;
+            initial_step::Real=0.05,
+            min_step::Real=1e-4,
+            max_step::Real=0.1,
+            max_steps::Integer=200,
+            corrector_tol::Real=1e-7,
+            max_corrector_iterations::Integer=20,
+            jacobian_step::Real=1e-6,
+            fold_sigma_tol::Real=1e-6,
+            tangent_lambda_tol::Real=1e-3,
+            target_lambda_tol::Real=5e-3,
+            endpoint_atol::Real=1e-5,
+            endpoint_rtol::Real=1e-5)
+        vals = (initial_step, min_step, max_step, corrector_tol, jacobian_step,
+                fold_sigma_tol, tangent_lambda_tol, target_lambda_tol,
+                endpoint_atol, endpoint_rtol)
+        all(x -> isfinite(Float64(x)) && Float64(x) > 0, vals) ||
+            throw(ArgumentError("pseudo-arclength steps and tolerances must be finite and > 0"))
+        min_step <= initial_step <= max_step || throw(ArgumentError(
+            "pseudo-arclength steps must satisfy min_step <= initial_step <= max_step"))
+        max_steps >= 1 || throw(ArgumentError("max_steps must be >= 1"))
+        max_corrector_iterations >= 1 || throw(ArgumentError(
+            "max_corrector_iterations must be >= 1"))
+        new(Float64(initial_step), Float64(min_step), Float64(max_step), Int(max_steps),
+            Float64(corrector_tol), Int(max_corrector_iterations), Float64(jacobian_step),
+            Float64(fold_sigma_tol), Float64(tangent_lambda_tol),
+            Float64(target_lambda_tol), Float64(endpoint_atol), Float64(endpoint_rtol))
+    end
+end
+
+function _pseudo_lambda_residual(net, λ, meta, x, residual_scale, h)
+    if λ <= h
+        lp = BMOPFTools.ybus_linearized(_operability_scale_network(net, λ + h);
+                                        fold=:constant_z)
+        l0 = BMOPFTools.ybus_linearized(_operability_scale_network(net, λ);
+                                        fold=:constant_z)
+        return (_operability_residual(lp, meta, x) - _operability_residual(l0, meta, x)) /
+            h ./ residual_scale
+    end
+    lp = BMOPFTools.ybus_linearized(_operability_scale_network(net, λ + h);
+                                    fold=:constant_z)
+    lm = BMOPFTools.ybus_linearized(_operability_scale_network(net, λ - h);
+                                    fold=:constant_z)
+    (_operability_residual(lp, meta, x) - _operability_residual(lm, meta, x)) /
+        (2h) ./ residual_scale
+end
+
+function _pseudo_corrector(net, ypred, tangent, meta, state_scale, residual_scale,
+                           coords, cfg::OperabilityPseudoArclengthSpec)
+    # The continuation state contains real and imaginary components for every
+    # free complex node.  `state_nodes` counts complex nodes, whereas `state`
+    # (and the scaled Jacobian) has twice as many real entries.
+    n = length(meta.state)
+    y = copy(ypred)
+    natural_cfg = OperabilityContinuationSpec(
+        initial_step=cfg.initial_step, min_step=cfg.min_step, max_step=cfg.max_step,
+        corrector_tol=cfg.corrector_tol,
+        max_corrector_iterations=cfg.max_corrector_iterations,
+        jacobian_step=cfg.jacobian_step, fold_sigma_tol=cfg.fold_sigma_tol,
+        endpoint_atol=cfg.endpoint_atol, endpoint_rtol=cfg.endpoint_rtol)
+    for iteration in 1:cfg.max_corrector_iterations
+        x = y[1:n] .* state_scale
+        λ = y[end]
+        lin = BMOPFTools.ybus_linearized(_operability_scale_network(net, λ);
+                                         fold=:constant_z)
+        f = _operability_residual(lin, meta, x) ./ residual_scale
+        g = dot(tangent, y - ypred)
+        G = vcat(f, g)
+        norm_g = isempty(G) ? 0.0 : maximum(abs, G)
+        norm_g <= cfg.corrector_tol && return y, true, iteration
+        J, _, _ = _continuation_scaled_jacobian(lin, meta, x, coords, natural_cfg)
+        fλ = _pseudo_lambda_residual(net, λ, meta, x, residual_scale, 1e-5)
+        A = [J fλ; reshape(tangent, 1, :)]
+        dy = try
+            -(A \ G)
+        catch
+            return y, false, iteration
+        end
+        all(isfinite, dy) || return y, false, iteration
+        α = 1.0; accepted = false
+        while α >= 1 / 64
+            candidate = y .+ α .* dy
+            xc = candidate[1:n] .* state_scale; λc = candidate[end]
+            linc = BMOPFTools.ybus_linearized(_operability_scale_network(net, λc);
+                                               fold=:constant_z)
+            fc = _operability_residual(linc, meta, xc) ./ residual_scale
+            Gc = vcat(fc, dot(tangent, candidate - ypred))
+            if all(isfinite, Gc) && maximum(abs, Gc) < norm_g
+                y = candidate; accepted = true; break
+            end
+            α /= 2
+        end
+        accepted || return y, false, iteration
+    end
+    y, false, cfg.max_corrector_iterations
+end
+
+"""
+    continue_opf_operability_pseudo_arclength(net, solution; spec,
+        continuation=OperabilityPseudoArclengthSpec(), context=nothing)
+
+Trace the same static load-scale equilibrium with a pseudo-arclength
+predictor/corrector. The path may continue through a fold because λ is treated
+as an unknown; fold candidates are recorded when the tangent reverses λ
+direction or the scaled Jacobian becomes nearly singular. Endpoint crossings
+are reported with their bracketing λ values, and only a corrected point within
+`target_lambda_tol` is eligible for endpoint matching.
+"""
+function continue_opf_operability_pseudo_arclength(
+        net::Dict{String,Any}, solution::AbstractDict;
+        spec::OperabilitySpec,
+        continuation::OperabilityPseudoArclengthSpec=
+            OperabilityPseudoArclengthSpec(), context=nothing)
+    coords = _operability_coordinates(net, spec; context)
+    unsupported = _operability_preflight(net)
+    !isempty(unsupported) && return _continuation_empty_result(
+        :not_applicable, "candidate contains physics outside the continuation scope",
+        coords.provenance, [Dict{String,Any}("kind" => "unsupported_physics",
+                                             "reasons" => unsupported)])
+    source_buses = _operability_source_buses(net)
+    isempty(source_buses) && throw(ArgumentError("continuation requires a voltage source"))
+    lin_target = BMOPFTools.ybus_linearized(net; fold=:constant_z)
+    target_vmap = _operability_solution_map(solution, lin_target.nodes)
+    meta = _operability_state_meta(lin_target, target_vmap, source_buses)
+    target_x = meta.state
+    isempty(target_x) && return _continuation_empty_result(
+        :pass, "network has no free non-source voltage state", coords.provenance)
+
+    natural_cfg = OperabilityContinuationSpec(
+        initial_step=continuation.initial_step, min_step=continuation.min_step,
+        max_step=continuation.max_step, corrector_tol=continuation.corrector_tol,
+        max_corrector_iterations=continuation.max_corrector_iterations,
+        jacobian_step=continuation.jacobian_step,
+        fold_sigma_tol=continuation.fold_sigma_tol,
+        endpoint_atol=continuation.endpoint_atol,
+        endpoint_rtol=continuation.endpoint_rtol)
+    net_zero = _operability_scale_network(net, 0.0)
+    lin_zero = BMOPFTools.ybus_linearized(net_zero; fold=:constant_z)
+    Jzero, state_scale, residual_scale = _continuation_scaled_jacobian(
+        lin_zero, meta, target_x, coords, natural_cfg)
+    base_x = target_x - (Jzero \ (_operability_residual(lin_zero, meta, target_x) ./
+        residual_scale)) .* state_scale
+    base_x, base_ok, base_iterations, _ = _continuation_corrector(
+        lin_zero, meta, base_x, coords, natural_cfg)
+    base_ok || return _continuation_empty_result(
+        :inconclusive, "energized no-load corrector failed", coords.provenance,
+        [Dict{String,Any}("kind" => "base_corrector_failure",
+                           "iterations" => base_iterations)])
+
+    base_point = _continuation_point(lin_zero, meta, base_x, coords, natural_cfg)
+    Fλ = _pseudo_lambda_residual(net, 0.0, meta, base_x, residual_scale, 1e-5)
+    dxλ = -(Jzero \ Fλ)
+    tangent = vcat(dxλ, 1.0); tangent ./= norm(tangent)
+    y = vcat(base_x ./ state_scale, 0.0)
+    lambdas = [0.0]; states = [copy(base_x)]
+    node_voltages = [base_point.node_voltages]
+    residuals = [base_point.residual_norm]
+    singular_values = [isempty(base_point.singular_values) ? NaN : last(base_point.singular_values)]
+    condition_numbers = [base_point.condition_number]
+    corrector_iterations = [base_iterations]
+    events = _continuation_voltage_events(net_zero, base_point.node_voltages, 0.0, spec)
+    step = continuation.initial_step
+    endpoint_match = nothing; endpoint_distance = NaN; status = :inconclusive
+    message = "pseudo-arclength trace did not produce a corrected λ=1 point"
+    for _ in 1:continuation.max_steps
+        ypred = y .+ step .* tangent
+        ynew, ok, iterations = _pseudo_corrector(
+            net, ypred, tangent, meta, state_scale, residual_scale, coords, continuation)
+        if !ok
+            push!(events, Dict{String,Any}("kind" => "corrector_failure",
+                "lambda" => ypred[end], "step" => step, "iterations" => iterations))
+            step /= 2
+            if step < continuation.min_step
+                message = "pseudo-arclength corrector step fell below min_step"
+                break
+            end
+            continue
+        end
+        n = length(meta.state)
+        xnew = ynew[1:n] .* state_scale; λnew = ynew[end]
+        lin_new = BMOPFTools.ybus_linearized(_operability_scale_network(net, λnew);
+                                             fold=:constant_z)
+        point = _continuation_point(lin_new, meta, xnew, coords, natural_cfg)
+        λold = y[end]
+        if (λold - 1.0) * (λnew - 1.0) <= 0 && λold != λnew
+            push!(events, Dict{String,Any}("kind" => "target_crossing",
+                "lambda_before" => λold, "lambda_after" => λnew))
+        end
+        push!(lambdas, λnew); push!(states, copy(xnew)); push!(node_voltages, point.node_voltages)
+        push!(residuals, point.residual_norm)
+        push!(singular_values, isempty(point.singular_values) ? NaN : last(point.singular_values))
+        push!(condition_numbers, point.condition_number); push!(corrector_iterations, iterations)
+        append!(events, _continuation_voltage_events(
+            _operability_scale_network(net, λnew), point.node_voltages, λnew, spec))
+        sigma = isempty(point.singular_values) ? NaN : last(point.singular_values)
+        if isfinite(sigma) && sigma <= continuation.fold_sigma_tol
+            push!(events, Dict{String,Any}("kind" => "near_singular",
+                                           "lambda" => λnew, "sigma_min" => sigma))
+        end
+        fλ_new = _pseudo_lambda_residual(net, λnew, meta, xnew, residual_scale, 1e-5)
+        Jnew, _, _ = _continuation_scaled_jacobian(lin_new, meta, xnew, coords, natural_cfg)
+        dxλ_new = try -(Jnew \ fλ_new) catch; zeros(length(xnew)) end
+        tangent_new = vcat(dxλ_new, 1.0); tangent_new ./= max(norm(tangent_new), eps())
+        dot(tangent_new, tangent) < 0 && (tangent_new .*= -1)
+        if abs(tangent[end]) > continuation.tangent_lambda_tol &&
+            abs(tangent_new[end]) > continuation.tangent_lambda_tol &&
+            signbit(tangent[end]) != signbit(tangent_new[end])
+            push!(events, Dict{String,Any}("kind" => "fold_candidate",
+                "lambda" => λnew, "tangent_lambda_before" => tangent[end],
+                "tangent_lambda_after" => tangent_new[end]))
+        elseif abs(tangent_new[end]) <= continuation.tangent_lambda_tol
+            push!(events, Dict{String,Any}("kind" => "fold_candidate",
+                "lambda" => λnew, "tangent_lambda" => tangent_new[end]))
+        end
+        y = ynew; tangent = tangent_new
+        if iterations <= 4
+            step = min(continuation.max_step, step * 1.3)
+        elseif iterations >= continuation.max_corrector_iterations ÷ 2
+            step = max(continuation.min_step, step / 1.5)
+        end
+        if abs(λnew - 1.0) <= continuation.target_lambda_tol
+            endpoint_distance = maximum(abs(point.node_voltages[node] - target_vmap[node])
+                                        for node in keys(target_vmap))
+            endpoint_limit = continuation.endpoint_atol + continuation.endpoint_rtol * max(
+                1.0, maximum(abs, values(target_vmap)))
+            endpoint_match = endpoint_distance <= endpoint_limit
+            status = endpoint_match ? :pass : :fail
+            message = endpoint_match ?
+                "pseudo-arclength trace reached and matched a λ=1 endpoint" :
+                "pseudo-arclength trace reached λ=1 but did not match the audited endpoint"
+            break
+        end
+    end
+    provenance = deepcopy(coords.provenance)
+    provenance["continuation"] = Dict("homotopy" => "uniform_load_scale_0_to_1",
+        "source_buses" => sort!(collect(source_buses)), "state_nodes" => meta.state_nodes,
+        "natural_parameter" => false, "pseudo_arclength" => true)
     OperabilityContinuationResult(status, message, lambdas, states, node_voltages,
         residuals, singular_values, condition_numbers, corrector_iterations, events,
         meta.state_nodes, endpoint_match, endpoint_distance, provenance)
