@@ -2210,9 +2210,20 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
     complexity = get(result.branch_evidence, "complexity", Dict{String,Any}())
     operability = get(result.provenance, "operability", Dict{String,Any}())
     topology = get(operability, "topology", Dict{String,Any}())
+    check_status(name) = get(result.checks, name,
+        OperabilityCheck(:not_applicable, nothing, nothing, "check unavailable")).status
     (
         snapshot_id=snapshot_id,
         status=result.status,
+        endpoint_status=check_status("endpoint"),
+        jacobian_regular_status=check_status("jacobian_regular"),
+        terminal_voltage_bounds_status=check_status("terminal_voltage_bounds"),
+        sequence_unbalance_status=check_status("sequence_unbalance"),
+        load_scale_sensitivity_status=check_status("load_scale_sensitivity"),
+        load_scale_sensitivity_validation_status=check_status(
+            "load_scale_sensitivity_validation"),
+        directional_sensitivity_validation_status=check_status(
+            "directional_sensitivity_validation"),
         endpoint_residual=result.endpoint_residual,
         endpoint_residual_normalized=result.endpoint_residual_normalized,
         smallest_singular_value=isempty(result.singular_values) ? NaN : last(result.singular_values),

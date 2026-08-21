@@ -113,6 +113,10 @@ row.status
 row.minimum_terminal_voltage
 row.maximum_vuf
 row.maximum_vuf_status       # :not_applicable when no complete 3-phase bus exists
+row.endpoint_status
+row.jacobian_regular_status
+row.terminal_voltage_bounds_status
+row.sequence_unbalance_status
 row.high_side_indicator_count
 row.near_nose_indicator_count
 row.fixed_point_certificate_status

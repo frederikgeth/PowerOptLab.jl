@@ -81,6 +81,13 @@ using SparseArrays
     snapshot_row = operability_snapshot_row(report; snapshot_id="base")
     @test snapshot_row.snapshot_id == "base"
     @test snapshot_row.status == :pass
+    @test snapshot_row.endpoint_status == :pass
+    @test snapshot_row.jacobian_regular_status == :pass
+    @test snapshot_row.terminal_voltage_bounds_status == :pass
+    @test snapshot_row.sequence_unbalance_status == :not_applicable
+    @test snapshot_row.load_scale_sensitivity_status == :pass
+    @test snapshot_row.load_scale_sensitivity_validation_status == :not_applicable
+    @test snapshot_row.directional_sensitivity_validation_status == :not_applicable
     @test snapshot_row.scope == "single_snapshot_static_ybus"
     @test snapshot_row.scope_status == :supported
     @test snapshot_row.equilibrium_scope == "static_ybus_linearized"
