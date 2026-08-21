@@ -74,6 +74,29 @@ using BMOPFTools
         spec=OperabilitySpec(scaling_policy=ClassicPerUnitScaling(1.0e6),
             scaling_bases=Dict("bus1" => (voltage=1000.0, current=1000.0))))
 
+    for policy in (
+            ConsistentPerUnitScaling(s_base=1.0e6,
+                voltage_bases=Dict("sourcebus" => 1000.0, "bus1" => 1000.0)),
+            ZonePerUnitScaling(
+                voltage_bases=Dict("sourcebus" => 1000.0, "bus1" => 1000.0),
+                power_bases=Dict("sourcebus" => 1.0e6, "bus1" => 1.0e6)))
+        scaled = check_opf_operability(net, pf; spec=OperabilitySpec(
+            scaling_policy=policy,
+            scaling_bases=Dict(
+                "sourcebus" => (voltage=1000.0, current=1000.0),
+                "bus1" => (voltage=1000.0, current=1000.0)),
+            voltage_min=800.0, voltage_max=1100.0,
+            compute_fixed_point_certificate=true))
+        @test scaled.status == report.status
+        @test scaled.checks["terminal_voltage_bounds"].status ==
+              report.checks["terminal_voltage_bounds"].status
+        @test scaled.checks["fixed_point_certificate"].status == :pass
+        @test scaled.load_connections["ld1/1"]["magnitude"] ≈
+              report.load_connections["ld1/1"]["magnitude"] atol=1e-10
+        @test scaled.branch_evidence["dP_dV"]["connections"]["ld1/1"]["classification"] ==
+              report.branch_evidence["dP_dV"]["connections"]["ld1/1"]["classification"]
+    end
+
     certificate_report = check_opf_operability(net, pf;
         spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
             compute_fixed_point_certificate=true))
