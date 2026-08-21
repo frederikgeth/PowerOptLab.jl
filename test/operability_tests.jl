@@ -23,6 +23,8 @@ using BMOPFTools
     @test load_scale_connection["magnitude_derivative"] < 0.0
     @test isfinite(load_scale_connection["path_dP_dV"])
     @test load_scale_connection["path_dP_dV"] < 0.0
+    @test report.branch_evidence["dP_dV"]["connections"]["ld1/1"]["classification"] ==
+          "negative_high_side_indicator"
     @test haskey(report.sensitivities["directions"], "P")
     @test haskey(report.sensitivities["directions"], "Q")
     p_direction = report.sensitivities["directions"]["P"]["ld1/1"]
@@ -141,6 +143,8 @@ using BMOPFTools
     low_report = check_opf_operability(nose_net, low_solution;
         spec=OperabilitySpec(scaling_policy=SIUnitsScaling()))
     @test low_report.status == :pass
+    @test low_report.branch_evidence["dP_dV"]["connections"]["ld1/1"]["classification"] ==
+          "positive_low_side_indicator"
     low_trace = continue_opf_operability_pseudo_arclength(nose_net, low_solution;
         spec=OperabilitySpec(scaling_policy=SIUnitsScaling()),
         continuation=OperabilityPseudoArclengthSpec(

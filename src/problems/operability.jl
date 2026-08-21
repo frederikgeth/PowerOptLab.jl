@@ -429,6 +429,35 @@ function _operability_validate_direction(net, lin, meta, x, coords, spec,
         "message" => "implicit directional sensitivity versus re-solved finite difference")
 end
 
+function _operability_path_dpdv_evidence(sensitivities)
+    records = get(get(sensitivities, "load_scale", Dict{String,Any}()),
+                  "load_connections", Dict{String,Any}())
+    connections = Dict{String,Any}(); finite_slopes = Float64[]
+    for (key_raw, record) in records
+        key = String(key_raw)
+        slope = Float64(get(record, "path_dP_dV", NaN))
+        classification = if !isfinite(slope)
+            "not_available"
+        elseif slope < -1e-9
+            push!(finite_slopes, slope)
+            "negative_high_side_indicator"
+        elseif slope > 1e-9
+            push!(finite_slopes, slope)
+            "positive_low_side_indicator"
+        else
+            push!(finite_slopes, slope)
+            "near_nose_indicator"
+        end
+        connections[key] = Dict{String,Any}(
+            "path_dP_dV" => slope, "classification" => classification,
+            "sign_convention" => "realized consumption P versus terminal magnitude along uniform load scale")
+    end
+    Dict{String,Any}(
+        "status" => isempty(finite_slopes) ? :not_applicable : :diagnostic,
+        "connections" => connections, "finite_count" => length(finite_slopes),
+        "interpretation" => "path-qualified branch indicator; not a universal voltage-stability certificate")
+end
+
 function _operability_state_meta(lin, vmap, source_buses)
     fixed = [i for (i, node) in enumerate(lin.nodes) if node[1] in source_buses]
     free = [i for i in eachindex(lin.nodes) if !(i in fixed)]
@@ -863,7 +892,8 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
     end
 
     branch_evidence = Dict{String,Any}(
-        "critical_mode" => _operability_critical_mode(jacobian_factorization, meta.state_nodes))
+        "critical_mode" => _operability_critical_mode(jacobian_factorization, meta.state_nodes),
+        "dP_dV" => _operability_path_dpdv_evidence(sensitivities))
     if spec.compute_helm
         reachability = _operability_helm_reachability(net, node_voltages, spec)
         branch_evidence["reachability"] = reachability
