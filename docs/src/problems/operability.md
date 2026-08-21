@@ -116,7 +116,9 @@ review context in compact form: `jacobian_spectrum_mode`,
 `jacobian_storage_bytes_estimate`, and `zbus_storage_mode`. Sparse reports also
 retain the finite-difference row/column pattern in
 `complexity["jacobian_pattern"]`; this is an operating-point diagnostic, not a
-topology-invariant symbolic sparsity pattern. A row therefore
+topology-invariant symbolic sparsity pattern. Set
+`record_jacobian_pattern=false` to omit those arrays while retaining the nnz
+and byte summaries. A row therefore
 remains interpretable when reports from different storage/spectrum policies are
 combined, while `not_requested` distinguishes an intentionally disabled
 certificate from an unsupported claim.

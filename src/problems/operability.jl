@@ -70,6 +70,9 @@ and smallest singular values with deterministic iterative solves; the default
 Set `jacobian_storage=:sparse` together with `jacobian_spectrum=:extremes` to
 retain the finite-difference Jacobian as a sparse matrix and use sparse LU
 right-hand-side solves; this reduced path omits the full SVD by design.
+Set `record_jacobian_pattern=false` when sparse row/column provenance is not
+needed; the default `true` retains the operating-point finite-difference
+pattern for trace comparison.
 """
 struct OperabilitySpec
     scaling_policy::Union{Nothing,_OPERABILITY_SCALING_POLICY}
@@ -82,6 +85,7 @@ struct OperabilitySpec
     jacobian_rank_rtol::Float64
     jacobian_spectrum::Symbol
     jacobian_storage::Symbol
+    record_jacobian_pattern::Bool
     sensitivity_step::Float64
     voltage_min::Float64
     voltage_max::Float64
@@ -107,6 +111,7 @@ struct OperabilitySpec
             jacobian_rank_rtol::Real=1e-8,
             jacobian_spectrum::Symbol=:full,
             jacobian_storage::Symbol=:dense,
+            record_jacobian_pattern::Bool=true,
             sensitivity_step::Real=1e-5,
             voltage_min::Real=0.0,
             voltage_max::Real=Inf,
@@ -150,6 +155,7 @@ struct OperabilitySpec
         new(scaling_policy, scaling_bases, provenance, closure,
             Float64(residual_atol), Float64(residual_rtol), Float64(jacobian_step),
             Float64(jacobian_rank_rtol), jacobian_spectrum, jacobian_storage,
+            record_jacobian_pattern,
             Float64(sensitivity_step),
             Float64(voltage_min), Float64(voltage_max), Float64(vuf_max),
             compute_sensitivity, compute_sensitivity_validation,
@@ -1703,7 +1709,7 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
                         for load in values(get(net, "load", Dict()))); init=0)
     ndirections = spec.compute_sensitivity && !isempty(x) &&
         last(singular_values) > rank_tol ? 1 + 2nconnections : 0
-    jacobian_pattern = if issparse(J)
+    jacobian_pattern = if issparse(J) && spec.record_jacobian_pattern
         rows, columns, _ = findnz(J)
         Dict("rows" => rows, "columns" => columns,
              "interpretation" => "finite-difference nonzero pattern at this snapshot")
@@ -1721,6 +1727,7 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
             spec.jacobian_spectrum === :extremes ? extreme_estimator_budget : 0,
         "jacobian_storage_mode" => String(spec.jacobian_storage),
         "jacobian_nonzero_count" => jacobian_nonzero_count,
+        "jacobian_pattern_recorded" => spec.record_jacobian_pattern && issparse(J),
         "jacobian_pattern" => jacobian_pattern,
         "linear_solver_factorization_reused" => linear_solver !== nothing,
         "jacobian_storage_bytes_dense" => sizeof(Float64) * nreal * nreal,

@@ -133,6 +133,9 @@ The current branch contains the first bounded implementation slice in
   state dimension, uses a bounded dense fallback when available, and reports
   estimator non-convergence separately from near-singularity; regression rows
   compare full and reduced spectra on the multi-bus four-wire fixture;
+- sparse finite-difference pattern arrays are now explicitly gated by
+  `record_jacobian_pattern`, retaining nnz/byte summaries when provenance
+  payload size must be minimized;
 - relative singular-value-ratio evidence, normalized residual verdicts, and
   explicit frozen-dispatch provenance now align the numerical checks with the
   audited scaling and closure contracts; aggregate status no longer reports a

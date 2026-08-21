@@ -173,6 +173,14 @@ using SparseArrays
     @test length(sparse_pattern["rows"]) ==
           sparse_spectrum_report.branch_evidence["complexity"]["jacobian_nonzero_count"]
     @test length(sparse_pattern["columns"]) == length(sparse_pattern["rows"])
+    sparse_unrecorded = check_opf_operability(net, pf;
+        spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
+            voltage_min=800.0, voltage_max=1100.0,
+            compute_sensitivity=false, jacobian_spectrum=:extremes,
+            jacobian_storage=:sparse, record_jacobian_pattern=false))
+    @test sparse_unrecorded.status == :pass
+    @test sparse_unrecorded.branch_evidence["complexity"]["jacobian_pattern"] === nothing
+    @test sparse_unrecorded.branch_evidence["complexity"]["jacobian_pattern_recorded"] === false
     sparse_certificate_report = check_opf_operability(net, pf;
         spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
             voltage_min=800.0, voltage_max=1100.0,
