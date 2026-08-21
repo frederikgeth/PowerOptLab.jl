@@ -173,7 +173,8 @@ export ConnectionPoint, FairnessPolicy, solve_operating_envelope,
 export OperabilitySpec, OperabilityCheck, OperabilityResult,
        check_opf_operability, OperabilityStressDirection,
        operability_stress_network, operability_stress_rows,
-       operability_stress_summary, operability_stress_ensemble_rows
+       operability_stress_summary, operability_stress_ensemble_rows,
+       operability_snapshot_row
 
 # Bilevel distribution-network proof of concept
 export BilevelPVResult, BilevelPVResponse, SingleLevelPVResult,

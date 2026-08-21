@@ -1582,3 +1582,47 @@ function operability_stress_ensemble_rows(campaigns; reference_lambda::Real=1.0)
     end
     sort!(rows; by=row -> (row.model, String(row.direction)))
 end
+
+"""
+    operability_snapshot_row(result; snapshot_id=nothing)
+
+Return one compact, table-ready row for a single [`OperabilityResult`](@ref).
+The row preserves the snapshot label, endpoint/regularity evidence, voltage
+and VUF extrema, branch-indicator counts, certificate/HELM statuses, and the
+number of unsupported-scope reasons. It is a reporting projection of one
+snapshot, not a contingency or operating-envelope assessment.
+"""
+function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing)
+    magnitudes = Float64[Float64(get(record, "magnitude", NaN))
+                         for record in values(result.load_connections)
+                         if isfinite(Float64(get(record, "magnitude", NaN)))]
+    vufs = Float64[Float64(get(record, "vuf", NaN))
+                   for record in values(result.sequences)
+                   if isfinite(Float64(get(record, "vuf", NaN)))]
+    dpdv = get(get(result.branch_evidence, "dP_dV", Dict{String,Any}()),
+               "connections", Dict{String,Any}())
+    classifications = String[get(record, "classification", "not_available")
+                             for record in values(dpdv)]
+    certificate = get(result.branch_evidence, "fixed_point_certificate", Dict{String,Any}())
+    reachability = get(result.branch_evidence, "reachability", Dict{String,Any}())
+    (
+        snapshot_id=snapshot_id,
+        status=result.status,
+        endpoint_residual=result.endpoint_residual,
+        endpoint_residual_normalized=result.endpoint_residual_normalized,
+        smallest_singular_value=isempty(result.singular_values) ? NaN : last(result.singular_values),
+        condition_number=result.condition_number,
+        minimum_terminal_voltage=isempty(magnitudes) ? NaN : minimum(magnitudes),
+        maximum_terminal_voltage=isempty(magnitudes) ? NaN : maximum(magnitudes),
+        maximum_vuf=isempty(vufs) ? NaN : maximum(vufs),
+        high_side_indicator_count=count(==("negative_high_side_indicator"), classifications),
+        near_nose_indicator_count=count(==("near_nose_indicator"), classifications),
+        low_side_indicator_count=count(==("positive_low_side_indicator"), classifications),
+        fixed_point_certificate_status=Symbol(get(certificate, "status", :not_applicable)),
+        fixed_point_condition_margin=Float64(get(certificate, "condition_margin", NaN)),
+        fixed_point_selected_region=String(get(certificate, "selected_region", "")),
+        helm_reachability_status=Symbol(get(reachability, "status", :not_applicable)),
+        unsupported_count=length(result.unsupported),
+        scope="single_snapshot_static_ybus",
+    )
+end

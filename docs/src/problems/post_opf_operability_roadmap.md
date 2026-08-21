@@ -2,7 +2,8 @@
 
 > **Status:** implementation underway · **Implementation:** first static
 > checker slice and opt-in HELM cross-check landed · **Scope:** static,
-> fundamental-frequency, unbalanced four-wire networks
+> fundamental-frequency, unbalanced four-wire networks · **Current focus:**
+> single-snapshot contract hardening
 >
 > **Owner:** PowerOptLab maintainers · **Last reviewed:** 2026-08-21
 
@@ -62,6 +63,10 @@ The current branch contains the first bounded implementation slice in
   explicit status precedence, first non-pass boundary, condition/voltage
   minima, and model labels. A missing boundary is `:not_observed`, not an
   unlimited-margin claim;
+- `operability_snapshot_row` now provides a compact single-snapshot projection
+  for study tables, keeping endpoint, regularity, voltage/VUF, branch-indicator,
+  certificate, HELM, and scope evidence together without adding contingency
+  semantics;
 - pseudo-arclength stress traces now refine every λ=1 crossing, enforce a
   declared lower λ-domain boundary (default 0), and can finish with a localized
   fold plus model-domain termination rather than spending the stress budget in
@@ -599,22 +604,37 @@ base-connected reachability.
 **Exit criterion:** control events are reproducible and carry pre/post model
 provenance; no derivative is reported through an unacknowledged discontinuity.
 
-### Milestone 5 — certificates, robustness, and studies
+### Snapshot core hardening — current focus
+
+- Treat `check_opf_operability(network, solution; spec, context)` as the stable
+  core API for one solved equilibrium.
+- Keep `OperabilityResult` and `operability_snapshot_row` complete enough for a
+  study table without requiring contingency-specific fields.
+- Close remaining native-static fixture gaps and verify scale/unit covariance,
+  unsupported-physics reporting, and snapshot status aggregation.
+
+**Exit criterion:** one snapshot produces reproducible, scale-audited,
+connection-aware evidence with explicit claim scope and no implicit
+contingency or operating-envelope guarantee.
+
+### Milestone 5 — certificates, snapshot robustness, and studies
 
 - Use the landed `law_bound_validation` evidence in study campaigns, and
   broaden the certified voltage-domain geometry beyond the landed
   componentwise polydisc where useful; retain `:inconclusive` semantics when
   the sufficient condition does not hold.
 - Run multiple named stress directions and model ensembles for ZIP/exponential
-- uncertainty using `operability_stress_rows`, then aggregate finite path
+  uncertainty using `operability_stress_rows`, then aggregate finite path
   margins without promoting them to a global guarantee.
-- Add selected contingency workflows without treating a finite list as a global
-  guarantee.
 - Provide table-ready rows and a documented research-study tutorial.
 
 **Exit criterion:** every positive claim is tied to a theorem, continuation
 trace, or declared finite study; conservative certificate failures remain
 inconclusive.
+
+Contingency orchestration is intentionally deferred to a separate PR. That
+future layer should iterate over solved contingency cases and call the stable
+single-snapshot API; it is not part of this processor's claim contract.
 
 ## Proposed repository layout
 

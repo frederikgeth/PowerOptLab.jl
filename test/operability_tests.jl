@@ -35,6 +35,13 @@ using BMOPFTools
     @test report.provenance["operability"]["closure"] == "frozen_dispatch"
     @test report.provenance["operability"]["model_inventory"]["load_models"] ==
           ["constant_power"]
+    snapshot_row = operability_snapshot_row(report; snapshot_id="base")
+    @test snapshot_row.snapshot_id == "base"
+    @test snapshot_row.status == :pass
+    @test snapshot_row.scope == "single_snapshot_static_ybus"
+    @test snapshot_row.minimum_terminal_voltage ≈ report.load_connections["ld1/1"]["magnitude"]
+    @test snapshot_row.high_side_indicator_count == 1
+    @test snapshot_row.fixed_point_certificate_status == :not_applicable
     certificate_report = check_opf_operability(net, pf;
         spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
             compute_fixed_point_certificate=true))
@@ -51,6 +58,9 @@ using BMOPFTools
     @test certificate["law_bound_validation"]["status"] == :pass
     @test maximum(certificate["law_bound_validation"]["connections"]["ld1/1"]["ratio"]) <= 1.001
     @test certificate_report.status == :pass
+    certificate_row = operability_snapshot_row(certificate_report)
+    @test certificate_row.fixed_point_certificate_status == :pass
+    @test certificate_row.fixed_point_condition_margin > 0.0
     direction = OperabilityStressDirection(:phase_selective;
         p_scale=1.0, q_scale=0.0, connection_weights=Dict("ld1" => [0.0]))
     stressed = operability_stress_network(net, 0.5, direction)

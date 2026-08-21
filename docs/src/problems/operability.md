@@ -43,6 +43,8 @@ The checker reports:
   table-ready residual/certificate rows; and
 * deterministic direction-level and model-ensemble summaries with first
   observed non-pass boundaries and finite path-specific margins; and
+* `operability_snapshot_row`, a compact single-snapshot projection for study
+  tables that does not imply contingency or envelope coverage; and
 * explicit `:not_applicable` scope evidence when generator or IBR equations are
   outside the residual seam.
 
@@ -145,6 +147,7 @@ stress_rows = operability_stress_rows(net, pf;
 stress_rows
 operability_stress_summary(stress_rows)
 operability_stress_ensemble_rows(Dict("base" => stress_rows))
+operability_snapshot_row(report; snapshot_id = "base")
 
 validated = check_opf_operability(net, pf;
     spec = OperabilitySpec(
@@ -197,4 +200,5 @@ operability_stress_network
 operability_stress_rows
 operability_stress_summary
 operability_stress_ensemble_rows
+operability_snapshot_row
 ```
