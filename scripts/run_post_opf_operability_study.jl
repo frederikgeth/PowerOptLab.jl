@@ -6,7 +6,8 @@
 #   julia --project=. scripts/run_post_opf_operability_study.jl
 #
 # The study intentionally evaluates one solved snapshot at a time. It then
-# runs two finite loading directions for constant-power and ZIP load models.
+# runs two finite loading directions for constant-power, ZIP, and unbalanced
+# DELTA load cases.
 # The output is finite study evidence, not a contingency or operating-envelope
 # guarantee.
 
@@ -14,6 +15,15 @@ using PowerOptLab
 using BMOPFTools: parse_bmopf, solve_pf, SIUnitsScaling
 
 function study_net(model::AbstractString)
+    is_delta = model == "unbalanced_delta"
+    load_model = is_delta ? "constant_power" : model
+    configuration = is_delta ? "DELTA" : "WYE"
+    terminal_map = is_delta ? "[\"a\",\"b\",\"c\"]" :
+        "[\"a\",\"b\",\"c\",\"n\"]"
+    p_nom = is_delta ? "[9000.0,14000.0,11000.0]" :
+        "[12000.0,12000.0,12000.0]"
+    q_nom = is_delta ? "[2500.0,4000.0,3000.0]" :
+        "[3000.0,3000.0,3000.0]"
     net = parse_bmopf("""
     {"bus":{
       "source":{"terminal_names":["a","b","c","n"],"perfectly_grounded_terminals":["n"]},
@@ -27,9 +37,9 @@ function study_net(model::AbstractString)
      "line":{"l1":{"bus_from":"source","bus_to":"loadbus",
          "terminal_map_from":["a","b","c","n"],"terminal_map_to":["a","b","c","n"],
          "linecode":"lc","length":1.0}},
-     "load":{"ld":{"bus":"loadbus","terminal_map":["a","b","c","n"],
-         "configuration":"WYE","model":"$model",
-         "p_nom":[12000.0,12000.0,12000.0],"q_nom":[3000.0,3000.0,3000.0]}}
+     "load":{"ld":{"bus":"loadbus","terminal_map":$terminal_map,
+         "configuration":"$configuration","model":"$load_model",
+         "p_nom":$p_nom,"q_nom":$q_nom}}
     }
     """; from_string=true)
     load = net["load"]["ld"]
@@ -45,12 +55,25 @@ function study_net(model::AbstractString)
     net
 end
 
-const STUDY_SPEC = OperabilitySpec(
-    scaling_policy=SIUnitsScaling(),
-    voltage_min=190.0,
-    voltage_max=260.0,
-    vuf_max=0.02,
-    compute_fixed_point_certificate=true)
+function study_spec(model::AbstractString)
+    if model == "unbalanced_delta"
+        # DELTA connection records are phase-to-phase terminal quantities;
+        # retain a separate declared bound rather than comparing them with
+        # phase-to-neutral WYE limits.
+        return OperabilitySpec(
+            scaling_policy=SIUnitsScaling(),
+            voltage_min=340.0,
+            voltage_max=450.0,
+            vuf_max=0.10,
+            compute_fixed_point_certificate=true)
+    end
+    OperabilitySpec(
+        scaling_policy=SIUnitsScaling(),
+        voltage_min=190.0,
+        voltage_max=260.0,
+        vuf_max=0.02,
+        compute_fixed_point_certificate=true)
+end
 
 const STUDY_DIRECTIONS = [
     OperabilityStressDirection(:uniform),
@@ -60,19 +83,20 @@ const STUDY_DIRECTIONS = [
 function run_campaign(model::AbstractString)
     net = study_net(model)
     solution = solve_pf(net; per_unit=false)
-    report = check_opf_operability(net, solution; spec=STUDY_SPEC)
+    spec = study_spec(model)
     rows = operability_stress_rows(net, solution;
-        spec=STUDY_SPEC,
+        spec=spec,
         directions=STUDY_DIRECTIONS,
         lambdas=[0.0, 0.5, 1.0],
         solve=network -> solve_pf(network; per_unit=false))
+    report = check_opf_operability(net, solution; spec=spec)
     report, operability_snapshot_row(report; snapshot_id=String(model)), rows
 end
 
 campaigns = Dict{String,Vector{NamedTuple}}()
 reports = Dict{String,OperabilityResult}()
 snapshot_rows = NamedTuple[]
-for model in ("constant_power", "zip")
+for model in ("constant_power", "zip", "unbalanced_delta")
     report, row, rows = run_campaign(model)
     reports[model] = report
     campaigns[model] = rows
