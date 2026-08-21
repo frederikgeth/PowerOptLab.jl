@@ -143,6 +143,17 @@ reduced.singular_values       # [σmax, σmin] estimates
 reduced.branch_evidence["critical_mode"] # explicitly not applicable
 ```
 
+For local size evidence, run the generated radial-feeder benchmark:
+
+```text
+julia --project=. scripts/benchmark_post_opf_operability_scaling.jl 8 16 32 64
+```
+
+It emits CSV-style timing, allocation, state-dimension, and dense-Jacobian
+size rows for both spectrum modes. The benchmark is a reproducibility aid for
+choosing study settings on the target machine, not a universal performance
+claim.
+
 ```julia
 using BMOPFTools
 using PowerOptLab

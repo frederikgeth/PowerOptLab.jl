@@ -787,49 +787,45 @@ function _operability_extreme_singular_values(J, factorization;
     isempty(J) && return Float64[]
     n = size(J, 2)
     n == 0 && return Float64[]
-    x = fill(inv(sqrt(Float64(n))), n)
-    sigma_max = NaN
-    max_converged = false
-    for _ in 1:max_iterations
-        y = J' * (J * x)
-        ynorm = norm(y)
-        isfinite(ynorm) && ynorm > 0.0 || return nothing
-        xnext = y / ynorm
-        sigma_next = sqrt(max(dot(xnext, J' * (J * xnext)), 0.0))
-        if isfinite(sigma_max) && abs(sigma_next - sigma_max) <=
-            rtol * max(1.0, sigma_next)
-            sigma_max = sigma_next
-            x = xnext
-            max_converged = true
-            break
+    lanczos_extreme(apply) = begin
+        q = fill(inv(sqrt(Float64(n))), n)
+        limit = min(max_iterations, n)
+        basis = zeros(Float64, n, limit)
+        alpha = zeros(Float64, limit); beta = zeros(Float64, limit)
+        iterations = 0
+        breakdown = false
+        for k in 1:limit
+            iterations = k
+            basis[:, k] = q
+            z = apply(q)
+            a = dot(q, z)
+            z .-= a .* q
+            k > 1 && (z .-= basis[:, 1:k-1] * (basis[:, 1:k-1]' * z))
+            b = norm(z)
+            alpha[k] = a
+            if b <= eps(Float64) * max(1.0, norm(apply(q)))
+                breakdown = true
+                break
+            end
+            beta[k] = b
+            q = z / b
         end
-        sigma_max = sigma_next
-        x = xnext
+        iterations == 0 && return nothing
+        alpha_view = alpha[1:iterations]
+        beta_view = iterations > 1 ? beta[1:iterations-1] : Float64[]
+        eig = eigen(SymTridiagonal(alpha_view, beta_view))
+        index = argmax(eig.values)
+        residual = breakdown ? 0.0 : abs(beta[iterations] * eig.vectors[end, index])
+        scale = max(1.0, abs(eig.values[index]))
+        residual <= rtol * scale ? (value=eig.values[index], residual=residual) : nothing
     end
-    max_converged || return nothing
+    maximum_result = lanczos_extreme(x -> J' * (J * x))
+    maximum_result === nothing && return nothing
     factorization === nothing && return nothing
-    y = fill(inv(sqrt(Float64(n))), n)
-    sigma_min = NaN
-    min_converged = false
-    for _ in 1:max_iterations
-        z = factorization \ (factorization' \ y)
-        znorm = norm(z)
-        isfinite(znorm) && znorm > 0.0 || return nothing
-        ynext = z / znorm
-        inverse_value = dot(ynext, factorization \ (factorization' \ ynext))
-        sigma_next = inverse_value > 0.0 ? inv(sqrt(inverse_value)) : NaN
-        if isfinite(sigma_min) && isfinite(sigma_next) &&
-            abs(sigma_next - sigma_min) <= rtol * max(1.0, sigma_next)
-            sigma_min = sigma_next
-            y = ynext
-            min_converged = true
-            break
-        end
-        sigma_min = sigma_next
-        y = ynext
-    end
-    max_converged && min_converged && isfinite(sigma_max) && isfinite(sigma_min) ?
-        [sigma_max, sigma_min] : nothing
+    minimum_inverse = lanczos_extreme(x -> factorization \ (factorization' \ x))
+    minimum_inverse === nothing && return nothing
+    maximum_result.value > 0.0 && minimum_inverse.value > 0.0 ?
+        [sqrt(maximum_result.value), inv(sqrt(minimum_inverse.value))] : nothing
 end
 
 function _operability_helm_preflight(net::Dict{String,Any})

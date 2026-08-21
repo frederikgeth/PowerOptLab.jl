@@ -101,6 +101,10 @@ The current branch contains the first bounded implementation slice in
 - an opt-in `jacobian_spectrum=:extremes` reduced mode now estimates only the
   largest and smallest singular values iteratively, explicitly omitting
   critical singular-vector participation while retaining the full-SVD default;
+- a generated radial-feeder benchmark now records local timing, allocation,
+  state-size, and dense-Jacobian evidence for full versus reduced spectrum
+  modes; it is explicitly diagnostic and machine-specific, not a performance
+  guarantee;
 - relative singular-value-ratio evidence, normalized residual verdicts, and
   explicit frozen-dispatch provenance now align the numerical checks with the
   audited scaling and closure contracts; aggregate status no longer reports a
