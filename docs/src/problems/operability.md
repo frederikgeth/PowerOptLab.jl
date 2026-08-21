@@ -46,6 +46,9 @@ The checker reports:
   table-ready residual/certificate rows; and
 * deterministic direction-level and model-ensemble summaries with first
   observed non-pass boundaries and finite path-specific margins; and
+  callback programming errors are rethrown, while expected bad snapshot
+  data is represented by `OperabilityModelError` and retained as an
+  inconclusive row; and
 * `operability_snapshot_row`, a compact single-snapshot projection for study
   tables that does not imply contingency or envelope coverage; and
 * explicit `:not_applicable` scope evidence when generator or IBR equations are
@@ -143,9 +146,15 @@ reported byte estimates are warnings, not hard safety limits, and hardware,
 sparsity, and requested campaign size must be measured for the target study.
 As an intermediate option, `jacobian_spectrum=:extremes` avoids the full SVD
 and retains only iterative estimates of the largest and smallest singular
-values. It still constructs the dense finite-difference Jacobian, so it reduces
-spectral work but is not yet a sparse-memory backend; critical singular-vector
-participation is marked `:not_applicable` in that mode.
+values. Its Lanczos budget scales with state dimension up to a bounded cap; if
+the dense reduced estimator still fails to converge, the implementation falls
+back to the reference dense SVD and records
+`jacobian_spectrum_effective_mode="full_fallback"`. Sparse mode does not
+silently densify: an estimator failure remains an honest inconclusive
+regularity result with a specific non-convergence message. The reduced path
+still constructs one finite-difference Jacobian, so it reduces spectral work
+but is not automatically a sparse-memory backend; critical singular-vector
+participation is omitted unless a dense fallback is used.
 For a sparse-memory Jacobian path, pair `jacobian_storage=:sparse` with
 `jacobian_spectrum=:extremes`. This stores the finite-difference matrix in
 compressed sparse form and uses sparse LU right-hand-side solves, but it still
@@ -305,6 +314,7 @@ guess, not uniqueness or global reachability.
 ```@docs
 OperabilitySpec
 OperabilityCheck
+OperabilityModelError
 OperabilityResult
 check_opf_operability
 OperabilityContinuationSpec

@@ -217,6 +217,26 @@ using SparseArrays
         directions=[OperabilityStressDirection(:vararg)], lambdas=[1.0],
         solve=(args...) -> solve_pf(args[1]; per_unit=false), solve_arity=1)
     @test only(vararg_stress_rows).status == :pass
+    three_arg_stress_rows = operability_stress_rows(net, pf;
+        spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
+            compute_fixed_point_certificate=true),
+        directions=[OperabilityStressDirection(:three_arg)], lambdas=[1.0],
+        solve=(network, previous, direction) -> solve_pf(network; per_unit=false))
+    @test only(three_arg_stress_rows).status == :pass
+    int32_arity_rows = operability_stress_rows(net, pf;
+        spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
+            compute_fixed_point_certificate=true),
+        directions=[OperabilityStressDirection(:int32_arity)], lambdas=[1.0],
+        solve=(args...) -> solve_pf(args[1]; per_unit=false), solve_arity=Int32(1))
+    @test only(int32_arity_rows).status == :pass
+    bad_solution = deepcopy(pf)
+    bad_solution["bus"]["bus1"]["1"]["vr"] = NaN
+    model_error_rows = operability_stress_rows(net, pf;
+        spec=OperabilitySpec(scaling_policy=SIUnitsScaling()),
+        directions=[OperabilityStressDirection(:bad_data)], lambdas=[1.0],
+        solve=network -> bad_solution)
+    @test only(model_error_rows).status == :inconclusive
+    @test occursin("not finite", only(model_error_rows).error)
     @test_throws UndefVarError operability_stress_rows(net, pf;
         spec=OperabilitySpec(scaling_policy=SIUnitsScaling()),
         directions=[OperabilityStressDirection(:broken)], lambdas=[1.0],
@@ -339,21 +359,42 @@ using SparseArrays
     @test floating_certificate.checks["fixed_point_euclidean_region"].status == :pass
     @test length(floating_certificate.state_nodes) == 4
 
-    # Assembly-level regression: on a lightly loaded copy where the Euclidean
-    # region is certified, probe the fixed-point map along the floating-neutral
-    # incidence direction and ensure the reported q bounds its real Jacobian.
-    floating_light_net = deepcopy(floating_net)
-    floating_light_net["load"]["ld"]["p_nom"] = [100.0]
-    floating_light_pf = solve_pf(floating_light_net; per_unit=false)
-    floating_light = check_opf_operability(floating_light_net, floating_light_pf;
+    four_wire_net = operability_four_wire_radial()
+    four_wire_pf = solve_pf(four_wire_net; per_unit=false)
+    four_wire_report = check_opf_operability(four_wire_net, four_wire_pf;
+        spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
+            voltage_min=180.0, voltage_max=280.0,
+            compute_fixed_point_certificate=true))
+    @test four_wire_report.status == :pass
+    @test four_wire_report.checks["fixed_point_certificate"].status == :pass
+    @test length(four_wire_report.state_nodes) == 8
+    @test four_wire_report.branch_evidence["fixed_point_certificate"]["edge_count"] == 3
+    four_wire_extremes = check_opf_operability(four_wire_net, four_wire_pf;
+        spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
+            voltage_min=180.0, voltage_max=280.0,
+            compute_sensitivity=false, jacobian_spectrum=:extremes))
+    @test four_wire_extremes.checks["jacobian_regular"].status == :pass
+    @test four_wire_extremes.singular_values ≈
+          [first(four_wire_report.singular_values), last(four_wire_report.singular_values)] rtol=1e-5
+    @test four_wire_extremes.branch_evidence["complexity"]["jacobian_spectrum_effective_mode"] ==
+          "extremes"
+
+    # Assembly-level regression: on a lightly loaded copy of the multi-bus
+    # four-wire fixture, probe several phase-rotated incidence directions near
+    # the lower connection-voltage boundary and ensure the reported q bounds
+    # the fixed-point map's real Jacobian. The non-zero source angles matter.
+    four_wire_light_net = operability_stress_network(four_wire_net, 0.05,
+        OperabilityStressDirection(:light))
+    four_wire_light_pf = solve_pf(four_wire_light_net; per_unit=false)
+    four_wire_light = check_opf_operability(four_wire_light_net, four_wire_light_pf;
         spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
             compute_fixed_point_certificate=true))
-    euclidean = floating_light.branch_evidence["fixed_point_certificate"]["euclidean_region"]
+    euclidean = four_wire_light.branch_evidence["fixed_point_certificate"]["euclidean_region"]
     @test euclidean["status"] == :pass
-    lin_light = BMOPFTools.ybus_linearized(floating_light_net; fold=:constant_z)
-    vmap_light = PowerOptLab._operability_solution_map(floating_light_pf, lin_light.nodes)
+    lin_light = BMOPFTools.ybus_linearized(four_wire_light_net; fold=:constant_z)
+    vmap_light = PowerOptLab._operability_solution_map(four_wire_light_pf, lin_light.nodes)
     meta_light = PowerOptLab._operability_state_meta(lin_light, vmap_light,
-        PowerOptLab._operability_source_buses(floating_light_net))
+        PowerOptLab._operability_source_buses(four_wire_light_net))
     nf_light = length(meta_light.free)
     yll_light = ComplexF64.(lin_light.Y[meta_light.free, meta_light.free])
     yls_light = ComplexF64.(lin_light.Y[meta_light.free, meta_light.fixed])
@@ -365,31 +406,28 @@ using SparseArrays
         vfull[meta_light.free] = vfree
         w_light + yll_factor_light \ ComplexF64.(lin_light.i_comp(vfull)[meta_light.free])
     end
-    sl_light = only(PowerOptLab._load_subloads(floating_light_net["load"]["ld"], floating_light_net))
+    sl_light = only(PowerOptLab._load_subloads(four_wire_light_net["load"]["la"], four_wire_light_net))
     a_light = zeros(Float64, nf_light)
+    free_index_light = Dict(gi => li for (li, gi) in enumerate(meta_light.free))
     pi_light = lin_light.index[sl_light.pos]
     ni_light = lin_light.index[sl_light.neg]
-    haskey(Dict(gi => li for (li, gi) in enumerate(meta_light.free)), pi_light) &&
-        (a_light[findfirst(==(pi_light), meta_light.free)] += 1.0)
-    haskey(Dict(gi => li for (li, gi) in enumerate(meta_light.free)), ni_light) &&
-        (a_light[findfirst(==(ni_light), meta_light.free)] -= 1.0)
-    probe = w_light .+ (0.999 * euclidean["radius"]) .* ComplexF64.(a_light ./ norm(a_light))
+    haskey(free_index_light, pi_light) && (a_light[free_index_light[pi_light]] += 1.0)
+    haskey(free_index_light, ni_light) && (a_light[free_index_light[ni_light]] -= 1.0)
+    dv0_light = (haskey(free_index_light, pi_light) ? w_light[free_index_light[pi_light]] : 0.0im) -
+        (haskey(free_index_light, ni_light) ? w_light[free_index_light[ni_light]] : 0.0im)
+    phase_light = dv0_light / abs(dv0_light)
     pack_light(v) = vcat(real.(v), imag.(v))
     unpack_light(z) = ComplexF64.(z[1:nf_light] .+ im .* z[nf_light+1:end])
-    map_jacobian = finite_difference_jacobian(
-        z -> pack_light(map_light(unpack_light(z))), pack_light(probe); step=1e-6)
-    @test opnorm(map_jacobian, 2) <= euclidean["contraction_factor"] * (1.0 + 1e-3)
-
-    four_wire_net = operability_four_wire_radial()
-    four_wire_pf = solve_pf(four_wire_net; per_unit=false)
-    four_wire_report = check_opf_operability(four_wire_net, four_wire_pf;
-        spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
-            voltage_min=180.0, voltage_max=280.0,
-            compute_fixed_point_certificate=true))
-    @test four_wire_report.status == :pass
-    @test four_wire_report.checks["fixed_point_certificate"].status == :pass
-    @test length(four_wire_report.state_nodes) == 8
-    @test four_wire_report.branch_evidence["fixed_point_certificate"]["edge_count"] == 3
+    probe_factors = (phase_light, -phase_light, im * phase_light, -im * phase_light)
+    probe_norms = Float64[]
+    for factor in probe_factors
+        probe = w_light .+ (0.999 * euclidean["radius"]) .*
+            ComplexF64.(a_light ./ norm(a_light)) .* factor
+        map_jacobian = finite_difference_jacobian(
+            z -> pack_light(map_light(unpack_light(z))), pack_light(probe); step=1e-6)
+        push!(probe_norms, opnorm(map_jacobian, 2))
+    end
+    @test maximum(probe_norms) <= euclidean["contraction_factor"] * (1.0 + 1e-3)
 
     helm_report = check_opf_operability(net, pf;
         spec=OperabilitySpec(scaling_policy=SIUnitsScaling(), compute_helm=true))

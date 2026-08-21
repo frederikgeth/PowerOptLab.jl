@@ -11,6 +11,13 @@ const _OPERABILITY_STATUSES = (:pass, :fail, :inconclusive, :not_applicable)
 const _OPERABILITY_SCALING_POLICY = isdefined(BMOPFTools, :AbstractOpfScalingPolicy) ?
     getfield(BMOPFTools, :AbstractOpfScalingPolicy) : Any
 
+"""Expected network/solution data failure while auditing one snapshot."""
+struct OperabilityModelError <: Exception
+    message::String
+end
+
+Base.showerror(io::IO, err::OperabilityModelError) = print(io, err.message)
+
 """One independently evaluated operability check."""
 struct OperabilityCheck
     status::Symbol
@@ -276,12 +283,13 @@ end
 function _operability_voltage(solution, node::_Node)
     bus, terminal = node
     buses = get(solution, "bus", Dict())
-    haskey(buses, bus) || throw(ArgumentError("solution is missing bus $(repr(bus))"))
+    haskey(buses, bus) || throw(OperabilityModelError(
+        "solution is missing bus $(repr(bus))"))
     data = get(buses[bus], terminal, nothing)
-    data === nothing && throw(ArgumentError(
+    data === nothing && throw(OperabilityModelError(
         "solution is missing voltage for terminal $(repr(node))"))
     vr = Float64(get(data, "vr", NaN)); vi = Float64(get(data, "vi", NaN))
-    isfinite(vr) && isfinite(vi) || throw(ArgumentError(
+    isfinite(vr) && isfinite(vi) || throw(OperabilityModelError(
         "solution voltage for $(repr(node)) is not finite"))
     complex(vr, vi)
 end
@@ -823,7 +831,7 @@ left/right mode participation.
 """
 function _operability_extreme_singular_values(J, factorization;
                                              max_iterations::Int=80,
-                                             rtol::Float64=1e-8)
+                                             rtol::Float64=1e-7)
     isempty(J) && return Float64[]
     n = size(J, 2)
     n == 0 && return Float64[]
@@ -1483,7 +1491,11 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
     source_buses = _operability_source_buses(net)
     isempty(source_buses) && throw(ArgumentError("operability checking requires a voltage source"))
 
-    lin = BMOPFTools.ybus_linearized(net; fold=:constant_z)
+    lin = try
+        BMOPFTools.ybus_linearized(net; fold=:constant_z)
+    catch err
+        err isa ArgumentError ? throw(OperabilityModelError(sprint(showerror, err))) : rethrow()
+    end
     vmap = _operability_solution_map(solution, lin.nodes)
     meta = _operability_state_meta(lin, vmap, source_buses)
     x = meta.state
@@ -1547,11 +1559,24 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
         nothing
     end
     jacobian_factorization = spec.jacobian_spectrum === :full && !isempty(J) ? svd(J) : nothing
+    effective_spectrum_mode = String(spec.jacobian_spectrum)
+    extreme_estimator_budget = max(80, min(size(J, 2), 256))
     singular_values = if spec.jacobian_spectrum === :full
         jacobian_factorization === nothing ? Float64[] : Float64.(jacobian_factorization.S)
     else
-        extremes = _operability_extreme_singular_values(J, linear_solver)
-        extremes === nothing ? Float64[] : extremes
+        extremes = _operability_extreme_singular_values(J, linear_solver;
+            max_iterations=extreme_estimator_budget)
+        if extremes === nothing && !issparse(J) && !isempty(J)
+            # A dense report can preserve the regularity/sensitivity contract
+            # by falling back to its reference SVD when the reduced estimator
+            # does not converge. Sparse mode remains explicitly inconclusive
+            # rather than silently materializing a dense matrix.
+            jacobian_factorization = svd(J)
+            effective_spectrum_mode = "full_fallback"
+            Float64.(jacobian_factorization.S)
+        else
+            extremes === nothing ? Float64[] : extremes
+        end
     end
     condition_number = isempty(singular_values) || last(singular_values) == 0 ?
         Inf : first(singular_values) / last(singular_values)
@@ -1565,12 +1590,16 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
             "no non-source voltage state remains after source/reference elimination")
     elseif isempty(singular_values)
         checks["jacobian_regular"] = OperabilityCheck(:inconclusive, nothing, rank_tol,
-            "reduced Jacobian spectrum could not estimate both extreme singular values")
+            "reduced Jacobian extreme-singular-value estimator did not converge")
     else
         checks["jacobian_regular"] = OperabilityCheck(last(singular_values) > rank_tol ?
             :pass : :inconclusive, last(singular_values), rank_tol,
             "scaled rectangular current-balance Jacobian smallest singular value")
     end
+    jacobian_unavailable_message = isempty(singular_values) &&
+        spec.jacobian_spectrum === :extremes ?
+        "extreme-singular-value estimator did not converge" :
+        "Jacobian is too close to singular"
 
     sensitivities = Dict{String,Any}()
     load_scale_dx = nothing
@@ -1600,7 +1629,7 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
             "sensitivity to uniform scaling of load nameplate P/Q terms")
     else
         checks["load_scale_sensitivity"] = OperabilityCheck(:not_applicable, nothing, nothing,
-            isempty(x) ? "no state to differentiate" : "Jacobian is too close to singular")
+            isempty(x) ? "no state to differentiate" : jacobian_unavailable_message)
     end
 
     if spec.compute_sensitivity_validation && load_scale_dx !== nothing
@@ -1687,6 +1716,9 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
         "load_connection_count" => nconnections,
         "sensitivity_direction_count" => ndirections,
         "jacobian_spectrum_mode" => String(spec.jacobian_spectrum),
+        "jacobian_spectrum_effective_mode" => effective_spectrum_mode,
+        "jacobian_extreme_estimator_iteration_budget" =>
+            spec.jacobian_spectrum === :extremes ? extreme_estimator_budget : 0,
         "jacobian_storage_mode" => String(spec.jacobian_storage),
         "jacobian_nonzero_count" => jacobian_nonzero_count,
         "jacobian_pattern" => jacobian_pattern,
@@ -1701,7 +1733,7 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
         "fixed_point_scan_points_per_geometry" => spec.compute_fixed_point_certificate ? 2001 : 0,
         "fixed_point_geometry_count" => spec.compute_fixed_point_certificate ? 4 : 0,
         "interpretation" => "diagnostic size indicators; dense Jacobian/SVD and Z-bus certificate storage can dominate large-network runs")
-    critical_mode = spec.jacobian_spectrum === :full ?
+    critical_mode = jacobian_factorization !== nothing ?
         _operability_critical_mode(jacobian_factorization, meta.state_nodes) :
         Dict{String,Any}(
             "status" => :not_applicable,
@@ -1820,6 +1852,7 @@ function operability_stress_rows(net::Dict{String,Any}, solution::AbstractDict;
     if solve_arity !== nothing
         solve_arity isa Integer && solve_arity in 1:4 || throw(ArgumentError(
             "solve_arity must be nothing or an integer in 1:4"))
+        solve_arity = Int(solve_arity)
     end
     rows = NamedTuple[]
     for direction in direction_list
@@ -1827,17 +1860,18 @@ function operability_stress_rows(net::Dict{String,Any}, solution::AbstractDict;
         for λ in lambda_list
             stressed = operability_stress_network(net, λ, direction)
             try
-                solved = if solve_arity === 4 ||
+                solved = if solve_arity == 4 ||
                     (solve_arity === nothing && applicable(solve, stressed, previous, direction, λ))
                     solve(stressed, previous, direction, λ)
-                elseif solve_arity === 2 ||
+                elseif solve_arity == 3 ||
+                    (solve_arity === nothing && applicable(solve, stressed, previous, direction))
+                    solve(stressed, previous, direction)
+                elseif solve_arity == 2 ||
                     (solve_arity === nothing && applicable(solve, stressed, previous))
                     solve(stressed, previous)
-                elseif solve_arity === 1 ||
+                elseif solve_arity == 1 ||
                     (solve_arity === nothing && applicable(solve, stressed))
                     solve(stressed)
-                elseif solve_arity === 3
-                    solve(stressed, previous, direction)
                 else
                     throw(ArgumentError("solve callback has no supported arity"))
                 end
@@ -1865,7 +1899,11 @@ function operability_stress_rows(net::Dict{String,Any}, solution::AbstractDict;
                         "candidate_inside_region", missing),
                     message="stress snapshot checked", error=nothing))
             catch err
-                if err isa InterruptException || err isa MethodError ||
+                if err isa OperabilityModelError
+                    # Expected snapshot data/model failures remain row-level
+                    # inconclusive evidence in a finite campaign.
+                    nothing
+                elseif err isa InterruptException || err isa MethodError ||
                     err isa UndefVarError || err isa ArgumentError ||
                     err isa TypeError || err isa DimensionMismatch ||
                     err isa BoundsError || err isa LoadError
