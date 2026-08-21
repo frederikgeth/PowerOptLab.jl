@@ -14,6 +14,7 @@ using BMOPFTools
     report = check_opf_operability(net, pf; spec)
     @test report.status == :pass
     @test report.checks["endpoint"].status == :pass
+    @test report.checks["endpoint"].value == report.endpoint_residual_normalized
     @test report.endpoint_residual < 1e-6
     @test report.checks["jacobian_regular"].status == :pass
     @test report.checks["load_scale_sensitivity"].status == :pass
@@ -31,12 +32,15 @@ using BMOPFTools
     @test p_direction["units"] == "W"
     @test p_direction["load_connections"]["ld1/1"]["magnitude_derivative"] < 0.0
     @test report.provenance["operability"]["scope"] == "static_ybus_linearized"
+    @test report.provenance["operability"]["closure"] == "frozen_dispatch"
     @test report.provenance["operability"]["model_inventory"]["load_models"] ==
           ["constant_power"]
     critical = report.branch_evidence["critical_mode"]
     @test critical["status"] == :pass
     @test length(critical["left_vector"]) == 2 * length(report.state_nodes)
     @test length(critical["right_node_participation"]) == length(report.state_nodes)
+    @test_throws ArgumentError OperabilitySpec(
+        scaling_policy=SIUnitsScaling(), closure=:operational)
 
     validation_report = check_opf_operability(net, pf;
         spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
@@ -79,7 +83,7 @@ using BMOPFTools
     delta_pf = solve_pf(delta_net; per_unit=false)
     delta_report = check_opf_operability(delta_net, delta_pf;
         spec=OperabilitySpec(scaling_policy=SIUnitsScaling()))
-    @test delta_report.status == :pass
+    @test delta_report.status == :not_applicable
     @test length(delta_report.load_connections) == 3
     @test all(r["positive"] !== r["negative"] for r in values(delta_report.load_connections))
     @test delta_report.provenance["operability"]["model_inventory"]["load_configurations"] ==
@@ -109,7 +113,7 @@ using BMOPFTools
         model_report = check_opf_operability(model_net, model_pf;
             spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
                 compute_sensitivity_validation=true))
-        @test model_report.status == :pass
+        @test model_report.status == :not_applicable
         @test model_report.provenance["operability"]["model_inventory"]["load_models"] == [model]
         @test model_report.checks["load_scale_sensitivity_validation"].status == :pass
         @test model_report.checks["directional_sensitivity_validation"].status == :pass
@@ -119,6 +123,16 @@ using BMOPFTools
         @test model_trace.status == :pass
         @test last(model_trace.lambdas) == 1.0
     end
+
+    q_only_net = single_bus_net(pload=0.0)
+    q_only_net["load"]["ld1"]["p_nom"] = Float64[]
+    q_only_net["load"]["ld1"]["q_nom"] = [100.0]
+    q_only_pf = solve_pf(q_only_net; per_unit=false)
+    q_only_report = check_opf_operability(q_only_net, q_only_pf;
+        spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
+            voltage_min=800.0, voltage_max=1100.0))
+    @test haskey(q_only_report.sensitivities["directions"], "Q")
+    @test haskey(q_only_report.sensitivities["directions"]["Q"], "ld1/1")
 
     trace = continue_opf_operability(net, pf;
         spec=spec,
@@ -161,6 +175,7 @@ using BMOPFTools
                                                                min_step=0.1)
     @test_throws ArgumentError OperabilityPseudoArclengthSpec(
         curvature_low=2.0, curvature_high=1.0)
+    @test_throws ArgumentError OperabilityPseudoArclengthSpec(lambda_min=1.0)
 
     # Analytic two-bus resistive feeder: P = V(E - V) / R has a high branch
     # at 600 V and a low branch at 400 V for P = 2.4 MW.  Both are valid
@@ -183,7 +198,7 @@ using BMOPFTools
     low_solution["bus"]["bus1"]["1"]["vr"] = 400.0
     low_report = check_opf_operability(nose_net, low_solution;
         spec=OperabilitySpec(scaling_policy=SIUnitsScaling()))
-    @test low_report.status == :pass
+    @test low_report.status == :not_applicable
     @test low_report.branch_evidence["dP_dV"]["connections"]["ld1/1"]["classification"] ==
           "positive_low_side_indicator"
     low_trace = continue_opf_operability_pseudo_arclength(nose_net, low_solution;
@@ -201,8 +216,17 @@ using BMOPFTools
         continuation=OperabilityPseudoArclengthSpec(
             initial_step=0.05, max_step=0.1, max_steps=40),
         stop_at_target=false)
-    @test stress_trace.status == :inconclusive
+    @test stress_trace.status == :pass
     @test stress_trace.provenance["continuation"]["stop_at_target"] === false
+    @test stress_trace.provenance["continuation"]["lambda_min"] == 0.0
+    @test count(event -> get(event, "kind", "") == "target_crossing",
+                stress_trace.events) == 2
+    @test count(event -> get(event, "kind", "") == "target_refinement" &&
+                         get(event, "status", nothing) == :pass,
+                stress_trace.events) == 2
+    @test any(get(event, "kind", "") == "model_domain_failure" &&
+              get(event, "status", nothing) == :pass for event in stress_trace.events)
+    @test last(stress_trace.lambdas) == 0.0
     fold_events = filter(event -> get(event, "kind", "") == "fold_candidate",
                          stress_trace.events)
     @test !isempty(fold_events)
@@ -217,6 +241,7 @@ using BMOPFTools
     @test solve_diagnostics(stress_trace).margin["mechanism"] == :fold_candidate
     stress_rows = operability_continuation_rows(stress_trace)
     @test any(:fold_candidate in row.event_kinds for row in stress_rows)
+    @test count(:target_crossing in row.event_kinds for row in stress_rows) == 2
     @test_throws ArgumentError operability_continuation_margin(stress_trace;
                                                                reference_lambda=0.0)
 

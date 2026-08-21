@@ -52,6 +52,14 @@ The current branch contains the first bounded implementation slice in
   arclength-step histories, with conservative curvature-aware step control;
 - `operability_continuation_rows` exposes deterministic one-row-per-point
   records so study tables can retain the trace ordering and event evidence;
+- pseudo-arclength stress traces now refine every λ=1 crossing, enforce a
+  declared lower λ-domain boundary (default 0), and can finish with a localized
+  fold plus model-domain termination rather than spending the stress budget in
+  negative-load territory;
+- relative singular-value-ratio evidence, normalized residual verdicts, and
+  explicit frozen-dispatch provenance now align the numerical checks with the
+  audited scaling and closure contracts; aggregate status no longer reports a
+  bare `:pass` when all primary operational claims are `:not_applicable`;
 - an opt-in bordered-equation fold localizer solving ``F=0``, ``Jv=0``, and
   ``‖v‖₂=1`` from a declared approximate fold state; pseudo-arclength fold
   candidates now retain its localized status and residual evidence when invoked.
@@ -61,7 +69,10 @@ complete branch discovery or a production-grade fold certificate. The current
 pseudo-arclength slice is limited to the native static ybus load scope; target
 refinement improves endpoint matching but does not replace fold refinement or
 global branch discovery. The bordered localizer is a local candidate solver and
-does not certify uniqueness or global reachability.
+does not certify uniqueness or global reachability. The pinned documentation
+environment does not yet expose the staged BMOPFTools scaling-policy seam, so
+the executable documentation example and the final scaling-contract release
+remain blocked on that upstream compatibility step.
 
 ## Research question and intended claims
 
@@ -124,6 +135,11 @@ Two closures answer different questions and must not be mixed:
   are fixed at the OPF values; and
 - **operational equilibrium:** physical algebraic controls such as droop or PV
   regulation remain in ``F``, with their active limit mode recorded.
+
+The implemented native slice currently accepts only
+`closure=:frozen_dispatch`; it records that choice in checker, continuation,
+and fold-localization provenance. Operational closures remain a future seam,
+not an implicit interpretation of the present static residual.
 
 The OPF KKT matrix is not the power-flow Jacobian and does not answer which
 power-flow branch contains the primal voltage point.
@@ -322,6 +338,12 @@ The determinant is not a headline metric because it is badly scaled and its
 sign depends on coordinate conventions. A reduced Q-V Jacobian is not the
 default because high-R/X and unbalanced distribution systems do not justify the
 usual decoupling assumptions.
+
+The current implementation still obtains the equilibrium Jacobian, ``F_λ``,
+and load-law slopes by finite differences. Its re-solve checks are therefore
+FD-versus-FD-composed validation, not an analytic/automatic-derivative versus
+finite-difference comparison. ForwardDiff/analytic device derivatives remain
+an explicit follow-on before claiming the full Milestone 2 exit criterion.
 
 Local nonsingularity is not a branch classifier: high- and low-voltage sheets
 are both locally regular away from a fold.

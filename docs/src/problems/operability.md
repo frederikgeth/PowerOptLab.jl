@@ -40,6 +40,14 @@ Scaling is part of the evidence contract. Supply the staged OPF `context` so
 the audited policy, AC coordinate bases, and research provenance are inherited,
 or pass an explicit `OperabilitySpec(scaling_policy=...)`. Non-SI policies also
 require `scaling_bases` keyed by bus; the checker never invents a per-unit base.
+The current equilibrium closure is explicitly `:frozen_dispatch` and is
+recorded in provenance; other closures are rejected until their equations are
+available through a public upstream seam.
+
+The aggregate result is `:pass` only when a requested primary operational claim
+(terminal-voltage bounds, sequence-unbalance bounds, or HELM reachability) has
+passed. If no such claim was requested, the result remains `:not_applicable`
+even when endpoint and Jacobian evidence are good.
 
 ```julia
 using BMOPFTools
@@ -85,6 +93,7 @@ stress = continue_opf_operability_pseudo_arclength(net, pf;
     continuation = OperabilityPseudoArclengthSpec(max_steps = 200),
     stop_at_target = false)
 stress.events
+stress.provenance["continuation"]["lambda_min"]
 
 # Optionally terminate when a declared terminal-voltage limit is first crossed:
 limited = continue_opf_operability_pseudo_arclength(net, pf;

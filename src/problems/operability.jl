@@ -37,6 +37,8 @@ The first implementation supports native static loads represented by
 `ybus_linearized`: constant-P, constant-I, constant-Z, ZIP, and exponential
 loads, including wye, single-phase, and delta connections. Generator, IBR, and
 endogenous-control equations are reported as outside this scope until a public
+equilibrium seam is available. The current closure is frozen-dispatch native
+static equilibrium and is recorded in result provenance.
 
 Set `compute_helm=true` to request an independent no-load-connected HELM
 cross-check on its narrower constant-power/constant-impedance scope. A HELM
@@ -49,6 +51,7 @@ struct OperabilitySpec
     scaling_policy::Union{Nothing,_OPERABILITY_SCALING_POLICY}
     scaling_bases::Any
     provenance::Any
+    closure::Symbol
     residual_atol::Float64
     residual_rtol::Float64
     jacobian_step::Float64
@@ -70,6 +73,7 @@ struct OperabilitySpec
             scaling_policy=nothing,
             scaling_bases=nothing,
             provenance=nothing,
+            closure::Symbol=:frozen_dispatch,
             residual_atol::Real=1e-8,
             residual_rtol::Real=1e-6,
             jacobian_step::Real=1e-6,
@@ -90,6 +94,8 @@ struct OperabilitySpec
         scaling_policy === nothing ||
             (_OPERABILITY_SCALING_POLICY !== Any && scaling_policy isa _OPERABILITY_SCALING_POLICY) ||
             throw(ArgumentError("scaling_policy must be an AbstractOpfScalingPolicy"))
+        closure === :frozen_dispatch || throw(ArgumentError(
+            "only closure=:frozen_dispatch is supported in the native static scope"))
         vals = (residual_atol, residual_rtol, jacobian_step,
                 jacobian_rank_rtol, sensitivity_step,
                 sensitivity_validation_atol, sensitivity_validation_rtol)
@@ -105,7 +111,7 @@ struct OperabilitySpec
         helm_vals = (helm_tol, helm_endpoint_atol, helm_endpoint_rtol)
         all(x -> isfinite(Float64(x)) && Float64(x) > 0, helm_vals) ||
             throw(ArgumentError("HELM tolerances must be finite and > 0"))
-        new(scaling_policy, scaling_bases, provenance,
+        new(scaling_policy, scaling_bases, provenance, closure,
             Float64(residual_atol), Float64(residual_rtol), Float64(jacobian_step),
             Float64(jacobian_rank_rtol), Float64(sensitivity_step),
             Float64(voltage_min), Float64(voltage_max), Float64(vuf_max),
@@ -287,6 +293,16 @@ function _operability_scale_network(net::Dict{String,Any}, λ::Real)
     result
 end
 
+function _operability_load_connection_count(load)
+    count = 0
+    for field in ("p_nom", "q_nom")
+        value = get(load, field, nothing)
+        count = max(count, value === nothing ? 0 :
+            value isa AbstractVector ? length(value) : 1)
+    end
+    count
+end
+
 function _operability_perturb_load(net::Dict{String,Any}, id::String, k::Int,
                                    field::String, delta::Real)
     result = deepcopy(net)
@@ -294,13 +310,9 @@ function _operability_perturb_load(net::Dict{String,Any}, id::String, k::Int,
     haskey(loads, id) || throw(ArgumentError("unknown load $(repr(id))"))
     load = loads[id]
     values = get(load, field, nothing)
-    if values === nothing
-        field == "q_nom" || throw(ArgumentError(
-            "load $(repr(id)) has no $(repr(field)) vector to perturb"))
-        values = zeros(length(get(load, "p_nom", Any[])))
-    end
-    vector = values isa AbstractVector ? Float64.(values) : [Float64(values)]
-    if field == "q_nom" && length(vector) < k
+    vector = values === nothing ? Float64[] :
+        (values isa AbstractVector ? Float64.(values) : [Float64(values)])
+    if length(vector) < k
         append!(vector, zeros(k - length(vector)))
     end
     1 <= k <= length(vector) || throw(BoundsError(vector, k))
@@ -341,9 +353,10 @@ function _operability_sensitivity_corrector(lin, meta, x0, coords, spec)
     x = copy(x0); last_residual = Inf
     for iteration in 1:20
         residual = _operability_residual(lin, meta, x)
-        last_residual = isempty(residual) ? 0.0 : maximum(abs, residual)
-        tolerance = spec.residual_atol + spec.residual_rtol * max(
-            1.0, isempty(residual) ? 0.0 : maximum(abs, residual))
+        _, residual_scale = _operability_scales(lin, meta, coords)
+        scaled_residual = residual ./ residual_scale
+        last_residual = isempty(scaled_residual) ? 0.0 : maximum(abs, scaled_residual)
+        tolerance = spec.residual_atol + spec.residual_rtol
         last_residual <= tolerance && return x, true, iteration, last_residual
         state_scale, residual_scale = _operability_scales(lin, meta, coords)
         Jphys = finite_difference_jacobian(
@@ -360,8 +373,9 @@ function _operability_sensitivity_corrector(lin, meta, x0, coords, spec)
         while α >= 1 / 64
             candidate = x .+ α .* step
             candidate_residual = _operability_residual(lin, meta, candidate)
-            candidate_norm = isempty(candidate_residual) ? 0.0 : maximum(abs, candidate_residual)
-            if all(isfinite, candidate_residual) && candidate_norm < last_residual
+            candidate_scaled = candidate_residual ./ residual_scale
+            candidate_norm = isempty(candidate_scaled) ? 0.0 : maximum(abs, candidate_scaled)
+            if all(isfinite, candidate_scaled) && candidate_norm < last_residual
                 x = candidate; accepted = true; break
             end
             α /= 2
@@ -750,9 +764,9 @@ end
 function _operability_overall(checks::Dict{String,OperabilityCheck})
     any(c.status === :fail for c in values(checks)) && return :fail
     any(c.status === :inconclusive for c in values(checks)) && return :inconclusive
-    haskey(checks, "endpoint") && checks["endpoint"].status === :not_applicable &&
-        return :not_applicable
-    any(c.status === :pass for c in values(checks)) ? :pass : :not_applicable
+    claim_keys = ("terminal_voltage_bounds", "sequence_unbalance", "helm_reachability")
+    claim_statuses = [checks[key].status for key in claim_keys if haskey(checks, key)]
+    any(status === :pass for status in claim_statuses) ? :pass : :not_applicable
 end
 
 """
@@ -783,15 +797,15 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
     residual_complex = _operability_complex_residual(lin, meta, x)
     endpoint_residual = isempty(residual_complex) ? 0.0 : maximum(abs, residual_complex)
     state_scale, residual_scale = _operability_scales(lin, meta, coords)
-    endpoint_normalized = isempty(residual_complex) ? 0.0 : maximum(
-        abs(residual_complex[i]) / residual_scale[i] for i in eachindex(residual_complex))
-    endpoint_tol = spec.residual_atol + spec.residual_rtol * max(1.0,
-        isempty(residual_complex) ? 0.0 : maximum(abs, residual_complex))
+    residual_real = _operability_residual(lin, meta, x)
+    endpoint_normalized = isempty(residual_real) ? 0.0 : maximum(
+        abs(residual_real[i]) / residual_scale[i] for i in eachindex(residual_real))
+    endpoint_tol = spec.residual_atol + spec.residual_rtol
     checks = Dict{String,OperabilityCheck}()
     checks["endpoint"] = OperabilityCheck(
-        endpoint_residual <= endpoint_tol ? :pass : :fail,
-        endpoint_residual, endpoint_tol,
-        "max current-balance mismatch on non-source nodes")
+        endpoint_normalized <= endpoint_tol ? :pass : :fail,
+        endpoint_normalized, endpoint_tol,
+        "max audited-policy-normalized current-balance mismatch on non-source nodes")
 
     V = _operability_voltage_vector(lin, meta, x)
     node_voltages = _operability_node_map(lin, V)
@@ -884,8 +898,7 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
     if spec.compute_sensitivity && !isempty(x) && last(singular_values) > rank_tol
         for (id_raw, load) in sort!(collect(get(net, "load", Dict())); by=x -> String(x[1]))
             id = String(id_raw)
-            p_nom = get(load, "p_nom", Float64[])
-            nconn = p_nom isa AbstractVector ? length(p_nom) : 1
+            nconn = _operability_load_connection_count(load)
             for field in ("p_nom", "q_nom")
                 family = field == "p_nom" ? "P" : "Q"
                 family_records = get!(directions, family, Dict{String,Any}())
@@ -903,8 +916,7 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
         statuses = Symbol[]
         for (id_raw, load) in sort!(collect(get(net, "load", Dict())); by=x -> String(x[1]))
             id = String(id_raw)
-            p_nom = get(load, "p_nom", Float64[])
-            nconn = p_nom isa AbstractVector ? length(p_nom) : 1
+            nconn = _operability_load_connection_count(load)
             for (field, family) in (("p_nom", "P"), ("q_nom", "Q"))
                 family_validation = get!(direction_validation, family, Dict{String,Any}())
                 for k in 1:nconn
@@ -953,6 +965,7 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
 
     provenance = deepcopy(coords.provenance)
     provenance["operability"] = Dict("scope" => "static_ybus_linearized",
+        "closure" => String(spec.closure),
         "source_buses" => sort!(collect(source_buses)), "state_nodes" => meta.state_nodes,
         "coordinate_policy" => BMOPFTools.opf_scaling_policy_data(coords.policy),
         "model_inventory" => _operability_scope_inventory(net))

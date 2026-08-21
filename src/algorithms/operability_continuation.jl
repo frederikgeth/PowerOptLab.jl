@@ -5,7 +5,11 @@
 # same static scope with an augmented corrector; it is a first fold-capable
 # diagnostic slice, not a global branch-discovery or fold-certification engine.
 
-"""Validated options for a static operability continuation trace."""
+"""Validated options for a static operability continuation trace.
+
+`fold_sigma_tol` is a relative smallest-to-largest singular-value ratio
+threshold, so the criterion is invariant to a uniform residual scaling.
+"""
 struct OperabilityContinuationSpec
     initial_step::Float64
     min_step::Float64
@@ -85,27 +89,16 @@ function _continuation_empty_result(status, message, provenance, events=Dict{Str
         _Node[], nothing, NaN, provenance)
 end
 
-"""
-    operability_continuation_margin(result; reference_lambda=1.0)
-
-Summarize the first declared path boundary observed in a continuation trace.
-The summary considers voltage-limit and fold-candidate events; a localized
-bordered fold uses its refined λ when available. The returned margin is
-relative to `reference_lambda` (normally the audited endpoint λ=1), so it is a
-path-specific diagnostic rather than a global transfer-capacity certificate.
-If the trace ended before observing one of these mechanisms, the result has
-`status == :not_observed` rather than implying unlimited margin.
-"""
 function _continuation_margin(events; reference_lambda::Real=1.0)
     reference = Float64(reference_lambda)
     isfinite(reference) && reference > 0 || throw(ArgumentError(
         "reference_lambda must be finite and > 0"))
-    candidates = NamedTuple{(:lambda, :kind, :event),
-                            Tuple{Float64,Symbol,Dict{String,Any}}}[]
-    for event in events
+    candidates = NamedTuple{(:trace_event_index, :lambda, :kind, :event),
+                            Tuple{Int,Float64,Symbol,Dict{String,Any}}}[]
+    for (trace_event_index, event) in enumerate(events)
         kind_string = get(event, "kind", "")
         kind = Symbol(kind_string)
-        kind in (:voltage_limit, :fold_candidate) || continue
+        kind in (:voltage_limit, :fold_candidate, :model_domain_failure) || continue
         λ = get(event, "lambda", NaN)
         if kind === :fold_candidate
             localized = get(event, "fold_localization", nothing)
@@ -114,7 +107,8 @@ function _continuation_margin(events; reference_lambda::Real=1.0)
             end
         end
         isfinite(Float64(λ)) || continue
-        push!(candidates, (lambda=Float64(λ), kind=kind, event=deepcopy(event)))
+        push!(candidates, (trace_event_index=trace_event_index,
+                           lambda=Float64(λ), kind=kind, event=deepcopy(event)))
     end
     isempty(candidates) && return Dict{String,Any}(
         "status" => :not_observed,
@@ -124,13 +118,13 @@ function _continuation_margin(events; reference_lambda::Real=1.0)
         "parameter_margin" => NaN,
         "relative_margin" => NaN,
         "pre_reference" => false,
-        "message" => "no declared voltage-limit or fold boundary was observed")
-    first_boundary = findmin(getfield.(candidates, :lambda))[2]
-    candidate = candidates[first_boundary]
+        "message" => "no declared voltage-limit, model-domain, or fold boundary was observed")
+    candidate = first(candidates)
     parameter_margin = candidate.lambda - reference
     Dict{String,Any}(
         "status" => :observed,
         "mechanism" => candidate.kind,
+        "trace_event_index" => candidate.trace_event_index,
         "lambda" => candidate.lambda,
         "reference_lambda" => reference,
         "parameter_margin" => parameter_margin,
@@ -144,9 +138,11 @@ end
     operability_continuation_margin(result; reference_lambda=1.0)
 
 Summarize the first declared path boundary observed in a continuation result.
-The summary considers voltage-limit and fold-candidate events; a localized
-bordered fold uses its refined λ when available. The returned margin is
-relative to `reference_lambda` (normally the audited endpoint λ=1), so it is a
+The summary considers voltage-limit, model-domain, and fold-candidate events;
+a localized bordered fold uses its refined λ when available. The first event
+in recorded trace order is selected, rather than the smallest λ, because a
+pseudo-arclength path can reverse direction. The returned margin is relative to
+`reference_lambda` (normally the audited endpoint λ=1), so it is a
 path-specific diagnostic rather than a global transfer-capacity certificate.
 If the trace ended before observing one of these mechanisms, the result has
 `status == :not_observed` rather than implying unlimited margin.
@@ -170,6 +166,7 @@ function operability_continuation_rows(result::OperabilityContinuationResult)
     curvature_history = get(continuation, "curvature_history", Float64[])
     arclength_steps = get(continuation, "arclength_steps", Float64[])
     rows = NamedTuple[]
+    tangent_index = 0
     for index in eachindex(result.lambdas)
         λ = result.lambdas[index]
         event_kinds = Symbol[]
@@ -182,7 +179,9 @@ function operability_continuation_rows(result::OperabilityContinuationResult)
             kind = Symbol(get(event, "kind", ""))
             kind in event_kinds || push!(event_kinds, kind)
         end
-        tangent_index = index - 1
+        if index > 1 && !(:target_refinement in event_kinds)
+            tangent_index += 1
+        end
         curvature = tangent_index >= 1 && tangent_index <= length(curvature_history) ?
             Float64(curvature_history[tangent_index]) : NaN
         arclength_step = tangent_index >= 1 && tangent_index <= length(arclength_steps) ?
@@ -217,7 +216,7 @@ function _continuation_corrector(lin, meta, x0, coords, cfg)
         residual = _operability_residual(lin, meta, x)
         _, residual_scale = _operability_scales(lin, meta, coords)
         scaled_residual = residual ./ residual_scale
-        norm_residual = isempty(residual) ? 0.0 : maximum(abs, residual)
+        norm_residual = isempty(scaled_residual) ? 0.0 : maximum(abs, scaled_residual)
         last_norm = norm_residual
         norm_residual <= cfg.corrector_tol && return x, true, iteration, last_norm
         J, state_scale, _ = _continuation_scaled_jacobian(lin, meta, x, coords, cfg)
@@ -233,8 +232,9 @@ function _continuation_corrector(lin, meta, x0, coords, cfg)
         while α >= 1 / 64
             candidate = x .+ α .* step
             candidate_residual = _operability_residual(lin, meta, candidate)
-            candidate_norm = isempty(candidate_residual) ? 0.0 : maximum(abs, candidate_residual)
-            if isfinite(candidate_norm) && candidate_norm < norm_residual
+            candidate_scaled = candidate_residual ./ residual_scale
+            candidate_norm = isempty(candidate_scaled) ? 0.0 : maximum(abs, candidate_scaled)
+            if all(isfinite, candidate_scaled) && candidate_norm < norm_residual
                 x = candidate
                 accepted = true
                 break
@@ -272,6 +272,19 @@ function _continuation_voltage_events(net, node_voltages, λ, spec)
         end
     end
     events
+end
+
+function _continuation_sigma_ratio(singular_values)
+    isempty(singular_values) || first(singular_values) <= 0 ? NaN :
+        last(singular_values) / first(singular_values)
+end
+
+function _continuation_has_localized_fold(events)
+    any(event -> begin
+        localized = get(event, "fold_localization", nothing)
+        get(event, "kind", "") == "fold_candidate" &&
+            localized isa AbstractDict && get(localized, "status", nothing) === :pass
+    end, events)
 end
 
 """
@@ -333,17 +346,21 @@ function continue_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
     corrector_iterations = [base_iterations]
     node_voltages = [points[1].node_voltages]
     events = _continuation_voltage_events(net_zero, node_voltages[1], 0.0, spec)
-    if !isempty(singular_values) && singular_values[1] <= continuation.fold_sigma_tol
+    base_sigma_ratio = _continuation_sigma_ratio(points[1].singular_values)
+    if isfinite(base_sigma_ratio) && base_sigma_ratio <= continuation.fold_sigma_tol
         push!(events, Dict{String,Any}("kind" => "near_singular", "lambda" => 0.0,
-                                       "sigma_min" => singular_values[1]))
+                                       "sigma_min" => singular_values[1],
+                                       "sigma_ratio" => base_sigma_ratio))
     end
 
     λ = 0.0; x = base_x; step = continuation.initial_step
     previous_step = nothing; previous_delta = nothing
-    voltage_limit_stop = false
+    voltage_limit_stop = stop_on_voltage_limit && !isempty(events)
     reached = false; endpoint_match = nothing; endpoint_distance = NaN
-    message = "continuation did not reach λ=1"
-    while λ < 1.0 - eps(Float64)
+    message = voltage_limit_stop ?
+        "energized no-load base violates a declared voltage limit" :
+        "continuation did not reach λ=1"
+    while !voltage_limit_stop && λ < 1.0 - eps(Float64)
         Δλ = min(step, 1.0 - λ)
         λtrial = λ + Δλ
         xpred = previous_delta === nothing ? x : x .+ previous_delta .* (Δλ / previous_step)
@@ -375,9 +392,11 @@ function continue_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
             message = "continuation stopped at a declared voltage limit"
             break
         end
-        if !isempty(point.singular_values) && last(point.singular_values) <= continuation.fold_sigma_tol
+        sigma_ratio = _continuation_sigma_ratio(point.singular_values)
+        if isfinite(sigma_ratio) && sigma_ratio <= continuation.fold_sigma_tol
             push!(events, Dict{String,Any}("kind" => "near_singular", "lambda" => λtrial,
-                                           "sigma_min" => last(point.singular_values)))
+                                           "sigma_min" => last(point.singular_values),
+                                           "sigma_ratio" => sigma_ratio))
         end
         previous_delta = xnew - x; previous_step = Δλ
         x = xnew; λ = λtrial
@@ -418,6 +437,7 @@ function continue_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
     end
     provenance = deepcopy(coords.provenance)
     provenance["continuation"] = Dict("homotopy" => "uniform_load_scale_0_to_1",
+        "closure" => String(spec.closure),
         "source_buses" => sort!(collect(source_buses)), "state_nodes" => meta.state_nodes,
         "natural_parameter" => true, "pseudo_arclength" => false,
         "stop_on_voltage_limit" => stop_on_voltage_limit,
@@ -427,7 +447,12 @@ function continue_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
         meta.state_nodes, endpoint_match, endpoint_distance, provenance)
 end
 
-"""Validated options for the pseudo-arclength operability trace."""
+"""Validated options for the pseudo-arclength operability trace.
+
+`fold_sigma_tol` is a relative smallest-to-largest singular-value ratio
+threshold. `lambda_min` is the lower domain boundary for stress continuation;
+crossing it produces a model-domain event after fixed-λ boundary refinement.
+"""
 struct OperabilityPseudoArclengthSpec
     initial_step::Float64
     min_step::Float64
@@ -443,6 +468,7 @@ struct OperabilityPseudoArclengthSpec
     endpoint_rtol::Float64
     curvature_low::Float64
     curvature_high::Float64
+    lambda_min::Float64
     function OperabilityPseudoArclengthSpec(;
             initial_step::Real=0.05,
             min_step::Real=1e-4,
@@ -457,7 +483,8 @@ struct OperabilityPseudoArclengthSpec
             endpoint_atol::Real=1e-5,
             endpoint_rtol::Real=1e-5,
             curvature_low::Real=2.0,
-            curvature_high::Real=5.0)
+            curvature_high::Real=5.0,
+            lambda_min::Real=0.0)
         vals = (initial_step, min_step, max_step, corrector_tol, jacobian_step,
                 fold_sigma_tol, tangent_lambda_tol, target_lambda_tol,
                 endpoint_atol, endpoint_rtol, curvature_low, curvature_high)
@@ -470,11 +497,15 @@ struct OperabilityPseudoArclengthSpec
             "max_corrector_iterations must be >= 1"))
         curvature_low <= curvature_high || throw(ArgumentError(
             "curvature_low must be <= curvature_high"))
+        isfinite(Float64(lambda_min)) || throw(ArgumentError(
+            "lambda_min must be finite"))
+        lambda_min < 1.0 || throw(ArgumentError(
+            "lambda_min must be below the audited λ=1 target"))
         new(Float64(initial_step), Float64(min_step), Float64(max_step), Int(max_steps),
             Float64(corrector_tol), Int(max_corrector_iterations), Float64(jacobian_step),
             Float64(fold_sigma_tol), Float64(tangent_lambda_tol),
             Float64(target_lambda_tol), Float64(endpoint_atol), Float64(endpoint_rtol),
-            Float64(curvature_low), Float64(curvature_high))
+            Float64(curvature_low), Float64(curvature_high), Float64(lambda_min))
     end
 end
 
@@ -617,6 +648,7 @@ function locate_opf_operability_fold(
     voltages = _operability_node_map(lin, _operability_voltage_vector(lin, meta, x))
     provenance = deepcopy(coords.provenance)
     provenance["fold_localization"] = Dict("equations" => "F=0,Jv=0,norm(v)=1",
+        "closure" => String(spec.closure),
         "source_buses" => sort!(collect(source_buses)), "state_nodes" => meta.state_nodes,
         "initial_lambda" => Float64(lambda), "iterations" => iterations)
     status = converged ? :pass : :inconclusive
@@ -681,7 +713,8 @@ function _pseudo_corrector(net, ypred, tangent, meta, arc_state_scale, residual_
         norm_g <= cfg.corrector_tol && return y, true, iteration
         J, _ = _pseudo_arclength_jacobian(
             lin, meta, x, coords, natural_cfg, arc_state_scale)
-        fλ = _pseudo_lambda_residual(net, λ, meta, x, residual_scale, 1e-5)
+        fλ = _pseudo_lambda_residual(net, λ, meta, x, residual_scale,
+                                     cfg.jacobian_step)
         A = [J fλ; reshape(tangent, 1, :)]
         dy = try
             -(A \ G)
@@ -771,7 +804,8 @@ function continue_opf_operability_pseudo_arclength(
                            "iterations" => base_iterations)])
 
     base_point = _continuation_point(lin_zero, meta, base_x, coords, natural_cfg)
-    Fλ = _pseudo_lambda_residual(net, 0.0, meta, base_x, residual_scale, 1e-5)
+    Fλ = _pseudo_lambda_residual(net, 0.0, meta, base_x, residual_scale,
+                                 continuation.jacobian_step)
     # Keep the audited scaling for residual/Jacobian evidence, but use a
     # dimensionless voltage metric for the arclength coordinate.  This avoids
     # making SI-unit traces effectively voltage-only near a fold.
@@ -794,12 +828,15 @@ function continue_opf_operability_pseudo_arclength(
     step = continuation.initial_step
     curvature_history = Float64[]
     arclength_steps = Float64[]
-    voltage_limit_stop = false
+    voltage_limit_stop = stop_on_voltage_limit && !isempty(events)
     endpoint_match = nothing; endpoint_distance = NaN; status = :inconclusive
-    message = stop_at_target ?
+    message = voltage_limit_stop ?
+        "energized no-load base violates a declared voltage limit" :
+        (stop_at_target ?
         "pseudo-arclength trace did not produce a corrected λ=1 point" :
-        "pseudo-arclength stress trace reached its step horizon"
+        "pseudo-arclength stress trace reached its step horizon")
     for _ in 1:continuation.max_steps
+        voltage_limit_stop && break
         step_used = step
         ypred = y .+ step .* tangent
         ynew, ok, iterations = _pseudo_corrector(
@@ -822,48 +859,89 @@ function continue_opf_operability_pseudo_arclength(
         λold = y[end]
         if (λold - 1.0) * (λnew - 1.0) <= 0 && λold != λnew
             push!(events, Dict{String,Any}("kind" => "target_crossing",
-                "lambda_before" => λold, "lambda_after" => λnew))
+                "lambda" => 1.0, "lambda_before" => λold, "lambda_after" => λnew))
             # A finite arclength step can bracket λ=1 without landing within
             # the endpoint tolerance.  Refine the crossing at fixed λ so the
             # endpoint comparison is made on an actual equilibrium, rather
             # than on a secant interpolation (which is especially important
             # when the crossing is close to a fold).
-            if stop_at_target && abs(λnew - 1.0) > continuation.target_lambda_tol
-                lin_endpoint = BMOPFTools.ybus_linearized(net; fold=:constant_z)
-                xendpoint, endpoint_ok, endpoint_iterations, _ =
-                    _continuation_corrector(lin_endpoint, meta, xnew, coords, natural_cfg)
-                push!(events, Dict{String,Any}("kind" => "target_refinement",
-                    "lambda" => 1.0, "iterations" => endpoint_iterations,
-                    "status" => endpoint_ok ? :pass : :inconclusive))
-                if endpoint_ok
-                    endpoint_point = _continuation_point(
-                        lin_endpoint, meta, xendpoint, coords, natural_cfg)
-                    push!(lambdas, 1.0); push!(states, copy(xendpoint))
-                    push!(node_voltages, endpoint_point.node_voltages)
-                    push!(residuals, endpoint_point.residual_norm)
-                    push!(singular_values, isempty(endpoint_point.singular_values) ?
-                        NaN : last(endpoint_point.singular_values))
-                    push!(condition_numbers, endpoint_point.condition_number)
-                    push!(corrector_iterations, endpoint_iterations)
-                    endpoint_voltage_events = _continuation_voltage_events(
-                        net, endpoint_point.node_voltages, 1.0, spec)
-                    append!(events, endpoint_voltage_events)
-                    voltage_limit_stop = stop_on_voltage_limit &&
-                        !isempty(endpoint_voltage_events)
-                    endpoint_distance = maximum(
-                        abs(endpoint_point.node_voltages[node] - target_vmap[node])
-                        for node in keys(target_vmap))
-                    endpoint_limit = continuation.endpoint_atol +
-                        continuation.endpoint_rtol * max(
-                            1.0, maximum(abs, values(target_vmap)))
-                    endpoint_match = endpoint_distance <= endpoint_limit
-                    status = endpoint_match ? :pass : :fail
-                    message = endpoint_match ?
-                        "pseudo-arclength trace refined and matched the λ=1 endpoint" :
-                        "pseudo-arclength trace refined λ=1 but did not match the audited endpoint"
+            lin_endpoint = BMOPFTools.ybus_linearized(net; fold=:constant_z)
+            xendpoint, endpoint_ok, endpoint_iterations, _ =
+                _continuation_corrector(lin_endpoint, meta, xnew, coords, natural_cfg)
+            push!(events, Dict{String,Any}("kind" => "target_refinement",
+                "lambda" => 1.0, "iterations" => endpoint_iterations,
+                "status" => endpoint_ok ? :pass : :inconclusive))
+            if endpoint_ok
+                endpoint_point = _continuation_point(
+                    lin_endpoint, meta, xendpoint, coords, natural_cfg)
+                push!(lambdas, 1.0); push!(states, copy(xendpoint))
+                push!(node_voltages, endpoint_point.node_voltages)
+                push!(residuals, endpoint_point.residual_norm)
+                push!(singular_values, isempty(endpoint_point.singular_values) ?
+                    NaN : last(endpoint_point.singular_values))
+                push!(condition_numbers, endpoint_point.condition_number)
+                push!(corrector_iterations, endpoint_iterations)
+                endpoint_voltage_events = _continuation_voltage_events(
+                    net, endpoint_point.node_voltages, 1.0, spec)
+                append!(events, endpoint_voltage_events)
+                voltage_limit_stop |= stop_on_voltage_limit &&
+                    !isempty(endpoint_voltage_events)
+                endpoint_distance = maximum(
+                    abs(endpoint_point.node_voltages[node] - target_vmap[node])
+                    for node in keys(target_vmap))
+                endpoint_limit = continuation.endpoint_atol +
+                    continuation.endpoint_rtol * max(
+                        1.0, maximum(abs, values(target_vmap)))
+                endpoint_match = endpoint_distance <= endpoint_limit
+                if stop_at_target
+                    status = voltage_limit_stop ? :fail : (endpoint_match ? :pass : :fail)
+                    message = voltage_limit_stop ?
+                        "pseudo-arclength trace refined to a declared voltage-limit failure" :
+                        (endpoint_match ?
+                         "pseudo-arclength trace refined and matched the λ=1 endpoint" :
+                         "pseudo-arclength trace refined λ=1 but did not match the audited endpoint")
                     break
                 end
             end
+        end
+        domain_crossing = (λold > continuation.lambda_min &&
+                           λnew <= continuation.lambda_min) ||
+            (λold < continuation.lambda_min && λnew >= continuation.lambda_min) ||
+            (λold == continuation.lambda_min && λnew < continuation.lambda_min)
+        if domain_crossing
+            push!(events, Dict{String,Any}("kind" => "lambda_domain_crossing",
+                "lambda" => continuation.lambda_min,
+                "lambda_before" => λold, "lambda_after" => λnew,
+                "lambda_min" => continuation.lambda_min))
+            lin_boundary = BMOPFTools.ybus_linearized(
+                _operability_scale_network(net, continuation.lambda_min);
+                fold=:constant_z)
+            xboundary, boundary_ok, boundary_iterations, _ = _continuation_corrector(
+                lin_boundary, meta, xnew, coords, natural_cfg)
+            push!(events, Dict{String,Any}("kind" => "model_domain_failure",
+                "domain" => "lambda", "lambda" => continuation.lambda_min,
+                "lambda_min" => continuation.lambda_min,
+                "status" => boundary_ok ? :pass : :inconclusive,
+                "iterations" => boundary_iterations))
+            if boundary_ok
+                boundary_point = _continuation_point(
+                    lin_boundary, meta, xboundary, coords, natural_cfg)
+                push!(lambdas, continuation.lambda_min); push!(states, copy(xboundary))
+                push!(node_voltages, boundary_point.node_voltages)
+                push!(residuals, boundary_point.residual_norm)
+                push!(singular_values, isempty(boundary_point.singular_values) ?
+                    NaN : last(boundary_point.singular_values))
+                push!(condition_numbers, boundary_point.condition_number)
+                push!(corrector_iterations, boundary_iterations)
+                status = _continuation_has_localized_fold(events) ? :pass : :inconclusive
+                message = _continuation_has_localized_fold(events) ?
+                    "stress trace localized a fold and stopped at the λ-domain boundary" :
+                    "stress trace stopped at the λ-domain boundary"
+            else
+                status = :inconclusive
+                message = "stress trace crossed the λ-domain boundary but boundary refinement failed"
+            end
+            break
         end
         push!(lambdas, λnew); push!(states, copy(xnew)); push!(node_voltages, point.node_voltages)
         push!(residuals, point.residual_norm)
@@ -877,16 +955,28 @@ function continue_opf_operability_pseudo_arclength(
             message = "pseudo-arclength trace stopped at a declared voltage limit"
         end
         sigma = isempty(point.singular_values) ? NaN : last(point.singular_values)
-        fλ_new = _pseudo_lambda_residual(net, λnew, meta, xnew, residual_scale, 1e-5)
+        fλ_new = _pseudo_lambda_residual(net, λnew, meta, xnew, residual_scale,
+                                         continuation.jacobian_step)
         Jnew, _ = _pseudo_arclength_jacobian(
             lin_new, meta, xnew, coords, natural_cfg, arc_state_scale)
         factorization_new = isempty(Jnew) ? nothing : svd(Jnew)
-        near_singular = isfinite(sigma) && sigma <= continuation.fold_sigma_tol
+        sigma_ratio = _continuation_sigma_ratio(point.singular_values)
+        near_singular = isfinite(sigma_ratio) && sigma_ratio <= continuation.fold_sigma_tol
         near_singular && push!(events, Dict{String,Any}(
             "kind" => "near_singular", "lambda" => λnew, "sigma_min" => sigma,
+            "sigma_ratio" => sigma_ratio,
             "critical_mode" => _operability_critical_mode(
                 factorization_new, meta.state_nodes)))
-        dxλ_new = try -(Jnew \ fλ_new) catch; zeros(length(xnew)) end
+        tangent_solve_ok = true
+        dxλ_new = try
+            -(Jnew \ fλ_new)
+        catch
+            tangent_solve_ok = false
+            zeros(length(xnew))
+        end
+        !tangent_solve_ok && push!(events, Dict{String,Any}(
+            "kind" => "tangent_solve_failure", "lambda" => λnew,
+            "message" => "state tangent solve failed; zero tangent fallback used"))
         tangent_new = vcat(dxλ_new, 1.0); tangent_new ./= max(norm(tangent_new), eps())
         dot(tangent_new, tangent) < 0 && (tangent_new .*= -1)
         fold_event = nothing
@@ -946,6 +1036,7 @@ function continue_opf_operability_pseudo_arclength(
     voltage_limit_stop && status === :inconclusive && (status = :fail)
     provenance = deepcopy(coords.provenance)
     provenance["continuation"] = Dict("homotopy" => "uniform_load_scale_0_to_1",
+        "closure" => String(spec.closure),
         "source_buses" => sort!(collect(source_buses)), "state_nodes" => meta.state_nodes,
         "natural_parameter" => false, "pseudo_arclength" => true,
         "arclength_state_scale" => arc_state_scale,
@@ -953,6 +1044,7 @@ function continue_opf_operability_pseudo_arclength(
         "curvature_history" => curvature_history,
         "curvature_control" => Dict("low" => continuation.curvature_low,
                                      "high" => continuation.curvature_high),
+        "lambda_min" => continuation.lambda_min,
         "stop_at_target" => stop_at_target,
         "stop_on_voltage_limit" => stop_on_voltage_limit,
         "margin" => _continuation_margin(events))
