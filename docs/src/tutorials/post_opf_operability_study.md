@@ -14,7 +14,9 @@ The repository includes a runnable companion study at
 four-wire feeder, evaluates constant-power and ZIP load models, and prints the
 snapshot rows plus finite stress summaries. It also includes an unbalanced
 DELTA case and a floating-neutral WYE case so the connection-level voltage,
-sequence, and neutral-displacement evidence are exercised:
+sequence, and neutral-displacement evidence are exercised. A final
+single-phase transformer case checks a separate low-voltage zone and its
+local voltage bounds:
 
 ```sh
 julia --project=. scripts/run_post_opf_operability_study.jl

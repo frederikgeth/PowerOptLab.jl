@@ -7,7 +7,7 @@
 #
 # The study intentionally evaluates one solved snapshot at a time. It then
 # runs two finite loading directions for constant-power, ZIP, unbalanced DELTA,
-# and floating-neutral load cases.
+# floating-neutral, and transformer-separated load cases.
 # The output is finite study evidence, not a contingency or operating-envelope
 # guarantee.
 
@@ -15,6 +15,25 @@ using PowerOptLab
 using BMOPFTools: parse_bmopf, solve_pf, SIUnitsScaling
 
 function study_net(model::AbstractString)
+    if model == "single_phase_transformer"
+        return parse_bmopf("""
+        {"bus":{
+          "hv":{"terminal_names":["1","n"],"perfectly_grounded_terminals":["n"]},
+          "lv":{"terminal_names":["1","n"],"perfectly_grounded_terminals":["n"],
+                 "v_min":[100.0],"v_max":[140.0]}},
+         "voltage_source":{"vs":{"bus":"hv","terminal_map":["1"],
+             "v_magnitude":[230.0],"v_angle":[0.0]}},
+         "transformer":{"single_phase":{"t1":{
+             "bus_from":"hv","bus_to":"lv",
+             "terminal_map_from":["1","n"],"terminal_map_to":["1","n"],
+             "v_nom_from":230.0,"v_nom_to":120.0,"s_rating":100000.0,
+             "r_series_from":0.005,"x_series_from":0.02}}},
+         "load":{"ld":{"bus":"lv","terminal_map":["1","n"],
+             "configuration":"WYE","model":"constant_power",
+             "p_nom":[10000.0],"q_nom":[2000.0]}}
+        }
+        """; from_string=true)
+    end
     is_delta = model == "unbalanced_delta"
     is_floating = model == "floating_neutral"
     load_model = (is_delta || is_floating) ? "constant_power" : model
@@ -77,6 +96,13 @@ function study_spec(model::AbstractString)
             voltage_max=260.0,
             vuf_max=Inf,
             compute_fixed_point_certificate=true)
+    elseif model == "single_phase_transformer"
+        return OperabilitySpec(
+            scaling_policy=SIUnitsScaling(),
+            voltage_min=100.0,
+            voltage_max=140.0,
+            vuf_max=Inf,
+            compute_fixed_point_certificate=true)
     end
     OperabilitySpec(
         scaling_policy=SIUnitsScaling(),
@@ -107,7 +133,8 @@ end
 campaigns = Dict{String,Vector{NamedTuple}}()
 reports = Dict{String,OperabilityResult}()
 snapshot_rows = NamedTuple[]
-for model in ("constant_power", "zip", "unbalanced_delta", "floating_neutral")
+for model in ("constant_power", "zip", "unbalanced_delta", "floating_neutral",
+              "single_phase_transformer")
     report, row, rows = run_campaign(model)
     reports[model] = report
     campaigns[model] = rows
@@ -152,4 +179,10 @@ neutral_voltage = abs(floating_report.node_voltages[("loadbus", "n")])
 @assert isfinite(neutral_voltage) && neutral_voltage > 0.0
 @assert length(floating_report.load_connections) == 1
 println("  floating-neutral displacement [V]: ", round(neutral_voltage; digits=6))
+transformer_report = reports["single_phase_transformer"]
+@assert transformer_report.provenance["operability"]["source_buses"] == ["hv"]
+@assert length(transformer_report.load_connections) == 1
+transformer_voltage = transformer_report.load_connections["ld/1"]["magnitude"]
+@assert isfinite(transformer_voltage) && 100.0 <= transformer_voltage <= 140.0
+println("  transformer LV terminal voltage [V]: ", round(transformer_voltage; digits=6))
 println("  result: PASS (finite declared study only)")

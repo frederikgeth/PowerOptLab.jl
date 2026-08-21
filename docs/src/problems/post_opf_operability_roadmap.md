@@ -98,9 +98,9 @@ The current branch contains the first bounded implementation slice in
   explicit scope semantics without introducing contingency claims;
 - a runnable `scripts/run_post_opf_operability_study.jl` fixture now exercises
   constant-power/ZIP model ensembles plus unbalanced DELTA and floating-neutral
-  WYE cases, named loading directions, connection-aware fixed-point margins,
-  neutral-displacement evidence, and table-ready snapshot output with
-  finite-study assertions;
+  WYE cases and a transformer-separated low-voltage zone, named loading
+  directions, connection-aware fixed-point margins, neutral-displacement
+  evidence, and table-ready snapshot output with finite-study assertions;
 - an opt-in bordered-equation fold localizer solving ``F=0``, ``Jv=0``, and
   ``‖v‖₂=1`` from a declared approximate fold state; pseudo-arclength fold
   candidates now retain its localized status and residual evidence when invoked.
