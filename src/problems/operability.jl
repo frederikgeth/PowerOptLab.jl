@@ -47,10 +47,10 @@ failure is retained as `:inconclusive`; unsupported physics is
 uniform-load and named P/Q perturbations and compare the implicit derivatives
 with independent finite differences. Set
 `compute_fixed_point_certificate=true` to evaluate a conservative
-Bernstein-style Z-bus contraction condition. The certificate is intentionally
-restricted to constant-power and constant-impedance sub-loads; a failed
-sufficient condition is `:inconclusive`, never a collapse or multiplicity
-claim.
+Bernstein-style Z-bus contraction condition. The certificate covers the
+native constant-P, constant-I, ZIP, exponential, and constant-Z load laws
+when their declared voltage-domain parameters are finite; a failed sufficient
+condition is `:inconclusive`, never a collapse or multiplicity claim.
 """
 struct OperabilitySpec
     scaling_policy::Union{Nothing,_OPERABILITY_SCALING_POLICY}
@@ -764,17 +764,19 @@ end
 function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
                                               spec::OperabilitySpec)
     reasons = String[]
+    supported_models = Set(("constant_power", "constant_current", "constant_impedance",
+                            "zip", "exponential"))
     for (id_raw, load) in get(net, "load", Dict())
         model = lowercase(string(get(load, "model", "constant_power")))
-        model in ("constant_power", "constant_impedance") || push!(reasons,
-            "load $(repr(String(id_raw))) uses $(repr(model)); the certificate " *
-            "currently supports only constant-power and constant-impedance parts")
+        model in supported_models || push!(reasons,
+            "load $(repr(String(id_raw))) uses unsupported model $(repr(model))")
     end
     assumptions = [
         "frozen-dispatch native ybus_linearized equilibrium",
         "source terminals are fixed and all non-source voltage nodes are included",
-        "constant-power compensation currents are represented by connection incidence",
+        "non-constant-Z compensation currents are represented by connection incidence",
         "constant-impedance parts are folded into the linear Ybus",
+        "power/current/exponential current laws use conservative real Lipschitz bounds",
         "the contraction region is a uniform complex-voltage polydisc around the no-load solution",
     ]
     base = Dict{String,Any}(
@@ -782,7 +784,7 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
         "method" => "bernstein_style_zbus_contraction",
         "theorem" => "sufficient existence, uniqueness, and Jacobian nonsingularity condition",
         "assumptions" => assumptions,
-        "scope" => "constant_power_and_constant_impedance",
+        "scope" => "native_static_load_laws",
     )
     if !isempty(reasons)
         base["reasons"] = reasons
@@ -816,9 +818,25 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
     for (id_raw, load) in sort!(collect(get(net, "load", Dict())); by=x -> String(x[1]))
         id = String(id_raw)
         for (k, sl) in enumerate(_load_subloads(load, net))
-            # The constant-Z component has already been absorbed into Y.
+            # The constant-Z component has already been absorbed into Y. The
+            # remaining terms are represented as current-law Lipschitz terms.
+            terms = NamedTuple[]
             s = ComplexF64(sl.pt.cc + im * sl.qt.cc)
-            abs(s) == 0.0 && continue
+            abs(s) > 0.0 && push!(terms,
+                (kind=:constant_power, coefficient=abs(s), gamma=0.0))
+            current_coefficient = abs(sl.pt.cs + im * sl.qt.cs)
+            current_coefficient > 0.0 && push!(terms,
+                (kind=:constant_current, coefficient=current_coefficient, gamma=1.0))
+            for component in (sl.pt, sl.qt)
+                component.nl === nothing && continue
+                coefficient, gamma = component.nl
+                isfinite(Float64(coefficient)) && isfinite(Float64(gamma)) ||
+                    push!(reasons, "load $(repr(id))/$k has non-finite exponential parameters")
+                coefficient_abs = abs(Float64(coefficient)) / sl.Vnom^Float64(gamma)
+                coefficient_abs > 0.0 && push!(terms,
+                    (kind=:exponential, coefficient=coefficient_abs, gamma=Float64(gamma)))
+            end
+            isempty(terms) && continue
             pi = get(lin.index, sl.pos, 0)
             ni = sl.neg === nothing ? 0 : get(lin.index, sl.neg, 0)
             a = zeros(Float64, nf)
@@ -830,14 +848,22 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
             vn = ni == 0 ? 0.0im : wfull[ni]
             dv0 = vp - vn
             push!(edges, (key="$id/$k", pos=sl.pos, neg=sl.neg,
-                sabs=abs(s), dv0=dv0, a=a, anorm=anorm,
+                terms=terms, dv0=dv0, a=a, anorm=anorm,
                 zalpha=abs.(Z * a)))
         end
+    end
+    if !isempty(reasons)
+        base["status"] = :not_applicable
+        base["reasons"] = reasons
+        base["message"] = "fixed-point certificate parameters are outside the supported finite domain"
+        return base
     end
     base["state_nodes"] = copy(meta.state_nodes)
     base["coordinate_order"] = "complex free nodes in LinearizedYbus order"
     base["no_load_voltage"] = copy(w)
     base["edge_count"] = length(edges)
+    base["connection_law_terms"] = Dict(
+        e.key => [String(term.kind) for term in e.terms] for e in edges)
     if isempty(edges)
         candidate = _operability_voltage_vector(lin, meta, meta.state)
         distance = maximum(abs.(candidate[meta.free] .- w))
@@ -856,13 +882,35 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
         base["message"] = "the no-load connection voltage is zero or has no positive safety radius"
         return base
     end
+    term_bounds(term, lower, upper) = begin
+        coefficient = term.coefficient
+        if term.kind === :constant_power
+            (coefficient / lower, coefficient / lower^2)
+        elseif term.kind === :constant_current
+            (coefficient, coefficient / lower)
+        else
+            magnitude_exponent = term.gamma - 1.0
+            derivative_exponent = term.gamma - 2.0
+            magnitude_radius = magnitude_exponent >= 0.0 ? upper : lower
+            derivative_radius = derivative_exponent >= 0.0 ? upper : lower
+            (coefficient * magnitude_radius^magnitude_exponent,
+             coefficient * max(1.0, abs(term.gamma - 1.0)) *
+                 derivative_radius^derivative_exponent)
+        end
+    end
     contribution(rho) = begin
         lower = [abs(e.dv0) - e.anorm * rho for e in edges]
+        upper = [abs(e.dv0) + e.anorm * rho for e in edges]
         any(v -> v <= 0.0, lower) && return (Inf, Inf, lower)
-        b = maximum(sum(e.zalpha[i] * e.sabs / lower[j]
-                        for (j, e) in enumerate(edges)) for i in 1:nf)
-        q = maximum(sum(e.zalpha[i] * e.anorm * e.sabs / lower[j]^2
-                        for (j, e) in enumerate(edges)) for i in 1:nf)
+        bounds = [term_bounds(term, lower[j], upper[j])
+                  for (j, e) in enumerate(edges) for term in e.terms]
+        offsets = cumsum(vcat(0, [length(e.terms) for e in edges]))
+        b = maximum(sum(e.zalpha[i] * bounds[offsets[j] + t][1]
+                        for (j, e) in enumerate(edges) for t in eachindex(e.terms))
+                    for i in 1:nf)
+        q = maximum(sum(e.zalpha[i] * e.anorm * bounds[offsets[j] + t][2]
+                        for (j, e) in enumerate(edges) for t in eachindex(e.terms))
+                    for i in 1:nf)
         b, q, lower
     end
     selected = nothing

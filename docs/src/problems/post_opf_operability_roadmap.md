@@ -57,13 +57,13 @@ The current branch contains the first bounded implementation slice in
   fold plus model-domain termination rather than spending the stress budget in
   negative-load territory;
 - an opt-in Bernstein-style fixed-point certificate now uses the native
-  source-eliminated Z-bus map. On constant-power/constant-impedance scope it
-  builds a conservative connection-aware contraction region around the
-  energized no-load solution, records the invariant-radius and contraction
-  margins, checks that the candidate lies inside the region, and retains an
-  independent `fixed_point_oracle` trace. Wye and delta incidence are handled
-  explicitly; current/ZIP/exponential models remain `:not_applicable` for this
-  certificate until their Lipschitz bounds are implemented;
+  source-eliminated Z-bus map. On the native constant-P/I/Z, ZIP, and finite
+  exponential-law scope it builds a conservative connection-aware contraction
+  region around the energized no-load solution, records the invariant-radius,
+  lower-voltage, and contraction margins, checks that the candidate lies inside
+  the region, and retains an independent `fixed_point_oracle` trace. Wye and
+  delta incidence are handled explicitly; non-finite or unsupported law
+  parameters remain `:not_applicable`;
 - relative singular-value-ratio evidence, normalized residual verdicts, and
   explicit frozen-dispatch provenance now align the numerical checks with the
   audited scaling and closure contracts; aggregate status no longer reports a
@@ -586,10 +586,10 @@ provenance; no derivative is reported through an unacknowledged discontinuity.
 
 ### Milestone 5 — certificates, robustness, and studies
 
-- Extend the landed sufficient multiphase fixed-point certificate to ZIP,
-  exponential, and current-law Lipschitz bounds where the compiled model and
-  voltage-domain assumptions permit; retain `:inconclusive` semantics when they
-  do not.
+- Validate the landed current/ZIP/exponential Lipschitz bounds against
+  independent device-law derivatives and broaden the certified voltage-domain
+  geometry beyond the uniform polydisc where useful; retain
+  `:inconclusive` semantics when the sufficient condition does not hold.
 - Run multiple named stress directions and model ensembles for ZIP/exponential
   uncertainty.
 - Add selected contingency workflows without treating a finite list as a global

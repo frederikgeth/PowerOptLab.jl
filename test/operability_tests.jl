@@ -122,7 +122,28 @@ using BMOPFTools
     current_certificate = check_opf_operability(current_net, current_pf;
         spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
             compute_fixed_point_certificate=true))
-    @test current_certificate.checks["fixed_point_certificate"].status == :not_applicable
+    @test current_certificate.checks["fixed_point_certificate"].status == :pass
+    @test current_certificate.branch_evidence["fixed_point_certificate"]["contraction_factor"] < 1.0
+
+    for model in ("zip", "exponential")
+        model_net = single_bus_net(pload=100.0)
+        load = model_net["load"]["ld1"]
+        load["model"] = model
+        load["v_nom"] = [1000.0]
+        if model == "zip"
+            load["alpha_z"] = [0.0]; load["alpha_i"] = [0.0]
+            load["alpha_p"] = [1.0]; load["beta_z"] = [0.0]
+            load["beta_i"] = [0.0]; load["beta_p"] = [1.0]
+        else
+            load["gamma_p"] = [1.5]; load["gamma_q"] = [1.5]
+        end
+        model_pf = solve_pf(model_net; per_unit=false)
+        model_certificate = check_opf_operability(model_net, model_pf;
+            spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
+                compute_fixed_point_certificate=true))
+        @test model_certificate.checks["fixed_point_certificate"].status == :pass
+        @test model_certificate.branch_evidence["fixed_point_certificate"]["edge_count"] == 1
+    end
 
     for model in ("constant_current", "constant_impedance")
         model_net = single_bus_net(pload=100.0)
