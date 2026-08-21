@@ -121,11 +121,16 @@ The current branch contains the first bounded implementation slice in
   reports preserve computational-cost context;
 - the Euclidean fixed-point certificate now includes the connection-incidence
   ``\ell_2`` factor in its state-space Lipschitz assembly; a lightly loaded
-  floating-neutral map probe and a multi-bus four-wire fixture regress this
-  claim, while region reports identify their distinct invariance formulations;
+  floating-neutral single-edge tightness probe plus a multi-bus four-wire
+  phase-rotation smoke probe regress this claim, while region reports identify
+  their distinct invariance formulations;
 - contraction scans now retain the largest certified member of each geometry
   family, and Jacobian regularity uses a relative singular-value threshold
   without an absolute ``σ_max`` floor;
+- fixed-point reports now separate largest-radius containment
+  (`condition_margin`) from the best finite-scan contraction margin
+  (`max_condition_margin`), so stress summaries and snapshot rows do not
+  compare bisection-boundary noise across models;
 - finite stress campaigns now support explicit callback arity and rethrow
   programming/interrupt errors instead of converting them to inconclusive
   science rows; benchmark output records warm-up state, nonzero count,
@@ -136,7 +141,8 @@ The current branch contains the first bounded implementation slice in
   compare full and reduced spectra on the multi-bus four-wire fixture;
 - sparse finite-difference pattern arrays are now explicitly gated by
   `record_jacobian_pattern`, retaining nnz/byte summaries when provenance
-  payload size must be minimized;
+  payload size must be minimized; the default is now `false` for sparse
+  large-network reports;
 - fixed-point geometry scans now use a deterministic 33-point coarse grid plus
   12 refinement iterations, preserving largest-certified-radius selection
   while avoiding four full 2001-point sweeps;

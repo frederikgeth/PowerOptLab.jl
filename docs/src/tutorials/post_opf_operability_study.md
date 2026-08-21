@@ -112,9 +112,11 @@ row = operability_snapshot_row(report; snapshot_id="base")
 row.status
 row.minimum_terminal_voltage
 row.maximum_vuf
+row.maximum_vuf_status       # :not_applicable when no complete 3-phase bus exists
 row.high_side_indicator_count
 row.near_nose_indicator_count
 row.fixed_point_certificate_status
+row.fixed_point_max_condition_margin
 row.scope_status
 row.closure
 row.control_closure
@@ -166,7 +168,8 @@ stress_summary = operability_stress_summary(stress_rows)
 ```
 
 Each row retains the direction, loading parameter, endpoint status, certificate
-status, condition margin, and any solve/checking error. A missing non-pass
+status, the best finite-scan contraction margin, and any solve/checking error.
+A missing non-pass
 boundary is reported as `:not_observed`; it is not an unlimited margin.
 
 For ZIP or exponential uncertainty, label each finite campaign and combine the

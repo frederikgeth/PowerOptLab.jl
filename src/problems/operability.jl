@@ -70,9 +70,9 @@ and smallest singular values with deterministic iterative solves; the default
 Set `jacobian_storage=:sparse` together with `jacobian_spectrum=:extremes` to
 retain the finite-difference Jacobian as a sparse matrix and use sparse LU
 right-hand-side solves; this reduced path omits the full SVD by design.
-Set `record_jacobian_pattern=false` when sparse row/column provenance is not
-needed; the default `true` retains the operating-point finite-difference
-pattern for trace comparison.
+Set `record_jacobian_pattern=true` when sparse row/column provenance is needed;
+the default `false` avoids retaining two explicit integer arrays in the sparse
+large-network path.
 """
 struct OperabilitySpec
     scaling_policy::Union{Nothing,_OPERABILITY_SCALING_POLICY}
@@ -111,7 +111,7 @@ struct OperabilitySpec
             jacobian_rank_rtol::Real=1e-8,
             jacobian_spectrum::Symbol=:full,
             jacobian_storage::Symbol=:dense,
-            record_jacobian_pattern::Bool=true,
+            record_jacobian_pattern::Bool=false,
             sensitivity_step::Real=1e-5,
             voltage_min::Real=0.0,
             voltage_max::Real=Inf,
@@ -339,10 +339,9 @@ end
 function _operability_scope_source_inventory(net::Dict{String,Any})
     bus_ids = Set{String}(String(id) for id in keys(get(net, "bus", Dict())))
     source_buses = sort!(collect(_operability_source_buses(net)))
-    missing_source_buses = sort!(filter(bus -> !isempty(bus) && !(bus in bus_ids), source_buses))
-    isempty(source_buses) && push!(missing_source_buses, "<none>")
+    missing_source_buses = sort!(filter(bus -> !(bus in bus_ids), source_buses))
     has_voltage_source = !isempty(source_buses) && isempty(
-        filter(bus -> !isempty(bus) && !(bus in bus_ids), source_buses))
+        missing_source_buses)
     Dict{String,Any}(
         "bus_count" => length(bus_ids),
         "voltage_source_count" => length(get(net, "voltage_source", Dict())),
@@ -359,6 +358,8 @@ Return a serialisable preflight record for the native frozen-dispatch
 operability checker. This audit does not inspect a solved voltage state and does
 not claim that an out-of-scope network is infeasible; it identifies the exact
 model seam that would need to be extended before a snapshot can be checked.
+Scope-audit `status` deliberately uses its own two-value readiness vocabulary,
+`:supported` or `:not_applicable`; it is not an `OperabilityCheck` verdict.
 """
 function operability_scope_audit(net::Dict{String,Any})
     reasons = _operability_preflight(net)
@@ -1189,18 +1190,27 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
                     for i in 1:nf)
         b, q, lower
     end
-    # The sufficient-condition predicates are monotone over each declared
-    # scalar geometry family: once the voltage-domain or contraction bound
-    # fails, enlarging the radius cannot restore feasibility. A coarse scan
-    # followed by bisection therefore recovers the largest certified member
-    # with O(coarse_points + refinement_iterations) evaluations instead of the
-    # former fixed 2001-point scan.
+    # A coarse scan identifies the last feasible interval; bisection then
+    # refines its upper boundary. The full predicate need not be globally
+    # monotone because voltage-domain and contraction terms can trade off, so
+    # the scan remains the guard against disconnected feasible bands. The
+    # refinement is only applied upward from the last feasible grid point and
+    # costs O(coarse_points + refinement_iterations) evaluations instead of the
+    # former fixed 2001-point sweep.
     largest_feasible_scalar = function(start, stop, evaluate, feasible;
                                         coarse_points::Int=33,
+                                        score=nothing,
                                         refinement_iterations::Int=12)
         start < stop || return nothing
         grid = collect(range(start, stop=stop, length=coarse_points))
         values = [evaluate(value) for value in grid]
+        score_value(value) = begin
+            score === nothing || value === nothing ? -Inf : begin
+                score_candidate = Float64(score(value))
+                isfinite(score_candidate) ? score_candidate : -Inf
+            end
+        end
+        max_score = maximum(score_value(value) for value in values)
         feasible_indices = findall(feasible, values)
         isempty(feasible_indices) && return nothing
         index = last(feasible_indices)
@@ -1209,13 +1219,15 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
         hi_scalar = index == length(grid) ? stop : grid[index + 1]
         if index == length(grid)
             endpoint = evaluate(hi_scalar)
+            max_score = max(max_score, score_value(endpoint))
             if feasible(endpoint)
-                return endpoint
+                return score === nothing ? endpoint : (value=endpoint, max_score=max_score)
             end
         end
         for _ in 1:refinement_iterations
             midpoint = (lo_scalar + hi_scalar) / 2.0
             candidate = evaluate(midpoint)
+            max_score = max(max_score, score_value(candidate))
             if feasible(candidate)
                 lo_scalar = midpoint
                 best = candidate
@@ -1223,7 +1235,7 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
                 hi_scalar = midpoint
             end
         end
-        best
+        score === nothing ? best : (value=best, max_score=max_score)
     end
     # A second sufficient geometry uses a Euclidean ball in the complex free
     # voltage state.  For a state perturbation of norm ρ, connection j moves
@@ -1269,16 +1281,24 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
         end
         largest_feasible_scalar(max(1e-9, radius_limit / 2000.0),
             0.999radius_limit, evaluate,
-            value -> value !== nothing)
+            value -> value !== nothing,
+            score=value -> 1.0 - value.q)
     end
-    euclidean = euclidean_region(w, wfull, ComplexF64[e.dv0 for e in edges])
-    selected = largest_feasible_scalar(0.0, 0.999radius_limit,
+    euclidean_scan = euclidean_region(w, wfull, ComplexF64[e.dv0 for e in edges])
+    euclidean = euclidean_scan === nothing ? nothing : euclidean_scan.value
+    euclidean_max_condition_margin = euclidean_scan === nothing ? NaN :
+        euclidean_scan.max_score
+    selected_scan = largest_feasible_scalar(0.0, 0.999radius_limit,
         rho -> begin
             b, q, lower = contribution(rho)
             isfinite(b) && isfinite(q) && b <= rho && q < 1.0 || return nothing
             (rho=rho, b=b, q=q, lower=lower)
         end,
-        value -> value !== nothing)
+        value -> value !== nothing,
+        score=value -> 1.0 - value.q)
+    selected = selected_scan === nothing ? nothing : selected_scan.value
+    selected_max_condition_margin = selected_scan === nothing ? NaN :
+        selected_scan.max_score
     # A one-parameter family of componentwise polydiscs preserves the
     # connection-aware voltage geometry while allowing weak phases/nodes to
     # receive larger radii than the scalar uniform search. The scalar alpha
@@ -1299,9 +1319,13 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
                         return nothing
                     (radii=radii, b=b, q=q, lower=lower, upper=upper, alpha=alpha)
                 end,
-                value -> value !== nothing)
+                value -> value !== nothing,
+                score=value -> 1.0 - value.q)
         end
     end
+    componentwise_max_condition_margin = componentwise === nothing ? NaN :
+        componentwise.max_score
+    componentwise = componentwise === nothing ? nothing : componentwise.value
     candidate = _operability_voltage_vector(lin, meta, meta.state)
     candidate_delta = abs.(candidate[meta.free] .- w)
     if euclidean === nothing
@@ -1315,6 +1339,7 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
             "radius" => euclidean.radius,
             "contraction_factor" => euclidean.q,
             "condition_margin" => 1.0 - euclidean.q,
+            "max_condition_margin" => euclidean_max_condition_margin,
             "invariance_bound" => euclidean.invariance_bound,
             "invariance_form" => "offset_norm + q * radius <= radius in the Euclidean state norm",
             "candidate_ratio" => euclidean_ratio,
@@ -1367,7 +1392,7 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
                             for i in 1:nf)
                 b, q, lower, upper
             end
-            selected_local = largest_feasible_scalar(
+            selected_local_scan = largest_feasible_scalar(
                 max(1e-9, local_limit / 2000.0), 0.999local_limit,
                 rho -> begin
                     radii = fill(rho, nf)
@@ -1376,10 +1401,14 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
                         return nothing
                     (radii=radii, b=b, q=q, lower=lower, upper=upper)
                 end,
-                value -> value !== nothing)
+                value -> value !== nothing,
+                score=value -> 1.0 - value.q)
+            selected_local = selected_local_scan === nothing ? nothing :
+                selected_local_scan.value
             selected_local === nothing ? nothing :
                 (kind=:candidate_local, radii=selected_local.radii,
                  b=selected_local.b, q=selected_local.q,
+                 max_condition_margin=selected_local_scan.max_score,
                  lower=selected_local.lower, upper=selected_local.upper,
                  offset=offset)
         end
@@ -1391,13 +1420,15 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
     else
         radii = fill(selected.rho, nf)
         b, q, lower, upper = component_contribution(radii)
-        (kind=:uniform, radii=radii, b=b, q=q, lower=lower, upper=upper)
+        (kind=:uniform, radii=radii, b=b, q=q, lower=lower, upper=upper,
+         max_condition_margin=selected_max_condition_margin)
     end
     component_region = if componentwise === nothing
         nothing
     else
         (kind=:componentwise, radii=componentwise.radii, b=componentwise.b,
-         q=componentwise.q, lower=componentwise.lower, upper=componentwise.upper)
+         q=componentwise.q, lower=componentwise.lower, upper=componentwise.upper,
+         max_condition_margin=componentwise_max_condition_margin)
     end
     candidate_ratio(region) = maximum(candidate_delta ./ region.radii)
     candidate_regions = [(region, candidate_ratio(region)) for region in
@@ -1481,11 +1512,13 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
     base["candidate_distance"] = distance
     base["uniform_region"] = uniform_region === nothing ? nothing : Dict(
         "radii" => uniform_region.radii, "contraction_factor" => uniform_region.q,
+        "max_condition_margin" => uniform_region.max_condition_margin,
         "invariance_bound" => maximum(uniform_region.b),
         "invariance_form" => "componentwise b_i <= radius_i in the weighted infinity norm",
         "candidate_ratio" => candidate_ratio(uniform_region))
     base["componentwise_region"] = component_region === nothing ? nothing : Dict(
         "radii" => component_region.radii, "contraction_factor" => component_region.q,
+        "max_condition_margin" => component_region.max_condition_margin,
         "invariance_bound" => maximum(component_region.b),
         "invariance_form" => "componentwise b_i <= radius_i in the weighted infinity norm",
         "candidate_ratio" => candidate_ratio(component_region))
@@ -1498,8 +1531,16 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
         "invariance_bound" => maximum(local_region.b),
         "invariance_form" => "candidate-centered offset + q * radius <= radius in the componentwise norm",
         "condition_margin" => 1.0 - local_region.q,
+        "max_condition_margin" => local_region.max_condition_margin,
         "candidate_residual_offset" => local_region.offset,
         "interpretation" => "local uniqueness evidence around the candidate; does not establish no-load reachability")
+    margins = Float64[
+        uniform_region === nothing ? NaN : uniform_region.max_condition_margin,
+        component_region === nothing ? NaN : component_region.max_condition_margin,
+        euclidean_max_condition_margin,
+    ]
+    finite_margins = filter(isfinite, margins)
+    base["max_condition_margin"] = isempty(finite_margins) ? NaN : maximum(finite_margins)
     if chosen === nothing
         base["message"] = "no invariant contraction polydisc was found; sufficient condition is inconclusive"
         return base
@@ -1529,11 +1570,14 @@ function _operability_empty_result(coords, unsupported, message; net=nothing)
     checks = Dict("scope" => OperabilityCheck(:not_applicable, unsupported, nothing, message))
     provenance = deepcopy(coords.provenance)
     if net !== nothing
+        generator_count = length(get(net, "generator", Dict()))
+        ibr_count = length(get(net, "ibr", Dict()))
         provenance["operability"] = Dict(
             "scope" => "static_ybus_linearized",
             "status" => :not_applicable,
             "closure" => "frozen_dispatch",
-            "control_closure" => "outside_native_static_seam",
+            "control_closure" => generator_count == 0 && ibr_count == 0 ?
+                "frozen_dispatch_native_static" : "outside_native_static_seam",
             "unsupported_reasons" => copy(unsupported),
             "model_inventory" => _operability_scope_inventory(net),
             "topology" => _operability_scope_source_inventory(net),
@@ -1575,7 +1619,8 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
     spec === nothing && throw(ArgumentError(
         "pass OperabilitySpec(scaling_policy=...) or an OPF context"))
     coords = _operability_coordinates(net, spec; context)
-    unsupported = _operability_preflight(net)
+    scope_audit = operability_scope_audit(net)
+    unsupported = copy(scope_audit["unsupported_reasons"])
     !isempty(unsupported) && return _operability_empty_result(coords, unsupported,
         "candidate contains physics outside the first operability residual scope";
         net=net)
@@ -1886,7 +1931,7 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
 
     provenance = deepcopy(coords.provenance)
     provenance["operability"] = Dict("scope" => "static_ybus_linearized",
-        "status" => :supported,
+        "status" => scope_audit["status"],
         "closure" => String(spec.closure),
         "control_closure" => "frozen_dispatch_native_static",
         "jacobian_spectrum_mode" => String(spec.jacobian_spectrum),
@@ -1991,6 +2036,8 @@ function operability_stress_rows(net::Dict{String,Any}, solution::AbstractDict;
                     endpoint_residual_normalized=report.endpoint_residual_normalized,
                     selected_region=get(certificate, "selected_region", missing),
                     contraction_factor=Float64(get(certificate, "contraction_factor", NaN)),
+                    max_condition_margin=Float64(get(certificate,
+                        "max_condition_margin", NaN)),
                     minimum_connection_voltage=Float64(get(certificate,
                         "minimum_connection_voltage", NaN)),
                     candidate_inside_region=get(certificate,
@@ -2014,7 +2061,8 @@ function operability_stress_rows(net::Dict{String,Any}, solution::AbstractDict;
                     connection_weights=deepcopy(direction.connection_weights),
                     endpoint_status=:inconclusive, certificate_status=:inconclusive,
                     endpoint_residual_normalized=NaN, selected_region=missing,
-                    contraction_factor=NaN, minimum_connection_voltage=NaN,
+                    contraction_factor=NaN, max_condition_margin=NaN,
+                    minimum_connection_voltage=NaN,
                     candidate_inside_region=missing, message="stress snapshot failed",
                     error=sprint(showerror, err)))
             end
@@ -2062,10 +2110,17 @@ function operability_stress_summary(rows; reference_lambda::Real=1.0)
             boundary = row
             break
         end
-        finite_margins = Float64[1.0 - Float64(row.contraction_factor)
-                                 for row in direction_rows
-                                 if hasproperty(row, :contraction_factor) &&
-                                    isfinite(Float64(row.contraction_factor))]
+        finite_margins = Float64[]
+        for row in direction_rows
+            margin = if hasproperty(row, :max_condition_margin)
+                Float64(row.max_condition_margin)
+            elseif hasproperty(row, :contraction_factor)
+                1.0 - Float64(row.contraction_factor)
+            else
+                NaN
+            end
+            isfinite(margin) && push!(finite_margins, margin)
+        end
         finite_voltages = Float64[Float64(row.minimum_connection_voltage)
                                   for row in direction_rows
                                   if hasproperty(row, :minimum_connection_voltage) &&
@@ -2164,12 +2219,15 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
         condition_number=result.condition_number,
         minimum_terminal_voltage=isempty(magnitudes) ? NaN : minimum(magnitudes),
         maximum_terminal_voltage=isempty(magnitudes) ? NaN : maximum(magnitudes),
-        maximum_vuf=isempty(vufs) ? NaN : maximum(vufs),
+        maximum_vuf=isempty(vufs) ? missing : maximum(vufs),
+        maximum_vuf_status=isempty(vufs) ? :not_applicable : :available,
         high_side_indicator_count=count(==("negative_high_side_indicator"), classifications),
         near_nose_indicator_count=count(==("near_nose_indicator"), classifications),
         low_side_indicator_count=count(==("positive_low_side_indicator"), classifications),
         fixed_point_certificate_status=Symbol(get(certificate, "status", :not_applicable)),
         fixed_point_condition_margin=Float64(get(certificate, "condition_margin", NaN)),
+        fixed_point_max_condition_margin=Float64(get(certificate,
+            "max_condition_margin", NaN)),
         fixed_point_selected_region=get(certificate, "selected_region", missing),
         fixed_point_local_region_status=Symbol(get(local_certificate, "status", :not_applicable)),
         fixed_point_local_condition_margin=Float64(get(local_certificate, "condition_margin", NaN)),

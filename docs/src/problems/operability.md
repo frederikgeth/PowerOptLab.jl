@@ -107,7 +107,12 @@ radius found on their deterministic scan, because containment is the useful
 claim. Their invariance bound is componentwise (`b_i ≤ radius_i`), whereas the
 Euclidean and candidate-local regions use an offset-plus-Lipschitz bound
 (`offset + q·radius ≤ radius`). The reported margins are therefore comparable
-within a geometry family, not interchangeable across geometries.
+within a geometry family, not interchangeable across geometries. The selected
+region's `condition_margin` is intentionally paired with
+`max_condition_margin`: the former describes the largest-radius containment
+member, while the latter is the best `1-q` observed over the finite scan and
+retains a meaningful conditioning margin instead of a bisection-boundary
+artifact.
 
 ## Computational scaling and size guidance
 
@@ -121,13 +126,14 @@ with its scientific evidence.
 The table-ready `operability_snapshot_row(report)` projection carries the same
 review context in compact form: `jacobian_spectrum_mode`,
 `jacobian_storage_mode`, `jacobian_nonzero_count`,
-`jacobian_storage_bytes_estimate`, `zbus_storage_mode`, `scope_status`,
+`jacobian_storage_bytes_estimate`, `zbus_storage_mode`,
+`fixed_point_max_condition_margin`, `scope_status`,
 `closure`, `control_closure`, and source-topology readiness. Sparse reports also
 retain the finite-difference row/column pattern in
 `complexity["jacobian_pattern"]`; this is an operating-point diagnostic, not a
 topology-invariant symbolic sparsity pattern. Set
-`record_jacobian_pattern=false` to omit those arrays while retaining the nnz
-and byte summaries. A row therefore
+`record_jacobian_pattern=true` to retain those arrays when provenance is needed;
+the default `false` omits them while retaining the nnz and byte summaries. A row therefore
 remains interpretable when reports from different storage/spectrum policies are
 combined, while `not_requested` distinguishes an intentionally disabled
 certificate from an unsupported claim.

@@ -34,6 +34,18 @@ using SparseArrays
     @test dangling_source_audit["topology"]["missing_source_buses"] == ["missing_bus"]
     @test any(occursin("missing bus", reason)
               for reason in dangling_source_audit["unsupported_reasons"])
+    dangling_source_report = check_opf_operability(dangling_source_net, pf; spec=OperabilitySpec(
+        scaling_policy=SIUnitsScaling(), voltage_min=800.0, voltage_max=1100.0))
+    @test dangling_source_report.status == :not_applicable
+    @test !isempty(dangling_source_report.unsupported)
+    @test dangling_source_report.provenance["operability"]["status"] == :not_applicable
+
+    blank_source_net = deepcopy(net)
+    delete!(blank_source_net["voltage_source"]["vs"], "bus")
+    blank_source_audit = operability_scope_audit(blank_source_net)
+    @test blank_source_audit["status"] == :not_applicable
+    @test blank_source_audit["topology"]["missing_source_buses"] == [""]
+    @test blank_source_audit["topology"]["has_voltage_source"] === false
 
     @test_throws ArgumentError check_opf_operability(net, pf)
 
@@ -77,6 +89,8 @@ using SparseArrays
     @test snapshot_row.topology_has_voltage_source === true
     @test isempty(snapshot_row.topology_missing_source_buses)
     @test snapshot_row.minimum_terminal_voltage ≈ report.load_connections["ld1/1"]["magnitude"]
+    @test snapshot_row.maximum_vuf === missing
+    @test snapshot_row.maximum_vuf_status == :not_applicable
     @test snapshot_row.high_side_indicator_count == 1
     @test snapshot_row.fixed_point_certificate_status == :not_applicable
     @test snapshot_row.jacobian_spectrum_mode == "full"
@@ -155,6 +169,7 @@ using SparseArrays
     @test certificate["method"] == "bernstein_style_zbus_contraction"
     @test certificate["candidate_inside_region"] === true
     @test certificate["contraction_factor"] < 1.0
+    @test certificate["max_condition_margin"] > certificate["condition_margin"]
     @test certificate["candidate_distance"] <= certificate["radius"]
     @test certificate["selected_region"] == "componentwise"
     @test length(certificate["region_radii"]) == length(report.state_nodes)
@@ -198,7 +213,8 @@ using SparseArrays
         spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
             voltage_min=800.0, voltage_max=1100.0,
             compute_sensitivity=false,
-            jacobian_spectrum=:extremes, jacobian_storage=:sparse))
+            jacobian_spectrum=:extremes, jacobian_storage=:sparse,
+            record_jacobian_pattern=true))
     @test sparse_spectrum_report.status == :pass
     @test issparse(sparse_spectrum_report.jacobian)
     @test sparse_spectrum_report.singular_values ≈
@@ -218,6 +234,7 @@ using SparseArrays
     @test sparse_unrecorded.status == :pass
     @test sparse_unrecorded.branch_evidence["complexity"]["jacobian_pattern"] === nothing
     @test sparse_unrecorded.branch_evidence["complexity"]["jacobian_pattern_recorded"] === false
+    @test OperabilitySpec(scaling_policy=SIUnitsScaling()).record_jacobian_pattern === false
     sparse_certificate_report = check_opf_operability(net, pf;
         spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
             voltage_min=800.0, voltage_max=1100.0,
@@ -232,6 +249,8 @@ using SparseArrays
     certificate_row = operability_snapshot_row(certificate_report)
     @test certificate_row.fixed_point_certificate_status == :pass
     @test certificate_row.fixed_point_condition_margin > 0.0
+    @test certificate_row.fixed_point_max_condition_margin >
+          certificate_row.fixed_point_condition_margin
     @test certificate_row.fixed_point_local_region_status == :pass
     @test certificate_row.fixed_point_local_condition_margin > 0.0
     @test certificate_row.fixed_point_euclidean_region_status == :pass
@@ -403,6 +422,54 @@ using SparseArrays
     # below guards the corrected Euclidean bound for this multi-state edge.
     @test floating_certificate.checks["fixed_point_euclidean_region"].status == :pass
     @test length(floating_certificate.state_nodes) == 4
+    # A dedicated single-edge probe guards tightness of the Euclidean incidence
+    # factor. Unlike the multi-edge four-wire smoke test below, this fixture
+    # can align all nonlinear current variation with the one binding edge.
+    floating_euclidean = floating_certificate.branch_evidence[
+        "fixed_point_certificate"]["euclidean_region"]
+    floating_lin = BMOPFTools.ybus_linearized(floating_net; fold=:constant_z)
+    floating_vmap = PowerOptLab._operability_solution_map(floating_pf, floating_lin.nodes)
+    floating_meta = PowerOptLab._operability_state_meta(floating_lin, floating_vmap,
+        PowerOptLab._operability_source_buses(floating_net))
+    floating_nf = length(floating_meta.free)
+    floating_yll = ComplexF64.(floating_lin.Y[floating_meta.free, floating_meta.free])
+    floating_yls = isempty(floating_meta.fixed) ? zeros(ComplexF64, floating_nf, 0) :
+        ComplexF64.(floating_lin.Y[floating_meta.free, floating_meta.fixed])
+    floating_factor = lu(floating_yll)
+    floating_w = isempty(floating_meta.fixed) ? zeros(ComplexF64, floating_nf) :
+        -(floating_factor \ (floating_yls * floating_meta.fixed_values))
+    floating_map(vfree) = begin
+        vfull = zeros(ComplexF64, length(floating_lin.nodes))
+        vfull[floating_meta.fixed] = floating_meta.fixed_values
+        vfull[floating_meta.free] = vfree
+        floating_w + floating_factor \ ComplexF64.(floating_lin.i_comp(vfull)[floating_meta.free])
+    end
+    floating_sl = only(PowerOptLab._load_subloads(floating_net["load"]["ld"], floating_net))
+    floating_free_index = Dict(gi => li for (li, gi) in enumerate(floating_meta.free))
+    floating_pi = floating_lin.index[floating_sl.pos]
+    floating_ni = floating_sl.neg === nothing ? 0 : floating_lin.index[floating_sl.neg]
+    floating_a = zeros(Float64, floating_nf)
+    haskey(floating_free_index, floating_pi) && (floating_a[floating_free_index[floating_pi]] += 1.0)
+    haskey(floating_free_index, floating_ni) && (floating_a[floating_free_index[floating_ni]] -= 1.0)
+    floating_dv0 = (floating_pi == 0 ? 0.0im : floating_w[floating_free_index[floating_pi]]) -
+        (floating_ni == 0 ? 0.0im : floating_w[floating_free_index[floating_ni]])
+    floating_phase = floating_dv0 / abs(floating_dv0)
+    floating_pack(v) = vcat(real.(v), imag.(v))
+    floating_unpack(z) = ComplexF64.(z[1:floating_nf] .+ im .* z[floating_nf+1:end])
+    floating_probe_factors = (floating_phase, -floating_phase,
+        im * floating_phase, -im * floating_phase)
+    floating_probe_norms = Float64[]
+    for factor in floating_probe_factors
+        floating_probe = floating_w .+ (0.999 * floating_euclidean["radius"]) .*
+            ComplexF64.(floating_a ./ norm(floating_a)) .* factor
+        floating_probe_jacobian = finite_difference_jacobian(
+            z -> floating_pack(floating_map(floating_unpack(z))),
+            floating_pack(floating_probe); step=1e-6)
+        push!(floating_probe_norms, opnorm(floating_probe_jacobian, 2))
+    end
+    @test maximum(floating_probe_norms) <=
+          floating_euclidean["contraction_factor"] * (1.0 + 1e-3)
+    @test maximum(floating_probe_norms) >= floating_euclidean["contraction_factor"] / 1.3
 
     four_wire_net = operability_four_wire_radial()
     four_wire_pf = solve_pf(four_wire_net; per_unit=false)

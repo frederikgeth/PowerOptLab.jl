@@ -152,6 +152,7 @@ for row in snapshot_rows
         " status=", row.status,
         " Vmin=", round(row.minimum_terminal_voltage; digits=3),
         " VUFmax=", row.maximum_vuf,
+        " (", row.maximum_vuf_status, ")",
         " certificate=", row.fixed_point_certificate_status,
         " local_certificate=", row.fixed_point_local_region_status,
          " dP/dV(high,near,low)=",
@@ -188,6 +189,9 @@ neutral_voltage = abs(floating_report.node_voltages[("loadbus", "n")])
 @assert length(floating_report.load_connections) == 1
 println("  floating-neutral displacement [V]: ", round(neutral_voltage; digits=6))
 transformer_report = reports["single_phase_transformer"]
+transformer_row = only(filter(row -> row.snapshot_id == "single_phase_transformer", snapshot_rows))
+@assert transformer_row.maximum_vuf === missing
+@assert transformer_row.maximum_vuf_status == :not_applicable
 @assert transformer_report.provenance["operability"]["source_buses"] == ["hv"]
 @assert length(transformer_report.load_connections) == 1
 transformer_voltage = transformer_report.load_connections["ld/1"]["magnitude"]
