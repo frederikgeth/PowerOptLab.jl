@@ -37,7 +37,8 @@ The checker reports:
   invariant contraction region around the energized no-load solution, and an
   independent fixed-point oracle trace; plus a separate candidate-centered
   contraction check that can provide local uniqueness evidence without
-  claiming no-load reachability; and
+  claiming no-load reachability; and a conservative Euclidean-ball contraction
+  certificate derived from the same connection incidence and load-law bounds; and
 * deterministic one-row-per-point continuation records for table-ready
   residual, conditioning, curvature, and event summaries; and
 * bounded named stress-direction snapshots with explicit P/Q and
@@ -87,6 +88,9 @@ When requested with the certificate, `checks["fixed_point_local_region"]` is a
 separate candidate-centered contraction result. It can certify local uniqueness
 around a feasible candidate even when the no-load-connected certificate is
 inconclusive, but it never establishes reachability from the energized germ.
+`checks["fixed_point_euclidean_region"]` is an alternative no-load-connected
+sufficient condition using a Euclidean ball in the complex free-voltage state;
+its `:pass` likewise requires the candidate to lie inside that ball.
 
 ```julia
 using BMOPFTools
@@ -113,6 +117,7 @@ report.branch_evidence["sequence_sensitivity"]
 report.branch_evidence["reachability"]
 report.branch_evidence["fixed_point_certificate"]
 report.checks["fixed_point_local_region"]
+report.checks["fixed_point_euclidean_region"]
 # Includes `connection_law_terms`, the certified radius, lower connection
 # voltage, contraction factor, finite-difference `law_bound_validation`, and
 # the independent Z-bus oracle summary.

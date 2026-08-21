@@ -87,6 +87,10 @@ The current branch contains the first bounded implementation slice in
   region for local uniqueness evidence. Its status is deliberately independent
   of the no-load-connected reachability certificate, so a low-branch candidate
   can remain locally regular without being called reachable;
+- a conservative Euclidean-ball contraction certificate now complements the
+  polydisc geometries using connection-incidence norms and the same load-law
+  derivative bounds; it is reported as a separate sufficient claim with its
+  own candidate-inclusion test;
 - relative singular-value-ratio evidence, normalized residual verdicts, and
   explicit frozen-dispatch provenance now align the numerical checks with the
   audited scaling and closure contracts; aggregate status no longer reports a

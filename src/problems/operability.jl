@@ -54,7 +54,9 @@ condition is `:inconclusive`, never a collapse or multiplicity claim.
 The same report includes `fixed_point_local_region`, a separate
 candidate-centered contraction result for local uniqueness evidence; it does
 not establish reachability from the energized no-load germ and does not
-downgrade the aggregate snapshot status.
+downgrade the aggregate snapshot status. `fixed_point_euclidean_region`
+provides an alternative no-load-connected sufficient condition using a
+conservative Euclidean ball in the complex free-voltage state.
 """
 struct OperabilitySpec
     scaling_policy::Union{Nothing,_OPERABILITY_SCALING_POLICY}
@@ -852,7 +854,7 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
         "non-constant-Z compensation currents are represented by connection incidence",
         "constant-impedance parts are folded into the linear Ybus",
         "power/current/exponential current laws use conservative real Lipschitz bounds",
-        "the contraction region is a connection-aware componentwise complex-voltage polydisc around the no-load solution",
+        "the contraction evidence uses connection-aware componentwise polydisc and Euclidean-ball geometries around the no-load solution",
     ]
     base = Dict{String,Any}(
         "status" => :not_applicable,
@@ -1008,6 +1010,48 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
                     for i in 1:nf)
         b, q, lower
     end
+    # A second sufficient geometry uses a Euclidean ball in the complex free
+    # voltage state.  For a state perturbation of norm ρ, connection j moves
+    # by at most ||aⱼ||₂ρ.  Combining those bounds with |Z| and the scalar
+    # load-law derivative bounds gives a conservative output Lipschitz factor
+    # without assuming a componentwise box shape.
+    euclidean_region = function(center_free, center_full, center_dv)
+        offset = abs.(w + Z * lin.i_comp(center_full)[meta.free] - center_free)
+        offset_norm = norm(offset)
+        connection_norms = Float64[norm(e.a) for e in edges]
+        radius_limit = minimum(abs(center_dv[j]) / connection_norms[j]
+                               for j in eachindex(edges)
+                               if connection_norms[j] > 0.0)
+        isfinite(radius_limit) && radius_limit > 0.0 || return nothing
+        selected = nothing
+        for rho in range(max(1e-9, radius_limit / 2000.0),
+                         stop=0.999radius_limit, length=2001)
+            lower = [abs(center_dv[j]) - connection_norms[j] * rho
+                     for j in eachindex(edges)]
+            upper = [abs(center_dv[j]) + connection_norms[j] * rho
+                     for j in eachindex(edges)]
+            any(v -> v <= 0.0, lower) && continue
+            derivative_bounds = [sum(term_bounds(term, lower[j], upper[j])[2]
+                                     for term in e.terms)
+                                 for (j, e) in enumerate(edges)]
+            # Each connection contributes through the incidence vector aⱼ;
+            # summing |Z aⱼ| avoids assuming one nonlinear edge per free node
+            # (e.g. a floating-neutral WYE load has one edge and four states).
+            output_bound = zeros(Float64, nf)
+            for (j, e) in enumerate(edges)
+                output_bound .+= abs.(Z * e.a) .* derivative_bounds[j]
+            end
+            q = norm(output_bound)
+            invariance = offset_norm + q * rho
+            if isfinite(q) && q < 1.0 && invariance <= rho
+                selected = (radius=rho, q=q, offset_norm=offset_norm,
+                            lower=lower, upper=upper,
+                            invariance_bound=invariance)
+            end
+        end
+        selected
+    end
+    euclidean = euclidean_region(w, wfull, ComplexF64[e.dv0 for e in edges])
     selected = nothing
     for rho in range(0.0, stop=0.999radius_limit, length=2001)
         b, q, lower = contribution(rho)
@@ -1042,6 +1086,24 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
     end
     candidate = _operability_voltage_vector(lin, meta, meta.state)
     candidate_delta = abs.(candidate[meta.free] .- w)
+    if euclidean === nothing
+        base["euclidean_region"] = Dict{String,Any}(
+            "status" => :inconclusive,
+            "message" => "no invariant Euclidean contraction ball was found")
+    else
+        euclidean_ratio = norm(candidate_delta) / euclidean.radius
+        base["euclidean_region"] = Dict{String,Any}(
+            "status" => euclidean_ratio <= 1.0 + spec.residual_atol ? :pass : :inconclusive,
+            "radius" => euclidean.radius,
+            "contraction_factor" => euclidean.q,
+            "condition_margin" => 1.0 - euclidean.q,
+            "invariance_bound" => euclidean.invariance_bound,
+            "candidate_ratio" => euclidean_ratio,
+            "candidate_inside_region" => euclidean_ratio <= 1.0 + spec.residual_atol,
+            "lower_connection_voltages" => euclidean.lower,
+            "upper_connection_voltages" => euclidean.upper,
+            "interpretation" => "conservative Euclidean-ball contraction around the energized no-load solution")
+    end
     # In addition to the no-load-connected region, evaluate a local
     # candidate-centered contraction region.  Its invariance bound includes
     # the fixed-point residual at the candidate, so it can certify local
@@ -1123,10 +1185,16 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
                          (uniform_region, component_region) if region !== nothing]
     inside_regions = [(region, ratio) for (region, ratio) in candidate_regions
                       if ratio <= 1.0 + spec.residual_atol]
+    # Prefer the anisotropic componentwise polydisc whenever it contains the
+    # candidate.  It retains phase-specific coupling information and is a
+    # strictly more informative report for unbalanced networks; use volume as
+    # the deterministic tie-breaker among regions of the same geometry.
     chosen = if !isempty(inside_regions)
-        first(sort(inside_regions; by=x -> -sum(log, x[1].radii)))
+        first(sort(inside_regions; by=x ->
+            (x[1].kind == :componentwise ? 0 : 1, -sum(log, x[1].radii))))
     elseif !isempty(candidate_regions)
-        first(sort(candidate_regions; by=x -> -sum(log, x[1].radii)))
+        first(sort(candidate_regions; by=x ->
+            (x[1].kind == :componentwise ? 0 : 1, -sum(log, x[1].radii))))
     else
         nothing
     end
@@ -1261,7 +1329,7 @@ function _operability_overall(checks::Dict{String,OperabilityCheck})
     primary = (c for (key, c) in checks if key != "fixed_point_local_region")
     any(c.status === :inconclusive for c in primary) && return :inconclusive
     claim_keys = ("terminal_voltage_bounds", "sequence_unbalance", "helm_reachability",
-                  "fixed_point_certificate")
+                  "fixed_point_certificate", "fixed_point_euclidean_region")
     claim_statuses = [checks[key].status for key in claim_keys if haskey(checks, key)]
     any(status === :pass for status in claim_statuses) ? :pass : :not_applicable
 end
@@ -1475,6 +1543,13 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
             local_status === :pass ?
                 "candidate-centered contraction gives local uniqueness evidence; reachability remains separate" :
                 "no candidate-centered contraction region was certified")
+        euclidean = get(certificate, "euclidean_region", Dict{String,Any}())
+        euclidean_status = Symbol(get(euclidean, "status", :not_applicable))
+        checks["fixed_point_euclidean_region"] = OperabilityCheck(
+            euclidean_status, get(euclidean, "contraction_factor", nothing), 1.0,
+            euclidean_status === :pass ?
+                "Euclidean-ball contraction certifies the candidate on the no-load-connected branch" :
+                "Euclidean-ball sufficient condition is inconclusive")
     else
         branch_evidence["fixed_point_certificate"] = Dict{String,Any}(
             "status" => :not_applicable,
@@ -1718,6 +1793,7 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
                              for record in values(dpdv)]
     certificate = get(result.branch_evidence, "fixed_point_certificate", Dict{String,Any}())
     local_certificate = get(certificate, "local_candidate_region", Dict{String,Any}())
+    euclidean_certificate = get(certificate, "euclidean_region", Dict{String,Any}())
     reachability = get(result.branch_evidence, "reachability", Dict{String,Any}())
     (
         snapshot_id=snapshot_id,
@@ -1737,6 +1813,8 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
         fixed_point_selected_region=String(get(certificate, "selected_region", "")),
         fixed_point_local_region_status=Symbol(get(local_certificate, "status", :not_applicable)),
         fixed_point_local_condition_margin=Float64(get(local_certificate, "condition_margin", NaN)),
+        fixed_point_euclidean_region_status=Symbol(get(euclidean_certificate, "status", :not_applicable)),
+        fixed_point_euclidean_condition_margin=Float64(get(euclidean_certificate, "condition_margin", NaN)),
         helm_reachability_status=Symbol(get(reachability, "status", :not_applicable)),
         unsupported_count=length(result.unsupported),
         scope="single_snapshot_static_ybus",

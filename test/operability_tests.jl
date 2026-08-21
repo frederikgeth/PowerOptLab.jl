@@ -102,6 +102,7 @@ using BMOPFTools
             compute_fixed_point_certificate=true))
     @test certificate_report.checks["fixed_point_certificate"].status == :pass
     @test certificate_report.checks["fixed_point_local_region"].status == :pass
+    @test certificate_report.checks["fixed_point_euclidean_region"].status == :pass
     certificate = certificate_report.branch_evidence["fixed_point_certificate"]
     @test certificate["method"] == "bernstein_style_zbus_contraction"
     @test certificate["candidate_inside_region"] === true
@@ -115,12 +116,16 @@ using BMOPFTools
     @test maximum(certificate["law_bound_validation"]["connections"]["ld1/1"]["ratio"]) <= 1.001
     @test certificate["local_candidate_region"]["status"] == :pass
     @test certificate["local_candidate_region"]["condition_margin"] > 0.0
+    @test certificate["euclidean_region"]["status"] == :pass
+    @test certificate["euclidean_region"]["condition_margin"] > 0.0
     @test certificate_report.status == :pass
     certificate_row = operability_snapshot_row(certificate_report)
     @test certificate_row.fixed_point_certificate_status == :pass
     @test certificate_row.fixed_point_condition_margin > 0.0
     @test certificate_row.fixed_point_local_region_status == :pass
     @test certificate_row.fixed_point_local_condition_margin > 0.0
+    @test certificate_row.fixed_point_euclidean_region_status == :pass
+    @test certificate_row.fixed_point_euclidean_condition_margin > 0.0
     direction = OperabilityStressDirection(:phase_selective;
         p_scale=1.0, q_scale=0.0, connection_weights=Dict("ld1" => [0.0]))
     stressed = operability_stress_network(net, 0.5, direction)
@@ -231,6 +236,18 @@ using BMOPFTools
     @test unbalanced_delta_certificate.checks["fixed_point_certificate"].status == :pass
     @test length(unbalanced_region) == 3
     @test maximum(unbalanced_region) > minimum(unbalanced_region)
+
+    # A floating-neutral WYE connection has one nonlinear edge mapped into
+    # four free node states; exercise the Euclidean incidence bound without
+    # assuming one edge per state.
+    floating_net = inv_grid3_floating_neutral()
+    floating_pf = solve_pf(floating_net; per_unit=false)
+    floating_certificate = check_opf_operability(floating_net, floating_pf;
+        spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
+            compute_fixed_point_certificate=true))
+    @test floating_certificate.checks["fixed_point_certificate"].status == :pass
+    @test floating_certificate.checks["fixed_point_euclidean_region"].status == :pass
+    @test length(floating_certificate.state_nodes) == 4
 
     helm_report = check_opf_operability(net, pf;
         spec=OperabilitySpec(scaling_policy=SIUnitsScaling(), compute_helm=true))
@@ -378,6 +395,7 @@ using BMOPFTools
             compute_fixed_point_certificate=true))
     @test low_certificate_report.checks["fixed_point_certificate"].status == :inconclusive
     @test low_certificate_report.checks["fixed_point_local_region"].status == :inconclusive
+    @test low_certificate_report.checks["fixed_point_euclidean_region"].status == :inconclusive
     @test low_certificate_report.branch_evidence["fixed_point_certificate"][
         "candidate_inside_region"] === false
     low_trace = continue_opf_operability_pseudo_arclength(nose_net, low_solution;
