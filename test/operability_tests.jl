@@ -118,6 +118,15 @@ using BMOPFTools
     @test certificate["local_candidate_region"]["condition_margin"] > 0.0
     @test certificate["euclidean_region"]["status"] == :pass
     @test certificate["euclidean_region"]["condition_margin"] > 0.0
+    complexity = certificate_report.branch_evidence["complexity"]
+    @test complexity["free_node_count"] == length(certificate_report.state_nodes)
+    @test complexity["real_state_dimension"] == length(certificate_report.state)
+    @test complexity["load_connection_count"] == 1
+    @test complexity["sensitivity_direction_count"] == 3
+    @test complexity["jacobian_storage_bytes_dense"] ==
+          sizeof(Float64) * length(certificate_report.state)^2
+    @test complexity["zbus_storage_bytes_dense"] > 0
+    @test complexity["fixed_point_scan_points_per_geometry"] == 2001
     @test certificate_report.status == :pass
     certificate_row = operability_snapshot_row(certificate_report)
     @test certificate_row.fixed_point_certificate_status == :pass

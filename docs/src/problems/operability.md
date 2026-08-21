@@ -92,6 +92,46 @@ inconclusive, but it never establishes reachability from the energized germ.
 sufficient condition using a Euclidean ball in the complex free-voltage state;
 its `:pass` likewise requires the candidate to lie inside that ball.
 
+## Computational scaling and size guidance
+
+There is no single network-size cutoff: runtime depends on the number of
+non-source nodes, load connections, requested sensitivity directions, and
+whether the opt-in continuation, HELM, validation, or fixed-point checks are
+enabled. The result records diagnostic size indicators in
+`report.branch_evidence["complexity"]` so a study can retain the cost context
+with its scientific evidence.
+
+For a network with ``n_f`` free complex nodes (real state dimension
+``n=2n_f``) and ``m`` load connections, the current implementation has these
+dominant terms:
+
+| Component | Current scaling / practical implication |
+|---|---|
+| Residual evaluation | approximately ``O(nnz(Y)+m)`` when the upstream Ybus is sparse |
+| finite-difference Jacobian | ``O(n)`` residual evaluations, then a dense ``n×n`` matrix |
+| singular values and dense linear solves | ``O(n^3)`` worst-case time and ``O(n^2)`` memory |
+| named P/Q sensitivities | one perturbed Ybus and linear solve per requested direction (up to ``1+2m``) |
+| fixed-point certificate | explicit dense ``Z=Y_{ll}^{-1}`` storage ``O(n_f^2)`` plus four deterministic 2001-point geometry scans; the scan arithmetic is roughly linear in ``m`` and ``n_f`` after connection products are cached |
+| continuation / stress campaigns | multiply snapshot cost by accepted steps or finite ``(direction, λ)`` rows; independent validation adds two nonlinear re-solves per validated direction |
+
+As a practical policy, run the default single-snapshot checks freely on small
+and medium feeders, but be deliberate for large meshed systems. For roughly
+``n_f`` in the low hundreds, retain the dense Jacobian evidence but consider
+disabling `compute_fixed_point_certificate`, `compute_helm`, and
+`compute_sensitivity_validation` unless they are needed for the study claim.
+Above roughly ``n_f=500`` the dense SVD/Jacobian and explicit Zbus allocation
+should be treated as a scaling risk rather than an automatic rejection; use a
+smaller diagnostic subset or a redesigned sparse/iterative backend. The
+reported byte estimates are warnings, not hard safety limits, and hardware,
+sparsity, and requested campaign size must be measured for the target study.
+
+```julia
+complexity = report.branch_evidence["complexity"]
+complexity["real_state_dimension"]
+complexity["jacobian_storage_bytes_dense"]
+complexity["zbus_storage_bytes_dense"]
+```
+
 ```julia
 using BMOPFTools
 using PowerOptLab
@@ -114,6 +154,7 @@ report.sensitivities["directions"]["P"]
 report.branch_evidence["critical_mode"]
 report.branch_evidence["dP_dV"]
 report.branch_evidence["sequence_sensitivity"]
+report.branch_evidence["complexity"]
 report.branch_evidence["reachability"]
 report.branch_evidence["fixed_point_certificate"]
 report.checks["fixed_point_local_region"]

@@ -154,9 +154,16 @@ for row in snapshot_rows
         " VUFmax=", row.maximum_vuf,
         " certificate=", row.fixed_point_certificate_status,
         " local_certificate=", row.fixed_point_local_region_status,
-        " dP/dV(high,near,low)=",
-        (row.high_side_indicator_count, row.near_nose_indicator_count,
+         " dP/dV(high,near,low)=",
+         (row.high_side_indicator_count, row.near_nose_indicator_count,
          row.low_side_indicator_count))
+    complexity = reports[row.snapshot_id].branch_evidence["complexity"]
+    println("      size profile: free_nodes=", complexity["free_node_count"],
+        " real_state=", complexity["real_state_dimension"],
+        " connections=", complexity["load_connection_count"],
+        " sensitivities=", complexity["sensitivity_direction_count"],
+        " dense_J_KiB=", round(complexity["jacobian_storage_bytes_dense"] / 1024; digits=2),
+        " dense_Z_KiB=", round(complexity["zbus_storage_bytes_dense"] / 1024; digits=2))
 end
 println("  finite stress summaries:")
 for row in ensemble

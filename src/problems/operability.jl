@@ -1039,7 +1039,10 @@ function _operability_fixed_point_certificate(net::Dict{String,Any}, lin, meta,
             # (e.g. a floating-neutral WYE load has one edge and four states).
             output_bound = zeros(Float64, nf)
             for (j, e) in enumerate(edges)
-                output_bound .+= abs.(Z * e.a) .* derivative_bounds[j]
+                # `zalpha = |Z aⱼ|` is precomputed when the connection edge is
+                # built; reusing it keeps the scan linear in the number of
+                # edges and free states instead of repeating dense matvecs.
+                output_bound .+= e.zalpha .* derivative_bounds[j]
             end
             q = norm(output_bound)
             invariance = offset_norm + q * rho
@@ -1509,10 +1512,28 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
             "directional sensitivities are unavailable for independent validation")
     end
 
+    nfree = length(meta.free)
+    nreal = length(x)
+    nconnections = sum((_operability_load_connection_count(load)
+                        for load in values(get(net, "load", Dict()))); init=0)
+    ndirections = spec.compute_sensitivity && !isempty(x) &&
+        last(singular_values) > rank_tol ? 1 + 2nconnections : 0
+    branch_complexity = Dict{String,Any}(
+        "free_node_count" => nfree,
+        "real_state_dimension" => nreal,
+        "load_connection_count" => nconnections,
+        "sensitivity_direction_count" => ndirections,
+        "jacobian_storage_bytes_dense" => sizeof(Float64) * nreal * nreal,
+        "zbus_storage_bytes_dense" => spec.compute_fixed_point_certificate ?
+            sizeof(ComplexF64) * nfree * nfree : 0,
+        "fixed_point_scan_points_per_geometry" => spec.compute_fixed_point_certificate ? 2001 : 0,
+        "fixed_point_geometry_count" => spec.compute_fixed_point_certificate ? 4 : 0,
+        "interpretation" => "diagnostic size indicators; dense Jacobian/SVD and Z-bus certificate storage can dominate large-network runs")
     branch_evidence = Dict{String,Any}(
         "critical_mode" => _operability_critical_mode(jacobian_factorization, meta.state_nodes),
         "dP_dV" => _operability_path_dpdv_evidence(sensitivities),
-        "sequence_sensitivity" => _operability_sequence_sensitivity_evidence(sensitivities))
+        "sequence_sensitivity" => _operability_sequence_sensitivity_evidence(sensitivities),
+        "complexity" => branch_complexity)
     if spec.compute_helm
         reachability = _operability_helm_reachability(net, node_voltages, spec)
         branch_evidence["reachability"] = reachability

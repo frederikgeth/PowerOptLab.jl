@@ -91,6 +91,10 @@ The current branch contains the first bounded implementation slice in
   polydisc geometries using connection-incidence norms and the same load-law
   derivative bounds; it is reported as a separate sufficient claim with its
   own candidate-inclusion test;
+- machine-readable complexity indicators now record free-node/state dimension,
+  load-connection and sensitivity-direction counts, dense Jacobian/Z-bus byte
+  estimates, and fixed-point scan budgets so large-network runs can be
+  reviewed for computational risk rather than treated as size-independent;
 - relative singular-value-ratio evidence, normalized residual verdicts, and
   explicit frozen-dispatch provenance now align the numerical checks with the
   audited scaling and closure contracts; aggregate status no longer reports a
@@ -652,6 +656,9 @@ contingency or operating-envelope guarantee.
   uncertainty using `operability_stress_rows`, then aggregate finite path
   margins without promoting them to a global guarantee.
 - Provide table-ready rows and maintain the documented research-study tutorial.
+- Measure the dense Jacobian/SVD and explicit-Zbus cost indicators on target
+  network classes; define a sparse/iterative certificate backend or a reduced
+  diagnostic mode before treating large meshed networks as routine scope.
 
 **Exit criterion:** every positive claim is tied to a theorem, continuation
 trace, or declared finite study; conservative certificate failures remain
