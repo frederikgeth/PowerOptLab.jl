@@ -348,6 +348,8 @@ rows[1].lambda
 rows[end].event_kinds
 rows[1].jacobian_method
 rows[1].lambda_forcing_method
+rows[1].analytic_jacobian_validation_status
+rows[1].analytic_load_scale_validation_status
 
 directions = [
     OperabilityStressDirection(:uniform),

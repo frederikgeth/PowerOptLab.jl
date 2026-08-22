@@ -158,7 +158,10 @@ Return deterministic, one-row-per-accepted-point records for a continuation
 trace. Each row preserves the index into `result.lambdas`, `result.states`, and
 `result.node_voltages`, and includes residual, conditioning, corrector, and
 curvature evidence plus event kinds observed at that λ. It also retains the
-Jacobian and load-scale forcing methods from continuation provenance.
+Jacobian and load-scale forcing methods from continuation provenance, together
+with the endpoint analytic-versus-finite-difference validation statuses and
+relative errors. These trace-level validation fields are repeated on each row
+so table consumers do not need a second provenance join.
 Curvature and arclength are `NaN` for the no-load base and any fixed-λ endpoint
 refinement that has no predictor tangent.
 """
@@ -199,6 +202,18 @@ function operability_continuation_rows(result::OperabilityContinuationResult)
             jacobian_method=String(get(continuation, "jacobian_method", "not_available")),
             lambda_forcing_method=String(get(
                 continuation, "lambda_forcing_method", "not_available")),
+            analytic_jacobian_validation_status=Symbol(get(
+                get(continuation, "analytic_jacobian_validation", Dict{String,Any}()),
+                "status", :not_applicable)),
+            analytic_jacobian_validation_relative_error=Float64(get(
+                get(continuation, "analytic_jacobian_validation", Dict{String,Any}()),
+                "relative_error", NaN)),
+            analytic_load_scale_validation_status=Symbol(get(
+                get(continuation, "analytic_load_scale_validation", Dict{String,Any}()),
+                "status", :not_applicable)),
+            analytic_load_scale_validation_relative_error=Float64(get(
+                get(continuation, "analytic_load_scale_validation", Dict{String,Any}()),
+                "relative_error", NaN)),
             event_kinds=event_kinds,
         ))
     end

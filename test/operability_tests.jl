@@ -771,6 +771,10 @@ using SparseArrays
     @test pseudo_rows[1].lambda == 0.0
     @test pseudo_rows[1].jacobian_method == "analytic_native_static"
     @test pseudo_rows[1].lambda_forcing_method == "analytic_native_static"
+    @test pseudo_rows[1].analytic_jacobian_validation_status == :pass
+    @test pseudo_rows[1].analytic_jacobian_validation_relative_error <= 1e-3
+    @test pseudo_rows[1].analytic_load_scale_validation_status == :pass
+    @test pseudo_rows[1].analytic_load_scale_validation_relative_error <= 1e-3
     @test isnan(pseudo_rows[1].curvature)
     @test [row.lambda for row in pseudo_rows] == pseudo_trace.lambdas
     @test pseudo_trace.provenance["continuation"]["margin"]["status"] == :not_observed
