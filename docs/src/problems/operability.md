@@ -9,6 +9,8 @@ single-phase, and delta connection records.
 The checker reports:
 
 * the independent non-source current-balance residual;
+* an explicit terminal model-domain check for finite, nonzero phasors before
+  angle and load-law derivative evidence is interpreted;
 * a coordinate-scaled voltage Jacobian, singular values, condition number, and
   a rank/regularity check with critical left/right singular-mode participation;
 * connection-level terminal voltages, requested-versus-realized powers, and

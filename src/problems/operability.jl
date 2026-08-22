@@ -1824,6 +1824,31 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
     node_voltages = _operability_node_map(lin, V)
     load_records = _operability_load_records(net, node_voltages)
     sequence_records = _operability_sequences(net, node_voltages)
+    model_domain_issues = String[]
+    for (key_raw, record) in load_records
+        key = String(key_raw)
+        magnitude = Float64(get(record, "magnitude", NaN))
+        if !isfinite(magnitude)
+            push!(model_domain_issues,
+                "connection $key has a non-finite terminal-voltage magnitude")
+        elseif magnitude <= 0.0
+            push!(model_domain_issues,
+                "connection $key has zero terminal voltage; angle and current-law derivatives are undefined")
+        end
+        realized = get(record, "realized_power", NaN + im * NaN)
+        if !(realized isa Number && isfinite(real(realized)) && isfinite(imag(realized)))
+            push!(model_domain_issues,
+                "connection $key has a non-finite realized power")
+        end
+    end
+    model_domain_status = isempty(model_domain_issues) ? :pass : :inconclusive
+    checks["model_domain"] = OperabilityCheck(
+        model_domain_status,
+        isempty(model_domain_issues) ? "all modeled load terminals are in-domain" :
+            copy(model_domain_issues), nothing,
+        isempty(model_domain_issues) ?
+            "finite, nonzero terminal phasors support angle and load-law derivative evidence" :
+            "terminal model-domain evidence is incomplete")
     magnitudes = [Float64(record["magnitude"]) for record in values(load_records)]
     if isempty(magnitudes) || (spec.voltage_min == 0.0 && spec.voltage_max == Inf)
         checks["terminal_voltage_bounds"] = OperabilityCheck(:not_applicable,
@@ -2515,6 +2540,7 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
         schema_version="operability_snapshot_row/v1",
         status=result.status,
         endpoint_status=check_status("endpoint"),
+        model_domain_status=check_status("model_domain"),
         jacobian_regular_status=check_status("jacobian_regular"),
         terminal_voltage_bounds_status=check_status("terminal_voltage_bounds"),
         sequence_unbalance_status=check_status("sequence_unbalance"),

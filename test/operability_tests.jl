@@ -72,6 +72,14 @@ using SparseArrays
     @test report.checks["endpoint"].status == :pass
     @test report.checks["endpoint"].value == report.endpoint_residual_normalized
     @test report.endpoint_residual < 1e-6
+    @test report.checks["model_domain"].status == :pass
+    zero_solution = deepcopy(pf)
+    zero_solution["bus"]["bus1"]["1"]["vr"] = 0.0
+    zero_solution["bus"]["bus1"]["1"]["vi"] = 0.0
+    zero_report = check_opf_operability(net, zero_solution; spec)
+    @test zero_report.checks["model_domain"].status == :inconclusive
+    @test any(occursin("zero terminal voltage", reason)
+              for reason in zero_report.checks["model_domain"].value)
     @test report.checks["jacobian_regular"].status == :pass
     @test report.checks["jacobian_step_validation"].status == :not_applicable
     @test report.checks["analytic_jacobian_validation"].status == :not_applicable
@@ -114,6 +122,7 @@ using SparseArrays
     @test snapshot_row.schema_version == "operability_snapshot_row/v1"
     @test snapshot_row.status == :pass
     @test snapshot_row.endpoint_status == :pass
+    @test snapshot_row.model_domain_status == :pass
     @test snapshot_row.claim_scope == "one_solved_equilibrium_only"
     @test snapshot_row.jacobian_regular_status == :pass
     @test snapshot_row.terminal_voltage_bounds_status == :pass

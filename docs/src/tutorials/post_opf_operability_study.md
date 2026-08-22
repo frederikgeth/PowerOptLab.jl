@@ -121,6 +121,7 @@ row.maximum_abs_positive_sequence_magnitude_derivative
 row.maximum_abs_negative_sequence_magnitude_derivative
 row.maximum_abs_vuf_derivative
 row.endpoint_status
+row.model_domain_status
 row.jacobian_regular_status
 row.jacobian_step_validation_status
 row.analytic_jacobian_validation_status
