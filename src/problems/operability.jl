@@ -380,6 +380,7 @@ function operability_scope_audit(net::Dict{String,Any})
         "scope" => "native_ybus_linearized",
         "closure" => :frozen_dispatch,
         "control_closure" => control_closure,
+        "upstream" => operability_upstream_audit(),
         "topology" => source_inventory,
         "generator_count" => generator_count,
         "ibr_count" => ibr_count,
@@ -1580,6 +1581,7 @@ function _operability_empty_result(coords, unsupported, message; net=nothing)
                 "frozen_dispatch_native_static" : "outside_native_static_seam",
             "unsupported_reasons" => copy(unsupported),
             "model_inventory" => _operability_scope_inventory(net),
+            "upstream" => operability_upstream_audit(),
             "topology" => _operability_scope_source_inventory(net),
             "coordinate_policy" => BMOPFTools.opf_scaling_policy_data(coords.policy),
         )
@@ -1939,6 +1941,7 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
         "source_buses" => sort!(collect(source_buses)), "state_nodes" => meta.state_nodes,
         "coordinate_policy" => BMOPFTools.opf_scaling_policy_data(coords.policy),
         "model_inventory" => _operability_scope_inventory(net),
+        "upstream" => operability_upstream_audit(),
         "topology" => _operability_scope_source_inventory(net))
     OperabilityResult(_operability_overall(checks), endpoint_residual,
         endpoint_normalized, meta.state_nodes, x, J, singular_values, condition_number,
@@ -2190,8 +2193,9 @@ certificate/HELM statuses, scaling/storage metadata, and the number of
 unsupported-scope reasons. It also retains scope status, closure/control
 closure, and source-topology readiness so pooled rows cannot hide an
 out-of-scope snapshot; the original unsupported-reason list is retained
-alongside its count. It is a reporting projection of one snapshot, not a
-contingency or operating-envelope assessment.
+alongside its count. The upstream adapter version and public equilibrium seam
+are retained for reproducibility. It is a reporting projection of one
+snapshot, not a contingency or operating-envelope assessment.
 """
 function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing)
     magnitudes = Float64[Float64(get(record, "magnitude", NaN))
@@ -2210,6 +2214,7 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
     reachability = get(result.branch_evidence, "reachability", Dict{String,Any}())
     complexity = get(result.branch_evidence, "complexity", Dict{String,Any}())
     operability = get(result.provenance, "operability", Dict{String,Any}())
+    upstream = get(operability, "upstream", Dict{String,Any}())
     topology = get(operability, "topology", Dict{String,Any}())
     check_status(name) = get(result.checks, name,
         OperabilityCheck(:not_applicable, nothing, nothing, "check unavailable")).status
@@ -2256,6 +2261,9 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
         scope_status=Symbol(get(operability, "status",
             result.status === :not_applicable ? :not_applicable : :supported)),
         equilibrium_scope=String(get(operability, "scope", "static_ybus_linearized")),
+        upstream_adapter_version=String(get(upstream, "adapter_version", "not_available")),
+        upstream_public_equilibrium_seam=String(get(upstream,
+            "public_equilibrium_seam", "not_available")),
         closure=Symbol(get(operability, "closure", "frozen_dispatch")),
         control_closure=String(get(operability, "control_closure",
             "frozen_dispatch_native_static")),

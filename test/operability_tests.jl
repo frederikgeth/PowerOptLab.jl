@@ -6,7 +6,15 @@ using SparseArrays
     net = single_bus_net(pload=100.0)
     pf = solve_pf(net; per_unit=false)
 
+    upstream_audit = operability_upstream_audit()
+    @test upstream_audit["upstream_package"] == "BMOPFTools"
+    @test upstream_audit["upstream_version"] == "0.1.0"
+    @test upstream_audit["public_equilibrium_seam"] == "BMOPFTools.ybus_linearized"
+    @test upstream_audit["private_load_decomposition"] === true
+    @test upstream_audit["generator_ibr_controller_residual_seam"] === false
+
     scope_audit = operability_scope_audit(net)
+    @test scope_audit["upstream"] == upstream_audit
     @test scope_audit["status"] == :supported
     @test scope_audit["closure"] == :frozen_dispatch
     @test scope_audit["control_closure"] == "frozen_dispatch_native_static"
@@ -76,6 +84,7 @@ using SparseArrays
     @test p_direction["load_connections"]["ld1/1"]["magnitude_derivative"] < 0.0
     @test report.provenance["operability"]["scope"] == "static_ybus_linearized"
     @test report.provenance["operability"]["closure"] == "frozen_dispatch"
+    @test report.provenance["operability"]["upstream"] == upstream_audit
     @test report.provenance["operability"]["model_inventory"]["load_models"] ==
           ["constant_power"]
     snapshot_row = operability_snapshot_row(report; snapshot_id="base")
@@ -93,6 +102,10 @@ using SparseArrays
     @test snapshot_row.scope == "single_snapshot_static_ybus"
     @test snapshot_row.scope_status == :supported
     @test snapshot_row.equilibrium_scope == "static_ybus_linearized"
+    @test snapshot_row.upstream_adapter_version ==
+          "bmopftools-0.1.0-private-load-decomposition/v1"
+    @test snapshot_row.upstream_public_equilibrium_seam ==
+          "BMOPFTools.ybus_linearized"
     @test snapshot_row.closure == :frozen_dispatch
     @test snapshot_row.control_closure == "frozen_dispatch_native_static"
     @test snapshot_row.topology_has_voltage_source === true

@@ -124,12 +124,21 @@ row.near_nose_indicator_count
 row.fixed_point_certificate_status
 row.fixed_point_max_condition_margin
 row.scope_status
+row.upstream_adapter_version
+row.upstream_public_equilibrium_seam
 row.closure
 row.control_closure
 row.topology_has_voltage_source
 row.unsupported_reasons
 row.helm_reachability_status
 row.scope                    # "single_snapshot_static_ybus"
+```
+
+For reproducibility, retain the upstream seam record alongside the rows:
+
+```julia
+operability_upstream_audit()
+report.provenance["operability"]["upstream"]
 ```
 
 For a collection of already solved cases, map the stable checker over the

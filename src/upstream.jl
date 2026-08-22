@@ -10,3 +10,34 @@ using BMOPFTools: _Node, _SubLoad, _load_subloads, _subload_S, _subload_S_nz,
     _subload_yz,
     _stamp_pair!, _neutral_terminal, _neutral_labels, _neutral_pos,
     _phase_positions, _DEFAULT_CONFIG
+
+const _OPERABILITY_UPSTREAM_ADAPTER_VERSION =
+    "bmopftools-0.1.0-private-load-decomposition/v1"
+const _OPERABILITY_UPSTREAM_PRIVATE_IMPORTS = (
+    "_Node", "_SubLoad", "_load_subloads", "_subload_S", "_subload_S_nz",
+    "_subload_yz", "_stamp_pair!", "_neutral_terminal", "_neutral_labels",
+    "_neutral_pos", "_phase_positions", "_DEFAULT_CONFIG")
+
+"""
+    operability_upstream_audit()
+
+Return the compatibility boundary used by the native operability and HELM
+implementations. The record is intentionally explicit: the pinned upstream
+release provides the public `ybus_linearized` equilibrium seam, while the
+connection-aware load decomposition remains private and is isolated here.
+The record is provenance, not a claim that generator, IBR, or controller
+equations are included in the native static closure.
+"""
+function operability_upstream_audit()
+    Dict{String,Any}(
+        "upstream_package" => "BMOPFTools",
+        "upstream_version" => string(Base.pkgversion(BMOPFTools)),
+        "adapter_version" => _OPERABILITY_UPSTREAM_ADAPTER_VERSION,
+        "public_equilibrium_seam" => "BMOPFTools.ybus_linearized",
+        "private_imports" => collect(_OPERABILITY_UPSTREAM_PRIVATE_IMPORTS),
+        "private_load_decomposition" => true,
+        "generator_ibr_controller_residual_seam" => false,
+        "replacement_plan" =>
+            "replace the single private boundary with a public equilibrium/device residual seam before extending closure scope",
+    )
+end

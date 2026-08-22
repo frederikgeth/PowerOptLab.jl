@@ -62,6 +62,13 @@ and retained reasons for any extension requirement. An out-of-scope result is a
 readiness diagnostic, not an infeasibility claim. A missing or dangling voltage
 source is reported here before the full checker is invoked.
 
+`operability_upstream_audit()` exposes the compatibility boundary behind that
+scope. It records the pinned BMOPFTools version, the public
+`ybus_linearized` seam, and the single isolated private load-decomposition
+adapter. It also records that generator/IBR/controller residual equations are
+not yet available through this seam; this provenance prevents a future closure
+extension from silently reusing only the native static equations.
+
 Scaling is part of the evidence contract. Supply the staged OPF `context` so
 the audited policy, AC coordinate bases, and research provenance are inherited,
 or pass an explicit `OperabilitySpec(scaling_policy=...)`. Non-SI policies also
@@ -133,7 +140,9 @@ statuses of endpoint, Jacobian regularity, voltage bounds, sequence unbalance,
 and sensitivity checks. It also retains the exact `unsupported_reasons` list,
 not just its count. The row carries `schema_version` and an explicit
 `claim_scope="one_solved_equilibrium_only"`; this is deliberately distinct
-from future contingency or operating-envelope schemas. Sparse reports also
+from future contingency or operating-envelope schemas. It also carries the
+upstream adapter version and public equilibrium seam used to produce the row.
+Sparse reports also
 retain the finite-difference row/column pattern in
 `complexity["jacobian_pattern"]`; this is an operating-point diagnostic, not a
 topology-invariant symbolic sparsity pattern. Set
@@ -340,6 +349,7 @@ OperabilityModelError
 OperabilityResult
 check_opf_operability
 operability_scope_audit
+operability_upstream_audit
 OperabilityContinuationSpec
 OperabilityContinuationResult
 continue_opf_operability

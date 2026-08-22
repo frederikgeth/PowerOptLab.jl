@@ -155,7 +155,9 @@ The current branch contains the first bounded implementation slice in
   contract for the frozen-dispatch native seam, including explicit generator/
   IBR/control-closure reasons before a solution is audited; its topology
   inventory also catches missing or dangling voltage-source references before
-  the residual checker is called;
+  the residual checker is called. `operability_upstream_audit()` now preserves
+  the pinned BMOPFTools version, public equilibrium seam, and the one private
+  load-decomposition boundary in the same provenance record;
 - relative singular-value-ratio evidence, normalized residual verdicts, and
   explicit frozen-dispatch provenance now align the numerical checks with the
   audited scaling and closure contracts; aggregate status no longer reports a
@@ -354,6 +356,12 @@ public read-only seam for the load decomposition, so HELM isolates
 compatibility adapter. Milestone 0 must begin from that finding, extend the same
 adapter only if unavoidable, and propose the smallest upstream public seam. It
 must not create a second private-import boundary.
+
+The current implementation exposes `operability_upstream_audit()` so every
+scope audit and snapshot report can retain that seam decision. The next
+upstream-facing implementation step is to replace the private load-decomposition
+imports with a public residual/device-derivative API before admitting
+generator, IBR, or controller equations into this processor.
 
 The processor should not create a second, silently divergent copy of the OPF
 device equations. An independent evaluation path is still required for
