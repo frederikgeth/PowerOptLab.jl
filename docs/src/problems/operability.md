@@ -194,7 +194,12 @@ is `:not_applicable` when none of its checks were available.
 The legacy-compatible `fixed_point_max_condition_margin` field aliases the
 robustness margin; the unqualified `fixed_point_condition_margin` now answers
 the same practical question, while the radius-boundary artifact is explicit
-in `fixed_point_radius_condition_margin`.
+in `fixed_point_radius_condition_margin`. The candidate-local and Euclidean
+regions follow the same convention, so
+`fixed_point_local_condition_margin`, `fixed_point_euclidean_condition_margin`,
+and `fixed_point_condition_margin` are directly comparable, with each
+region's radius-boundary value in the matching
+`*_radius_condition_margin` field.
 When HELM is requested, `helm_endpoint_mismatch`, `helm_endpoint_limit`, and
 `helm_common_node_count` expose the numerical agreement behind
 `helm_reachability_status`; otherwise they are `missing`.

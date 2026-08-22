@@ -2512,7 +2512,11 @@ certificate/HELM statuses, scaling/storage metadata, and the number of
 unsupported-scope reasons. It also retains scope status, closure/control
 closure, and source-topology readiness so pooled rows cannot hide an
 out-of-scope snapshot; the original unsupported-reason list is retained
-alongside its count. Per-check status counts are included so a study table can
+alongside its count. Every `*_condition_margin` field reports the best margin
+found over its geometry family, and the paired `*_radius_condition_margin`
+field reports the margin at that region's selected (largest certified) radius;
+the latter is pinned near zero by the radius search and is retained only as
+scan provenance. Per-check status counts are included so a study table can
 distinguish a clean pass from a result with requested claims that were
 inconclusive or not applicable without reimplementing aggregation. It also
 reports the same counts after excluding the explicitly complementary
@@ -2612,7 +2616,7 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
             ("fixed_point_certificate", "fixed_point_euclidean_region")))
     (
         snapshot_id=snapshot_id,
-        schema_version="operability_snapshot_row/v1",
+        schema_version="operability_snapshot_row/v2",
         status=result.status,
         claim_statuses=claim_statuses,
         check_messages=check_messages,
@@ -2686,9 +2690,13 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
         fixed_point_selected_region=get(certificate, "selected_region", missing),
         fixed_point_local_region_status=Symbol(get(local_certificate, "status", :not_applicable)),
         fixed_point_local_condition_margin=optional_float(get(local_certificate,
+            "max_condition_margin", nothing)),
+        fixed_point_local_radius_condition_margin=optional_float(get(local_certificate,
             "condition_margin", nothing)),
         fixed_point_euclidean_region_status=Symbol(get(euclidean_certificate, "status", :not_applicable)),
         fixed_point_euclidean_condition_margin=optional_float(get(euclidean_certificate,
+            "max_condition_margin", nothing)),
+        fixed_point_euclidean_radius_condition_margin=optional_float(get(euclidean_certificate,
             "condition_margin", nothing)),
         helm_reachability_status=Symbol(get(reachability, "status", :not_applicable)),
         helm_endpoint_mismatch=optional_float(get(reachability, "endpoint_mismatch", nothing)),

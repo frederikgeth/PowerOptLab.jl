@@ -151,7 +151,7 @@ using SparseArrays
           ["constant_power"]
     snapshot_row = operability_snapshot_row(report; snapshot_id="base")
     @test snapshot_row.snapshot_id == "base"
-    @test snapshot_row.schema_version == "operability_snapshot_row/v1"
+    @test snapshot_row.schema_version == "operability_snapshot_row/v2"
     @test snapshot_row.status == :pass
     @test snapshot_row.claim_statuses["endpoint"] == :pass
     @test snapshot_row.claim_statuses["voltage_quality"] == :pass
@@ -409,6 +409,20 @@ using SparseArrays
     @test certificate_row.fixed_point_local_condition_margin > 0.0
     @test certificate_row.fixed_point_euclidean_region_status == :pass
     @test certificate_row.fixed_point_euclidean_condition_margin > 0.0
+    # Every region reports the family-best margin under `*_condition_margin`
+    # and its selected-radius margin under `*_radius_condition_margin`, so a
+    # study table can compare the three regions on the same quantity.
+    for (best, radius) in (
+            (certificate_row.fixed_point_condition_margin,
+             certificate_row.fixed_point_radius_condition_margin),
+            (certificate_row.fixed_point_local_condition_margin,
+             certificate_row.fixed_point_local_radius_condition_margin),
+            (certificate_row.fixed_point_euclidean_condition_margin,
+             certificate_row.fixed_point_euclidean_radius_condition_margin))
+        @test best > 0.0
+        @test radius > 0.0
+        @test best >= radius
+    end
     @test certificate_row.jacobian_spectrum_mode == "full"
     @test certificate_row.jacobian_storage_mode == "dense"
     @test certificate_row.jacobian_storage_bytes_estimate > 0
