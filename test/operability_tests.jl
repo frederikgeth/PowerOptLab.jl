@@ -150,6 +150,11 @@ using SparseArrays
     @test snapshot_row.load_scale_sensitivity_status == :pass
     @test snapshot_row.load_scale_sensitivity_validation_status == :not_applicable
     @test snapshot_row.directional_sensitivity_validation_status == :not_applicable
+    @test isnan(snapshot_row.jacobian_step_validation_relative_error)
+    @test isnan(snapshot_row.analytic_jacobian_validation_relative_error)
+    @test isnan(snapshot_row.analytic_load_scale_rhs_validation_relative_error)
+    @test isnan(snapshot_row.load_scale_sensitivity_validation_relative_error)
+    @test isnan(snapshot_row.directional_sensitivity_validation_max_relative_error)
     @test snapshot_row.scope == "single_snapshot_static_ybus"
     @test snapshot_row.scope_status == :supported
     @test snapshot_row.equilibrium_scope == "static_ybus_linearized"
@@ -298,12 +303,18 @@ using SparseArrays
     @test analytic_validation_report.checks["analytic_jacobian_validation"].status == :pass
     @test analytic_validation_report.branch_evidence["analytic_jacobian_validation"][
         "relative_error"] <= 1e-3
+    analytic_validation_row = operability_snapshot_row(analytic_validation_report)
+    @test analytic_validation_row.analytic_jacobian_validation_status == :pass
+    @test analytic_validation_row.analytic_jacobian_validation_relative_error <= 1e-3
     analytic_rhs_report = check_opf_operability(net, pf;
         spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
             compute_analytic_sensitivity_validation=true))
     @test analytic_rhs_report.checks["analytic_load_scale_rhs_validation"].status == :pass
     @test analytic_rhs_report.branch_evidence["analytic_load_scale_rhs_validation"][
         "relative_error"] <= 1e-3
+    analytic_rhs_row = operability_snapshot_row(analytic_rhs_report)
+    @test analytic_rhs_row.analytic_load_scale_rhs_validation_status == :pass
+    @test analytic_rhs_row.analytic_load_scale_rhs_validation_relative_error <= 1e-3
     sparse_spectrum_report = check_opf_operability(net, pf;
         spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
             voltage_min=800.0, voltage_max=1100.0,
@@ -454,6 +465,11 @@ using SparseArrays
     direction_validation = validation_report.sensitivities["validation"]["directions"]
     @test all(v["status"] == :pass for family in values(direction_validation)
               for v in values(family))
+    validation_row = operability_snapshot_row(validation_report)
+    @test validation_row.load_scale_sensitivity_validation_status == :pass
+    @test validation_row.load_scale_sensitivity_validation_relative_error <= 1e-3
+    @test validation_row.directional_sensitivity_validation_status == :pass
+    @test validation_row.directional_sensitivity_validation_max_relative_error <= 1e-3
 
     bad = deepcopy(pf)
     bad["bus"]["bus1"]["1"]["vr"] += 10.0

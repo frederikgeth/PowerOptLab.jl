@@ -2546,6 +2546,21 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
     euclidean_certificate = get(certificate, "euclidean_region", Dict{String,Any}())
     reachability = get(result.branch_evidence, "reachability", Dict{String,Any}())
     complexity = get(result.branch_evidence, "complexity", Dict{String,Any}())
+    validation = get(result.sensitivities, "validation", Dict{String,Any}())
+    load_scale_validation = get(validation, "load_scale", Dict{String,Any}())
+    directional_validation = get(validation, "directions", Dict{String,Any}())
+    directional_errors = Float64[
+        Float64(get(record, "relative_error", NaN))
+        for family in values(directional_validation)
+        for record in values(family)
+        if isfinite(Float64(get(record, "relative_error", NaN)))]
+    jacobian_step_validation = get(result.branch_evidence,
+                                   "jacobian_step_validation", Dict{String,Any}())
+    analytic_jacobian_validation = get(result.branch_evidence,
+                                       "analytic_jacobian_validation", Dict{String,Any}())
+    analytic_load_scale_validation = get(result.branch_evidence,
+                                         "analytic_load_scale_rhs_validation",
+                                         Dict{String,Any}())
     operability = get(result.provenance, "operability", Dict{String,Any}())
     upstream = get(operability, "upstream", Dict{String,Any}())
     topology = get(operability, "topology", Dict{String,Any}())
@@ -2576,12 +2591,22 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
         load_scale_sensitivity_status=check_status("load_scale_sensitivity"),
         load_scale_sensitivity_validation_status=check_status(
             "load_scale_sensitivity_validation"),
+        load_scale_sensitivity_validation_relative_error=Float64(get(
+            load_scale_validation, "relative_error", NaN)),
         directional_sensitivity_validation_status=check_status(
             "directional_sensitivity_validation"),
+        directional_sensitivity_validation_max_relative_error=isempty(
+            directional_errors) ? NaN : maximum(directional_errors),
         jacobian_step_validation_status=check_status("jacobian_step_validation"),
+        jacobian_step_validation_relative_error=Float64(get(
+            jacobian_step_validation, "relative_error", NaN)),
         analytic_jacobian_validation_status=check_status("analytic_jacobian_validation"),
+        analytic_jacobian_validation_relative_error=Float64(get(
+            analytic_jacobian_validation, "relative_error", NaN)),
         analytic_load_scale_rhs_validation_status=check_status(
             "analytic_load_scale_rhs_validation"),
+        analytic_load_scale_rhs_validation_relative_error=Float64(get(
+            analytic_load_scale_validation, "relative_error", NaN)),
         endpoint_residual=result.endpoint_residual,
         endpoint_residual_normalized=result.endpoint_residual_normalized,
         smallest_singular_value=isempty(result.singular_values) ? NaN : last(result.singular_values),

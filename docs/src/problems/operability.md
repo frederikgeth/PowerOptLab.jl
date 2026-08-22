@@ -171,6 +171,10 @@ were inconclusive or not applicable without reimplementing aggregation. The
 `primary_check_*` fields repeat those counts after excluding the complementary
 candidate-local fixed-point region, matching the rule that this evidence does
 not downgrade the aggregate snapshot verdict.
+Validation status fields are paired with relative-error summaries for the
+finite-difference step check, analytic Jacobian and load-scale checks, and
+re-solved sensitivity validations; unrequested or unavailable validations are
+reported as `NaN` rather than being interpreted as zero error.
 When HELM is requested, `helm_endpoint_mismatch`, `helm_endpoint_limit`, and
 `helm_common_node_count` expose the numerical agreement behind
 `helm_reachability_status`; otherwise they are `NaN` or `missing`.
