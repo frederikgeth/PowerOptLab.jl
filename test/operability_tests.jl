@@ -731,6 +731,10 @@ using SparseArrays
     @test trace.endpoint_distance < 1e-4
     @test maximum(trace.residuals) < 1e-5
     @test trace.provenance["continuation"]["pseudo_arclength"] === false
+    @test trace.provenance["continuation"]["jacobian_method"] ==
+          "analytic_native_static"
+    @test trace.provenance["continuation"]["lambda_forcing_method"] ==
+          "finite_difference"
     @test_throws ArgumentError OperabilityContinuationSpec(initial_step=0.01, min_step=0.1)
 
     pseudo_trace = continue_opf_operability_pseudo_arclength(net, pf;
@@ -759,6 +763,8 @@ using SparseArrays
     @test length(pseudo_rows) == length(pseudo_trace.lambdas)
     @test pseudo_rows[1].index == 1
     @test pseudo_rows[1].lambda == 0.0
+    @test pseudo_rows[1].jacobian_method == "analytic_native_static"
+    @test pseudo_rows[1].lambda_forcing_method == "analytic_native_static"
     @test isnan(pseudo_rows[1].curvature)
     @test [row.lambda for row in pseudo_rows] == pseudo_trace.lambdas
     @test pseudo_trace.provenance["continuation"]["margin"]["status"] == :not_observed

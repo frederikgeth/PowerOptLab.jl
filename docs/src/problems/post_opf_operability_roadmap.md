@@ -52,7 +52,8 @@ The current branch contains the first bounded implementation slice in
 - pseudo-arclength results now retain tangent-turning curvature and accepted
   arclength-step histories, with conservative curvature-aware step control;
 - `operability_continuation_rows` exposes deterministic one-row-per-point
-  records so study tables can retain the trace ordering and event evidence;
+  records so study tables can retain the trace ordering, event evidence, and
+  the Jacobian/load-scale forcing methods used by the trace;
 - named finite stress directions now have an explicit network builder and a
   bounded `operability_stress_rows` campaign adapter. P/Q scales, optional
   load weights, and connection weights are recorded by direction; the solver

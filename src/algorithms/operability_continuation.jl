@@ -157,9 +157,10 @@ operability_continuation_margin(
 Return deterministic, one-row-per-accepted-point records for a continuation
 trace. Each row preserves the index into `result.lambdas`, `result.states`, and
 `result.node_voltages`, and includes residual, conditioning, corrector, and
-curvature evidence plus event kinds observed at that λ. Curvature and
-arclength are `NaN` for the no-load base and any fixed-λ endpoint refinement
-that has no predictor tangent.
+curvature evidence plus event kinds observed at that λ. It also retains the
+Jacobian and load-scale forcing methods from continuation provenance.
+Curvature and arclength are `NaN` for the no-load base and any fixed-λ endpoint
+refinement that has no predictor tangent.
 """
 function operability_continuation_rows(result::OperabilityContinuationResult)
     continuation = get(result.provenance, "continuation", Dict{String,Any}())
@@ -195,6 +196,9 @@ function operability_continuation_rows(result::OperabilityContinuationResult)
             corrector_iterations=Int(result.corrector_iterations[index]),
             curvature=curvature,
             arclength_step=arclength_step,
+            jacobian_method=String(get(continuation, "jacobian_method", "not_available")),
+            lambda_forcing_method=String(get(
+                continuation, "lambda_forcing_method", "not_available")),
             event_kinds=event_kinds,
         ))
     end
@@ -221,7 +225,8 @@ function _continuation_scaled_jacobian(lin, meta, x, coords, cfg;
     J, state_scale, residual_scale
 end
 
-function _continuation_corrector(lin, meta, x0, coords, cfg)
+function _continuation_corrector(lin, meta, x0, coords, cfg;
+                                 net=nothing, analytic::Bool=false)
     x = copy(x0)
     last_norm = Inf
     for iteration in 1:cfg.max_corrector_iterations
@@ -231,7 +236,8 @@ function _continuation_corrector(lin, meta, x0, coords, cfg)
         norm_residual = isempty(scaled_residual) ? 0.0 : maximum(abs, scaled_residual)
         last_norm = norm_residual
         norm_residual <= cfg.corrector_tol && return x, true, iteration, last_norm
-        J, state_scale, _ = _continuation_scaled_jacobian(lin, meta, x, coords, cfg)
+        J, state_scale, _ = _continuation_scaled_jacobian(
+            lin, meta, x, coords, cfg; net=net, analytic=analytic)
         step_scaled = try
             -(J \ scaled_residual)
         catch
@@ -258,10 +264,12 @@ function _continuation_corrector(lin, meta, x0, coords, cfg)
     x, false, cfg.max_corrector_iterations, last_norm
 end
 
-function _continuation_point(lin, meta, x, coords, cfg)
+function _continuation_point(lin, meta, x, coords, cfg;
+                             net=nothing, analytic::Bool=false)
     residual = _operability_complex_residual(lin, meta, x)
     residual_norm = isempty(residual) ? 0.0 : maximum(abs, residual)
-    J, _, _ = _continuation_scaled_jacobian(lin, meta, x, coords, cfg)
+    J, _, _ = _continuation_scaled_jacobian(
+        lin, meta, x, coords, cfg; net=net, analytic=analytic)
     singular_values = isempty(J) ? Float64[] : Float64.(svdvals(J))
     condition_number = isempty(singular_values) || last(singular_values) == 0 ?
         Inf : first(singular_values) / last(singular_values)
@@ -339,19 +347,29 @@ function continue_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
     # the energized no-load germ without starting at a zero-voltage singularity.
     net_zero = _operability_scale_network(net, 0.0)
     lin_zero = BMOPFTools.ybus_linearized(net_zero; fold=:constant_z)
+    analytic_jacobian_available = try
+        _operability_analytic_jacobian(net, lin_target, meta, target_x) !== nothing
+    catch
+        false
+    end
+    analytic_jacobian_method = analytic_jacobian_available ?
+        "analytic_native_static" : "finite_difference"
     Jzero, state_scale, residual_scale = _continuation_scaled_jacobian(
-        lin_zero, meta, target_x, coords, continuation)
+        lin_zero, meta, target_x, coords, continuation;
+        net=net_zero, analytic=analytic_jacobian_available)
     base_x = target_x - (Jzero \ (_operability_residual(lin_zero, meta, target_x) ./
         residual_scale)) .* state_scale
     base_x, base_ok, base_iterations, _ = _continuation_corrector(
-        lin_zero, meta, base_x, coords, continuation)
+        lin_zero, meta, base_x, coords, continuation;
+        net=net_zero, analytic=analytic_jacobian_available)
     base_ok || return _continuation_empty_result(
         :inconclusive, "energized no-load corrector failed", coords.provenance,
         [Dict{String,Any}("kind" => "base_corrector_failure",
                            "iterations" => base_iterations)])
 
     lambdas = [0.0]; states = [copy(base_x)]
-    points = [_continuation_point(lin_zero, meta, base_x, coords, continuation)]
+    points = [_continuation_point(lin_zero, meta, base_x, coords, continuation;
+                                  net=net_zero, analytic=analytic_jacobian_available)]
     residuals = [points[1].residual_norm]
     singular_values = [isempty(points[1].singular_values) ? NaN : last(points[1].singular_values)]
     condition_numbers = [points[1].condition_number]
@@ -379,7 +397,8 @@ function continue_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
         net_trial = _operability_scale_network(net, λtrial)
         lin_trial = BMOPFTools.ybus_linearized(net_trial; fold=:constant_z)
         xnew, ok, iterations, _ = _continuation_corrector(
-            lin_trial, meta, xpred, coords, continuation)
+            lin_trial, meta, xpred, coords, continuation;
+            net=net_trial, analytic=analytic_jacobian_available)
         if !ok
             push!(events, Dict{String,Any}("kind" => "corrector_failure",
                 "lambda" => λtrial, "step" => Δλ, "iterations" => iterations))
@@ -390,7 +409,8 @@ function continue_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
             end
             continue
         end
-        point = _continuation_point(lin_trial, meta, xnew, coords, continuation)
+        point = _continuation_point(lin_trial, meta, xnew, coords, continuation;
+                                     net=net_trial, analytic=analytic_jacobian_available)
         push!(lambdas, λtrial); push!(states, copy(xnew)); push!(points, point)
         push!(residuals, point.residual_norm)
         push!(singular_values, isempty(point.singular_values) ? NaN : last(point.singular_values))
@@ -452,6 +472,8 @@ function continue_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
         "closure" => String(spec.closure),
         "source_buses" => sort!(collect(source_buses)), "state_nodes" => meta.state_nodes,
         "natural_parameter" => true, "pseudo_arclength" => false,
+        "jacobian_method" => analytic_jacobian_method,
+        "lambda_forcing_method" => "finite_difference",
         "stop_on_voltage_limit" => stop_on_voltage_limit,
         "margin" => _continuation_margin(events))
     OperabilityContinuationResult(status, message, lambdas, states, node_voltages,
@@ -845,13 +867,15 @@ function continue_opf_operability_pseudo_arclength(
     base_x = target_x - (Jzero \ (_operability_residual(lin_zero, meta, target_x) ./
         residual_scale)) .* state_scale
     base_x, base_ok, base_iterations, _ = _continuation_corrector(
-        lin_zero, meta, base_x, coords, natural_cfg)
+        lin_zero, meta, base_x, coords, natural_cfg;
+        net=net_zero, analytic=analytic_jacobian_available)
     base_ok || return _continuation_empty_result(
         :inconclusive, "energized no-load corrector failed", coords.provenance,
         [Dict{String,Any}("kind" => "base_corrector_failure",
                            "iterations" => base_iterations)])
 
-    base_point = _continuation_point(lin_zero, meta, base_x, coords, natural_cfg)
+    base_point = _continuation_point(lin_zero, meta, base_x, coords, natural_cfg;
+                                     net=net_zero, analytic=analytic_jacobian_available)
     Fλ, _ = _pseudo_lambda_residual(net, 0.0, meta, base_x, residual_scale,
                                     continuation.jacobian_step;
                                     analytic_lin=analytic_forcing_lin,
@@ -908,7 +932,10 @@ function continue_opf_operability_pseudo_arclength(
         xnew = ynew[1:n] .* arc_state_scale; λnew = ynew[end]
         lin_new = BMOPFTools.ybus_linearized(_operability_scale_network(net, λnew);
                                              fold=:constant_z)
-        point = _continuation_point(lin_new, meta, xnew, coords, natural_cfg)
+        point = _continuation_point(
+            lin_new, meta, xnew, coords, natural_cfg;
+            net=_operability_scale_network(net, λnew),
+            analytic=analytic_jacobian_available)
         λold = y[end]
         if (λold - 1.0) * (λnew - 1.0) <= 0 && λold != λnew
             push!(events, Dict{String,Any}("kind" => "target_crossing",
@@ -920,13 +947,15 @@ function continue_opf_operability_pseudo_arclength(
             # when the crossing is close to a fold).
             lin_endpoint = BMOPFTools.ybus_linearized(net; fold=:constant_z)
             xendpoint, endpoint_ok, endpoint_iterations, _ =
-                _continuation_corrector(lin_endpoint, meta, xnew, coords, natural_cfg)
+                _continuation_corrector(lin_endpoint, meta, xnew, coords, natural_cfg;
+                                        net=net, analytic=analytic_jacobian_available)
             push!(events, Dict{String,Any}("kind" => "target_refinement",
                 "lambda" => 1.0, "iterations" => endpoint_iterations,
                 "status" => endpoint_ok ? :pass : :inconclusive))
             if endpoint_ok
                 endpoint_point = _continuation_point(
-                    lin_endpoint, meta, xendpoint, coords, natural_cfg)
+                    lin_endpoint, meta, xendpoint, coords, natural_cfg;
+                    net=net, analytic=analytic_jacobian_available)
                 push!(lambdas, 1.0); push!(states, copy(xendpoint))
                 push!(node_voltages, endpoint_point.node_voltages)
                 push!(residuals, endpoint_point.residual_norm)
@@ -970,7 +999,9 @@ function continue_opf_operability_pseudo_arclength(
                 _operability_scale_network(net, continuation.lambda_min);
                 fold=:constant_z)
             xboundary, boundary_ok, boundary_iterations, _ = _continuation_corrector(
-                lin_boundary, meta, xnew, coords, natural_cfg)
+                lin_boundary, meta, xnew, coords, natural_cfg;
+                net=_operability_scale_network(net, continuation.lambda_min),
+                analytic=analytic_jacobian_available)
             push!(events, Dict{String,Any}("kind" => "model_domain_failure",
                 "domain" => "lambda", "lambda" => continuation.lambda_min,
                 "lambda_min" => continuation.lambda_min,
@@ -978,7 +1009,9 @@ function continue_opf_operability_pseudo_arclength(
                 "iterations" => boundary_iterations))
             if boundary_ok
                 boundary_point = _continuation_point(
-                    lin_boundary, meta, xboundary, coords, natural_cfg)
+                    lin_boundary, meta, xboundary, coords, natural_cfg;
+                    net=_operability_scale_network(net, continuation.lambda_min),
+                    analytic=analytic_jacobian_available)
                 push!(lambdas, continuation.lambda_min); push!(states, copy(xboundary))
                 push!(node_voltages, boundary_point.node_voltages)
                 push!(residuals, boundary_point.residual_norm)

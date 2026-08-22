@@ -322,6 +322,8 @@ pseudo.status
 pseudo.provenance["continuation"]["pseudo_arclength"]
 pseudo.provenance["continuation"]["arclength_state_scale"]
 pseudo.provenance["continuation"]["curvature_history"]
+pseudo.provenance["continuation"]["jacobian_method"]
+pseudo.provenance["continuation"]["lambda_forcing_method"]
 
 # To continue the declared stress path beyond the audited endpoint:
 stress = continue_opf_operability_pseudo_arclength(net, pf;
@@ -342,6 +344,8 @@ limited.provenance["continuation"]["margin"]
 rows = operability_continuation_rows(pseudo)
 rows[1].lambda
 rows[end].event_kinds
+rows[1].jacobian_method
+rows[1].lambda_forcing_method
 
 directions = [
     OperabilityStressDirection(:uniform),
