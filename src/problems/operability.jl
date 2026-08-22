@@ -2561,6 +2561,16 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
     analytic_load_scale_validation = get(result.branch_evidence,
                                          "analytic_load_scale_rhs_validation",
                                          Dict{String,Any}())
+    endpoint_check = get(result.checks, "endpoint", nothing)
+    voltage_bounds_check = get(result.checks, "terminal_voltage_bounds", nothing)
+    sequence_check = get(result.checks, "sequence_unbalance", nothing)
+    endpoint_limit = endpoint_check === nothing || !(endpoint_check.limit isa Real) ?
+        NaN : Float64(endpoint_check.limit)
+    voltage_limits = voltage_bounds_check === nothing ||
+        !(voltage_bounds_check.limit isa Tuple) ? (NaN, NaN) :
+        (Float64(voltage_bounds_check.limit[1]), Float64(voltage_bounds_check.limit[2]))
+    sequence_limit = sequence_check === nothing || !(sequence_check.limit isa Real) ?
+        NaN : Float64(sequence_check.limit)
     operability = get(result.provenance, "operability", Dict{String,Any}())
     upstream = get(operability, "upstream", Dict{String,Any}())
     topology = get(operability, "topology", Dict{String,Any}())
@@ -2609,10 +2619,14 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
             analytic_load_scale_validation, "relative_error", NaN)),
         endpoint_residual=result.endpoint_residual,
         endpoint_residual_normalized=result.endpoint_residual_normalized,
+        endpoint_residual_normalized_limit=endpoint_limit,
         smallest_singular_value=isempty(result.singular_values) ? NaN : last(result.singular_values),
         condition_number=result.condition_number,
         minimum_terminal_voltage=isempty(magnitudes) ? NaN : minimum(magnitudes),
         maximum_terminal_voltage=isempty(magnitudes) ? NaN : maximum(magnitudes),
+        terminal_voltage_min_limit=voltage_limits[1],
+        terminal_voltage_max_limit=voltage_limits[2],
+        sequence_unbalance_limit=sequence_limit,
         maximum_abs_terminal_angle_derivative=isempty(angle_derivatives) ? NaN :
             maximum(angle_derivatives),
         maximum_vuf=isempty(vufs) ? missing : maximum(vufs),

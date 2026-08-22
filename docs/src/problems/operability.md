@@ -175,6 +175,8 @@ Validation status fields are paired with relative-error summaries for the
 finite-difference step check, analytic Jacobian and load-scale checks, and
 re-solved sensitivity validations; unrequested or unavailable validations are
 reported as `NaN` rather than being interpreted as zero error.
+The row also carries the declared endpoint residual, terminal-voltage, and
+sequence-unbalance limits next to the corresponding measurements and statuses.
 When HELM is requested, `helm_endpoint_mismatch`, `helm_endpoint_limit`, and
 `helm_common_node_count` expose the numerical agreement behind
 `helm_reachability_status`; otherwise they are `NaN` or `missing`.

@@ -142,11 +142,15 @@ using SparseArrays
     @test snapshot_row.primary_check_pass_count == snapshot_row.check_pass_count
     @test snapshot_row.primary_check_inconclusive_count == 0
     @test snapshot_row.endpoint_status == :pass
+    @test snapshot_row.endpoint_residual_normalized_limit ≈ 1.01e-6
     @test snapshot_row.model_domain_status == :pass
     @test snapshot_row.claim_scope == "one_solved_equilibrium_only"
     @test snapshot_row.jacobian_regular_status == :pass
     @test snapshot_row.terminal_voltage_bounds_status == :pass
+    @test snapshot_row.terminal_voltage_min_limit == 800.0
+    @test snapshot_row.terminal_voltage_max_limit == 1100.0
     @test snapshot_row.sequence_unbalance_status == :not_applicable
+    @test snapshot_row.sequence_unbalance_limit == Inf
     @test snapshot_row.load_scale_sensitivity_status == :pass
     @test snapshot_row.load_scale_sensitivity_validation_status == :not_applicable
     @test snapshot_row.directional_sensitivity_validation_status == :not_applicable
@@ -495,6 +499,7 @@ using SparseArrays
     @test isfinite(sequence_sensitivity["vuf_derivative"])
     sequence_row = operability_snapshot_row(report3; snapshot_id="balanced")
     @test sequence_row.sequence_sensitivity_status == :available
+    @test sequence_row.sequence_unbalance_limit == 0.01
     @test sequence_row.maximum_abs_positive_sequence_magnitude_derivative >= 0.0
     @test sequence_row.maximum_abs_negative_sequence_magnitude_derivative >= 0.0
     @test sequence_row.maximum_abs_vuf_derivative >= 0.0
