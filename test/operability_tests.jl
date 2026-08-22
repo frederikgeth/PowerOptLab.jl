@@ -415,6 +415,11 @@ using SparseArrays
     sequence_sensitivity = report3.branch_evidence["sequence_sensitivity"]["buses"]["poc"]
     @test isfinite(sequence_sensitivity["positive_sequence_magnitude_derivative"])
     @test isfinite(sequence_sensitivity["vuf_derivative"])
+    sequence_row = operability_snapshot_row(report3; snapshot_id="balanced")
+    @test sequence_row.sequence_sensitivity_status == :available
+    @test sequence_row.maximum_abs_positive_sequence_magnitude_derivative >= 0.0
+    @test sequence_row.maximum_abs_negative_sequence_magnitude_derivative >= 0.0
+    @test sequence_row.maximum_abs_vuf_derivative >= 0.0
 
     delta_net = inv_grid3_bal()
     delta_net["load"] = Dict("dΔ" => Dict{String,Any}(

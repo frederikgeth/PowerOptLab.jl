@@ -375,6 +375,10 @@ Aggregate branch evidence now retains derivative availability counts and
 near-zero-tangent counts, preserving the distinction between an unsupported
 path, a finite slope, and a turning-tangent singular quotient.
 
+Table-ready rows also retain bounded positive-/negative-sequence and VUF
+sensitivity summaries, while preserving the per-bus phasors and terminal-level
+records as the authoritative unbalanced evidence.
+
 The processor should not create a second, silently divergent copy of the OPF
 device equations. An independent evaluation path is still required for
 validation; independence should come from the residual assembly and numerical

@@ -115,6 +115,10 @@ row.claim_scope
 row.minimum_terminal_voltage
 row.maximum_vuf
 row.maximum_vuf_status       # :not_applicable when no complete 3-phase bus exists
+row.sequence_sensitivity_status
+row.maximum_abs_positive_sequence_magnitude_derivative
+row.maximum_abs_negative_sequence_magnitude_derivative
+row.maximum_abs_vuf_derivative
 row.endpoint_status
 row.jacobian_regular_status
 row.terminal_voltage_bounds_status

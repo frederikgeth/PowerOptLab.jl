@@ -2237,6 +2237,19 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
     vufs = Float64[Float64(get(record, "vuf", NaN))
                    for record in values(result.sequences)
                    if isfinite(Float64(get(record, "vuf", NaN)))]
+    sequence_sensitivity = get(result.branch_evidence, "sequence_sensitivity",
+                               Dict{String,Any}())
+    sequence_sensitivity_buses = get(sequence_sensitivity, "buses",
+                                     Dict{String,Any}())
+    sequence_derivative_values(name) = Float64[
+        abs(Float64(get(record, name, NaN)))
+        for record in values(sequence_sensitivity_buses)
+        if isfinite(Float64(get(record, name, NaN)))]
+    positive_sequence_derivatives = sequence_derivative_values(
+        "positive_sequence_magnitude_derivative")
+    negative_sequence_derivatives = sequence_derivative_values(
+        "negative_sequence_magnitude_derivative")
+    vuf_derivatives = sequence_derivative_values("vuf_derivative")
     dpdv = get(get(result.branch_evidence, "dP_dV", Dict{String,Any}()),
                "connections", Dict{String,Any}())
     classifications = String[get(record, "classification", "not_available")
@@ -2272,6 +2285,13 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
         maximum_terminal_voltage=isempty(magnitudes) ? NaN : maximum(magnitudes),
         maximum_vuf=isempty(vufs) ? missing : maximum(vufs),
         maximum_vuf_status=isempty(vufs) ? :not_applicable : :available,
+        sequence_sensitivity_status=Symbol(get(sequence_sensitivity, "status",
+            :not_applicable)),
+        maximum_abs_positive_sequence_magnitude_derivative=isempty(
+            positive_sequence_derivatives) ? NaN : maximum(positive_sequence_derivatives),
+        maximum_abs_negative_sequence_magnitude_derivative=isempty(
+            negative_sequence_derivatives) ? NaN : maximum(negative_sequence_derivatives),
+        maximum_abs_vuf_derivative=isempty(vuf_derivatives) ? NaN : maximum(vuf_derivatives),
         high_side_indicator_count=count(==("negative_high_side_indicator"), classifications),
         near_nose_indicator_count=count(==("near_nose_indicator"), classifications),
         near_zero_voltage_tangent_count=get(get(result.branch_evidence,

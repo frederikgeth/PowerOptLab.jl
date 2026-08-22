@@ -275,6 +275,10 @@ indicator for that path, not a universal voltage-stability certificate.
 The aggregate `branch_evidence["dP_dV"]` record retains status counts and
 `near_zero_voltage_tangent_count`, so a pooled row can distinguish missing
 sensitivity evidence from a deliberately withheld slope at a turning tangent.
+Snapshot rows also retain a sequence-sensitivity status and maxima of the
+absolute positive-sequence, negative-sequence, and VUF derivatives. These are
+summary fields only; the per-bus phasors and phase-level records remain the
+authoritative evidence.
 
 trace = continue_opf_operability(net, pf;
     spec = OperabilitySpec(scaling_policy = SIUnitsScaling()),
