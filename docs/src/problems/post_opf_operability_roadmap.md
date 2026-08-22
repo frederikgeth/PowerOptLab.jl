@@ -1,11 +1,12 @@
 # Post-OPF voltage operability roadmap
 
-> **Status:** implementation underway · **Implementation:** first static
-> checker slice and opt-in HELM cross-check landed · **Scope:** static,
+> **Status:** scoped native-static PR ready for review · **Implementation:**
+> first static checker slice, HELM cross-check, continuation, and study-row
+> contracts landed · **Scope:** static,
 > fundamental-frequency, unbalanced four-wire networks · **Current focus:**
-> single-snapshot contract hardening
+> final API and scientific-scope review
 >
-> **Owner:** PowerOptLab maintainers · **Last reviewed:** 2026-08-21
+> **Owner:** PowerOptLab maintainers · **Last reviewed:** 2026-08-22
 
 This page preserves the scientific and implementation plan for a processor that
 checks the voltage operability of an OPF-determined equilibrium. It is not an API
@@ -126,6 +127,10 @@ The current branch contains the first bounded implementation slice in
 - table-ready snapshot rows now retain the Jacobian spectrum/storage mode,
   nonzero count, byte estimate, and implicit Zbus storage mode so pooled
   reports preserve computational-cost context;
+- snapshot rows now retain declared limits, validation relative errors, HELM
+  endpoint mismatch/tolerance, deterministic check messages, all-check and
+  primary-check status counts, and section-level claim statuses so a study
+  table can audit both the numerical result and the reason for each claim;
 - the Euclidean fixed-point certificate now includes the connection-incidence
   ``\ell_2`` factor in its state-space Lipschitz assembly; a lightly loaded
   floating-neutral single-edge tightness probe plus a multi-bus four-wire
@@ -198,6 +203,31 @@ necessary test. Its `:inconclusive` outcome is deliberately conservative when
 the norm bound cannot be satisfied, when the candidate is outside the certified
   polydisc, or when the load law is outside the implemented native static
   scope.
+
+## Scoped PR readiness checkpoint
+
+The current PR is ready for review for the native frozen-dispatch,
+single-snapshot scope. It includes endpoint/model-domain checks,
+connection-aware phase and sequence evidence, local Jacobian and directional
+sensitivities, HELM and sufficient fixed-point certificates, natural and
+pseudo-arclength continuation with local fold evidence, finite stress-study
+adapters, and table-ready snapshot/continuation rows with scaling, limit,
+validation, and claim provenance.
+
+The following are explicit follow-on work, not hidden gaps in this PR:
+
+- generator, IBR, droop/PV, inverter-capability, and other controller residual
+  equations remain outside the pinned native-ybus derivative seam;
+- full global branch discovery, production-grade fold certification, and
+  multidimensional closest-boundary searches are not claimed;
+- sparse/iterative certificate backends for routine very-large meshed studies
+  remain a later performance milestone; and
+- contingency orchestration remains a separate PR over this stable
+  single-snapshot API.
+
+The review gate for this PR is therefore the public-field naming, claim-scope,
+and scientific-interpretation contract. The native-static implementation and
+its focused regression suite are complete within that boundary.
 
 ## Research question and intended claims
 
