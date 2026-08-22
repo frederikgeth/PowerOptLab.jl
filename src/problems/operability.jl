@@ -759,6 +759,8 @@ function _operability_load_records(net, vmap; dvmap=nothing, uniform_scale=false
                  (sl.neg === nothing ? 0.0im : get(dvmap, sl.neg, 0.0im)))
             u = vp - vn; mag = abs(u)
             dmag = dvmap === nothing || mag == 0 ? NaN : real(conj(u) * dv) / mag
+            angle = mag == 0.0 ? NaN : atan(imag(u), real(u))
+            dangle = dvmap === nothing || mag == 0.0 ? NaN : imag(conj(u) * dv) / mag^2
             requested = ComplexF64(sl.p0 + im * sl.q0)
             realized = ComplexF64(_subload_S(sl, mag))
             local_dS_dmag = ComplexF64(_operability_connection_power_slope(sl, mag))
@@ -785,11 +787,14 @@ function _operability_load_records(net, vmap; dvmap=nothing, uniform_scale=false
                 "load" => id, "connection_index" => k,
                 "positive" => sl.pos, "negative" => sl.neg,
                 "voltage" => ComplexF64(u), "magnitude" => mag,
+                "angle" => angle, "angle_units" => "radians",
                 "requested_power" => requested, "realized_power" => realized,
                 "power_error" => realized - requested,
                 "realized_power_local_derivative" => local_dS_dmag,
                 "voltage_derivative" => ComplexF64(dv),
                 "magnitude_derivative" => dmag,
+                "angle_derivative" => dangle,
+                "angle_derivative_units" => "radians per declared perturbation",
                 "realized_power_derivative" => path_dS,
                 "path_dP_dlambda" => uniform_scale && dvmap !== nothing ? real(path_dS) : NaN,
                 "path_dQ_dlambda" => uniform_scale && dvmap !== nothing ? imag(path_dS) : NaN,
@@ -2234,6 +2239,11 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
     magnitudes = Float64[Float64(get(record, "magnitude", NaN))
                          for record in values(result.load_connections)
                          if isfinite(Float64(get(record, "magnitude", NaN)))]
+    angle_records = get(get(result.sensitivities, "load_scale", Dict{String,Any}()),
+                        "load_connections", Dict{String,Any}())
+    angle_derivatives = Float64[abs(Float64(get(record, "angle_derivative", NaN)))
+                               for record in values(angle_records)
+                               if isfinite(Float64(get(record, "angle_derivative", NaN)))]
     vufs = Float64[Float64(get(record, "vuf", NaN))
                    for record in values(result.sequences)
                    if isfinite(Float64(get(record, "vuf", NaN)))]
@@ -2283,6 +2293,8 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
         condition_number=result.condition_number,
         minimum_terminal_voltage=isempty(magnitudes) ? NaN : minimum(magnitudes),
         maximum_terminal_voltage=isempty(magnitudes) ? NaN : maximum(magnitudes),
+        maximum_abs_terminal_angle_derivative=isempty(angle_derivatives) ? NaN :
+            maximum(angle_derivatives),
         maximum_vuf=isempty(vufs) ? missing : maximum(vufs),
         maximum_vuf_status=isempty(vufs) ? :not_applicable : :available,
         sequence_sensitivity_status=Symbol(get(sequence_sensitivity, "status",

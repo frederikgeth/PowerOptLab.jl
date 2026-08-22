@@ -379,6 +379,11 @@ Table-ready rows also retain bounded positive-/negative-sequence and VUF
 sensitivity summaries, while preserving the per-bus phasors and terminal-level
 records as the authoritative unbalanced evidence.
 
+Terminal records now retain angle and angle-tangent quantities in radians,
+including a compact maximum-absolute angle derivative in snapshot rows. This
+completes the first-slice reporting of both magnitude and phase directional
+voltage response without treating phase rotation as a voltage-limit verdict.
+
 The processor should not create a second, silently divergent copy of the OPF
 device equations. An independent evaluation path is still required for
 validation; independence should come from the residual assembly and numerical

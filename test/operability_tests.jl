@@ -76,6 +76,7 @@ using SparseArrays
     @test report.checks["load_scale_sensitivity"].status == :pass
     connection = report.load_connections["ld1/1"]
     @test connection["requested_power"] ≈ connection["realized_power"] atol=1e-8
+    @test isfinite(connection["angle"])
     load_scale_connection = report.sensitivities["load_scale"]["load_connections"]["ld1/1"]
     @test load_scale_connection["magnitude_derivative"] < 0.0
     @test isfinite(load_scale_connection["path_dP_dV"])
@@ -95,6 +96,7 @@ using SparseArrays
     p_direction = report.sensitivities["directions"]["P"]["ld1/1"]
     @test p_direction["units"] == "W"
     @test p_direction["load_connections"]["ld1/1"]["magnitude_derivative"] < 0.0
+    @test isfinite(p_direction["load_connections"]["ld1/1"]["angle_derivative"])
     @test p_direction["load_connections"]["ld1/1"]["path_dP_dV_status"] == :not_available
     @test report.provenance["operability"]["scope"] == "static_ybus_linearized"
     @test report.provenance["operability"]["closure"] == "frozen_dispatch"
@@ -127,6 +129,7 @@ using SparseArrays
     @test isempty(snapshot_row.topology_missing_source_buses)
     @test isempty(snapshot_row.unsupported_reasons)
     @test snapshot_row.minimum_terminal_voltage ≈ report.load_connections["ld1/1"]["magnitude"]
+    @test snapshot_row.maximum_abs_terminal_angle_derivative >= 0.0
     @test snapshot_row.maximum_vuf === missing
     @test snapshot_row.maximum_vuf_status == :not_applicable
     @test snapshot_row.high_side_indicator_count == 1

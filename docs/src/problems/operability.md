@@ -280,6 +280,11 @@ absolute positive-sequence, negative-sequence, and VUF derivatives. These are
 summary fields only; the per-bus phasors and phase-level records remain the
 authoritative evidence.
 
+Each terminal record also retains its voltage angle in radians and its
+angle derivative for the declared perturbation. The snapshot projection keeps
+the maximum absolute terminal angle derivative as a compact screening field;
+the signed per-terminal value is required when interpreting phase rotation.
+
 trace = continue_opf_operability(net, pf;
     spec = OperabilitySpec(scaling_policy = SIUnitsScaling()),
     continuation = OperabilityContinuationSpec(initial_step = 0.1))
