@@ -512,6 +512,10 @@ The regression fixtures now exercise that cross-check on balanced delta and
 floating-neutral wye topology in addition to the scalar feeder, guarding the
 cross-phase and neutral-incidence signs that determine the Jacobian spectrum.
 
+An opt-in analytic load-scale `F_lambda` check now uses the zero-load/native-
+Ybus decomposition and compares that right-hand side with a central finite
+difference. This covers the directional forcing term separately from `F_z`.
+
 Local nonsingularity is not a branch classifier: high- and low-voltage sheets
 are both locally regular away from a fold.
 

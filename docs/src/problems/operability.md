@@ -96,6 +96,9 @@ finite-difference Jacobian against the analytic native static load-law
 assembly. The check retains its relative error and tolerance; zero-magnitude
 operating points are `:not_applicable` because the current-law derivative is
 singular or undefined there.
+Set `compute_analytic_sensitivity_validation=true` to validate the corresponding
+uniform-load `F_lambda` contribution from the zero-load/native-Ybus
+decomposition against a central finite difference.
 
 The aggregate result is `:pass` only when a requested primary operational claim
 (terminal-voltage bounds, sequence-unbalance bounds, HELM reachability, or the

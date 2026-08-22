@@ -79,6 +79,8 @@ numerical step-stability diagnostic, not an analytic-derivative validation.
 Set `compute_analytic_jacobian_validation=true` to compare the full residual
 Jacobian with the analytic native static load-law assembly. Unsupported
 zero-magnitude operating points are reported as `:not_applicable`.
+Set `compute_analytic_sensitivity_validation=true` to cross-check the analytic
+uniform-load ``F_λ`` contribution against a central finite difference.
 """
 struct OperabilitySpec
     scaling_policy::Union{Nothing,_OPERABILITY_SCALING_POLICY}
@@ -96,6 +98,8 @@ struct OperabilitySpec
     jacobian_validation_rtol::Float64
     compute_analytic_jacobian_validation::Bool
     analytic_jacobian_validation_rtol::Float64
+    compute_analytic_sensitivity_validation::Bool
+    analytic_sensitivity_validation_rtol::Float64
     sensitivity_step::Float64
     voltage_min::Float64
     voltage_max::Float64
@@ -126,6 +130,8 @@ struct OperabilitySpec
             jacobian_validation_rtol::Real=1e-3,
             compute_analytic_jacobian_validation::Bool=false,
             analytic_jacobian_validation_rtol::Real=1e-3,
+            compute_analytic_sensitivity_validation::Bool=false,
+            analytic_sensitivity_validation_rtol::Real=1e-3,
             sensitivity_step::Real=1e-5,
             voltage_min::Real=0.0,
             voltage_max::Real=Inf,
@@ -154,7 +160,8 @@ struct OperabilitySpec
         vals = (residual_atol, residual_rtol, jacobian_step,
                 jacobian_rank_rtol, sensitivity_step,
                 sensitivity_validation_atol, sensitivity_validation_rtol,
-                jacobian_validation_rtol, analytic_jacobian_validation_rtol)
+                jacobian_validation_rtol, analytic_jacobian_validation_rtol,
+                analytic_sensitivity_validation_rtol)
         all(x -> isfinite(Float64(x)) && Float64(x) > 0, vals) ||
             throw(ArgumentError("operability tolerances and steps must be finite and > 0"))
         isfinite(Float64(voltage_min)) && voltage_min >= 0 ||
@@ -174,6 +181,8 @@ struct OperabilitySpec
             Float64(jacobian_validation_rtol),
             compute_analytic_jacobian_validation,
             Float64(analytic_jacobian_validation_rtol),
+            compute_analytic_sensitivity_validation,
+            Float64(analytic_sensitivity_validation_rtol),
             Float64(sensitivity_step),
             Float64(voltage_min), Float64(voltage_max), Float64(vuf_max),
             compute_sensitivity, compute_sensitivity_validation,
@@ -834,6 +843,17 @@ function _operability_analytic_jacobian(net::Dict{String,Any}, lin, meta, x)
     end
     vcat(hcat(real.(dR_re), real.(dR_im)),
          hcat(imag.(dR_re), imag.(dR_im)))
+end
+
+function _operability_analytic_load_scale_rhs(net::Dict{String,Any}, lin, meta, x)
+    V = _operability_voltage_vector(lin, meta, x)
+    zero_net = _operability_scale_network(net, 0.0)
+    zero_lin = BMOPFTools.ybus_linearized(zero_net; fold=:constant_z)
+    length(zero_lin.nodes) == length(lin.nodes) || return nothing
+    all(zero_lin.nodes .== lin.nodes) || return nothing
+    load_residual = (lin.Y - zero_lin.Y) * V - lin.i_comp(V)
+    free = meta.free
+    vcat(real.(load_residual[free]), imag.(load_residual[free]))
 end
 
 function _operability_load_records(net, vmap; dvmap=nothing, uniform_scale=false)
@@ -1893,6 +1913,46 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
         get(analytic_jacobian_validation, "relative_error", nothing),
         get(analytic_jacobian_validation, "tolerance", nothing),
         String(analytic_jacobian_validation["message"]))
+    analytic_sensitivity_validation = Dict{String,Any}(
+        "status" => :not_applicable,
+        "message" => spec.compute_analytic_sensitivity_validation ?
+            "analytic load-scale F_lambda is unavailable at this operating point" :
+            "analytic load-scale F_lambda validation was not requested")
+    if spec.compute_analytic_sensitivity_validation && !isempty(x)
+        analytic_rhs = _operability_analytic_load_scale_rhs(net, lin, meta, x)
+        if analytic_rhs !== nothing
+            h_rhs = spec.sensitivity_step
+            plus_rhs = _operability_residual(
+                BMOPFTools.ybus_linearized(
+                    _operability_scale_network(net, 1.0 + h_rhs);
+                    fold=:constant_z), meta, x)
+            minus_rhs = _operability_residual(
+                BMOPFTools.ybus_linearized(
+                    _operability_scale_network(net, 1.0 - h_rhs);
+                    fold=:constant_z), meta, x)
+            finite_difference_rhs = (plus_rhs - minus_rhs) / (2h_rhs)
+            analytic_scaled = analytic_rhs ./ residual_scale
+            finite_difference_scaled = finite_difference_rhs ./ residual_scale
+            absolute_error = norm(analytic_scaled - finite_difference_scaled, Inf)
+            scale = max(1.0, norm(analytic_scaled, Inf), norm(finite_difference_scaled, Inf))
+            relative_error = absolute_error / scale
+            status = relative_error <= spec.analytic_sensitivity_validation_rtol ?
+                :pass : :inconclusive
+            analytic_sensitivity_validation = Dict{String,Any}(
+                "status" => status, "step" => h_rhs,
+                "absolute_error" => absolute_error,
+                "relative_error" => relative_error,
+                "tolerance" => spec.analytic_sensitivity_validation_rtol,
+                "message" => status === :pass ?
+                    "analytic native static load-scale F_lambda agrees with finite difference" :
+                    "analytic native static load-scale F_lambda disagrees with finite difference")
+        end
+    end
+    checks["analytic_load_scale_rhs_validation"] = OperabilityCheck(
+        Symbol(analytic_sensitivity_validation["status"]),
+        get(analytic_sensitivity_validation, "relative_error", nothing),
+        get(analytic_sensitivity_validation, "tolerance", nothing),
+        String(analytic_sensitivity_validation["message"]))
     linear_solver = if !isempty(J) &&
         (spec.compute_sensitivity || spec.jacobian_spectrum === :extremes)
         try
@@ -2094,6 +2154,7 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
         "sequence_sensitivity" => _operability_sequence_sensitivity_evidence(sensitivities),
         "jacobian_step_validation" => jacobian_validation,
         "analytic_jacobian_validation" => analytic_jacobian_validation,
+        "analytic_load_scale_rhs_validation" => analytic_sensitivity_validation,
         "complexity" => branch_complexity)
     if spec.compute_helm
         reachability = _operability_helm_reachability(net, node_voltages, spec)
@@ -2461,6 +2522,8 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
             "directional_sensitivity_validation"),
         jacobian_step_validation_status=check_status("jacobian_step_validation"),
         analytic_jacobian_validation_status=check_status("analytic_jacobian_validation"),
+        analytic_load_scale_rhs_validation_status=check_status(
+            "analytic_load_scale_rhs_validation"),
         endpoint_residual=result.endpoint_residual,
         endpoint_residual_normalized=result.endpoint_residual_normalized,
         smallest_singular_value=isempty(result.singular_values) ? NaN : last(result.singular_values),
