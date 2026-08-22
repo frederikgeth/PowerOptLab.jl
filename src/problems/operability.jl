@@ -2492,7 +2492,10 @@ certificate/HELM statuses, scaling/storage metadata, and the number of
 unsupported-scope reasons. It also retains scope status, closure/control
 closure, and source-topology readiness so pooled rows cannot hide an
 out-of-scope snapshot; the original unsupported-reason list is retained
-alongside its count. The upstream adapter version and public equilibrium seam
+alongside its count. Per-check status counts are included so a study table can
+distinguish a clean pass from a result with requested claims that were
+inconclusive or not applicable without reimplementing aggregation. The
+upstream adapter version and public equilibrium seam
 and deterministic adapter fingerprint are retained for reproducibility. It is
 a reporting projection of one snapshot, not a contingency or operating-envelope
 assessment.
@@ -2540,6 +2543,13 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
         snapshot_id=snapshot_id,
         schema_version="operability_snapshot_row/v1",
         status=result.status,
+        check_count=length(result.checks),
+        check_pass_count=count(check -> check.status === :pass, values(result.checks)),
+        check_fail_count=count(check -> check.status === :fail, values(result.checks)),
+        check_inconclusive_count=count(check -> check.status === :inconclusive,
+                                       values(result.checks)),
+        check_not_applicable_count=count(check -> check.status === :not_applicable,
+                                         values(result.checks)),
         endpoint_status=check_status("endpoint"),
         model_domain_status=check_status("model_domain"),
         jacobian_regular_status=check_status("jacobian_regular"),

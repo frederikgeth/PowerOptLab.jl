@@ -165,6 +165,9 @@ from future contingency or operating-envelope schemas. It also carries the
 upstream adapter version, deterministic adapter fingerprint, and public
 equilibrium seam used to produce the row. The fingerprint changes if the
 pinned upstream version or isolated private import list changes.
+The row also includes `check_count` and per-status check counts, making it
+possible to distinguish a clean pass from a result with requested checks that
+were inconclusive or not applicable without reimplementing aggregation.
 Sparse reports also
 retain the finite-difference row/column pattern in
 `complexity["jacobian_pattern"]`; this is an operating-point diagnostic, not a

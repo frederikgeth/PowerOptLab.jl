@@ -121,6 +121,14 @@ using SparseArrays
     @test snapshot_row.snapshot_id == "base"
     @test snapshot_row.schema_version == "operability_snapshot_row/v1"
     @test snapshot_row.status == :pass
+    @test snapshot_row.check_count == length(report.checks)
+    @test snapshot_row.check_pass_count > 0
+    @test snapshot_row.check_fail_count == 0
+    @test snapshot_row.check_inconclusive_count == 0
+    @test snapshot_row.check_not_applicable_count > 0
+    @test snapshot_row.check_pass_count + snapshot_row.check_fail_count +
+          snapshot_row.check_inconclusive_count + snapshot_row.check_not_applicable_count ==
+          snapshot_row.check_count
     @test snapshot_row.endpoint_status == :pass
     @test snapshot_row.model_domain_status == :pass
     @test snapshot_row.claim_scope == "one_solved_equilibrium_only"
