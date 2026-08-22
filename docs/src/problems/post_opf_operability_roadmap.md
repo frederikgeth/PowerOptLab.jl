@@ -502,6 +502,12 @@ therefore still FD-versus-FD-composed for the network residual; ForwardDiff or
 analytic network/device derivatives remain an explicit follow-on before
 claiming the full Milestone 2 exit criterion.
 
+The opt-in `compute_analytic_jacobian_validation` path now assembles the full
+native static rectangular Jacobian from the analytic load-law current tangent
+and compares it with finite differences, including wye/delta incidence. This
+is the first analytic-versus-FD network cross-check; endogenous controls and
+generator/IBR equations remain outside the native seam.
+
 Local nonsingularity is not a branch classifier: high- and low-voltage sheets
 are both locally regular away from a fold.
 

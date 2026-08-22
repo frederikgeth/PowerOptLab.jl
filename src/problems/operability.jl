@@ -76,6 +76,9 @@ large-network path.
 Set `compute_jacobian_validation=true` to compare the retained finite-difference
 Jacobian with a second evaluation at one-tenth the configured step. This is a
 numerical step-stability diagnostic, not an analytic-derivative validation.
+Set `compute_analytic_jacobian_validation=true` to compare the full residual
+Jacobian with the analytic native static load-law assembly. Unsupported
+zero-magnitude operating points are reported as `:not_applicable`.
 """
 struct OperabilitySpec
     scaling_policy::Union{Nothing,_OPERABILITY_SCALING_POLICY}
@@ -91,6 +94,8 @@ struct OperabilitySpec
     record_jacobian_pattern::Bool
     compute_jacobian_validation::Bool
     jacobian_validation_rtol::Float64
+    compute_analytic_jacobian_validation::Bool
+    analytic_jacobian_validation_rtol::Float64
     sensitivity_step::Float64
     voltage_min::Float64
     voltage_max::Float64
@@ -119,6 +124,8 @@ struct OperabilitySpec
             record_jacobian_pattern::Bool=false,
             compute_jacobian_validation::Bool=false,
             jacobian_validation_rtol::Real=1e-3,
+            compute_analytic_jacobian_validation::Bool=false,
+            analytic_jacobian_validation_rtol::Real=1e-3,
             sensitivity_step::Real=1e-5,
             voltage_min::Real=0.0,
             voltage_max::Real=Inf,
@@ -147,7 +154,7 @@ struct OperabilitySpec
         vals = (residual_atol, residual_rtol, jacobian_step,
                 jacobian_rank_rtol, sensitivity_step,
                 sensitivity_validation_atol, sensitivity_validation_rtol,
-                jacobian_validation_rtol)
+                jacobian_validation_rtol, analytic_jacobian_validation_rtol)
         all(x -> isfinite(Float64(x)) && Float64(x) > 0, vals) ||
             throw(ArgumentError("operability tolerances and steps must be finite and > 0"))
         isfinite(Float64(voltage_min)) && voltage_min >= 0 ||
@@ -165,6 +172,8 @@ struct OperabilitySpec
             Float64(jacobian_rank_rtol), jacobian_spectrum, jacobian_storage,
             record_jacobian_pattern, compute_jacobian_validation,
             Float64(jacobian_validation_rtol),
+            compute_analytic_jacobian_validation,
+            Float64(analytic_jacobian_validation_rtol),
             Float64(sensitivity_step),
             Float64(voltage_min), Float64(voltage_max), Float64(vuf_max),
             compute_sensitivity, compute_sensitivity_validation,
@@ -768,6 +777,63 @@ function _operability_connection_power_slope_analytic(sl, magnitude)
         t.nl[1] * γ / sl.Vnom * (magnitude / sl.Vnom)^(γ - 1.0)
     end
     component_derivative(sl.pt) + im * component_derivative(sl.qt)
+end
+
+function _operability_subload_nz_power_slope_analytic(sl, magnitude)
+    magnitude < 0.0 && throw(ArgumentError("voltage magnitude must be nonnegative"))
+    component_derivative(t) = if t.nl === nothing
+        t.cs
+    elseif magnitude == 0.0
+        γ = t.nl[2]
+        γ == 1.0 ? t.nl[1] / sl.Vnom : (γ > 1.0 ? 0.0 : Inf)
+    else
+        γ = t.nl[2]
+        t.nl[1] * γ / sl.Vnom * (magnitude / sl.Vnom)^(γ - 1.0)
+    end
+    component_derivative(sl.pt) + im * component_derivative(sl.qt)
+end
+
+function _operability_analytic_jacobian(net::Dict{String,Any}, lin, meta, x)
+    nf = length(meta.free)
+    nf == 0 && return zeros(Float64, 0, 0)
+    V = _operability_voltage_vector(lin, meta, x)
+    free_index = Dict{Int,Int}(global_index => local_index for
+        (local_index, global_index) in enumerate(meta.free))
+    dR_re = ComplexF64.(lin.Y[meta.free, meta.free])
+    dR_im = im .* dR_re
+    for load in values(get(net, "load", Dict()))
+        for sl in _load_subloads(load, net)
+            pi = get(lin.index, sl.pos, 0)
+            ni = sl.neg === nothing ? 0 : get(lin.index, sl.neg, 0)
+            vp = pi == 0 ? 0.0im : V[pi]
+            vn = ni == 0 ? 0.0im : V[ni]
+            u = vp - vn
+            a = abs(u)
+            a > 0.0 || return nothing
+            s = ComplexF64(_subload_S_nz(sl, a))
+            ds = ComplexF64(_operability_subload_nz_power_slope_analytic(sl, a))
+            all(isfinite, (real(s), imag(s), real(ds), imag(ds))) || return nothing
+            k = conj(s) / a^2
+            dk = conj(ds) / a^2 - 2.0 * conj(s) / a^3
+            dcurrent(du) = k * du + u * dk * real(conj(u) * du) / a
+            for (output_index, sign_out) in ((pi, 1.0), (ni, -1.0))
+                output_index == 0 && continue
+                output_local = get(free_index, output_index, 0)
+                output_local == 0 && continue
+                for (input_index, sign_in) in ((pi, 1.0), (ni, -1.0))
+                    input_index == 0 && continue
+                    input_local = get(free_index, input_index, 0)
+                    input_local == 0 && continue
+                    dR_re[output_local, input_local] +=
+                        sign_out * sign_in * dcurrent(1.0)
+                    dR_im[output_local, input_local] +=
+                        sign_out * sign_in * dcurrent(im)
+                end
+            end
+        end
+    end
+    vcat(hcat(real.(dR_re), real.(dR_im)),
+         hcat(imag.(dR_re), imag.(dR_im)))
 end
 
 function _operability_load_records(net, vmap; dvmap=nothing, uniform_scale=false)
@@ -1800,6 +1866,33 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
         get(jacobian_validation, "relative_error", nothing),
         get(jacobian_validation, "tolerance", nothing),
         String(jacobian_validation["message"]))
+    analytic_jacobian_validation = Dict{String,Any}(
+        "status" => :not_applicable,
+        "message" => spec.compute_analytic_jacobian_validation ?
+            "analytic Jacobian validation is unavailable at this operating point" :
+            "analytic Jacobian validation was not requested")
+    if spec.compute_analytic_jacobian_validation && !isempty(x)
+        J_analytic = _operability_analytic_jacobian(net, lin, meta, x)
+        if J_analytic !== nothing
+            absolute_error = norm(J - J_analytic, Inf)
+            scale = max(1.0, norm(J, Inf), norm(J_analytic, Inf))
+            relative_error = absolute_error / scale
+            status = relative_error <= spec.analytic_jacobian_validation_rtol ?
+                :pass : :inconclusive
+            analytic_jacobian_validation = Dict{String,Any}(
+                "status" => status, "absolute_error" => absolute_error,
+                "relative_error" => relative_error,
+                "tolerance" => spec.analytic_jacobian_validation_rtol,
+                "message" => status === :pass ?
+                    "finite-difference Jacobian agrees with analytic native static assembly" :
+                    "finite-difference Jacobian disagrees with analytic native static assembly")
+        end
+    end
+    checks["analytic_jacobian_validation"] = OperabilityCheck(
+        Symbol(analytic_jacobian_validation["status"]),
+        get(analytic_jacobian_validation, "relative_error", nothing),
+        get(analytic_jacobian_validation, "tolerance", nothing),
+        String(analytic_jacobian_validation["message"]))
     linear_solver = if !isempty(J) &&
         (spec.compute_sensitivity || spec.jacobian_spectrum === :extremes)
         try
@@ -2000,6 +2093,7 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
         "dP_dV" => _operability_path_dpdv_evidence(sensitivities),
         "sequence_sensitivity" => _operability_sequence_sensitivity_evidence(sensitivities),
         "jacobian_step_validation" => jacobian_validation,
+        "analytic_jacobian_validation" => analytic_jacobian_validation,
         "complexity" => branch_complexity)
     if spec.compute_helm
         reachability = _operability_helm_reachability(net, node_voltages, spec)
@@ -2366,6 +2460,7 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
         directional_sensitivity_validation_status=check_status(
             "directional_sensitivity_validation"),
         jacobian_step_validation_status=check_status("jacobian_step_validation"),
+        analytic_jacobian_validation_status=check_status("analytic_jacobian_validation"),
         endpoint_residual=result.endpoint_residual,
         endpoint_residual_normalized=result.endpoint_residual_normalized,
         smallest_singular_value=isempty(result.singular_values) ? NaN : last(result.singular_values),

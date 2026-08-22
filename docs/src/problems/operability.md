@@ -91,6 +91,12 @@ discrepancy, and a validation status. The full network residual and Jacobian
 remain finite-difference diagnostics until the broader analytic/AD Milestone 2
 cross-check is completed.
 
+Set `compute_analytic_jacobian_validation=true` to compare the full scaled
+finite-difference Jacobian against the analytic native static load-law
+assembly. The check retains its relative error and tolerance; zero-magnitude
+operating points are `:not_applicable` because the current-law derivative is
+singular or undefined there.
+
 The aggregate result is `:pass` only when a requested primary operational claim
 (terminal-voltage bounds, sequence-unbalance bounds, HELM reachability, or the
 fixed-point certificate) has passed. If no such claim was requested, the result
