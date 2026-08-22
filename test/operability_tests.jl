@@ -52,6 +52,11 @@ using SparseArrays
     @test dangling_source_report.status == :not_applicable
     @test !isempty(dangling_source_report.unsupported)
     @test dangling_source_report.provenance["operability"]["status"] == :not_applicable
+    dangling_source_row = operability_snapshot_row(dangling_source_report;
+                                                    snapshot_id="out_of_scope")
+    @test dangling_source_row.status == :not_applicable
+    @test dangling_source_row.check_not_applicable_count == dangling_source_row.check_count
+    @test dangling_source_row.primary_check_count == dangling_source_row.check_count
 
     blank_source_net = deepcopy(net)
     delete!(blank_source_net["voltage_source"]["vs"], "bus")
@@ -80,6 +85,10 @@ using SparseArrays
     @test zero_report.checks["model_domain"].status == :inconclusive
     @test any(occursin("zero terminal voltage", reason)
               for reason in zero_report.checks["model_domain"].value)
+    @test zero_report.status == :fail
+    zero_row = operability_snapshot_row(zero_report; snapshot_id="zero_domain")
+    @test zero_row.primary_check_inconclusive_count > 0
+    @test zero_row.primary_check_fail_count > 0
     @test report.checks["jacobian_regular"].status == :pass
     @test report.checks["jacobian_step_validation"].status == :not_applicable
     @test report.checks["analytic_jacobian_validation"].status == :not_applicable
@@ -129,6 +138,9 @@ using SparseArrays
     @test snapshot_row.check_pass_count + snapshot_row.check_fail_count +
           snapshot_row.check_inconclusive_count + snapshot_row.check_not_applicable_count ==
           snapshot_row.check_count
+    @test snapshot_row.primary_check_count == snapshot_row.check_count
+    @test snapshot_row.primary_check_pass_count == snapshot_row.check_pass_count
+    @test snapshot_row.primary_check_inconclusive_count == 0
     @test snapshot_row.endpoint_status == :pass
     @test snapshot_row.model_domain_status == :pass
     @test snapshot_row.claim_scope == "one_solved_equilibrium_only"
@@ -331,6 +343,9 @@ using SparseArrays
           ("implicit_sparse_factorization", "implicit_dense_factorization")
     certificate_row = operability_snapshot_row(certificate_report)
     @test certificate_row.fixed_point_certificate_status == :pass
+    @test certificate_row.primary_check_count == certificate_row.check_count - 1
+    @test certificate_row.primary_check_pass_count == certificate_row.check_pass_count - 1
+    @test certificate_row.primary_check_inconclusive_count == certificate_row.check_inconclusive_count
     @test certificate_row.fixed_point_condition_margin > 0.0
     @test certificate_row.fixed_point_max_condition_margin >
           certificate_row.fixed_point_condition_margin
@@ -445,6 +460,9 @@ using SparseArrays
     bad_report = check_opf_operability(net, bad; spec)
     @test bad_report.status == :fail
     @test bad_report.checks["endpoint"].status == :fail
+    bad_row = operability_snapshot_row(bad_report; snapshot_id="bad_endpoint")
+    @test bad_row.primary_check_fail_count > 0
+    @test bad_row.primary_check_inconclusive_count == 0
 
     # The balanced fixture uses the phase ordering/convention shared with the
     # existing inverter symmetrical-component helper.

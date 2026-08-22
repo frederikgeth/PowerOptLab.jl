@@ -167,7 +167,10 @@ equilibrium seam used to produce the row. The fingerprint changes if the
 pinned upstream version or isolated private import list changes.
 The row also includes `check_count` and per-status check counts, making it
 possible to distinguish a clean pass from a result with requested checks that
-were inconclusive or not applicable without reimplementing aggregation.
+were inconclusive or not applicable without reimplementing aggregation. The
+`primary_check_*` fields repeat those counts after excluding the complementary
+candidate-local fixed-point region, matching the rule that this evidence does
+not downgrade the aggregate snapshot verdict.
 Sparse reports also
 retain the finite-difference row/column pattern in
 `complexity["jacobian_pattern"]`; this is an operating-point diagnostic, not a

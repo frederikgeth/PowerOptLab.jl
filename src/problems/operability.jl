@@ -1777,6 +1777,16 @@ function _operability_overall(checks::Dict{String,OperabilityCheck})
     any(status === :pass for status in claim_statuses) ? :pass : :not_applicable
 end
 
+function _operability_check_status_counts(checks::Dict{String,OperabilityCheck};
+                                          primary_only::Bool=false)
+    counts = Dict{Symbol,Int}(status => 0 for status in _OPERABILITY_STATUSES)
+    for (key, check) in checks
+        primary_only && key == "fixed_point_local_region" && continue
+        counts[check.status] = get(counts, check.status, 0) + 1
+    end
+    counts
+end
+
 """
     check_opf_operability(net, solution; spec, context=nothing)
 
@@ -2494,8 +2504,10 @@ closure, and source-topology readiness so pooled rows cannot hide an
 out-of-scope snapshot; the original unsupported-reason list is retained
 alongside its count. Per-check status counts are included so a study table can
 distinguish a clean pass from a result with requested claims that were
-inconclusive or not applicable without reimplementing aggregation. The
-upstream adapter version and public equilibrium seam
+inconclusive or not applicable without reimplementing aggregation. It also
+reports the same counts after excluding the explicitly complementary
+`fixed_point_local_region` check, which is not allowed to downgrade the
+primary verdict. The upstream adapter version and public equilibrium seam
 and deterministic adapter fingerprint are retained for reproducibility. It is
 a reporting projection of one snapshot, not a contingency or operating-envelope
 assessment.
@@ -2537,6 +2549,9 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
     operability = get(result.provenance, "operability", Dict{String,Any}())
     upstream = get(operability, "upstream", Dict{String,Any}())
     topology = get(operability, "topology", Dict{String,Any}())
+    all_check_counts = _operability_check_status_counts(result.checks)
+    primary_check_counts = _operability_check_status_counts(result.checks;
+                                                             primary_only=true)
     check_status(name) = get(result.checks, name,
         OperabilityCheck(:not_applicable, nothing, nothing, "check unavailable")).status
     (
@@ -2544,12 +2559,15 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
         schema_version="operability_snapshot_row/v1",
         status=result.status,
         check_count=length(result.checks),
-        check_pass_count=count(check -> check.status === :pass, values(result.checks)),
-        check_fail_count=count(check -> check.status === :fail, values(result.checks)),
-        check_inconclusive_count=count(check -> check.status === :inconclusive,
-                                       values(result.checks)),
-        check_not_applicable_count=count(check -> check.status === :not_applicable,
-                                         values(result.checks)),
+        check_pass_count=all_check_counts[:pass],
+        check_fail_count=all_check_counts[:fail],
+        check_inconclusive_count=all_check_counts[:inconclusive],
+        check_not_applicable_count=all_check_counts[:not_applicable],
+        primary_check_count=sum(values(primary_check_counts)),
+        primary_check_pass_count=primary_check_counts[:pass],
+        primary_check_fail_count=primary_check_counts[:fail],
+        primary_check_inconclusive_count=primary_check_counts[:inconclusive],
+        primary_check_not_applicable_count=primary_check_counts[:not_applicable],
         endpoint_status=check_status("endpoint"),
         model_domain_status=check_status("model_domain"),
         jacobian_regular_status=check_status("jacobian_regular"),
