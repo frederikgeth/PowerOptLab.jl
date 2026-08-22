@@ -178,6 +178,12 @@ r.p_dc     # DC-link power = p_conv + p_loss  (non-branching)
 r.v_int_mag  # internal EMF magnitude per phase (V)
 ```
 
+For feeder-scale matched controller experiments, the
+[`scripts/enwl_advanced_ibr`](scripts/enwl_advanced_ibr/README.md) campaign
+adapts the 30-, 99-, and 538-bus ENWL snapshots in a sibling BMOPFDraftData
+checkout. The adapter explicitly labels its single-phase-to-three-phase PV
+retrofit and preserves the source cases and provenance.
+
 ## Development setup
 
 BMOPFTools is not yet registered. For development, use a local checkout; CI and
