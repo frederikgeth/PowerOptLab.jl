@@ -515,6 +515,10 @@ cross-phase and neutral-incidence signs that determine the Jacobian spectrum.
 An opt-in analytic load-scale `F_lambda` check now uses the zero-load/native-
 Ybus decomposition and compares that right-hand side with a central finite
 difference. This covers the directional forcing term separately from `F_z`.
+The regression matrix now exercises that check across constant-I/Z and
+ZIP/exponential laws, balanced delta incidence, and floating-neutral wye
+incidence; the cross-check remains explicitly native-static evidence rather
+than a claim about unavailable generator, IBR, or controller equations.
 
 Local nonsingularity is not a branch classifier: high- and low-voltage sheets
 are both locally regular away from a fold.

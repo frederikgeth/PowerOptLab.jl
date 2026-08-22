@@ -474,6 +474,12 @@ using SparseArrays
     @test delta_analytic.checks["analytic_jacobian_validation"].status == :pass
     @test delta_analytic.branch_evidence["analytic_jacobian_validation"][
         "relative_error"] <= 1e-3
+    delta_rhs_analytic = check_opf_operability(delta_net, delta_pf;
+        spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
+            compute_analytic_sensitivity_validation=true))
+    @test delta_rhs_analytic.checks["analytic_load_scale_rhs_validation"].status == :pass
+    @test delta_rhs_analytic.branch_evidence["analytic_load_scale_rhs_validation"][
+        "relative_error"] <= 1e-3
     @test delta_report.provenance["operability"]["model_inventory"]["load_configurations"] ==
           ["DELTA"]
     delta_certificate = check_opf_operability(delta_net, delta_pf;
@@ -513,6 +519,12 @@ using SparseArrays
             compute_analytic_jacobian_validation=true))
     @test floating_analytic.checks["analytic_jacobian_validation"].status == :pass
     @test floating_analytic.branch_evidence["analytic_jacobian_validation"][
+        "relative_error"] <= 1e-3
+    floating_rhs_analytic = check_opf_operability(floating_net, floating_pf;
+        spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
+            compute_analytic_sensitivity_validation=true))
+    @test floating_rhs_analytic.checks["analytic_load_scale_rhs_validation"].status == :pass
+    @test floating_rhs_analytic.branch_evidence["analytic_load_scale_rhs_validation"][
         "relative_error"] <= 1e-3
     # A dedicated single-edge probe guards tightness of the Euclidean incidence
     # factor. Unlike the multi-edge four-wire smoke test below, this fixture
@@ -685,11 +697,13 @@ using SparseArrays
         model_pf = solve_pf(model_net; per_unit=false)
         model_report = check_opf_operability(model_net, model_pf;
             spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
-                compute_sensitivity_validation=true))
+                compute_sensitivity_validation=true,
+                compute_analytic_sensitivity_validation=true))
         @test model_report.status == :not_applicable
         @test model_report.provenance["operability"]["model_inventory"]["load_models"] == [model]
         @test model_report.checks["load_scale_sensitivity_validation"].status == :pass
         @test model_report.checks["directional_sensitivity_validation"].status == :pass
+        @test model_report.checks["analytic_load_scale_rhs_validation"].status == :pass
         model_trace = continue_opf_operability(model_net, model_pf;
             spec=OperabilitySpec(scaling_policy=SIUnitsScaling()),
             continuation=OperabilityContinuationSpec(initial_step=0.2))
