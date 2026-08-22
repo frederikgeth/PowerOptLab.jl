@@ -676,6 +676,10 @@ using SparseArrays
     @test helm_report.checks["helm_reachability"].status == :pass
     @test helm_report.branch_evidence["reachability"]["base"] == "energized_no_load_germ"
     @test helm_report.branch_evidence["reachability"]["endpoint_mismatch"] < 1e-4
+    helm_row = operability_snapshot_row(helm_report; snapshot_id="helm")
+    @test helm_row.helm_reachability_status == :pass
+    @test helm_row.helm_endpoint_mismatch < helm_row.helm_endpoint_limit
+    @test helm_row.helm_common_node_count > 0
 
     current_net = single_bus_net(pload=100.0)
     current_net["load"]["ld1"]["model"] = "constant_current"
