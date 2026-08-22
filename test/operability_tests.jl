@@ -736,6 +736,8 @@ using SparseArrays
     @test trace.provenance["continuation"]["lambda_forcing_method"] ==
           "finite_difference"
     @test trace.provenance["continuation"]["analytic_jacobian_validation"]["status"] == :pass
+    @test trace.provenance["continuation"]["analytic_load_scale_validation"]["status"] == :pass
+    @test trace.provenance["continuation"]["analytic_load_scale_validation"]["relative_error"] <= 1e-3
     @test_throws ArgumentError OperabilityContinuationSpec(initial_step=0.01, min_step=0.1)
 
     pseudo_trace = continue_opf_operability_pseudo_arclength(net, pf;
@@ -754,6 +756,8 @@ using SparseArrays
     @test pseudo_trace.provenance["continuation"]["jacobian_method"] ==
           "analytic_native_static"
     @test pseudo_trace.provenance["continuation"]["analytic_jacobian_validation"]["status"] == :pass
+    @test pseudo_trace.provenance["continuation"]["analytic_load_scale_validation"]["status"] == :pass
+    @test pseudo_trace.provenance["continuation"]["analytic_load_scale_validation"]["relative_error"] <= 1e-3
     @test all(>(0.0), pseudo_trace.provenance["continuation"]["arclength_state_scale"])
     @test !isempty(pseudo_trace.provenance["continuation"]["curvature_history"])
     @test all(isfinite, pseudo_trace.provenance["continuation"]["curvature_history"])

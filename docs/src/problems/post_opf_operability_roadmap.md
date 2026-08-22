@@ -589,7 +589,11 @@ the derivative seam to controls, generators, or IBRs.
 Bordered fold localization now uses the same λ-matched analytic native Jacobian
 inside ``Jv=0`` when available and records its method in fold provenance/events.
 Natural, pseudo-arclength, and bordered traces also retain an endpoint
-analytic-versus-finite-difference Jacobian validation record.
+analytic-versus-finite-difference Jacobian validation record. Natural and
+pseudo-arclength traces additionally retain an independent endpoint validation
+of the analytic load-scale forcing term ``F_\lambda`` against central finite
+differences, so both ingredients of the augmented tangent carry numerical
+evidence.
 
 The initial default homotopy proposed for review is:
 

@@ -258,6 +258,48 @@ function _continuation_analytic_jacobian_validation(net, lin, meta, x, coords, c
             "analytic native Jacobian disagrees with finite difference")
 end
 
+function _continuation_analytic_load_scale_validation(
+        net, lin, zero_lin, meta, x, coords, step::Real;
+        tolerance::Real=1e-3)
+    analytic = try
+        _operability_analytic_load_scale_rhs(net, lin, meta, x; zero_lin=zero_lin)
+    catch
+        nothing
+    end
+    analytic === nothing && return Dict{String,Any}(
+        "status" => :not_applicable,
+        "message" => "analytic native load-scale F_lambda is unavailable at this point")
+    _, residual_scale = _operability_scales(lin, meta, coords)
+    finite = try
+        vec(finite_difference_jacobian(
+            lambda -> begin
+                scaled = _operability_scale_network(net, lambda[1])
+                scaled_lin = BMOPFTools.ybus_linearized(scaled; fold=:constant_z)
+                _operability_residual(scaled_lin, meta, x)
+            end, [1.0]; step=step)[:, 1])
+    catch
+        return Dict{String,Any}(
+            "status" => :inconclusive,
+            "step" => Float64(step),
+            "message" => "finite-difference load-scale F_lambda validation failed")
+    end
+    analytic_scaled = analytic ./ residual_scale
+    finite_scaled = finite ./ residual_scale
+    absolute_error = norm(analytic_scaled - finite_scaled, Inf)
+    scale = max(1.0, norm(analytic_scaled, Inf), norm(finite_scaled, Inf))
+    relative_error = absolute_error / scale
+    status = relative_error <= Float64(tolerance) ? :pass : :inconclusive
+    Dict{String,Any}(
+        "status" => status,
+        "absolute_error" => absolute_error,
+        "relative_error" => relative_error,
+        "tolerance" => Float64(tolerance),
+        "step" => Float64(step),
+        "message" => status === :pass ?
+            "analytic native load-scale F_lambda agrees with finite difference" :
+            "analytic native load-scale F_lambda disagrees with finite difference")
+end
+
 function _continuation_corrector(lin, meta, x0, coords, cfg;
                                  net=nothing, analytic::Bool=false)
     x = copy(x0)
@@ -389,6 +431,8 @@ function continue_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
         "analytic_native_static" : "finite_difference"
     analytic_jacobian_validation = _continuation_analytic_jacobian_validation(
         net, lin_target, meta, target_x, coords, continuation)
+    analytic_load_scale_validation = _continuation_analytic_load_scale_validation(
+        net, lin_target, lin_zero, meta, target_x, coords, continuation.jacobian_step)
     Jzero, state_scale, residual_scale = _continuation_scaled_jacobian(
         lin_zero, meta, target_x, coords, continuation;
         net=net_zero, analytic=analytic_jacobian_available)
@@ -510,6 +554,7 @@ function continue_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
         "jacobian_method" => analytic_jacobian_method,
         "lambda_forcing_method" => "finite_difference",
         "analytic_jacobian_validation" => analytic_jacobian_validation,
+        "analytic_load_scale_validation" => analytic_load_scale_validation,
         "stop_on_voltage_limit" => stop_on_voltage_limit,
         "margin" => _continuation_margin(events))
     OperabilityContinuationResult(status, message, lambdas, states, node_voltages,
@@ -928,6 +973,8 @@ function continue_opf_operability_pseudo_arclength(
         "analytic_native_static" : "finite_difference"
     analytic_jacobian_validation = _continuation_analytic_jacobian_validation(
         net, lin_target, meta, target_x, coords, natural_cfg)
+    analytic_load_scale_validation = _continuation_analytic_load_scale_validation(
+        net, lin_target, lin_zero, meta, target_x, coords, natural_cfg.jacobian_step)
     Jzero, state_scale, residual_scale = _continuation_scaled_jacobian(
         lin_zero, meta, target_x, coords, natural_cfg;
         net=net_zero, analytic=analytic_jacobian_available)
@@ -1205,6 +1252,7 @@ function continue_opf_operability_pseudo_arclength(
         "lambda_forcing_method" => analytic_forcing_method,
         "jacobian_method" => analytic_jacobian_method,
         "analytic_jacobian_validation" => analytic_jacobian_validation,
+        "analytic_load_scale_validation" => analytic_load_scale_validation,
         "arclength_state_scale" => arc_state_scale,
         "arclength_steps" => arclength_steps,
         "curvature_history" => curvature_history,
