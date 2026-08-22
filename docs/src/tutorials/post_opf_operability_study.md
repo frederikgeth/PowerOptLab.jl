@@ -122,6 +122,7 @@ row.maximum_abs_negative_sequence_magnitude_derivative
 row.maximum_abs_vuf_derivative
 row.endpoint_status
 row.jacobian_regular_status
+row.jacobian_step_validation_status
 row.terminal_voltage_bounds_status
 row.sequence_unbalance_status
 row.high_side_indicator_count

@@ -73,6 +73,7 @@ using SparseArrays
     @test report.checks["endpoint"].value == report.endpoint_residual_normalized
     @test report.endpoint_residual < 1e-6
     @test report.checks["jacobian_regular"].status == :pass
+    @test report.checks["jacobian_step_validation"].status == :not_applicable
     @test report.checks["load_scale_sensitivity"].status == :pass
     connection = report.load_connections["ld1/1"]
     @test connection["requested_power"] ≈ connection["realized_power"] atol=1e-8
@@ -251,6 +252,12 @@ using SparseArrays
           :not_applicable
     @test reduced_spectrum_report.branch_evidence["complexity"]["jacobian_spectrum_mode"] ==
           "extremes"
+    jacobian_validation_report = check_opf_operability(net, pf;
+        spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
+            compute_jacobian_validation=true))
+    @test jacobian_validation_report.checks["jacobian_step_validation"].status == :pass
+    @test jacobian_validation_report.branch_evidence["jacobian_step_validation"][
+        "relative_error"] <= 1e-3
     sparse_spectrum_report = check_opf_operability(net, pf;
         spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
             voltage_min=800.0, voltage_max=1100.0,

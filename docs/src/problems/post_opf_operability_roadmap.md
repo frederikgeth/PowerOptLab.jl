@@ -384,6 +384,12 @@ including a compact maximum-absolute angle derivative in snapshot rows. This
 completes the first-slice reporting of both magnitude and phase directional
 voltage response without treating phase rotation as a voltage-limit verdict.
 
+An opt-in Jacobian step-stability check now compares the scaled finite-
+difference matrix at ``h`` and ``h/10``. A material difference is retained as
+`:inconclusive` numerical evidence rather than being promoted to an operability
+failure; analytic/automatic-differentiation cross-checks remain a later
+Milestone 2 task.
+
 The processor should not create a second, silently divergent copy of the OPF
 device equations. An independent evaluation path is still required for
 validation; independence should come from the residual assembly and numerical

@@ -73,6 +73,9 @@ right-hand-side solves; this reduced path omits the full SVD by design.
 Set `record_jacobian_pattern=true` when sparse row/column provenance is needed;
 the default `false` avoids retaining two explicit integer arrays in the sparse
 large-network path.
+Set `compute_jacobian_validation=true` to compare the retained finite-difference
+Jacobian with a second evaluation at one-tenth the configured step. This is a
+numerical step-stability diagnostic, not an analytic-derivative validation.
 """
 struct OperabilitySpec
     scaling_policy::Union{Nothing,_OPERABILITY_SCALING_POLICY}
@@ -86,6 +89,8 @@ struct OperabilitySpec
     jacobian_spectrum::Symbol
     jacobian_storage::Symbol
     record_jacobian_pattern::Bool
+    compute_jacobian_validation::Bool
+    jacobian_validation_rtol::Float64
     sensitivity_step::Float64
     voltage_min::Float64
     voltage_max::Float64
@@ -112,6 +117,8 @@ struct OperabilitySpec
             jacobian_spectrum::Symbol=:full,
             jacobian_storage::Symbol=:dense,
             record_jacobian_pattern::Bool=false,
+            compute_jacobian_validation::Bool=false,
+            jacobian_validation_rtol::Real=1e-3,
             sensitivity_step::Real=1e-5,
             voltage_min::Real=0.0,
             voltage_max::Real=Inf,
@@ -139,7 +146,8 @@ struct OperabilitySpec
             throw(ArgumentError("jacobian_storage=:sparse requires jacobian_spectrum=:extremes"))
         vals = (residual_atol, residual_rtol, jacobian_step,
                 jacobian_rank_rtol, sensitivity_step,
-                sensitivity_validation_atol, sensitivity_validation_rtol)
+                sensitivity_validation_atol, sensitivity_validation_rtol,
+                jacobian_validation_rtol)
         all(x -> isfinite(Float64(x)) && Float64(x) > 0, vals) ||
             throw(ArgumentError("operability tolerances and steps must be finite and > 0"))
         isfinite(Float64(voltage_min)) && voltage_min >= 0 ||
@@ -155,7 +163,8 @@ struct OperabilitySpec
         new(scaling_policy, scaling_bases, provenance, closure,
             Float64(residual_atol), Float64(residual_rtol), Float64(jacobian_step),
             Float64(jacobian_rank_rtol), jacobian_spectrum, jacobian_storage,
-            record_jacobian_pattern,
+            record_jacobian_pattern, compute_jacobian_validation,
+            Float64(jacobian_validation_rtol),
             Float64(sensitivity_step),
             Float64(voltage_min), Float64(voltage_max), Float64(vuf_max),
             compute_sensitivity, compute_sensitivity_validation,
@@ -1723,6 +1732,40 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
             y -> _operability_residual(lin, meta, y), x; step=spec.jacobian_step)
     end
     J = _operability_scaled_jacobian(Jphys, state_scale, residual_scale)
+    jacobian_validation = Dict{String,Any}(
+        "status" => :not_applicable,
+        "message" => spec.compute_jacobian_validation ?
+            "no non-source voltage state remains" : "Jacobian step validation was not requested")
+    if spec.compute_jacobian_validation && !isempty(x)
+        validation_step = spec.jacobian_step / 10.0
+        Jphys_validation = if spec.jacobian_storage === :sparse
+            _operability_sparse_finite_difference_jacobian(
+                y -> _operability_residual(lin, meta, y), x; step=validation_step)
+        else
+            finite_difference_jacobian(
+                y -> _operability_residual(lin, meta, y), x; step=validation_step)
+        end
+        J_validation = _operability_scaled_jacobian(
+            Jphys_validation, state_scale, residual_scale)
+        absolute_error = norm(J - J_validation, Inf)
+        scale = max(1.0, norm(J, Inf), norm(J_validation, Inf))
+        relative_error = absolute_error / scale
+        status = relative_error <= spec.jacobian_validation_rtol ? :pass : :inconclusive
+        jacobian_validation = Dict{String,Any}(
+            "status" => status, "step" => spec.jacobian_step,
+            "validation_step" => validation_step,
+            "absolute_error" => absolute_error,
+            "relative_error" => relative_error,
+            "tolerance" => spec.jacobian_validation_rtol,
+            "message" => status === :pass ?
+                "finite-difference Jacobian is stable under one-tenth step refinement" :
+                "finite-difference Jacobian changes materially under one-tenth step refinement")
+    end
+    checks["jacobian_step_validation"] = OperabilityCheck(
+        Symbol(jacobian_validation["status"]),
+        get(jacobian_validation, "relative_error", nothing),
+        get(jacobian_validation, "tolerance", nothing),
+        String(jacobian_validation["message"]))
     linear_solver = if !isempty(J) &&
         (spec.compute_sensitivity || spec.jacobian_spectrum === :extremes)
         try
@@ -1922,6 +1965,7 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
         "critical_mode" => critical_mode,
         "dP_dV" => _operability_path_dpdv_evidence(sensitivities),
         "sequence_sensitivity" => _operability_sequence_sensitivity_evidence(sensitivities),
+        "jacobian_step_validation" => jacobian_validation,
         "complexity" => branch_complexity)
     if spec.compute_helm
         reachability = _operability_helm_reachability(net, node_voltages, spec)
@@ -2287,6 +2331,7 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
             "load_scale_sensitivity_validation"),
         directional_sensitivity_validation_status=check_status(
             "directional_sensitivity_validation"),
+        jacobian_step_validation_status=check_status("jacobian_step_validation"),
         endpoint_residual=result.endpoint_residual,
         endpoint_residual_normalized=result.endpoint_residual_normalized,
         smallest_singular_value=isempty(result.singular_values) ? NaN : last(result.singular_values),

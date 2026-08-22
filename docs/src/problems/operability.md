@@ -157,6 +157,12 @@ remains interpretable when reports from different storage/spectrum policies are
 combined, while `not_requested` distinguishes an intentionally disabled
 certificate from an unsupported claim.
 
+Set `compute_jacobian_validation=true` to compare the scaled finite-difference
+Jacobian with the same residual map evaluated at one-tenth the configured step.
+The resulting `jacobian_step_validation` check and snapshot-row status are
+numerical step-stability evidence only; they are not a substitute for an
+analytic or automatic-differentiation cross-check.
+
 For a network with ``n_f`` free complex nodes (real state dimension
 ``n=2n_f``) and ``m`` load connections, the current implementation has these
 dominant terms:
