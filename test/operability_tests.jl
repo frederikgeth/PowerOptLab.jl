@@ -87,6 +87,9 @@ using SparseArrays
           real(load_scale_connection["realized_power_derivative"])
     @test report.branch_evidence["dP_dV"]["connections"]["ld1/1"]["classification"] ==
           "negative_high_side_indicator"
+    @test report.branch_evidence["dP_dV"]["status_counts"]["available"] == 1
+    @test report.branch_evidence["dP_dV"]["near_zero_voltage_tangent_count"] == 0
+    @test report.branch_evidence["dP_dV"]["connections"]["ld1/1"]["path_dQ_dV"] ≈ 0.0 atol=1e-10
     @test haskey(report.sensitivities["directions"], "P")
     @test haskey(report.sensitivities["directions"], "Q")
     p_direction = report.sensitivities["directions"]["P"]["ld1/1"]
@@ -127,6 +130,7 @@ using SparseArrays
     @test snapshot_row.maximum_vuf === missing
     @test snapshot_row.maximum_vuf_status == :not_applicable
     @test snapshot_row.high_side_indicator_count == 1
+    @test snapshot_row.near_zero_voltage_tangent_count == 0
     @test snapshot_row.fixed_point_certificate_status == :not_applicable
     @test snapshot_row.jacobian_spectrum_mode == "full"
     @test snapshot_row.jacobian_storage_mode == "dense"

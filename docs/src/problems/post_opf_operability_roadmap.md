@@ -371,6 +371,10 @@ terms, with a status for near-zero voltage tangents. This keeps the reported
 `dP/dV` sign tied to its declared path and avoids presenting a singular
 quotient as branch evidence.
 
+Aggregate branch evidence now retains derivative availability counts and
+near-zero-tangent counts, preserving the distinction between an unsupported
+path, a finite slope, and a turning-tangent singular quotient.
+
 The processor should not create a second, silently divergent copy of the OPF
 device equations. An independent evaluation path is still required for
 validation; independence should come from the residual assembly and numerical

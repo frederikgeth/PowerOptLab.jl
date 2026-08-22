@@ -272,6 +272,9 @@ path-qualified derivatives in the declared uniform-load direction; a
 near-zero voltage tangent is reported as `:near_zero_voltage_tangent` rather
 than being divided into an unstable slope. The sign is therefore a branch
 indicator for that path, not a universal voltage-stability certificate.
+The aggregate `branch_evidence["dP_dV"]` record retains status counts and
+`near_zero_voltage_tangent_count`, so a pooled row can distinguish missing
+sensitivity evidence from a deliberately withheld slope at a turning tangent.
 
 trace = continue_opf_operability(net, pf;
     spec = OperabilitySpec(scaling_policy = SIUnitsScaling()),

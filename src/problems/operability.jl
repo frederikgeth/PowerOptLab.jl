@@ -634,10 +634,17 @@ function _operability_path_dpdv_evidence(sensitivities)
     records = get(get(sensitivities, "load_scale", Dict{String,Any}()),
                   "load_connections", Dict{String,Any}())
     connections = Dict{String,Any}(); finite_slopes = Float64[]
+    status_counts = Dict{String,Int}()
     for (key_raw, record) in records
         key = String(key_raw)
         slope = Float64(get(record, "path_dP_dV", NaN))
-        classification = if !isfinite(slope)
+        slope_status = Symbol(get(record, "path_dP_dV_status",
+            isfinite(slope) ? :available : :not_available))
+        status_counts[String(slope_status)] = get(status_counts,
+            String(slope_status), 0) + 1
+        classification = if slope_status === :near_zero_voltage_tangent
+            "near_zero_voltage_tangent"
+        elseif !isfinite(slope)
             "not_available"
         elseif slope < -1e-9
             push!(finite_slopes, slope)
@@ -651,11 +658,18 @@ function _operability_path_dpdv_evidence(sensitivities)
         end
         connections[key] = Dict{String,Any}(
             "path_dP_dV" => slope, "classification" => classification,
+            "path_dQ_dV" => Float64(get(record, "path_dQ_dV", NaN)),
+            "path_dP_dlambda" => Float64(get(record, "path_dP_dlambda", NaN)),
+            "path_dQ_dlambda" => Float64(get(record, "path_dQ_dlambda", NaN)),
+            "path_dP_dV_status" => slope_status,
             "sign_convention" => "realized consumption P versus terminal magnitude along uniform load scale")
     end
     Dict{String,Any}(
         "status" => isempty(finite_slopes) ? :not_applicable : :diagnostic,
         "connections" => connections, "finite_count" => length(finite_slopes),
+        "status_counts" => status_counts,
+        "near_zero_voltage_tangent_count" => get(status_counts,
+            "near_zero_voltage_tangent", 0),
         "interpretation" => "path-qualified branch indicator; not a universal voltage-stability certificate")
 end
 
@@ -2260,6 +2274,8 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
         maximum_vuf_status=isempty(vufs) ? :not_applicable : :available,
         high_side_indicator_count=count(==("negative_high_side_indicator"), classifications),
         near_nose_indicator_count=count(==("near_nose_indicator"), classifications),
+        near_zero_voltage_tangent_count=get(get(result.branch_evidence,
+            "dP_dV", Dict{String,Any}()), "near_zero_voltage_tangent_count", 0),
         low_side_indicator_count=count(==("positive_low_side_indicator"), classifications),
         fixed_point_certificate_status=Symbol(get(certificate, "status", :not_applicable)),
         fixed_point_condition_margin=Float64(get(certificate, "condition_margin", NaN)),
