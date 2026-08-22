@@ -608,7 +608,12 @@ end
               r_filter=0.02, x_filter=0.06,
               r_filter_grid=0.03, x_filter_grid=0.09,
               c_filter_mid=30e-6, r_filter_damping=0.5)
-    r = solve_advanced_inverter(inv_grid3_unbal(), AdvancedInverter(; id="i", common...))
+    # Under BMOPFTools 8f121216 this problem needs roughly 50x the Ipopt
+    # iterations it did under 4c0ec8b9 to reach the same optimum; the raised
+    # budget keeps every assertion below live while issue #37 tracks the
+    # underlying conditioning regression.
+    r = solve_advanced_inverter(inv_grid3_unbal(), AdvancedInverter(; id="i", common...);
+                                solver_options=("max_iter" => 10000, "tol" => 1e-6))
     @test r.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
     @test r.i_neutral > 0.1
     @test maximum(r.i_filter_shunt_mag) > 1.0

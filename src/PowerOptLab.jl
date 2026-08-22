@@ -117,10 +117,12 @@ include("problems/inverter_control_study.jl")
 include("problems/inverter_control_experiments.jl")
 include("problems/inverter_control_sizing.jl")
 include("problems/closed_loop_evidence.jl")
+include("problems/operability.jl")
 
 # Bespoke algorithms — new solution methods (custom solve loops)
 include("algorithms/pade.jl")
 include("algorithms/helm.jl")
+include("algorithms/operability_continuation.jl")
 
 # Shared extension interfaces
 export AbstractDevice, AbstractMeasurement, AbstractSolveResult
@@ -166,6 +168,14 @@ export SequenceLineObservation, OverheadCarsonCandidate,
 export ConnectionPoint, FairnessPolicy, solve_operating_envelope,
        verify_operating_envelope, compare_operating_envelope_policies,
        OperatingEnvelopeResult, OperatingEnvelopeVerification
+
+# Post-OPF static voltage operability (first slice: native ybus load scope)
+export OperabilitySpec, OperabilityCheck, OperabilityModelError, OperabilityResult,
+       check_opf_operability, OperabilityStressDirection,
+       operability_scope_audit, operability_upstream_audit,
+       operability_stress_network, operability_stress_rows,
+       operability_stress_summary, operability_stress_ensemble_rows,
+       operability_snapshot_row, operability_snapshot_rows
 
 # Bilevel distribution-network proof of concept
 export BilevelPVResult, BilevelPVResponse, SingleLevelPVResult,
@@ -227,5 +237,12 @@ export solve_multiperiod_ivq, MultiperiodIVQResult
 
 # HELM power flow (holomorphic embedding load-flow, a bespoke solution method)
 export helm_series, HelmResult, solve_pf_helm
+
+# Static operability continuation and local fold evidence
+export OperabilityContinuationSpec, OperabilityContinuationResult,
+       continue_opf_operability, OperabilityPseudoArclengthSpec,
+       continue_opf_operability_pseudo_arclength, OperabilityFoldResult,
+       locate_opf_operability_fold, operability_continuation_margin,
+       operability_continuation_rows
 
 end # module PowerOptLab

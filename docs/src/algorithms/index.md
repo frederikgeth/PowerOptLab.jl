@@ -12,15 +12,29 @@ engine's admittance-matrix primitives) in a custom loop.
   a load-scaling parameter and evaluates it by Padé analytic continuation, with
   physical-residual, Padé-spread, coefficient-tail, and heuristic singularity
   diagnostics exposed for independent validation.
+- **Static operability continuation** — `continue_opf_operability` provides the
+  natural-parameter trace, while `continue_opf_operability_pseudo_arclength`
+  provides an opt-in first fold-capable predictor/corrector slice for the same
+  native static-load scope, including fixed-λ refinement when a target crossing
+  is bracketed; `stop_at_target=false` continues a declared stress path beyond
+  λ=1. `locate_opf_operability_fold` separately refines a declared fold
+  candidate with bordered equations, and `stop_on_voltage_limit=true` can
+  terminate at the first declared terminal-voltage violation. The
+  `operability_continuation_margin` helper summarizes the first declared
+  voltage-limit or localized fold boundary relative to λ=1; pseudo-arclength
+  traces also retain tangent-turning curvature and accepted-step histories.
+  `operability_continuation_rows` provides deterministic table-ready records.
 
 ## Question-driven candidates not yet built
 
 The next algorithms should support the [research program](../research_program.md),
 rather than form an unconnected catalogue:
 
-- **Continuation and branch discovery** — pseudo-arclength continuation,
-  singular-point handling, deflation, and systematic multistart to identify which
-  nonlinear solution a sensitivity or decision uses.
+- **Continuation and branch discovery** — the staged design is maintained in the
+  [Post-OPF voltage operability roadmap](../problems/post_opf_operability_roadmap.md);
+  the current pseudo-arclength slice still needs refined singular-point
+  handling, deflation, and systematic multistart to identify which nonlinear
+  solution a sensitivity or decision uses.
 - **Sensitivity validation** — KKT regularity, active-set transition, and
   finite-difference/continuation comparisons for DiffOpt and, where useful,
   direct sensitivities through the HELM coefficient recursion.

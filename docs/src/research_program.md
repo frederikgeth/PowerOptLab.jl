@@ -106,6 +106,13 @@ branch was differentiated, whether the local solution is isolated, where the
 derivative becomes ill-conditioned or discontinuous, and whether another local
 response changes the decision.
 
+The maintained scientific and implementation plan for the first post-solve
+processor in this track is the [Post-OPF voltage operability
+roadmap](problems/post_opf_operability_roadmap.md). It separates endpoint feasibility,
+local Jacobian evidence, phase/sequence sensitivity, energized-base-connected
+reachability, and path-specific margin rather than compressing them into one
+stability index.
+
 ## Later, question-driven extensions
 
 These directions fit after the core workflow has a concrete use for them:

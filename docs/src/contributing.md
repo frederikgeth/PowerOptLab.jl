@@ -85,8 +85,9 @@ and the PowerOptLab version becomes a thin re-export or is retired.
 ## BMOPFTools compatibility contract
 
 BMOPFTools is unregistered, so automated builds pin the exact tested source
-commit (`4c0ec8b9c947eea5cd94966f32d2c97f65115b87`, the PowerIO 0.7-compatible
-snapshot with semantic IBR keys and the public smooth-PWL API) and
+commit (`8f121216065bcd692f18444836c7c80149e5cf4a`, the PowerIO 0.7-compatible
+snapshot adding the public OPF scaling-policy and diagnostic schema on top of
+the semantic IBR keys and smooth-PWL API) and
 `Project.toml` pins its package version to 0.1.0. Update both
 together, then run the complete test and
 documentation suites on the Julia compatibility floor and current stable.

@@ -11,6 +11,11 @@ provides two lightweight diagnostics for that outer loop:
 2. `screen_fixed_point_gain` computes a finite-difference Jacobian and reports
    its spectral radius and induced infinity norm.
 
+The shared `finite_difference_jacobian` utility supports rectangular real maps
+(`m × n`) and checks that the output dimension remains fixed under every
+perturbation. The eigenvalue-based fixed-point gain screen remains restricted
+to square maps.
+
 These are evidence-generation tools, not formal dynamic stability proofs. A
 fixed point can be locally attractive while a different initial condition
 fails, and a local gain screen says nothing about response time, delays,

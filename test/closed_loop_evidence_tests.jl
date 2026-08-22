@@ -31,6 +31,14 @@ using LinearAlgebra
         @test negative_gain.maximum_real_eigenvalue ≈ -2.0 atol=1e-8
         @test negative_gain.continuous_time_margin ≈ 3.0 atol=1e-8
         @test negative_gain.alpha_max ≈ 2 / 3 atol=1e-8
+
+        rectangular(x) = [x[1] + 2x[2], x[1] - x[2], 3x[2]]
+        rectangular_jacobian = finite_difference_jacobian(
+            rectangular, [2.0, -1.0]; step=1e-6)
+        @test size(rectangular_jacobian) == (3, 2)
+        @test rectangular_jacobian ≈ [1.0 2.0; 1.0 -1.0; 0.0 3.0] atol=1e-8
+        @test_throws DimensionMismatch screen_fixed_point_gain(
+            rectangular, [2.0, -1.0]; step=1e-6)
     end
 
     @testset "cycle detection" begin

@@ -60,8 +60,9 @@ method roadmap.
 
 BMOPFTools is not yet registered. Develop both from local checkouts; automated
 builds pin BMOPFTools commit
-`4c0ec8b9c947eea5cd94966f32d2c97f65115b87` (the PowerIO 0.7-compatible
-snapshot with semantic IBR keys and the public smooth-PWL API):
+`8f121216065bcd692f18444836c7c80149e5cf4a` (the PowerIO 0.7-compatible
+snapshot adding the public OPF scaling-policy and diagnostic schema on top of
+the semantic IBR keys and smooth-PWL API):
 
 ```julia
 using Pkg
