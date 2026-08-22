@@ -142,6 +142,9 @@ operability_upstream_audit()
 report.provenance["operability"]["upstream"]
 ```
 
+The record's `compatibility_status` should be `:supported` before pooling
+native snapshot rows.
+
 For a collection of already solved cases, map the stable checker over the
 cases and retain the case identifier in `snapshot_id`:
 

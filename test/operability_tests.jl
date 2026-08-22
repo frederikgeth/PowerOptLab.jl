@@ -14,6 +14,9 @@ using SparseArrays
     @test upstream_audit["public_equilibrium_seam"] == "BMOPFTools.ybus_linearized"
     @test upstream_audit["private_load_decomposition"] === true
     @test upstream_audit["generator_ibr_controller_residual_seam"] === false
+    @test upstream_audit["public_equilibrium_seam_available"] === true
+    @test upstream_audit["private_imports_available"] === true
+    @test upstream_audit["compatibility_status"] == :supported
 
     scope_audit = operability_scope_audit(net)
     @test scope_audit["upstream"] == upstream_audit

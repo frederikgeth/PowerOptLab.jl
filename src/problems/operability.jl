@@ -365,6 +365,9 @@ function operability_scope_audit(net::Dict{String,Any})
     reasons = _operability_preflight(net)
     inventory = _operability_scope_inventory(net)
     source_inventory = _operability_scope_source_inventory(net)
+    upstream = operability_upstream_audit()
+    upstream["compatibility_status"] === :supported || push!(reasons,
+        "upstream compatibility audit is not ready for the native operability seam")
     if source_inventory["voltage_source_count"] == 0
         push!(reasons, "network has no voltage source for a native ybus_linearized equilibrium")
     elseif !isempty(source_inventory["missing_source_buses"])
@@ -380,7 +383,7 @@ function operability_scope_audit(net::Dict{String,Any})
         "scope" => "native_ybus_linearized",
         "closure" => :frozen_dispatch,
         "control_closure" => control_closure,
-        "upstream" => operability_upstream_audit(),
+        "upstream" => upstream,
         "topology" => source_inventory,
         "generator_count" => generator_count,
         "ibr_count" => ibr_count,
@@ -1941,7 +1944,7 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
         "source_buses" => sort!(collect(source_buses)), "state_nodes" => meta.state_nodes,
         "coordinate_policy" => BMOPFTools.opf_scaling_policy_data(coords.policy),
         "model_inventory" => _operability_scope_inventory(net),
-        "upstream" => operability_upstream_audit(),
+        "upstream" => scope_audit["upstream"],
         "topology" => _operability_scope_source_inventory(net))
     OperabilityResult(_operability_overall(checks), endpoint_residual,
         endpoint_normalized, meta.state_nodes, x, J, singular_values, condition_number,

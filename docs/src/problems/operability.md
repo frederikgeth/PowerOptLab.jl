@@ -67,7 +67,10 @@ scope. It records the pinned BMOPFTools version, the public
 `ybus_linearized` seam, and the single isolated private load-decomposition
 adapter. It also records that generator/IBR/controller residual equations are
 not yet available through this seam; this provenance prevents a future closure
-extension from silently reusing only the native static equations.
+extension from silently reusing only the native static equations. The audit
+also checks that the declared public seam and private imports are present;
+`operability_scope_audit` retains a `:not_applicable` reason if that
+compatibility check fails.
 
 Scaling is part of the evidence contract. Supply the staged OPF `context` so
 the audited policy, AC coordinate bases, and research provenance are inherited,

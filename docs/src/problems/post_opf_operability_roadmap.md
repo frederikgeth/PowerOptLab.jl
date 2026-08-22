@@ -158,7 +158,8 @@ The current branch contains the first bounded implementation slice in
   inventory also catches missing or dangling voltage-source references before
   the residual checker is called. `operability_upstream_audit()` now preserves
   the pinned BMOPFTools version, public equilibrium seam, and the one private
-  load-decomposition boundary in the same provenance record;
+  load-decomposition boundary in the same provenance record; its deterministic
+  fingerprint and availability status make seam drift explicit;
 - relative singular-value-ratio evidence, normalized residual verdicts, and
   explicit frozen-dispatch provenance now align the numerical checks with the
   audited scaling and closure contracts; aggregate status no longer reports a

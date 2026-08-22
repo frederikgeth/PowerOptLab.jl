@@ -34,13 +34,20 @@ function operability_upstream_audit()
     fingerprint = join(("BMOPFTools", upstream_version,
                         _OPERABILITY_UPSTREAM_ADAPTER_VERSION,
                         join(private_imports, ",")), "|")
+    public_equilibrium_seam_available = isdefined(BMOPFTools, :ybus_linearized)
+    private_imports_available = all(isdefined(BMOPFTools, Symbol(name))
+                                    for name in private_imports)
     Dict{String,Any}(
         "upstream_package" => "BMOPFTools",
         "upstream_version" => upstream_version,
         "adapter_version" => _OPERABILITY_UPSTREAM_ADAPTER_VERSION,
         "adapter_fingerprint" => fingerprint,
         "public_equilibrium_seam" => "BMOPFTools.ybus_linearized",
+        "public_equilibrium_seam_available" => public_equilibrium_seam_available,
         "private_imports" => private_imports,
+        "private_imports_available" => private_imports_available,
+        "compatibility_status" => public_equilibrium_seam_available &&
+            private_imports_available ? :supported : :not_applicable,
         "private_load_decomposition" => true,
         "generator_ibr_controller_residual_seam" => false,
         "replacement_plan" =>
