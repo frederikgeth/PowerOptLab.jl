@@ -201,10 +201,22 @@ function operability_continuation_rows(result::OperabilityContinuationResult)
     rows
 end
 
-function _continuation_scaled_jacobian(lin, meta, x, coords, cfg)
+function _continuation_scaled_jacobian(lin, meta, x, coords, cfg;
+                                       net=nothing, analytic::Bool=false)
     state_scale, residual_scale = _operability_scales(lin, meta, coords)
-    Jphys = finite_difference_jacobian(
-        y -> _operability_residual(lin, meta, y), x; step=cfg.jacobian_step)
+    Jphys = if analytic && net !== nothing
+        analytic_jacobian = try
+            _operability_analytic_jacobian(net, lin, meta, x)
+        catch
+            nothing
+        end
+        analytic_jacobian === nothing ? finite_difference_jacobian(
+            y -> _operability_residual(lin, meta, y), x; step=cfg.jacobian_step) :
+            (issparse(analytic_jacobian) ? Matrix(analytic_jacobian) : analytic_jacobian)
+    else
+        finite_difference_jacobian(
+            y -> _operability_residual(lin, meta, y), x; step=cfg.jacobian_step)
+    end
     J = _operability_scaled_jacobian(Jphys, state_scale, residual_scale)
     J, state_scale, residual_scale
 end
@@ -687,9 +699,10 @@ function _pseudo_lambda_residual(net, λ, meta, x, residual_scale, h;
         (2h) ./ residual_scale, :finite_difference)
 end
 
-function _pseudo_arclength_jacobian(lin, meta, x, coords, cfg, arc_state_scale)
+function _pseudo_arclength_jacobian(lin, meta, x, coords, cfg, arc_state_scale;
+                                    net=nothing, analytic::Bool=false)
     J, state_scale, residual_scale = _continuation_scaled_jacobian(
-        lin, meta, x, coords, cfg)
+        lin, meta, x, coords, cfg; net=net, analytic=analytic)
     # The audited Jacobian uses the caller's research scaling.  Pseudo-arclength
     # needs a separate metric so that SI volts and the dimensionless λ coordinate
     # have comparable magnitudes; transform the Jacobian columns accordingly.
@@ -702,7 +715,8 @@ end
 
 function _pseudo_corrector(net, ypred, tangent, meta, arc_state_scale, residual_scale,
                            coords, cfg::OperabilityPseudoArclengthSpec;
-                           analytic_lin=nothing, analytic_zero_lin=nothing)
+                           analytic_lin=nothing, analytic_zero_lin=nothing,
+                           analytic_jacobian::Bool=false)
     # The continuation state contains real and imaginary components for every
     # free complex node.  `state_nodes` counts complex nodes, whereas `state`
     # (and the scaled Jacobian) has twice as many real entries.
@@ -725,7 +739,8 @@ function _pseudo_corrector(net, ypred, tangent, meta, arc_state_scale, residual_
         norm_g = isempty(G) ? 0.0 : maximum(abs, G)
         norm_g <= cfg.corrector_tol && return y, true, iteration
         J, _ = _pseudo_arclength_jacobian(
-            lin, meta, x, coords, natural_cfg, arc_state_scale)
+            lin, meta, x, coords, natural_cfg, arc_state_scale;
+            net=_operability_scale_network(net, λ), analytic=analytic_jacobian)
         fλ, _ = _pseudo_lambda_residual(net, λ, meta, x, residual_scale,
                                         cfg.jacobian_step;
                                         analytic_lin=analytic_lin,
@@ -817,8 +832,16 @@ function continue_opf_operability_pseudo_arclength(
         "analytic_native_static" : "finite_difference"
     analytic_forcing_lin = analytic_forcing_available ? lin_target : nothing
     analytic_forcing_zero_lin = analytic_forcing_available ? lin_zero : nothing
+    analytic_jacobian_available = try
+        _operability_analytic_jacobian(net, lin_target, meta, target_x) !== nothing
+    catch
+        false
+    end
+    analytic_jacobian_method = analytic_jacobian_available ?
+        "analytic_native_static" : "finite_difference"
     Jzero, state_scale, residual_scale = _continuation_scaled_jacobian(
-        lin_zero, meta, target_x, coords, natural_cfg)
+        lin_zero, meta, target_x, coords, natural_cfg;
+        net=net_zero, analytic=analytic_jacobian_available)
     base_x = target_x - (Jzero \ (_operability_residual(lin_zero, meta, target_x) ./
         residual_scale)) .* state_scale
     base_x, base_ok, base_iterations, _ = _continuation_corrector(
@@ -869,7 +892,8 @@ function continue_opf_operability_pseudo_arclength(
         ynew, ok, iterations = _pseudo_corrector(
             net, ypred, tangent, meta, arc_state_scale, residual_scale, coords, continuation;
             analytic_lin=analytic_forcing_lin,
-            analytic_zero_lin=analytic_forcing_zero_lin)
+            analytic_zero_lin=analytic_forcing_zero_lin,
+            analytic_jacobian=analytic_jacobian_available)
         if !ok
             push!(events, Dict{String,Any}("kind" => "corrector_failure",
                 "lambda" => ypred[end], "step" => step, "iterations" => iterations))
@@ -989,7 +1013,9 @@ function continue_opf_operability_pseudo_arclength(
                                             analytic_lin=analytic_forcing_lin,
                                             analytic_zero_lin=analytic_forcing_zero_lin)
         Jnew, _ = _pseudo_arclength_jacobian(
-            lin_new, meta, xnew, coords, natural_cfg, arc_state_scale)
+            lin_new, meta, xnew, coords, natural_cfg, arc_state_scale;
+            net=_operability_scale_network(net, λnew),
+            analytic=analytic_jacobian_available)
         factorization_new = isempty(Jnew) ? nothing : svd(Jnew)
         sigma_ratio = _continuation_sigma_ratio(point.singular_values)
         near_singular = isfinite(sigma_ratio) && sigma_ratio <= continuation.fold_sigma_tol
@@ -1071,6 +1097,7 @@ function continue_opf_operability_pseudo_arclength(
         "source_buses" => sort!(collect(source_buses)), "state_nodes" => meta.state_nodes,
         "natural_parameter" => false, "pseudo_arclength" => true,
         "lambda_forcing_method" => analytic_forcing_method,
+        "jacobian_method" => analytic_jacobian_method,
         "arclength_state_scale" => arc_state_scale,
         "arclength_steps" => arclength_steps,
         "curvature_history" => curvature_history,

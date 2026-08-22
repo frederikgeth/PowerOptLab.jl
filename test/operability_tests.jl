@@ -746,6 +746,8 @@ using SparseArrays
     @test pseudo_trace.provenance["continuation"]["pseudo_arclength"] === true
     @test pseudo_trace.provenance["continuation"]["lambda_forcing_method"] ==
           "analytic_native_static"
+    @test pseudo_trace.provenance["continuation"]["jacobian_method"] ==
+          "analytic_native_static"
     @test all(>(0.0), pseudo_trace.provenance["continuation"]["arclength_state_scale"])
     @test !isempty(pseudo_trace.provenance["continuation"]["curvature_history"])
     @test all(isfinite, pseudo_trace.provenance["continuation"]["curvature_history"])
