@@ -297,6 +297,9 @@ with its failing check names rather than being silently discarded.
 
 ```julia
 using BMOPFTools
+# BMOPFTools does not export the OPF scaling-policy types, so name the
+# one matching the audited solve explicitly.
+using BMOPFTools: SIUnitsScaling
 using PowerOptLab
 
 pf = solve_pf(net; per_unit=false)

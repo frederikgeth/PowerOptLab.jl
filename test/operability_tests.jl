@@ -1,4 +1,8 @@
 using BMOPFTools
+# The OPF scaling-policy types are public API but are not exported by
+# BMOPFTools, so name them explicitly rather than relying on `using`.
+using BMOPFTools: SIUnitsScaling, ClassicPerUnitScaling,
+    ConsistentPerUnitScaling, ZonePerUnitScaling
 using LinearAlgebra
 using SparseArrays
 
