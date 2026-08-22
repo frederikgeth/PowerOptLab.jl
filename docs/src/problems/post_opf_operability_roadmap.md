@@ -523,11 +523,12 @@ PowerOptLab already exports `finite_difference_jacobian`,
 `fixed_point_oracle`, and `screen_fixed_point_gain`, together with network
 sensitivity result types, from `src/problems/closed_loop_evidence.jl`. Milestone
 2 should reuse their input validation, scale-aware step conventions, and result
-semantics where applicable. The current `finite_difference_jacobian` requires a
-square real map (`length(y) == length(x)`), so it directly checks ``F_z`` for a
-square equilibrium residual but does not cover ``F_\lambda`` or rectangular
-directional maps without a deliberate generalization. That limitation must not
-be hidden by adding a near-duplicate helper.
+semantics where applicable. `finite_difference_jacobian` now supports a fixed
+rectangular real map (`m × n`) while retaining the same scale-aware central
+steps; `screen_fixed_point_gain` remains explicitly square because its
+eigenvalue-based screen requires a square map. This shared primitive can now
+cover ``F_\lambda`` and other rectangular directional maps without a
+near-duplicate helper.
 
 ## Branch reachability and margin
 

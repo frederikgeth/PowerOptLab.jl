@@ -530,11 +530,15 @@ function _operability_directional_sensitivity(net, lin, meta, x, J, linear_solve
     base = values === nothing || (values isa AbstractVector && k > length(values)) ? 0.0 :
         Float64(values isa AbstractVector ? values[k] : values)
     h = spec.sensitivity_step * max(abs(base), 1.0)
-    plus = _operability_perturb_load(net, id, k, field, h)
-    minus = _operability_perturb_load(net, id, k, field, -h)
-    lp = BMOPFTools.ybus_linearized(plus; fold=:constant_z)
-    lm = BMOPFTools.ybus_linearized(minus; fold=:constant_z)
-    dF = (_operability_residual(lp, meta, x) - _operability_residual(lm, meta, x)) / (2h)
+    dF = vec(finite_difference_jacobian(
+        delta -> begin
+            perturbed = _operability_perturb_load(
+                net, id, k, field, delta[1])
+            perturbed_lin = BMOPFTools.ybus_linearized(
+                perturbed; fold=:constant_z)
+            _operability_residual(perturbed_lin, meta, x)
+        end,
+        [0.0]; step=h, relative_step=false)[:, 1])
     dF_scaled = dF ./ residual_scale
     dx_scaled = linear_solver === nothing ? -(J \ dF_scaled) :
         -(linear_solver \ dF_scaled)
@@ -1922,15 +1926,14 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
         analytic_rhs = _operability_analytic_load_scale_rhs(net, lin, meta, x)
         if analytic_rhs !== nothing
             h_rhs = spec.sensitivity_step
-            plus_rhs = _operability_residual(
-                BMOPFTools.ybus_linearized(
-                    _operability_scale_network(net, 1.0 + h_rhs);
-                    fold=:constant_z), meta, x)
-            minus_rhs = _operability_residual(
-                BMOPFTools.ybus_linearized(
-                    _operability_scale_network(net, 1.0 - h_rhs);
-                    fold=:constant_z), meta, x)
-            finite_difference_rhs = (plus_rhs - minus_rhs) / (2h_rhs)
+            finite_difference_rhs = vec(finite_difference_jacobian(
+                lambda -> begin
+                    scaled = _operability_scale_network(net, lambda[1])
+                    scaled_lin = BMOPFTools.ybus_linearized(
+                        scaled; fold=:constant_z)
+                    _operability_residual(scaled_lin, meta, x)
+                end,
+                [1.0]; step=h_rhs)[:, 1])
             analytic_scaled = analytic_rhs ./ residual_scale
             finite_difference_scaled = finite_difference_rhs ./ residual_scale
             absolute_error = norm(analytic_scaled - finite_difference_scaled, Inf)

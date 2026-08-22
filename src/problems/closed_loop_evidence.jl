@@ -200,7 +200,14 @@ function fixed_point_oracle(
         x, trajectory)
 end
 
-"""Compute a central finite-difference Jacobian of a real vector map."""
+"""
+    finite_difference_jacobian(map, point; step=1e-6, relative_step=true)
+
+Compute a central finite-difference Jacobian of a real vector map. The map may
+be rectangular: for an input of length ``n`` and output of length ``m`` the
+result has size ``m × n``. The output dimension is inferred once at `point`
+and must remain fixed for every perturbation.
+"""
 function finite_difference_jacobian(
         map, point;
         step::Real=1e-6,
@@ -211,16 +218,15 @@ function finite_difference_jacobian(
         "step must be finite and > 0"))
     y = _real_state(map(x), "finite-difference map output")
     n = length(x)
-    length(y) == n || throw(DimensionMismatch(
-        "finite-difference map output length must equal input length"))
-    jacobian = Matrix{Float64}(undef, n, n)
+    m = length(y)
+    jacobian = Matrix{Float64}(undef, m, n)
     for column in 1:n
         delta = relative_step ? h * max(abs(x[column]), 1.0) : h
         plus = copy(x); plus[column] += delta
         minus = copy(x); minus[column] -= delta
         y_plus = _real_state(map(plus), "finite-difference map output")
         y_minus = _real_state(map(minus), "finite-difference map output")
-        length(y_plus) == n && length(y_minus) == n || throw(DimensionMismatch(
+        length(y_plus) == m && length(y_minus) == m || throw(DimensionMismatch(
             "finite-difference map output length changed"))
         jacobian[:, column] = (y_plus - y_minus) / (2delta)
     end
@@ -249,6 +255,8 @@ function screen_fixed_point_gain(
         "threshold must be finite and > 0"))
     jacobian = finite_difference_jacobian(
         map, point; step=step, relative_step=relative_step)
+    size(jacobian, 1) == size(jacobian, 2) || throw(DimensionMismatch(
+        "fixed-point gain screening requires a square map"))
     eigenvalues = ComplexF64.(eigvals(jacobian))
     spectral_radius = isempty(eigenvalues) ? 0.0 : maximum(abs, eigenvalues)
     induced_inf_norm = opnorm(jacobian, Inf)
