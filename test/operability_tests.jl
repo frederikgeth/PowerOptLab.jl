@@ -837,6 +837,7 @@ using SparseArrays
     @test !isempty(fold_events)
     localized_fold = fold_events[1]["fold_localization"]
     @test localized_fold["status"] == :pass
+    @test localized_fold["jacobian_method"] == "analytic_native_static"
     @test localized_fold["lambda"] ≈ 25 / 24 atol=1e-6
     @test localized_fold["sigma_min"] < 1e-7
     @test stress_trace.provenance["continuation"]["margin"]["mechanism"] == :fold_candidate
@@ -873,6 +874,8 @@ using SparseArrays
     @test fold.sigma_min < 1e-8
     @test fold.critical_mode["coordinate_order"] == "[real(state_nodes); imag(state_nodes)]"
     @test fold.provenance["fold_localization"]["equations"] == "F=0,Jv=0,norm(v)=1"
+    @test fold.provenance["fold_localization"]["jacobian_method"] ==
+          "analytic_native_static"
 
     # Scope exclusions are explicit evidence rather than a silent partial pass.
     ibr_net = doe_ibr_feeder()

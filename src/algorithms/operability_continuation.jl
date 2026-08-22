@@ -580,13 +580,26 @@ end
 function _fold_equations(net, u, meta, coords, cfg)
     n = length(meta.state)
     x_scaled = u[1:n]; λ = u[n + 1]; v = u[n + 2:end]
-    lin = BMOPFTools.ybus_linearized(_operability_scale_network(net, λ);
+    scaled_net = _operability_scale_network(net, λ)
+    lin = BMOPFTools.ybus_linearized(scaled_net;
                                     fold=:constant_z)
     state_scale, residual_scale = _operability_scales(lin, meta, coords)
     x = x_scaled .* state_scale
     f = _operability_residual(lin, meta, x) ./ residual_scale
-    Jphys = finite_difference_jacobian(
-        y -> _operability_residual(lin, meta, y), x; step=cfg.jacobian_step)
+    Jphys = if cfg.analytic_jacobian
+        analytic = try
+            _operability_analytic_jacobian(scaled_net, lin, meta, x)
+        catch
+            nothing
+        end
+        analytic === nothing ? finite_difference_jacobian(
+            y -> _operability_residual(lin, meta, y), x; step=cfg.jacobian_step) :
+            analytic
+    else
+        finite_difference_jacobian(
+            y -> _operability_residual(lin, meta, y), x; step=cfg.jacobian_step)
+    end
+    issparse(Jphys) && (Jphys = Matrix(Jphys))
     J = _operability_scaled_jacobian(Jphys, state_scale, residual_scale)
     vcat(f, J * v, dot(v, v) - 1.0)
 end
@@ -634,14 +647,24 @@ function locate_opf_operability_fold(
     isempty(meta.state) && return _operability_fold_empty(
         :not_applicable, "network has no free non-source voltage state", coords.provenance)
     state_scale, _ = _operability_scales(lin_nominal, meta, coords)
+    analytic_jacobian_available = try
+        _operability_analytic_jacobian(net, lin_nominal, meta, meta.state) !== nothing
+    catch
+        false
+    end
+    analytic_jacobian_method = analytic_jacobian_available ?
+        "analytic_native_static" : "finite_difference"
+    net_at_lambda = _operability_scale_network(net, lambda)
     J0, _, residual_scale = _continuation_scaled_jacobian(
-        BMOPFTools.ybus_linearized(_operability_scale_network(net, lambda);
+        BMOPFTools.ybus_linearized(net_at_lambda;
                                    fold=:constant_z), meta, meta.state, coords,
-        OperabilityContinuationSpec(jacobian_step=jacobian_step))
+        OperabilityContinuationSpec(jacobian_step=jacobian_step);
+        net=net_at_lambda, analytic=analytic_jacobian_available)
     factorization = svd(J0)
     v0 = Float64.(factorization.V[:, end])
     u = vcat(meta.state ./ state_scale, Float64(lambda), v0)
-    cfg = (jacobian_step=Float64(jacobian_step),)
+    cfg = (jacobian_step=Float64(jacobian_step),
+           analytic_jacobian=analytic_jacobian_available)
     converged = false; last_norm = Inf; iterations = 0
     for iteration in 1:max_iterations
         iterations = iteration
@@ -673,7 +696,8 @@ function locate_opf_operability_fold(
     lin = BMOPFTools.ybus_linearized(_operability_scale_network(net, λ);
                                      fold=:constant_z)
     J, _, _ = _continuation_scaled_jacobian(
-        lin, meta, x, coords, OperabilityContinuationSpec(jacobian_step=jacobian_step))
+        lin, meta, x, coords, OperabilityContinuationSpec(jacobian_step=jacobian_step);
+        net=_operability_scale_network(net, λ), analytic=analytic_jacobian_available)
     sigma = isempty(J) ? NaN : last(svdvals(J))
     residual = _operability_complex_residual(lin, meta, x)
     residual_norm = isempty(residual) ? 0.0 : maximum(abs, residual)
@@ -684,7 +708,8 @@ function locate_opf_operability_fold(
     provenance["fold_localization"] = Dict("equations" => "F=0,Jv=0,norm(v)=1",
         "closure" => String(spec.closure),
         "source_buses" => sort!(collect(source_buses)), "state_nodes" => meta.state_nodes,
-        "initial_lambda" => Float64(lambda), "iterations" => iterations)
+        "initial_lambda" => Float64(lambda), "iterations" => iterations,
+        "jacobian_method" => analytic_jacobian_method)
     status = converged ? :pass : :inconclusive
     message = converged ? "bordered fold equations converged" :
         "bordered fold equations did not converge"
@@ -1091,7 +1116,10 @@ function continue_opf_operability_pseudo_arclength(
                 "status" => localized.status, "lambda" => localized.lambda,
                 "residual_norm" => localized.residual_norm,
                 "sigma_min" => localized.sigma_min,
-                "iterations" => localized.iterations)
+                "iterations" => localized.iterations,
+                "jacobian_method" => get(
+                    get(localized.provenance, "fold_localization", Dict{String,Any}()),
+                    "jacobian_method", "not_available"))
             push!(events, fold_event)
         end
         turning_angle = acos(clamp(real(dot(tangent, tangent_new)), -1.0, 1.0))

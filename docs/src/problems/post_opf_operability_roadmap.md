@@ -586,6 +586,8 @@ native-static analytic load-scale forcing term and analytic native Jacobian when
 the topology is compatible, and retain finite-difference fallbacks with
 provenance. This improves the continuation tangent evidence but does not extend
 the derivative seam to controls, generators, or IBRs.
+Bordered fold localization now uses the same λ-matched analytic native Jacobian
+inside ``Jv=0`` when available and records its method in fold provenance/events.
 
 The initial default homotopy proposed for review is:
 
