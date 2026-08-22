@@ -756,6 +756,20 @@ function _operability_connection_power_slope(sl, magnitude)
         (magnitude + h - max(magnitude - h, 0.0))
 end
 
+function _operability_connection_power_slope_analytic(sl, magnitude)
+    magnitude < 0.0 && throw(ArgumentError("voltage magnitude must be nonnegative"))
+    component_derivative(t) = if t.nl === nothing
+        2.0 * t.cW * magnitude + t.cs
+    elseif magnitude == 0.0
+        γ = t.nl[2]
+        γ == 1.0 ? t.nl[1] / sl.Vnom : (γ > 1.0 ? 0.0 : Inf)
+    else
+        γ = t.nl[2]
+        t.nl[1] * γ / sl.Vnom * (magnitude / sl.Vnom)^(γ - 1.0)
+    end
+    component_derivative(sl.pt) + im * component_derivative(sl.qt)
+end
+
 function _operability_load_records(net, vmap; dvmap=nothing, uniform_scale=false)
     records = Dict{String,Any}()
     for (id_raw, load) in sort!(collect(get(net, "load", Dict())); by=x -> String(x[1]))
@@ -772,7 +786,23 @@ function _operability_load_records(net, vmap; dvmap=nothing, uniform_scale=false
             dangle = dvmap === nothing || mag == 0.0 ? NaN : imag(conj(u) * dv) / mag^2
             requested = ComplexF64(sl.p0 + im * sl.q0)
             realized = ComplexF64(_subload_S(sl, mag))
-            local_dS_dmag = ComplexF64(_operability_connection_power_slope(sl, mag))
+            local_dS_dmag_fd = ComplexF64(_operability_connection_power_slope(sl, mag))
+            local_dS_dmag_analytic = ComplexF64(
+                _operability_connection_power_slope_analytic(sl, mag))
+            derivative_error = abs(local_dS_dmag_analytic - local_dS_dmag_fd)
+            derivative_scale = max(1.0, abs(local_dS_dmag_analytic),
+                                   abs(local_dS_dmag_fd))
+            derivative_status = if !all(isfinite, (real(local_dS_dmag_analytic),
+                                                    imag(local_dS_dmag_analytic)))
+                :not_applicable
+            elseif derivative_error <= 1e-5 * derivative_scale
+                :pass
+            else
+                :inconclusive
+            end
+            local_dS_dmag = isfinite(real(local_dS_dmag_analytic)) &&
+                isfinite(imag(local_dS_dmag_analytic)) ? local_dS_dmag_analytic :
+                local_dS_dmag_fd
             path_dS = if uniform_scale && dvmap !== nothing
                 realized + local_dS_dmag * dmag
             else
@@ -800,6 +830,10 @@ function _operability_load_records(net, vmap; dvmap=nothing, uniform_scale=false
                 "requested_power" => requested, "realized_power" => realized,
                 "power_error" => realized - requested,
                 "realized_power_local_derivative" => local_dS_dmag,
+                "realized_power_local_derivative_analytic" => local_dS_dmag_analytic,
+                "realized_power_local_derivative_fd" => local_dS_dmag_fd,
+                "realized_power_local_derivative_error" => derivative_error,
+                "realized_power_local_derivative_status" => derivative_status,
                 "voltage_derivative" => ComplexF64(dv),
                 "magnitude_derivative" => dmag,
                 "angle_derivative" => dangle,

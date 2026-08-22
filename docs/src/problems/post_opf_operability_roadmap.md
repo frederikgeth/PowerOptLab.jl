@@ -494,11 +494,13 @@ sign depends on coordinate conventions. A reduced Q-V Jacobian is not the
 default because high-R/X and unbalanced distribution systems do not justify the
 usual decoupling assumptions.
 
-The current implementation still obtains the equilibrium Jacobian, ``F_λ``,
-and load-law slopes by finite differences. Its re-solve checks are therefore
-FD-versus-FD-composed validation, not an analytic/automatic-derivative versus
-finite-difference comparison. ForwardDiff/analytic device derivatives remain
-an explicit follow-on before claiming the full Milestone 2 exit criterion.
+The current implementation still obtains the equilibrium Jacobian and ``F_λ``
+by finite differences. Local load-law slopes now have an analytic
+sub-load-coefficient path cross-checked against finite differences, but the
+full network Jacobian and ``F_λ`` remain numerical. Its re-solve checks are
+therefore still FD-versus-FD-composed for the network residual; ForwardDiff or
+analytic network/device derivatives remain an explicit follow-on before
+claiming the full Milestone 2 exit criterion.
 
 Local nonsingularity is not a branch classifier: high- and low-voltage sheets
 are both locally regular away from a fold.

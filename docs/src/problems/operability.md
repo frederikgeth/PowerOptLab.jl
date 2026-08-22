@@ -84,6 +84,13 @@ The current equilibrium closure is explicitly `:frozen_dispatch` and is
 recorded in provenance; other closures are rejected until their equations are
 available through a public upstream seam.
 
+Local load-law power derivatives are evaluated analytically from the isolated
+BMOPFTools sub-load coefficients and compared with the retained finite-
+difference derivative. Each terminal record keeps both values, the absolute
+discrepancy, and a validation status. The full network residual and Jacobian
+remain finite-difference diagnostics until the broader analytic/AD Milestone 2
+cross-check is completed.
+
 The aggregate result is `:pass` only when a requested primary operational claim
 (terminal-voltage bounds, sequence-unbalance bounds, HELM reachability, or the
 fixed-point certificate) has passed. If no such claim was requested, the result

@@ -78,6 +78,9 @@ using SparseArrays
     connection = report.load_connections["ld1/1"]
     @test connection["requested_power"] ≈ connection["realized_power"] atol=1e-8
     @test isfinite(connection["angle"])
+    @test connection["realized_power_local_derivative_status"] == :pass
+    @test connection["realized_power_local_derivative"] ≈
+          connection["realized_power_local_derivative_analytic"] atol=1e-8
     load_scale_connection = report.sensitivities["load_scale"]["load_connections"]["ld1/1"]
     @test load_scale_connection["magnitude_derivative"] < 0.0
     @test isfinite(load_scale_connection["path_dP_dV"])
