@@ -16,6 +16,10 @@ using SparseArrays
     @test upstream_audit["generator_ibr_controller_residual_seam"] === false
     @test upstream_audit["public_equilibrium_seam_available"] === true
     @test upstream_audit["private_imports_available"] === true
+    @test upstream_audit["private_imports_bound"] === true
+    @test upstream_audit["private_imports_match_upstream"] === true
+    @test all(isdefined(PowerOptLab, Symbol(name))
+              for name in PowerOptLab._OPERABILITY_UPSTREAM_PRIVATE_IMPORTS)
     @test upstream_audit["compatibility_status"] == :supported
 
     scope_audit = operability_scope_audit(net)
@@ -59,6 +63,21 @@ using SparseArrays
     @test dangling_source_row.primary_check_count == dangling_source_row.check_count
     @test occursin("outside the first operability residual scope",
                    dangling_source_row.check_messages["scope"])
+    dangling_continuation = continue_opf_operability(dangling_source_net, pf;
+        spec=OperabilitySpec(scaling_policy=SIUnitsScaling()))
+    @test dangling_continuation.status == :not_applicable
+    @test any(get(event, "kind", "") == "unsupported_physics"
+              for event in dangling_continuation.events)
+    @test dangling_continuation.provenance["scope_audit"]["status"] == :not_applicable
+    dangling_pseudo = continue_opf_operability_pseudo_arclength(dangling_source_net, pf;
+        spec=OperabilitySpec(scaling_policy=SIUnitsScaling()))
+    @test dangling_pseudo.status == :not_applicable
+    @test dangling_pseudo.provenance["scope_audit"]["status"] == :not_applicable
+    dangling_fold = locate_opf_operability_fold(dangling_source_net, pf;
+        spec=OperabilitySpec(scaling_policy=SIUnitsScaling()))
+    @test dangling_fold.status == :not_applicable
+    @test dangling_fold.provenance["scope_audit"]["status"] == :not_applicable
+    @test solve_status(dangling_fold).publishable === false
 
     blank_source_net = deepcopy(net)
     delete!(blank_source_net["voltage_source"]["vs"], "bus")
@@ -168,11 +187,11 @@ using SparseArrays
     @test snapshot_row.load_scale_sensitivity_status == :pass
     @test snapshot_row.load_scale_sensitivity_validation_status == :not_applicable
     @test snapshot_row.directional_sensitivity_validation_status == :not_applicable
-    @test isnan(snapshot_row.jacobian_step_validation_relative_error)
-    @test isnan(snapshot_row.analytic_jacobian_validation_relative_error)
-    @test isnan(snapshot_row.analytic_load_scale_rhs_validation_relative_error)
-    @test isnan(snapshot_row.load_scale_sensitivity_validation_relative_error)
-    @test isnan(snapshot_row.directional_sensitivity_validation_max_relative_error)
+    @test snapshot_row.jacobian_step_validation_relative_error === missing
+    @test snapshot_row.analytic_jacobian_validation_relative_error === missing
+    @test snapshot_row.analytic_load_scale_rhs_validation_relative_error === missing
+    @test snapshot_row.load_scale_sensitivity_validation_relative_error === missing
+    @test snapshot_row.directional_sensitivity_validation_max_relative_error === missing
     @test snapshot_row.scope == "single_snapshot_static_ybus"
     @test snapshot_row.scope_status == :supported
     @test snapshot_row.equilibrium_scope == "static_ybus_linearized"
@@ -190,6 +209,10 @@ using SparseArrays
     @test snapshot_row.maximum_abs_terminal_angle_derivative >= 0.0
     @test snapshot_row.maximum_vuf === missing
     @test snapshot_row.maximum_vuf_status == :not_applicable
+    @test snapshot_row.maximum_abs_vuf_derivative === missing
+    @test snapshot_row.helm_endpoint_mismatch === missing
+    @test snapshot_row.helm_endpoint_limit === missing
+    @test snapshot_row.helm_common_node_count === missing
     @test snapshot_row.high_side_indicator_count == 1
     @test snapshot_row.near_zero_voltage_tangent_count == 0
     @test snapshot_row.fixed_point_certificate_status == :not_applicable
@@ -377,7 +400,10 @@ using SparseArrays
     @test certificate_row.primary_check_pass_count == certificate_row.check_pass_count - 1
     @test certificate_row.primary_check_inconclusive_count == certificate_row.check_inconclusive_count
     @test certificate_row.fixed_point_condition_margin > 0.0
-    @test certificate_row.fixed_point_max_condition_margin >
+    @test certificate_row.fixed_point_radius_condition_margin > 0.0
+    @test certificate_row.fixed_point_condition_margin >
+          certificate_row.fixed_point_radius_condition_margin
+    @test certificate_row.fixed_point_max_condition_margin ==
           certificate_row.fixed_point_condition_margin
     @test certificate_row.fixed_point_local_region_status == :pass
     @test certificate_row.fixed_point_local_condition_margin > 0.0

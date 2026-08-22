@@ -155,7 +155,9 @@ The table-ready `operability_snapshot_row(report)` projection carries the same
 review context in compact form: `jacobian_spectrum_mode`,
 `jacobian_storage_mode`, `jacobian_nonzero_count`,
 `jacobian_storage_bytes_estimate`, `zbus_storage_mode`,
-`fixed_point_max_condition_margin`, `scope_status`,
+`fixed_point_condition_margin` (the best finite-scan robustness margin),
+`fixed_point_radius_condition_margin` (the selected-radius containment
+margin), `scope_status`,
 `closure`, `control_closure`, source-topology readiness, and the explicit
 statuses of endpoint, Jacobian regularity, voltage bounds, sequence unbalance,
 and sensitivity checks. It also retains the exact `unsupported_reasons` list,
@@ -164,7 +166,10 @@ not just its count. The row carries `schema_version` and an explicit
 from future contingency or operating-envelope schemas. It also carries the
 upstream adapter version, deterministic adapter fingerprint, and public
 equilibrium seam used to produce the row. The fingerprint changes if the
-pinned upstream version or isolated private import list changes.
+pinned upstream version or isolated private import list changes. The upstream
+audit also verifies that every adapter import is bound in PowerOptLab and is
+the same binding exported by BMOPFTools, making drift in the isolated seam
+explicit rather than silently trusting the import list.
 The row also includes `check_count` and per-status check counts, making it
 possible to distinguish a clean pass from a result with requested checks that
 were inconclusive or not applicable without reimplementing aggregation. The
@@ -174,7 +179,10 @@ not downgrade the aggregate snapshot verdict.
 Validation status fields are paired with relative-error summaries for the
 finite-difference step check, analytic Jacobian and load-scale checks, and
 re-solved sensitivity validations; unrequested or unavailable validations are
-reported as `NaN` rather than being interpreted as zero error.
+reported as `missing` rather than being interpreted as zero error. Snapshot
+rows use `missing` uniformly for unavailable optional scalar metrics; raw
+diagnostic arrays may retain `NaN` where their numerical shape is part of the
+algorithmic evidence.
 The row also carries the declared endpoint residual, terminal-voltage, and
 sequence-unbalance limits next to the corresponding measurements and statuses.
 `check_messages` preserves the deterministic explanation for each status,
@@ -183,9 +191,13 @@ including unsupported-scope, not-requested, and inconclusive outcomes.
 voltage-quality, local-regularity, sensitivities, reachability, and
 certificates; each section uses fail-over-inconclusive-over-pass precedence and
 is `:not_applicable` when none of its checks were available.
+The legacy-compatible `fixed_point_max_condition_margin` field aliases the
+robustness margin; the unqualified `fixed_point_condition_margin` now answers
+the same practical question, while the radius-boundary artifact is explicit
+in `fixed_point_radius_condition_margin`.
 When HELM is requested, `helm_endpoint_mismatch`, `helm_endpoint_limit`, and
 `helm_common_node_count` expose the numerical agreement behind
-`helm_reachability_status`; otherwise they are `NaN` or `missing`.
+`helm_reachability_status`; otherwise they are `missing`.
 Sparse reports also
 retain the finite-difference row/column pattern in
 `complexity["jacobian_pattern"]`; this is an operating-point diagnostic, not a
@@ -335,6 +347,11 @@ trace = continue_opf_operability(net, pf;
     continuation = OperabilityContinuationSpec(initial_step = 0.1))
 trace.status
 trace.events
+
+All three continuation entry points and the bordered fold localizer run the
+same `operability_scope_audit` preflight as the snapshot checker. Missing or
+invalid source topology therefore returns `:not_applicable` with the audit
+record, rather than entering a singular bordered solve.
 
 pseudo = continue_opf_operability_pseudo_arclength(net, pf;
     spec = OperabilitySpec(scaling_policy = SIUnitsScaling()),

@@ -83,6 +83,10 @@ The current branch contains the first bounded implementation slice in
   declared lower λ-domain boundary (default 0), and can finish with a localized
   fold plus model-domain termination rather than spending the stress budget in
   negative-load territory;
+- all continuation and bordered-fold entry points now share the snapshot
+  `operability_scope_audit` preflight, returning `:not_applicable` with the
+  topology audit instead of attempting a singular solve on missing-source
+  networks;
 - an opt-in Bernstein-style fixed-point certificate now uses the native
   source-eliminated Z-bus map. On the native constant-P/I/Z, ZIP, and finite
   exponential-law scope it builds a conservative connection-aware contraction

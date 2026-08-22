@@ -115,11 +115,11 @@ row.claim_scope
 row.minimum_terminal_voltage
 row.maximum_vuf
 row.maximum_vuf_status       # :not_applicable when no complete 3-phase bus exists
-row.maximum_abs_terminal_angle_derivative
+row.maximum_abs_terminal_angle_derivative  # `missing` when unavailable
 row.sequence_sensitivity_status
-row.maximum_abs_positive_sequence_magnitude_derivative
-row.maximum_abs_negative_sequence_magnitude_derivative
-row.maximum_abs_vuf_derivative
+row.maximum_abs_positive_sequence_magnitude_derivative # `missing` when unavailable
+row.maximum_abs_negative_sequence_magnitude_derivative # `missing` when unavailable
+row.maximum_abs_vuf_derivative                         # `missing` when unavailable
 row.endpoint_status
 row.model_domain_status
 row.jacobian_regular_status
@@ -131,7 +131,8 @@ row.sequence_unbalance_status
 row.high_side_indicator_count
 row.near_nose_indicator_count
 row.fixed_point_certificate_status
-row.fixed_point_max_condition_margin
+row.fixed_point_condition_margin       # best finite-scan robustness margin
+row.fixed_point_radius_condition_margin # selected-radius containment margin
 row.scope_status
 row.upstream_adapter_version
 row.upstream_adapter_fingerprint

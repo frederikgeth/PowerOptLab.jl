@@ -2520,7 +2520,9 @@ reports the same counts after excluding the explicitly complementary
 primary verdict. The upstream adapter version and public equilibrium seam
 and deterministic adapter fingerprint are retained for reproducibility. It is
 a reporting projection of one snapshot, not a contingency or operating-envelope
-assessment.
+assessment. Unavailable optional scalar metrics use `missing` consistently;
+raw diagnostic arrays may retain `NaN` when their numerical shape is part of
+the algorithmic evidence.
 """
 function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing)
     magnitudes = Float64[Float64(get(record, "magnitude", NaN))
@@ -2574,6 +2576,8 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
     endpoint_check = get(result.checks, "endpoint", nothing)
     voltage_bounds_check = get(result.checks, "terminal_voltage_bounds", nothing)
     sequence_check = get(result.checks, "sequence_unbalance", nothing)
+    optional_float(value) = value === nothing || value === missing ||
+        (value isa Real && isnan(Float64(value))) ? missing : Float64(value)
     endpoint_limit = endpoint_check === nothing || !(endpoint_check.limit isa Real) ?
         NaN : Float64(endpoint_check.limit)
     voltage_limits = voltage_bounds_check === nothing ||
@@ -2630,60 +2634,65 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
         load_scale_sensitivity_status=check_status("load_scale_sensitivity"),
         load_scale_sensitivity_validation_status=check_status(
             "load_scale_sensitivity_validation"),
-        load_scale_sensitivity_validation_relative_error=Float64(get(
-            load_scale_validation, "relative_error", NaN)),
+        load_scale_sensitivity_validation_relative_error=optional_float(get(
+            load_scale_validation, "relative_error", nothing)),
         directional_sensitivity_validation_status=check_status(
             "directional_sensitivity_validation"),
         directional_sensitivity_validation_max_relative_error=isempty(
-            directional_errors) ? NaN : maximum(directional_errors),
+            directional_errors) ? missing : maximum(directional_errors),
         jacobian_step_validation_status=check_status("jacobian_step_validation"),
-        jacobian_step_validation_relative_error=Float64(get(
-            jacobian_step_validation, "relative_error", NaN)),
+        jacobian_step_validation_relative_error=optional_float(get(
+            jacobian_step_validation, "relative_error", nothing)),
         analytic_jacobian_validation_status=check_status("analytic_jacobian_validation"),
-        analytic_jacobian_validation_relative_error=Float64(get(
-            analytic_jacobian_validation, "relative_error", NaN)),
+        analytic_jacobian_validation_relative_error=optional_float(get(
+            analytic_jacobian_validation, "relative_error", nothing)),
         analytic_load_scale_rhs_validation_status=check_status(
             "analytic_load_scale_rhs_validation"),
-        analytic_load_scale_rhs_validation_relative_error=Float64(get(
-            analytic_load_scale_validation, "relative_error", NaN)),
-        endpoint_residual=result.endpoint_residual,
-        endpoint_residual_normalized=result.endpoint_residual_normalized,
-        endpoint_residual_normalized_limit=endpoint_limit,
-        smallest_singular_value=isempty(result.singular_values) ? NaN : last(result.singular_values),
-        condition_number=result.condition_number,
-        minimum_terminal_voltage=isempty(magnitudes) ? NaN : minimum(magnitudes),
-        maximum_terminal_voltage=isempty(magnitudes) ? NaN : maximum(magnitudes),
+        analytic_load_scale_rhs_validation_relative_error=optional_float(get(
+            analytic_load_scale_validation, "relative_error", nothing)),
+        endpoint_residual=optional_float(result.endpoint_residual),
+        endpoint_residual_normalized=optional_float(result.endpoint_residual_normalized),
+        endpoint_residual_normalized_limit=optional_float(endpoint_limit),
+        smallest_singular_value=isempty(result.singular_values) ? missing : last(result.singular_values),
+        condition_number=isempty(result.state) ? missing : result.condition_number,
+        minimum_terminal_voltage=isempty(magnitudes) ? missing : minimum(magnitudes),
+        maximum_terminal_voltage=isempty(magnitudes) ? missing : maximum(magnitudes),
         terminal_voltage_min_limit=voltage_limits[1],
         terminal_voltage_max_limit=voltage_limits[2],
         sequence_unbalance_limit=sequence_limit,
-        maximum_abs_terminal_angle_derivative=isempty(angle_derivatives) ? NaN :
+        maximum_abs_terminal_angle_derivative=isempty(angle_derivatives) ? missing :
             maximum(angle_derivatives),
         maximum_vuf=isempty(vufs) ? missing : maximum(vufs),
         maximum_vuf_status=isempty(vufs) ? :not_applicable : :available,
         sequence_sensitivity_status=Symbol(get(sequence_sensitivity, "status",
             :not_applicable)),
         maximum_abs_positive_sequence_magnitude_derivative=isempty(
-            positive_sequence_derivatives) ? NaN : maximum(positive_sequence_derivatives),
+            positive_sequence_derivatives) ? missing : maximum(positive_sequence_derivatives),
         maximum_abs_negative_sequence_magnitude_derivative=isempty(
-            negative_sequence_derivatives) ? NaN : maximum(negative_sequence_derivatives),
-        maximum_abs_vuf_derivative=isempty(vuf_derivatives) ? NaN : maximum(vuf_derivatives),
+            negative_sequence_derivatives) ? missing : maximum(negative_sequence_derivatives),
+        maximum_abs_vuf_derivative=isempty(vuf_derivatives) ? missing : maximum(vuf_derivatives),
         high_side_indicator_count=count(==("negative_high_side_indicator"), classifications),
         near_nose_indicator_count=count(==("near_nose_indicator"), classifications),
         near_zero_voltage_tangent_count=get(get(result.branch_evidence,
             "dP_dV", Dict{String,Any}()), "near_zero_voltage_tangent_count", 0),
         low_side_indicator_count=count(==("positive_low_side_indicator"), classifications),
         fixed_point_certificate_status=Symbol(get(certificate, "status", :not_applicable)),
-        fixed_point_condition_margin=Float64(get(certificate, "condition_margin", NaN)),
-        fixed_point_max_condition_margin=Float64(get(certificate,
-            "max_condition_margin", NaN)),
+        fixed_point_condition_margin=optional_float(get(certificate,
+            "max_condition_margin", nothing)),
+        fixed_point_radius_condition_margin=optional_float(get(certificate,
+            "condition_margin", nothing)),
+        fixed_point_max_condition_margin=optional_float(get(certificate,
+            "max_condition_margin", nothing)),
         fixed_point_selected_region=get(certificate, "selected_region", missing),
         fixed_point_local_region_status=Symbol(get(local_certificate, "status", :not_applicable)),
-        fixed_point_local_condition_margin=Float64(get(local_certificate, "condition_margin", NaN)),
+        fixed_point_local_condition_margin=optional_float(get(local_certificate,
+            "condition_margin", nothing)),
         fixed_point_euclidean_region_status=Symbol(get(euclidean_certificate, "status", :not_applicable)),
-        fixed_point_euclidean_condition_margin=Float64(get(euclidean_certificate, "condition_margin", NaN)),
+        fixed_point_euclidean_condition_margin=optional_float(get(euclidean_certificate,
+            "condition_margin", nothing)),
         helm_reachability_status=Symbol(get(reachability, "status", :not_applicable)),
-        helm_endpoint_mismatch=Float64(get(reachability, "endpoint_mismatch", NaN)),
-        helm_endpoint_limit=Float64(get(reachability, "endpoint_limit", NaN)),
+        helm_endpoint_mismatch=optional_float(get(reachability, "endpoint_mismatch", nothing)),
+        helm_endpoint_limit=optional_float(get(reachability, "endpoint_limit", nothing)),
         helm_common_node_count=get(reachability, "common_nodes", missing),
         jacobian_spectrum_mode=String(get(complexity, "jacobian_spectrum_mode", "not_available")),
         jacobian_storage_mode=String(get(complexity, "jacobian_storage_mode", "not_available")),

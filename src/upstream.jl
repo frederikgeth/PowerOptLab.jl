@@ -37,6 +37,11 @@ function operability_upstream_audit()
     public_equilibrium_seam_available = isdefined(BMOPFTools, :ybus_linearized)
     private_imports_available = all(isdefined(BMOPFTools, Symbol(name))
                                     for name in private_imports)
+    private_imports_bound = all(isdefined(@__MODULE__, Symbol(name))
+                                for name in private_imports)
+    private_imports_match_upstream = private_imports_bound && all(
+        getfield(@__MODULE__, Symbol(name)) ===
+        getfield(BMOPFTools, Symbol(name)) for name in private_imports)
     Dict{String,Any}(
         "upstream_package" => "BMOPFTools",
         "upstream_version" => upstream_version,
@@ -46,8 +51,11 @@ function operability_upstream_audit()
         "public_equilibrium_seam_available" => public_equilibrium_seam_available,
         "private_imports" => private_imports,
         "private_imports_available" => private_imports_available,
+        "private_imports_bound" => private_imports_bound,
+        "private_imports_match_upstream" => private_imports_match_upstream,
         "compatibility_status" => public_equilibrium_seam_available &&
-            private_imports_available ? :supported : :not_applicable,
+            private_imports_available && private_imports_match_upstream ?
+            :supported : :not_applicable,
         "private_load_decomposition" => true,
         "generator_ibr_controller_residual_seam" => false,
         "replacement_plan" =>

@@ -419,11 +419,13 @@ function continue_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
                                   context=nothing,
                                   stop_on_voltage_limit::Bool=false)
     coords = _operability_coordinates(net, spec; context)
-    unsupported = _operability_preflight(net)
+    scope_audit = operability_scope_audit(net)
+    unsupported = copy(scope_audit["unsupported_reasons"])
     !isempty(unsupported) && return _continuation_empty_result(
         :not_applicable, "candidate contains physics outside the continuation scope",
-        coords.provenance, [Dict{String,Any}("kind" => "unsupported_physics",
-                                             "reasons" => unsupported)])
+        merge(deepcopy(coords.provenance), Dict{String,Any}("scope_audit" => scope_audit)),
+        [Dict{String,Any}("kind" => "unsupported_physics",
+                          "reasons" => unsupported)])
     source_buses = _operability_source_buses(net)
     isempty(source_buses) && throw(ArgumentError("continuation requires a voltage source"))
     lin_target = BMOPFTools.ybus_linearized(net; fold=:constant_z)
@@ -731,10 +733,11 @@ function locate_opf_operability_fold(
     isfinite(Float64(jacobian_step)) && jacobian_step > 0 ||
         throw(ArgumentError("jacobian_step must be finite and > 0"))
     coords = _operability_coordinates(net, spec; context)
-    unsupported = _operability_preflight(net)
+    scope_audit = operability_scope_audit(net)
+    unsupported = copy(scope_audit["unsupported_reasons"])
     !isempty(unsupported) && return _operability_fold_empty(
         :not_applicable, "candidate contains physics outside the continuation scope",
-        coords.provenance)
+        merge(deepcopy(coords.provenance), Dict{String,Any}("scope_audit" => scope_audit)))
     source_buses = _operability_source_buses(net)
     isempty(source_buses) && throw(ArgumentError("fold localization requires a voltage source"))
     lin_nominal = BMOPFTools.ybus_linearized(net; fold=:constant_z)
@@ -945,11 +948,13 @@ function continue_opf_operability_pseudo_arclength(
         stop_at_target::Bool=true,
         stop_on_voltage_limit::Bool=false)
     coords = _operability_coordinates(net, spec; context)
-    unsupported = _operability_preflight(net)
+    scope_audit = operability_scope_audit(net)
+    unsupported = copy(scope_audit["unsupported_reasons"])
     !isempty(unsupported) && return _continuation_empty_result(
         :not_applicable, "candidate contains physics outside the continuation scope",
-        coords.provenance, [Dict{String,Any}("kind" => "unsupported_physics",
-                                             "reasons" => unsupported)])
+        merge(deepcopy(coords.provenance), Dict{String,Any}("scope_audit" => scope_audit)),
+        [Dict{String,Any}("kind" => "unsupported_physics",
+                          "reasons" => unsupported)])
     source_buses = _operability_source_buses(net)
     isempty(source_buses) && throw(ArgumentError("continuation requires a voltage source"))
     lin_target = BMOPFTools.ybus_linearized(net; fold=:constant_z)
