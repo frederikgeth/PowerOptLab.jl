@@ -179,6 +179,10 @@ The row also carries the declared endpoint residual, terminal-voltage, and
 sequence-unbalance limits next to the corresponding measurements and statuses.
 `check_messages` preserves the deterministic explanation for each status,
 including unsupported-scope, not-requested, and inconclusive outcomes.
+`claim_statuses` provides section-level aggregation for endpoint,
+voltage-quality, local-regularity, sensitivities, reachability, and
+certificates; each section uses fail-over-inconclusive-over-pass precedence and
+is `:not_applicable` when none of its checks were available.
 When HELM is requested, `helm_endpoint_mismatch`, `helm_endpoint_limit`, and
 `helm_common_node_count` expose the numerical agreement behind
 `helm_reachability_status`; otherwise they are `NaN` or `missing`.

@@ -1787,6 +1787,15 @@ function _operability_check_status_counts(checks::Dict{String,OperabilityCheck};
     counts
 end
 
+function _operability_claim_status(checks::Dict{String,OperabilityCheck}, names)
+    statuses = Symbol[checks[name].status for name in names if haskey(checks, name)]
+    isempty(statuses) && return :not_applicable
+    any(==(:fail), statuses) && return :fail
+    any(==(:inconclusive), statuses) && return :inconclusive
+    any(==(:pass), statuses) && return :pass
+    :not_applicable
+end
+
 """
     check_opf_operability(net, solution; spec, context=nothing)
 
@@ -2583,10 +2592,25 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
     check_messages = Dict{String,String}(
         String(key) => result.checks[key].message
         for key in sort!(collect(keys(result.checks)); by=String))
+    claim_statuses = Dict{String,Symbol}(
+        "endpoint" => _operability_claim_status(result.checks,
+            ("endpoint", "model_domain")),
+        "voltage_quality" => _operability_claim_status(result.checks,
+            ("terminal_voltage_bounds", "sequence_unbalance")),
+        "local_regularity" => _operability_claim_status(result.checks,
+            ("jacobian_regular",)),
+        "sensitivities" => _operability_claim_status(result.checks,
+            ("load_scale_sensitivity", "load_scale_sensitivity_validation",
+             "directional_sensitivity_validation")),
+        "reachability" => _operability_claim_status(result.checks,
+            ("helm_reachability",)),
+        "certificates" => _operability_claim_status(result.checks,
+            ("fixed_point_certificate", "fixed_point_euclidean_region")))
     (
         snapshot_id=snapshot_id,
         schema_version="operability_snapshot_row/v1",
         status=result.status,
+        claim_statuses=claim_statuses,
         check_messages=check_messages,
         check_count=length(result.checks),
         check_pass_count=all_check_counts[:pass],

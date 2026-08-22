@@ -92,6 +92,7 @@ using SparseArrays
     @test zero_row.primary_check_inconclusive_count > 0
     @test zero_row.primary_check_fail_count > 0
     @test occursin("zero terminal voltage", zero_row.check_messages["model_domain"])
+    @test zero_row.claim_statuses["endpoint"] == :fail
     @test report.checks["jacobian_regular"].status == :pass
     @test report.checks["jacobian_step_validation"].status == :not_applicable
     @test report.checks["analytic_jacobian_validation"].status == :not_applicable
@@ -133,6 +134,12 @@ using SparseArrays
     @test snapshot_row.snapshot_id == "base"
     @test snapshot_row.schema_version == "operability_snapshot_row/v1"
     @test snapshot_row.status == :pass
+    @test snapshot_row.claim_statuses["endpoint"] == :pass
+    @test snapshot_row.claim_statuses["voltage_quality"] == :pass
+    @test snapshot_row.claim_statuses["local_regularity"] == :pass
+    @test snapshot_row.claim_statuses["sensitivities"] == :pass
+    @test snapshot_row.claim_statuses["reachability"] == :not_applicable
+    @test snapshot_row.claim_statuses["certificates"] == :not_applicable
     @test snapshot_row.check_messages["helm_reachability"] ==
           "HELM cross-check was not requested"
     @test snapshot_row.check_messages["endpoint"] ==
@@ -365,6 +372,7 @@ using SparseArrays
           ("implicit_sparse_factorization", "implicit_dense_factorization")
     certificate_row = operability_snapshot_row(certificate_report)
     @test certificate_row.fixed_point_certificate_status == :pass
+    @test certificate_row.claim_statuses["certificates"] == :pass
     @test certificate_row.primary_check_count == certificate_row.check_count - 1
     @test certificate_row.primary_check_pass_count == certificate_row.check_pass_count - 1
     @test certificate_row.primary_check_inconclusive_count == certificate_row.check_inconclusive_count
@@ -706,6 +714,7 @@ using SparseArrays
     @test helm_report.branch_evidence["reachability"]["endpoint_mismatch"] < 1e-4
     helm_row = operability_snapshot_row(helm_report; snapshot_id="helm")
     @test helm_row.helm_reachability_status == :pass
+    @test helm_row.claim_statuses["reachability"] == :pass
     @test helm_row.helm_endpoint_mismatch < helm_row.helm_endpoint_limit
     @test helm_row.helm_common_node_count > 0
 
