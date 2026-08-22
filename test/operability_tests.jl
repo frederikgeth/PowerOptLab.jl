@@ -735,6 +735,7 @@ using SparseArrays
           "analytic_native_static"
     @test trace.provenance["continuation"]["lambda_forcing_method"] ==
           "finite_difference"
+    @test trace.provenance["continuation"]["analytic_jacobian_validation"]["status"] == :pass
     @test_throws ArgumentError OperabilityContinuationSpec(initial_step=0.01, min_step=0.1)
 
     pseudo_trace = continue_opf_operability_pseudo_arclength(net, pf;
@@ -752,6 +753,7 @@ using SparseArrays
           "analytic_native_static"
     @test pseudo_trace.provenance["continuation"]["jacobian_method"] ==
           "analytic_native_static"
+    @test pseudo_trace.provenance["continuation"]["analytic_jacobian_validation"]["status"] == :pass
     @test all(>(0.0), pseudo_trace.provenance["continuation"]["arclength_state_scale"])
     @test !isempty(pseudo_trace.provenance["continuation"]["curvature_history"])
     @test all(isfinite, pseudo_trace.provenance["continuation"]["curvature_history"])
@@ -838,6 +840,7 @@ using SparseArrays
     localized_fold = fold_events[1]["fold_localization"]
     @test localized_fold["status"] == :pass
     @test localized_fold["jacobian_method"] == "analytic_native_static"
+    @test localized_fold["analytic_jacobian_validation"]["status"] == :pass
     @test localized_fold["lambda"] ≈ 25 / 24 atol=1e-6
     @test localized_fold["sigma_min"] < 1e-7
     @test stress_trace.provenance["continuation"]["margin"]["mechanism"] == :fold_candidate
@@ -876,6 +879,7 @@ using SparseArrays
     @test fold.provenance["fold_localization"]["equations"] == "F=0,Jv=0,norm(v)=1"
     @test fold.provenance["fold_localization"]["jacobian_method"] ==
           "analytic_native_static"
+    @test fold.provenance["fold_localization"]["analytic_jacobian_validation"]["status"] == :pass
 
     # Scope exclusions are explicit evidence rather than a silent partial pass.
     ibr_net = doe_ibr_feeder()

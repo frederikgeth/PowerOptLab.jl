@@ -324,6 +324,7 @@ pseudo.provenance["continuation"]["arclength_state_scale"]
 pseudo.provenance["continuation"]["curvature_history"]
 pseudo.provenance["continuation"]["jacobian_method"]
 pseudo.provenance["continuation"]["lambda_forcing_method"]
+pseudo.provenance["continuation"]["analytic_jacobian_validation"]
 
 # To continue the declared stress path beyond the audited endpoint:
 stress = continue_opf_operability_pseudo_arclength(net, pf;

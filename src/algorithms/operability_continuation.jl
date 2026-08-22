@@ -225,6 +225,39 @@ function _continuation_scaled_jacobian(lin, meta, x, coords, cfg;
     J, state_scale, residual_scale
 end
 
+function _continuation_analytic_jacobian_validation(net, lin, meta, x, coords, cfg;
+                                                    tolerance::Real=1e-3)
+    analytic = try
+        _operability_analytic_jacobian(net, lin, meta, x)
+    catch
+        nothing
+    end
+    analytic === nothing && return Dict{String,Any}(
+        "status" => :not_applicable,
+        "message" => "analytic native Jacobian is unavailable at this point")
+    state_scale, residual_scale = _operability_scales(lin, meta, coords)
+    finite_difference = finite_difference_jacobian(
+        y -> _operability_residual(lin, meta, y), x; step=cfg.jacobian_step)
+    analytic = issparse(analytic) ? Matrix(analytic) : analytic
+    finite_scaled = _operability_scaled_jacobian(
+        finite_difference, state_scale, residual_scale)
+    analytic_scaled = _operability_scaled_jacobian(
+        analytic, state_scale, residual_scale)
+    absolute_error = norm(finite_scaled - analytic_scaled, Inf)
+    scale = max(1.0, norm(finite_scaled, Inf), norm(analytic_scaled, Inf))
+    relative_error = absolute_error / scale
+    status = relative_error <= Float64(tolerance) ? :pass : :inconclusive
+    Dict{String,Any}(
+        "status" => status,
+        "absolute_error" => absolute_error,
+        "relative_error" => relative_error,
+        "tolerance" => Float64(tolerance),
+        "step" => cfg.jacobian_step,
+        "message" => status === :pass ?
+            "analytic native Jacobian agrees with finite difference" :
+            "analytic native Jacobian disagrees with finite difference")
+end
+
 function _continuation_corrector(lin, meta, x0, coords, cfg;
                                  net=nothing, analytic::Bool=false)
     x = copy(x0)
@@ -354,6 +387,8 @@ function continue_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
     end
     analytic_jacobian_method = analytic_jacobian_available ?
         "analytic_native_static" : "finite_difference"
+    analytic_jacobian_validation = _continuation_analytic_jacobian_validation(
+        net, lin_target, meta, target_x, coords, continuation)
     Jzero, state_scale, residual_scale = _continuation_scaled_jacobian(
         lin_zero, meta, target_x, coords, continuation;
         net=net_zero, analytic=analytic_jacobian_available)
@@ -474,6 +509,7 @@ function continue_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
         "natural_parameter" => true, "pseudo_arclength" => false,
         "jacobian_method" => analytic_jacobian_method,
         "lambda_forcing_method" => "finite_difference",
+        "analytic_jacobian_validation" => analytic_jacobian_validation,
         "stop_on_voltage_limit" => stop_on_voltage_limit,
         "margin" => _continuation_margin(events))
     OperabilityContinuationResult(status, message, lambdas, states, node_voltages,
@@ -654,6 +690,9 @@ function locate_opf_operability_fold(
     end
     analytic_jacobian_method = analytic_jacobian_available ?
         "analytic_native_static" : "finite_difference"
+    analytic_jacobian_validation = _continuation_analytic_jacobian_validation(
+        net, lin_nominal, meta, meta.state, coords,
+        OperabilityContinuationSpec(jacobian_step=jacobian_step))
     net_at_lambda = _operability_scale_network(net, lambda)
     J0, _, residual_scale = _continuation_scaled_jacobian(
         BMOPFTools.ybus_linearized(net_at_lambda;
@@ -709,7 +748,8 @@ function locate_opf_operability_fold(
         "closure" => String(spec.closure),
         "source_buses" => sort!(collect(source_buses)), "state_nodes" => meta.state_nodes,
         "initial_lambda" => Float64(lambda), "iterations" => iterations,
-        "jacobian_method" => analytic_jacobian_method)
+        "jacobian_method" => analytic_jacobian_method,
+        "analytic_jacobian_validation" => analytic_jacobian_validation)
     status = converged ? :pass : :inconclusive
     message = converged ? "bordered fold equations converged" :
         "bordered fold equations did not converge"
@@ -886,6 +926,8 @@ function continue_opf_operability_pseudo_arclength(
     end
     analytic_jacobian_method = analytic_jacobian_available ?
         "analytic_native_static" : "finite_difference"
+    analytic_jacobian_validation = _continuation_analytic_jacobian_validation(
+        net, lin_target, meta, target_x, coords, natural_cfg)
     Jzero, state_scale, residual_scale = _continuation_scaled_jacobian(
         lin_zero, meta, target_x, coords, natural_cfg;
         net=net_zero, analytic=analytic_jacobian_available)
@@ -1119,7 +1161,10 @@ function continue_opf_operability_pseudo_arclength(
                 "iterations" => localized.iterations,
                 "jacobian_method" => get(
                     get(localized.provenance, "fold_localization", Dict{String,Any}()),
-                    "jacobian_method", "not_available"))
+                    "jacobian_method", "not_available"),
+                "analytic_jacobian_validation" => get(
+                    get(localized.provenance, "fold_localization", Dict{String,Any}()),
+                    "analytic_jacobian_validation", Dict{String,Any}()))
             push!(events, fold_event)
         end
         turning_angle = acos(clamp(real(dot(tangent, tangent_new)), -1.0, 1.0))
@@ -1159,6 +1204,7 @@ function continue_opf_operability_pseudo_arclength(
         "natural_parameter" => false, "pseudo_arclength" => true,
         "lambda_forcing_method" => analytic_forcing_method,
         "jacobian_method" => analytic_jacobian_method,
+        "analytic_jacobian_validation" => analytic_jacobian_validation,
         "arclength_state_scale" => arc_state_scale,
         "arclength_steps" => arclength_steps,
         "curvature_history" => curvature_history,
