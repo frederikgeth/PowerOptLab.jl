@@ -125,6 +125,7 @@ row.fixed_point_certificate_status
 row.fixed_point_max_condition_margin
 row.scope_status
 row.upstream_adapter_version
+row.upstream_adapter_fingerprint
 row.upstream_public_equilibrium_seam
 row.closure
 row.control_closure

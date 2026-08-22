@@ -9,6 +9,8 @@ using SparseArrays
     upstream_audit = operability_upstream_audit()
     @test upstream_audit["upstream_package"] == "BMOPFTools"
     @test upstream_audit["upstream_version"] == "0.1.0"
+    @test upstream_audit["adapter_fingerprint"] ==
+          "BMOPFTools|0.1.0|bmopftools-0.1.0-private-load-decomposition/v1|_Node,_SubLoad,_load_subloads,_subload_S,_subload_S_nz,_subload_yz,_stamp_pair!,_neutral_terminal,_neutral_labels,_neutral_pos,_phase_positions,_DEFAULT_CONFIG"
     @test upstream_audit["public_equilibrium_seam"] == "BMOPFTools.ybus_linearized"
     @test upstream_audit["private_load_decomposition"] === true
     @test upstream_audit["generator_ibr_controller_residual_seam"] === false
@@ -104,6 +106,7 @@ using SparseArrays
     @test snapshot_row.equilibrium_scope == "static_ybus_linearized"
     @test snapshot_row.upstream_adapter_version ==
           "bmopftools-0.1.0-private-load-decomposition/v1"
+    @test snapshot_row.upstream_adapter_fingerprint == upstream_audit["adapter_fingerprint"]
     @test snapshot_row.upstream_public_equilibrium_seam ==
           "BMOPFTools.ybus_linearized"
     @test snapshot_row.closure == :frozen_dispatch

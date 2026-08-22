@@ -2194,8 +2194,9 @@ unsupported-scope reasons. It also retains scope status, closure/control
 closure, and source-topology readiness so pooled rows cannot hide an
 out-of-scope snapshot; the original unsupported-reason list is retained
 alongside its count. The upstream adapter version and public equilibrium seam
-are retained for reproducibility. It is a reporting projection of one
-snapshot, not a contingency or operating-envelope assessment.
+and deterministic adapter fingerprint are retained for reproducibility. It is
+a reporting projection of one snapshot, not a contingency or operating-envelope
+assessment.
 """
 function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing)
     magnitudes = Float64[Float64(get(record, "magnitude", NaN))
@@ -2262,6 +2263,7 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
             result.status === :not_applicable ? :not_applicable : :supported)),
         equilibrium_scope=String(get(operability, "scope", "static_ybus_linearized")),
         upstream_adapter_version=String(get(upstream, "adapter_version", "not_available")),
+        upstream_adapter_fingerprint=String(get(upstream, "adapter_fingerprint", "not_available")),
         upstream_public_equilibrium_seam=String(get(upstream,
             "public_equilibrium_seam", "not_available")),
         closure=Symbol(get(operability, "closure", "frozen_dispatch")),

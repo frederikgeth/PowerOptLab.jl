@@ -29,12 +29,18 @@ The record is provenance, not a claim that generator, IBR, or controller
 equations are included in the native static closure.
 """
 function operability_upstream_audit()
+    upstream_version = string(Base.pkgversion(BMOPFTools))
+    private_imports = collect(_OPERABILITY_UPSTREAM_PRIVATE_IMPORTS)
+    fingerprint = join(("BMOPFTools", upstream_version,
+                        _OPERABILITY_UPSTREAM_ADAPTER_VERSION,
+                        join(private_imports, ",")), "|")
     Dict{String,Any}(
         "upstream_package" => "BMOPFTools",
-        "upstream_version" => string(Base.pkgversion(BMOPFTools)),
+        "upstream_version" => upstream_version,
         "adapter_version" => _OPERABILITY_UPSTREAM_ADAPTER_VERSION,
+        "adapter_fingerprint" => fingerprint,
         "public_equilibrium_seam" => "BMOPFTools.ybus_linearized",
-        "private_imports" => collect(_OPERABILITY_UPSTREAM_PRIVATE_IMPORTS),
+        "private_imports" => private_imports,
         "private_load_decomposition" => true,
         "generator_ibr_controller_residual_seam" => false,
         "replacement_plan" =>
