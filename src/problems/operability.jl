@@ -1853,13 +1853,14 @@ function check_opf_operability(net::Dict{String,Any}, solution::AbstractDict;
         end
     end
     model_domain_status = isempty(model_domain_issues) ? :pass : :inconclusive
+    model_domain_message = isempty(model_domain_issues) ?
+        "finite, nonzero terminal phasors support angle and load-law derivative evidence" :
+        "terminal model-domain evidence is incomplete: " * join(model_domain_issues, "; ")
     checks["model_domain"] = OperabilityCheck(
         model_domain_status,
         isempty(model_domain_issues) ? "all modeled load terminals are in-domain" :
             copy(model_domain_issues), nothing,
-        isempty(model_domain_issues) ?
-            "finite, nonzero terminal phasors support angle and load-law derivative evidence" :
-            "terminal model-domain evidence is incomplete")
+        model_domain_message)
     magnitudes = [Float64(record["magnitude"]) for record in values(load_records)]
     if isempty(magnitudes) || (spec.voltage_min == 0.0 && spec.voltage_max == Inf)
         checks["terminal_voltage_bounds"] = OperabilityCheck(:not_applicable,
@@ -2579,10 +2580,14 @@ function operability_snapshot_row(result::OperabilityResult; snapshot_id=nothing
                                                              primary_only=true)
     check_status(name) = get(result.checks, name,
         OperabilityCheck(:not_applicable, nothing, nothing, "check unavailable")).status
+    check_messages = Dict{String,String}(
+        String(key) => result.checks[key].message
+        for key in sort!(collect(keys(result.checks)); by=String))
     (
         snapshot_id=snapshot_id,
         schema_version="operability_snapshot_row/v1",
         status=result.status,
+        check_messages=check_messages,
         check_count=length(result.checks),
         check_pass_count=all_check_counts[:pass],
         check_fail_count=all_check_counts[:fail],

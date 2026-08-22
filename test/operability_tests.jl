@@ -57,6 +57,8 @@ using SparseArrays
     @test dangling_source_row.status == :not_applicable
     @test dangling_source_row.check_not_applicable_count == dangling_source_row.check_count
     @test dangling_source_row.primary_check_count == dangling_source_row.check_count
+    @test occursin("outside the first operability residual scope",
+                   dangling_source_row.check_messages["scope"])
 
     blank_source_net = deepcopy(net)
     delete!(blank_source_net["voltage_source"]["vs"], "bus")
@@ -89,6 +91,7 @@ using SparseArrays
     zero_row = operability_snapshot_row(zero_report; snapshot_id="zero_domain")
     @test zero_row.primary_check_inconclusive_count > 0
     @test zero_row.primary_check_fail_count > 0
+    @test occursin("zero terminal voltage", zero_row.check_messages["model_domain"])
     @test report.checks["jacobian_regular"].status == :pass
     @test report.checks["jacobian_step_validation"].status == :not_applicable
     @test report.checks["analytic_jacobian_validation"].status == :not_applicable
@@ -130,6 +133,10 @@ using SparseArrays
     @test snapshot_row.snapshot_id == "base"
     @test snapshot_row.schema_version == "operability_snapshot_row/v1"
     @test snapshot_row.status == :pass
+    @test snapshot_row.check_messages["helm_reachability"] ==
+          "HELM cross-check was not requested"
+    @test snapshot_row.check_messages["endpoint"] ==
+          "max audited-policy-normalized current-balance mismatch on non-source nodes"
     @test snapshot_row.check_count == length(report.checks)
     @test snapshot_row.check_pass_count > 0
     @test snapshot_row.check_fail_count == 0
