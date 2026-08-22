@@ -452,6 +452,12 @@ using SparseArrays
     @test delta_report.status == :not_applicable
     @test length(delta_report.load_connections) == 3
     @test all(r["positive"] !== r["negative"] for r in values(delta_report.load_connections))
+    delta_analytic = check_opf_operability(delta_net, delta_pf;
+        spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
+            compute_analytic_jacobian_validation=true))
+    @test delta_analytic.checks["analytic_jacobian_validation"].status == :pass
+    @test delta_analytic.branch_evidence["analytic_jacobian_validation"][
+        "relative_error"] <= 1e-3
     @test delta_report.provenance["operability"]["model_inventory"]["load_configurations"] ==
           ["DELTA"]
     delta_certificate = check_opf_operability(delta_net, delta_pf;
@@ -486,6 +492,12 @@ using SparseArrays
     # below guards the corrected Euclidean bound for this multi-state edge.
     @test floating_certificate.checks["fixed_point_euclidean_region"].status == :pass
     @test length(floating_certificate.state_nodes) == 4
+    floating_analytic = check_opf_operability(floating_net, floating_pf;
+        spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
+            compute_analytic_jacobian_validation=true))
+    @test floating_analytic.checks["analytic_jacobian_validation"].status == :pass
+    @test floating_analytic.branch_evidence["analytic_jacobian_validation"][
+        "relative_error"] <= 1e-3
     # A dedicated single-edge probe guards tightness of the Euclidean incidence
     # factor. Unlike the multi-edge four-wire smoke test below, this fixture
     # can align all nonlinear current variation with the one binding edge.

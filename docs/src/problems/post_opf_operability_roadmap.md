@@ -508,6 +508,10 @@ and compares it with finite differences, including wye/delta incidence. This
 is the first analytic-versus-FD network cross-check; endogenous controls and
 generator/IBR equations remain outside the native seam.
 
+The regression fixtures now exercise that cross-check on balanced delta and
+floating-neutral wye topology in addition to the scalar feeder, guarding the
+cross-phase and neutral-incidence signs that determine the Jacobian spectrum.
+
 Local nonsingularity is not a branch classifier: high- and low-voltage sheets
 are both locally regular away from a fold.
 
