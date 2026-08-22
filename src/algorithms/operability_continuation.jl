@@ -658,21 +658,33 @@ function locate_opf_operability_fold(
         Float64(sigma), iterations, mode, provenance)
 end
 
-function _pseudo_lambda_residual(net, λ, meta, x, residual_scale, h)
+function _pseudo_lambda_residual(net, λ, meta, x, residual_scale, h;
+                                 analytic_lin=nothing, analytic_zero_lin=nothing)
+    if analytic_lin !== nothing
+        analytic_rhs = try
+            _operability_analytic_load_scale_rhs(
+                net, analytic_lin, meta, x; zero_lin=analytic_zero_lin)
+        catch
+            nothing
+        end
+        analytic_rhs !== nothing && return analytic_rhs ./ residual_scale,
+            :analytic_native_static
+    end
     if λ <= h
         lp = BMOPFTools.ybus_linearized(_operability_scale_network(net, λ + h);
                                         fold=:constant_z)
         l0 = BMOPFTools.ybus_linearized(_operability_scale_network(net, λ);
                                         fold=:constant_z)
-        return (_operability_residual(lp, meta, x) - _operability_residual(l0, meta, x)) /
-            h ./ residual_scale
+        return ((_operability_residual(lp, meta, x) -
+                 _operability_residual(l0, meta, x)) / h ./ residual_scale,
+                :finite_difference)
     end
     lp = BMOPFTools.ybus_linearized(_operability_scale_network(net, λ + h);
                                     fold=:constant_z)
     lm = BMOPFTools.ybus_linearized(_operability_scale_network(net, λ - h);
                                     fold=:constant_z)
-    (_operability_residual(lp, meta, x) - _operability_residual(lm, meta, x)) /
-        (2h) ./ residual_scale
+    ((_operability_residual(lp, meta, x) - _operability_residual(lm, meta, x)) /
+        (2h) ./ residual_scale, :finite_difference)
 end
 
 function _pseudo_arclength_jacobian(lin, meta, x, coords, cfg, arc_state_scale)
@@ -689,7 +701,8 @@ function _pseudo_arclength_jacobian(lin, meta, x, coords, cfg, arc_state_scale)
 end
 
 function _pseudo_corrector(net, ypred, tangent, meta, arc_state_scale, residual_scale,
-                           coords, cfg::OperabilityPseudoArclengthSpec)
+                           coords, cfg::OperabilityPseudoArclengthSpec;
+                           analytic_lin=nothing, analytic_zero_lin=nothing)
     # The continuation state contains real and imaginary components for every
     # free complex node.  `state_nodes` counts complex nodes, whereas `state`
     # (and the scaled Jacobian) has twice as many real entries.
@@ -713,8 +726,10 @@ function _pseudo_corrector(net, ypred, tangent, meta, arc_state_scale, residual_
         norm_g <= cfg.corrector_tol && return y, true, iteration
         J, _ = _pseudo_arclength_jacobian(
             lin, meta, x, coords, natural_cfg, arc_state_scale)
-        fλ = _pseudo_lambda_residual(net, λ, meta, x, residual_scale,
-                                     cfg.jacobian_step)
+        fλ, _ = _pseudo_lambda_residual(net, λ, meta, x, residual_scale,
+                                        cfg.jacobian_step;
+                                        analytic_lin=analytic_lin,
+                                        analytic_zero_lin=analytic_zero_lin)
         A = [J fλ; reshape(tangent, 1, :)]
         dy = try
             -(A \ G)
@@ -792,6 +807,16 @@ function continue_opf_operability_pseudo_arclength(
         endpoint_rtol=continuation.endpoint_rtol)
     net_zero = _operability_scale_network(net, 0.0)
     lin_zero = BMOPFTools.ybus_linearized(net_zero; fold=:constant_z)
+    analytic_forcing_available = try
+        _operability_analytic_load_scale_rhs(
+            net, lin_target, meta, target_x; zero_lin=lin_zero) !== nothing
+    catch
+        false
+    end
+    analytic_forcing_method = analytic_forcing_available ?
+        "analytic_native_static" : "finite_difference"
+    analytic_forcing_lin = analytic_forcing_available ? lin_target : nothing
+    analytic_forcing_zero_lin = analytic_forcing_available ? lin_zero : nothing
     Jzero, state_scale, residual_scale = _continuation_scaled_jacobian(
         lin_zero, meta, target_x, coords, natural_cfg)
     base_x = target_x - (Jzero \ (_operability_residual(lin_zero, meta, target_x) ./
@@ -804,8 +829,10 @@ function continue_opf_operability_pseudo_arclength(
                            "iterations" => base_iterations)])
 
     base_point = _continuation_point(lin_zero, meta, base_x, coords, natural_cfg)
-    Fλ = _pseudo_lambda_residual(net, 0.0, meta, base_x, residual_scale,
-                                 continuation.jacobian_step)
+    Fλ, _ = _pseudo_lambda_residual(net, 0.0, meta, base_x, residual_scale,
+                                    continuation.jacobian_step;
+                                    analytic_lin=analytic_forcing_lin,
+                                    analytic_zero_lin=analytic_forcing_zero_lin)
     # Keep the audited scaling for residual/Jacobian evidence, but use a
     # dimensionless voltage metric for the arclength coordinate.  This avoids
     # making SI-unit traces effectively voltage-only near a fold.
@@ -840,7 +867,9 @@ function continue_opf_operability_pseudo_arclength(
         step_used = step
         ypred = y .+ step .* tangent
         ynew, ok, iterations = _pseudo_corrector(
-            net, ypred, tangent, meta, arc_state_scale, residual_scale, coords, continuation)
+            net, ypred, tangent, meta, arc_state_scale, residual_scale, coords, continuation;
+            analytic_lin=analytic_forcing_lin,
+            analytic_zero_lin=analytic_forcing_zero_lin)
         if !ok
             push!(events, Dict{String,Any}("kind" => "corrector_failure",
                 "lambda" => ypred[end], "step" => step, "iterations" => iterations))
@@ -955,8 +984,10 @@ function continue_opf_operability_pseudo_arclength(
             message = "pseudo-arclength trace stopped at a declared voltage limit"
         end
         sigma = isempty(point.singular_values) ? NaN : last(point.singular_values)
-        fλ_new = _pseudo_lambda_residual(net, λnew, meta, xnew, residual_scale,
-                                         continuation.jacobian_step)
+        fλ_new, _ = _pseudo_lambda_residual(net, λnew, meta, xnew, residual_scale,
+                                            continuation.jacobian_step;
+                                            analytic_lin=analytic_forcing_lin,
+                                            analytic_zero_lin=analytic_forcing_zero_lin)
         Jnew, _ = _pseudo_arclength_jacobian(
             lin_new, meta, xnew, coords, natural_cfg, arc_state_scale)
         factorization_new = isempty(Jnew) ? nothing : svd(Jnew)
@@ -1039,6 +1070,7 @@ function continue_opf_operability_pseudo_arclength(
         "closure" => String(spec.closure),
         "source_buses" => sort!(collect(source_buses)), "state_nodes" => meta.state_nodes,
         "natural_parameter" => false, "pseudo_arclength" => true,
+        "lambda_forcing_method" => analytic_forcing_method,
         "arclength_state_scale" => arc_state_scale,
         "arclength_steps" => arclength_steps,
         "curvature_history" => curvature_history,

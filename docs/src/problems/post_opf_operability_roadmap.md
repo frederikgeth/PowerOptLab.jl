@@ -580,6 +580,12 @@ slice with recorded turning history; fold refinement beyond the local bordered
 candidate, deflation, and controller/generator closures remain Milestone 3
 work.
 
+Pseudo-arclength tangent and corrector equations now reuse the validated
+native-static analytic load-scale forcing term when the topology is compatible,
+and retain a finite-difference fallback with provenance. This improves the
+continuation tangent evidence but does not extend the derivative seam to
+controls, generators, or IBRs.
+
 The initial default homotopy proposed for review is:
 
 - keep passive network elements, physical shunts, grounding, and the source

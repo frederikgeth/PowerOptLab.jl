@@ -849,10 +849,11 @@ function _operability_analytic_jacobian(net::Dict{String,Any}, lin, meta, x)
          hcat(imag.(dR_re), imag.(dR_im)))
 end
 
-function _operability_analytic_load_scale_rhs(net::Dict{String,Any}, lin, meta, x)
+function _operability_analytic_load_scale_rhs(net::Dict{String,Any}, lin, meta, x;
+                                              zero_lin=nothing)
     V = _operability_voltage_vector(lin, meta, x)
-    zero_net = _operability_scale_network(net, 0.0)
-    zero_lin = BMOPFTools.ybus_linearized(zero_net; fold=:constant_z)
+    zero_lin === nothing && (zero_lin = BMOPFTools.ybus_linearized(
+        _operability_scale_network(net, 0.0); fold=:constant_z))
     length(zero_lin.nodes) == length(lin.nodes) || return nothing
     all(zero_lin.nodes .== lin.nodes) || return nothing
     load_residual = (lin.Y - zero_lin.Y) * V - lin.i_comp(V)
