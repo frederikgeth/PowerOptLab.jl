@@ -38,14 +38,30 @@ function snapshot_paths(root::AbstractString; feeder::Union{Nothing,String}=noth
     all(isdir, feeders) || throw(ArgumentError(
         "requested feeder directory does not exist under $root"))
     wanted = snapshots === nothing ? nothing : Set(snapshots)
+    matched = Set{String}()
     paths = String[]
     for directory in feeders
         for path in sort!(readdir(directory; join=true))
             endswith(path, ".bmopf.json") || continue
             sid = snapshot_id(path)
-            (wanted === nothing || sid in wanted ||
-             replace(sid, feeder_id(path) * "_" => "") in wanted) && push!(paths, path)
+            wanted === nothing && (push!(paths, path); continue)
+            suffix = replace(sid, feeder_id(path) * "_" => "")
+            keys_here = sid == suffix ? (sid,) : (sid, suffix)
+            hit = false
+            for key in keys_here
+                key in wanted || continue
+                push!(matched, key)
+                hit = true
+            end
+            hit && push!(paths, path)
         end
+    end
+    if wanted !== nothing
+        # Dropping a typo silently would yield a short campaign that still
+        # looks complete once the CSVs are written.
+        unmatched = sort!(collect(setdiff(wanted, matched)))
+        isempty(unmatched) || throw(ArgumentError(
+            "no snapshot matches: $(join(unmatched, ", "))"))
     end
     isempty(paths) && throw(ArgumentError("no matching .bmopf.json snapshots found"))
     paths
@@ -56,6 +72,15 @@ feeder_id(path::AbstractString) = basename(dirname(path))
 
 _number(value) = Float64(value)
 _scalar(value) = value isa AbstractVector ? _number(only(value)) : _number(value)
+_total(value) = value isa AbstractVector ? sum(_number, value) : _number(value)
+
+# The schema types `p_avail` as a scalar and `p_max` as a per-phase array,
+# while ENWL writes both as scalars, so total over whatever shape is present.
+function _available_power(record, fallback::Float64)
+    haskey(record, "p_avail") && return _total(record["p_avail"])
+    haskey(record, "p_max") && return _total(record["p_max"])
+    fallback
+end
 
 function _phase(record)
     terminals = String.(record["terminal_map"])
@@ -75,7 +100,7 @@ function _snapshot_inventory(path)
         topology_counts[topology] = get(topology_counts, topology, 0) + 1
         phase_counts[_phase(record)] += 1
         total_rating += sum(_number.(record["s_max"]))
-        total_available += _number(get(record, "p_avail", get(record, "p_max", 0.0)))
+        total_available += _available_power(record, 0.0)
     end
     (
         feeder=feeder_id(path), snapshot=snapshot_id(path), path=abspath(path),
@@ -125,6 +150,17 @@ function _selected_ids(net, count::Int)
     ids[indices]
 end
 
+const PER_PHASE_REFERENCES = ("PG_PER_PHASE", "PN_PER_PHASE")
+
+function _profile_field(section, name::String, allowed)
+    haskey(section, name) || throw(ArgumentError(
+        "ENWL control profile must declare '$name'"))
+    value = uppercase(String(section[name]))
+    value in allowed || throw(ArgumentError(
+        "unsupported $name '$value'; this study supports $(join(allowed, ", "))"))
+    value
+end
+
 function _as4777_laws(net)
     profiles = get(net, "control_profile", Dict())
     length(profiles) == 1 || throw(ArgumentError(
@@ -132,6 +168,25 @@ function _as4777_laws(net)
     profile = only(values(profiles))
     vv = profile["volt_var"]
     vw = profile["volt_watt"]
+
+    # The ordinate units decide what the curve fractions multiply. Checking
+    # them keeps the retrofitted plants on the same law as the native PVs
+    # solved alongside them: q_scale carries VAR_MAX and p_rated carries S_MAX.
+    _profile_field(vv, "q_unit", ("VA_FRACTION",))
+    _profile_field(vv, "q_ref", ("VAR_MAX",))
+    _profile_field(vw, "p_unit", ("VA_FRACTION",))
+    volt_watt_basis =
+        _profile_field(vw, "p_ref", ("S_MAX", "P_AVAILABLE")) == "S_MAX" ?
+        :rated : :available
+
+    # Both curves must monitor the same per-phase magnitude; the caller decides
+    # what to do about the phase-to-neutral/phase-to-ground gap.
+    reference = _profile_field(vv, "voltage_reference", PER_PHASE_REFERENCES)
+    vw_reference = _profile_field(vw, "voltage_reference", PER_PHASE_REFERENCES)
+    reference == vw_reference || throw(ArgumentError(
+        "volt-var and volt-watt must monitor the same voltage reference; " *
+        "got '$reference' and '$vw_reference'"))
+
     vv_breakpoints = Float64.(vv["breakpoints"])
     q_limits = Float64.(vv["q_limits"])
     length(vv_breakpoints) == 4 && length(q_limits) == 2 || throw(ArgumentError(
@@ -145,18 +200,23 @@ function _as4777_laws(net)
     volt_watt = PiecewiseLinearLaw(
         Float64.(vw["breakpoints"]), reverse(sort(p_limits));
         smoothing_epsilon=0.05)
-    volt_watt, volt_var
+    volt_watt, volt_var, volt_watt_basis, reference
 end
 
-function _controller(variant::String, volt_watt, volt_var)
+function _controller(variant::String, volt_watt, volt_var, volt_watt_basis::Symbol)
     positive = if variant == "baseline"
-        AverageVoltageVoltVarWatt(volt_watt=volt_watt, volt_var=volt_var)
+        AverageVoltageVoltVarWatt(
+            volt_watt=volt_watt, volt_var=volt_var,
+            volt_watt_basis=volt_watt_basis)
     elseif variant == "worst_phase"
         WorstPhaseVoltVarWatt(
             volt_watt=volt_watt, volt_var=volt_var,
-            extrema_epsilon=0.5, conflict_epsilon=0.05)
+            extrema_epsilon=0.5, conflict_epsilon=0.05,
+            volt_watt_basis=volt_watt_basis)
     elseif variant == "sequence_droop"
-        PositiveSequenceVoltVarWatt(volt_watt=volt_watt, volt_var=volt_var)
+        PositiveSequenceVoltVarWatt(
+            volt_watt=volt_watt, volt_var=volt_var,
+            volt_watt_basis=volt_watt_basis)
     else
         throw(ArgumentError("unknown variant '$variant'; choose from " *
                             join(DEFAULT_VARIANTS, ", ")))
@@ -186,7 +246,7 @@ function _retrofit!(net, id::String; nominal_voltage::Float64=230.0)
         "IBR '$id' bus '$bus' is not an a-b-c-n bus"))
 
     rating = sum(_number.(record["s_max"]))
-    available = _number(get(record, "p_avail", get(record, "p_max", rating)))
+    available = _available_power(record, rating)
     q_scale = max(abs(_scalar(get(record, "q_min", -rating))),
                   abs(_scalar(get(record, "q_max", rating))))
     per_phase_rating = rating / 3
@@ -224,7 +284,14 @@ end
 function _build_snapshot_cases(path::String, variants, device_count::Int)
     net = parse_bmopf(path)
     selected = _selected_ids(net, device_count)
-    volt_watt, volt_var = _as4777_laws(net)
+    volt_watt, volt_var, volt_watt_basis, reference = _as4777_laws(net)
+    if reference == "PN_PER_PHASE"
+        # A three-wire retrofit has no neutral to sense against, so the curve
+        # input carries the local neutral displacement on these feeders.
+        message = "profile monitors phase-to-neutral voltage, but the " *
+                  "retrofitted three-wire plants sense phase-to-ground"
+        @warn message reference maxlog=1
+    end
     inverters = Dict{String,AdvancedInverter}()
     requests = Dict{String,InverterControlRequest}()
     provenance = Dict{String,Any}()
@@ -241,10 +308,13 @@ function _build_snapshot_cases(path::String, variants, device_count::Int)
         "controlled_device_count" => length(selected),
         "selected_device_ids" => selected,
         "device_provenance" => provenance,
+        "profile_voltage_reference" => reference,
+        "sensed_voltage_reference" => "PG_PER_PHASE",
+        "volt_watt_basis" => String(volt_watt_basis),
     )
     [begin
         devices = Dict(id => ControlledDevice(
-            inverter, _controller(variant, volt_watt, volt_var))
+            inverter, _controller(variant, volt_watt, volt_var, volt_watt_basis))
             for (id, inverter) in inverters)
         InverterControlStudyCase(
             scenario_id=snapshot_id(path), variant_id=variant,

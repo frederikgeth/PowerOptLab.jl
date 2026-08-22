@@ -53,6 +53,16 @@ not a reproduction of the original single-phase PV operating point. The CSV
 outputs retain the source path, original phase/terminal map, selected IDs, and
 retrofit label in case metadata.
 
+The AS/NZS 4777 curves are read from the snapshot's `control_profile`, and the
+declared ordinate units are enforced rather than assumed: `p_ref: S_MAX` selects
+`volt_watt_basis=:rated`, so a retrofitted plant curtails against the same base
+as the native PVs solved beside it. The one gap the retrofit cannot close is the
+sensing reference. A three-wire plant has no neutral to measure against, so it
+senses phase-to-ground; on the `*_LN` feeders the profile declares
+`PN_PER_PHASE`, and the local neutral displacement then shifts the curve input.
+The campaign warns once when this applies and records both references in case
+metadata (`profile_voltage_reference`, `sensed_voltage_reference`).
+
 The variants are:
 
 - `baseline`: mean-phase Volt-var/Volt-watt, balanced current;
