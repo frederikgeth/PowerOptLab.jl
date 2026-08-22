@@ -80,6 +80,11 @@ using SparseArrays
     @test load_scale_connection["magnitude_derivative"] < 0.0
     @test isfinite(load_scale_connection["path_dP_dV"])
     @test load_scale_connection["path_dP_dV"] < 0.0
+    @test load_scale_connection["path_dP_dV_status"] == :available
+    @test isfinite(load_scale_connection["path_dQ_dV"])
+    @test load_scale_connection["path_dQ_dV"] ≈ 0.0 atol=1e-10
+    @test load_scale_connection["path_dP_dlambda"] ≈
+          real(load_scale_connection["realized_power_derivative"])
     @test report.branch_evidence["dP_dV"]["connections"]["ld1/1"]["classification"] ==
           "negative_high_side_indicator"
     @test haskey(report.sensitivities["directions"], "P")
@@ -87,6 +92,7 @@ using SparseArrays
     p_direction = report.sensitivities["directions"]["P"]["ld1/1"]
     @test p_direction["units"] == "W"
     @test p_direction["load_connections"]["ld1/1"]["magnitude_derivative"] < 0.0
+    @test p_direction["load_connections"]["ld1/1"]["path_dP_dV_status"] == :not_available
     @test report.provenance["operability"]["scope"] == "static_ybus_linearized"
     @test report.provenance["operability"]["closure"] == "frozen_dispatch"
     @test report.provenance["operability"]["upstream"] == upstream_audit

@@ -365,6 +365,12 @@ upstream-facing implementation step is to replace the private load-decomposition
 imports with a public residual/device-derivative API before admitting
 generator, IBR, or controller equations into this processor.
 
+The snapshot sensitivity records also retain the complementary reactive
+`dQ/dV` path derivative and explicit numerator (`dP/dlambda`, `dQ/dlambda`)
+terms, with a status for near-zero voltage tangents. This keeps the reported
+`dP/dV` sign tied to its declared path and avoids presenting a singular
+quotient as branch evidence.
+
 The processor should not create a second, silently divergent copy of the OPF
 device equations. An independent evaluation path is still required for
 validation; independence should come from the residual assembly and numerical

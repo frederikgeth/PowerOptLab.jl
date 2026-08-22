@@ -755,6 +755,17 @@ function _operability_load_records(net, vmap; dvmap=nothing, uniform_scale=false
             end
             path_dP_dV = uniform_scale && dvmap !== nothing && isfinite(dmag) &&
                 abs(dmag) > eps(Float64) ? real(path_dS) / dmag : NaN
+            path_dQ_dV = uniform_scale && dvmap !== nothing && isfinite(dmag) &&
+                abs(dmag) > eps(Float64) ? imag(path_dS) / dmag : NaN
+            path_dP_dV_status = if !(uniform_scale && dvmap !== nothing)
+                :not_available
+            elseif !isfinite(dmag)
+                :not_available
+            elseif abs(dmag) <= eps(Float64)
+                :near_zero_voltage_tangent
+            else
+                :available
+            end
             key = "$id/$k"
             records[key] = Dict{String,Any}(
                 "load" => id, "connection_index" => k,
@@ -766,7 +777,11 @@ function _operability_load_records(net, vmap; dvmap=nothing, uniform_scale=false
                 "voltage_derivative" => ComplexF64(dv),
                 "magnitude_derivative" => dmag,
                 "realized_power_derivative" => path_dS,
+                "path_dP_dlambda" => uniform_scale && dvmap !== nothing ? real(path_dS) : NaN,
+                "path_dQ_dlambda" => uniform_scale && dvmap !== nothing ? imag(path_dS) : NaN,
                 "path_dP_dV" => path_dP_dV,
+                "path_dQ_dV" => path_dQ_dV,
+                "path_dP_dV_status" => path_dP_dV_status,
             )
         end
     end

@@ -265,6 +265,14 @@ report.checks["fixed_point_euclidean_region"]
 # the independent Z-bus oracle summary.
 report.provenance["operability"]["model_inventory"]
 
+Each load-connection record under the uniform-load sensitivity retains both
+`path_dP_dV` and the complementary `path_dQ_dV`, plus the signed
+`path_dP_dlambda`/`path_dQ_dlambda` terms and a `path_dP_dV_status`. These are
+path-qualified derivatives in the declared uniform-load direction; a
+near-zero voltage tangent is reported as `:near_zero_voltage_tangent` rather
+than being divided into an unstable slope. The sign is therefore a branch
+indicator for that path, not a universal voltage-stability certificate.
+
 trace = continue_opf_operability(net, pf;
     spec = OperabilitySpec(scaling_policy = SIUnitsScaling()),
     continuation = OperabilityContinuationSpec(initial_step = 0.1))
