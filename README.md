@@ -187,9 +187,9 @@ retrofit and preserves the source cases and provenance.
 ## Development setup
 
 BMOPFTools is not yet registered. For development, use a local checkout; CI and
-documentation builds pin commit `b7aa9a1bb48bcc8b790d3bcf5417d6a32036352a`
+documentation builds pin commit `7937f9792babac62483203321803652bb2159271`
 so their dependency source is reproducible. That BMOPFTools snapshot uses
-PowerIO 0.7:
+PowerIO 0.9:
 
 ```julia
 using Pkg
