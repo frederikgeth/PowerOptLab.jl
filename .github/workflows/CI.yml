@@ -32,6 +32,6 @@ jobs:
       # BMOPFTools is not registered yet. Pin the tested source rather than
       # resolving whichever commit happens to be at the head of main.
       - name: Add pinned BMOPFTools dependency
-        run: julia --project=. -e 'using Pkg; Pkg.add(PackageSpec(url="https://github.com/frederikgeth/BMOPFTools.jl", rev="8f121216065bcd692f18444836c7c80149e5cf4a"))'
+        run: julia --project=. -e 'using Pkg; Pkg.add(PackageSpec(url="https://github.com/frederikgeth/BMOPFTools.jl", rev="7937f9792babac62483203321803652bb2159271"))'
       - uses: julia-actions/julia-buildpkg@latest
       - uses: julia-actions/julia-runtest@latest
