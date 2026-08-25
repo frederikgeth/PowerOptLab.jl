@@ -1181,6 +1181,76 @@ function _validate_inverter(inv::AdvancedInverter, nets=())
     end
     inv.grid_forming && length(inv.phase_terminals) != 3 && throw(ArgumentError(
         "grid-forming inverter '$(inv.id)' requires 3 phase_terminals"))
+    _warn_if_filter_negligible(inv, nets)
+    return nothing
+end
+
+# Below this per-unit magnitude a filter branch carries no meaningful voltage
+# drop / shunt current at the fundamental: it is electrically absent, whatever
+# the declared parameters say. Set well under any realistic LCL design (series
+# arms are normally 1-10% pu, the capacitor 2-10% pu) so the check flags
+# degenerate data, not merely a small filter.
+const _FILTER_NEGLIGIBLE_PU = 1e-3
+
+# Phase-to-neutral voltage scale for the inverter's own per-unit base, from
+# public data only. Each fallback is a declared rating, so the result is an
+# order-of-magnitude base for a negligibility test rather than a precise base.
+function _inverter_voltage_scale(inv::AdvancedInverter, nets)
+    nph = length(inv.phase_terminals)
+    for net in nets
+        bus = get(get(net, "bus", Dict()), inv.bus, nothing)
+        bus === nothing && continue
+        lo = get(bus, "v_min", nothing); hi = get(bus, "v_max", nothing)
+        vals = Float64[]
+        lo === nothing || append!(vals, Float64.(lo))
+        hi === nothing || append!(vals, Float64.(hi))
+        filter!(v -> isfinite(v) && v > 0, vals)
+        isempty(vals) || return sum(vals) / length(vals)
+    end
+    # Converter ceiling: fundamental phase-to-neutral RMS at full modulation.
+    inv.v_dc === nothing || return inv.m_max * inv.v_dc / (2 * sqrt(2))
+    # Last resort: the voltage implied by the declared current rating.
+    inv.i_max === nothing || return inv.s_max / (nph * inv.i_max)
+    return nothing
+end
+
+# Flag filter data that is electrically absent. The solve stays well posed --
+# a vanishing filter is not itself a convergence hazard -- but the reported
+# filter quantities stop meaning anything, so say so rather than returning
+# confident numbers for a branch that is not there.
+function _warn_if_filter_negligible(inv::AdvancedInverter, nets)
+    vscale = _inverter_voltage_scale(inv, nets)
+    (vscale === nothing || !isfinite(vscale) || vscale <= 0) && return nothing
+    nph = length(inv.phase_terminals)
+    zbase = vscale^2 / (inv.s_max / nph)
+    isfinite(zbase) && zbase > 0 || return nothing
+
+    # Scalar arms only: a matrix-valued filter has no single representative
+    # impedance, and _filter_resonance_hz already declines to summarise it.
+    matrix_mode = inv.r_filter_matrix !== nothing || inv.x_filter_matrix !== nothing ||
+        inv.r_filter_grid_matrix !== nothing || inv.x_filter_grid_matrix !== nothing
+    matrix_mode && return nothing
+
+    # Only declared-but-inert data is flagged. Declaring no filter at all is a
+    # deliberate modelling choice (the reduced model is then exact), not an
+    # accident, so a zero branch is left alone.
+    z_series = hypot(inv.r_filter + inv.r_filter_grid, inv.x_filter + inv.x_filter_grid)
+    if z_series > 0 && z_series / zbase < _FILTER_NEGLIGIBLE_PU
+        @warn "inverter '$(inv.id)': series output filter is electrically negligible " *
+              "($(round(z_series / zbase, sigdigits=2)) pu < $(_FILTER_NEGLIGIBLE_PU) pu). " *
+              "The internal EMF collapses onto the terminal voltage; v_int_mag, " *
+              "p_filter_loss and the reported filter currents are not meaningful."
+    end
+    if _lcl_active(inv) && inv.c_filter_mid != 0.0
+        gmid, bmid = _mid_filter_admittance(inv)
+        y_shunt = hypot(gmid, bmid)
+        if y_shunt > 0 && y_shunt * zbase < _FILTER_NEGLIGIBLE_PU
+            @warn "inverter '$(inv.id)': LCL midpoint branch is electrically negligible " *
+                  "($(round(y_shunt * zbase, sigdigits=2)) pu < $(_FILTER_NEGLIGIBLE_PU) pu). " *
+                  "The two series arms act as one; i_filter_shunt_mag ~ 0 and " *
+                  "filter_resonance_hz does not describe this circuit."
+        end
+    end
     return nothing
 end
 
@@ -1387,6 +1457,34 @@ end
 
 _start_or(v, default) = (s = JuMP.start_value(v); s === nothing ? default : s)
 
+# True when the objective carries no decision variable, i.e. every feasible
+# point is optimal. `p_loss_fixed` deliberately does not count: it is an additive
+# constant and pins nothing.
+_objective_is_constant(m::JuMP.Model) = begin
+    f = JuMP.objective_function(m)
+    f isa Number ? true :
+    f isa JuMP.AffExpr ? isempty(JuMP.linear_terms(f)) :
+    f isa JuMP.QuadExpr ?
+        (isempty(JuMP.linear_terms(f)) && isempty(JuMP.quad_terms(f))) : false
+end
+
+# Fraction of the arm rating used to seed the converter/grid currents. Small
+# enough that the arm starts well inside its current box, large enough that the
+# |I|² rows below have a non-vanishing gradient at the start point.
+const _ARM_CURRENT_SEED_FRACTION = 0.01
+
+# Seed magnitude for one converter arm current, in the model's current units
+# (amps in SI mode, per-unit otherwise). Rated current at the seed voltage,
+# capped by whichever conductor limit is declared.
+function _arm_current_seed(inv, nph::Int, vmagseed::Real, sb::Real, ib::Real)
+    (vmagseed > 0 && isfinite(vmagseed)) || return 0.0
+    irated = (inv.s_max / sb) / (nph * vmagseed)
+    inv.i_max === nothing || (irated = min(irated, inv.i_max / ib))
+    inv.i_grid_max === nothing || (irated = min(irated, inv.i_grid_max / ib))
+    isfinite(irated) || return 0.0
+    return _ARM_CURRENT_SEED_FRACTION * irated
+end
+
 # Stamp the inverter's internal-node model into `ctx`. Returns `_InvHandles`.
 function _stamp_inverter!(ctx, inv::AdvancedInverter)
     m = _opf_model(ctx)
@@ -1448,6 +1546,35 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
         else
             vrmid[k] = dvr[k]; vimid[k] = dvi[k]
             gri[k] = cri[k]; gii[k] = cii[k]
+        end
+
+        # |I| = 0 is a rank-deficient point of the |I|² rows stamped below:
+        # their gradient in (cri, cii) vanishes identically at the origin, and
+        # Ipopt's default start for an unseeded variable sits exactly on it.
+        # A voltage warm start that is itself consistent with zero current --
+        # an exact source-phasor start, which BMOPFTools produces since #367 --
+        # then leaves nothing to kick the arm off that point, and the solve
+        # crawls for thousands of iterations before recovering (issue #37).
+        # Seeding a light unity-PF export breaks the degeneracy without
+        # pinning the arm near a bound.
+        vmagseed = hypot(vseedr, vseedi)
+        iseed = _arm_current_seed(inv, nph, vmagseed, sb, ib)
+        if iseed > 0
+            gseedr = iseed * vseedr / vmagseed
+            gseedi = iseed * vseedi / vmagseed
+            if has_lcl
+                JuMP.set_start_value(gri[k], gseedr)
+                JuMP.set_start_value(gii[k], gseedi)
+                # The midpoint KCL below is cri == gri + shunt. Seeding both
+                # arms equally would violate it by the whole capacitor current,
+                # so the converter arm carries the shunt draw evaluated at the
+                # midpoint voltage seed, leaving the start point consistent.
+                JuMP.set_start_value(cri[k], gseedr + gmid*vseedr - bmid*vseedi)
+                JuMP.set_start_value(cii[k], gseedi + bmid*vseedr + gmid*vseedi)
+            else   # gri/gii alias cri/cii: one arm, one seed
+                JuMP.set_start_value(cri[k], gseedr)
+                JuMP.set_start_value(cii[k], gseedi)
+            end
         end
     end
     for k in 1:nph
@@ -1933,6 +2060,18 @@ function _solve_advanced_inverter_once(net::Dict{String,Any}, inverter::Advanced
                           optimizer=optimizer, verbose=verbose)
     _set_solver_options!(_opf_model(ctx), solver_options)
     enforce_kcl!(ctx)
+    # A pinned q_set already determines the operating point, so a constant
+    # objective is harmless there; only a free reactive axis is a problem.
+    if objective == :min_loss && q_set === nothing &&
+            _objective_is_constant(_opf_model(ctx))
+        @warn "inverter '$(inverter.id)': the :min_loss objective is identically " *
+              "zero, because no a_loss, c_loss or capacitor ESR is declared " *
+              "(p_loss_fixed is an additive constant and does not count). This " *
+              "is then a pure feasibility problem: every operating point meeting " *
+              "p_set is optimal and the reactive operating point is arbitrary, so " *
+              "the result is not reproducible across platforms or solver " *
+              "versions. Declare loss coefficients, or pin q_set."
+    end
     JuMP.optimize!(_opf_model(ctx))
 
     outcome = _solve_outcome(_opf_model(ctx))
