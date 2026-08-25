@@ -547,16 +547,23 @@ end
 end
 
 @testset "Advanced inverter: explicit LCL filter limiting cases and losses" begin
+    # These inverters declare no a_loss/c_loss/esr_dc, so the :min_loss
+    # objective (p_loss + p_cap_loss) is identically zero and the solve is a
+    # pure feasibility problem: every reactive operating point satisfying p_set
+    # is optimal. Pinning q_set makes the cross-formulation comparisons below
+    # determinate, so they test the circuit equivalence they claim to rather
+    # than whether two solves happened to trace the same path.
+    #
     # With C=0, splitting one series impedance across the two arms must reduce
     # exactly to the original single-arm circuit.
     reduced = solve_advanced_inverter(inv_grid(), AdvancedInverter(
         id="i", bus="poc", s_max=5e3, r_filter=0.10, x_filter=0.20);
-        objective=:min_loss, p_set=3000.0)
+        objective=:min_loss, p_set=3000.0, q_set=0.0)
     split = solve_advanced_inverter(inv_grid(), AdvancedInverter(
         id="i", bus="poc", s_max=5e3,
         r_filter=0.04, x_filter=0.08,
         r_filter_grid=0.06, x_filter_grid=0.12);
-        objective=:min_loss, p_set=3000.0)
+        objective=:min_loss, p_set=3000.0, q_set=0.0)
     @test split.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
     @test split.p_conv ≈ reduced.p_conv rtol=2e-6
     @test split.q_conv ≈ reduced.q_conv atol=0.01
@@ -573,7 +580,7 @@ end
         r_filter=0.05, x_filter=0.10,
         r_filter_grid=0.05, x_filter_grid=0.10,
         c_filter_mid=c, r_filter_damping=rd, i_grid_max=30.0);
-        objective=:min_loss, p_set=3000.0)
+        objective=:min_loss, p_set=3000.0, q_set=0.0)
     @test lcl.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
     @test abs(lcl.i_grid_mag[1] - lcl.i_mag[1]) > 0.01
     xc = 1 / (2pi*50.0*c)
@@ -595,7 +602,7 @@ end
         r_filter_matrix=R1, x_filter_matrix=X1,
         r_filter_grid_matrix=R2, x_filter_grid_matrix=X2,
         c_filter_mid=c, r_filter_damping=rd, i_grid_max=30.0);
-        objective=:min_loss, p_set=3000.0)
+        objective=:min_loss, p_set=3000.0, q_set=0.0)
     @test mlcl.p_conv ≈ lcl.p_conv rtol=2e-6
     @test mlcl.i_grid_mag ≈ lcl.i_grid_mag rtol=2e-6
     @test isnan(mlcl.filter_resonance_hz) # no unique scalar estimate in matrix mode
@@ -608,12 +615,11 @@ end
               r_filter=0.02, x_filter=0.06,
               r_filter_grid=0.03, x_filter_grid=0.09,
               c_filter_mid=30e-6, r_filter_damping=0.5)
-    # Under BMOPFTools 8f121216 this problem needs roughly 50x the Ipopt
-    # iterations it did under 4c0ec8b9 to reach the same optimum; the raised
-    # budget keeps every assertion below live while issue #37 tracks the
-    # underlying conditioning regression.
+    # Solved in per-unit: the SI form of this model spans ~10 orders of
+    # magnitude in its coefficients, which is inherent to the units rather than
+    # something the formulation can fix (issue #37).
     r = solve_advanced_inverter(inv_grid3_unbal(), AdvancedInverter(; id="i", common...);
-                                solver_options=("max_iter" => 10000, "tol" => 1e-6))
+                                per_unit=true)
     @test r.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
     @test r.i_neutral > 0.1
     @test maximum(r.i_filter_shunt_mag) > 1.0
@@ -1069,10 +1075,14 @@ end
     feas(topo, vdc; N=72) = begin
         kw = topo == :SPLIT_DC ? (; topology=topo, v_dc=vdc, c_dc=50e-3, In_max=40.0) :
                                  (; topology=topo, v_dc=vdc, c_dc=50e-3)
+        # c_loss makes :min_loss strictly convex in current. Without it the
+        # objective is identically zero, the reactive operating point is free
+        # across the whole rating, and "the internal EMF equals the POC
+        # voltage" above holds only by luck of the starting point.
         r = solve_advanced_inverter(inv_grid3_bal(),
                 AdvancedInverter(; id="i", kw..., bus="poc",
                     phase_terminals=["a","b","c"], neutral="n",
-                    s_max=20e3, m_max=0.96, n_samples=N);
+                    s_max=20e3, m_max=0.96, n_samples=N, c_loss=0.01);
                 objective=:min_loss, p_set=0.0)
         r.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
     end
@@ -1096,10 +1106,12 @@ end
     # More samples ⇒ the polytope tightens (the true peak stops being missed), so
     # a bus that a coarse grid accepts must be rejected by a fine one. 587 V is
     # the converged 3-leg minimum; a 6-sample grid under-constrains down to ~508.
+    # c_loss as above: pins the zero-power operating point instead of leaving
+    # the whole reactive range optimal.
     coarse(vdc, N) = solve_advanced_inverter(inv_grid3_bal(),
             AdvancedInverter(; id="i", topology=:THREE_LEG, v_dc=vdc, c_dc=50e-3,
                 bus="poc", phase_terminals=["a","b","c"], neutral="n",
-                s_max=20e3, m_max=0.96, n_samples=N);
+                s_max=20e3, m_max=0.96, n_samples=N, c_loss=0.01);
             objective=:min_loss, p_set=0.0)
     loose = coarse(550.0, 6)
     fine_bad = coarse(550.0, 36)
