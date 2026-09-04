@@ -96,6 +96,45 @@ end
         [0.0, 0.0], [1.0 1.0; 1.0 1.0];
         parameter_names=("x", "y"), count=3, seed=45)
     @test singular_samples.diagnostics["numerical_rank"] == 1
+
+    truncated_timestamps = [DateTime(2026, 5, index) for index in 1:6]
+    truncated_samples = sample_doe_box_truncated_gaussian_uncertainty(
+        [0.0, 0.0], [1.0 0.25; 0.25 1.0];
+        parameter_names=("x", "y"),
+        lower=[0.0, -Inf], upper=[Inf, 0.0],
+        count=6, seed=46, draw_budget=200,
+        timestamps=truncated_timestamps)
+    repeated_truncated = sample_doe_box_truncated_gaussian_uncertainty(
+        [0.0, 0.0], [1.0 0.25; 0.25 1.0];
+        parameter_names=("x", "y"),
+        lower=[0.0, -Inf], upper=[Inf, 0.0],
+        count=6, seed=46, draw_budget=200,
+        timestamps=truncated_timestamps)
+    @test truncated_samples.sample_set_id == repeated_truncated.sample_set_id
+    @test truncated_samples.generation_method ==
+          :box_truncated_multivariate_gaussian
+    @test all(sample.parameters["x"] >= 0.0 &&
+              sample.parameters["y"] <= 0.0
+              for sample in truncated_samples.samples)
+    @test [sample.timestamp for sample in truncated_samples.samples] ==
+          truncated_timestamps
+    @test truncated_samples.metadata["distribution"] ==
+          :box_truncated_multivariate_normal
+    @test truncated_samples.diagnostics["accepted_count"] == 6
+    @test truncated_samples.diagnostics["proposals_generated"] == 200
+    @test 6 <= truncated_samples.diagnostics["draws_attempted"] <= 200
+    @test truncated_samples.diagnostics["empirical_acceptance_rate"] ==
+          6 / truncated_samples.diagnostics["draws_attempted"]
+    @test truncated_samples.diagnostics[
+        "physical_support_constraints_enforced"]
+    @test truncated_samples.diagnostics[
+        "support_constraints_declared_by_caller"]
+    @test !truncated_samples.diagnostics["support_model_validated"]
+    @test !truncated_samples.diagnostics[
+        "accepted_draws_clipped_or_projected"]
+    @test truncated_samples.diagnostics[
+        "exact_conditional_draws_given_declared_model"]
+
     @test_throws ArgumentError sample_doe_gaussian_uncertainty(
         [0.0, 0.0], [1.0 2.0; 2.0 1.0];
         parameter_names=("x", "y"), count=3, seed=45)
@@ -105,6 +144,23 @@ end
     @test_throws DimensionMismatch sample_doe_gaussian_uncertainty(
         [0.0], [1.0 0.0; 0.0 1.0];
         parameter_names=("x",), count=3, seed=45)
+    @test_throws ArgumentError sample_doe_box_truncated_gaussian_uncertainty(
+        [0.0], reshape([1.0], 1, 1);
+        parameter_names=("x",), lower=[0.0], upper=[1.0],
+        count=5, seed=45, draw_budget=4)
+    @test_throws ArgumentError sample_doe_box_truncated_gaussian_uncertainty(
+        [0.0], reshape([1.0], 1, 1);
+        parameter_names=("x",), lower=[0.0], upper=[0.0],
+        count=1, seed=45, draw_budget=5)
+    @test_throws ArgumentError sample_doe_box_truncated_gaussian_uncertainty(
+        [0.0], reshape([1.0], 1, 1);
+        parameter_names=("x",), lower=[100.0], upper=[101.0],
+        count=2, seed=45, draw_budget=5)
+    @test_throws DimensionMismatch sample_doe_box_truncated_gaussian_uncertainty(
+        [0.0], reshape([1.0], 1, 1);
+        parameter_names=("x",), lower=[0.0], upper=[1.0],
+        count=2, seed=45, draw_budget=5,
+        timestamps=[DateTime(2026, 1, 1)])
     @test_throws ArgumentError DOEUncertaintySampleSet([
         DOEUncertaintySample(id="weighted", parameters=Dict("x" => 1),
                              weight=0.5),

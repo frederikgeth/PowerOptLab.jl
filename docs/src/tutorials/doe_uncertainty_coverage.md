@@ -477,7 +477,36 @@ numerical rank, and refuses material negative eigenvalues or asymmetry. It uses
 a named `MersenneTwister` seed and records declared and empirical moments. This
 reproduces the computational draw; it does not validate Gaussianity. Gaussian
 support is unbounded, so transformations, truncation, and rejection rules must
-be explicit when nonphysical values are plausible.
+be explicit when nonphysical values are plausible. For loads, impose a
+componentwise physical box without silently clipping the Gaussian draws:
+
+```julia
+physical_load_samples = sample_doe_box_truncated_gaussian_uncertainty(
+    [5000.0, 5000.0],
+    [500.0^2 0.4 * 500.0^2;
+     0.4 * 500.0^2 500.0^2];
+    parameter_names=("p1_W", "p2_W"),
+    lower=[0.0, 0.0],
+    upper=[Inf, Inf],
+    count=100,
+    seed=20260905,
+    draw_budget=1000,
+    sample_prefix="physical-load",
+    metadata=Dict(
+        "support_rationale" => "active demand is nonnegative",
+        "units" => Dict("p1_W" => "W", "p2_W" => "W")))
+
+physical_load_samples.diagnostics["empirical_acceptance_rate"]
+physical_load_samples.diagnostics["draws_attempted"]
+```
+
+This is rejection sampling from the declared Gaussian conditional on the box,
+not a clipped normal approximation. The required draw budget makes the stopping
+rule reproducible; exhaustion raises an error rather than returning a smaller
+or biased sample. A low acceptance rate signals a poorly aligned proposal and
+should prompt a different uncertainty model or sampler. Neither successful
+sampling nor the physical box validates Gaussianity or the scientific choice of
+bounds.
 
 Materialize each sample from a deep copy of one base network:
 
@@ -490,15 +519,15 @@ function apply_load_sample!(network, sample)
     return nothing
 end
 
-gaussian_scenarios = materialize_doe_scenarios(
-    base_network, load_samples, apply_load_sample!;
-    dataset_id="tutorial-gaussian-loads-v1",
+physical_load_scenarios = materialize_doe_scenarios(
+    base_network, physical_load_samples, apply_load_sample!;
+    dataset_id="tutorial-box-truncated-gaussian-loads-v1",
     materializer_id="apply-load-sample-v1",
     role=:calibration,
-    source="synthetic tutorial covariance model")
+    source="synthetic tutorial box-conditioned covariance model")
 
-gaussian_scenarios.metadata
-gaussian_scenarios.intervals[1][1].metadata["uncertainty_parameters"]
+physical_load_scenarios.metadata
+physical_load_scenarios.intervals[1][1].metadata["uncertainty_parameters"]
 ```
 
 The required `materializer_id` stands in for a callback body, which cannot be
@@ -506,7 +535,8 @@ serialized into a study manifest; use a committed method name and revision in a
 real experiment. The base-network hash, sample-set identity, parameters, seed,
 generation method, and materializer identifier all propagate into scenario
 provenance. The callback remains responsible for units, physical transforms,
-topology validity, and any acceptance rule.
+and topology validity. When the box-truncated sampler is used, its bounds,
+proposal identity, rejection rule, and acceptance diagnostics also propagate.
 
 ## Connecting a DSSE workflow
 

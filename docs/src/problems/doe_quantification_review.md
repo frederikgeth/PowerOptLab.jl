@@ -424,9 +424,12 @@ counterexamples.
    method, seed, timestamp, and metadata; these fields participate in the study
    identity. Typed uncertainty samples, PSD-aware reproducible Gaussian draws,
    and deep-copy materialization with required callback identity now provide a
-   generic path from covariance or model candidates to scenarios. Automatic
-   selection of DSSE derived quantities, physical transforms, support rules,
-   and inverse-Carson/topology insertion remains future work.
+   generic path from covariance or model candidates to scenarios. A first
+   componentwise physical-support policy now draws from a box-conditioned
+   Gaussian by rejection with an explicit draw budget, no clipping, and
+   recorded acceptance diagnostics. Automatic selection of DSSE-derived
+   quantities, non-box transforms/support rules, and inverse-Carson/topology
+   insertion remains future work.
 2. **Held-out evaluation slice implemented:** role-selected coverage reports
    per-scenario outcomes and empirical, weighted, and conservative candidate-
    violation rates. A one-sided Hoeffding bound is emitted only after an
@@ -507,8 +510,10 @@ Develop the tutorials in this order:
 3. **Implemented synthetic first slice — From uncertainty to a tested DOE.** A
    runnable tutorial declares calibration/test roles and provenance, allocates
    without test leakage, and reports held-out empirical and optional i.i.d.
-   bounds. Extend it with DSSE covariance and model-uncertainty scenario
-   construction.
+   bounds. It now demonstrates reproducible covariance draws and explicit
+   box-conditioned physical support. Extend it with empirical DSSE covariance,
+   non-Gaussian/model-uncertainty construction, and sensitivity to the support
+   rule.
 4. **Fairness–efficiency over time.** Compare equal kW, nameplate-normalized,
    request-normalized, proportional, max–min, and historical-curtailment rules;
    report who benefits, the price of fairness, and sensitivity to the chosen

@@ -56,6 +56,7 @@ OperatingEnvelopeMultistartResult
 ```@docs
 audit_doe_scenario_calibration
 sample_doe_gaussian_uncertainty
+sample_doe_box_truncated_gaussian_uncertainty
 materialize_doe_scenarios
 test_doe_covariate_shift
 test_doe_time_series_covariate_shift

@@ -949,6 +949,155 @@ function sample_doe_gaussian_uncertainty(
 end
 
 """
+    sample_doe_box_truncated_gaussian_uncertainty(mean, covariance;
+        parameter_names, lower, upper, count, seed, draw_budget,
+        sample_prefix="truncated-gaussian", timestamps=nothing,
+        metadata=Dict(), psd_tolerance=sqrt(eps()))
+
+Draw from a multivariate Gaussian conditioned on the componentwise box
+`lower .<= x .<= upper` using rejection sampling. Accepted draws are not
+clipped or projected. The returned sample set records the draw budget, stopping
+index, empirical acceptance rate, bounds, underlying Gaussian declaration, and
+whether the requested count was reached.
+
+`draw_budget` is a required scientific/computational stopping rule. The function
+throws when the budget cannot supply `count` accepted samples. Rejection
+sampling is exact conditional on the declared Gaussian model and box, but a low
+acceptance rate is evidence of an inefficient or poorly aligned proposal—not
+validation of either model.
+"""
+function sample_doe_box_truncated_gaussian_uncertainty(
+        mean_values::AbstractVector{<:Real}, covariance;
+        parameter_names,
+        lower,
+        upper,
+        count::Int,
+        seed::Int,
+        draw_budget::Int,
+        sample_prefix::AbstractString="truncated-gaussian",
+        timestamps=nothing,
+        metadata=Dict{String,Any}(),
+        psd_tolerance::Float64=sqrt(eps(Float64)))
+    count >= 1 || throw(ArgumentError("count must be positive"))
+    draw_budget >= count || throw(ArgumentError(
+        "draw_budget must be at least count"))
+    seed >= 0 || throw(ArgumentError("seed must be nonnegative"))
+    isempty(sample_prefix) && throw(ArgumentError(
+        "sample_prefix must be non-empty"))
+    names = parameter_names isa Union{AbstractString,Symbol} ?
+        [String(parameter_names)] : String.(collect(parameter_names))
+    lower_values = Float64.(collect(lower))
+    upper_values = Float64.(collect(upper))
+    length(names) == length(mean_values) || throw(DimensionMismatch(
+        "parameter_names and mean must have equal length"))
+    length(lower_values) == length(names) || throw(DimensionMismatch(
+        "lower must have one entry per parameter"))
+    length(upper_values) == length(names) || throw(DimensionMismatch(
+        "upper must have one entry per parameter"))
+    all(value -> !isnan(value), lower_values) &&
+        all(value -> !isnan(value), upper_values) || throw(ArgumentError(
+            "box bounds must not be NaN"))
+    all(lower_values .< upper_values) || throw(ArgumentError(
+        "every lower bound must be strictly below its upper bound"))
+    timestamp_values = if timestamps === nothing
+        Union{Nothing,DateTime}[nothing for _ in 1:count]
+    else
+        collected = collect(timestamps)
+        length(collected) == count || throw(DimensionMismatch(
+            "timestamps must have one entry per accepted sample"))
+        all(value -> value === nothing || value isa DateTime, collected) ||
+            throw(ArgumentError(
+                "timestamps must contain DateTime values or nothing"))
+        Union{Nothing,DateTime}[value for value in collected]
+    end
+
+    proposal = sample_doe_gaussian_uncertainty(
+        mean_values, covariance;
+        parameter_names=names,
+        count=draw_budget,
+        seed=seed,
+        sample_prefix=sample_prefix * "-proposal",
+        metadata=metadata,
+        psd_tolerance=psd_tolerance)
+    accepted_proposals = DOEUncertaintySample[]
+    stopping_index = 0
+    for (index, sample) in enumerate(proposal.samples)
+        values = Float64[sample.parameters[name] for name in names]
+        if all(lower_values .<= values) && all(values .<= upper_values)
+            push!(accepted_proposals, sample)
+            if length(accepted_proposals) == count
+                stopping_index = index
+                break
+            end
+        end
+    end
+    if length(accepted_proposals) < count
+        throw(ArgumentError(
+            "box-truncated Gaussian draw budget exhausted: accepted $(length(accepted_proposals)) of $count requested samples in $draw_budget proposals"))
+    end
+    width = ndigits(count)
+    samples = DOEUncertaintySample[]
+    for (index, proposal_sample) in enumerate(accepted_proposals)
+        proposal_index = proposal_sample.metadata["sample_index"]
+        push!(samples, DOEUncertaintySample(
+            id="$(sample_prefix)-$(lpad(string(index), width, '0'))",
+            parameters=proposal_sample.parameters,
+            timestamp=timestamp_values[index],
+            metadata=Dict{String,Any}(
+                "sample_index" => index,
+                "proposal_index" => proposal_index,
+                "master_seed" => seed)))
+    end
+    accepted_matrix = Matrix{Float64}(undef, count, length(names))
+    for row in 1:count, column in eachindex(names)
+        accepted_matrix[row, column] = samples[row].parameters[names[column]]
+    end
+    empirical_mean = vec(sum(accepted_matrix; dims=1)) ./ count
+    empirical_covariance = if count > 1
+        centered = accepted_matrix .- reshape(empirical_mean, 1, :)
+        transpose(centered) * centered / (count - 1)
+    else
+        missing
+    end
+    model_metadata = merge(
+        Dict{String,Any}(string(key) => value
+                         for (key, value) in pairs(proposal.metadata)),
+        Dict{String,Any}(
+            "distribution" => :box_truncated_multivariate_normal,
+            "conditioning_lower" => lower_values,
+            "conditioning_upper" => upper_values,
+            "unbounded_support" => false,
+            "proposal_sample_set_id" => proposal.sample_set_id,
+            "rejection_sampling" => true))
+    diagnostics = merge(deepcopy(proposal.diagnostics), Dict{String,Any}(
+        "requested_accepted_count" => count,
+        "draw_budget" => draw_budget,
+        "proposals_generated" => draw_budget,
+        "draws_attempted" => stopping_index,
+        "accepted_count" => count,
+        "rejected_count_before_stopping" => stopping_index - count,
+        "empirical_acceptance_rate" => count / stopping_index,
+        "budget_exhausted" => false,
+        "conditioning_lower" => lower_values,
+        "conditioning_upper" => upper_values,
+        "empirical_mean" => empirical_mean,
+        "empirical_covariance" => empirical_covariance,
+        "sampling_algorithm" => :sequential_rejection,
+        "accepted_draws_clipped_or_projected" => false,
+        "exact_conditional_draws_given_declared_model" => true,
+        "physical_support_constraints_enforced" => true,
+        "support_constraints_declared_by_caller" => true,
+        "support_model_validated" => false,
+        "distribution_model_validated" => false))
+    return DOEUncertaintySampleSet(samples;
+        parameter_names=names,
+        generation_method=:box_truncated_multivariate_gaussian,
+        seed=seed,
+        metadata=model_metadata,
+        diagnostics=diagnostics)
+end
+
+"""
     materialize_doe_scenarios(base_network, sample_set, materialize!;
         dataset_id, materializer_id, role=:unspecified,
         source="uncertainty sample materialization", metadata=Dict(),

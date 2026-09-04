@@ -218,6 +218,11 @@ identity.
 uncertainty realizations from network construction. A reproducible Gaussian
 sampler accepts positive-semidefinite covariance and records rank, seed,
 declared/empirical moments, and unbounded-support limitations.
+[`sample_doe_box_truncated_gaussian_uncertainty`](@ref) provides an explicit
+physical-support option: it samples the Gaussian conditional on componentwise
+bounds by rejection, never clips accepted values, and requires a finite draw
+budget whose stopping and acceptance diagnostics are recorded. The declared
+Gaussian and box remain modelling assumptions rather than validated truths.
 [`materialize_doe_scenarios`](@ref) deep-copies a base network per sample and
 requires a versioned materializer identifier, propagating sample and network
 provenance without prescribing a DSSE, impedance, topology, or forecast schema.
