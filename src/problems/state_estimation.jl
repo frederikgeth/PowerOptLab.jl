@@ -24,7 +24,7 @@
 #   * the fit is nonconvex — Ipopt returns a LOCAL stationary point, not a
 #     certified global/unique one (see the observability diagnostic below).
 
-using LinearAlgebra: svdvals
+using LinearAlgebra: svdvals, nullspace
 
 # Bus operational-limit fields that must not appear in an estimation net.
 const _SE_BUS_LIMIT_FIELDS = ("v_min", "v_max", "vpn_min", "vpn_max",
@@ -275,6 +275,33 @@ function _check_coverage(net, measurements, neutral, zi::Set{Tuple{String,String
                         "\nDeclare zero-injection buses via `zero_injection=[...]` and pair every :pinj with a :qinj."))
 end
 
+# Every reference terminal a measurement resolves to must exist on its bus.
+# Without this the solve reaches BMOPFTools' voltage map and fails there with a
+# message about an unknown OPF terminal, which does not say that the SOLVE's
+# `neutral` default — not the caller's `Measurement` — chose that terminal.
+function _check_references(net, measurements, neutral)
+    buses = get(net, "bus", Dict())
+    problems = String[]
+    for m in measurements
+        ref = _resolve_ref(m, neutral)
+        ref === nothing && continue
+        bus = get(buses, m.bus, nothing)
+        bus === nothing && continue
+        terms = String.(get(bus, "terminal_names", String[]))
+        ref in terms && continue
+        source = m.reference === missing ?
+            "the solve's `neutral=\"$ref\"` default" : "its `reference=\"$ref\"`"
+        push!(problems, "$(m.kind) at bus '$(m.bus)' terminal '$(m.terminal)' resolves its " *
+                        "return terminal from $source, but bus '$(m.bus)' has only " *
+                        "terminal(s) $(join(map(t -> "'" * t * "'", terms), ", "))")
+    end
+    isempty(problems) && return nothing
+    throw(ArgumentError("measurement reference terminals are not on their buses:\n  - " *
+                        join(problems, "\n  - ") *
+                        "\nPass `neutral=nothing` (or `reference=nothing` per measurement) to " *
+                        "reference terminals directly to ground, or name the return terminal explicitly."))
+end
+
 """
     solve_state_estimation(net, measurements; kwargs...) -> StateEstimationResult
 
@@ -332,6 +359,7 @@ function solve_state_estimation(net::Dict{String,Any}, measurements::AbstractVec
     isfinite(s_base) && s_base > 0 || throw(ArgumentError("s_base must be finite and > 0"))
 
     _reject_operational(net, allow_operational)
+    _check_references(net, measurements, neutral)
     zi = _zero_injection_set(net, zero_injection, neutral)
     _check_coverage(net, measurements, neutral, zi)
 
@@ -469,6 +497,11 @@ end
 # non-source node (source terminals are the fixed boundary). Reuses the passive
 # system admittance `ybus_passive` (I = Y·V, current into the network) rather
 # than re-deriving the network. `rank(H) == n_states` ⇔ locally observable.
+_se_identity(n) = (M = zeros(Float64, n, n); for k in 1:n; M[k, k] = 1.0; end; M)
+
+# `zi` is retained for call compatibility and is no longer read: a declared
+# zero-injection node simply has no free injection column, so the left-null-space
+# construction below already emits its KCL row.
 function _observability(net, measurements, neutral, zi::Set{Tuple{String,String}},
                         est_bus)
     yb = ybus_passive(net)
@@ -502,12 +535,45 @@ function _observability(net, measurements, neutral, zi::Set{Tuple{String,String}
                     haskey(fixed, nd) ? (real(fixed[nd]), imag(fixed[nd])) :
                     (zero(eltype(x)), zero(eltype(x)))
 
-    # Zero-injection phase nodes (declared, not measured, in the Ybus node set).
-    measured = Set((m.bus, m.terminal) for m in measurements if m.kind in (:pinj, :qinj))
-    zi_nodes = [nd for nd in nodes if nd in zi && !(nd in measured) && !haskey(fixed, nd)]
+    # The KCL equations the SOLVER actually imposes, reduced to the voltage
+    # state.  `enforce_kcl!` constrains every non-source node, and the hook adds
+    # ONE free complex injection per measured (bus, terminal), entering at the
+    # terminal and leaving at its reference terminal.  A node whose KCL row can
+    # be balanced by a free injection therefore constrains nothing; only
+    # combinations of rows in which every injection cancels do.
+    #
+    # Build the injection incidence `A` over the non-source nodes (column per
+    # free injection, +1 at the terminal, -1 at a non-grounded reference).  The
+    # surviving equations are `p' (Y V) = 0` for each `p` spanning the LEFT null
+    # space of `A`.  Enumerating declared zero-injection nodes instead — as this
+    # diagnostic used to — silently drops two classes of real equation:
+    # ungrounded neutrals (never in `zero_injection`, since that keyword is
+    # per-phase) and the "currents at a bus sum to zero" equation that a
+    # non-grounded reference terminal creates.  Both produced spurious
+    # `UNOBSERVABLE` warnings, and a negative `redundancy` gave it away.
+    inj_cols = Tuple{Int,Int}[]      # (terminal row, reference row; 0 = grounded)
+    seen_inj = Set{Tuple{String,String}}()
+    for meas in measurements
+        meas.kind in (:pinj, :qinj) || continue
+        key = (meas.bus, meas.terminal)
+        key in seen_inj && continue
+        push!(seen_inj, key)
+        kt = get(spos, key, 0)
+        ref = _resolve_ref(meas, neutral)
+        kr = ref === nothing ? 0 : get(spos, (meas.bus, ref), 0)
+        (kt == 0 && kr == 0) && continue
+        push!(inj_cols, (kt, kr))
+    end
+    A = zeros(Float64, ns, length(inj_cols))
+    for (c, (kt, kr)) in enumerate(inj_cols)
+        kt != 0 && (A[kt, c] += 1.0)
+        kr != 0 && (A[kr, c] -= 1.0)
+    end
+    # Columns of `P` span {p : A' p = 0}; each contributes one complex KCL row.
+    P = isempty(inj_cols) ? _se_identity(ns) : nullspace(permutedims(A))
 
-    # Row-scaled residual map h(x): measurement rows σ-normalised; zero-injection
-    # rows scaled by a representative voltage weight so ranks are comparable.
+    # Row-scaled residual map h(x): measurement rows σ-normalised; KCL rows
+    # scaled by a representative voltage weight so ranks are comparable.
     wz = isempty(measurements) ? 1.0 : 1.0 / minimum(m.sigma for m in measurements)
     function hvec(x)
         T = eltype(x)
@@ -535,9 +601,17 @@ function _observability(net, measurements, neutral, zi::Set{Tuple{String,String}
                 push!(rows, zero(T))
             end
         end
-        for nd in zi_nodes
-            k = posof[nd]
-            push!(rows, wz * Ir[k]); push!(rows, wz * Ii[k])
+        # One complex KCL row per left-null-space direction of the injection
+        # incidence, expressed over the non-source nodes in `state_nodes` order.
+        for c in axes(P, 2)
+            pr = zero(T); pi_ = zero(T)
+            for (k, nd) in enumerate(state_nodes)
+                w = P[k, c]
+                w == 0 && continue
+                j = posof[nd]
+                pr += w * Ir[j]; pi_ += w * Ii[j]
+            end
+            push!(rows, wz * pr); push!(rows, wz * pi_)
         end
         rows
     end
