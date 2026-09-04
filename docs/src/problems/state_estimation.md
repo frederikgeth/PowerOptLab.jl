@@ -5,6 +5,7 @@
 This page documents the original JuMP/Ipopt WLS prototype.  For the compiled
 four-wire constrained-NLLS estimator, exact device equations, branch telemetry,
 and time series, use [Constrained NLLS state estimation](constrained_state_estimation.md).
+See [Choosing a formulation](../estimation/comparison.md) for the head-to-head.
 
 [`solve_state_estimation`](@ref) is a *different problem specification* over the
 same network physics: given noisy measurements of an energised network, find the
@@ -79,28 +80,52 @@ voltage-magnitude equality is nonconvex, so Ipopt returns a *local* stationary
 point (and low-voltage solutions exist). A converged solve does **not** prove the
 state is unique.
 
-The result carries an `observability` diagnostic: the Jacobian of the
-measurement + zero-injection equations with respect to the rectangular node
-voltages is formed at the returned point (reusing BMOPFTools' `ybus_passive` for
-`I = Y·V`), and `observable = rank == n_states`. It reports `redundancy` (surplus
-equations), the smallest singular value, and the condition number, and
-`solve_state_estimation` warns on rank deficiency. This is a **local numerical**
-identifiability check (grounded-neutral networks; it does not model floating
-neutral displacement), not a global uniqueness proof.
+The result carries an `observability` diagnostic. Its Jacobian reproduces the
+equation set the *solver* imposes, not a convenient approximation of it:
+
+* `enforce_kcl!` constrains every non-source node, and the model hook adds one
+  free complex injection per measured `(bus, terminal)`, entering at the
+  terminal and leaving at its reference terminal.
+* A KCL row that a free injection can balance therefore constrains nothing.
+  The equations that do constrain the voltage state are the combinations in
+  which every injection cancels — the **left null space of the injection
+  incidence**, one complex row per direction.
+
+`observable = rank == n_states`, where `rank` combines the exact-constraint
+rank with the measurement rank on the resulting tangent space. `redundancy`
+counts stochastic measurement rows beyond that tangent-space measurement rank;
+exact constraints do not create residual redundancy. The result also reports
+the smallest reduced singular value and condition number, and
+`solve_state_estimation` warns on rank deficiency.
+
+!!! note "This is a local check"
+    It detects local rank deficiency and critically weak measurement sets. It
+    is not a global uniqueness proof, and solver convergence never establishes
+    one. See [current-magnitude measurements](../estimation/current_magnitude.md)
+    for two states that both fit the same data exactly.
+
+Earlier versions enumerated declared `zero_injection` nodes instead of the null
+space, which dropped the KCL rows of an explicitly modelled neutral and of any
+non-grounded return terminal. A four-wire feeder with a bonded neutral was then
+reported unobservable even though the estimate was correct. The current
+diagnostic derives the tangent space from all exact KCL combinations and keeps
+their numerical rank separate from the whitened measurement rows.
 
 !!! warning "Local optimum"
     Like the IVQ battery solve, this is a
     nonconvex problem solved to a local stationary point. For a promotion-grade
-    estimator, add multistart or a Gauss–Newton/normal-equations method, and
-    check `observability.observable` and `primal_status` before trusting a result.
+    estimator, add multistart or an appropriate global-validation strategy,
+    and check `observability.observable` and `primal_status` before trusting a
+    result. Switching local algorithms does not establish global uniqueness.
 
 ## Residuals
 
 `residuals[i].standardized = residual/σ` is the **σ-normalised raw residual** — a
 scale-free residual, *not* the classical leverage-adjusted normalised residual
-``r^N_i = r_i/\sqrt{S_{ii}}`` (with ``S`` the residual covariance) used for
-bad-data identification. A χ² goodness-of-fit test and largest-normalised-residual
-bad-data processing are not yet implemented.
+``r^N_i = r_i/\sqrt{\Omega_{ii}}`` (with ``\Omega`` the residual covariance)
+used for bad-data identification. A separate global objective test has an
+approximate χ² law under the linearised Gaussian model. Neither that test nor
+largest-normalised-residual processing is implemented.
 
 ## Worked example
 
@@ -138,7 +163,8 @@ se = solve_state_estimation(net, meas)
 se.primal_status            # "FEASIBLE_POINT" — trust the estimate only then
 se.bus["bus1"]["1"]["vm"]   # estimated |V| at bus1 (V); NaN if not FEASIBLE_POINT
 se.residuals                # per-measurement measured/estimated/residual/standardized
-se.observability            # (observable, n_states, rank, redundancy, min_singular, cond)
+se.observability            # (observable, n_states, rank, redundancy,
+                            #  min_singular, cond, tangent_dimension)
 se.objective                # optimal weighted-residual sum
 ```
 
@@ -151,8 +177,15 @@ state is determined.
 ## Not yet supported
 
 Branch-flow / branch-current / phasor (PMU) / source measurements; bad-data
-detection and identification (χ², largest-`rᴺ`); floating/displaced-neutral
-observability; multistart / global search.
+detection and identification (χ², largest-`rᴺ`); multistart / global search.
+Four-wire modelling with an ungrounded neutral as a first-class state belongs
+to the [constrained NLLS estimator](constrained_state_estimation.md); this
+formulation states zero injection per phase against a return terminal, so
+`zero_injection` expands a bare bus id over its *phase* terminals only.
+
+Measurements whose return terminal does not exist on their bus are rejected up
+front, naming whether the terminal came from the solve's `neutral` default or
+from the measurement's own `reference`.
 
 ## Literature
 

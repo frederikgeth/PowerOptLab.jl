@@ -24,7 +24,7 @@
 #   * the fit is nonconvex — Ipopt returns a LOCAL stationary point, not a
 #     certified global/unique one (see the observability diagnostic below).
 
-using LinearAlgebra: svdvals
+using LinearAlgebra: svdvals, nullspace
 
 # Bus operational-limit fields that must not appear in an estimation net.
 const _SE_BUS_LIMIT_FIELDS = ("v_min", "v_max", "vpn_min", "vpn_max",
@@ -104,8 +104,13 @@ Result of [`solve_state_estimation`](@ref).
   leverage-adjusted normalised residual (`rᴺ = r / √(Sᵢᵢ)`) used for bad-data
   identification; it is a scale-free residual, not a χ²/rᴺ test statistic.
 - `observability::NamedTuple` — a LOCAL numerical identifiability diagnostic
-  `(observable, n_states, rank, redundancy, min_singular, cond)` from the
-  measurement Jacobian at the returned point (see [`solve_state_estimation`](@ref)).
+  `(observable, n_states, rank, redundancy, min_singular, cond,
+  tangent_dimension)` from the measurement Jacobian at the returned point.
+  Exact KCL equations are ranked in their own units; measurement rank,
+  redundancy, `min_singular`, and `cond` are computed from the whitened
+  measurement Jacobian on the feasible tangent space. Thus `1/min_singular` is
+  the local worst-case estimate standard deviation under the stated Gaussian
+  model (see [`solve_state_estimation`](@ref)).
 """
 struct StateEstimationResult <: AbstractSolveResult
     termination_status::String
@@ -191,9 +196,18 @@ end
 # ── injection coverage / P–Q pairing ────────────────────────────────────────
 
 # Normalise a `zero_injection` argument (bus ids and/or (bus, terminal) tuples)
-# into a set of (bus, terminal) pairs, expanding a bare bus id over its phase
-# terminals (all terminal_names except `neutral` and grounded terminals).
-function _zero_injection_set(net, zero_injection, neutral)
+# into a set of (bus, terminal) pairs, expanding a bare bus id over its terminals
+# (all terminal_names except grounded ones, and — unless `include_neutral` —
+# except `neutral`).
+#
+# The two estimators need different expansions, and the difference is physical.
+# The WLS formulation states zero injection per PHASE, referenced to the bus's
+# return terminal, so the return terminal itself carries the balancing current
+# and must not be constrained. The four-wire compiled formulation states KCL per
+# CONDUCTOR against earth, so a bus with no device attached injects nothing into
+# its neutral either; omitting that conductor leaves the neutral voltage
+# unconstrained and silently non-identifiable.
+function _zero_injection_set(net, zero_injection, neutral; include_neutral::Bool=false)
     zi = Set{Tuple{String,String}}()
     buses = get(net, "bus", Dict())
     for z in zero_injection
@@ -203,7 +217,7 @@ function _zero_injection_set(net, zero_injection, neutral)
             b = String(z)
             bus = get(buses, b, nothing)
             bus === nothing && throw(ArgumentError("zero_injection bus '$b' not in net"))
-            for t in _phase_terminals(bus, neutral)
+            for t in _phase_terminals(bus, include_neutral ? nothing : neutral)
                 push!(zi, (b, t))
             end
         else
@@ -266,6 +280,33 @@ function _check_coverage(net, measurements, neutral, zi::Set{Tuple{String,String
                         "\nDeclare zero-injection buses via `zero_injection=[...]` and pair every :pinj with a :qinj."))
 end
 
+# Every reference terminal a measurement resolves to must exist on its bus.
+# Without this the solve reaches BMOPFTools' voltage map and fails there with a
+# message about an unknown OPF terminal, which does not say that the SOLVE's
+# `neutral` default — not the caller's `Measurement` — chose that terminal.
+function _check_references(net, measurements, neutral)
+    buses = get(net, "bus", Dict())
+    problems = String[]
+    for m in measurements
+        ref = _resolve_ref(m, neutral)
+        ref === nothing && continue
+        bus = get(buses, m.bus, nothing)
+        bus === nothing && continue
+        terms = String.(get(bus, "terminal_names", String[]))
+        ref in terms && continue
+        source = m.reference === missing ?
+            "the solve's `neutral=\"$ref\"` default" : "its `reference=\"$ref\"`"
+        push!(problems, "$(m.kind) at bus '$(m.bus)' terminal '$(m.terminal)' resolves its " *
+                        "return terminal from $source, but bus '$(m.bus)' has only " *
+                        "terminal(s) $(join(map(t -> "'" * t * "'", terms), ", "))")
+    end
+    isempty(problems) && return nothing
+    throw(ArgumentError("measurement reference terminals are not on their buses:\n  - " *
+                        join(problems, "\n  - ") *
+                        "\nPass `neutral=nothing` (or `reference=nothing` per measurement) to " *
+                        "reference terminals directly to ground, or name the return terminal explicitly."))
+end
+
 """
     solve_state_estimation(net, measurements; kwargs...) -> StateEstimationResult
 
@@ -323,6 +364,7 @@ function solve_state_estimation(net::Dict{String,Any}, measurements::AbstractVec
     isfinite(s_base) && s_base > 0 || throw(ArgumentError("s_base must be finite and > 0"))
 
     _reject_operational(net, allow_operational)
+    _check_references(net, measurements, neutral)
     zi = _zero_injection_set(net, zero_injection, neutral)
     _check_coverage(net, measurements, neutral, zi)
 
@@ -460,6 +502,11 @@ end
 # non-source node (source terminals are the fixed boundary). Reuses the passive
 # system admittance `ybus_passive` (I = Y·V, current into the network) rather
 # than re-deriving the network. `rank(H) == n_states` ⇔ locally observable.
+_se_identity(n) = (M = zeros(Float64, n, n); for k in 1:n; M[k, k] = 1.0; end; M)
+
+# `zi` is retained for call compatibility and is no longer read: a declared
+# zero-injection node simply has no free injection column, so the left-null-space
+# construction below already emits its KCL row.
 function _observability(net, measurements, neutral, zi::Set{Tuple{String,String}},
                         est_bus)
     yb = ybus_passive(net)
@@ -493,14 +540,62 @@ function _observability(net, measurements, neutral, zi::Set{Tuple{String,String}
                     haskey(fixed, nd) ? (real(fixed[nd]), imag(fixed[nd])) :
                     (zero(eltype(x)), zero(eltype(x)))
 
-    # Zero-injection phase nodes (declared, not measured, in the Ybus node set).
-    measured = Set((m.bus, m.terminal) for m in measurements if m.kind in (:pinj, :qinj))
-    zi_nodes = [nd for nd in nodes if nd in zi && !(nd in measured) && !haskey(fixed, nd)]
+    # The KCL equations the SOLVER actually imposes, reduced to the voltage
+    # state.  `enforce_kcl!` constrains every non-source node, and the hook adds
+    # ONE free complex injection per measured (bus, terminal), entering at the
+    # terminal and leaving at its reference terminal.  A node whose KCL row can
+    # be balanced by a free injection therefore constrains nothing; only
+    # combinations of rows in which every injection cancels do.
+    #
+    # Build the injection incidence `A` over the non-source nodes (column per
+    # free injection, +1 at the terminal, -1 at a non-grounded reference).  The
+    # surviving equations are `p' (Y V) = 0` for each `p` spanning the LEFT null
+    # space of `A`.  Enumerating declared zero-injection nodes instead — as this
+    # diagnostic used to — silently drops two classes of real equation:
+    # ungrounded neutrals (never in `zero_injection`, since that keyword is
+    # per-phase) and the "currents at a bus sum to zero" equation that a
+    # non-grounded reference terminal creates.  Both produced spurious
+    # `UNOBSERVABLE` warnings, and a negative `redundancy` gave it away.
+    inj_cols = Tuple{Int,Int}[]      # (terminal row, reference row; 0 = grounded)
+    seen_inj = Set{Tuple{String,String}}()
+    for meas in measurements
+        meas.kind in (:pinj, :qinj) || continue
+        key = (meas.bus, meas.terminal)
+        key in seen_inj && continue
+        push!(seen_inj, key)
+        kt = get(spos, key, 0)
+        ref = _resolve_ref(meas, neutral)
+        kr = ref === nothing ? 0 : get(spos, (meas.bus, ref), 0)
+        (kt == 0 && kr == 0) && continue
+        push!(inj_cols, (kt, kr))
+    end
+    A = zeros(Float64, ns, length(inj_cols))
+    for (c, (kt, kr)) in enumerate(inj_cols)
+        kt != 0 && (A[kt, c] += 1.0)
+        kr != 0 && (A[kr, c] -= 1.0)
+    end
+    # Columns of `P` span {p : A' p = 0}; each contributes one complex KCL row.
+    P = isempty(inj_cols) ? _se_identity(ns) : nullspace(permutedims(A))
 
-    # Row-scaled residual map h(x): measurement rows σ-normalised; zero-injection
-    # rows scaled by a representative voltage weight so ranks are comparable.
-    wz = isempty(measurements) ? 1.0 : 1.0 / minimum(m.sigma for m in measurements)
-    function hvec(x)
+    # The measurement rows and the KCL rows are kept in SEPARATE maps.
+    #
+    # They cannot share a row scaling. The measurement rows are whitened by
+    # 1/sigma, and those sigmas are in volts, watts and vars; the KCL rows are
+    # in amperes. An earlier version scaled the KCL rows by
+    # `1/minimum(m.sigma for m in measurements)` — a numerical minimum taken
+    # across three different units and then applied to a fourth. Exact rank is
+    # invariant to nonzero row scaling, but a floating-point rank test compares
+    # all singular values with a common tolerance. Extreme cross-unit scaling
+    # could therefore change even the observability boolean; `min_singular` and
+    # `cond` were always in an arbitrary unit and could not carry the
+    # estimate-uncertainty interpretation the documentation gave them.
+    #
+    # `_observability` now does what the constrained estimator does: treat the
+    # KCL equations as exact constraints, take their tangent space `Z`, and
+    # report singular values of the WHITENED measurement Jacobian restricted to
+    # it. `sigma_min(H*Z)` is then the inverse of the worst-case standard
+    # deviation, in the units the measurements were whitened into.
+    function hmeas(x)
         T = eltype(x)
         Vr = Vector{T}(undef, N); Vi = Vector{T}(undef, N)
         for k in 1:N
@@ -526,9 +621,30 @@ function _observability(net, measurements, neutral, zi::Set{Tuple{String,String}
                 push!(rows, zero(T))
             end
         end
-        for nd in zi_nodes
-            k = posof[nd]
-            push!(rows, wz * Ir[k]); push!(rows, wz * Ii[k])
+        rows
+    end
+
+    # One complex KCL row per left-null-space direction of the injection
+    # incidence, expressed over the non-source nodes in `state_nodes` order.
+    # Unwhitened: these are exact equations, not measurements.
+    function hkcl(x)
+        T = eltype(x)
+        Vr = Vector{T}(undef, N); Vi = Vector{T}(undef, N)
+        for k in 1:N
+            re, im = _vnode(nodes[k], x); Vr[k] = re; Vi[k] = im
+        end
+        Ir = Yr * Vr - Yi * Vi
+        Ii = Yr * Vi + Yi * Vr
+        rows = T[]
+        for c in axes(P, 2)
+            pr = zero(T); pi_ = zero(T)
+            for (k, nd) in enumerate(state_nodes)
+                w = P[k, c]
+                w == 0 && continue
+                j = posof[nd]
+                pr += w * Ir[j]; pi_ += w * Ii[j]
+            end
+            push!(rows, pr); push!(rows, pi_)
         end
         rows
     end
@@ -544,20 +660,53 @@ function _observability(net, measurements, neutral, zi::Set{Tuple{String,String}
     end
 
     n_states == 0 && return (observable=true, n_states=0, rank=0, redundancy=0,
-                             min_singular=Inf, cond=1.0)
-    H = _fd_jacobian(hvec, x0)
-    sv = svdvals(H)
-    smax = isempty(sv) ? 0.0 : maximum(sv)
-    tol = smax * max(size(H)...) * eps(Float64)
-    rk = count(>(tol), sv)
-    smin = length(sv) >= n_states ? sv[n_states] : 0.0
-    condn = smin > 0 ? smax / smin : Inf
-    (observable = rk == n_states,
+                             min_singular=Inf, cond=1.0, tangent_dimension=0)
+
+    Hm = _fd_jacobian(hmeas, x0)                      # whitened measurement rows
+    C  = _fd_jacobian(hkcl, x0)                       # exact KCL rows
+    _se_observability_metrics(Hm, C)
+end
+
+# Combine exact equations and stochastic measurements without stacking their
+# rows. `C` is in physical equation units while `Hm` is whitened; a numerical
+# rank test on `vcat(Hm, C)` therefore depends on their arbitrary relative
+# scaling. Rank C in its own scale, restrict Hm to C's tangent space, and rank
+# that reduced map in its own scale.
+function _se_observability_metrics(Hm::AbstractMatrix{<:Real}, C::AbstractMatrix{<:Real})
+    n_states = size(Hm, 2)
+    size(C, 2) == n_states || throw(DimensionMismatch(
+        "measurement and constraint Jacobians must have the same number of columns"))
+    n_states == 0 && return (observable=true, n_states=0, rank=0, redundancy=0,
+                             min_singular=Inf, cond=1.0, tangent_dimension=0)
+
+    rankC, Z = if size(C, 1) == 0
+        (0, _se_identity(n_states))
+    else
+        F = svd(collect(Float64, C); full=true)
+        smaxC = isempty(F.S) ? 0.0 : maximum(F.S)
+        tolC = smaxC * max(size(C)...) * eps(Float64)
+        rC = count(>(tolC), F.S)
+        rC, collect(F.V[:, rC+1:n_states])
+    end
+
+    tangent = size(Z, 2)
+    Hr = collect(Float64, Hm) * Z
+    svr = svdvals(Hr)
+    smaxr = isempty(svr) ? 0.0 : maximum(svr)
+    tolr = smaxr * max(size(Hr)...) * eps(Float64)
+    rankM = count(>(tolr), svr)
+    smin = tangent == 0 ? Inf : length(svr) >= tangent ? svr[tangent] : 0.0
+    condn = tangent == 0 ? 1.0 : smin > 0 ? smaxr / smin : Inf
+
+    (observable = rankM == tangent,
      n_states = n_states,
-     rank = rk,
-     redundancy = size(H, 1) - n_states,
+     rank = rankC + rankM,
+     # Exact equations reduce the tangent dimension; they are not noisy
+     # observations and must not be counted as residual redundancy.
+     redundancy = size(Hm, 1) - rankM,
      min_singular = smin,
-     cond = condn)
+     cond = condn,
+     tangent_dimension = tangent)
 end
 
 # Central-difference Jacobian of `f: Rⁿ → Rᵐ` at `x` (steps scaled to |x| so it

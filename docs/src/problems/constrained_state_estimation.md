@@ -9,7 +9,8 @@ nonlinear least-squares problem
 \min_x \frac12\lVert r(x)\rVert_2^2 \qquad \text{subject to}\qquad c(x)=0.
 ```
 
-It is separate from the [legacy WLS/Ipopt formulation](state_estimation.md).
+It is separate from the [legacy WLS/Ipopt formulation](state_estimation.md); see
+[Choosing a formulation](../estimation/comparison.md) for the head-to-head.
 Use this API when the distinction between **uncertain information** and a
 **genuinely exact electrical equation** matters, when neutral displacement must
 remain in the state, or when branch telemetry/exact nonlinear devices are
@@ -45,6 +46,15 @@ eliminated into the fixed-voltage parameter vector.  Perfectly grounded BMOPF
 terminals are earth (`V=0`); an ungrounded neutral remains an explicit state.
 Thus a global phasor reference is not silently confused with a neutral ground.
 Floating/common-mode freedoms appear in the tangent-space observability result.
+
+!!! note "`zero_injection` covers the neutral here"
+    Four-wire KCL is stated per conductor against earth, so a bare bus id in
+    `zero_injection` expands over **all** of the bus's non-grounded terminals,
+    its neutral included: nothing attached to a bus means nothing injected into
+    any of its conductors.  The [WLS estimator](state_estimation.md) states zero
+    injection per phase against a return terminal and deliberately expands over
+    phase terminals only.  Passing `(bus, terminal)` tuples is explicit either
+    way.
 
 `compile_state_estimator` imports BMOPFTools' passive `I = YV` in SI units.
 Closed ideal switches use BMOPFTools' node aliases.  The compiled structure owns
@@ -91,7 +101,28 @@ sparse = solve_sparse_state_estimator(structure, parameters, x0)
 Trust an estimate only for `:converged_unique` or
 `:converged_underobserved`.  The latter is feasible but non-unique.  Other
 statuses distinguish, among other conditions, constraint restoration failure,
-invalid device domain, trust-region stall, and numerical failure.
+invalid device domain, trust-region stall, `:undefined_derivative` (a `:vmag`
+or `:imag` row sitting exactly at zero, where the magnitude derivative does not
+exist), and numerical failure.
+
+!!! warning "`:converged_unique` is a LOCAL statement"
+    It reports that the reduced Jacobian ``HZ`` has full rank **at the returned
+    point**.  It is not a global uniqueness certificate.  Two distinct states
+    can each earn it while fitting the same data exactly — see
+    [current-magnitude measurements](../estimation/current_magnitude.md).
+
+### Convergence tolerances are scale relative
+
+`norm(c)` is a difference of ``YV`` products, so the smallest value it can
+reach in double precision scales with the network's SI current magnitude — near
+``5\times10^3`` A on a 230 V feeder with 20 S conductors, near ``3\times10^9``
+A on a 132 kV feeder with short 20 kS segments.  Feasibility is therefore tested
+against `max(constraint_tolerance, constraint_rtol * current_scale)`: the
+absolute request acts as a floor, so small networks behave exactly as before,
+while a high-voltage network is no longer asked for a precision that double
+precision cannot deliver.  Stationarity is divided by `norm(H, Inf)`, so
+`optimality_tolerance` reads in units of the whitened residual rather than in
+whatever units ``\partial h/\partial x`` happens to carry.
 
 ## Measurements
 
@@ -108,7 +139,11 @@ All values are SI and every scalar has an independent standard deviation
 
 Magnitude derivatives are undefined at zero.  Set
 `SEParameters(...; magnitude_epsilon=...)` only when smoothing below the
-instrument's meaningful resolution is appropriate.
+instrument's meaningful resolution is appropriate.  It applies to `:vmag` and
+to branch `:imag` alike.  Note that a smoothed magnitude row evaluated at
+exactly zero is *differentiable but information-free* — its gradient there is
+zero — so the honest outcome is `:converged_underobserved`, not a confident
+estimate.  See [current-magnitude measurements](../estimation/current_magnitude.md).
 
 ### Line telemetry
 
@@ -126,6 +161,13 @@ Supported kinds are `:ire`, `:iim`, `:imag`, `:pflow`, and `:qflow`.  They use
 BMOPFTools' public `line_yprim` primitive, so linecode truncation and shunt
 stamping match the passive network model exactly.  This requires the
 BMOPFTools release containing `line_yprim` (introduced by PR #348).
+
+!!! note "Branch power is referenced to earth"
+    Unlike a node [`Measurement`](@ref), a `BranchMeasurement` takes no
+    `reference`: `:pflow`/`:qflow` use the measured conductor's voltage to
+    **earth**.  On a four-wire line with a displaced neutral that is not the
+    phase-to-neutral power a real meter reports.  A per-measurement reference
+    is [on the roadmap](../estimation/state_of_the_art.md#Roadmap).
 
 ## Exact devices and continuation
 
@@ -183,6 +225,19 @@ series = solve_time_series_state_estimator(structure, [p1, p2], x0;
 The prior from snapshot `t-1` is a whitened residual, not a hard voltage
 constraint.  The driver warm-starts each snapshot, stops on the first failed
 one, and returns `:time_series_stalled` without publishing later estimates.
+
+A prior the caller configured on an `SEParameters` is **preserved**.  When
+`previous_state_sigma` is supplied the previous-state prior is layered on top of
+it rather than replacing it. Algebraically, duplicated indices add independent
+quadratic rows. That is statistically justified only if the information sources
+can be treated as independent; a previous estimate usually reuses earlier meter
+data and therefore should not be described as a second independent meter.
+
+This driver is temporal regularisation, not a state-space filter: it does not
+propagate the previous covariance, specify process noise, or account for
+cross-time correlation. Choose `previous_state_sigma` as an explicit movement
+assumption and do not interpret the resulting local covariance as a complete
+filtered posterior.
 
 ## Current limitations
 

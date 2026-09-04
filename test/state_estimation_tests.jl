@@ -167,22 +167,101 @@ end
     @test se.bus["bus2"]["1"]["vm"] ≈ tv("bus2") atol=1e-2
 end
 
+# A four-wire feeder whose neutral conductor is explicitly modelled. `ground`
+# selects whether the SOURCE neutral is bonded to earth.
+function se_net_fourwire(; ground::Bool)
+    bond = ground ? ",\"perfectly_grounded_terminals\":[\"n\"]" : ""
+    parse_bmopf("""
+    {"bus":{"src":{"terminal_names":["1","n"]$bond},
+        "bus1":{"terminal_names":["1","n"]},
+        "bus2":{"terminal_names":["1","n"]}},
+     "voltage_source":{"vs":{"bus":"src","terminal_map":["1"],"v_magnitude":[1000.0],"v_angle":[0.0]}},
+     "linecode":{"lc":{"R_series_1_1":0.5,"R_series_2_2":0.5}},
+     "line":{"l1":{"bus_from":"src","bus_to":"bus1","terminal_map_from":["1","n"],"terminal_map_to":["1","n"],"linecode":"lc","length":1.0},
+             "l2":{"bus_from":"bus1","bus_to":"bus2","terminal_map_from":["1","n"],"terminal_map_to":["1","n"],"linecode":"lc","length":1.0}}}
+    """; from_string=true)
+end
+
 @testset "State estimation: observability diagnostic" begin
     net = se_net()
     pf = solve_pf(se_net_loaded(); per_unit=false)
     estbus = pf["bus"]
     zi = Set{Tuple{String,String}}()
-    # Two |V| readings, no injection information anywhere: state under-determined.
-    m_under = [Measurement(kind=:vmag, bus="bus1", value=1000.0, sigma=1.0),
-               Measurement(kind=:vmag, bus="bus2", value=1000.0, sigma=1.0)]
-    o = PowerOptLab._observability(net, m_under, "n", zi, estbus)
-    @test o.observable === false
-    @test o.rank < o.n_states
-    # A well-posed set is observable with positive redundancy.
+
+    # A well-posed set is observable, with redundancy from the surplus |V| rows.
     full, _ = se_full_meas()
     o2 = PowerOptLab._observability(net, full, "n", zi, estbus)
     @test o2.observable === true
     @test o2.redundancy == length(full) - o2.n_states
+
+    # The diagnostic reproduces the equation set the SOLVER imposes: KCL holds at
+    # every non-source node, and a measured (bus, terminal) absorbs its own KCL
+    # row into a free injection. A node with no free injection is therefore a
+    # zero-injection node to the diagnostic, so a |V|-only set describes a
+    # determined passive network. (The public API separately refuses that set,
+    # because absence of telemetry is not evidence of zero injection.)
+    m_vonly = [Measurement(kind=:vmag, bus="bus1", value=1000.0, sigma=1.0),
+               Measurement(kind=:vmag, bus="bus2", value=1000.0, sigma=1.0)]
+    o_v = PowerOptLab._observability(net, m_vonly, "n", zi, estbus)
+    @test o_v.observable === true
+    @test_throws ArgumentError solve_state_estimation(net, m_vonly)
+end
+
+@testset "State estimation: exact-row scaling cannot change numerical rank" begin
+    # Exact constraints and whitened measurements have different physical units.
+    # Ranking their stacked matrix lets the larger block set the tolerance and
+    # can erase an otherwise independent direction.
+    Hm = [1.0 0.0]
+    C = [0.0 1.0]
+    for scale in (1e-30, 1.0, 1e30)
+        d = PowerOptLab._se_observability_metrics(Hm, scale .* C)
+        @test d.observable
+        @test d.rank == d.n_states == 2
+        @test d.tangent_dimension == 1
+        @test d.redundancy == 0
+        @test d.min_singular ≈ 1.0
+        @test d.cond ≈ 1.0
+    end
+end
+
+@testset "State estimation: observability covers non-grounded return terminals" begin
+    # Regression: the diagnostic used to emit rows only for measurements and for
+    # DECLARED zero-injection nodes. An explicitly modelled neutral is neither,
+    # so its KCL rows went missing, the state was reported UNOBSERVABLE, and
+    # `redundancy` went negative — a structural giveaway that equations, not
+    # measurements, were absent.
+    meas = Measurement[]
+    for b in ("bus1", "bus2")
+        push!(meas, Measurement(kind=:vmag, bus=b, value=980.0, sigma=2.0))
+        push!(meas, Measurement(kind=:pinj, bus=b, value=-20_000.0, sigma=400.0))
+        push!(meas, Measurement(kind=:qinj, bus=b, value=0.0, sigma=400.0))
+    end
+    zi = Set{Tuple{String,String}}()
+
+    bonded = se_net_fourwire(; ground=true)
+    ob = PowerOptLab._observability(bonded, meas, "n", zi,
+                                    solve_pf(bonded; per_unit=false)["bus"])
+    @test ob.observable === true
+    @test ob.rank == ob.n_states == 8      # both conductors of both buses
+    @test ob.tangent_dimension == 4        # four real KCL rows are exact
+    # `redundancy` counts measurement rows beyond the tangent directions they
+    # identify: 6 readings, 4 identified. It was -2 while the KCL rows were
+    # missing from the diagnostic altogether.
+    @test ob.redundancy == 2
+    @test ob.min_singular > 1.0
+
+    # With the source neutral unbonded the whole neutral system floats: a genuine
+    # gauge freedom, and the one case here that IS rank deficient.
+    # The rank is a LOCAL property, so the exact deficiency depends on the point
+    # the diagnostic is evaluated at; that the state is not identifiable does not.
+    floating = se_net_fourwire(; ground=false)
+    of = PowerOptLab._observability(floating, meas, "n", zi, Dict{String,Any}())
+    @test of.observable === false
+    @test of.rank < of.n_states
+    @test of.min_singular < 1e-10
+    # More redundancy AND less observability than the bonded network: the
+    # missing direction is a gauge freedom, not a measurement gap.
+    @test of.redundancy > ob.redundancy
 end
 
 @testset "State estimation: Measurement validation" begin
@@ -214,4 +293,30 @@ end
 @testset "State estimation: empty and bad inputs" begin
     @test_throws ArgumentError solve_state_estimation(se_net(), Measurement[])
     @test_throws ArgumentError solve_state_estimation(se_net(), [1, 2, 3])
+end
+
+@testset "State estimation: unresolvable reference terminal is diagnosed" begin
+    # A two-terminal-free net whose buses have no "n": the default neutral cannot
+    # resolve. The error must name the solve's `neutral` default as the source of
+    # the terminal, not surface an unknown-OPF-terminal error from the engine.
+    net = parse_bmopf("""
+    {"bus":{"src":{"terminal_names":["1"]},"b":{"terminal_names":["1"]}},
+     "voltage_source":{"s":{"bus":"src","terminal_map":["1"],"v_magnitude":[230.0],"v_angle":[0.0]}},
+     "linecode":{"lc":{"R_series_1_1":0.5}},
+     "line":{"l":{"bus_from":"src","bus_to":"b","terminal_map_from":["1"],"terminal_map_to":["1"],"linecode":"lc","length":1.0}}}
+    """; from_string=true)
+    meas = [Measurement(kind=:vmag, bus="b", value=229.0, sigma=1.0),
+            Measurement(kind=:pinj, bus="b", value=-1_000.0, sigma=10.0),
+            Measurement(kind=:qinj, bus="b", value=0.0, sigma=10.0)]
+    err = try
+        solve_state_estimation(net, meas); nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError
+    @test occursin("neutral", sprint(showerror, err))
+    # Referencing to ground instead resolves, and the estimate is recovered.
+    se = solve_state_estimation(net, meas; neutral=nothing)
+    @test se.primal_status == "FEASIBLE_POINT"
+    @test se.observability.observable === true
 end

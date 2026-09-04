@@ -156,12 +156,20 @@ Mutable numerical data paired with an [`SEStructure`](@ref).  Updating the
 measurement values, standard deviations, or fixed source phasors does not alter
 terminal ordering or symbolic sparsity.  Standard deviations are the diagonal
 whitening factors for this first implementation.
+
+`magnitude_epsilon` (volts) and `current_epsilon` (amperes) smooth `:vmag` and
+`:imag` residuals respectively.  They are deliberately separate scalars: a
+magnitude derivative is undefined at zero for both, but the two are different
+physical quantities and a mixed `:vmag`/`:imag` dataset has no single
+meaningful smoothing value.  Size each below the resolution of the instrument
+it applies to.
 """
 mutable struct SEParameters
     fixed_voltages::Vector{ComplexF64}
     measurement_values::Vector{Float64}
     covariance_values::Vector{Float64}
     magnitude_epsilon::Float64
+    current_epsilon::Float64
     device_powers::Vector{ComplexF64}
     device_currents::Vector{ComplexF64}
     device_admittances::Vector{ComplexF64}
@@ -394,7 +402,9 @@ function compile_state_estimator(net::Dict{String,Any}, measurements::AbstractVe
     fixed_current = Vector{Float64}(K * fixed_voltage)
 
     specs = _compile_measurements(net, measurements, node_index, neutral)
-    zi = _zero_injection_set(net, zero_injection, neutral)
+    # Four-wire KCL is stated per conductor against earth, so a bare bus id in
+    # `zero_injection` covers the neutral conductor too.
+    zi = _zero_injection_set(net, zero_injection, neutral; include_neutral=true)
     constraint_nodes = Int[]
     for node in zi
         i = get(node_index, node, 0)
@@ -415,6 +425,7 @@ end
 
 function SEParameters(s::SEStructure, measurements::AbstractVector=Measurement[];
                       exact_devices=Any[], magnitude_epsilon::Real=0.0,
+                      current_epsilon::Real=0.0,
                       voltage_min_model::Real=1e-3, regularization_voltage::Real=1e-3,
                       continuation_alpha::Real=1.0, prior::Union{StatePrior,Nothing}=nothing)
     length(measurements) == length(s.measurement_pattern) ||
@@ -422,6 +433,9 @@ function SEParameters(s::SEStructure, measurements::AbstractVector=Measurement[]
     epsmag = Float64(magnitude_epsilon)
     epsmag >= 0 && isfinite(epsmag) ||
         throw(ArgumentError("magnitude_epsilon must be finite and non-negative"))
+    epscur = Float64(current_epsilon)
+    epscur >= 0 && isfinite(epscur) ||
+        throw(ArgumentError("current_epsilon must be finite and non-negative"))
     vmin = Float64(voltage_min_model); vreg = Float64(regularization_voltage)
     α = Float64(continuation_alpha)
     vmin > 0 && isfinite(vmin) || throw(ArgumentError("voltage_min_model must be finite and > 0"))
@@ -443,7 +457,7 @@ function SEParameters(s::SEStructure, measurements::AbstractVector=Measurement[]
     prior_indices = isnothing(prior) ? Int[] : copy(prior.indices)
     prior_values = isnothing(prior) ? Float64[] : copy(prior.values)
     prior_sigmas = isnothing(prior) ? Float64[] : copy(prior.sigmas)
-    SEParameters(fixed_by_node, values, sigmas, epsmag, powers, currents, admittances,
+    SEParameters(fixed_by_node, values, sigmas, epsmag, epscur, powers, currents, admittances,
                  vmin, vreg, α, prior_indices, prior_values, prior_sigmas)
 end
 
@@ -470,6 +484,8 @@ function _validate_parameters(s::SEStructure, p::SEParameters)
         throw(ArgumentError("all measurement standard deviations must be finite and > 0"))
     p.magnitude_epsilon >= 0 && isfinite(p.magnitude_epsilon) ||
         throw(ArgumentError("magnitude_epsilon must be finite and non-negative"))
+    p.current_epsilon >= 0 && isfinite(p.current_epsilon) ||
+        throw(ArgumentError("current_epsilon must be finite and non-negative"))
     ndevice = sum((length(d.positive) for d in s.device_pattern); init=0)
     length(p.device_powers) == ndevice || throw(ArgumentError("device_powers length does not match compiled device pattern"))
     length(p.device_currents) == ndevice || throw(ArgumentError("device_currents length does not match compiled device pattern"))
@@ -525,7 +541,7 @@ function _measurement_value(spec, vr, vi, ir, ii, epsmag)
                            magnitude_epsilon=epsmag)
 end
 
-function _branch_measurement_value(spec::_SEBranchMeasurementSpec, vr, vi)
+function _branch_measurement_value(spec::_SEBranchMeasurementSpec, vr, vi, epsmag)
     br = 0.0; bi = 0.0
     for (k, node) in enumerate(spec.nodes)
         node == 0 && continue
@@ -535,10 +551,11 @@ function _branch_measurement_value(spec::_SEBranchMeasurementSpec, vr, vi)
     end
     vrr = spec.conductor == 0 ? 0.0 : vr[spec.conductor]
     vii = spec.conductor == 0 ? 0.0 : vi[spec.conductor]
-    measurement_prediction(spec.kind, vrr, vii; ir=br, ii=bi)
+    measurement_prediction(spec.kind, vrr, vii; ir=br, ii=bi,
+                           magnitude_epsilon=epsmag)
 end
 
-function _branch_measurement_jacobian(spec::_SEBranchMeasurementSpec, E, vr, vi)
+function _branch_measurement_jacobian(spec::_SEBranchMeasurementSpec, E, vr, vi, epsmag)
     n = length(vr); ns = size(E, 2)
     jir = zeros(Float64, ns); jii = zeros(Float64, ns)
     br = 0.0; bi = 0.0
@@ -552,8 +569,17 @@ function _branch_measurement_jacobian(spec::_SEBranchMeasurementSpec, E, vr, vi)
     spec.kind === :ire && return br, jir
     spec.kind === :iim && return bi, jii
     if spec.kind === :imag
-        mag = hypot(br, bi)
-        mag > 0 || throw(DomainError(mag, "branch-current magnitude derivative is undefined at zero"))
+        # `current_epsilon` smooths |I| the way `magnitude_epsilon` smooths |V|.
+        # They are SEPARATE fields because they are separate physical
+        # quantities: one is a voltage in volts, the other a current in amperes,
+        # and no single number is meaningful for both on a mixed :vmag/:imag
+        # dataset. The value and the derivative must use the same smoothed
+        # magnitude, or the analytic Jacobian stops being the Jacobian of the
+        # evaluated residual.
+        mag = sqrt(br^2 + bi^2 + epsmag^2)
+        mag > 0 || throw(DomainError(mag,
+            "branch-current magnitude derivative is undefined at zero current; " *
+            "set `current_epsilon > 0` (in amperes; see SEParameters) to smooth it"))
         return mag, (br .* jir .+ bi .* jii) ./ mag
     end
     i = spec.conductor; vrr, vii = vr[i], vi[i]
@@ -649,7 +675,7 @@ function evaluate_state_estimator(s::SEStructure, p::SEParameters, x::AbstractVe
     vr, vi, ir, ii = _se_parts(s, p, x)
     dir, dii, _, _ = _device_parts(s, p, vr, vi)
     predicted = [spec isa _SEBranchMeasurementSpec ?
-                 _branch_measurement_value(spec, vr, vi) :
+                 _branch_measurement_value(spec, vr, vi, p.current_epsilon) :
                  _measurement_value(spec, vr, vi, ir, ii, p.magnitude_epsilon)
                  for spec in s.measurement_pattern]
     measurement_residual = (predicted .- p.measurement_values) ./ p.covariance_values
@@ -675,7 +701,7 @@ function residual_jacobian(s::SEStructure, p::SEParameters, x::AbstractVector{<:
     J = zeros(Float64, length(s.measurement_pattern) + length(p.prior_indices), nstate)
     for (row, spec) in enumerate(s.measurement_pattern)
         if spec isa _SEBranchMeasurementSpec
-            _, Jrow = _branch_measurement_jacobian(spec, E, vr, vi)
+            _, Jrow = _branch_measurement_jacobian(spec, E, vr, vi, p.current_epsilon)
             J[row, :] .= Jrow ./ p.covariance_values[row]
             continue
         end
@@ -727,7 +753,7 @@ end
 function _se_rank_nullspace(A::AbstractMatrix{<:Real}; rtol::Real=sqrt(eps(Float64)))
     n = size(A, 2)
     size(A, 1) == 0 && return (0, Matrix{Float64}(I, n, n))
-    F = svd(Matrix{Float64}(A); full=true)
+    F = svd(collect(Float64, A); full=true)
     smax = isempty(F.S) ? 0.0 : maximum(F.S)
     tol = max(Float64(rtol) * max(size(A)...) * smax, eps(Float64))
     rank = count(>(tol), F.S)
@@ -738,6 +764,54 @@ function _se_rank_nullspace(A::AbstractMatrix{<:Real}; rtol::Real=sqrt(eps(Float
 end
 
 _se_merit(e::SEEvaluation, μ) = 0.5 * sum(abs2, e.residual) + μ * norm(e.constraints)
+
+# A characteristic magnitude, in amperes, for the terms summed into an exact
+# KCL equation.  The constraint residual is a difference of `Y*V` products, so
+# the smallest value it can reach in double precision is about `eps` times this
+# — a quantity that spans many orders of magnitude across real networks (a
+# 230 V feeder with 20 S conductors sits near 5e3; a 132 kV feeder with short
+# 20 kS segments near 3e9).  An absolute tolerance in SI amperes is therefore
+# achievable on one network and unreachable on another that is electrically
+# identical in per unit.
+function _se_current_scale(s::SEStructure, p::SEParameters)
+    ymax = isempty(nonzeros(s.passive_pattern)) ? 0.0 : maximum(abs, nonzeros(s.passive_pattern))
+    finite = p.fixed_voltages[isfinite.(real.(p.fixed_voltages))]
+    vmax = maximum(abs, finite; init=0.0)
+    scale = ymax * vmax
+    isfinite(scale) && scale > 0 ? scale : 1.0
+end
+
+# Effective feasibility tolerance: the absolute request acts as a floor, and the
+# relative term takes over once round-off in `Y*V` alone exceeds it.
+_se_constraint_tolerance(atol, rtol, scale) = max(Float64(atol), Float64(rtol) * scale)
+
+# Stationarity measured in units of the whitened residual.
+#
+# `H' * r` carries one factor of the measurement Jacobian's magnitude, and `H`
+# is `(dh/dx)/sigma` — so with a 1 W standard deviation on a 20 kW injection its
+# entries run to tens, and the smallest gradient reachable in double precision
+# scales with them. Dividing by `norm(H, Inf)` leaves a quantity with the units
+# of `r` itself, so `optimality_tolerance` reads as "how small a residual-
+# equivalent gradient counts as stationary" on every network rather than only on
+# ones whose SI magnitudes happen to be near one.
+function _se_stationarity(H, g)
+    hscale = max(1.0, norm(H, Inf))
+    norm(g, Inf) / hscale
+end
+
+# Jacobian assembly can legitimately hit an undefined magnitude derivative: a
+# `:vmag` row at exactly zero volts, or an `:imag` row on a line carrying
+# exactly zero current (the classic flat-start failure of ampere measurements).
+# That is a property of the measurement set at this point, so a solver reports
+# it as a status; it must not throw out of the caller's solve.
+function _se_jacobians(s::SEStructure, p::SEParameters, x::AbstractVector{<:Real})
+    try
+        return (residual_jacobian(s, p, x), constraint_jacobian(s, p, x))
+    catch err
+        err isa DomainError || rethrow()
+        return nothing
+    end
+end
 
 function _se_scaled_normal_step(C, c, scale, radius)
     isempty(c) && return zeros(Float64, size(C, 2))
@@ -787,6 +861,7 @@ function solve_compiled_state_estimator(s::SEStructure, p::SEParameters,
                                         penalty::Real=10.0,
                                         acceptance_threshold::Real=0.1,
                                         constraint_tolerance::Real=1e-8,
+                                        constraint_rtol::Real=1e-11,
                                         optimality_tolerance::Real=1e-8,
                                         min_radius::Real=1e-10,
                                         rank_rtol::Real=sqrt(eps(Float64)))
@@ -795,6 +870,9 @@ function solve_compiled_state_estimator(s::SEStructure, p::SEParameters,
     0 < normal_fraction < 1 || throw(ArgumentError("normal_fraction must lie in (0, 1)"))
     penalty > 0 || throw(ArgumentError("penalty must be positive"))
     0 < acceptance_threshold < 1 || throw(ArgumentError("acceptance_threshold must lie in (0, 1)"))
+    constraint_rtol >= 0 || throw(ArgumentError("constraint_rtol must be non-negative"))
+    ctol = _se_constraint_tolerance(constraint_tolerance, constraint_rtol,
+                                    _se_current_scale(s, p))
 
     x = Float64.(x0)
     e = evaluate_state_estimator(s, p, x)
@@ -810,16 +888,20 @@ function solve_compiled_state_estimator(s::SEStructure, p::SEParameters,
     rejected = 0
 
     for iteration in 1:max_iterations
-        H = residual_jacobian(s, p, x)
-        C = constraint_jacobian(s, p, x)
+        jac = _se_jacobians(s, p, x)
+        if jac === nothing
+            return ConstrainedStateEstimationResult(:undefined_derivative, x, e,
+                                                    iteration - 1, 0, 0, 0, history)
+        end
+        H, C = jac
         rankC, Z = _se_rank_nullspace(C; rtol=rank_rtol)
         c = e.constraints
         r = e.residual
         # Continuation stages and externally supplied warm starts can already
         # satisfy both tests.  Do not manufacture a zero predicted-reduction
         # failure merely because there is no step left to take.
-        gred0 = size(Z, 2) == 0 ? 0.0 : norm(Z' * (H' * r), Inf)
-        if norm(c) <= constraint_tolerance && gred0 <= optimality_tolerance
+        gred0 = size(Z, 2) == 0 ? 0.0 : _se_stationarity(H, Z' * (H' * r))
+        if norm(c) <= ctol && gred0 <= optimality_tolerance
             observable, _ = _se_rank_nullspace(H * Z; rtol=rank_rtol)
             status = observable == size(Z, 2) ? :converged_unique : :converged_underobserved
             return ConstrainedStateEstimationResult(status, x, e, iteration - 1, rankC,
@@ -895,13 +977,16 @@ function solve_compiled_state_estimator(s::SEStructure, p::SEParameters,
             # Tangent-space first-order stationarity and exact-equation
             # feasibility are separate conditions; satisfying only one is not
             # convergence for a constrained estimator.
-            Cnow = constraint_jacobian(s, p, x)
-            _, Znow = _se_rank_nullspace(Cnow; rtol=rank_rtol)
-            gred = size(Znow, 2) == 0 ? 0.0 : norm(Znow' * (residual_jacobian(s, p, x)' * e.residual), Inf)
-            if norm(e.constraints) <= constraint_tolerance && gred <= optimality_tolerance
-                Hnow = residual_jacobian(s, p, x)
+            jacnow = _se_jacobians(s, p, x)
+            if jacnow === nothing
+                return ConstrainedStateEstimationResult(:undefined_derivative, x, e,
+                                                        iteration, 0, 0, 0, history)
+            end
+            Hnow, Cnow = jacnow
+            rankC, Znow = _se_rank_nullspace(Cnow; rtol=rank_rtol)
+            gred = size(Znow, 2) == 0 ? 0.0 : _se_stationarity(Hnow, Znow' * (Hnow' * e.residual))
+            if norm(e.constraints) <= ctol && gred <= optimality_tolerance
                 observable, _ = _se_rank_nullspace(Hnow * Znow; rtol=rank_rtol)
-                rankC, _ = _se_rank_nullspace(Cnow; rtol=rank_rtol)
                 status = observable == size(Znow, 2) ? :converged_unique : :converged_underobserved
                 return ConstrainedStateEstimationResult(status, x, e, iteration, rankC,
                                                         size(Znow, 2), observable, history)
@@ -913,9 +998,11 @@ function solve_compiled_state_estimator(s::SEStructure, p::SEParameters,
         end
     end
 
-    C = constraint_jacobian(s, p, x)
-    rankC, Z = _se_rank_nullspace(C; rtol=rank_rtol)
-    status = norm(e.constraints) > constraint_tolerance ?
+    jac = _se_jacobians(s, p, x)
+    jac === nothing && return ConstrainedStateEstimationResult(:undefined_derivative, x, e,
+                                                               max_iterations, 0, 0, 0, history)
+    rankC, Z = _se_rank_nullspace(jac[2]; rtol=rank_rtol)
+    status = norm(e.constraints) > ctol ?
         (rejected > 0 ? :constraint_restoration_failed : :infeasible_constraints) :
         (radius < min_radius ? :trust_region_stalled : :max_iterations)
     ConstrainedStateEstimationResult(status, x, e, max_iterations, rankC,
@@ -1039,6 +1126,7 @@ function solve_sparse_state_estimator(s::SEStructure, p::SEParameters,
                                       penalty::Real=10.0,
                                       acceptance_threshold::Real=0.1,
                                       constraint_tolerance::Real=1e-8,
+                                      constraint_rtol::Real=1e-11,
                                       optimality_tolerance::Real=1e-8,
                                       min_radius::Real=1e-10,
                                       damping::Real=1e-10,
@@ -1048,6 +1136,9 @@ function solve_sparse_state_estimator(s::SEStructure, p::SEParameters,
     penalty > 0 || throw(ArgumentError("penalty must be positive"))
     0 < acceptance_threshold < 1 || throw(ArgumentError("acceptance_threshold must lie in (0, 1)"))
     damping >= 0 || throw(ArgumentError("damping must be non-negative"))
+    constraint_rtol >= 0 || throw(ArgumentError("constraint_rtol must be non-negative"))
+    ctol = _se_constraint_tolerance(constraint_tolerance, constraint_rtol,
+                                    _se_current_scale(s, p))
 
     x = Float64.(x0)
     e = evaluate_state_estimator(s, p, x)
@@ -1059,27 +1150,42 @@ function solve_sparse_state_estimator(s::SEStructure, p::SEParameters,
     rejected = 0
 
     for iteration in 1:max_iterations
-        H = sparse(residual_jacobian(s, p, x))
-        C = sparse(constraint_jacobian(s, p, x))
-        r, c = e.residual, e.constraints
-        status, rankC, tangent, observable = _se_status_from_linearisation(H, C; rank_rtol=rank_rtol)
-        # Materialise sparse Jacobians without the unparameterised `Matrix(...)`
-        # constructor; see `_se_rank_nullspace` for the OpenDSSDirect conflict.
-        gred = tangent == 0 ? 0.0 : norm((collect(H)' * r + collect(C)' * λ), Inf)
-        if norm(c) <= constraint_tolerance && gred <= optimality_tolerance
-            _, λ = _se_hachtel_step(H, C, r, zeros(Float64, length(c)), scale, damping)
-            return SparseConstrainedStateEstimationResult(status, x, e, iteration - 1, rankC,
-                                                          tangent, observable, λ, history)
+        jac = _se_jacobians(s, p, x)
+        if jac === nothing
+            return SparseConstrainedStateEstimationResult(:undefined_derivative, x, e,
+                                                          iteration - 1, 0, 0, 0, λ, history)
         end
+        H = sparse(jac[1]); C = sparse(jac[2])
+        r, c = e.residual, e.constraints
 
         step, λtrial = try
             _se_hachtel_step(H, C, r, c, scale, damping)
         catch err
             if err isa SingularException || err isa PosDefException
+                _, rankC, tangent, observable = _se_status_from_linearisation(H, C; rank_rtol=rank_rtol)
                 return SparseConstrainedStateEstimationResult(:numerical_failure, x, e, iteration - 1,
                                                               rankC, tangent, observable, λ, history)
             end
             rethrow()
+        end
+
+        # KKT stationarity is measured against the multiplier from THIS
+        # linearisation, so it is meaningful on the first iteration and needs no
+        # special case for a zero-dimensional tangent space.  The Hachtel block
+        # row `Hs'w + γy + Cs'λ = 0` with `w = -r - Hs*y` gives `C'λ = H'r` at a
+        # stationary point, so the residual is `H'r - C'λ`; the sign matters
+        # once the tangent space is non-trivial.  The rank / observability
+        # diagnostic is a DENSE SVD: it is a reporting quantity, not part of the
+        # linear step, so it runs only on an exit path.  Computing it every
+        # iteration made this solver cubic in the state dimension and dominated
+        # its runtime.
+        λ = λtrial
+        if norm(c) <= ctol &&
+           _se_stationarity(H, H' * r - C' * λ) <= optimality_tolerance
+            status, rankC, tangent, observable = _se_status_from_linearisation(H, C; rank_rtol=rank_rtol)
+            _, λ = _se_hachtel_step(H, C, r, zeros(Float64, length(c)), scale, damping)
+            return SparseConstrainedStateEstimationResult(status, x, e, iteration - 1, rankC,
+                                                          tangent, observable, λ, history)
         end
         scaled_norm = norm(scale .* step)
         scaled_norm > radius && scaled_norm > 0 && (step .*= radius / scaled_norm)
@@ -1112,9 +1218,12 @@ function solve_sparse_state_estimator(s::SEStructure, p::SEParameters,
         end
     end
 
-    H = sparse(residual_jacobian(s, p, x)); C = sparse(constraint_jacobian(s, p, x))
-    _, rankC, tangent, observable = _se_status_from_linearisation(H, C; rank_rtol=rank_rtol)
-    status = norm(e.constraints) > constraint_tolerance ?
+    jac = _se_jacobians(s, p, x)
+    jac === nothing && return SparseConstrainedStateEstimationResult(:undefined_derivative, x, e,
+                                                                     max_iterations, 0, 0, 0, λ, history)
+    _, rankC, tangent, observable = _se_status_from_linearisation(sparse(jac[1]), sparse(jac[2]);
+                                                                 rank_rtol=rank_rtol)
+    status = norm(e.constraints) > ctol ?
         (rejected > 0 ? :constraint_restoration_failed : :infeasible_constraints) :
         (radius < min_radius ? :trust_region_stalled : :max_iterations)
     SparseConstrainedStateEstimationResult(status, x, e, max_iterations, rankC,
@@ -1142,7 +1251,7 @@ function _se_reduced_jacobian(s::SEStructure, p::SEParameters, x;
 end
 
 function _se_svd_rank(A; rank_rtol=sqrt(eps(Float64)))
-    F = svd(Matrix{Float64}(A); full=true)
+    F = svd(collect(Float64, A); full=true)
     smax = isempty(F.S) ? 0.0 : maximum(F.S)
     tol = max(Float64(rank_rtol) * max(size(A)...) * smax, eps(Float64))
     count(>(tol), F.S), F
@@ -1198,7 +1307,7 @@ function _derived_covariance(s::SEStructure, p::SEParameters, x, Jderived;
     rankH == size(Z, 2) ||
         throw(ArgumentError("requested covariance is not finite: $(size(Z, 2) - rankH) tangent directions are unobservable"))
     size(Z, 2) == 0 && return zeros(Float64, size(Jderived, 1), size(Jderived, 1))
-    W = Matrix{Float64}(Jderived) * Z * F.V[:, 1:rankH]
+    W = collect(Float64, Jderived) * Z * F.V[:, 1:rankH]
     W * Diagonal(1.0 ./ (F.S[1:rankH] .^ 2)) * W'
 end
 
@@ -1256,6 +1365,24 @@ function _se_previous_state_prior(x, sigma)
     StatePrior(collect(1:n), Float64.(x), sigmas)
 end
 
+# Snapshot the prior a caller built into an `SEParameters`, so the time-series
+# driver can layer its previous-state prior on top of it instead of destroying
+# it.  A prior is ordinary information the caller supplied; the driver owns only
+# the rows it adds itself.
+_se_capture_prior(p::SEParameters) =
+    isempty(p.prior_indices) ? nothing :
+    StatePrior(copy(p.prior_indices), copy(p.prior_values), copy(p.prior_sigmas))
+
+# Concatenate two priors into the stacked whitened residual rows.  Duplicated
+# indices are allowed and behave as independent observations of that state, so a
+# caller prior and a previous-state prior compose the way two meters would.
+function _se_merge_priors(a::Union{StatePrior,Nothing}, b::Union{StatePrior,Nothing})
+    a === nothing && return b
+    b === nothing && return a
+    StatePrior(vcat(a.indices, b.indices), vcat(a.values, b.values),
+               vcat(a.sigmas, b.sigmas))
+end
+
 """
     solve_time_series_state_estimator(structure, parameters, x0;
                                       previous_state_sigma=nothing, solver=:sparse, kwargs...)
@@ -1283,18 +1410,34 @@ function solve_time_series_state_estimator(s::SEStructure,
                 throw(ArgumentError("solver must be :sparse or :dense"))
     x = Float64.(x0)
     snapshots = Any[]
-    for (t, p) in enumerate(parameters)
-        if t == 1 || isnothing(previous_state_sigma)
-            set_state_prior!(p, nothing)
-        else
-            set_state_prior!(p, _se_previous_state_prior(x, previous_state_sigma))
+    # Capture caller priors BEFORE any snapshot runs, and restore them on the way
+    # out. The driver has to write its previous-state prior into each
+    # `SEParameters` to solve with it, but that row is driver-owned scratch, not
+    # caller input. Leaving it behind would make a second call on the same
+    # objects read it back as if the caller had supplied it, so the prior would
+    # grow by one previous-state block per invocation and the same historical
+    # estimate would be counted repeatedly — shrinking the reported uncertainty
+    # a little more each time. Restoring makes repeated calls idempotent.
+    caller_priors = [_se_capture_prior(p) for p in parameters]
+    restore!() = foreach(((p, prior),) -> set_state_prior!(p, prior),
+                         zip(parameters, caller_priors))
+    try
+        for (t, p) in enumerate(parameters)
+            if t == 1 || isnothing(previous_state_sigma)
+                set_state_prior!(p, caller_priors[t])
+            else
+                set_state_prior!(p, _se_merge_priors(caller_priors[t],
+                                                     _se_previous_state_prior(x, previous_state_sigma)))
+            end
+            result = solve_one(s, p, x; kwargs...)
+            push!(snapshots, result)
+            if !(result.status in (:converged_unique, :converged_underobserved))
+                return TimeSeriesStateEstimationResult(:time_series_stalled, snapshots, t - 1)
+            end
+            x = result.state
         end
-        result = solve_one(s, p, x; kwargs...)
-        push!(snapshots, result)
-        if !(result.status in (:converged_unique, :converged_underobserved))
-            return TimeSeriesStateEstimationResult(:time_series_stalled, snapshots, t - 1)
-        end
-        x = result.state
+    finally
+        restore!()
     end
     TimeSeriesStateEstimationResult(:converged, snapshots, length(snapshots))
 end
