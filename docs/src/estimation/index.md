@@ -40,6 +40,10 @@ wrong:
   Convergence is not uniqueness, and neither estimator does multistart. The
   [current-magnitude tutorial](current_magnitude.md) shows two different
   states that both fit the same data exactly, each reported as converged.
+* **Redundancy is not observability, and observability is not a binary.**
+  Placement decides what is identified, and the smallest singular value
+  decides whether the identification is worth anything. See
+  [observability](observability.md).
 * **A σ is a modelling claim, not a formality.** It sets the weight, and it is
   the only channel through which you say how much a reading should move the
   answer. A pseudo-measurement given a meter's σ *is* a meter.
@@ -51,6 +55,8 @@ wrong:
 * [Constrained NLLS state estimation](../problems/constrained_state_estimation.md) — reference.
 * [Modelling tutorial](../tutorials/constrained_nlls_state_estimation.md) — exact
   vs uncertain information, grounding, and diagnostics.
+* [Observability and under-observed estimation](observability.md) — which
+  parts of an estimate are supported by measurements and which are decoration.
 * [Current-magnitude measurements](current_magnitude.md) — why ampere readings
   are genuinely hard, demonstrated rather than asserted.
 * [State of the art and roadmap](state_of_the_art.md) — what the literature

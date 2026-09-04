@@ -79,7 +79,9 @@ reporting `LOCALLY_SOLVED`.
 `compile_state_estimator` has no equivalent contract. It is the more
 expressive interface and the sharper instrument; it will happily compile an
 under-determined problem and tell you so afterwards through
-`observability_diagnostics`. Check the diagnostics; nothing else will.
+`observability_diagnostics`. Check the diagnostics; nothing else will — and see
+[observability](observability.md) for how to read them and what to do when a
+set turns out to be under-observed.
 
 ## Reading the status
 

@@ -42,6 +42,7 @@ makedocs(
             "Legacy WLS estimator"         => "problems/state_estimation.md",
             "Constrained NLLS estimator"   => "problems/constrained_state_estimation.md",
             "Modelling tutorial"           => "tutorials/constrained_nlls_state_estimation.md",
+            "Observability & under-observed" => "estimation/observability.md",
             "Current-magnitude measurements" => "estimation/current_magnitude.md",
             "State of the art & roadmap"   => "estimation/state_of_the_art.md",
         ],

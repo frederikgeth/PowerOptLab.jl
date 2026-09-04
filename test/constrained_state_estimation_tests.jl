@@ -486,3 +486,136 @@ end
         @test r.state[1] + im * r.state[2] ≈ vtrue rtol=1e-6
     end
 end
+
+# ── observability: the numbers quoted in docs/src/estimation/observability.md ──
+
+# Two-bus radial feeder; state order is [Vre_b, Vre_c, Vim_b, Vim_c].
+obs_net() = scaled_feeder(230.0, 0.5)
+const OBS_VB = 211.58 + 7.79im
+const OBS_VC = 204.90 + 10.90im
+obs_state() = [real(OBS_VB), real(OBS_VC), imag(OBS_VB), imag(OBS_VC)]
+obs_m(kind, bus, value; sigma=0.1) =
+    Measurement(kind=kind, bus=bus, reference=nothing, value=value, sigma=sigma)
+
+function obs_diag(ms; zi=String[])
+    s = compile_state_estimator(obs_net(), ms; zero_injection=zi)
+    p = SEParameters(s, ms)
+    (s, p, observability_diagnostics(s, p, obs_state()))
+end
+
+@testset "Observability: redundancy is not observability" begin
+    vb = obs_m(:vmag, "b", abs(OBS_VB))
+    vc = obs_m(:vmag, "c", abs(OBS_VC))
+    # Three copies of one reading: redundant against noise, rank one.
+    _, _, d3 = obs_diag([vb, vb, vb])
+    @test d3.tangent_dimension == 4
+    @test d3.observable_dimension == 1
+    @test d3.unobservable_dimension == 3
+
+    # Same count as the determined set below, opposite verdict: placement decides.
+    _, _, dm = obs_diag([vb, vc])
+    @test dm.observable_dimension == 2
+    @test dm.unobservable_dimension == 2
+
+    rect = [obs_m(:vr, "b", real(OBS_VB)), obs_m(:vi, "b", imag(OBS_VB)),
+            obs_m(:vr, "c", real(OBS_VC)), obs_m(:vi, "c", imag(OBS_VC))]
+    _, _, dr = obs_diag(rect)
+    @test dr.observable_dimension == 4
+    @test dr.unobservable_dimension == 0
+    @test dr.min_singular ≈ 10.0 rtol=1e-6      # 1/sigma with sigma = 0.1
+end
+
+@testset "Observability: the unobservable direction of a magnitude-only set" begin
+    # |V| at both buses leaves both phase angles free. The null space should be
+    # exactly the tangent to each constant-magnitude circle -- the analytic
+    # direction (-Im V, Re V)/|V| -- which is what makes this diagnostic worth
+    # reading rather than just counting.
+    ms = [obs_m(:vmag, "b", abs(OBS_VB)), obs_m(:vmag, "c", abs(OBS_VC))]
+    s, p, d = obs_diag(ms)
+    @test d.unobservable_dimension == 2
+    x = obs_state()
+    U = unobservable_directions(s, p, x)
+    @test size(U) == (4, 2)
+    H = residual_jacobian(s, p, x)
+    for k in axes(U, 2)
+        @test norm(H * U[:, k]) < 1e-10
+    end
+    # `unobservable_directions` returns an orthonormal basis, so projecting an
+    # analytic phase direction onto it must reproduce it exactly.
+    for (V, ire, iim) in ((OBS_VB, 1, 3), (OBS_VC, 2, 4))
+        u = zeros(4)
+        u[ire] = -imag(V) / abs(V)
+        u[iim] =  real(V) / abs(V)
+        @test norm(U * (U' * u) - u) < 1e-8     # u is already in the span
+    end
+end
+
+@testset "Observability: an exact constraint can make a set sufficient" begin
+    # The measurements do not change; the constraint removes two directions
+    # they would otherwise have had to explain. rank(H) alone is the wrong test.
+    ms = [obs_m(:vr, "b", real(OBS_VB)), obs_m(:vi, "b", imag(OBS_VB))]
+    _, _, free = obs_diag(ms)
+    @test free.tangent_dimension == 4
+    @test free.observable_dimension == 2
+    @test free.unobservable_dimension == 2
+
+    _, _, held = obs_diag(ms; zi=["c"])
+    @test held.tangent_dimension == 2
+    @test held.observable_dimension == 2
+    @test held.unobservable_dimension == 0
+end
+
+@testset "Observability: a critical measurement hides bad data completely" begin
+    # Exactly determined => every measurement is critical => every residual is
+    # identically zero, so a gross error leaves no signature at all.
+    rect = [obs_m(:vr, "b", real(OBS_VB)), obs_m(:vi, "b", imag(OBS_VB)),
+            obs_m(:vr, "c", real(OBS_VC)), obs_m(:vi, "c", imag(OBS_VC))]
+    s = compile_state_estimator(obs_net(), rect)
+    p = SEParameters(s, rect)
+    x0 = zeros(4); x0[1] = x0[2] = 230.0
+    clean = solve_compiled_state_estimator(s, p, x0; initial_radius=2.0)
+    @test clean.status == :converged_unique
+    @test norm(clean.evaluation.residual) < 1e-10
+
+    p.measurement_values[1] += 5.0                     # 50 sigma
+    bad = solve_compiled_state_estimator(s, p, x0; initial_radius=2.0)
+    @test bad.status == :converged_unique
+    @test norm(bad.evaluation.residual) < 1e-10        # NO residual signature
+    # The estimate absorbed the whole error.
+    @test bad.state[1] - clean.state[1] ≈ 5.0 rtol=1e-6
+
+    # One redundant row makes the same error unmistakable.
+    red = vcat(rect, [obs_m(:vmag, "b", abs(OBS_VB))])
+    s2 = compile_state_estimator(obs_net(), red)
+    p2 = SEParameters(s2, red)
+    @test norm(solve_compiled_state_estimator(s2, p2, x0; initial_radius=2.0
+              ).evaluation.residual) < 1e-8
+    p2.measurement_values[1] += 5.0
+    exposed = solve_compiled_state_estimator(s2, p2, x0; initial_radius=2.0)
+    @test norm(exposed.evaluation.residual) > 10.0
+    @test maximum(abs, exposed.evaluation.residual) > 20.0
+end
+
+@testset "Observability: covariance refuses to invent information" begin
+    ms = [obs_m(:vr, "b", real(OBS_VB)), obs_m(:vi, "b", imag(OBS_VB))]
+    s = compile_state_estimator(obs_net(), ms)
+    x = obs_state()
+
+    # Rank deficient: an unobservable direction has infinite variance, and a
+    # pseudo-inverse would silently report confidence that does not exist.
+    p = SEParameters(s, ms)
+    @test observability_diagnostics(s, p, x).unobservable_dimension == 2
+    @test_throws ArgumentError selected_state_covariance(s, p, x, [1])
+
+    # A prior restores rank -- and the covariance says where the answer came
+    # from: the measured bus keeps its meter's sigma, the unmeasured bus
+    # reports exactly the prior's.
+    for psig in (1.0, 10.0, 100.0)
+        pp = SEParameters(s, ms;
+            prior=StatePrior([2, 4], [real(OBS_VC), imag(OBS_VC)], [psig, psig]))
+        @test observability_diagnostics(s, pp, x).unobservable_dimension == 0
+        C = selected_state_covariance(s, pp, x, [1, 2])
+        @test sqrt(C[1, 1]) ≈ 0.1  rtol=1e-8      # the meter's sigma
+        @test sqrt(C[2, 2]) ≈ psig rtol=1e-8      # entirely the prior
+    end
+end

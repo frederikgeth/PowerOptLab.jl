@@ -113,7 +113,14 @@ Both problems are nonconvex, and the current-magnitude tutorial exhibits two
 exactly-fitting solutions. A cheap multistart with a spread comparison would
 turn "converged" into something closer to a claim.
 
-### 6. Transformer and source telemetry
+### 6. Observable-island decomposition
+
+The unobservable directions are computed and can be inspected
+([observability](observability.md)); turning them into maximal observable
+islands, and into a minimal set of pseudo-measurements that merges them, is a
+combinatorial step this codebase does not take.
+
+### 7. Transformer and source telemetry
 
 `BranchMeasurement` covers lines via `line_yprim`. Transformers, switches,
 neutral currents and source phasors are not modelled. Note also that
