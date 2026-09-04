@@ -90,6 +90,51 @@ recourse. Native transformer taps and IBR active/reactive power can be linked.
 Free generator P/Q is audited but cannot yet be linked safely, so fail-closed
 policies reject it unless an explicit `:context` rule is supplied.
 
+Research extensions can participate through [`DOEControlRegistration`](@ref)
+and `context_hook!`. A registration names a stable BMOPFTools `OpfModelKey`,
+canonical unit, native classification, automatic law, scale, and provenance
+metadata. This keeps policy rules independent of JuMP variable names.
+
+## Context evidence and fixed-control replay
+
+[`verify_operating_envelope`](@ref) returns `context_results[t]`, containing one
+[`OperatingEnvelopeContextResult`](@ref) per scenario and utilization point. A
+feasible joint policy solve is independently repeated one context at a time with
+its optimized free controls fixed. The replay records its status, completeness,
+snapshot, margins, and maximum complex-voltage difference from the joint solve.
+
+When a joint model fails, contexts are diagnosed separately. If they are all
+individually feasible, diagnostics use
+`:shared_control_incompatibility_or_joint_nlp_failure`; they do not invent a
+single offending context.
+
+## Finite interior search and multistart
+
+[`search_operating_envelope_utilizations`](@ref) verifies a deterministic Halton
+set inside the advertised box. Its outcomes are deliberately limited to
+`:search_stable`, `:candidate_counterexample`, and `:inconclusive`.
+[`solve_search_stable_operating_envelope`](@ref) adds the screened set to a
+counterexample-guided allocation loop. Neither API reports a global certificate.
+
+[`solve_operating_envelope_multistart`](@ref) perturbs registered-variable start
+values deterministically, retains every run, and reports capacity spread and
+independently evaluated JuMP primal-constraint residuals.
+
+## Reproducibility manifest
+
+[`DOEStudySpec`](@ref) hashes every interval/scenario network and the connection
+declarations with SHA-256, then records coverage, control/fairness policies,
+solver options, seeds, extension metadata, and software versions. Store
+[`doe_study_manifest`](@ref) with every published result.
+
+## Migration note
+
+Omitting `control_policy` continues to select pointwise `PerfectRecourse()` and
+records `control_policy_source=:legacy_default`. New research studies should
+pass the policy explicitly. The original four-argument
+`OperatingEnvelopeVerification` constructor remains available; new verification
+results additionally populate `context_results`.
+
 If an interval has no feasible primal point, its capacities and total are `NaN`.
 The package never publishes values from an infeasible solver iterate.
 
@@ -331,12 +376,14 @@ operational-policy difference rather than a DOE-model comparison.
 - Exact corner enumeration scales exponentially.
 - Control discovery currently covers native free transformer taps, IBR P/Q,
   and explicit generator P/Q bounds. Generator P/Q lacks a stable power handle
-  for non-anticipativity, and custom extension controls require a future
-  registration interface.
+  for non-anticipativity. Custom extensions can register semantic controls, but
+  undeclared extension variables cannot yet be distinguished automatically from
+  physical state variables.
 - A finite scenario set has no probability or confidence meaning. Scenario
   provenance, calibration, weights, and held-out coverage are caller concerns.
-- Verification reports an interval-level result rather than one structured
-  record and violation magnitude per scenario/utilization context.
+- Verification returns an interval verdict plus structured per-context evidence,
+  but a proven infeasibility certificate and normalized violation-maximization
+  problem remain future work.
 - The current object is a one-sided active-power box. It does not jointly issue
   lower/upper import-export limits or a coupled P-Q flexibility set.
 - Rolling fairness is causal rather than globally horizon-optimal; temporal

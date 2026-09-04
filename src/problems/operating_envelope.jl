@@ -78,6 +78,63 @@ end
 const _DOE_CONTROL_STAGES = (:issue, :scenario, :local_law, :context)
 const _DOE_FREE_CONTROL_STAGES = (:issue, :scenario, :context)
 const _DOE_UNCLASSIFIED_ACTIONS = (:error, :context)
+const _DOE_NATIVE_CLASSIFICATIONS = (:free, :fixed_data, :local_law, :envelope)
+
+"""
+    DOEControlRegistration(; component, id, quantity, handle, kwargs...)
+
+Register a control exposed by a BMOPFTools public `OpfModelKey` so that a DOE
+policy can audit and link it without inspecting JuMP variable names.
+
+`native_classification` is `:free`, `:fixed_data`, `:local_law`, or `:envelope`.
+For a local law, provide `automatic_law` and immutable controller provenance in
+`metadata`. `model_to_canonical_scale` converts the registered scalar model
+value to `canonical_unit`; it must be identical for every context represented
+by this registration. Native IBR powers and transformer taps are registered by
+the solver automatically.
+"""
+struct DOEControlRegistration
+    component::Symbol
+    id::String
+    quantity::Symbol
+    position::Int
+    handle::BMOPFTools.OpfModelKey
+    native_classification::Symbol
+    automatic_law::Union{Nothing,Symbol}
+    canonical_unit::Symbol
+    model_to_canonical_scale::Float64
+    metadata::Dict{String,Any}
+
+    function DOEControlRegistration(; component::Symbol,
+                                    id::AbstractString,
+                                    quantity::Symbol,
+                                    position::Int=1,
+                                    handle::BMOPFTools.OpfModelKey,
+                                    native_classification::Symbol=:free,
+                                    automatic_law::Union{Nothing,Symbol}=nothing,
+                                    canonical_unit::Symbol=:dimensionless,
+                                    model_to_canonical_scale::Real=1.0,
+                                    metadata=Dict{String,Any}())
+        isempty(id) && throw(ArgumentError(
+            "DOE control-registration id must be non-empty"))
+        position >= 1 || throw(ArgumentError(
+            "DOE control-registration position must be positive"))
+        handle.kind == :variable || throw(ArgumentError(
+            "DOE control-registration handle must identify a variable"))
+        native_classification in _DOE_NATIVE_CLASSIFICATIONS ||
+            throw(ArgumentError(
+                "native_classification must be one of $(_DOE_NATIVE_CLASSIFICATIONS)"))
+        native_classification == :local_law && automatic_law === nothing &&
+            throw(ArgumentError(
+                "a :local_law registration must name automatic_law"))
+        scale = Float64(model_to_canonical_scale)
+        isfinite(scale) && !iszero(scale) || throw(ArgumentError(
+            "model_to_canonical_scale must be finite and nonzero"))
+        new(component, String(id), quantity, position, handle,
+            native_classification, automatic_law, canonical_unit, scale,
+            Dict{String,Any}(string(key) => value for (key, value) in pairs(metadata)))
+    end
+end
 
 """
     DOEControlRule(; component, id, quantity, stage)
@@ -115,7 +172,8 @@ end
 
 """
     DOEControlPolicy(; name=:custom, default_stage=:context,
-                       rules=DOEControlRule[], on_unclassified=:error)
+                       rules=DOEControlRule[], registrations=DOEControlRegistration[],
+                       on_unclassified=:error)
 
 Information structure for controllable assets in a DOE formulation.
 `default_stage` applies to discovered free controls that have no explicit rule.
@@ -132,11 +190,13 @@ struct DOEControlPolicy
     name::Symbol
     default_stage::Symbol
     rules::Vector{DOEControlRule}
+    registrations::Vector{DOEControlRegistration}
     on_unclassified::Symbol
 
     function DOEControlPolicy(; name::Symbol=:custom,
                               default_stage::Symbol=:context,
                               rules=DOEControlRule[],
+                              registrations=DOEControlRegistration[],
                               on_unclassified::Symbol=:error)
         default_stage in _DOE_FREE_CONTROL_STAGES || throw(ArgumentError(
             "DOE default control stage must be one of $(_DOE_FREE_CONTROL_STAGES), got :$default_stage"))
@@ -146,24 +206,194 @@ struct DOEControlPolicy
         identities = [(rule.component, rule.id, rule.quantity) for rule in typed_rules]
         length(unique(identities)) == length(identities) || throw(ArgumentError(
             "DOE control policy contains duplicate component/id/quantity rules"))
-        new(name, default_stage, typed_rules, on_unclassified)
+        typed_registrations = DOEControlRegistration[
+            registration for registration in registrations]
+        registration_identities = [(registration.component, registration.id,
+                                    registration.quantity, registration.position)
+                                   for registration in typed_registrations]
+        length(unique(registration_identities)) == length(registration_identities) ||
+            throw(ArgumentError(
+                "DOE control policy contains duplicate control registrations"))
+        new(name, default_stage, typed_rules, typed_registrations,
+            on_unclassified)
     end
 end
 
 """Policy preset retaining independent controls in every scenario/utilisation context."""
-PerfectRecourse(; rules=DOEControlRule[]) = DOEControlPolicy(
+PerfectRecourse(; rules=DOEControlRule[], registrations=DOEControlRegistration[]) = DOEControlPolicy(
     name=:perfect_recourse, default_stage=:context, rules=rules,
+    registrations=registrations,
     on_unclassified=:context)
 
 """Policy preset fixing all discovered free setpoints at DOE issue time."""
-IssueFixedControls(; rules=DOEControlRule[]) = DOEControlPolicy(
+IssueFixedControls(; rules=DOEControlRule[], registrations=DOEControlRegistration[]) = DOEControlPolicy(
     name=:issue_fixed_controls, default_stage=:issue, rules=rules,
+    registrations=registrations,
     on_unclassified=:error)
 
 """Operational preset: issue-time free setpoints plus prescribed local control laws."""
-IssuePlusLocalLaws(; rules=DOEControlRule[]) = DOEControlPolicy(
+IssuePlusLocalLaws(; rules=DOEControlRule[], registrations=DOEControlRegistration[]) = DOEControlPolicy(
     name=:issue_plus_local_laws, default_stage=:issue, rules=rules,
+    registrations=registrations,
     on_unclassified=:error)
+
+"""
+    DOEStudySpec
+
+Immutable top-level provenance record for a reproducible DOE experiment. Use
+the network-aware constructor `DOEStudySpec(nets, connection_points; kwargs...)`
+and serialize [`doe_study_manifest`](@ref) beside research outputs.
+"""
+struct DOEStudySpec
+    study_id::String
+    network_hashes::Vector{Vector{String}}
+    connection_points::Vector{Dict{String,Any}}
+    direction::Symbol
+    security::Symbol
+    utilizations
+    control_policy::Dict{String,Any}
+    fairness::Dict{String,Any}
+    solver::String
+    solver_options::Dict{String,Any}
+    seeds::Dict{String,Int}
+    software_versions::Dict{String,String}
+    metadata::Dict{String,Any}
+end
+
+function _doe_canonical(value)
+    value === nothing && return "null"
+    value isa Bool && return value ? "true" : "false"
+    value isa Number && return repr(value)
+    value isa AbstractString && return repr(String(value))
+    value isa Symbol && return ":" * String(value)
+    value isa DateTime && return repr(string(value))
+    if value isa AbstractDict || value isa NamedTuple
+        entries = [(string(key), item) for (key, item) in pairs(value)]
+        sort!(entries; by=first)
+        return "{" * join((repr(key) * ":" * _doe_canonical(item)
+                            for (key, item) in entries), ",") * "}"
+    elseif value isa Tuple || value isa AbstractVector
+        return "[" * join((_doe_canonical(item) for item in value), ",") * "]"
+    end
+    return repr(value)
+end
+
+_doe_sha256(value) = bytes2hex(SHA.sha256(codeunits(_doe_canonical(value))))
+
+function _doe_policy_manifest(policy::DOEControlPolicy)
+    Dict{String,Any}(
+        "name" => policy.name,
+        "default_stage" => policy.default_stage,
+        "on_unclassified" => policy.on_unclassified,
+        "rules" => [Dict{String,Any}(
+            "component" => rule.component, "id" => rule.id,
+            "quantity" => rule.quantity, "stage" => rule.stage)
+            for rule in policy.rules],
+        "registrations" => [Dict{String,Any}(
+            "component" => registration.component,
+            "id" => registration.id,
+            "quantity" => registration.quantity,
+            "position" => registration.position,
+            "handle" => Dict("kind" => registration.handle.kind,
+                             "family" => registration.handle.family,
+                             "index" => registration.handle.index),
+            "native_classification" => registration.native_classification,
+            "automatic_law" => registration.automatic_law,
+            "canonical_unit" => registration.canonical_unit,
+            "model_to_canonical_scale" =>
+                registration.model_to_canonical_scale,
+            "metadata" => copy(registration.metadata))
+            for registration in policy.registrations])
+end
+
+function _doe_fairness_manifest(policy::FairnessPolicy)
+    Dict{String,Any}(
+        "kind" => policy.kind,
+        "normalization" => policy.normalization,
+        "weights" => copy(policy.weights),
+        "alpha" => policy.alpha,
+        "epsilon" => policy.epsilon)
+end
+
+"""
+    DOEStudySpec(nets, connection_points; kwargs...)
+
+Create a deterministic study manifest with SHA-256 hashes of every interval /
+scenario network and the full connection-point declaration. The manifest also
+records coverage, control and fairness policies, solver options, named random
+seeds, extension metadata, and package versions. Functions such as custom hooks
+cannot be serialized; identify their committed implementation in `metadata`.
+"""
+function DOEStudySpec(nets, connection_points::AbstractVector{ConnectionPoint};
+                      direction::Symbol=:export,
+                      security::Symbol=:bound_point,
+                      utilizations=nothing,
+                      control_policy::DOEControlPolicy=PerfectRecourse(),
+                      fairness=:equal,
+                      optimizer=Ipopt.Optimizer,
+                      solver_options=NamedTuple(),
+                      seeds=Dict{String,Int}(),
+                      metadata=Dict{String,Any}())
+    groups = _scenario_groups(nets)
+    cps = collect(connection_points)
+    fairness_policy = _as_policy(fairness)
+    network_hashes = [[_doe_sha256(net) for net in group] for group in groups]
+    cp_records = [Dict{String,Any}(
+        "id" => cp.id, "bus" => cp.bus,
+        "phase_terminals" => copy(cp.phase_terminals),
+        "neutral" => cp.neutral, "export_max" => cp.export_max,
+        "import_max" => cp.import_max, "ibr_id" => cp.ibr_id,
+        "requested" => cp.requested, "normalization" => cp.normalization)
+        for cp in cps]
+    options = Dict{String,Any}(string(key) => value
+                              for (key, value) in pairs(solver_options))
+    seed_records = Dict{String,Int}(string(key) => Int(value)
+                                    for (key, value) in pairs(seeds))
+    metadata_records = Dict{String,Any}(string(key) => value
+                                        for (key, value) in pairs(metadata))
+    versions = Dict{String,String}(
+        "julia" => string(VERSION),
+        "PowerOptLab" => string(Base.pkgversion(@__MODULE__)),
+        "BMOPFTools" => string(Base.pkgversion(BMOPFTools)),
+        "JuMP" => string(Base.pkgversion(JuMP)),
+        "Ipopt" => string(Base.pkgversion(Ipopt)))
+    manifest = Dict{String,Any}(
+        "network_hashes" => network_hashes,
+        "connection_points" => cp_records,
+        "direction" => direction,
+        "security" => security,
+        "utilizations" => utilizations,
+        "control_policy" => _doe_policy_manifest(control_policy),
+        "fairness" => _doe_fairness_manifest(fairness_policy),
+        "solver" => string(optimizer),
+        "solver_options" => options,
+        "seeds" => seed_records,
+        "software_versions" => versions,
+        "metadata" => metadata_records)
+    study_id = _doe_sha256(manifest)
+    return DOEStudySpec(study_id, network_hashes, cp_records,
+        direction, security, deepcopy(utilizations),
+        manifest["control_policy"], manifest["fairness"],
+        manifest["solver"], options, seed_records, versions, metadata_records)
+end
+
+"""Return a serialization-friendly dictionary for a [`DOEStudySpec`](@ref)."""
+function doe_study_manifest(spec::DOEStudySpec)
+    Dict{String,Any}(
+        "study_id" => spec.study_id,
+        "network_hashes" => deepcopy(spec.network_hashes),
+        "connection_points" => deepcopy(spec.connection_points),
+        "direction" => spec.direction,
+        "security" => spec.security,
+        "utilizations" => deepcopy(spec.utilizations),
+        "control_policy" => deepcopy(spec.control_policy),
+        "fairness" => deepcopy(spec.fairness),
+        "solver" => spec.solver,
+        "solver_options" => deepcopy(spec.solver_options),
+        "seeds" => copy(spec.seeds),
+        "software_versions" => copy(spec.software_versions),
+        "metadata" => deepcopy(spec.metadata))
+end
 
 """
     OperatingEnvelopeResult
@@ -223,6 +453,27 @@ OperatingEnvelopeResult(status, envelope, total, snapshots) =
                             Dict{String,Any}[])
 
 """
+    OperatingEnvelopeContextResult
+
+Evidence for one forecast scenario and participant-utilisation point in an
+operating-envelope solve or verification. `feasible=nothing` means that a
+multi-context model failed before feasibility of this individual context could
+be determined. The nested diagnostics distinguish joint-model evidence from an
+independent fixed-control replay.
+"""
+struct OperatingEnvelopeContextResult
+    scenario::Int
+    utilization_index::Int
+    utilization::Vector{Float64}
+    termination_status::String
+    primal_status::String
+    feasible::Union{Bool,Nothing}
+    snapshot::Dict{String,Any}
+    diagnostics::Dict{String,Any}
+    control_values::Vector{Dict{String,Any}}
+end
+
+"""
     OperatingEnvelopeVerification
 
 Result of [`verify_operating_envelope`](@ref). Each interval reports whether a
@@ -235,7 +486,13 @@ struct OperatingEnvelopeVerification <: AbstractSolveResult
     feasible::Vector{Bool}
     snapshots::Vector{Dict{String,Any}}
     diagnostics::Vector{Dict{String,Any}}
+    context_results::Vector{Vector{OperatingEnvelopeContextResult}}
 end
+
+# Source compatibility for callers constructing the original four-field result.
+OperatingEnvelopeVerification(status, feasible, snapshots, diagnostics) =
+    OperatingEnvelopeVerification(status, feasible, snapshots, diagnostics,
+        [OperatingEnvelopeContextResult[] for _ in eachindex(status)])
 
 
 function solve_status(result::OperatingEnvelopeVerification)
@@ -253,6 +510,76 @@ end
 solve_diagnostics(result::OperatingEnvelopeVerification) =
     (interval_count=length(result.feasible),
      feasible_count=count(identity, result.feasible), verification=true)
+
+"""
+    OperatingEnvelopeSearchResult
+
+Result of [`search_operating_envelope_utilizations`](@ref). `outcome` is
+`:search_stable`, `:candidate_counterexample`, or `:inconclusive`. Search-stable
+means only that every generated point passed the configured local AC
+verification; `global_certificate` remains false.
+"""
+struct OperatingEnvelopeSearchResult <: AbstractSolveResult
+    outcome::Symbol
+    utilization_points::Vector{Vector{Float64}}
+    verification::OperatingEnvelopeVerification
+    candidate_contexts::Vector{OperatingEnvelopeContextResult}
+    diagnostics::Dict{String,Any}
+end
+
+solve_status(result::OperatingEnvelopeSearchResult) =
+    solve_status(result.verification)
+solve_diagnostics(result::OperatingEnvelopeSearchResult) =
+    (outcome=result.outcome,
+     tested_point_count=length(result.utilization_points),
+     global_certificate=false)
+
+"""
+    SearchStableOperatingEnvelopeResult
+
+Result of [`solve_search_stable_operating_envelope`](@ref). It retains the
+final allocation, every utilization-screening round, and the accumulated test
+set. `outcome=:search_stable` is a finite-search result rather than a global
+robust certificate.
+"""
+struct SearchStableOperatingEnvelopeResult <: AbstractSolveResult
+    outcome::Symbol
+    envelope::OperatingEnvelopeResult
+    searches::Vector{OperatingEnvelopeSearchResult}
+    utilization_points::Vector{Vector{Float64}}
+    rounds::Int
+    diagnostics::Dict{String,Any}
+end
+
+solve_status(result::SearchStableOperatingEnvelopeResult) =
+    solve_status(result.envelope)
+solve_diagnostics(result::SearchStableOperatingEnvelopeResult) =
+    (outcome=result.outcome, rounds=result.rounds,
+     tested_point_count=length(result.utilization_points),
+     global_certificate=false)
+
+"""
+    OperatingEnvelopeMultistartResult
+
+Collection returned by [`solve_operating_envelope_multistart`](@ref). `selected`
+is the best publishable run under the declared selection rule; all starts and
+capacity spreads remain available for branch-sensitivity reporting.
+"""
+struct OperatingEnvelopeMultistartResult <: AbstractSolveResult
+    selected::OperatingEnvelopeResult
+    runs::Vector{OperatingEnvelopeResult}
+    start_scales::Vector{Float64}
+    selected_index::Int
+    diagnostics::Dict{String,Any}
+end
+
+solve_status(result::OperatingEnvelopeMultistartResult) =
+    solve_status(result.selected)
+solve_diagnostics(result::OperatingEnvelopeMultistartResult) =
+    (run_count=length(result.runs), selected_index=result.selected_index,
+     global_certificate=false,
+     maximum_capacity_spread=get(result.diagnostics,
+                                 "maximum_capacity_spread_W", NaN))
 
 const _FAIRNESS_KINDS =
     (:equal, :max_total, :proportional, :alpha, :max_min, :equal_curtailment)
@@ -737,10 +1064,12 @@ function _doe_fixed_bounds(device, quantity::Symbol, position::Int)
                     atol=1e-12 * max(1.0, abs(lower), abs(upper)))
 end
 
-function _doe_native_control_handles(record, cps)
+function _doe_native_control_handles(record, cps, registrations)
     handles = Dict{_DOEControlKey,Any}()
+    declarations = Dict{_DOEControlKey,DOEControlRegistration}()
     constraint_families = Dict{Any,Set{Symbol}}()
-    for object_key in BMOPFTools.opf_object_keys(record.ctx)
+    object_keys = BMOPFTools.opf_object_keys(record.ctx)
+    for object_key in object_keys
         if object_key.kind == :constraint && object_key.index !== nothing
             push!(get!(constraint_families, object_key.index, Set{Symbol}()),
                   object_key.family)
@@ -762,9 +1091,26 @@ function _doe_native_control_handles(record, cps)
         end
     end
 
+    available_keys = Set(object_keys)
+    for registration in registrations
+        registration.handle in available_keys || continue
+        key = _doe_control_key(registration.component, registration.id,
+                               registration.quantity, registration.position)
+        haskey(handles, key) && throw(ArgumentError(
+            "custom DOE control registration collides with native control $(key)"))
+        handles[key] = BMOPFTools.opf_object(record.ctx, registration.handle)
+        declarations[key] = registration
+    end
+
     envelope_ibrs = Set(cp.ibr_id for cp in cps if cp.ibr_id !== nothing)
     classifications = Dict{_DOEControlKey,Tuple{Symbol,Union{Nothing,Symbol}}}()
     for key in keys(handles)
+        if haskey(declarations, key)
+            registration = declarations[key]
+            classifications[key] = (registration.native_classification,
+                                    registration.automatic_law)
+            continue
+        end
         if key.component == :transformer
             classifications[key] = (:free, nothing)
             continue
@@ -784,7 +1130,28 @@ function _doe_native_control_handles(record, cps)
             classifications[key] = (:free, nothing)
         end
     end
-    return handles, classifications
+    return handles, classifications, declarations
+end
+
+
+function _doe_control_scale(record, key, declarations)
+    registration = get(declarations, key, nothing)
+    registration !== nothing && return registration.model_to_canonical_scale
+    return key.quantity in (:active_power, :reactive_power) ?
+        _power_base(record.ctx) : 1.0
+end
+
+function _doe_control_unit(key, declarations)
+    registration = get(declarations, key, nothing)
+    registration !== nothing && return registration.canonical_unit
+    key.quantity == :active_power && return :W
+    key.quantity == :reactive_power && return :var
+    return :effective_ratio_coefficient
+end
+
+function _doe_control_metadata(key, declarations)
+    registration = get(declarations, key, nothing)
+    registration === nothing ? Dict{String,Any}() : copy(registration.metadata)
 end
 
 function _doe_policy_stage(policy, rules, used_rules, key, native_states)
@@ -852,22 +1219,40 @@ function _doe_generator_recourses(records)
 end
 
 function _apply_doe_control_policy!(model, records, cps,
-                                    policy::DOEControlPolicy)
+                                    policy::DOEControlPolicy;
+                                    fixed_control_values=Dict{_DOEControlKey,Float64}())
     rules = _doe_rule_map(policy)
     used_rules = Set{Tuple{Symbol,String,Symbol}}()
     handles_by_record = Vector{Dict{_DOEControlKey,Any}}(undef, length(records))
+    declarations_by_record = Vector{Dict{_DOEControlKey,DOEControlRegistration}}(
+        undef, length(records))
     classes_by_record = Vector{Dict{_DOEControlKey,Tuple{Symbol,Union{Nothing,Symbol}}}}(
         undef, length(records))
     all_keys = Set{_DOEControlKey}()
     for (index, record) in enumerate(records)
-        handles, classifications = _doe_native_control_handles(record, cps)
+        handles, classifications, declarations = _doe_native_control_handles(
+            record, cps, policy.registrations)
         handles_by_record[index] = handles
         classes_by_record[index] = classifications
+        declarations_by_record[index] = declarations
         union!(all_keys, keys(handles))
     end
+    discovered_registrations = Set(
+        (registration.component, registration.id, registration.quantity,
+         registration.position)
+        for declarations in declarations_by_record
+        for registration in values(declarations))
+    declared_registrations = Set(
+        (registration.component, registration.id, registration.quantity,
+         registration.position) for registration in policy.registrations)
+    missing_registrations = setdiff(
+        declared_registrations, discovered_registrations)
+    isempty(missing_registrations) || throw(ArgumentError(
+        "DOE control registrations did not resolve to a model variable: $(collect(missing_registrations))"))
 
     audit = Dict{String,Any}[]
     link_count = 0
+    fix_count = 0
     for key in sort!(collect(all_keys); by=key ->
                      (string(key.component), key.id, string(key.quantity), key.position))
         present = [index for index in eachindex(records)
@@ -889,11 +1274,26 @@ function _apply_doe_control_policy!(model, records, cps,
                 push!(equality_groups, [Dict("scenario" => records[index].scenario,
                                              "pattern" => records[index].pattern)
                                         for index in group])
-                reference = handles_by_record[first(group)][key]
+                reference_index = first(group)
+                reference = handles_by_record[reference_index][key]
+                reference_scale = _doe_control_scale(
+                    records[reference_index], key,
+                    declarations_by_record[reference_index])
                 for index in Iterators.drop(group, 1)
-                    JuMP.@constraint(model, handles_by_record[index][key] == reference)
+                    scale = _doe_control_scale(
+                        records[index], key, declarations_by_record[index])
+                    JuMP.@constraint(model,
+                        scale * handles_by_record[index][key] ==
+                        reference_scale * reference)
                     links += 1
                 end
+            end
+        end
+        if haskey(fixed_control_values, key)
+            for index in present
+                JuMP.@constraint(model,
+                    handles_by_record[index][key] == fixed_control_values[key])
+                fix_count += 1
             end
         end
         link_count += links
@@ -905,6 +1305,10 @@ function _apply_doe_control_policy!(model, records, cps,
             "native_classification" => length(unique(first.(native_states))) == 1 ?
                 first(first(native_states)) : :mixed,
             "automatic_laws" => Symbol[law for law in local_laws],
+            "canonical_unit" => _doe_control_unit(
+                key, declarations_by_record[first(present)]),
+            "metadata" => _doe_control_metadata(
+                key, declarations_by_record[first(present)]),
             "stage" => stage,
             "stage_source" => source,
             "linkage_supported" => true,
@@ -913,6 +1317,10 @@ function _apply_doe_control_policy!(model, records, cps,
             "equality_groups" => equality_groups,
             "link_constraints" => links))
     end
+
+    unknown_fixed = setdiff(Set(keys(fixed_control_values)), all_keys)
+    isempty(unknown_fixed) || throw(ArgumentError(
+        "fixed replay controls were not discovered in this context: $(collect(unknown_fixed))"))
 
     # Generator P/Q is currently represented by current variables whose power
     # depends on voltage. Linking those currents would impose the wrong policy,
@@ -941,6 +1349,8 @@ function _apply_doe_control_policy!(model, records, cps,
             "position" => key.position,
             "native_classification" => :free,
             "automatic_laws" => Symbol[],
+            "canonical_unit" => key.quantity == :active_power ? :W : :var,
+            "metadata" => Dict{String,Any}(),
             "stage" => :context,
             "stage_source" => rule === nothing ? :unclassified_fallback : :explicit_rule,
             "linkage_supported" => false,
@@ -956,11 +1366,12 @@ function _apply_doe_control_policy!(model, records, cps,
     adaptive = [item for item in audit if item["stage"] == :context &&
                 item["native_classification"] in (:free, :mixed)]
     shared = [item for item in audit if item["stage"] in (:issue, :scenario)]
-    return Dict{String,Any}(
+    diagnostics = Dict{String,Any}(
         "control_policy" => policy.name,
         "control_default_stage" => policy.default_stage,
         "control_audit" => audit,
         "control_link_constraints" => link_count,
+        "control_fix_constraints" => fix_count,
         "shared_control_count" => length(shared),
         "adaptive_control_count" => length(adaptive),
         "control_nonanticipativity" => !isempty(shared),
@@ -968,7 +1379,63 @@ function _apply_doe_control_policy!(model, records, cps,
         "perfect_recourse_controls_present" => !isempty(adaptive),
         "ideal_recourse_used" => !isempty(adaptive),
         "all_discovered_free_controls_classified" => true,
-        "control_discovery_scope" => :native_transformer_taps_ibr_power_and_generator_bounds)
+        "custom_control_registration_count" => length(policy.registrations),
+        "control_discovery_scope" =>
+            :native_controls_plus_explicit_registered_extension_controls)
+    return (diagnostics=diagnostics,
+            handles_by_record=handles_by_record,
+            declarations_by_record=declarations_by_record,
+            audit=audit)
+end
+
+function _doe_key_from_audit(item)
+    _doe_control_key(item["component"], item["id"], item["quantity"],
+                     item["position"])
+end
+
+function _doe_context_control_values(record_index, records, handles_by_record,
+                                     declarations_by_record, audit)
+    values_ = Dict{String,Any}[]
+    handles = handles_by_record[record_index]
+    declarations = declarations_by_record[record_index]
+    for item in audit
+        key = _doe_key_from_audit(item)
+        entry = Dict{String,Any}(
+            "component" => key.component,
+            "id" => key.id,
+            "quantity" => key.quantity,
+            "position" => key.position,
+            "stage" => item["stage"])
+        if haskey(handles, key)
+            model_value = JuMP.value(handles[key])
+            entry["value"] = model_value * _doe_control_scale(
+                records[record_index], key, declarations)
+            entry["unit"] = _doe_control_unit(key, declarations)
+            entry["model_value"] = model_value
+            entry["available"] = true
+        else
+            entry["available"] = false
+            entry["reason"] = :no_stable_value_handle
+        end
+        push!(values_, entry)
+    end
+    return values_
+end
+
+function _doe_context_replay_values(record_index, handles_by_record, audit)
+    handles = handles_by_record[record_index]
+    values_ = Dict{_DOEControlKey,Float64}()
+    unsupported = Dict{String,Any}[]
+    for item in audit
+        item["native_classification"] in (:free, :mixed) || continue
+        key = _doe_key_from_audit(item)
+        if haskey(handles, key)
+            values_[key] = JuMP.value(handles[key])
+        else
+            push!(unsupported, item)
+        end
+    end
+    return values_, unsupported
 end
 
 function _solve_interval_group(group, cps, policy;
@@ -976,10 +1443,13 @@ function _solve_interval_group(group, cps, policy;
                                optimizer, verbose, solver_options,
                                volt_var_watt_eps, max_min_tolerance,
                                control_policy, control_policy_source,
+                               context_hook!,
+                               start_hook!,
                                temporal_history=nothing,
                                temporal_dt_h=1.0,
                                fixed_capacity=nothing,
-                               patterns_override=nothing)
+                               patterns_override=nothing,
+                               fixed_control_values=Dict{_DOEControlKey,Float64}())
     model = JuMP.Model(optimizer)
     pb = per_unit ? s_base : 1.0
     cap = Dict{String,Any}()
@@ -1009,6 +1479,7 @@ function _solve_interval_group(group, cps, policy;
                 JuMP.@constraint(_opf_model(ctx),
                     p == sign * fractions[i] * cap[cp.id])
             end
+            context_hook! === nothing || context_hook!(ctx)
         end
     end
     multi = build_multi_context([spec.net for spec in specifications]; model,
@@ -1018,27 +1489,52 @@ function _solve_interval_group(group, cps, policy;
                 scenario=spec.scenario, pattern=spec.pattern,
                 fractions=spec.fractions)
                for (index, spec) in enumerate(specifications)]
-    control_diagnostics = _apply_doe_control_policy!(
-        model, records, cps, control_policy)
+    control_payload = _apply_doe_control_policy!(
+        model, records, cps, control_policy;
+        fixed_control_values=fixed_control_values)
+    control_diagnostics = control_payload.diagnostics
     foreach(r -> enforce_kcl!(r.ctx), records)
-    if fixed_capacity === nothing
-        stage = _set_fairness_objective!(model, cap, cps, policy, direction, pb;
-            temporal_history=temporal_history, temporal_dt_h=temporal_dt_h)
-        _optimize_fairness!(model, stage; max_min_tolerance=max_min_tolerance)
-    else
-        JuMP.@objective(model, Min, 0.0)
-        JuMP.optimize!(model)
+    start_hook! === nothing || start_hook!(multi.contexts)
+    solve_time_seconds = @elapsed begin
+        if fixed_capacity === nothing
+            stage = _set_fairness_objective!(model, cap, cps, policy, direction, pb;
+                temporal_history=temporal_history, temporal_dt_h=temporal_dt_h)
+            _optimize_fairness!(model, stage; max_min_tolerance=max_min_tolerance)
+        else
+            JuMP.@objective(model, Min, 0.0)
+            JuMP.optimize!(model)
+        end
     end
 
     outcome = _solve_outcome(model)
     status = string(outcome.termination_status)
     primal = string(outcome.primal_status)
     feasible = _publishable(outcome)
+    primal_residual_diagnostics = Dict{String,Any}(
+        "primal_residual_available" => false,
+        "maximum_primal_constraint_violation" => NaN,
+        "constraint_violation_count_above_1e_6" => 0)
+    if outcome.has_primal
+        try
+            report = JuMP.primal_feasibility_report(model; atol=0.0)
+            violations = Float64.(collect(values(report)))
+            primal_residual_diagnostics["primal_residual_available"] = true
+            primal_residual_diagnostics["maximum_primal_constraint_violation"] =
+                maximum(violations; init=0.0)
+            primal_residual_diagnostics["constraint_violation_count_above_1e_6"] =
+                count(>(1e-6), violations)
+        catch error_
+            primal_residual_diagnostics["primal_residual_error"] =
+                sprint(showerror, error_)
+        end
+    end
     total = NaN
     alloc = Dict(cp.id => NaN for cp in cps)
     snapshot = Dict{String,Any}("termination_status"=>status,
                                 "primal_status"=>primal)
     objective = NaN
+    context_results = OperatingEnvelopeContextResult[]
+    replay_values = Vector{Tuple{Int,Int,Dict{_DOEControlKey,Float64},Vector{Dict{String,Any}}}}()
     margin_diagnostics = Dict{String,Any}(
         "minimum_margins"=>Dict{String,Float64}(),
         "minimum_margin_locations"=>Dict{String,String}(),
@@ -1054,12 +1550,45 @@ function _solve_interval_group(group, cps, policy;
         representative = records[something(representative_index, 1)]
         snapshot = extract_result(representative.ctx)
         checked = Tuple{Dict{String,Any},Dict{String,Any}}[]
-        for record in records
+        for (record_index, record) in enumerate(records)
             result = record.scenario == 1 && all(isone, record.fractions) ?
                      snapshot : extract_result(record.ctx)
             push!(checked, (result, record.net))
+            local_margins = _merge_margins([(result, record.net)])
+            control_values = _doe_context_control_values(
+                record_index, records, control_payload.handles_by_record,
+                control_payload.declarations_by_record,
+                control_payload.audit)
+            values_, unsupported = _doe_context_replay_values(
+                record_index, control_payload.handles_by_record,
+                control_payload.audit)
+            push!(replay_values,
+                (record.scenario, record.pattern, values_, unsupported))
+            evidence = Dict{String,Any}(
+                "evidence_scope" => :joint_policy_model,
+                "joint_solve_time_seconds" => solve_time_seconds,
+                "independent_replay" => nothing)
+            merge!(evidence, local_margins)
+            merge!(evidence, primal_residual_diagnostics)
+            push!(context_results, OperatingEnvelopeContextResult(
+                record.scenario, record.pattern, copy(record.fractions),
+                status, primal, true, result, evidence, control_values))
         end
         margin_diagnostics = _merge_margins(checked)
+    else
+        individually_resolved = length(records) == 1
+        for record in records
+            push!(context_results, OperatingEnvelopeContextResult(
+                record.scenario, record.pattern, copy(record.fractions),
+                status, primal, individually_resolved ? false : nothing,
+                Dict{String,Any}(),
+                Dict{String,Any}(
+                    "evidence_scope" => individually_resolved ?
+                        :single_context_model : :unresolved_joint_model,
+                    "joint_solve_time_seconds" => solve_time_seconds,
+                    "independent_replay" => nothing),
+                Dict{String,Any}[]))
+        end
     end
 
     security_scope = if security == :corners
@@ -1073,6 +1602,7 @@ function _solve_interval_group(group, cps, policy;
         "feasible" => feasible,
         "primal_status" => primal,
         "objective" => objective,
+        "solve_time_seconds" => solve_time_seconds,
         "direction" => direction,
         "security" => security,
         "security_scope" => security_scope,
@@ -1093,8 +1623,11 @@ function _solve_interval_group(group, cps, policy;
         "temporal_fairness" => temporal_history === nothing ? :none : :cumulative_max_min)
     merge!(diag, control_diagnostics)
     merge!(diag, margin_diagnostics)
+    merge!(diag, primal_residual_diagnostics)
     return (status=status, alloc=alloc, total=total,
-            snapshot=snapshot, diagnostics=diag)
+            snapshot=snapshot, diagnostics=diag,
+            context_results=context_results,
+            replay_values=replay_values)
 end
 
 """
@@ -1125,6 +1658,14 @@ Important keywords:
   explicitly for published-work replication, or [`IssuePlusLocalLaws`](@ref)
   to share free setpoints across all scenario/utilisation contexts while
   retaining prescribed automatic IBR laws;
+- `utilizations=nothing` may instead be an explicit collection of participant
+  utilisation vectors in `[0,1]^N`. This supports reproducible adaptive or
+  counterexample-guided studies and is reported as an explicit test set;
+- `context_hook! = nothing` may register research-extension variables through
+  BMOPFTools public `OpfModelKey`s before the control policy is applied. Pair
+  those handles with [`DOEControlRegistration`](@ref);
+- `start_hook! = nothing` receives the completed OPF contexts immediately
+  before optimization and can set reproducible JuMP start values;
 - `volt_var_watt_eps=2e-3` controls the engine's smooth approximation of
   mandatory IBR Volt-VAr/Volt-Watt curve corners.
 
@@ -1146,6 +1687,7 @@ function solve_operating_envelope(nets,
                                   fairness=:equal,
                                   direction::Symbol=:export,
                                   security::Symbol=:bound_point,
+                                  utilizations=nothing,
                                   per_unit::Bool=true,
                                   s_base::Float64=1e6,
                                   optimizer=Ipopt.Optimizer,
@@ -1155,6 +1697,8 @@ function solve_operating_envelope(nets,
                                   max_exact_corners::Int=10,
                                   max_min_tolerance::Float64=1e-7,
                                   control_policy::Union{Nothing,DOEControlPolicy}=nothing,
+                                  context_hook! = nothing,
+                                  start_hook! = nothing,
                                   temporal_fairness::Symbol=:none,
                                   fairness_history::AbstractDict=Dict{String,Float64}(),
                                   temporal_dt_h::Float64=1.0,
@@ -1175,6 +1719,13 @@ function solve_operating_envelope(nets,
         "max_min_tolerance must be finite and >= 0"))
     _validate_connection_points(groups, cps, policy, direction, security,
                                 max_exact_corners)
+    utilization_patterns = if utilizations === nothing
+        nothing
+    else
+        security == :bound_point || throw(ArgumentError(
+            "explicit utilizations cannot be combined with security=:corners"))
+        _verification_patterns(utilizations, length(cps))
+    end
     _validate_temporal_fairness(temporal_fairness, fairness_history, temporal_dt_h, cps)
     isfinite(interval_seconds) && interval_seconds > 0 || throw(ArgumentError(
         "interval_seconds must be finite and > 0"))
@@ -1203,6 +1754,9 @@ function solve_operating_envelope(nets,
             max_min_tolerance=max_min_tolerance,
             control_policy=resolved_control_policy,
             control_policy_source=control_policy_source,
+            context_hook! = context_hook!,
+            start_hook! = start_hook!,
+            patterns_override=utilization_patterns,
             temporal_history=temporal_fairness == :cumulative_max_min ? history : nothing,
             temporal_dt_h=temporal_dt_h)
         statuses[t] = solved.status
@@ -1258,6 +1812,95 @@ function solve_operating_envelope(nets,
                             direction, total, diagnostics, metrics, schedule)
 end
 
+function _doe_scale_registered_starts!(contexts, scale::Float64)
+    changed = 0
+    seen = Set{Any}()
+    for ctx in contexts
+        for key in BMOPFTools.opf_object_keys(ctx; kind=:variable)
+            variable = BMOPFTools.opf_object(ctx, key)
+            variable isa JuMP.VariableRef || continue
+            index = JuMP.index(variable)
+            index in seen && continue
+            push!(seen, index)
+            start = JuMP.start_value(variable)
+            start === nothing && continue
+            target = Float64(start) * scale
+            JuMP.has_lower_bound(variable) &&
+                (target = max(target, JuMP.lower_bound(variable)))
+            JuMP.has_upper_bound(variable) &&
+                (target = min(target, JuMP.upper_bound(variable)))
+            JuMP.is_fixed(variable) && (target = JuMP.fix_value(variable))
+            JuMP.set_start_value(variable, target)
+            changed += 1
+        end
+    end
+    return changed
+end
+
+"""
+    solve_operating_envelope_multistart(nets, connection_points;
+        start_scales=(1.0, 0.9, 1.1), base_start_hook! = nothing, kwargs...)
+
+Run the same DOE formulation from several deterministic perturbations of the
+native registered-variable starting point. The selected result maximizes total
+published capacity among runs with feasible primal solutions, while diagnostics
+retain every termination status and the per-interval capacity spread.
+
+This is a branch-sensitivity diagnostic, not a proof of global optimality.
+`base_start_hook!`, when supplied, runs before each scale perturbation. Remaining
+keywords are forwarded to [`solve_operating_envelope`](@ref).
+"""
+function solve_operating_envelope_multistart(
+        nets, connection_points::AbstractVector{ConnectionPoint};
+        start_scales=(1.0, 0.9, 1.1),
+        base_start_hook! = nothing,
+        kwargs...)
+    scales = Float64.(collect(start_scales))
+    isempty(scales) && throw(ArgumentError("start_scales must be non-empty"))
+    all(scale -> isfinite(scale) && scale > 0, scales) ||
+        throw(ArgumentError("start_scales must be finite and positive"))
+    runs = OperatingEnvelopeResult[]
+    changed_counts = Int[]
+    for scale in scales
+        changed = Ref(0)
+        start_hook! = contexts -> begin
+            base_start_hook! === nothing || base_start_hook!(contexts)
+            changed[] = _doe_scale_registered_starts!(contexts, scale)
+        end
+        push!(runs, solve_operating_envelope(
+            nets, connection_points; start_hook! = start_hook!, kwargs...))
+        push!(changed_counts, changed[])
+    end
+    accepted = [index for index in eachindex(runs)
+                if all(get(diag, "feasible", false)
+                       for diag in runs[index].diagnostics)]
+    selected_index = isempty(accepted) ? 1 : accepted[argmax(
+        [sum(runs[index].total_capacity) for index in accepted])]
+    interval_count = length(runs[selected_index].total_capacity)
+    spreads = fill(NaN, interval_count)
+    if !isempty(accepted)
+        for interval in 1:interval_count
+            values_ = [runs[index].total_capacity[interval] for index in accepted]
+            spreads[interval] = maximum(values_) - minimum(values_)
+        end
+    end
+    diagnostics = Dict{String,Any}(
+        "selection" => :maximum_total_capacity_among_feasible_primals,
+        "accepted_run_indices" => accepted,
+        "start_changed_variable_counts" => changed_counts,
+        "termination_statuses" => [run.termination_status for run in runs],
+        "maximum_primal_constraint_violation" =>
+            [[get(diag, "maximum_primal_constraint_violation", NaN)
+              for diag in run.diagnostics] for run in runs],
+        "capacity_spread_W" => spreads,
+        "maximum_capacity_spread_W" =>
+            isempty(accepted) ? NaN : maximum(spreads),
+        "global_certificate" => false,
+        "claim" => :deterministic_multistart_branch_sensitivity)
+    return OperatingEnvelopeMultistartResult(
+        runs[selected_index], runs, scales, selected_index, diagnostics)
+end
+
 """
     compare_operating_envelope_policies(nets, connection_points, policies; kwargs...)
 
@@ -1278,6 +1921,36 @@ function compare_operating_envelope_policies(nets, connection_points, policies; 
             fairness=last(entry), kwargs...)
     end
     return result
+end
+
+function _doe_snapshot_voltage_difference(left, right)
+    buses_left = get(left, "bus", Dict())
+    buses_right = get(right, "bus", Dict())
+    difference = 0.0
+    found = false
+    for bus in intersect(Set(keys(buses_left)), Set(keys(buses_right)))
+        left_bus = buses_left[bus]
+        right_bus = buses_right[bus]
+        for terminal in intersect(Set(keys(left_bus)), Set(keys(right_bus)))
+            left_terminal = left_bus[terminal]
+            right_terminal = right_bus[terminal]
+            all(haskey(left_terminal, field) && haskey(right_terminal, field)
+                for field in ("vr", "vi")) || continue
+            delta = hypot(Float64(left_terminal["vr"]) - Float64(right_terminal["vr"]),
+                          Float64(left_terminal["vi"]) - Float64(right_terminal["vi"]))
+            difference = max(difference, delta)
+            found = true
+        end
+    end
+    return found ? difference : NaN
+end
+
+function _doe_relabel_context(result::OperatingEnvelopeContextResult,
+                              scenario, pattern, fractions)
+    OperatingEnvelopeContextResult(
+        scenario, pattern, copy(fractions), result.termination_status,
+        result.primal_status, result.feasible, result.snapshot,
+        result.diagnostics, result.control_values)
 end
 
 """
@@ -1308,6 +1981,10 @@ function verify_operating_envelope(nets,
                                    solver_options=(),
                                    volt_var_watt_eps::Float64=2e-3,
                                    control_policy::Union{Nothing,DOEControlPolicy}=nothing,
+                                   context_hook! = nothing,
+                                   start_hook! = nothing,
+                                   independent_replay::Bool=true,
+                                   diagnose_infeasible_contexts::Bool=true,
                                    max_exact_corners::Int=10)
     groups = _scenario_groups(nets)
     cps = collect(connection_points)
@@ -1326,6 +2003,7 @@ function verify_operating_envelope(nets,
     feasible = Bool[]
     snapshots = Dict{String,Any}[]
     diagnostics = Dict{String,Any}[]
+    context_results = Vector{OperatingEnvelopeContextResult}[]
     for (t, group) in enumerate(groups)
         solved = _solve_interval_group(group, cps, policy;
             direction=direction, security=security, per_unit=per_unit, s_base=s_base,
@@ -1333,11 +2011,414 @@ function verify_operating_envelope(nets,
             volt_var_watt_eps=volt_var_watt_eps, max_min_tolerance=1e-7,
             control_policy=resolved_control_policy,
             control_policy_source=control_policy_source,
+            context_hook! = context_hook!,
+            start_hook! = start_hook!,
             fixed_capacity=trajectory[t], patterns_override=patterns)
         push!(statuses, solved.status)
-        push!(feasible, solved.diagnostics["feasible"])
         push!(snapshots, solved.snapshot)
+        interval_contexts = OperatingEnvelopeContextResult[]
+        if solved.diagnostics["feasible"]
+            replay_all_feasible = true
+            if independent_replay
+                for (context_index, (scenario, net, pattern_index, fractions)) in enumerate(
+                        (scenario, net, pattern_index, fractions)
+                        for (scenario, net) in enumerate(group)
+                        for (pattern_index, fractions) in enumerate(patterns))
+                    stored_scenario, stored_pattern, fixed_values, unsupported =
+                        solved.replay_values[context_index]
+                    stored_scenario == scenario && stored_pattern == pattern_index ||
+                        error("internal DOE context ordering mismatch")
+                    replay = _solve_interval_group([net], cps, policy;
+                        direction=direction, security=:bound_point,
+                        per_unit=per_unit, s_base=s_base,
+                        optimizer=optimizer, verbose=verbose,
+                        solver_options=solver_options,
+                        volt_var_watt_eps=volt_var_watt_eps,
+                        max_min_tolerance=1e-7,
+                        control_policy=resolved_control_policy,
+                        control_policy_source=control_policy_source,
+                        context_hook! = context_hook!,
+                        start_hook! = start_hook!,
+                        fixed_capacity=trajectory[t],
+                        patterns_override=[fractions],
+                        fixed_control_values=fixed_values)
+                    replay_context = only(replay.context_results)
+                    replay_feasible = replay_context.feasible === true
+                    replay_all_feasible &= replay_feasible
+                    joint_context = solved.context_results[context_index]
+                    joint_context.diagnostics["independent_replay"] = Dict{String,Any}(
+                        "feasible" => replay_feasible,
+                        "termination_status" => replay_context.termination_status,
+                        "primal_status" => replay_context.primal_status,
+                        "control_replay_complete" => isempty(unsupported),
+                        "unreplayed_controls" => unsupported,
+                        "maximum_voltage_difference_V" => replay_feasible ?
+                            _doe_snapshot_voltage_difference(
+                                joint_context.snapshot, replay_context.snapshot) : NaN,
+                        "snapshot" => replay_context.snapshot,
+                        "diagnostics" => replay_context.diagnostics)
+                    push!(interval_contexts, joint_context)
+                end
+            else
+                append!(interval_contexts, solved.context_results)
+            end
+            solved.diagnostics["joint_policy_feasible"] = true
+            solved.diagnostics["independent_replay_all_feasible"] =
+                independent_replay ? replay_all_feasible : nothing
+            solved.diagnostics["verification_evidence"] =
+                independent_replay ? :joint_model_plus_fixed_control_replay :
+                :joint_model_only
+            push!(feasible, replay_all_feasible)
+        elseif diagnose_infeasible_contexts
+            any_individually_infeasible = false
+            all_individually_feasible = true
+            for (scenario, net) in enumerate(group)
+                for (pattern_index, fractions) in enumerate(patterns)
+                    individual = _solve_interval_group([net], cps, policy;
+                        direction=direction, security=:bound_point,
+                        per_unit=per_unit, s_base=s_base,
+                        optimizer=optimizer, verbose=verbose,
+                        solver_options=solver_options,
+                        volt_var_watt_eps=volt_var_watt_eps,
+                        max_min_tolerance=1e-7,
+                        control_policy=resolved_control_policy,
+                        control_policy_source=control_policy_source,
+                        context_hook! = context_hook!,
+                        start_hook! = start_hook!,
+                        fixed_capacity=trajectory[t],
+                        patterns_override=[fractions])
+                    context = _doe_relabel_context(
+                        only(individual.context_results), scenario,
+                        pattern_index, fractions)
+                    context.diagnostics["evidence_scope"] =
+                        :individual_context_diagnostic
+                    push!(interval_contexts, context)
+                    individually_feasible = context.feasible === true
+                    all_individually_feasible &= individually_feasible
+                    any_individually_infeasible |= context.feasible === false
+                end
+            end
+            solved.diagnostics["joint_policy_feasible"] = false
+            solved.diagnostics["independent_contexts_all_feasible"] =
+                all_individually_feasible
+            solved.diagnostics["infeasibility_interpretation"] =
+                any_individually_infeasible ? :at_least_one_context_infeasible :
+                all_individually_feasible ?
+                    :shared_control_incompatibility_or_joint_nlp_failure :
+                    :individual_context_diagnostics_inconclusive
+            solved.diagnostics["verification_evidence"] =
+                :joint_model_plus_individual_context_diagnostics
+            push!(feasible, false)
+        else
+            append!(interval_contexts, solved.context_results)
+            solved.diagnostics["joint_policy_feasible"] = false
+            solved.diagnostics["verification_evidence"] = :joint_model_only
+            push!(feasible, false)
+        end
+        solved.diagnostics["context_result_count"] = length(interval_contexts)
+        push!(context_results, interval_contexts)
         push!(diagnostics, solved.diagnostics)
     end
-    return OperatingEnvelopeVerification(statuses, feasible, snapshots, diagnostics)
+    return OperatingEnvelopeVerification(
+        statuses, feasible, snapshots, diagnostics, context_results)
+end
+
+function _doe_first_primes(count::Int)
+    primes = Int[]
+    candidate = 2
+    while length(primes) < count
+        isprime = all(candidate % divisor != 0 for divisor in 2:isqrt(candidate))
+        isprime && push!(primes, candidate)
+        candidate += 1
+    end
+    return primes
+end
+
+function _doe_radical_inverse(index::Int, base::Int)
+    value = 0.0
+    factor = 1.0 / base
+    remaining = index
+    while remaining > 0
+        digit = remaining % base
+        value += digit * factor
+        remaining ÷= base
+        factor /= base
+    end
+    return value
+end
+
+function _doe_search_points(participant_count::Int, samples::Int,
+                            sequence_offset::Int;
+                            include_zero, include_bound, include_corners,
+                            max_exact_corners)
+    participant_count >= 1 || throw(ArgumentError(
+        "utilization search needs at least one participant"))
+    samples >= 0 || throw(ArgumentError("samples must be non-negative"))
+    sequence_offset >= 0 || throw(ArgumentError(
+        "sequence_offset must be non-negative"))
+    include_corners && participant_count > max_exact_corners &&
+        throw(ArgumentError(
+            "include_corners=true requires participant count <= max_exact_corners"))
+    points = Vector{Vector{Float64}}()
+    include_zero && push!(points, zeros(participant_count))
+    include_bound && push!(points, ones(participant_count))
+    include_corners && append!(points,
+        _dispatch_patterns(participant_count, :corners))
+    bases = _doe_first_primes(participant_count)
+    for index in (sequence_offset + 1):(sequence_offset + samples)
+        push!(points, [_doe_radical_inverse(index, base) for base in bases])
+    end
+    unique_points = Vector{Vector{Float64}}()
+    seen = Set{Tuple}()
+    for point in points
+        identity = Tuple(point)
+        identity in seen && continue
+        push!(seen, identity)
+        push!(unique_points, point)
+    end
+    return unique_points
+end
+
+"""
+    search_operating_envelope_utilizations(nets, connection_points, capacities;
+        samples=16, sequence_offset=0, include_zero=true,
+        include_bound=true, include_corners=false, kwargs...)
+
+Screen an issued operating envelope at a deterministic Halton low-discrepancy
+set of continuous participant-utilisation vectors. The generated set is solved
+jointly, so the selected [`DOEControlPolicy`](@ref) and its non-anticipativity
+constraints apply across the search points.
+
+The result is deliberately labelled `:search_stable`,
+`:candidate_counterexample`, or `:inconclusive`; this finite local-NLP search is
+not a robust-feasibility certificate. `sequence_offset` makes disjoint,
+reproducible batches possible. Remaining keywords are forwarded to
+[`verify_operating_envelope`](@ref).
+"""
+function search_operating_envelope_utilizations(
+        nets, connection_points::AbstractVector{ConnectionPoint}, capacities;
+        samples::Int=16,
+        sequence_offset::Int=0,
+        include_zero::Bool=true,
+        include_bound::Bool=true,
+        include_corners::Bool=false,
+        max_exact_corners::Int=10,
+        independent_replay::Bool=false,
+        kwargs...)
+    points = _doe_search_points(length(connection_points), samples,
+        sequence_offset; include_zero, include_bound, include_corners,
+        max_exact_corners)
+    isempty(points) && throw(ArgumentError(
+        "utilization search generated no points"))
+    verification = verify_operating_envelope(
+        nets, connection_points, capacities;
+        utilizations=points,
+        independent_replay=independent_replay,
+        max_exact_corners=max_exact_corners,
+        kwargs...)
+    candidates = OperatingEnvelopeContextResult[]
+    unresolved = false
+    for interval_contexts in verification.context_results
+        for context in interval_contexts
+            context.feasible === false && push!(candidates, context)
+            context.feasible === nothing && (unresolved = true)
+        end
+    end
+    outcome = if all(verification.feasible)
+        :search_stable
+    elseif !isempty(candidates)
+        :candidate_counterexample
+    else
+        :inconclusive
+    end
+    diagnostics = Dict{String,Any}(
+        "method" => :halton_low_discrepancy_screening,
+        "requested_samples" => samples,
+        "sequence_offset" => sequence_offset,
+        "tested_point_count" => length(points),
+        "include_zero" => include_zero,
+        "include_bound" => include_bound,
+        "include_corners" => include_corners,
+        "candidate_context_count" => length(candidates),
+        "unresolved_contexts_present" => unresolved,
+        "global_certificate" => false,
+        "claim" => outcome == :search_stable ?
+            :local_ac_feasibility_at_generated_points :
+            outcome == :candidate_counterexample ?
+                :candidate_violation_requires_confirmation :
+                :numerically_or_policy_inconclusive)
+    return OperatingEnvelopeSearchResult(
+        outcome, points, verification, candidates, diagnostics)
+end
+
+"""
+    solve_search_stable_operating_envelope(nets, connection_points;
+        initial_utilizations=:bound_point, samples_per_round=16,
+        max_rounds=3, solve_keywords=NamedTuple(),
+        verification_keywords=NamedTuple(), kwargs...)
+
+Counterexample-guided research wrapper for a box DOE. Each round allocates
+capacity on the accumulated utilization set, screens that allocation on an
+increasing deterministic low-discrepancy set, and adds the full screened set to
+the next allocation when a candidate violation or joint-policy conflict is
+found.
+
+The result is `:search_stable`, `:budget_exhausted`, or `:allocation_failed`.
+No outcome is a global certificate: this procedure improves finite tested-point
+coverage while retaining local nonlinear-solver limitations. Put fairness and
+other allocation-only options in `solve_keywords`; put replay/solver options
+used only for screening in `verification_keywords`.
+"""
+function solve_search_stable_operating_envelope(
+        nets, connection_points::AbstractVector{ConnectionPoint};
+        initial_utilizations=:bound_point,
+        samples_per_round::Int=16,
+        max_rounds::Int=3,
+        sequence_offset::Int=0,
+        control_policy::Union{Nothing,DOEControlPolicy}=nothing,
+        context_hook! = nothing,
+        solve_keywords=NamedTuple(),
+        verification_keywords=NamedTuple())
+    samples_per_round >= 1 || throw(ArgumentError(
+        "samples_per_round must be positive"))
+    max_rounds >= 1 || throw(ArgumentError("max_rounds must be positive"))
+    sequence_offset >= 0 || throw(ArgumentError(
+        "sequence_offset must be non-negative"))
+    solve_keywords isa NamedTuple || throw(ArgumentError(
+        "solve_keywords must be a NamedTuple"))
+    verification_keywords isa NamedTuple || throw(ArgumentError(
+        "verification_keywords must be a NamedTuple"))
+    points = _verification_patterns(
+        initial_utilizations, length(connection_points))
+    searches = OperatingEnvelopeSearchResult[]
+    allocation = solve_operating_envelope(
+        nets, connection_points;
+        utilizations=points,
+        control_policy=control_policy,
+        context_hook! = context_hook!,
+        solve_keywords...)
+    for round in 1:max_rounds
+        if any(!isfinite, allocation.total_capacity)
+            return SearchStableOperatingEnvelopeResult(
+                :allocation_failed, allocation, searches, points,
+                length(searches), Dict{String,Any}(
+                    "global_certificate" => false,
+                    "failure_round" => round,
+                    "claim" => :no_publishable_allocation))
+        end
+        search = search_operating_envelope_utilizations(
+            nets, connection_points, allocation;
+            samples=round * samples_per_round,
+            sequence_offset=sequence_offset,
+            control_policy=control_policy,
+            context_hook! = context_hook!,
+            independent_replay=false,
+            verification_keywords...)
+        push!(searches, search)
+        points = search.utilization_points
+        if search.outcome == :search_stable
+            return SearchStableOperatingEnvelopeResult(
+                :search_stable, allocation, searches, points, round,
+                Dict{String,Any}(
+                    "global_certificate" => false,
+                    "claim" => :local_ac_feasibility_at_generated_points,
+                    "samples_per_round" => samples_per_round,
+                    "sequence_offset" => sequence_offset))
+        end
+        allocation = solve_operating_envelope(
+            nets, connection_points;
+            utilizations=points,
+            control_policy=control_policy,
+            context_hook! = context_hook!,
+            solve_keywords...)
+    end
+    return SearchStableOperatingEnvelopeResult(
+        :budget_exhausted, allocation, searches, points,
+        length(searches), Dict{String,Any}(
+            "global_certificate" => false,
+            "claim" => :finite_search_budget_exhausted,
+            "samples_per_round" => samples_per_round,
+            "sequence_offset" => sequence_offset))
+end
+
+"""
+    doe_benchmark_rows(spec, result; method_label="DOE")
+
+Return stable, tidy interval rows for a DOE allocation. The rows retain the
+study identity, formulation labels, solver evidence, capacity, and claim
+boundary without embedding full network snapshots.
+"""
+function doe_benchmark_rows(spec::DOEStudySpec,
+                            result::OperatingEnvelopeResult;
+                            method_label::AbstractString="DOE")
+    interval_count = length(result.total_capacity)
+    length(spec.network_hashes) == interval_count || throw(ArgumentError(
+        "DOEStudySpec interval count does not match the result"))
+    return [(
+        study_id=spec.study_id,
+        method=String(method_label),
+        interval=interval,
+        termination_status=result.termination_status[interval],
+        primal_status=string(get(result.diagnostics[interval],
+                                 "primal_status", "UNKNOWN")),
+        feasible=Bool(get(result.diagnostics[interval], "feasible", false)),
+        published=isfinite(result.total_capacity[interval]),
+        direction=result.direction,
+        total_capacity_W=result.total_capacity[interval],
+        fairness_kind=get(result.diagnostics[interval], "fairness_kind", missing),
+        control_policy=get(result.diagnostics[interval], "control_policy", missing),
+        security_scope=get(result.diagnostics[interval], "security_scope", missing),
+        scenario_count=Int(get(result.diagnostics[interval], "scenario_count", 0)),
+        dispatch_point_count=Int(get(result.diagnostics[interval],
+                                     "dispatch_points_per_scenario", 0)),
+        solve_time_seconds=Float64(get(result.diagnostics[interval],
+                                       "solve_time_seconds", NaN)),
+        maximum_primal_constraint_violation=Float64(get(
+            result.diagnostics[interval],
+            "maximum_primal_constraint_violation", NaN)),
+        global_certificate=Bool(get(result.diagnostics[interval],
+                                    "global_certificate", false)),
+    ) for interval in 1:interval_count]
+end
+
+"""
+    doe_context_benchmark_rows(spec, verification; method_label="verification")
+
+Return one tidy row per interval/scenario/utilization context, including replay
+status and minimum-margin summaries.
+"""
+function doe_context_benchmark_rows(
+        spec::DOEStudySpec, verification::OperatingEnvelopeVerification;
+        method_label::AbstractString="verification")
+    length(spec.network_hashes) == length(verification.context_results) ||
+        throw(ArgumentError(
+            "DOEStudySpec interval count does not match the verification"))
+    rows = NamedTuple[]
+    for (interval, contexts) in enumerate(verification.context_results)
+        for context in contexts
+            replay = get(context.diagnostics, "independent_replay", nothing)
+            margins = get(context.diagnostics, "minimum_margins",
+                          Dict{String,Float64}())
+            push!(rows, (
+                study_id=spec.study_id,
+                method=String(method_label),
+                interval=interval,
+                scenario=context.scenario,
+                utilization_index=context.utilization_index,
+                utilization=copy(context.utilization),
+                termination_status=context.termination_status,
+                primal_status=context.primal_status,
+                feasible=context.feasible,
+                replay_feasible=replay isa AbstractDict ?
+                    get(replay, "feasible", missing) : missing,
+                control_replay_complete=replay isa AbstractDict ?
+                    get(replay, "control_replay_complete", missing) : missing,
+                replay_voltage_difference_V=replay isa AbstractDict ?
+                    get(replay, "maximum_voltage_difference_V", NaN) : NaN,
+                minimum_margins=copy(margins),
+                global_certificate=false,
+            ))
+        end
+    end
+    return rows
 end

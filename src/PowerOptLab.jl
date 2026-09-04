@@ -88,6 +88,7 @@ using ForwardDiff
 using JuMP
 using Ipopt
 using LinearAlgebra
+using SHA
 using SparseArrays
 
 # Shared validation and solver-result contracts.
@@ -165,11 +166,18 @@ export SequenceLineObservation, OverheadCarsonCandidate,
        materialize_inverse_carson
 
 # Dynamic operating envelopes
-export ConnectionPoint, FairnessPolicy, DOEControlRule, DOEControlPolicy,
+export ConnectionPoint, FairnessPolicy, DOEControlRegistration,
+       DOEControlRule, DOEControlPolicy,
        PerfectRecourse, IssueFixedControls, IssuePlusLocalLaws,
-       solve_operating_envelope,
-       verify_operating_envelope, compare_operating_envelope_policies,
-       OperatingEnvelopeResult, OperatingEnvelopeVerification
+       DOEStudySpec, doe_study_manifest, doe_benchmark_rows,
+       doe_context_benchmark_rows,
+       solve_operating_envelope, solve_operating_envelope_multistart,
+       verify_operating_envelope, search_operating_envelope_utilizations,
+       solve_search_stable_operating_envelope,
+       compare_operating_envelope_policies,
+       OperatingEnvelopeResult, OperatingEnvelopeVerification,
+       OperatingEnvelopeContextResult, OperatingEnvelopeSearchResult,
+       SearchStableOperatingEnvelopeResult, OperatingEnvelopeMultistartResult
 
 # Post-OPF static voltage operability (first slice: native ybus load scope)
 export OperabilitySpec, OperabilityCheck, OperabilityModelError, OperabilityResult,

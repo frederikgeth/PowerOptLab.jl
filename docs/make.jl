@@ -63,13 +63,17 @@ makedocs(
         "Tutorials" => [
             "Single-snapshot post-OPF operability study" => "tutorials/post_opf_operability_study.md",
             "Dynamic operating envelopes" => "tutorials/dynamic_operating_envelopes.md",
+            "DOE research workflow" => "tutorials/doe_research_workflow.md",
             "Inverse Carson reconstruction" => "tutorials/inverse_carson_reconstruction.md",
             "Battery storage models" => "tutorials/battery_storage_models.md",
             "HELM versus nonlinear power flow" => "tutorials/helm_vs_nonlinear_power_flow.md",
             "Learning smart-inverter controls" => "tutorials/learning_smart_inverter_controls.md",
         ],
         "Contributing"       => "contributing.md",
-        "API reference"      => "api.md",
+        "API reference" => [
+            "Core API" => "api.md",
+            "Dynamic operating envelopes API" => "api/operating_envelope.md",
+        ],
         "Symbol index"       => "symbol_index.md",
     ],
     checkdocs = :exports,

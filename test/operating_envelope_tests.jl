@@ -1,5 +1,6 @@
-using BMOPFTools: add_statcom!
+using BMOPFTools: OpfModelKey, add_statcom!, opf_model, register_opf_object!
 using Dates
+using JuMP
 
 @testset "Operating envelope: equal allocation is uniform, voltage-limited, load-dependent" begin
     cps = [ConnectionPoint(id="der1", bus="bus1", export_max=10e3),
@@ -13,6 +14,9 @@ using Dates
     @test solve_status(res).publishable
     @test solve_status(res).optimal
     @test solve_diagnostics(res).published_count == 2
+    @test all(diag["primal_residual_available"] for diag in res.diagnostics)
+    @test all(diag["maximum_primal_constraint_violation"] < 1e-5
+              for diag in res.diagnostics)
 
     for t in 1:2
         e1 = res.envelope["der1"][t]; e2 = res.envelope["der2"][t]
@@ -264,6 +268,11 @@ end
     @test operational_replay.feasible == [false]
     @test operational_replay.diagnostics[1]["control_policy"] ==
           :issue_plus_local_laws
+    @test length(operational_replay.context_results[1]) == 4
+    @test all(context.feasible === true for context in
+              operational_replay.context_results[1])
+    @test operational_replay.diagnostics[1]["infeasibility_interpretation"] ==
+          :shared_control_incompatibility_or_joint_nlp_failure
 
     scenario_policy = PerfectRecourse(rules=[DOEControlRule(
         component=:ibr, id="statcom_bus2", quantity=:reactive_power,
@@ -322,6 +331,30 @@ end
     @test !generator_audit["linkage_supported"]
     @test_throws ArgumentError solve_operating_envelope(
         generator_net, generator_cp; control_policy=IssuePlusLocalLaws())
+
+    extension_key = OpfModelKey(:variable, :research_support, "setting")
+    extension_hook! = ctx -> begin
+        setting = @variable(opf_model(ctx), lower_bound=-1.0,
+                            upper_bound=1.0,
+                            base_name="research_support_setting")
+        register_opf_object!(ctx, extension_key, setting)
+    end
+    registration = DOEControlRegistration(
+        component=:research_device, id="support1", quantity=:setting,
+        handle=extension_key, canonical_unit=:per_unit_setting,
+        metadata=Dict("controller" => "laboratory fixture"))
+    extension_policy = IssuePlusLocalLaws(registrations=[registration])
+    extension_result = solve_operating_envelope(
+        doe_feeder(p1=200.0, p2=200.0), cps;
+        security=:corners, control_policy=extension_policy,
+        context_hook! = extension_hook!)
+    extension_audit = only(filter(
+        item -> item["component"] == :research_device,
+        extension_result.diagnostics[1]["control_audit"]))
+    @test extension_audit["stage"] == :issue
+    @test extension_audit["link_constraints"] == 3
+    @test extension_audit["canonical_unit"] == :per_unit_setting
+    @test extension_audit["metadata"]["controller"] == "laboratory fixture"
 end
 
 @testset "Operating envelope: inherited thermal and unbalance constraints" begin
@@ -363,15 +396,113 @@ end
     @test verified.diagnostics[1]["verification"]
     @test solve_status(verified).publishable
     @test solve_diagnostics(verified).verification
+    @test length(verified.context_results[1]) == 1
+    replay = verified.context_results[1][1].diagnostics["independent_replay"]
+    @test replay["feasible"]
+    @test replay["control_replay_complete"]
+    @test replay["maximum_voltage_difference_V"] < 1e-3
 
     custom = verify_operating_envelope(nets[1], cps, compared["equal"];
         utilizations=[[0.25, 0.75], [0.75, 0.25]])
     @test custom.feasible == [true]
     @test custom.diagnostics[1]["security_scope"] == :explicit_utilization_points
     @test custom.diagnostics[1]["dispatch_points_per_scenario"] == 2
+    @test [context.utilization for context in custom.context_results[1]] ==
+          [[0.25, 0.75], [0.75, 0.25]]
 
     fallback = solve_operating_envelope([nets[1], doe_feeder(p1=5e3, p2=5e3)], cps;
         security=:corners, fallback=:last_feasible)
     @test fallback.schedule[2]["publication_source"] in (:optimized, :last_feasible_fallback)
     @test solve_status(fallback).publishable
+end
+
+@testset "Operating envelope: explicit utilization and search-stable screening" begin
+    net = doe_feeder(p1=200.0, p2=200.0)
+    cps = [ConnectionPoint(id="d1", bus="bus1", export_max=10e3),
+           ConnectionPoint(id="d2", bus="bus2", export_max=10e3)]
+    explicit = solve_operating_envelope(net, cps;
+        utilizations=[[0.0, 0.0], [0.5, 0.25], [1.0, 1.0]])
+    @test explicit.diagnostics[1]["security_scope"] ==
+          :explicit_utilization_points
+    @test explicit.diagnostics[1]["dispatch_points_per_scenario"] == 3
+    @test_throws ArgumentError solve_operating_envelope(net, cps;
+        security=:corners, utilizations=[[1.0, 1.0]])
+
+    conservative = Dict(id => 0.5 * explicit.envelope[id][1]
+                        for id in keys(explicit.envelope))
+    stable = search_operating_envelope_utilizations(
+        net, cps, conservative; samples=3)
+    @test stable.outcome == :search_stable
+    @test stable.diagnostics["global_certificate"] == false
+    @test stable.utilization_points[1] == [0.0, 0.0]
+    @test stable.utilization_points[2] == [1.0, 1.0]
+    @test stable.utilization_points[3] == [0.5, 1 / 3]
+    @test solve_diagnostics(stable).tested_point_count == 5
+
+    unsafe = search_operating_envelope_utilizations(
+        net, cps, Dict("d1" => 10e3, "d2" => 10e3); samples=0)
+    @test unsafe.outcome == :candidate_counterexample
+    @test !isempty(unsafe.candidate_contexts)
+    @test unsafe.diagnostics["claim"] ==
+          :candidate_violation_requires_confirmation
+
+    adaptive = solve_search_stable_operating_envelope(
+        net, cps; samples_per_round=2, max_rounds=2)
+    @test adaptive.outcome == :search_stable
+    @test adaptive.rounds == 1
+    @test length(adaptive.searches) == 1
+    @test !adaptive.diagnostics["global_certificate"]
+
+    multistart = solve_operating_envelope_multistart(
+        net, cps; start_scales=(1.0, 0.98))
+    @test length(multistart.runs) == 2
+    @test multistart.selected_index in (1, 2)
+    @test all(count > 0 for count in
+              multistart.diagnostics["start_changed_variable_counts"])
+    @test isfinite(multistart.diagnostics["maximum_capacity_spread_W"])
+    @test !multistart.diagnostics["global_certificate"]
+end
+
+@testset "Operating envelope: reproducible study manifest" begin
+    net = doe_feeder(p1=200.0, p2=300.0)
+    cps = [ConnectionPoint(id="d1", bus="bus1", export_max=10e3)]
+    first_spec = DOEStudySpec(net, cps;
+        security=:corners,
+        control_policy=IssuePlusLocalLaws(),
+        fairness=FairnessPolicy(kind=:max_min, normalization=:capacity),
+        seeds=Dict("scenario_generation" => 42),
+        metadata=Dict("case" => "manifest fixture"))
+    second_spec = DOEStudySpec(deepcopy(net), deepcopy(cps);
+        security=:corners,
+        control_policy=IssuePlusLocalLaws(),
+        fairness=FairnessPolicy(kind=:max_min, normalization=:capacity),
+        seeds=Dict("scenario_generation" => 42),
+        metadata=Dict("case" => "manifest fixture"))
+    @test first_spec.study_id == second_spec.study_id
+    @test first_spec.network_hashes == second_spec.network_hashes
+    @test doe_study_manifest(first_spec)["study_id"] == first_spec.study_id
+    @test first_spec.software_versions["PowerOptLab"] == "0.1.0"
+
+    changed = deepcopy(net)
+    changed["load"]["d1"]["p_nom"][1] += 1.0
+    changed_spec = DOEStudySpec(changed, cps;
+        security=:corners, control_policy=IssuePlusLocalLaws(),
+        fairness=FairnessPolicy(kind=:max_min, normalization=:capacity),
+        seeds=Dict("scenario_generation" => 42),
+        metadata=Dict("case" => "manifest fixture"))
+    @test changed_spec.study_id != first_spec.study_id
+    @test changed_spec.network_hashes != first_spec.network_hashes
+
+    benchmark_spec = DOEStudySpec(net, cps)
+    result = solve_operating_envelope(net, cps)
+    rows = doe_benchmark_rows(benchmark_spec, result; method_label="baseline")
+    @test length(rows) == 1
+    @test rows[1].study_id == benchmark_spec.study_id
+    @test rows[1].method == "baseline"
+    @test !rows[1].global_certificate
+    verification = verify_operating_envelope(net, cps, result)
+    context_rows = doe_context_benchmark_rows(
+        benchmark_spec, verification)
+    @test length(context_rows) == 1
+    @test context_rows[1].replay_feasible === true
 end

@@ -245,16 +245,20 @@ distributed, and literature-replication studies.
 2. **Implemented:** add `:issue` and `:scenario` linking for transformer taps
    and free IBR P/Q handles; prescribed IBR control profiles are classified as
    `:local_law`, not linked setpoints.
-3. **Partly implemented:** a paired STATCOM test shows ideal recourse admitting
-   more capacity than one issue-time setting. Independent per-context control
-   replay remains to be added.
-4. Extend the upstream control registry before supporting generator setpoints
-   or new device families; do not infer controls from JuMP variable names.
+3. **Implemented first slice:** a paired STATCOM test shows ideal recourse
+   admitting more capacity than one issue-time setting; verification repeats
+   each feasible context with optimized free controls fixed.
+4. **Partly implemented:** `DOEControlRegistration` lets extensions declare
+   stable semantic handles, units, classifications, laws, and provenance.
+   Generator P/Q still needs a public upstream power handle; currents are not
+   used as a surrogate.
 5. After migration warnings and compatibility tests, require an explicit policy
    for multi-context studies with free controls. Keep both operational and
    perfect-recourse presets stable and tested.
-6. Reuse exactly the same policy in corner checks, custom verification,
-   counterexample search, and eventual stochastic/robust formulations.
+6. **Implemented for current finite methods:** the same policy is used in
+   corner checks, explicit utilization allocation, custom verification, Halton
+   screening, and counterexample-guided allocation. Eventual stochastic/robust
+   formulations must retain this path.
 
 ## Open scientific questions
 
@@ -367,30 +371,37 @@ hidden inside an objective.
 
 Deliver this before claiming a new quantification method:
 
-1. Introduce a `DOEStudySpec`-like immutable record containing network/data
-   hashes, interval and issuance time, uncertainty construction, utilization
-   set, control information structure, objective, normalization, solver and
-   options, random seeds, and software versions.
-2. Return per-context status, residuals, margins, solve time, and identifiers;
-   aggregate only after preserving the raw evidence.
-3. Add independent constraint-residual evaluation and fixed-dispatch AC replay.
-4. Add configurable multistart with a recorded start-generation policy and
-   capacity spread across accepted local solutions.
-5. Build a benchmark runner that emits tidy machine-readable results and never
-   mixes unit tests with empirical research claims.
-6. Extend the typed control-recourse contract beyond its native tap/IBR first
-   slice and fail closed on all unregistered custom free controls in
-   research-safe studies.
+1. **Implemented first slice:** `DOEStudySpec` records interval/scenario network
+   hashes, utilization coverage, control information structure, objective,
+   normalization, solver/options, random seeds, metadata, and software versions.
+   Typed issuance and uncertainty-construction records remain future additions.
+2. **Implemented first slice:** return per-context status, margins, identifiers,
+   snapshots, controls, joint timing, and independent replay timing/evidence.
+3. **Partly implemented:** independently evaluate JuMP primal residuals and
+   repeat each context with free controls fixed. A second power-flow engine or
+   formulation is still needed for stronger independent physics replay.
+4. **Implemented first slice:** deterministic registered-variable multistart
+   records the start policy, every status, accepted runs, and capacity spread.
+5. **Implemented first slice:** `doe_benchmark_rows`,
+   `doe_context_benchmark_rows`, and `scripts/run_doe_benchmark.jl` emit stable
+   TSV-ready evidence without mixing empirical runs into unit tests.
+6. **Partly implemented:** explicit extension controls can register stable
+   semantic handles and fail closed. Automatically detecting an undeclared
+   custom free control without confusing it with a state variable remains an
+   upstream registration problem.
 
 Acceptance gate: a third party can recreate every table row from one committed
 configuration and can identify exactly what was and was not tested.
 
 ### Stage 1 — search-stable range verification
 
-1. Implement an inner adversarial search over utilization vectors, maximizing
+1. **First screening slice implemented:** deterministic Halton utilization
+   search now distinguishes search-stable, candidate, and inconclusive results.
+   Implement an inner adversarial optimization over utilization vectors, maximizing
    voltage, current, unbalance, or composite normalized violation.
-2. Add counterexample-guided outer allocation: solve, search, append the
-   violating point, and repeat.
+2. **Implemented for finite screens:** counterexample-guided outer allocation
+   solves, screens, appends the complete tested set, and repeats. Replace the
+   screen with a true violation-maximizing oracle when available.
 3. Keep the outcome hierarchy explicit: falsified, search-stable under a budget,
    or certified by a valid bound.
 4. Compare full corners, random/quasi-random points, sensitivity-screened

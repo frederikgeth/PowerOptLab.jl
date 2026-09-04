@@ -7,6 +7,9 @@ This is the modelling primer for the current API. The implementation audit and
 the planned sequence of counterexample, uncertainty, fairness, scaling, and
 power-quality tutorials are maintained in [DOE quantification: scientific
 review and roadmap](../problems/doe_quantification_review.md).
+For the implemented recourse registry, structured replay, finite interior
+search, multistart, and reproducibility manifest, continue with
+[Reproducible DOE recourse, verification, and search](doe_research_workflow.md).
 
 This tutorial is about *modelling choices*, not just calling an optimizer. A
 dynamic operating envelope (DOE) is an operational promise: a participant may
