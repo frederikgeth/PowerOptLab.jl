@@ -1,5 +1,5 @@
 using BMOPFTools: parse_bmopf, solve_pf
-using LinearAlgebra: norm, I
+using LinearAlgebra: norm, svdvals, I
 
 # A four-conductor feeder with an explicitly modelled (not perfectly grounded)
 # neutral.  The source phase phasors pin the electrical angle; the neutral stays
@@ -196,7 +196,7 @@ end
     @test series.completed_snapshots == 2
     @test length(series.snapshots) == 2
     @test length(p1.prior_indices) == 0
-    @test p2.prior_values ≈ series.snapshots[1].state
+    @test length(p2.prior_indices) == 0     # driver scratch is removed on exit
     measured_state = s.free_state_map[(measurements[1].bus, measurements[1].terminal)]
     @test series.snapshots[2].state[measured_state] > series.snapshots[1].state[measured_state]
     @test series.snapshots[2].state[measured_state] < p2.measurement_values[1]
@@ -278,7 +278,7 @@ function scaled_feeder(vsrc, r)
     """; from_string=true)
 end
 
-@testset "Compiled SE: magnitude_epsilon reaches branch current magnitudes" begin
+@testset "Compiled SE: voltage and current magnitudes smooth independently" begin
     net = compiled_se_net()
     bm = [BranchMeasurement(kind=:imag, line="l1", side=:from, terminal="1",
                             value=0.0, sigma=0.1)]
@@ -288,21 +288,32 @@ end
     # Without smoothing the prediction is a hard zero and the derivative does not
     # exist; with it, both the value and the analytic Jacobian are the smoothed
     # magnitude. The option used to be accepted and then ignored for :imag.
-    p0 = SEParameters(s, bm; magnitude_epsilon=0.0)
+    p0 = SEParameters(s, bm)
     @test evaluate_state_estimator(s, p0, x).predicted == [0.0]
     @test_throws DomainError residual_jacobian(s, p0, x)
 
-    p5 = SEParameters(s, bm; magnitude_epsilon=5.0)
-    @test evaluate_state_estimator(s, p5, x).predicted ≈ [5.0]
-    @test residual_jacobian(s, p5, x) ≈
-          central_jacobian(y -> evaluate_state_estimator(s, p5, y).residual, x) rtol=1e-5 atol=1e-6
+    # `current_epsilon` is in AMPERES and smooths |I|. `magnitude_epsilon` is in
+    # VOLTS and must not touch a branch current: one scalar cannot carry two
+    # physical units, so a mixed :vmag/:imag dataset needs both knobs.
+    pv = SEParameters(s, bm; magnitude_epsilon=5.0)
+    @test evaluate_state_estimator(s, pv, x).predicted == [0.0]
+    @test_throws DomainError residual_jacobian(s, pv, x)
 
-    # The same smoothing must reach a node voltage magnitude, which it always did.
+    pc = SEParameters(s, bm; current_epsilon=5.0)
+    @test evaluate_state_estimator(s, pc, x).predicted ≈ [5.0]
+    @test residual_jacobian(s, pc, x) ≈
+          central_jacobian(y -> evaluate_state_estimator(s, pc, y).residual, x) rtol=1e-5 atol=1e-6
+
+    # Symmetrically, a node voltage magnitude answers only to `magnitude_epsilon`.
     vm = [Measurement(kind=:vmag, bus="b1", terminal="n", reference=nothing,
                       value=0.0, sigma=1.0)]
     sv = compile_state_estimator(net, vm)
+    xv = flat_compiled_state(sv)
     @test evaluate_state_estimator(sv, SEParameters(sv, vm; magnitude_epsilon=5.0),
-                                   flat_compiled_state(sv)).predicted ≈ [5.0]
+                                   xv).predicted ≈ [5.0]
+    @test evaluate_state_estimator(sv, SEParameters(sv, vm; current_epsilon=5.0),
+                                   xv).predicted == [0.0]
+    @test_throws ArgumentError SEParameters(sv, vm; current_epsilon=-1.0)
 end
 
 @testset "Compiled SE: an undefined magnitude derivative is a status, not a throw" begin
@@ -327,8 +338,8 @@ end
         @test result.status == :undefined_derivative
         @test !solve_status(result).publishable
     end
-    # Smoothing the magnitude makes the same start solvable.
-    ps = SEParameters(s, meas; magnitude_epsilon=1e-3)
+    # Smoothing the CURRENT magnitude makes the same start solvable.
+    ps = SEParameters(s, meas; current_epsilon=1e-3)
     @test solve_compiled_state_estimator(s, ps, xtrue).status != :undefined_derivative
 end
 
@@ -371,15 +382,30 @@ end
     @test p1.prior_indices == [1] && p1.prior_values == [xtrue[1] - 4.0]
     @test p2.prior_indices == [1] && p2.prior_values == [xtrue[1] - 4.0]
 
-    # With one, it is LAYERED ON TOP of the caller's prior, not substituted for
-    # it: two independent observations of the same state, so both rows survive.
+    # With one, the previous-state prior is LAYERED ON TOP of the caller's while
+    # the snapshot solves, then removed again: it is driver scratch, not caller
+    # input. Repeated calls on the same objects must therefore be idempotent --
+    # otherwise each invocation would stack another previous-state block and
+    # count the same historical estimate again, shrinking reported uncertainty.
     q1 = SEParameters(s, meas; prior=prior)
     q2 = SEParameters(s, meas; prior=prior)
-    solve_time_series_state_estimator(s, [q1, q2], zeros(length(xtrue));
-                                      previous_state_sigma=10.0, initial_radius=2.0)
+    for call in 1:3
+        series2 = solve_time_series_state_estimator(s, [q1, q2], zeros(length(xtrue));
+                                                    previous_state_sigma=10.0, initial_radius=2.0)
+        @test series2.status == :converged
+        @test q1.prior_indices == [1]
+        @test q2.prior_indices == [1]
+        @test q2.prior_values == [xtrue[1] - 4.0]
+    end
+
+    # A stalled run must restore the caller's priors too.
+    bad = SEParameters(s, meas; prior=prior)
+    bad.covariance_values[1] = 1e-14        # force a hopeless snapshot
+    solve_time_series_state_estimator(s, [q1, bad], zeros(length(xtrue));
+                                      previous_state_sigma=10.0, initial_radius=2.0,
+                                      max_iterations=3)
     @test q1.prior_indices == [1]
-    @test length(q2.prior_indices) == 1 + length(xtrue)
-    @test q2.prior_values[1] == xtrue[1] - 4.0
+    @test bad.prior_indices == [1]
 end
 
 @testset "Compiled SE: recovers a BMOPFTools power flow from exact telemetry" begin
@@ -419,25 +445,39 @@ end
     @test dense.state ≈ sparse_r.state rtol=1e-6
 end
 
-@testset "Compiled SE: feasibility tolerance is scale invariant" begin
-    # The same dimensionless problem at two voltage levels. `norm(c)` is a
-    # difference of Y*V products, so its double-precision floor scales with the
-    # network's SI magnitude; a purely absolute tolerance made the high-voltage
-    # case report failure at a perfectly converged point.
-    for (vsrc, r) in ((230.0, 0.1), (132_000.0, 1e-4))
+@testset "Compiled SE: convergence tests are scale invariant" begin
+    # DIMENSIONALLY EQUIVALENT networks: holding Z fixed and scaling V by k
+    # scales I by k and S by k^2, so the per-unit problem is IDENTICAL at every
+    # k and only the SI magnitudes move. Anything that changes across this sweep
+    # is an artefact of units, not of the estimation problem.
+    #
+    # Both stopping tests are exercised: the exact device drives the FEASIBILITY
+    # test, and the |V| measurement supplies a stochastic residual row so the
+    # STATIONARITY test has a non-empty H to normalise (the earlier version of
+    # this test had no measurements at all, so it never touched that path).
+    reference = nothing
+    for k in (1.0, 1e2, 1e4, 5.74e5)          # 230 V, 23 kV, 2.3 MV, 132 MV
+        vsrc = 230.0 * k
         load = ExactDeviceEquation(ConstantPowerDevice(
-            [TerminalConnection(("c", "1"), nothing)], ComplexF64[vsrc * 10 + 0im]))
-        net = scaled_feeder(vsrc, r)
-        s = compile_state_estimator(net; zero_injection=["b"], exact_devices=[load])
-        p = SEParameters(s; exact_devices=[load])
+            [TerminalConnection(("c", "1"), nothing)], ComplexF64[(4_000 + 1_000im) * k^2]))
+        net = scaled_feeder(vsrc, 0.1)        # Z fixed across the sweep
+        meas = [Measurement(kind=:vmag, bus="b", reference=nothing,
+                            value=0.999 * vsrc, sigma=1e-3 * vsrc)]
+        s = compile_state_estimator(net, meas; zero_injection=["b"], exact_devices=[load])
+        p = SEParameters(s, meas; exact_devices=[load], voltage_min_model=1e-3 * k)
         x0 = zeros(2length(s.free_state_map))
-        for ((_, _), k) in s.free_state_map; x0[k] = vsrc; end
+        for ((_, _), kk) in s.free_state_map; x0[kk] = vsrc; end
+
+        scale = PowerOptLab._se_current_scale(s, p)
         for solver in (solve_compiled_state_estimator, solve_sparse_state_estimator)
             result = solver(s, p, x0; initial_radius=0.5)
             @test result.status == :converged_unique
             # Feasible to round-off RELATIVE to the network's own current scale.
-            @test norm(result.evaluation.constraints) <=
-                  1e-11 * PowerOptLab._se_current_scale(s, p)
+            @test norm(result.evaluation.constraints) <= 1e-11 * scale
+            # The per-unit answer must not depend on k.
+            pu = result.state ./ vsrc
+            reference === nothing && (reference = pu)
+            @test pu ≈ reference rtol=1e-6
         end
     end
 end
@@ -618,4 +658,95 @@ end
         @test sqrt(C[1, 1]) ≈ 0.1  rtol=1e-8      # the meter's sigma
         @test sqrt(C[2, 2]) ≈ psig rtol=1e-8      # entirely the prior
     end
+end
+
+# ── current-magnitude conditioning: BOTH the benign and the degenerate path ──
+
+# Two-bus feeder, 0.5 ohm, 230 V source. State is [Vre_b, Vim_b].
+cm_net() = parse_bmopf("""
+{"bus":{"src":{"terminal_names":["1"]},"b":{"terminal_names":["1"]}},
+ "voltage_source":{"s":{"bus":"src","terminal_map":["1"],"v_magnitude":[230.0],"v_angle":[0.0]}},
+ "linecode":{"lc":{"R_series_1_1":0.5}},
+ "line":{"l":{"bus_from":"src","bus_to":"b","terminal_map_from":["1"],"terminal_map_to":["1"],"linecode":"lc","length":1.0}}}
+"""; from_string=true)
+
+# |V_b| and |I_l| at an operating point with current `Ic`; returns (H, x, s, p).
+function cm_setup(Ic; sigma=0.01)
+    V = 230.0 - 0.5 * Ic
+    ms = Any[Measurement(kind=:vmag, bus="b", reference=nothing, value=abs(V), sigma=sigma),
+             BranchMeasurement(kind=:imag, line="l", side=:from, terminal="1",
+                               value=abs(Ic), sigma=sigma)]
+    s = compile_state_estimator(cm_net(), ms)
+    p = SEParameters(s, ms)
+    ([real(V), imag(V)], s, p)
+end
+
+@testset "Current magnitude: conditioning is bounded as |I| falls at fixed angle" begin
+    # Shrinking the current at a FIXED power-factor angle does not degrade the
+    # conditioning: the |I| row is a unit vector along the current direction, so
+    # its magnitude does not vanish with |I|. This is the path that makes the
+    # blanket claim "ampere measurements are ill-conditioned" wrong.
+    conds = Float64[]
+    for imag_a in (60.0, 20.0, 5.0, 1.0, 1e-2, 1e-4)
+        x, s, p = cm_setup(imag_a * cis(-0.451))
+        sv = svdvals(residual_jacobian(s, p, x))
+        push!(conds, maximum(sv) / minimum(sv))
+    end
+    @test all(c -> 4.0 < c < 6.0, conds)          # converges to about 5.6
+    @test conds[end] ≈ conds[end - 1] rtol=1e-3   # it settles rather than diverging
+end
+
+@testset "Current magnitude: |V| and |I| go collinear at unity power factor" begin
+    # ...but the conditioning IS operating-point dependent, and this is the
+    # degeneracy that matters in practice. |V_b| senses the direction V-hat and
+    # |I| senses I-hat. When the current is in phase with the bus voltage the two
+    # rows are parallel and the pair loses rank -- at ANY current magnitude.
+    # Unity power factor is common (resistive load, PV at unity pf), so this is
+    # not a corner case.
+    conds = Float64[]
+    for phi in (-0.6, -0.3, -0.1, -0.03, -0.01, -0.003)
+        x, s, p = cm_setup(40.0 * cis(phi))
+        sv = svdvals(residual_jacobian(s, p, x))
+        push!(conds, maximum(sv) / minimum(sv))
+        @test observability_diagnostics(s, p, x).unobservable_dimension == 0
+    end
+    # Monotone blow-up, roughly inversely with the angle between V and I.
+    @test issorted(conds)
+    @test conds[1] < 5.0
+    @test conds[end] > 500.0
+
+    # Exactly at unity power factor the rows are parallel: rank 1 of 2, at 40 A.
+    x, s, p = cm_setup(40.0 + 0.0im)
+    sv = svdvals(residual_jacobian(s, p, x))
+    @test minimum(sv) < 1e-10
+    d = observability_diagnostics(s, p, x)
+    @test d.unobservable_dimension == 1
+    @test_throws ArgumentError selected_state_covariance(s, p, x, [1])
+
+    # A rectangular voltage pair is completely insensitive to the power factor.
+    for phi in (-0.6, -0.01, 0.0)
+        V = 230.0 - 0.5 * (40.0 * cis(phi))
+        ms = [Measurement(kind=:vr, bus="b", reference=nothing, value=real(V), sigma=0.01),
+              Measurement(kind=:vi, bus="b", reference=nothing, value=imag(V), sigma=0.01)]
+        sr = compile_state_estimator(cm_net(), ms)
+        sv = svdvals(residual_jacobian(sr, SEParameters(sr, ms), [real(V), imag(V)]))
+        @test maximum(sv) / minimum(sv) ≈ 1.0 rtol=1e-9
+    end
+end
+
+@testset "Current magnitude: uncertainty tracks the conditioning" begin
+    # sigma_min is not decoration: 1/sigma_min bounds the worst-case standard
+    # deviation, so the estimated angle degrades in lockstep with cond(H).
+    sds = Float64[]
+    for phi in (-0.6, -0.1, -0.01, -0.003)
+        x, s, p = cm_setup(40.0 * cis(phi))
+        V = x[1] + im * x[2]
+        J = zeros(1, 2)
+        J[1, 1] = -imag(V) / abs(V)^2       # d(angle V)/d(Vre)
+        J[1, 2] =  real(V) / abs(V)^2       # d(angle V)/d(Vim)
+        push!(sds, sqrt(derived_covariance(s, p, x, J)[1, 1]))
+    end
+    @test issorted(sds)
+    @test sds[1] < 1e-4                     # 0.6 rad power factor: tight
+    @test sds[end] > 1e-2                   # 0.003 rad: two orders worse
 end

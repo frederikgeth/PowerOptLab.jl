@@ -104,8 +104,13 @@ Result of [`solve_state_estimation`](@ref).
   leverage-adjusted normalised residual (`rᴺ = r / √(Sᵢᵢ)`) used for bad-data
   identification; it is a scale-free residual, not a χ²/rᴺ test statistic.
 - `observability::NamedTuple` — a LOCAL numerical identifiability diagnostic
-  `(observable, n_states, rank, redundancy, min_singular, cond)` from the
-  measurement Jacobian at the returned point (see [`solve_state_estimation`](@ref)).
+  `(observable, n_states, rank, redundancy, min_singular, cond,
+  tangent_dimension)` from the measurement Jacobian at the returned point.
+  `observable`/`rank`/`redundancy` come from the stacked measurement + KCL
+  system; `min_singular`/`cond` are computed on the tangent space of the exact
+  KCL equations, so they are in the measurements' whitened units and
+  `1/min_singular` is the worst-case estimate standard deviation (see
+  [`solve_state_estimation`](@ref)).
 """
 struct StateEstimationResult <: AbstractSolveResult
     termination_status::String
@@ -572,10 +577,24 @@ function _observability(net, measurements, neutral, zi::Set{Tuple{String,String}
     # Columns of `P` span {p : A' p = 0}; each contributes one complex KCL row.
     P = isempty(inj_cols) ? _se_identity(ns) : nullspace(permutedims(A))
 
-    # Row-scaled residual map h(x): measurement rows σ-normalised; KCL rows
-    # scaled by a representative voltage weight so ranks are comparable.
-    wz = isempty(measurements) ? 1.0 : 1.0 / minimum(m.sigma for m in measurements)
-    function hvec(x)
+    # The measurement rows and the KCL rows are kept in SEPARATE maps.
+    #
+    # They cannot share a row scaling. The measurement rows are whitened by
+    # 1/sigma, and those sigmas are in volts, watts and vars; the KCL rows are
+    # in amperes. An earlier version scaled the KCL rows by
+    # `1/minimum(m.sigma for m in measurements)` — a numerical minimum taken
+    # across three different units and then applied to a fourth. Rank is
+    # invariant to any nonzero row scaling, so the observability BOOLEAN
+    # survived that, but `min_singular` and `cond` did not: they were reported
+    # in an arbitrary unit and could not carry the estimate-uncertainty
+    # interpretation the documentation gave them.
+    #
+    # `_observability` now does what the constrained estimator does: treat the
+    # KCL equations as exact constraints, take their tangent space `Z`, and
+    # report singular values of the WHITENED measurement Jacobian restricted to
+    # it. `sigma_min(H*Z)` is then the inverse of the worst-case standard
+    # deviation, in the units the measurements were whitened into.
+    function hmeas(x)
         T = eltype(x)
         Vr = Vector{T}(undef, N); Vi = Vector{T}(undef, N)
         for k in 1:N
@@ -601,8 +620,21 @@ function _observability(net, measurements, neutral, zi::Set{Tuple{String,String}
                 push!(rows, zero(T))
             end
         end
-        # One complex KCL row per left-null-space direction of the injection
-        # incidence, expressed over the non-source nodes in `state_nodes` order.
+        rows
+    end
+
+    # One complex KCL row per left-null-space direction of the injection
+    # incidence, expressed over the non-source nodes in `state_nodes` order.
+    # Unwhitened: these are exact equations, not measurements.
+    function hkcl(x)
+        T = eltype(x)
+        Vr = Vector{T}(undef, N); Vi = Vector{T}(undef, N)
+        for k in 1:N
+            re, im = _vnode(nodes[k], x); Vr[k] = re; Vi[k] = im
+        end
+        Ir = Yr * Vr - Yi * Vi
+        Ii = Yr * Vi + Yi * Vr
+        rows = T[]
         for c in axes(P, 2)
             pr = zero(T); pi_ = zero(T)
             for (k, nd) in enumerate(state_nodes)
@@ -611,7 +643,7 @@ function _observability(net, measurements, neutral, zi::Set{Tuple{String,String}
                 j = posof[nd]
                 pr += w * Ir[j]; pi_ += w * Ii[j]
             end
-            push!(rows, wz * pr); push!(rows, wz * pi_)
+            push!(rows, pr); push!(rows, pi_)
         end
         rows
     end
@@ -627,20 +659,46 @@ function _observability(net, measurements, neutral, zi::Set{Tuple{String,String}
     end
 
     n_states == 0 && return (observable=true, n_states=0, rank=0, redundancy=0,
-                             min_singular=Inf, cond=1.0)
-    H = _fd_jacobian(hvec, x0)
-    sv = svdvals(H)
-    smax = isempty(sv) ? 0.0 : maximum(sv)
-    tol = smax * max(size(H)...) * eps(Float64)
-    rk = count(>(tol), sv)
-    smin = length(sv) >= n_states ? sv[n_states] : 0.0
-    condn = smin > 0 ? smax / smin : Inf
+                             min_singular=Inf, cond=1.0, tangent_dimension=0)
+
+    Hm = _fd_jacobian(hmeas, x0)                      # whitened measurement rows
+    C  = _fd_jacobian(hkcl, x0)                       # exact KCL rows
+
+    # Rank of the stacked system still decides observability, and is invariant
+    # to how the two blocks are scaled relative to one another.
+    stacked = vcat(Hm, C)
+    sv_all = svdvals(stacked)
+    smax_all = isempty(sv_all) ? 0.0 : maximum(sv_all)
+    rk = count(>(smax_all * max(size(stacked)...) * eps(Float64)), sv_all)
+
+    # The QUANTITATIVE numbers come from the tangent space of the exact
+    # equations, so they are in the measurements' own whitened units:
+    # `sigma_min` is the inverse of the worst-case estimate standard deviation
+    # on the directions the KCL equations leave free.
+    Z = if isempty(C) || size(C, 1) == 0
+        _se_identity(n_states)
+    else
+        svC = svdvals(C)
+        tolC = (isempty(svC) ? 0.0 : maximum(svC)) * max(size(C)...) * eps(Float64)
+        nullspace(C; atol=max(tolC, eps(Float64)))
+    end
+    tangent = size(Z, 2)
+    smin, condn = if tangent == 0
+        (Inf, 1.0)
+    else
+        svr = svdvals(Hm * Z)
+        smaxr = isempty(svr) ? 0.0 : maximum(svr)
+        sminr = length(svr) >= tangent ? svr[tangent] : 0.0
+        (sminr, sminr > 0 ? smaxr / sminr : Inf)
+    end
+
     (observable = rk == n_states,
      n_states = n_states,
      rank = rk,
-     redundancy = size(H, 1) - n_states,
+     redundancy = size(stacked, 1) - n_states,
      min_singular = smin,
-     cond = condn)
+     cond = condn,
+     tangent_dimension = tangent)
 end
 
 # Central-difference Jacobian of `f: Rⁿ → Rᵐ` at `x` (steps scaled to |x| so it

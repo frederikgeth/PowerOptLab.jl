@@ -156,12 +156,20 @@ Mutable numerical data paired with an [`SEStructure`](@ref).  Updating the
 measurement values, standard deviations, or fixed source phasors does not alter
 terminal ordering or symbolic sparsity.  Standard deviations are the diagonal
 whitening factors for this first implementation.
+
+`magnitude_epsilon` (volts) and `current_epsilon` (amperes) smooth `:vmag` and
+`:imag` residuals respectively.  They are deliberately separate scalars: a
+magnitude derivative is undefined at zero for both, but the two are different
+physical quantities and a mixed `:vmag`/`:imag` dataset has no single
+meaningful smoothing value.  Size each below the resolution of the instrument
+it applies to.
 """
 mutable struct SEParameters
     fixed_voltages::Vector{ComplexF64}
     measurement_values::Vector{Float64}
     covariance_values::Vector{Float64}
     magnitude_epsilon::Float64
+    current_epsilon::Float64
     device_powers::Vector{ComplexF64}
     device_currents::Vector{ComplexF64}
     device_admittances::Vector{ComplexF64}
@@ -417,6 +425,7 @@ end
 
 function SEParameters(s::SEStructure, measurements::AbstractVector=Measurement[];
                       exact_devices=Any[], magnitude_epsilon::Real=0.0,
+                      current_epsilon::Real=0.0,
                       voltage_min_model::Real=1e-3, regularization_voltage::Real=1e-3,
                       continuation_alpha::Real=1.0, prior::Union{StatePrior,Nothing}=nothing)
     length(measurements) == length(s.measurement_pattern) ||
@@ -424,6 +433,9 @@ function SEParameters(s::SEStructure, measurements::AbstractVector=Measurement[]
     epsmag = Float64(magnitude_epsilon)
     epsmag >= 0 && isfinite(epsmag) ||
         throw(ArgumentError("magnitude_epsilon must be finite and non-negative"))
+    epscur = Float64(current_epsilon)
+    epscur >= 0 && isfinite(epscur) ||
+        throw(ArgumentError("current_epsilon must be finite and non-negative"))
     vmin = Float64(voltage_min_model); vreg = Float64(regularization_voltage)
     α = Float64(continuation_alpha)
     vmin > 0 && isfinite(vmin) || throw(ArgumentError("voltage_min_model must be finite and > 0"))
@@ -445,7 +457,7 @@ function SEParameters(s::SEStructure, measurements::AbstractVector=Measurement[]
     prior_indices = isnothing(prior) ? Int[] : copy(prior.indices)
     prior_values = isnothing(prior) ? Float64[] : copy(prior.values)
     prior_sigmas = isnothing(prior) ? Float64[] : copy(prior.sigmas)
-    SEParameters(fixed_by_node, values, sigmas, epsmag, powers, currents, admittances,
+    SEParameters(fixed_by_node, values, sigmas, epsmag, epscur, powers, currents, admittances,
                  vmin, vreg, α, prior_indices, prior_values, prior_sigmas)
 end
 
@@ -472,6 +484,8 @@ function _validate_parameters(s::SEStructure, p::SEParameters)
         throw(ArgumentError("all measurement standard deviations must be finite and > 0"))
     p.magnitude_epsilon >= 0 && isfinite(p.magnitude_epsilon) ||
         throw(ArgumentError("magnitude_epsilon must be finite and non-negative"))
+    p.current_epsilon >= 0 && isfinite(p.current_epsilon) ||
+        throw(ArgumentError("current_epsilon must be finite and non-negative"))
     ndevice = sum((length(d.positive) for d in s.device_pattern); init=0)
     length(p.device_powers) == ndevice || throw(ArgumentError("device_powers length does not match compiled device pattern"))
     length(p.device_currents) == ndevice || throw(ArgumentError("device_currents length does not match compiled device pattern"))
@@ -555,13 +569,17 @@ function _branch_measurement_jacobian(spec::_SEBranchMeasurementSpec, E, vr, vi,
     spec.kind === :ire && return br, jir
     spec.kind === :iim && return bi, jii
     if spec.kind === :imag
-        # `magnitude_epsilon` smooths |I| exactly as it smooths |V|: the value
-        # and the derivative must use the SAME smoothed magnitude, or the
-        # analytic Jacobian stops being the Jacobian of the evaluated residual.
+        # `current_epsilon` smooths |I| the way `magnitude_epsilon` smooths |V|.
+        # They are SEPARATE fields because they are separate physical
+        # quantities: one is a voltage in volts, the other a current in amperes,
+        # and no single number is meaningful for both on a mixed :vmag/:imag
+        # dataset. The value and the derivative must use the same smoothed
+        # magnitude, or the analytic Jacobian stops being the Jacobian of the
+        # evaluated residual.
         mag = sqrt(br^2 + bi^2 + epsmag^2)
         mag > 0 || throw(DomainError(mag,
             "branch-current magnitude derivative is undefined at zero current; " *
-            "set `magnitude_epsilon > 0` (see SEParameters) to smooth it"))
+            "set `current_epsilon > 0` (in amperes; see SEParameters) to smooth it"))
         return mag, (br .* jir .+ bi .* jii) ./ mag
     end
     i = spec.conductor; vrr, vii = vr[i], vi[i]
@@ -657,7 +675,7 @@ function evaluate_state_estimator(s::SEStructure, p::SEParameters, x::AbstractVe
     vr, vi, ir, ii = _se_parts(s, p, x)
     dir, dii, _, _ = _device_parts(s, p, vr, vi)
     predicted = [spec isa _SEBranchMeasurementSpec ?
-                 _branch_measurement_value(spec, vr, vi, p.magnitude_epsilon) :
+                 _branch_measurement_value(spec, vr, vi, p.current_epsilon) :
                  _measurement_value(spec, vr, vi, ir, ii, p.magnitude_epsilon)
                  for spec in s.measurement_pattern]
     measurement_residual = (predicted .- p.measurement_values) ./ p.covariance_values
@@ -683,7 +701,7 @@ function residual_jacobian(s::SEStructure, p::SEParameters, x::AbstractVector{<:
     J = zeros(Float64, length(s.measurement_pattern) + length(p.prior_indices), nstate)
     for (row, spec) in enumerate(s.measurement_pattern)
         if spec isa _SEBranchMeasurementSpec
-            _, Jrow = _branch_measurement_jacobian(spec, E, vr, vi, p.magnitude_epsilon)
+            _, Jrow = _branch_measurement_jacobian(spec, E, vr, vi, p.current_epsilon)
             J[row, :] .= Jrow ./ p.covariance_values[row]
             continue
         end
@@ -1392,23 +1410,34 @@ function solve_time_series_state_estimator(s::SEStructure,
                 throw(ArgumentError("solver must be :sparse or :dense"))
     x = Float64.(x0)
     snapshots = Any[]
-    # Capture caller priors BEFORE any snapshot runs: the loop rewrites each
-    # `SEParameters`' prior in place, and a later snapshot must still see the
-    # prior its caller configured rather than one left over from the driver.
+    # Capture caller priors BEFORE any snapshot runs, and restore them on the way
+    # out. The driver has to write its previous-state prior into each
+    # `SEParameters` to solve with it, but that row is driver-owned scratch, not
+    # caller input. Leaving it behind would make a second call on the same
+    # objects read it back as if the caller had supplied it, so the prior would
+    # grow by one previous-state block per invocation and the same historical
+    # estimate would be counted repeatedly — shrinking the reported uncertainty
+    # a little more each time. Restoring makes repeated calls idempotent.
     caller_priors = [_se_capture_prior(p) for p in parameters]
-    for (t, p) in enumerate(parameters)
-        if t == 1 || isnothing(previous_state_sigma)
-            set_state_prior!(p, caller_priors[t])
-        else
-            set_state_prior!(p, _se_merge_priors(caller_priors[t],
-                                                 _se_previous_state_prior(x, previous_state_sigma)))
+    restore!() = foreach(((p, prior),) -> set_state_prior!(p, prior),
+                         zip(parameters, caller_priors))
+    try
+        for (t, p) in enumerate(parameters)
+            if t == 1 || isnothing(previous_state_sigma)
+                set_state_prior!(p, caller_priors[t])
+            else
+                set_state_prior!(p, _se_merge_priors(caller_priors[t],
+                                                     _se_previous_state_prior(x, previous_state_sigma)))
+            end
+            result = solve_one(s, p, x; kwargs...)
+            push!(snapshots, result)
+            if !(result.status in (:converged_unique, :converged_underobserved))
+                return TimeSeriesStateEstimationResult(:time_series_stalled, snapshots, t - 1)
+            end
+            x = result.state
         end
-        result = solve_one(s, p, x; kwargs...)
-        push!(snapshots, result)
-        if !(result.status in (:converged_unique, :converged_underobserved))
-            return TimeSeriesStateEstimationResult(:time_series_stalled, snapshots, t - 1)
-        end
-        x = result.state
+    finally
+        restore!()
     end
     TimeSeriesStateEstimationResult(:converged, snapshots, length(snapshots))
 end
