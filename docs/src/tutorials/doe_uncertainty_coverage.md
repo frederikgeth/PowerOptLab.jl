@@ -71,7 +71,8 @@ calibration = DOEScenario(
     timestamp=DateTime(2026, 1, 1, 12),
     metadata=Dict(
         "site_id" => "synthetic-feeder",
-        "aggregate_demand_kw" => 10.0),
+        "aggregate_demand_kw" => 10.0,
+        "predicted_violation_probability" => 0.10),
 )
 
 test_low = DOEScenario(
@@ -85,7 +86,8 @@ test_low = DOEScenario(
     timestamp=DateTime(2026, 1, 15, 12),
     metadata=Dict(
         "site_id" => "synthetic-feeder",
-        "aggregate_demand_kw" => 0.4),
+        "aggregate_demand_kw" => 0.4,
+        "predicted_violation_probability" => 0.75),
 )
 
 test_high = DOEScenario(
@@ -99,7 +101,8 @@ test_high = DOEScenario(
     timestamp=DateTime(2026, 1, 15, 12),
     metadata=Dict(
         "site_id" => "synthetic-feeder",
-        "aggregate_demand_kw" => 9.6),
+        "aggregate_demand_kw" => 9.6,
+        "predicted_violation_probability" => 0.15),
 )
 
 scenarios = DOEScenarioSet(
@@ -313,6 +316,49 @@ standardized mean differences, and empirical-CDF distances. Scenario weights
 are not interpreted as sampling probabilities. Even a rejected permutation
 test establishes shift only in the declared metadata covariates—not concept
 shift, changed violation risk, or shift in the complete network state.
+
+## Evaluate violation-probability calibration
+
+Suppose the metadata probability was issued before each held-out outcome. Turn
+the coverage results into explicit forecast/outcome pairs:
+
+```julia
+probability_observations = doe_probability_observations(
+    coverage;
+    probability_key="predicted_violation_probability",
+    use_scenario_weights=false)
+
+probability_calibration = evaluate_doe_probability_calibration(
+    probability_observations;
+    bins=[0.0, 0.5, 1.0],
+    unresolved=:exclude,
+    independence_assumption=false)
+
+probability_calibration.bin_rows
+probability_calibration.metrics["brier_score"]
+probability_calibration.metrics["logarithmic_score"]
+probability_calibration.metrics["calibration_gap"]
+probability_calibration.metrics["expected_calibration_error"]
+probability_calibration.diagnostics
+```
+
+Candidate violations become `true`, passed scenarios become `false`, and
+unresolved solves remain `nothing`. The unresolved policy can conservatively
+count them as violations, but must be chosen explicitly. Scenario weights are
+not reused by default because relative scenario importance is not automatically
+an observation-frequency weight.
+
+The bin rows form a reliability-diagram table. They include empty bins so bin
+definitions remain comparable across studies. Brier and logarithmic scores are
+proper scoring rules; expected/maximum calibration error and the binned Brier
+decomposition depend on the declared bin edges. No threshold is used to label a
+forecast simply “calibrated.”
+
+Setting `independence_assumption=true` adds an overall weighted Hoeffding
+interval for the calibration gap and simultaneous Bonferroni-Hoeffding bin
+intervals. Do not do that for this two-scenario, same-site example. The function
+does not verify that probabilities predate outcomes, or account automatically
+for serial or group dependence and post-hoc model selection.
 
 ## Add a statistical bound only when justified
 

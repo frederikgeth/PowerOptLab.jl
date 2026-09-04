@@ -235,6 +235,12 @@ evidence that their generating distributions differ.
 distance and per-feature effects for explicitly named numeric metadata. Its
 permutation p-value is disabled unless the caller asserts scenario- or
 group-level exchangeability, and its claim remains limited to those covariates.
+[`evaluate_doe_probability_calibration`](@ref) evaluates separately issued
+violation-probability forecasts using reliability bins, proper scores,
+calibration error, and a binned Brier decomposition. Its coverage adapter keeps
+unresolved solves missing and ignores scenario weights unless explicitly
+requested. Weighted Hoeffding intervals require a separate observation-
+independence assertion.
 
 ## PV and batteries with mandatory Q-V control
 

@@ -408,6 +408,69 @@ struct DOECovariateShiftResult
     diagnostics::Dict{String,Any}
 end
 
+"""
+    DOEProbabilityObservation(; id, predicted_violation_probability,
+        observed_violation, weight=1.0, timestamp=nothing, group_id=nothing,
+        metadata=Dict())
+
+One probability forecast paired with its later binary DOE-verification outcome.
+`observed_violation=nothing` records an unresolved outcome rather than silently
+labelling it safe. The probability must have been produced before observing the
+outcome; this temporal ordering is a caller-supplied scientific assertion.
+"""
+struct DOEProbabilityObservation
+    id::String
+    predicted_violation_probability::Float64
+    observed_violation::Union{Nothing,Bool}
+    weight::Float64
+    timestamp::Union{Nothing,DateTime}
+    group_id::Union{Nothing,String}
+    metadata::Dict{String,Any}
+
+    function DOEProbabilityObservation(;
+            id::AbstractString,
+            predicted_violation_probability::Real,
+            observed_violation::Union{Nothing,Bool},
+            weight::Real=1.0,
+            timestamp::Union{Nothing,DateTime}=nothing,
+            group_id::Union{Nothing,AbstractString}=nothing,
+            metadata=Dict{String,Any}())
+        isempty(id) && throw(ArgumentError(
+            "probability-observation id must be non-empty"))
+        predicted_violation_probability isa Bool && throw(ArgumentError(
+            "predicted_violation_probability must be numeric, not Boolean"))
+        probability = Float64(predicted_violation_probability)
+        isfinite(probability) && 0 <= probability <= 1 || throw(ArgumentError(
+            "predicted_violation_probability must be finite and in [0, 1]"))
+        weight_value = Float64(weight)
+        isfinite(weight_value) && weight_value > 0 || throw(ArgumentError(
+            "probability-observation weight must be finite and positive"))
+        group_id === nothing || !isempty(group_id) || throw(ArgumentError(
+            "group_id must be non-empty when provided"))
+        new(String(id), probability, observed_violation, weight_value,
+            timestamp, group_id === nothing ? nothing : String(group_id),
+            Dict{String,Any}(string(key) => value
+                             for (key, value) in pairs(metadata)))
+    end
+end
+
+"""
+    DOEProbabilityCalibrationResult
+
+Reliability and proper-score diagnostics returned by
+[`evaluate_doe_probability_calibration`](@ref). Empty-bin rows are retained so
+different studies can use an identical bin declaration. Concentration intervals
+are present only when observation independence is explicitly asserted.
+"""
+struct DOEProbabilityCalibrationResult
+    outcome::Symbol
+    observations::Vector{DOEProbabilityObservation}
+    bin_edges::Vector{Float64}
+    bin_rows::Vector{NamedTuple}
+    metrics::Dict{String,Any}
+    diagnostics::Dict{String,Any}
+end
+
 function _doe_scenario_with_role(scenario::DOEScenario, role::Symbol,
                                  split_name::AbstractString)
     metadata = copy(scenario.metadata)
@@ -3368,6 +3431,7 @@ function evaluate_operating_envelope_coverage(
                 timestamp=scenario.timestamp,
                 source=scenario.source,
                 generation_method=scenario.generation_method,
+                metadata=deepcopy(scenario.metadata),
                 utilization_count=length(contexts),
                 status=status,
                 candidate_context_count=failed_count,
@@ -3458,6 +3522,276 @@ function evaluate_operating_envelope_coverage(
             :empirical_coverage_only)
     return DOECoverageResult(
         outcome, selected_roles, verification, rows, metrics, diagnostics)
+end
+
+"""
+    doe_probability_observations(coverage;
+        probability_key, group_key=nothing, use_scenario_weights=false)
+
+Convert scenario rows from a [`DOECoverageResult`](@ref) into probability-
+calibration observations. `probability_key` names scenario metadata containing
+a violation-probability forecast made before evaluation. Candidate violations
+map to `true`, passed scenarios to `false`, and unresolved scenarios to
+`nothing`.
+
+Scenario weights are ignored by default because relative scenario weights are
+not automatically observation-frequency weights. Set `use_scenario_weights`
+only when that interpretation is scientifically justified.
+"""
+function doe_probability_observations(
+        coverage::DOECoverageResult;
+        probability_key,
+        group_key=nothing,
+        use_scenario_weights::Bool=false)
+    probability_name = String(probability_key)
+    isempty(probability_name) && throw(ArgumentError(
+        "probability_key must be non-empty"))
+    group_name = group_key === nothing ? nothing : String(group_key)
+    group_name === nothing || !isempty(group_name) || throw(ArgumentError(
+        "group_key must be non-empty when provided"))
+    observations = DOEProbabilityObservation[]
+    for row in coverage.scenario_rows
+        hasproperty(row, :metadata) || throw(ArgumentError(
+            "coverage scenario rows do not contain metadata"))
+        metadata = row.metadata
+        haskey(metadata, probability_name) || throw(ArgumentError(
+            "scenario '$(row.scenario_id)' has no metadata probability '$probability_name'"))
+        if use_scenario_weights && row.weight === nothing
+            throw(ArgumentError(
+                "scenario '$(row.scenario_id)' has no weight to reuse"))
+        end
+        group_id = nothing
+        if group_name !== nothing
+            haskey(metadata, group_name) || throw(ArgumentError(
+                "scenario '$(row.scenario_id)' has no metadata group '$group_name'"))
+            group_id = string(metadata[group_name])
+        end
+        observed = row.status == :candidate_violation ? true :
+            row.status == :passed ? false : nothing
+        observation_metadata = merge(deepcopy(metadata), Dict{String,Any}(
+            "coverage_dataset_id" => row.dataset_id,
+            "coverage_interval" => row.interval,
+            "coverage_scenario_id" => row.scenario_id,
+            "coverage_role" => row.role,
+            "coverage_status" => row.status,
+            "probability_key" => probability_name,
+            "scenario_weight_used" => use_scenario_weights))
+        push!(observations, DOEProbabilityObservation(
+            id="$(row.dataset_id):$(row.interval):$(row.scenario_id)",
+            predicted_violation_probability=metadata[probability_name],
+            observed_violation=observed,
+            weight=use_scenario_weights ? Float64(row.weight) : 1.0,
+            timestamp=row.timestamp,
+            group_id=group_id,
+            metadata=observation_metadata))
+    end
+    return observations
+end
+
+function _doe_probability_bin_edges(bins)
+    if bins isa Integer && !(bins isa Bool)
+        bins >= 1 || throw(ArgumentError("bins must be positive"))
+        return collect(range(0.0, 1.0; length=Int(bins) + 1)), :equal_width
+    end
+    edges = Float64.(collect(bins))
+    length(edges) >= 2 || throw(ArgumentError(
+        "custom bin edges need at least two entries"))
+    all(isfinite, edges) || throw(ArgumentError(
+        "custom bin edges must be finite"))
+    all(edges[index] < edges[index + 1]
+        for index in 1:length(edges) - 1) || throw(ArgumentError(
+            "custom bin edges must be strictly increasing"))
+    first(edges) == 0.0 && last(edges) == 1.0 || throw(ArgumentError(
+        "custom bin edges must start at 0 and end at 1"))
+    return edges, :custom
+end
+
+function _doe_probability_log_loss(probability::Float64, outcome::Float64)
+    if outcome == 1.0
+        return probability == 0.0 ? Inf : -log(probability)
+    end
+    return probability == 1.0 ? Inf : -log1p(-probability)
+end
+
+function _doe_weighted_hoeffding_radius(weights::Vector{Float64},
+                                        tail_probability::Float64)
+    normalized_square_sum = sum(abs2, weights) / sum(weights)^2
+    return sqrt(log(2 / tail_probability) * normalized_square_sum / 2)
+end
+
+"""
+    evaluate_doe_probability_calibration(observations;
+        bins=10, unresolved=:exclude, independence_assumption=false,
+        confidence=0.95)
+
+Evaluate forecasts of DOE candidate-violation probability against later binary
+outcomes. The result includes weighted Brier and logarithmic scores,
+calibration-in-the-large, weighted expected/maximum calibration errors, a
+binned Brier decomposition, and reliability-bin rows. `bins` is either a
+positive equal-width bin count or explicit edges spanning `[0, 1]`.
+
+`unresolved` must be `:exclude`, `:violation`, or `:pass`; the default preserves
+uncertainty rather than labelling unresolved nonlinear solves. Simultaneous
+bin-wise and overall weighted Hoeffding intervals are returned only with
+`independence_assumption=true`. That assertion is not inferred from timestamps,
+groups, scenario weights, or provenance.
+
+These are diagnostics, not a binary declaration that a forecast is calibrated.
+Reliability diagrams depend on bin choice, and temporal/group dependence,
+forecast selection, and post-hoc reuse require study-specific treatment.
+"""
+function evaluate_doe_probability_calibration(
+        observations::AbstractVector{DOEProbabilityObservation};
+        bins=10,
+        unresolved::Symbol=:exclude,
+        independence_assumption::Bool=false,
+        confidence::Float64=0.95)
+    isempty(observations) && throw(ArgumentError(
+        "probability calibration needs at least one observation"))
+    unresolved in (:exclude, :violation, :pass) || throw(ArgumentError(
+        "unresolved must be :exclude, :violation, or :pass"))
+    0 < confidence < 1 || throw(ArgumentError(
+        "confidence must lie strictly between zero and one"))
+    ids = [observation.id for observation in observations]
+    length(unique(ids)) == length(ids) || throw(ArgumentError(
+        "probability-observation IDs must be unique"))
+    edges, binning = _doe_probability_bin_edges(bins)
+
+    resolved = NamedTuple[]
+    unresolved_count = 0
+    for observation in observations
+        outcome = observation.observed_violation
+        if outcome === nothing
+            unresolved_count += 1
+            unresolved == :exclude && continue
+            outcome = unresolved == :violation
+        end
+        push!(resolved, (
+            observation=observation,
+            probability=observation.predicted_violation_probability,
+            outcome=outcome ? 1.0 : 0.0,
+            weight=observation.weight,
+        ))
+    end
+    isempty(resolved) && throw(ArgumentError(
+        "unresolved policy left no classified probability observations"))
+    total_weight = sum(row.weight for row in resolved)
+    mean_probability = sum(row.weight * row.probability for row in resolved) /
+        total_weight
+    observed_frequency = sum(row.weight * row.outcome for row in resolved) /
+        total_weight
+    calibration_gap = observed_frequency - mean_probability
+    brier_score = sum(row.weight * (row.probability - row.outcome)^2
+                      for row in resolved) / total_weight
+    logarithmic_score = sum(
+        row.weight * _doe_probability_log_loss(row.probability, row.outcome)
+        for row in resolved) / total_weight
+
+    bin_indices = [min(searchsortedlast(edges, row.probability),
+                       length(edges) - 1) for row in resolved]
+    nonempty_bin_count = length(unique(bin_indices))
+    bin_rows = NamedTuple[]
+    reliability = 0.0
+    resolution = 0.0
+    expected_calibration_error = 0.0
+    maximum_calibration_error = 0.0
+    for bin in 1:length(edges) - 1
+        members = [resolved[index] for index in eachindex(resolved)
+                   if bin_indices[index] == bin]
+        if isempty(members)
+            push!(bin_rows, (
+                bin=bin,
+                lower=edges[bin],
+                upper=edges[bin + 1],
+                upper_inclusive=bin == length(edges) - 1,
+                count=0,
+                weight=0.0,
+                mean_predicted_probability=missing,
+                observed_violation_frequency=missing,
+                calibration_gap=missing,
+                simultaneous_gap_lower=missing,
+                simultaneous_gap_upper=missing,
+            ))
+            continue
+        end
+        bin_weight = sum(row.weight for row in members)
+        bin_probability = sum(row.weight * row.probability for row in members) /
+            bin_weight
+        bin_observed = sum(row.weight * row.outcome for row in members) /
+            bin_weight
+        bin_gap = bin_observed - bin_probability
+        reliability += bin_weight / total_weight * bin_gap^2
+        resolution += bin_weight / total_weight *
+            (bin_observed - observed_frequency)^2
+        expected_calibration_error += bin_weight / total_weight * abs(bin_gap)
+        maximum_calibration_error = max(maximum_calibration_error, abs(bin_gap))
+        radius = independence_assumption ? _doe_weighted_hoeffding_radius(
+            Float64[row.weight for row in members],
+            (1 - confidence) / nonempty_bin_count) : missing
+        push!(bin_rows, (
+            bin=bin,
+            lower=edges[bin],
+            upper=edges[bin + 1],
+            upper_inclusive=bin == length(edges) - 1,
+            count=length(members),
+            weight=bin_weight,
+            mean_predicted_probability=bin_probability,
+            observed_violation_frequency=bin_observed,
+            calibration_gap=bin_gap,
+            simultaneous_gap_lower=radius === missing ? missing :
+                bin_gap - radius,
+            simultaneous_gap_upper=radius === missing ? missing :
+                bin_gap + radius,
+        ))
+    end
+    uncertainty = observed_frequency * (1 - observed_frequency)
+    overall_radius = independence_assumption ?
+        _doe_weighted_hoeffding_radius(
+            Float64[row.weight for row in resolved], 1 - confidence) : missing
+    effective_sample_size = total_weight^2 /
+        sum(row.weight^2 for row in resolved)
+    metrics = Dict{String,Any}(
+        "observation_count" => length(observations),
+        "classified_observation_count" => length(resolved),
+        "unresolved_observation_count" => unresolved_count,
+        "total_weight" => total_weight,
+        "effective_sample_size" => effective_sample_size,
+        "mean_predicted_violation_probability" => mean_probability,
+        "observed_violation_frequency" => observed_frequency,
+        "calibration_gap" => calibration_gap,
+        "calibration_gap_lower" => overall_radius === missing ? missing :
+            calibration_gap - overall_radius,
+        "calibration_gap_upper" => overall_radius === missing ? missing :
+            calibration_gap + overall_radius,
+        "brier_score" => brier_score,
+        "logarithmic_score" => logarithmic_score,
+        "expected_calibration_error" => expected_calibration_error,
+        "maximum_calibration_error" => maximum_calibration_error,
+        "binned_reliability" => reliability,
+        "binned_resolution" => resolution,
+        "outcome_uncertainty" => uncertainty,
+        "binned_brier_reconstruction" => reliability - resolution + uncertainty)
+    diagnostics = Dict{String,Any}(
+        "binning" => binning,
+        "bin_count" => length(edges) - 1,
+        "nonempty_bin_count" => nonempty_bin_count,
+        "unresolved_treatment" => unresolved,
+        "independence_assumption" => independence_assumption,
+        "confidence" => confidence,
+        "concentration_interval" => independence_assumption ?
+            :weighted_hoeffding : :none,
+        "bin_interval_multiplicity" => independence_assumption ?
+            :bonferroni_over_nonempty_bins : :not_applicable,
+        "forecast_temporality_verified" => false,
+        "group_dependence_assessed" => false,
+        "serial_dependence_assessed" => false,
+        "bin_sensitivity_assessed" => false,
+        "claim" => independence_assumption ?
+            :calibration_diagnostics_with_independence_conditional_intervals :
+            :descriptive_probability_calibration_diagnostics)
+    return DOEProbabilityCalibrationResult(
+        :diagnostics_available, collect(observations), edges,
+        bin_rows, metrics, diagnostics)
 end
 
 function _doe_scaled_capacities(result::OperatingEnvelopeResult,

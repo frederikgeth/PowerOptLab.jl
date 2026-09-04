@@ -29,6 +29,8 @@ IssuePlusLocalLaws
 DOEStudySpec
 DOEScenarioCalibrationAudit
 DOECovariateShiftResult
+DOEProbabilityObservation
+DOEProbabilityCalibrationResult
 doe_study_manifest
 doe_benchmark_rows
 doe_context_benchmark_rows
@@ -51,6 +53,8 @@ OperatingEnvelopeMultistartResult
 ```@docs
 audit_doe_scenario_calibration
 test_doe_covariate_shift
+doe_probability_observations
+evaluate_doe_probability_calibration
 solve_operating_envelope
 solve_operating_envelope_multistart
 compare_operating_envelope_policies

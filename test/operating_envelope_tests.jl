@@ -609,7 +609,8 @@ end
         weight=0.7,
         source="synthetic fixture",
         generation_method=:held_out_fixture,
-        seed=12)
+        seed=12,
+        metadata=Dict("predicted_violation_probability" => 0.8))
     permissive_test = DOEScenario(
         id="test-high-load",
         network=doe_feeder(p1=5000.0, p2=5000.0),
@@ -617,7 +618,8 @@ end
         weight=0.3,
         source="synthetic fixture",
         generation_method=:held_out_fixture,
-        seed=13)
+        seed=13,
+        metadata=Dict("predicted_violation_probability" => 0.2))
     scenarios = DOEScenarioSet(
         [calibration, restrictive_test, permissive_test];
         dataset_id="doe-held-out-fixture-v1",
@@ -666,6 +668,66 @@ end
     @test coverage.diagnostics["distribution_shift_assessed"] == false
     @test Set(row.scenario_id for row in coverage.scenario_rows) ==
           Set(["test-low-load", "test-high-load"])
+    @test all(haskey(row.metadata, "predicted_violation_probability")
+              for row in coverage.scenario_rows)
+
+    probability_observations = doe_probability_observations(
+        coverage; probability_key="predicted_violation_probability")
+    @test length(probability_observations) == 2
+    @test all(observation.weight == 1.0
+              for observation in probability_observations)
+    @test Set(observation.observed_violation
+              for observation in probability_observations) == Set([true, false])
+    weighted_probability_observations = doe_probability_observations(
+        coverage; probability_key="predicted_violation_probability",
+        use_scenario_weights=true)
+    @test sort([observation.weight
+                for observation in weighted_probability_observations]) == [0.3, 0.7]
+    adapted_calibration = evaluate_doe_probability_calibration(
+        probability_observations; bins=2)
+    @test adapted_calibration.metrics["brier_score"] ≈ 0.04
+    @test adapted_calibration.diagnostics["independence_assumption"] == false
+
+    direct_probability_observations = [
+        DOEProbabilityObservation(
+            id="safe-low", predicted_violation_probability=0.1,
+            observed_violation=false),
+        DOEProbabilityObservation(
+            id="safe-mid", predicted_violation_probability=0.2,
+            observed_violation=false),
+        DOEProbabilityObservation(
+            id="violation-mid", predicted_violation_probability=0.8,
+            observed_violation=true),
+        DOEProbabilityObservation(
+            id="violation-high", predicted_violation_probability=0.9,
+            observed_violation=true),
+        DOEProbabilityObservation(
+            id="unresolved", predicted_violation_probability=0.5,
+            observed_violation=nothing),
+    ]
+    probability_calibration = evaluate_doe_probability_calibration(
+        direct_probability_observations;
+        bins=[0.0, 0.5, 1.0], independence_assumption=true,
+        confidence=0.9)
+    @test probability_calibration.outcome == :diagnostics_available
+    @test probability_calibration.bin_edges == [0.0, 0.5, 1.0]
+    @test probability_calibration.metrics["classified_observation_count"] == 4
+    @test probability_calibration.metrics["unresolved_observation_count"] == 1
+    @test probability_calibration.metrics["brier_score"] ≈ 0.025
+    @test probability_calibration.metrics["calibration_gap"] ≈ 0.0
+    @test probability_calibration.metrics["expected_calibration_error"] ≈ 0.15
+    @test probability_calibration.metrics["maximum_calibration_error"] ≈ 0.15
+    @test probability_calibration.metrics["calibration_gap_lower"] !== missing
+    @test all(row.simultaneous_gap_lower !== missing
+              for row in probability_calibration.bin_rows if row.count > 0)
+    conservative_calibration = evaluate_doe_probability_calibration(
+        direct_probability_observations;
+        bins=2, unresolved=:violation)
+    @test conservative_calibration.metrics[
+        "classified_observation_count"] == 5
+    @test conservative_calibration.metrics["calibration_gap"] ≈ 0.1
+    @test conservative_calibration.diagnostics["unresolved_treatment"] ==
+          :violation
 
     shift = compare_doe_coverage_shift(
         first(curve.coverages), last(curve.coverages);
@@ -890,4 +952,14 @@ end
         group_overlap_policy=:unknown)
     @test_throws ArgumentError evaluate_operating_envelope_coverage_curve(
         scenarios, cps, allocation; scales=(-0.1,))
+    @test_throws ArgumentError DOEProbabilityObservation(
+        id="bad-probability", predicted_violation_probability=1.1,
+        observed_violation=false)
+    @test_throws ArgumentError DOEProbabilityObservation(
+        id="boolean-probability", predicted_violation_probability=true,
+        observed_violation=false)
+    @test_throws ArgumentError evaluate_doe_probability_calibration(
+        direct_probability_observations; bins=[0.0, 0.7, 0.6, 1.0])
+    @test_throws ArgumentError evaluate_doe_probability_calibration(
+        direct_probability_observations; unresolved=:unknown)
 end

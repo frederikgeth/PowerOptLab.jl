@@ -436,9 +436,11 @@ counterexamples.
    diagnostics under declared requirements. Declared numeric metadata can now
    be compared with multivariate energy distance and per-feature effects;
    permutation inference requires an explicit scenario- or group-level
-   exchangeability assertion and remains limited to those covariates. Add
-   probability-calibration diagnostics and time-series-specific resampling
-   designs next.
+   exchangeability assertion and remains limited to those covariates.
+   Separately issued violation-probability forecasts can now be evaluated with
+   reliability tables, proper scores, calibration errors, explicit unresolved
+   treatment, and independence-conditional concentration intervals. Add time-
+   series-specific resampling designs next.
 3. Couple envelopes to storage SOC, EV energy, ramping, tap operations, and
    first-stage/recourse decisions using the package's multi-period machinery.
 4. Evaluate offered capacity, realized utilization, curtailed energy, customer
