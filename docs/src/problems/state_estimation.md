@@ -5,6 +5,7 @@
 This page documents the original JuMP/Ipopt WLS prototype.  For the compiled
 four-wire constrained-NLLS estimator, exact device equations, branch telemetry,
 and time series, use [Constrained NLLS state estimation](constrained_state_estimation.md).
+See [Choosing a formulation](../estimation/comparison.md) for the head-to-head.
 
 [`solve_state_estimation`](@ref) is a *different problem specification* over the
 same network physics: given noisy measurements of an energised network, find the
@@ -79,14 +80,34 @@ voltage-magnitude equality is nonconvex, so Ipopt returns a *local* stationary
 point (and low-voltage solutions exist). A converged solve does **not** prove the
 state is unique.
 
-The result carries an `observability` diagnostic: the Jacobian of the
-measurement + zero-injection equations with respect to the rectangular node
-voltages is formed at the returned point (reusing BMOPFTools' `ybus_passive` for
-`I = Y·V`), and `observable = rank == n_states`. It reports `redundancy` (surplus
-equations), the smallest singular value, and the condition number, and
-`solve_state_estimation` warns on rank deficiency. This is a **local numerical**
-identifiability check (grounded-neutral networks; it does not model floating
-neutral displacement), not a global uniqueness proof.
+The result carries an `observability` diagnostic. Its Jacobian reproduces the
+equation set the *solver* imposes, not a convenient approximation of it:
+
+* `enforce_kcl!` constrains every non-source node, and the model hook adds one
+  free complex injection per measured `(bus, terminal)`, entering at the
+  terminal and leaving at its reference terminal.
+* A KCL row that a free injection can balance therefore constrains nothing.
+  The equations that do constrain the voltage state are the combinations in
+  which every injection cancels — the **left null space of the injection
+  incidence**, one complex row per direction.
+
+`observable = rank == n_states`, alongside `redundancy` (surplus equations),
+the smallest singular value, and the condition number; `solve_state_estimation`
+warns on rank deficiency.
+
+!!! note "This is a local check"
+    It detects local rank deficiency and critically weak measurement sets. It
+    is not a global uniqueness proof, and solver convergence never establishes
+    one. See [current-magnitude measurements](../estimation/current_magnitude.md)
+    for two states that both fit the same data exactly.
+
+A negative `redundancy` would mean the diagnostic has fewer equations than
+states, which is a property of the diagnostic and never of a measurement set
+that solved. Earlier versions enumerated declared `zero_injection` nodes
+instead of the null space, which dropped the KCL rows of an explicitly
+modelled neutral and of any non-grounded return terminal; a four-wire feeder
+with a bonded neutral was reported UNOBSERVABLE with `redundancy == -2` while
+the estimate itself was correct.
 
 !!! warning "Local optimum"
     Like the IVQ battery solve, this is a
@@ -151,8 +172,15 @@ state is determined.
 ## Not yet supported
 
 Branch-flow / branch-current / phasor (PMU) / source measurements; bad-data
-detection and identification (χ², largest-`rᴺ`); floating/displaced-neutral
-observability; multistart / global search.
+detection and identification (χ², largest-`rᴺ`); multistart / global search.
+Four-wire modelling with an ungrounded neutral as a first-class state belongs
+to the [constrained NLLS estimator](constrained_state_estimation.md); this
+formulation states zero injection per phase against a return terminal, so
+`zero_injection` expands a bare bus id over its *phase* terminals only.
+
+Measurements whose return terminal does not exist on their bus are rejected up
+front, naming whether the terminal came from the solve's `neutral` default or
+from the measurement's own `reference`.
 
 ## Literature
 
