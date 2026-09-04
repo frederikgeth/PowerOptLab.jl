@@ -753,7 +753,7 @@ end
 function _se_rank_nullspace(A::AbstractMatrix{<:Real}; rtol::Real=sqrt(eps(Float64)))
     n = size(A, 2)
     size(A, 1) == 0 && return (0, Matrix{Float64}(I, n, n))
-    F = svd(Matrix{Float64}(A); full=true)
+    F = svd(collect(Float64, A); full=true)
     smax = isempty(F.S) ? 0.0 : maximum(F.S)
     tol = max(Float64(rtol) * max(size(A)...) * smax, eps(Float64))
     rank = count(>(tol), F.S)
@@ -1251,7 +1251,7 @@ function _se_reduced_jacobian(s::SEStructure, p::SEParameters, x;
 end
 
 function _se_svd_rank(A; rank_rtol=sqrt(eps(Float64)))
-    F = svd(Matrix{Float64}(A); full=true)
+    F = svd(collect(Float64, A); full=true)
     smax = isempty(F.S) ? 0.0 : maximum(F.S)
     tol = max(Float64(rank_rtol) * max(size(A)...) * smax, eps(Float64))
     count(>(tol), F.S), F
@@ -1307,7 +1307,7 @@ function _derived_covariance(s::SEStructure, p::SEParameters, x, Jderived;
     rankH == size(Z, 2) ||
         throw(ArgumentError("requested covariance is not finite: $(size(Z, 2) - rankH) tangent directions are unobservable"))
     size(Z, 2) == 0 && return zeros(Float64, size(Jderived, 1), size(Jderived, 1))
-    W = Matrix{Float64}(Jderived) * Z * F.V[:, 1:rankH]
+    W = collect(Float64, Jderived) * Z * F.V[:, 1:rankH]
     W * Diagonal(1.0 ./ (F.S[1:rankH] .^ 2)) * W'
 end
 

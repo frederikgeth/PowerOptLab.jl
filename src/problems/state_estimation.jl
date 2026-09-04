@@ -682,15 +682,15 @@ function _se_observability_metrics(Hm::AbstractMatrix{<:Real}, C::AbstractMatrix
     rankC, Z = if size(C, 1) == 0
         (0, _se_identity(n_states))
     else
-        F = svd(Matrix{Float64}(C); full=true)
+        F = svd(collect(Float64, C); full=true)
         smaxC = isempty(F.S) ? 0.0 : maximum(F.S)
         tolC = smaxC * max(size(C)...) * eps(Float64)
         rC = count(>(tolC), F.S)
-        rC, Matrix(F.V[:, rC+1:n_states])
+        rC, collect(F.V[:, rC+1:n_states])
     end
 
     tangent = size(Z, 2)
-    Hr = Matrix{Float64}(Hm) * Z
+    Hr = collect(Float64, Hm) * Z
     svr = svdvals(Hr)
     smaxr = isempty(svr) ? 0.0 : maximum(svr)
     tolr = smaxr * max(size(Hr)...) * eps(Float64)

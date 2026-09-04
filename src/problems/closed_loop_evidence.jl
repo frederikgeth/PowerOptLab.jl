@@ -352,7 +352,7 @@ struct InverterControlNetworkFixedPointResult
 end
 
 function _validated_voltage_sensitivity(voltage_sensitivity::AbstractMatrix)
-    sensitivity = Matrix{Float64}(voltage_sensitivity)
+    sensitivity = collect(Float64, voltage_sensitivity)
     size(sensitivity) == (6, 6) || throw(DimensionMismatch(
         "voltage_sensitivity must be a 6×6 real matrix"))
     all(isfinite, sensitivity) || throw(ArgumentError(
@@ -792,7 +792,7 @@ function controlled_inverter_fleet_loop_gain(
     coordinate_system = first(coordinate_systems)
     dimension = _coordinate_dimension(coordinate_system)
     n = dimension * length(ids)
-    sensitivity = Matrix{Float64}(voltage_sensitivity)
+    sensitivity = collect(Float64, voltage_sensitivity)
     size(sensitivity) == (n, n) || throw(DimensionMismatch(
         "fleet voltage_sensitivity must be a $(n)×$(n) real matrix"))
     all(isfinite, sensitivity) || throw(ArgumentError(
@@ -1424,7 +1424,7 @@ function inverter_control_loop_gain(
         threshold::Real=1.0,
         coordinate_system::Symbol=:phase_rectangular)
     dimension = _coordinate_dimension(coordinate_system)
-    sensitivity = Matrix{Float64}(voltage_sensitivity)
+    sensitivity = collect(Float64, voltage_sensitivity)
     size(sensitivity) == (dimension, dimension) || throw(DimensionMismatch(
         "voltage_sensitivity must be a $(dimension)×$(dimension) real matrix " *
         "for coordinate_system=:$(coordinate_system)"))
