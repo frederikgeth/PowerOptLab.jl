@@ -223,14 +223,20 @@ series = solve_time_series_state_estimator(structure, [p1, p2], x0;
     previous_state_sigma=10.0, solver=:sparse)
 ```
 
-The earlier state is a whitened prior residual, not a hard equality. The driver
-warm-starts each snapshot and stops at the first failure.
+The earlier point estimate is a whitened prior residual, not a hard equality.
+The driver warm-starts each snapshot and stops at the first failure. It does not
+propagate the previous covariance or define process noise, so this is temporal
+regularisation rather than a Kalman filter or complete sequential Bayesian
+estimator.
 
 ### Pitfall: hard-constraining successive states to be equal
 
 Load, PV, switching, and control actions move distribution states. A hard
 `x_t=x_{t-1}` equality can conceal a real change or force conflict into meter
 residuals. Select and report a prior sigma representing plausible movement.
+Remember that successive prior rows reuse information from earlier snapshots;
+do not count them as independent measurements when interpreting covariance or
+goodness-of-fit statistics.
 
 ## 8. Investigate inconsistency before excluding a datum
 

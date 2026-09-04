@@ -57,21 +57,21 @@ d = observability_diagnostics(structure, parameters, x)
 
 The WLS estimator's `result.observability` reports the analogous
 `(observable, n_states, rank, redundancy, min_singular, cond,
-tangent_dimension)`. `observable`, `rank` and `redundancy` come from the
-stacked measurement + KCL system; `min_singular` and `cond` are computed on the
-tangent space of the exact KCL equations, from the **whitened** measurement
-Jacobian only, so they carry the same units and the same interpretation as the
-constrained estimator's.
+tangent_dimension)`. Exact KCL equations are ranked in their own units, then the
+**whitened** measurement Jacobian is ranked on their tangent space. `rank` is
+the sum of those two independent ranks; `redundancy` counts measurement rows
+beyond the tangent directions they identify. `min_singular` and `cond` come
+from the reduced measurement Jacobian, so they have the same interpretation as
+the constrained estimator's.
 
 !!! note "Row scaling and what it does and does not affect"
-    Rank is invariant to any nonzero row scaling, so the observability boolean
-    survives almost any weighting choice. Singular values are not. An earlier
-    version of this diagnostic scaled the exact KCL rows (in amperes) by
-    `1/minimum(sigma)` taken across measurement sigmas in volts, watts and
-    vars; the boolean was fine and `min_singular` was in an arbitrary unit that
-    supported no uncertainty interpretation at all. If you build such a
-    diagnostic yourself, keep exact rows out of the whitened block rather than
-    inventing a scale for them.
+    Exact rank is invariant to any nonzero row scaling; *numerical* rank is not,
+    because a tolerance is compared with singular values. An earlier diagnostic
+    stacked exact KCL rows in amperes with measurement rows whitened from volts,
+    watts and vars. Its singular values were meaningless, and sufficiently
+    extreme relative scaling could also change its numerical rank. The current
+    implementation ranks the exact block first and the measurement block on its
+    tangent space, each in its own scale.
 
 ## Redundancy is not observability
 
@@ -150,11 +150,11 @@ contributes to ``Z`` in the same way.
 
 The binary is the least useful thing the diagnostic reports. Here is a set
 approaching criticality for a concrete physical reason: a ``|V_b|`` and a
-``|I_\ell|`` measurement on a two-bus feeder, as the power-factor angle falls
-toward zero and the two rows rotate onto each other
-([why](current_magnitude.md#Real-problem-1:-at-unity-power-factor,-V-and-I-collapse-onto-each-other)).
+``|I_\ell|`` measurement on a resistive two-bus feeder, as the current angle
+relative to the source falls toward zero and the two rows rotate onto each
+other ([why](current_magnitude.md#Real-problem-1:-sensitivity-rows-can-collapse-onto-each-other)).
 
-| pf angle (rad) | ``\sigma_{\min}(HZ)`` | ``\mathrm{cond}(HZ)`` | sd of estimated ``\angle V_b`` |
+| source-referenced ``\angle I`` (rad) | ``\sigma_{\min}(HZ)`` | ``\mathrm{cond}(HZ)`` | sd of estimated ``\angle V_b`` |
 |---:|---:|---:|---:|
 | −0.6 | 5.61e+01 | 3.86 | 7.2e−05 rad |
 | −0.3 | 2.91e+01 | 7.63 | 1.6e−04 rad |
@@ -316,25 +316,26 @@ the constraint handling and the singular values; it costs ``O(n^3)`` and a
 threshold. Treat a ``\sigma_{\min}`` near the tolerance as "ask again", not as
 an answer.
 
-## Open academic angles
+## Academic questions suggested by the prototype
 
-The genuinely interesting questions this codebase is positioned to attack,
-roughly in order of how novel they are:
+These are research leads, not novelty claims. A systematic review and sharper
+problem statement are required before presenting any of them as open:
 
 1. **Observability of four-wire networks with explicit neutrals.** The
-   literature is overwhelmingly single-phase-equivalent or three-wire. Once
-   neutrals are states, the reference question becomes richer than "fix one
-   angle": bonding, multi-grounding, and broken neutrals each change the gauge
-   structure. This implementation makes those freedoms *visible* rather than
-   assuming them away, which is the precondition for studying them. There is a
-   paper in characterising the gauge group of a multi-grounded four-wire
-   feeder and relating it to bonding topology.
+   literature already includes complete four-wire LV state estimators and
+   neutral-to-earth-voltage estimation (Bandara et al., 2021; Melo, Teixeira and
+   Mingorança, 2023). The narrower question exposed here is how bonding,
+   multi-grounding, broken neutrals, and the chosen measurement references alter
+   the gauge/null-space structure, and how that relates to existing neutral
+   reductions and observability results.
 2. **Observability under general exact device equations.** Classical treatments
    special-case zero injections. The ``HZ`` formulation admits any exact law —
-   ZIP, delta connections, an inverter control characteristic. Which device
-   laws contribute usable rank, and how much, is open. A constant-power device
-   is a nonlinear constraint whose contribution to ``Z`` depends on the
-   operating point, so "observable" can change with loading.
+   ZIP, delta connections, an inverter control characteristic. A useful study
+   would classify when these laws contribute usable rank and compare the result
+   with established equality-constrained and augmented-state formulations. A
+   constant-power device is a nonlinear constraint whose contribution to ``Z``
+   depends on the operating point, so local observability can change with
+   loading.
 3. **Quantitative observability for meter placement.** With
    `derived_covariance` the design objective is available directly: maximise
    ``\sigma_{\min}`` (E-optimality) or minimise the variance of a quantity the
@@ -349,9 +350,9 @@ roughly in order of how novel they are:
    clean extension of Monticelli and Garcia's framework.
 5. **Local versus global identifiability with magnitude measurements.** The
    [mirror solutions](current_magnitude.md) are locally unique and globally
-   not. A certificate that a measurement set admits a unique global solution
-   on a given feeder is, as far as we know, unavailable for realistic
-   distribution models.
+   not. The research question is which existing tools from polynomial-system
+   solving, interval analysis, relaxations, or certified continuation can give
+   useful uniqueness certificates for bounded distribution-network models.
 6. **Observable-island decomposition from the null space.** The unobservable
    directions are computed; turning them into maximal observable islands and a
    minimal set of pseudo-measurements that merges them is a combinatorial step
@@ -388,3 +389,12 @@ roughly in order of how novel they are:
   1983.
 * Abur, A. and Expósito, A. G., *Power System State Estimation: Theory and
   Implementation*, Marcel Dekker, 2004, chapters on observability and bad data.
+* Bandara, W. G. C., Almeida, D., Godaliyadda, R. I., Ekanayake, M. P. and
+  Ekanayake, J., "A complete state estimation algorithm for a three-phase
+  four-wire low voltage distribution system with high penetration of solar PV",
+  *International Journal of Electrical Power & Energy Systems*, 124:106332,
+  2021. DOI: 10.1016/j.ijepes.2020.106332.
+* Melo, I. D., Teixeira, M. O. N. and Mingorança, J. S., "Neutral-to-Earth
+  Voltage (NEV) and state estimation for unbalanced multiphase distribution
+  systems based on an optimization model", *Electric Power Systems Research*,
+  217:109123, 2023. DOI: 10.1016/j.epsr.2023.109123.

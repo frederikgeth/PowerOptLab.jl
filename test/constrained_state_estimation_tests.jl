@@ -670,6 +670,15 @@ cm_net() = parse_bmopf("""
  "line":{"l":{"bus_from":"src","bus_to":"b","terminal_map_from":["1"],"terminal_map_to":["1"],"linecode":"lc","length":1.0}}}
 """; from_string=true)
 
+function cm_net(z::Complex)
+    parse_bmopf("""
+    {"bus":{"src":{"terminal_names":["1"]},"b":{"terminal_names":["1"]}},
+     "voltage_source":{"s":{"bus":"src","terminal_map":["1"],"v_magnitude":[230.0],"v_angle":[0.0]}},
+     "linecode":{"lc":{"R_series_1_1":$(real(z)),"X_series_1_1":$(imag(z))}},
+     "line":{"l":{"bus_from":"src","bus_to":"b","terminal_map_from":["1"],"terminal_map_to":["1"],"linecode":"lc","length":1.0}}}
+    """; from_string=true)
+end
+
 # |V_b| and |I_l| at an operating point with current `Ic`; returns (H, x, s, p).
 function cm_setup(Ic; sigma=0.01)
     V = 230.0 - 0.5 * Ic
@@ -681,11 +690,21 @@ function cm_setup(Ic; sigma=0.01)
     ([real(V), imag(V)], s, p)
 end
 
+function cm_setup(Ic, z::Complex; sigma=0.01)
+    V = 230.0 - z * Ic
+    ms = Any[Measurement(kind=:vmag, bus="b", reference=nothing, value=abs(V), sigma=sigma),
+             BranchMeasurement(kind=:imag, line="l", side=:from, terminal="1",
+                               value=abs(Ic), sigma=sigma)]
+    s = compile_state_estimator(cm_net(z), ms)
+    p = SEParameters(s, ms)
+    ([real(V), imag(V)], s, p)
+end
+
 @testset "Current magnitude: conditioning is bounded as |I| falls at fixed angle" begin
-    # Shrinking the current at a FIXED power-factor angle does not degrade the
-    # conditioning: the |I| row is a unit vector along the current direction, so
-    # its magnitude does not vanish with |I|. This is the path that makes the
-    # blanket claim "ampere measurements are ill-conditioned" wrong.
+    # Shrinking current at a FIXED source-referenced direction does not degrade
+    # conditioning on this resistive feeder. The |I| derivative with respect to
+    # rectangular current is a unit vector; the voltage-state row also contains
+    # the fixed branch sensitivity, so it does not vanish with |I| on this path.
     conds = Float64[]
     for imag_a in (60.0, 20.0, 5.0, 1.0, 1e-2, 1e-4)
         x, s, p = cm_setup(imag_a * cis(-0.451))
@@ -696,13 +715,30 @@ end
     @test conds[end] ≈ conds[end - 1] rtol=1e-3   # it settles rather than diverging
 end
 
+@testset "Current magnitude: complex impedance shifts the alignment condition" begin
+    z = 0.4 + 0.3im
+
+    # The scalar condition is angle(V) - angle(I) = angle(z), modulo pi.
+    # Choosing I at -angle(z) makes both V and zI real, so the two magnitude
+    # sensitivities are exactly collinear even though the load is not at unity PF.
+    aligned_current = 40.0 * cis(-angle(z))
+    x, s, p = cm_setup(aligned_current, z)
+    @test minimum(svdvals(residual_jacobian(s, p, x))) < 1e-10
+    @test observability_diagnostics(s, p, x).unobservable_dimension == 1
+
+    # Conversely, source-referenced unity PF is not the degeneracy for a line
+    # with reactance: the impedance rotates the current-magnitude sensitivity.
+    x, s, p = cm_setup(40.0 + 0.0im, z)
+    @test minimum(svdvals(residual_jacobian(s, p, x))) > 1.0
+    @test observability_diagnostics(s, p, x).unobservable_dimension == 0
+end
+
 @testset "Current magnitude: |V| and |I| go collinear at unity power factor" begin
     # ...but the conditioning IS operating-point dependent, and this is the
-    # degeneracy that matters in practice. |V_b| senses the direction V-hat and
-    # |I| senses I-hat. When the current is in phase with the bus voltage the two
-    # rows are parallel and the pair loses rank -- at ANY current magnitude.
-    # Unity power factor is common (resistive load, PV at unity pf), so this is
-    # not a corner case.
+    # degeneracy that matters in practice. On this scalar resistive feeder the
+    # |I| voltage-state sensitivity is aligned with I-hat, so it becomes parallel
+    # to the |V| row at unity power factor. With complex impedance or mutual
+    # coupling, the branch sensitivity shifts the alignment condition.
     conds = Float64[]
     for phi in (-0.6, -0.3, -0.1, -0.03, -0.01, -0.003)
         x, s, p = cm_setup(40.0 * cis(phi))

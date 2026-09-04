@@ -583,11 +583,12 @@ function _observability(net, measurements, neutral, zi::Set{Tuple{String,String}
     # 1/sigma, and those sigmas are in volts, watts and vars; the KCL rows are
     # in amperes. An earlier version scaled the KCL rows by
     # `1/minimum(m.sigma for m in measurements)` — a numerical minimum taken
-    # across three different units and then applied to a fourth. Rank is
-    # invariant to any nonzero row scaling, so the observability BOOLEAN
-    # survived that, but `min_singular` and `cond` did not: they were reported
-    # in an arbitrary unit and could not carry the estimate-uncertainty
-    # interpretation the documentation gave them.
+    # across three different units and then applied to a fourth. Exact rank is
+    # invariant to nonzero row scaling, but a floating-point rank test compares
+    # all singular values with a common tolerance. Extreme cross-unit scaling
+    # could therefore change even the observability boolean; `min_singular` and
+    # `cond` were always in an arbitrary unit and could not carry the
+    # estimate-uncertainty interpretation the documentation gave them.
     #
     # `_observability` now does what the constrained estimator does: treat the
     # KCL equations as exact constraints, take their tangent space `Z`, and

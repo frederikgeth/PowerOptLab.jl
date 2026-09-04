@@ -15,14 +15,17 @@ and what they do not. This page is deliberately blunt about the gaps.
 
 **The formulation.** Schweppe and Wildes (1970) posed static state estimation
 as weighted least squares over a nonlinear measurement model, and that is
-still the frame. Both PowerOptLab estimators are instances of it.
+still the dominant frame. The measurement-only modes of both PowerOptLab
+estimators are constrained Gaussian WLS/MLE formulations; adding a genuine
+state prior gives a MAP or regularised formulation instead.
 
 **Zero injections are constraints, not measurements.** Modelling a known zero
 injection as a pseudo-measurement with a very small σ is a classic source of
 ill-conditioning. Two effects compound: the spread of weights inflates
-``\mathrm{cond}(W^{1/2}H)`` in proportion to the ratio of largest to smallest
-weight, and forming the normal equations then squares whatever condition number
-``W^{1/2}H`` has. Treating the zero injections as equality constraints and
+``\mathrm{cond}(W^{1/2}H)`` by up to the ratio of the largest to smallest
+*whitening factor*, ``\sqrt{w_{\max}/w_{\min}}`` when the diagonal entries of
+``W`` are inverse-variance weights. Forming the normal equations then squares
+the condition number of ``W^{1/2}H``. Treating zero injections as equality constraints and
 solving the resulting KKT system avoids both (Clements, Woodzell and Burchett,
 1990). The
 [constrained NLLS estimator](../problems/constrained_state_estimation.md) does
@@ -38,14 +41,20 @@ system with sparse QR and never forms ``H^\top H``.
 
 **Bad data needs the residual covariance, not the raw residual.** Monticelli
 and Garcia (1983) established largest-normalised-residual processing:
-``r^N_i = r_i/\sqrt{S_{ii}}`` with ``S`` the residual sensitivity matrix.
-Dividing by σ alone is not this, and does not have the χ² distribution the
-test needs. **Neither estimator implements it** — see the gaps below.
+``r^N_i = r_i/\sqrt{\Omega_{ii}}``, where ``\Omega = SR`` is the residual
+covariance, ``R`` is the measurement covariance, and ``S`` is the residual
+sensitivity matrix. Dividing by σ alone is not this. The separate global
+objective test has an approximate χ² law under the linearised Gaussian model;
+the individual normalised residual is used for identification after detection.
+**Neither estimator implements either test** — see the gaps below.
 
-**Ampere measurements are a modelling hazard, not a conditioning one.** Abur
-and Expósito (1997) showed that current magnitudes admit multiple solutions.
-The [current-magnitude tutorial](current_magnitude.md) reproduces this and
-also shows the conditioning story is a myth.
+**Ampere measurements have distinct identifiability and conditioning hazards.**
+Abur and Expósito (1997) showed that current magnitudes can admit multiple
+solutions. Their 2004 text also discusses poor conditioning under low loading
+when ampere measurements carry observability. The
+[current-magnitude tutorial](current_magnitude.md) reproduces a local/global
+ambiguity and two conditioning paths on a resistive feeder; it does not turn
+either path into a universal rule.
 
 **Distribution estimation is measurement-poor.** Modern DSSE surveys
 (Dehghanpour et al., 2019; Primadianto and Lu, 2017) agree that the binding
@@ -112,10 +121,11 @@ actually faces.
 The route differs sharply by engine, and this is the one axis where the legacy
 WLS estimator is the better platform. Its JuMP objective can express any smooth
 ``-\log f`` directly, and ``\ell_1`` exactly through an epigraph
-reformulation that adds only linear rows — so WLAV costs almost nothing there.
-The compiled estimator cannot host either without abandoning Gauss–Newton,
-because its step, its augmented system and its covariance all require a sum of
-squares. See [estimators, not curve fits](maximum_likelihood.md), and Vanin et
+reformulation. That formulation adds variables and inequalities, so its runtime
+and convergence should be benchmarked rather than assumed. The compiled
+estimator could use robust reweighting or a generalised Gauss--Newton method,
+but its step, stopping tests and covariance would all need new definitions.
+See [likelihood, loss, and priors](maximum_likelihood.md), and Vanin et
 al. (2023) for a worked non-Gaussian DSSE in the same ecosystem.
 
 ### 4. Correlated covariance
@@ -177,3 +187,16 @@ neutral these are not the same quantity.
 * Dehghanpour, K., Wang, Z., Wang, J., Yuan, Y. and Bu, F., "A survey on state
   estimation techniques and challenges in smart distribution systems", *IEEE
   Trans. Smart Grid*, 10(2):2312–2322, 2019.
+* Vanin, M., Van Acker, T., D'hulst, R. and Van Hertem, D., "Exact modeling of
+  non-Gaussian measurement uncertainty in distribution system state
+  estimation", *IEEE Trans. Instrumentation and Measurement*, 72:9002911,
+  2023. DOI: 10.1109/TIM.2023.3287253.
+* Bandara, W. G. C., Almeida, D., Godaliyadda, R. I., Ekanayake, M. P. and
+  Ekanayake, J., "A complete state estimation algorithm for a three-phase
+  four-wire low voltage distribution system with high penetration of solar PV",
+  *International Journal of Electrical Power & Energy Systems*, 124:106332,
+  2021. DOI: 10.1016/j.ijepes.2020.106332.
+* Melo, I. D., Teixeira, M. O. N. and Mingorança, J. S., "Neutral-to-Earth
+  Voltage (NEV) and state estimation for unbalanced multiphase distribution
+  systems based on an optimization model", *Electric Power Systems Research*,
+  217:109123, 2023. DOI: 10.1016/j.epsr.2023.109123.

@@ -91,9 +91,12 @@ equation set the *solver* imposes, not a convenient approximation of it:
   which every injection cancels — the **left null space of the injection
   incidence**, one complex row per direction.
 
-`observable = rank == n_states`, alongside `redundancy` (surplus equations),
-the smallest singular value, and the condition number; `solve_state_estimation`
-warns on rank deficiency.
+`observable = rank == n_states`, where `rank` combines the exact-constraint
+rank with the measurement rank on the resulting tangent space. `redundancy`
+counts stochastic measurement rows beyond that tangent-space measurement rank;
+exact constraints do not create residual redundancy. The result also reports
+the smallest reduced singular value and condition number, and
+`solve_state_estimation` warns on rank deficiency.
 
 !!! note "This is a local check"
     It detects local rank deficiency and critically weak measurement sets. It
@@ -101,27 +104,28 @@ warns on rank deficiency.
     one. See [current-magnitude measurements](../estimation/current_magnitude.md)
     for two states that both fit the same data exactly.
 
-A negative `redundancy` would mean the diagnostic has fewer equations than
-states, which is a property of the diagnostic and never of a measurement set
-that solved. Earlier versions enumerated declared `zero_injection` nodes
-instead of the null space, which dropped the KCL rows of an explicitly
-modelled neutral and of any non-grounded return terminal; a four-wire feeder
-with a bonded neutral was reported UNOBSERVABLE with `redundancy == -2` while
-the estimate itself was correct.
+Earlier versions enumerated declared `zero_injection` nodes instead of the null
+space, which dropped the KCL rows of an explicitly modelled neutral and of any
+non-grounded return terminal. A four-wire feeder with a bonded neutral was then
+reported unobservable even though the estimate was correct. The current
+diagnostic derives the tangent space from all exact KCL combinations and keeps
+their numerical rank separate from the whitened measurement rows.
 
 !!! warning "Local optimum"
     Like the IVQ battery solve, this is a
     nonconvex problem solved to a local stationary point. For a promotion-grade
-    estimator, add multistart or a Gauss–Newton/normal-equations method, and
-    check `observability.observable` and `primal_status` before trusting a result.
+    estimator, add multistart or an appropriate global-validation strategy,
+    and check `observability.observable` and `primal_status` before trusting a
+    result. Switching local algorithms does not establish global uniqueness.
 
 ## Residuals
 
 `residuals[i].standardized = residual/σ` is the **σ-normalised raw residual** — a
 scale-free residual, *not* the classical leverage-adjusted normalised residual
-``r^N_i = r_i/\sqrt{S_{ii}}`` (with ``S`` the residual covariance) used for
-bad-data identification. A χ² goodness-of-fit test and largest-normalised-residual
-bad-data processing are not yet implemented.
+``r^N_i = r_i/\sqrt{\Omega_{ii}}`` (with ``\Omega`` the residual covariance)
+used for bad-data identification. A separate global objective test has an
+approximate χ² law under the linearised Gaussian model. Neither that test nor
+largest-normalised-residual processing is implemented.
 
 ## Worked example
 

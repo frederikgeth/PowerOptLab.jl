@@ -228,8 +228,16 @@ one, and returns `:time_series_stalled` without publishing later estimates.
 
 A prior the caller configured on an `SEParameters` is **preserved**.  When
 `previous_state_sigma` is supplied the previous-state prior is layered on top of
-it — duplicated state indices behave as independent observations, the way two
-meters on one quantity would — rather than replacing it.
+it rather than replacing it. Algebraically, duplicated indices add independent
+quadratic rows. That is statistically justified only if the information sources
+can be treated as independent; a previous estimate usually reuses earlier meter
+data and therefore should not be described as a second independent meter.
+
+This driver is temporal regularisation, not a state-space filter: it does not
+propagate the previous covariance, specify process noise, or account for
+cross-time correlation. Choose `previous_state_sigma` as an explicit movement
+assumption and do not interpret the resulting local covariance as a complete
+filtered posterior.
 
 ## Current limitations
 

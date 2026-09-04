@@ -43,8 +43,8 @@ carries `sigma = 0.01` in its own SI unit (volts for `:vmag`, amperes for
 ## Shrinking current alone is benign
 
 Take ``|V_b|`` and ``|I_\ell|`` and let the line current fall by six orders of
-magnitude, holding the power-factor angle fixed at 0.9 lagging so the state
-stays genuinely complex:
+magnitude, holding its source-referenced direction fixed so the state stays
+genuinely complex:
 
 | ``|I|`` (A) | ``\sigma_{\min}(H)`` | ``\mathrm{cond}(H)`` |
 |---:|---:|---:|
@@ -56,24 +56,35 @@ stays genuinely complex:
 | 0.0001 | 3.96e+01 | 5.56 |
 
 Along this path the condition number does not blow up — it *converges*, to
-about 5.6. The gradient of ``\sqrt{I_{re}^2+I_{im}^2}`` is a unit vector along
-the current direction, so its magnitude does not shrink with ``|I|``.
+about 5.6. With respect to rectangular current components, the gradient of
+``\sqrt{I_{re}^2+I_{im}^2}`` is a unit vector along the current direction. The
+voltage-state row also contains the fixed branch-current sensitivity; neither
+factor shrinks merely because ``|I|`` does along this path.
 
 **This is one path only.** It fixes the current's direction and varies its
 magnitude. The next section varies the direction instead, and the outcome is
 completely different — which is exactly why the blanket claim in either
 direction is unhelpful.
 
-## Real problem 1: at unity power factor, ``|V|`` and ``|I|`` collapse onto each other
+## Real problem 1: sensitivity rows can collapse onto each other
 
-``|V_b|`` senses the state along the direction ``\hat V``; ``|I_\ell|`` senses it
-along ``\hat I``. When the current is in phase with the bus voltage those two
-directions coincide, the two whitened rows become **parallel**, and the pair
-loses rank — at any current magnitude whatsoever.
+``|V_b|`` senses the voltage state along ``\hat V``. A current-magnitude row
+senses it along ``J_I^\top\hat I``, where ``J_I`` maps voltage-state changes to
+branch-current changes. On this page's scalar, purely resistive line,
+``J_I`` is just a signed scalar: when current and receiving-end voltage are in
+phase, the two whitened rows become **parallel**, and the pair loses rank at any
+nonzero current magnitude.
 
-Hold the current at 40 A and sweep the power-factor angle toward zero:
+For a scalar complex impedance ``Z``, the alignment condition instead involves
+the impedance angle: ``\angle V-\angle I = \angle Z`` modulo ``\pi``. With
+mutual coupling it depends on the full current-sensitivity row. Unity power
+factor is therefore the degeneracy of this resistive example, not a universal
+threshold for ampere measurements.
 
-| pf angle (rad) | ``\angle(V,I)`` | ``\sigma_{\min}(H)`` | ``\mathrm{cond}(H)`` | sd of ``\angle V_b`` |
+Hold the current at 40 A and sweep its angle relative to the 0-rad source toward
+zero. The next column reports the actual receiving-end voltage/current angle:
+
+| source-referenced ``\angle I`` (rad) | ``|\angle V-\angle I|`` | ``\sigma_{\min}(H)`` | ``\mathrm{cond}(H)`` | sd of ``\angle V_b`` |
 |---:|---:|---:|---:|---:|
 | −0.6 | 0.6529 | 5.61e+01 | 3.86 | 7.2e−05 |
 | −0.3 | 0.3280 | 2.91e+01 | 7.63 | 1.6e−04 |
@@ -83,7 +94,7 @@ Hold the current at 40 A and sweep the power-factor angle toward zero:
 | −0.003 | 0.0033 | 2.94e−01 | 761 | 1.6e−02 |
 | **0** | **0** | **0** | ``\infty`` | undefined |
 
-At exactly unity power factor the set is rank 1 of 2 while carrying 40 A, and
+At exactly unity power factor *on this resistive feeder* the set is rank 1 of 2 while carrying 40 A, and
 `selected_state_covariance` refuses to return a covariance. Unity and
 near-unity power factor is not exotic — resistive load, and PV inverters
 operating at unity — so this degeneracy is reachable in ordinary operation.
@@ -92,10 +103,10 @@ The contrast with a rectangular pair is total. Replacing ``|V_b|`` with
 ``V_{re}``, ``V_{im}`` gives ``\mathrm{cond}(H) = 1.0`` at **every** power-factor
 angle in the sweep, including zero.
 
-So: conditioning with ampere measurements depends on the geometry between the
-measured directions at the operating point. It is fine along some paths and
-singular along others, and only the diagnostic at your actual operating point
-can tell you which one you are on.
+So: conditioning with ampere measurements depends on the network sensitivity,
+measurement placement, whitening, and operating point. It is fine along some
+paths and singular along others, and only the diagnostic for the actual model
+and operating point can tell you which one you are on.
 
 ## Real problem 2: the derivative is undefined at exactly zero current
 
@@ -104,9 +115,9 @@ does not exist. And the difficulty is a **single point**, not a
 neighbourhood: at ``|I| = 10^{-4}\,\mathrm{A}`` the Jacobian is perfectly
 healthy, as the table above shows.
 
-The trouble is that the single bad point is the one everybody starts from. A
-flat start — every voltage at nominal, no load anywhere — puts *every* line
-current at exactly zero.
+The trouble is that the single bad point is a common start. On an unloaded
+radial feeder without shunts, a flat voltage profile puts the line currents at
+exactly zero.
 
 ```julia
 imeas = BranchMeasurement(kind=:imag, line="l", side=:from, terminal="1",
@@ -143,8 +154,9 @@ Three things to read off this:
 
 The practical remedy is to start somewhere with current in the lines — a
 power-flow solution, the previous snapshot, or a nominal-load point — and to
-reach for `current_epsilon` knowingly, sized below the ammeter's meaningful
-resolution.
+reach for `current_epsilon` knowingly. Sizing it below the ammeter's meaningful
+resolution limits the perturbation of the predicted magnitude, but the resulting
+sensitivity and estimate should still be checked rather than assumed unchanged.
 
 ## Real problem 3: a magnitude carries no direction
 
@@ -172,7 +184,8 @@ solve_compiled_state_estimator(s, p, [219.0, +11.0]; initial_radius=1.0)
 | lagging | `:converged_unique` | 220.0000 | **−0.05000** | 2.8e−11 | 2/2 |
 | leading | `:converged_unique` | 220.0000 | **+0.05000** | 2.8e−11 | 2/2 |
 
-Two different states. Both fit the data **exactly**. Both are reported
+Two different states. Both fit the data **exactly** on this real-impedance
+feeder. Both are reported
 `:converged_unique` with a full-rank reduced Jacobian.
 
 Nothing here is a bug, and nothing is ill-conditioned. The two states are a
@@ -215,11 +228,13 @@ model, so that is where it had to be repaired.
 
 1. **Do not discard ampere measurements on a blanket conditioning argument** —
    but do not assume they are safe either. Check ``\sigma_{\min}`` at your
-   operating point. The failure mode to watch for is a ``|V|`` and a ``|I|``
-   measurement whose directions align, which happens near unity power factor.
-2. **Never start flat when `:imag` rows are present.** Warm start from a power
-   flow, the previous snapshot, or a nominal-load point. A flat start is the
-   one operating point where the derivative does not exist.
+   operating point. The failure mode is alignment of the ``|V|`` and ``|I|``
+   *state-sensitivity rows*. Near-unity power factor is the warning sign for the
+   resistive example above; general impedances and coupled lines shift it.
+2. **Avoid a zero-current start when `:imag` rows are present.** Warm start from
+   a power flow, the previous snapshot, or a nominal-load point. If other rows
+   or smoothing move the iterate away from zero, document that mechanism rather
+   than relying on an undefined current-magnitude derivative.
 3. **Use `current_epsilon` deliberately**, sized below the ammeter's
    resolution, and read the returned status: an `ε`-smoothed row at zero
    current carries no information, and `:converged_underobserved` is telling
@@ -250,5 +265,6 @@ not be cited as one.
 Abur, A. and Expósito, A. G., *Power System State Estimation: Theory and
 Implementation*, Marcel Dekker, 2004. Discusses the practical difficulties of
 ampere measurements, including ill-conditioning near low loading when they are
-load-bearing for observability — the concern the unity-power-factor result
-above makes concrete on this feeder.
+load-bearing for observability. That low-loading mechanism and the sensitivity
+alignment demonstrated above are related practical warnings, not the same
+mathematical claim.
