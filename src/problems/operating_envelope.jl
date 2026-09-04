@@ -237,6 +237,128 @@ IssuePlusLocalLaws(; rules=DOEControlRule[], registrations=DOEControlRegistratio
     registrations=registrations,
     on_unclassified=:error)
 
+const _DOE_SCENARIO_ROLES =
+    (:train, :calibration, :validation, :test, :stress, :unspecified)
+
+"""
+    DOEScenario(; id, network, role=:unspecified, weight=nothing, kwargs...)
+
+One network realization with explicit uncertainty provenance. `role` is one of
+`:train`, `:calibration`, `:validation`, `:test`, `:stress`, or `:unspecified`.
+`weight` is an optional positive relative probability weight; a scenario set
+must either weight every scenario in an interval or none of them.
+
+`source`, `generation_method`, `seed`, `timestamp`, and `metadata` describe how
+the realization was obtained. They do not themselves establish calibration or
+independence.
+"""
+struct DOEScenario
+    id::String
+    network::Dict{String,Any}
+    role::Symbol
+    weight::Union{Nothing,Float64}
+    source::String
+    generation_method::Symbol
+    seed::Union{Nothing,Int}
+    timestamp::Union{Nothing,DateTime}
+    metadata::Dict{String,Any}
+
+    function DOEScenario(; id::AbstractString,
+                         network::Dict{String,Any},
+                         role::Symbol=:unspecified,
+                         weight::Union{Nothing,Real}=nothing,
+                         source::AbstractString="unspecified",
+                         generation_method::Symbol=:unspecified,
+                         seed::Union{Nothing,Integer}=nothing,
+                         timestamp::Union{Nothing,DateTime}=nothing,
+                         metadata=Dict{String,Any}())
+        isempty(id) && throw(ArgumentError("DOE scenario id must be non-empty"))
+        role in _DOE_SCENARIO_ROLES || throw(ArgumentError(
+            "DOE scenario role must be one of $(_DOE_SCENARIO_ROLES)"))
+        weight_ = weight === nothing ? nothing : Float64(weight)
+        weight_ === nothing || (isfinite(weight_) && weight_ > 0) ||
+            throw(ArgumentError("DOE scenario weight must be finite and positive"))
+        isempty(source) && throw(ArgumentError(
+            "DOE scenario source must be non-empty"))
+        new(String(id), network, role, weight_, String(source),
+            generation_method, seed === nothing ? nothing : Int(seed),
+            timestamp,
+            Dict{String,Any}(string(key) => value
+                             for (key, value) in pairs(metadata)))
+    end
+end
+
+"""
+    DOEScenarioSet(intervals; dataset_id, metadata=Dict())
+
+Typed scenario ensemble. Pass a vector of [`DOEScenario`](@ref) for one interval
+or a vector of non-empty scenario vectors for multiple intervals. Scenario IDs
+must be unique within each interval. Optional weights must be complete within an
+interval; they are treated as relative weights and normalized only when a
+coverage statistic is calculated.
+"""
+struct DOEScenarioSet
+    intervals::Vector{Vector{DOEScenario}}
+    dataset_id::String
+    metadata::Dict{String,Any}
+
+    function DOEScenarioSet(intervals;
+                            dataset_id::AbstractString,
+                            metadata=Dict{String,Any}())
+        isempty(dataset_id) && throw(ArgumentError(
+            "DOE scenario-set dataset_id must be non-empty"))
+        groups = if intervals isa AbstractVector &&
+                    all(item -> item isa DOEScenario, intervals)
+            [DOEScenario[item for item in intervals]]
+        elseif intervals isa AbstractVector &&
+               all(group -> group isa AbstractVector && !isempty(group) &&
+                            all(item -> item isa DOEScenario, group), intervals)
+            [DOEScenario[item for item in group] for group in intervals]
+        else
+            throw(ArgumentError(
+                "DOEScenarioSet requires scenarios or non-empty scenario vectors"))
+        end
+        isempty(groups) && throw(ArgumentError(
+            "DOE scenario set needs at least one interval"))
+        all(!isempty, groups) || throw(ArgumentError(
+            "every DOE scenario-set interval must be non-empty"))
+        for (interval, group) in enumerate(groups)
+            ids = [scenario.id for scenario in group]
+            length(unique(ids)) == length(ids) || throw(ArgumentError(
+                "DOE scenario IDs must be unique within interval $interval"))
+            weighted = [scenario.weight !== nothing for scenario in group]
+            all(weighted) || all(!, weighted) || throw(ArgumentError(
+                "DOE scenario weights must be complete within interval $interval"))
+        end
+        new(groups, String(dataset_id),
+            Dict{String,Any}(string(key) => value
+                             for (key, value) in pairs(metadata)))
+    end
+end
+
+"""Return a typed subset containing scenarios whose role is in `roles`."""
+function select_doe_scenarios(scenarios::DOEScenarioSet;
+                              roles=(:test,))
+    role_values = roles isa Symbol ? (roles,) : roles
+    selected_roles = Set(Symbol(role) for role in role_values)
+    isempty(selected_roles) && throw(ArgumentError(
+        "scenario-role selection must be non-empty"))
+    issubset(selected_roles, Set(_DOE_SCENARIO_ROLES)) || throw(ArgumentError(
+        "unknown DOE scenario role in $(collect(selected_roles))"))
+    groups = Vector{Vector{DOEScenario}}()
+    for (interval, group) in enumerate(scenarios.intervals)
+        selected = [scenario for scenario in group
+                    if scenario.role in selected_roles]
+        isempty(selected) && throw(ArgumentError(
+            "no selected DOE scenarios in interval $interval"))
+        push!(groups, selected)
+    end
+    return DOEScenarioSet(groups;
+        dataset_id=scenarios.dataset_id,
+        metadata=merge(copy(scenarios.metadata),
+            Dict{String,Any}("selected_roles" => sort!(collect(selected_roles)))))
+end
+
 """
     DOEStudySpec
 
@@ -258,7 +380,18 @@ struct DOEStudySpec
     seeds::Dict{String,Int}
     software_versions::Dict{String,String}
     metadata::Dict{String,Any}
+    scenario_provenance::Vector{Vector{Dict{String,Any}}}
+    scenario_set_metadata::Dict{String,Any}
 end
+
+# Source compatibility for the original positional provenance record.
+DOEStudySpec(study_id, network_hashes, connection_points, direction, security,
+             utilizations, control_policy, fairness, solver, solver_options,
+             seeds, software_versions, metadata) =
+    DOEStudySpec(study_id, network_hashes, connection_points, direction,
+                 security, utilizations, control_policy, fairness, solver,
+                 solver_options, seeds, software_versions, metadata,
+                 Vector{Vector{Dict{String,Any}}}(), Dict{String,Any}())
 
 function _doe_canonical(value)
     value === nothing && return "null"
@@ -320,9 +453,11 @@ end
 
 Create a deterministic study manifest with SHA-256 hashes of every interval /
 scenario network and the full connection-point declaration. The manifest also
-records coverage, control and fairness policies, solver options, named random
-seeds, extension metadata, and package versions. Functions such as custom hooks
-cannot be serialized; identify their committed implementation in `metadata`.
+records typed scenario IDs, roles, weights and construction provenance when
+`nets` is a [`DOEScenarioSet`](@ref), plus coverage, control and fairness
+policies, solver options, named random seeds, extension metadata, and package
+versions. Functions such as custom hooks cannot be serialized; identify their
+committed implementation in `metadata`.
 """
 function DOEStudySpec(nets, connection_points::AbstractVector{ConnectionPoint};
                       direction::Symbol=:export,
@@ -335,9 +470,17 @@ function DOEStudySpec(nets, connection_points::AbstractVector{ConnectionPoint};
                       seeds=Dict{String,Int}(),
                       metadata=Dict{String,Any}())
     groups = _scenario_groups(nets)
+    scenario_provenance = _scenario_provenance_groups(nets, groups)
     cps = collect(connection_points)
     fairness_policy = _as_policy(fairness)
     network_hashes = [[_doe_sha256(net) for net in group] for group in groups]
+    scenario_set_metadata = nets isa DOEScenarioSet ? Dict{String,Any}(
+        "dataset_id" => nets.dataset_id,
+        "metadata" => copy(nets.metadata),
+        "typed" => true) : Dict{String,Any}(
+        "dataset_id" => nothing,
+        "metadata" => Dict{String,Any}(),
+        "typed" => false)
     cp_records = [Dict{String,Any}(
         "id" => cp.id, "bus" => cp.bus,
         "phase_terminals" => copy(cp.phase_terminals),
@@ -359,6 +502,8 @@ function DOEStudySpec(nets, connection_points::AbstractVector{ConnectionPoint};
         "Ipopt" => string(Base.pkgversion(Ipopt)))
     manifest = Dict{String,Any}(
         "network_hashes" => network_hashes,
+        "scenario_provenance" => scenario_provenance,
+        "scenario_set_metadata" => scenario_set_metadata,
         "connection_points" => cp_records,
         "direction" => direction,
         "security" => security,
@@ -374,7 +519,8 @@ function DOEStudySpec(nets, connection_points::AbstractVector{ConnectionPoint};
     return DOEStudySpec(study_id, network_hashes, cp_records,
         direction, security, deepcopy(utilizations),
         manifest["control_policy"], manifest["fairness"],
-        manifest["solver"], options, seed_records, versions, metadata_records)
+        manifest["solver"], options, seed_records, versions, metadata_records,
+        scenario_provenance, scenario_set_metadata)
 end
 
 """Return a serialization-friendly dictionary for a [`DOEStudySpec`](@ref)."""
@@ -382,6 +528,8 @@ function doe_study_manifest(spec::DOEStudySpec)
     Dict{String,Any}(
         "study_id" => spec.study_id,
         "network_hashes" => deepcopy(spec.network_hashes),
+        "scenario_provenance" => deepcopy(spec.scenario_provenance),
+        "scenario_set_metadata" => deepcopy(spec.scenario_set_metadata),
         "connection_points" => deepcopy(spec.connection_points),
         "direction" => spec.direction,
         "security" => spec.security,
@@ -622,6 +770,30 @@ solve_diagnostics(result::AdversarialSearchStableOperatingEnvelopeResult) =
      global_certificate=false)
 
 """
+    DOECoverageResult
+
+Held-out scenario evaluation returned by
+[`evaluate_operating_envelope_coverage`](@ref). `scenario_rows` contains one
+safe/unsafe/unresolved record per selected interval/scenario, while `metrics`
+reports empirical context and scenario rates. A confidence bound is present
+only when the caller explicitly declares the selected scenarios i.i.d.
+"""
+struct DOECoverageResult <: AbstractSolveResult
+    outcome::Symbol
+    selected_roles::Vector{Symbol}
+    verification::OperatingEnvelopeVerification
+    scenario_rows::Vector{NamedTuple}
+    metrics::Dict{String,Any}
+    diagnostics::Dict{String,Any}
+end
+
+solve_status(result::DOECoverageResult) = solve_status(result.verification)
+solve_diagnostics(result::DOECoverageResult) =
+    (outcome=result.outcome,
+     scenario_count=length(result.scenario_rows),
+     global_certificate=false)
+
+"""
     SearchStableOperatingEnvelopeResult
 
 Result of [`solve_search_stable_operating_envelope`](@ref). It retains the
@@ -693,9 +865,11 @@ function _as_policy(fairness)
 end
 
 function _scenario_groups(nets)
+    nets isa DOEScenarioSet && return [
+        [scenario.network for scenario in group] for group in nets.intervals]
     nets isa Dict{String,Any} && return [[nets]]
     nets isa AbstractVector || throw(ArgumentError(
-        "nets must be a network Dict, a vector of interval networks, or a vector of scenario vectors"))
+        "nets must be a network Dict, interval/scenario vectors, or DOEScenarioSet"))
     isempty(nets) && throw(ArgumentError("need at least one interval"))
     if all(n -> n isa Dict{String,Any}, nets)
         return [[n] for n in nets]
@@ -705,6 +879,34 @@ function _scenario_groups(nets)
     end
     throw(ArgumentError(
         "nets must contain only network Dicts or only non-empty vectors of network Dicts"))
+end
+
+function _scenario_provenance_groups(nets, groups=_scenario_groups(nets))
+    if nets isa DOEScenarioSet
+        return [[Dict{String,Any}(
+            "id" => scenario.id,
+            "role" => scenario.role,
+            "weight" => scenario.weight,
+            "source" => scenario.source,
+            "generation_method" => scenario.generation_method,
+            "seed" => scenario.seed,
+            "timestamp" => scenario.timestamp,
+            "metadata" => copy(scenario.metadata),
+            "network_hash" => _doe_sha256(scenario.network))
+            for scenario in group] for group in nets.intervals]
+    end
+    return [[Dict{String,Any}(
+        "id" => "interval_$(interval)_scenario_$(scenario)",
+        "role" => :unspecified,
+        "weight" => nothing,
+        "source" => "untyped_network_input",
+        "generation_method" => :unspecified,
+        "seed" => nothing,
+        "timestamp" => nothing,
+        "metadata" => Dict{String,Any}(),
+        "network_hash" => _doe_sha256(net))
+        for (scenario, net) in enumerate(group)]
+        for (interval, group) in enumerate(groups)]
 end
 
 function _validate_policy(policy::FairnessPolicy, cps, direction)
@@ -1114,7 +1316,8 @@ function _capacity_trajectory(capacities, cps, T, direction)
 end
 
 function _doe_issued_values_from_result(capacities, interval,
-                                        policy::DOEControlPolicy)
+                                        policy::DOEControlPolicy,
+                                        stages)
     capacities isa OperatingEnvelopeResult ||
         return Dict{_DOEPolicyValueKey,Float64}(), :capacity_values_only
     interval <= length(capacities.diagnostics) ||
@@ -1130,7 +1333,7 @@ function _doe_issued_values_from_result(capacities, interval,
     for record in records
         record isa AbstractDict || continue
         stage = get(record, "stage", nothing)
-        stage in (:issue, :scenario) || continue
+        stage in stages || continue
         key = _doe_control_key(
             record["component"], record["id"], record["quantity"],
             record["position"])
@@ -1140,8 +1343,14 @@ function _doe_issued_values_from_result(capacities, interval,
             "recorded issued control value is not finite"))
         values_[(key, information_index)] = value
     end
-    return values_, isempty(values_) ? :no_issued_controls :
+    source = if !isempty(values_)
         :operating_envelope_result
+    elseif isempty(records)
+        :no_issued_controls
+    else
+        :no_controls_at_selected_stages
+    end
+    return values_, source
 end
 
 function _verification_patterns(utilizations, n)
@@ -1855,7 +2064,10 @@ Calculate active-power operating-envelope capacity for each interval.
 - `Vector{Dict}` — several intervals, one scenario each (backward compatible);
 - `Vector{Vector{Dict}}` — several intervals, each containing one or more
   forecast/model scenarios. One capacity allocation is shared by every scenario
-  in an interval.
+  in an interval;
+- [`DOEScenarioSet`](@ref) — the same interval/scenario structure with typed
+  IDs, train/calibration/validation/test roles, optional weights, timestamps,
+  generation method, seeds, and provenance metadata.
 
 Important keywords:
 
@@ -1920,6 +2132,7 @@ function solve_operating_envelope(nets,
                                   validity_seconds::Float64=interval_seconds,
                                   fallback::Symbol=:missing)
     groups = _scenario_groups(nets)
+    scenario_provenance = _scenario_provenance_groups(nets, groups)
     cps = collect(connection_points)
     policy = _as_policy(fairness)
     resolved_control_policy = control_policy === nothing ?
@@ -1972,6 +2185,13 @@ function solve_operating_envelope(nets,
             patterns_override=utilization_patterns,
             temporal_history=temporal_fairness == :cumulative_max_min ? history : nothing,
             temporal_dt_h=temporal_dt_h)
+        solved.diagnostics["scenario_provenance"] =
+            deepcopy(scenario_provenance[t])
+        solved.diagnostics["scenario_dataset_id"] =
+            nets isa DOEScenarioSet ? nets.dataset_id : nothing
+        nets isa DOEScenarioSet &&
+            (solved.diagnostics["uncertainty_semantics"] =
+                :typed_finite_scenario_set)
         statuses[t] = solved.status
         snapshots[t] = solved.snapshot
         diagnostics[t] = solved.diagnostics
@@ -2203,8 +2423,10 @@ function verify_operating_envelope(nets,
                                    independent_replay::Bool=true,
                                    diagnose_infeasible_contexts::Bool=true,
                                    replay_issued_controls::Bool=true,
+                                   replay_control_stages=(:issue, :scenario),
                                    max_exact_corners::Int=10)
     groups = _scenario_groups(nets)
+    scenario_provenance = _scenario_provenance_groups(nets, groups)
     cps = collect(connection_points)
     policy = FairnessPolicy(kind=:max_total)
     resolved_control_policy = control_policy === nothing ?
@@ -2214,6 +2436,13 @@ function verify_operating_envelope(nets,
     isfinite(volt_var_watt_eps) && volt_var_watt_eps > 0 || throw(ArgumentError(
         "volt_var_watt_eps must be finite and > 0"))
     security = utilizations == :corners ? :corners : :bound_point
+    replay_stage_values = replay_control_stages isa Symbol ?
+        (replay_control_stages,) : replay_control_stages
+    replay_stages = Set(Symbol(stage) for stage in replay_stage_values)
+    isempty(replay_stages) && throw(ArgumentError(
+        "replay_control_stages must be non-empty"))
+    issubset(replay_stages, Set((:issue, :scenario))) || throw(ArgumentError(
+        "replay_control_stages may contain only :issue and :scenario"))
     _validate_connection_points(groups, cps, policy, direction, security, max_exact_corners)
     patterns = _verification_patterns(utilizations, length(cps))
     trajectory = _capacity_trajectory(capacities, cps, length(groups), direction)
@@ -2225,7 +2454,7 @@ function verify_operating_envelope(nets,
     for (t, group) in enumerate(groups)
         issued_values, issued_source = replay_issued_controls ?
             _doe_issued_values_from_result(
-                capacities, t, resolved_control_policy) :
+                capacities, t, resolved_control_policy, replay_stages) :
             (Dict{_DOEPolicyValueKey,Float64}(), :disabled)
         solved = _solve_interval_group(group, cps, policy;
             direction=direction, security=security, per_unit=per_unit, s_base=s_base,
@@ -2239,6 +2468,15 @@ function verify_operating_envelope(nets,
             fixed_policy_control_values=issued_values)
         solved.diagnostics["issued_control_replay_source"] = issued_source
         solved.diagnostics["issued_control_replay_count"] = length(issued_values)
+        solved.diagnostics["replay_control_stages"] =
+            sort!(collect(replay_stages))
+        solved.diagnostics["scenario_provenance"] =
+            deepcopy(scenario_provenance[t])
+        solved.diagnostics["scenario_dataset_id"] =
+            nets isa DOEScenarioSet ? nets.dataset_id : nothing
+        nets isa DOEScenarioSet &&
+            (solved.diagnostics["uncertainty_semantics"] =
+                :typed_finite_scenario_set)
         push!(statuses, solved.status)
         push!(snapshots, solved.snapshot)
         interval_contexts = OperatingEnvelopeContextResult[]
@@ -2347,6 +2585,176 @@ function verify_operating_envelope(nets,
     end
     return OperatingEnvelopeVerification(
         statuses, feasible, snapshots, diagnostics, context_results)
+end
+
+"""
+    evaluate_operating_envelope_coverage(
+        scenarios, connection_points, capacities;
+        roles=(:test,), utilizations=:bound_point,
+        iid_assumption=false, confidence=0.95, kwargs...)
+
+Evaluate an issued envelope on a role-selected subset of a typed
+[`DOEScenarioSet`](@ref). A scenario is a candidate violation when any tested
+utilization context is individually infeasible, unresolved when numerical or
+joint-policy evidence cannot classify every context, and passed otherwise.
+
+Empirical context/scenario rates are always returned. A one-sided Hoeffding
+upper bound is returned only when `iid_assumption=true`; that flag is an explicit
+scientific assertion by the caller, not something inferred from metadata.
+Issue-time controls from an `OperatingEnvelopeResult` are replayed, while
+scenario-stage controls may adapt to each newly observed held-out scenario.
+"""
+function evaluate_operating_envelope_coverage(
+        scenarios::DOEScenarioSet,
+        connection_points::AbstractVector{ConnectionPoint}, capacities;
+        roles=(:test,),
+        utilizations=:bound_point,
+        iid_assumption::Bool=false,
+        confidence::Float64=0.95,
+        kwargs...)
+    0 < confidence < 1 || throw(ArgumentError(
+        "confidence must lie strictly between zero and one"))
+    selected = select_doe_scenarios(scenarios; roles=roles)
+    selected_roles = sort!(unique(
+        scenario.role for group in selected.intervals for scenario in group))
+    verification = verify_operating_envelope(
+        selected, connection_points, capacities;
+        utilizations=utilizations,
+        replay_control_stages=(:issue,),
+        kwargs...)
+
+    rows = NamedTuple[]
+    candidate_scenarios = 0
+    unresolved_scenarios = 0
+    passed_scenarios = 0
+    candidate_contexts = 0
+    unresolved_contexts = 0
+    passed_contexts = 0
+    for (interval, group) in enumerate(selected.intervals)
+        for (scenario_index, scenario) in enumerate(group)
+            contexts = [context for context in
+                        verification.context_results[interval]
+                        if context.scenario == scenario_index]
+            failed_count = count(context -> context.feasible === false, contexts)
+            unresolved_count = count(
+                context -> context.feasible === nothing, contexts)
+            passed_count = count(context -> context.feasible === true, contexts)
+            candidate_contexts += failed_count
+            unresolved_contexts += unresolved_count
+            passed_contexts += passed_count
+            status = failed_count > 0 ? :candidate_violation :
+                unresolved_count > 0 ? :unresolved : :passed
+            candidate_scenarios += status == :candidate_violation
+            unresolved_scenarios += status == :unresolved
+            passed_scenarios += status == :passed
+            normalized_margins = Float64[]
+            for context in contexts
+                margins = get(context.diagnostics,
+                    "minimum_normalized_margins", Dict())
+                append!(normalized_margins,
+                    Float64(value) for value in values(margins)
+                    if value isa Real && isfinite(value))
+            end
+            push!(rows, (
+                dataset_id=selected.dataset_id,
+                interval=interval,
+                scenario_index=scenario_index,
+                scenario_id=scenario.id,
+                role=scenario.role,
+                weight=scenario.weight,
+                timestamp=scenario.timestamp,
+                source=scenario.source,
+                generation_method=scenario.generation_method,
+                utilization_count=length(contexts),
+                status=status,
+                candidate_context_count=failed_count,
+                unresolved_context_count=unresolved_count,
+                minimum_normalized_margin=isempty(normalized_margins) ?
+                    NaN : minimum(normalized_margins),
+            ))
+        end
+    end
+
+    scenario_count = length(rows)
+    context_count = candidate_contexts + unresolved_contexts + passed_contexts
+    resolved_scenarios = candidate_scenarios + passed_scenarios
+    resolved_contexts = candidate_contexts + passed_contexts
+    scenario_frequency = resolved_scenarios == 0 ? NaN :
+        candidate_scenarios / resolved_scenarios
+    context_frequency = resolved_contexts == 0 ? NaN :
+        candidate_contexts / resolved_contexts
+    conservative_scenario_frequency = scenario_count == 0 ? NaN :
+        (candidate_scenarios + unresolved_scenarios) / scenario_count
+
+    weights_available = all(row.weight !== nothing for row in rows)
+    weighted_frequency = missing
+    weighted_conservative_frequency = missing
+    if weights_available
+        interval_estimates = Float64[]
+        interval_conservative = Float64[]
+        for interval in eachindex(selected.intervals)
+            interval_rows = [row for row in rows if row.interval == interval]
+            total_weight = sum(Float64(row.weight) for row in interval_rows)
+            resolved_weight = sum(Float64(row.weight) for row in interval_rows
+                                  if row.status != :unresolved)
+            resolved_weight > 0 && push!(interval_estimates,
+                sum(Float64(row.weight) for row in interval_rows
+                    if row.status == :candidate_violation) / resolved_weight)
+            push!(interval_conservative,
+                sum(Float64(row.weight) for row in interval_rows
+                    if row.status != :passed) / total_weight)
+        end
+        weighted_frequency = isempty(interval_estimates) ? missing :
+            sum(interval_estimates) / length(interval_estimates)
+        weighted_conservative_frequency =
+            sum(interval_conservative) / length(interval_conservative)
+    end
+
+    hoeffding_upper = missing
+    if iid_assumption
+        radius = sqrt(log(1 / (1 - confidence)) / (2 * scenario_count))
+        hoeffding_upper = min(1.0, conservative_scenario_frequency + radius)
+    end
+    outcome = candidate_scenarios > 0 ? :candidate_violations_observed :
+        unresolved_scenarios > 0 ? :inconclusive :
+        :no_candidate_violations_observed
+    metrics = Dict{String,Any}(
+        "scenario_count" => scenario_count,
+        "context_count" => context_count,
+        "passed_scenario_count" => passed_scenarios,
+        "candidate_scenario_count" => candidate_scenarios,
+        "unresolved_scenario_count" => unresolved_scenarios,
+        "passed_context_count" => passed_contexts,
+        "candidate_context_count" => candidate_contexts,
+        "unresolved_context_count" => unresolved_contexts,
+        "empirical_candidate_scenario_frequency" => scenario_frequency,
+        "empirical_candidate_context_frequency" => context_frequency,
+        "conservative_scenario_frequency" =>
+            conservative_scenario_frequency,
+        "weighted_candidate_scenario_frequency" => weighted_frequency,
+        "weighted_conservative_scenario_frequency" =>
+            weighted_conservative_frequency,
+        "confidence" => confidence,
+        "one_sided_hoeffding_upper_bound" => hoeffding_upper)
+    diagnostics = Dict{String,Any}(
+        "dataset_id" => selected.dataset_id,
+        "selected_roles" => selected_roles,
+        "iid_assumption" => iid_assumption,
+        "statistical_bound" => iid_assumption ?
+            :one_sided_hoeffding_candidate_frequency : :none,
+        "unresolved_treatment" =>
+            :counted_as_candidate_in_conservative_rate_and_bound,
+        "scenario_weights" => weights_available ? :declared_relative_weights :
+            :not_available,
+        "issue_controls" => :replayed_when_available,
+        "scenario_controls" => :adaptive_to_selected_scenario,
+        "distribution_shift_assessed" => false,
+        "global_certificate" => false,
+        "claim" => iid_assumption ?
+            :empirical_coverage_with_declared_iid_concentration_bound :
+            :empirical_coverage_only)
+    return DOECoverageResult(
+        outcome, selected_roles, verification, rows, metrics, diagnostics)
 end
 
 function _doe_first_primes(count::Int)
@@ -3001,6 +3409,8 @@ function doe_benchmark_rows(spec::DOEStudySpec,
             result.diagnostics[interval], "control_policy_signature", missing),
         issued_control_count=length(get(
             result.diagnostics[interval], "issued_control_values", Any[])),
+        scenario_dataset_id=get(
+            result.diagnostics[interval], "scenario_dataset_id", missing),
         security_scope=get(result.diagnostics[interval], "security_scope", missing),
         scenario_count=Int(get(result.diagnostics[interval], "scenario_count", 0)),
         dispatch_point_count=Int(get(result.diagnostics[interval],

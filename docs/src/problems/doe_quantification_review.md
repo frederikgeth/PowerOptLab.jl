@@ -419,10 +419,16 @@ counterexamples.
 
 ### Stage 2 — uncertainty and time
 
-1. Connect DSSE covariance/profile uncertainty and inverse-Carson candidate
-   models to typed DOE scenarios or uncertainty sets.
-2. Provide train/calibration/test time splits and out-of-sample violation
-   curves rather than in-sample scenario feasibility alone.
+1. **Typed provenance slice implemented:** `DOEScenario` and `DOEScenarioSet`
+   record scenario IDs, roles, optional relative weights, source, construction
+   method, seed, timestamp, and metadata; these fields participate in the study
+   identity. Automatic DSSE covariance/profile and inverse-Carson scenario
+   construction remains future work.
+2. **Held-out evaluation slice implemented:** role-selected coverage reports
+   per-scenario outcomes and empirical, weighted, and conservative candidate-
+   violation rates. A one-sided Hoeffding bound is emitted only after an
+   explicit i.i.d. assertion. Add time-block split helpers, violation curves,
+   calibration diagnostics, and distribution-shift tests next.
 3. Couple envelopes to storage SOC, EV energy, ramping, tap operations, and
    first-stage/recourse decisions using the package's multi-period machinery.
 4. Evaluate offered capacity, realized utilization, curtailed energy, customer
@@ -480,9 +486,11 @@ Develop the tutorials in this order:
 2. **Control recourse changes the DOE.** Compare a fixed STATCOM/tap setting,
    perfect context-dependent recourse, and a local controller. Plot both
    capacity and ex-post violations.
-3. **From DSSE uncertainty to a tested DOE.** Generate scenarios from state and
-   model uncertainty, preserve provenance, calibrate on one period, and report
-   held-out coverage on another.
+3. **Implemented synthetic first slice — From uncertainty to a tested DOE.** A
+   runnable tutorial declares calibration/test roles and provenance, allocates
+   without test leakage, and reports held-out empirical and optional i.i.d.
+   bounds. Extend it with DSSE covariance and model-uncertainty scenario
+   construction.
 4. **Fairness–efficiency over time.** Compare equal kW, nameplate-normalized,
    request-normalized, proportional, max–min, and historical-curtailment rules;
    report who benefits, the price of fairness, and sensitivity to the chosen

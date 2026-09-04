@@ -10,6 +10,9 @@ an end-to-end example and guidance on interpreting finite numerical evidence.
 ```@docs
 ConnectionPoint
 FairnessPolicy
+DOEScenario
+DOEScenarioSet
+select_doe_scenarios
 DOEControlRegistration
 DOEControlRule
 DOEControlPolicy
@@ -31,6 +34,7 @@ OperatingEnvelopeContextResult
 OperatingEnvelopeSearchResult
 DOEAdversarialSearchResult
 DOECounterexampleConfirmationResult
+DOECoverageResult
 AdversarialSearchStableOperatingEnvelopeResult
 SearchStableOperatingEnvelopeResult
 OperatingEnvelopeMultistartResult
@@ -46,6 +50,7 @@ verify_operating_envelope
 search_operating_envelope_utilizations
 search_operating_envelope_adversarial
 confirm_operating_envelope_counterexample
+evaluate_operating_envelope_coverage
 solve_adversarial_search_stable_operating_envelope
 solve_search_stable_operating_envelope
 ```

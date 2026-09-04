@@ -321,3 +321,6 @@ one row per verification context.
 See [DOE quantification: scientific review and roadmap](../problems/doe_quantification_review.md)
 for the remaining certification, uncertainty-calibration, temporal, fairness,
 and scaling research agenda.
+
+For typed calibration/test splits and empirical coverage reporting, continue to
+[DOE uncertainty provenance and held-out coverage](doe_uncertainty_coverage.md).

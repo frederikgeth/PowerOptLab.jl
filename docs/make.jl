@@ -65,6 +65,7 @@ makedocs(
             "Dynamic operating envelopes" => "tutorials/dynamic_operating_envelopes.md",
             "What does a DOE guarantee?" => "tutorials/doe_range_guarantees.md",
             "DOE research workflow" => "tutorials/doe_research_workflow.md",
+            "DOE uncertainty and held-out coverage" => "tutorials/doe_uncertainty_coverage.md",
             "Inverse Carson reconstruction" => "tutorials/inverse_carson_reconstruction.md",
             "Battery storage models" => "tutorials/battery_storage_models.md",
             "HELM versus nonlinear power flow" => "tutorials/helm_vs_nonlinear_power_flow.md",

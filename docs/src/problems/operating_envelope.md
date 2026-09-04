@@ -207,6 +207,19 @@ topology alternatives, or candidate impedance models. In particular, candidates
 or profile intervals produced by [`solve_inverse_carson`](@ref) can be
 materialized into alternative network scenarios.
 
+Use [`DOEScenario`](@ref) and [`DOEScenarioSet`](@ref) when the ensemble is part
+of a scientific experiment. They record stable IDs, train/calibration/
+validation/test/stress roles, optional relative weights, sources, construction
+methods, seeds, timestamps, and metadata. The solver includes this provenance in
+interval diagnostics, while [`DOEStudySpec`](@ref) includes it in the study
+identity.
+
+[`evaluate_operating_envelope_coverage`](@ref) selects declared roles and
+reports per-scenario outcomes plus empirical context, scenario, weighted, and
+conservative candidate-violation rates. A one-sided Hoeffding upper bound is
+returned only when the caller explicitly sets `iid_assumption=true`; weights do
+not create an i.i.d. claim and distribution shift remains unassessed.
+
 ## PV and batteries with mandatory Q-V control
 
 For realistic DER behaviour, place the converter in the network's `ibr` block

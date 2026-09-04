@@ -589,3 +589,80 @@ end
     @test !isempty(context_rows[1].minimum_normalized_margins)
     @test context_rows[1].issued_control_replay_source == :no_issued_controls
 end
+
+@testset "Operating envelope: typed scenarios and held-out coverage" begin
+    cps = [ConnectionPoint(id="d1", bus="bus1", export_max=10e3),
+           ConnectionPoint(id="d2", bus="bus2", export_max=10e3)]
+    calibration = DOEScenario(
+        id="calibration-high-load",
+        network=doe_feeder(p1=5000.0, p2=5000.0),
+        role=:calibration,
+        weight=1.0,
+        source="synthetic fixture",
+        generation_method=:deterministic_fixture,
+        seed=11,
+        timestamp=DateTime(2026, 1, 1, 12))
+    restrictive_test = DOEScenario(
+        id="test-low-load",
+        network=doe_feeder(p1=200.0, p2=200.0),
+        role=:test,
+        weight=0.7,
+        source="synthetic fixture",
+        generation_method=:held_out_fixture,
+        seed=12)
+    permissive_test = DOEScenario(
+        id="test-high-load",
+        network=doe_feeder(p1=5000.0, p2=5000.0),
+        role=:test,
+        weight=0.3,
+        source="synthetic fixture",
+        generation_method=:held_out_fixture,
+        seed=13)
+    scenarios = DOEScenarioSet(
+        [calibration, restrictive_test, permissive_test];
+        dataset_id="doe-held-out-fixture-v1",
+        metadata=Dict("license" => "synthetic"))
+    calibration_set = select_doe_scenarios(
+        scenarios; roles=:calibration)
+    test_set = select_doe_scenarios(scenarios; roles=:test)
+    @test length(calibration_set.intervals[1]) == 1
+    @test length(test_set.intervals[1]) == 2
+    @test test_set.metadata["selected_roles"] == [:test]
+
+    allocation = solve_operating_envelope(
+        calibration_set, cps; control_policy=PerfectRecourse())
+    @test allocation.diagnostics[1]["uncertainty_semantics"] ==
+          :typed_finite_scenario_set
+    @test allocation.diagnostics[1]["scenario_provenance"][1]["id"] ==
+          "calibration-high-load"
+    typed_spec = DOEStudySpec(
+        calibration_set, cps; control_policy=PerfectRecourse())
+    manifest = doe_study_manifest(typed_spec)
+    @test manifest["scenario_set_metadata"]["dataset_id"] ==
+          "doe-held-out-fixture-v1"
+    @test manifest["scenario_provenance"][1][1]["role"] == :calibration
+
+    coverage = evaluate_operating_envelope_coverage(
+        scenarios, cps, allocation;
+        roles=:test, iid_assumption=true, confidence=0.95,
+        control_policy=PerfectRecourse())
+    @test coverage.outcome == :candidate_violations_observed
+    @test coverage.metrics["scenario_count"] == 2
+    @test coverage.metrics["candidate_scenario_count"] == 1
+    @test coverage.metrics["passed_scenario_count"] == 1
+    @test coverage.metrics["weighted_candidate_scenario_frequency"] ≈ 0.7
+    @test 0.5 <= coverage.metrics["one_sided_hoeffding_upper_bound"] <= 1.0
+    @test coverage.diagnostics["iid_assumption"]
+    @test coverage.diagnostics["distribution_shift_assessed"] == false
+    @test Set(row.scenario_id for row in coverage.scenario_rows) ==
+          Set(["test-low-load", "test-high-load"])
+
+    @test_throws ArgumentError DOEScenario(
+        id="bad", network=doe_feeder(p1=1.0, p2=1.0), role=:unknown)
+    @test_throws ArgumentError DOEScenarioSet(
+        [restrictive_test, DOEScenario(
+            id="unweighted", network=doe_feeder(p1=1.0, p2=1.0), role=:test)];
+        dataset_id="incomplete-weights")
+    @test_throws ArgumentError select_doe_scenarios(
+        scenarios; roles=:validation)
+end
