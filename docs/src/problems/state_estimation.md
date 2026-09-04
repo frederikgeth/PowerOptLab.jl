@@ -163,7 +163,8 @@ se = solve_state_estimation(net, meas)
 se.primal_status            # "FEASIBLE_POINT" — trust the estimate only then
 se.bus["bus1"]["1"]["vm"]   # estimated |V| at bus1 (V); NaN if not FEASIBLE_POINT
 se.residuals                # per-measurement measured/estimated/residual/standardized
-se.observability            # (observable, n_states, rank, redundancy, min_singular, cond)
+se.observability            # (observable, n_states, rank, redundancy,
+                            #  min_singular, cond, tangent_dimension)
 se.objective                # optimal weighted-residual sum
 ```
 

@@ -243,7 +243,12 @@ end
                                     solve_pf(bonded; per_unit=false)["bus"])
     @test ob.observable === true
     @test ob.rank == ob.n_states == 8      # both conductors of both buses
-    @test ob.redundancy >= 0               # was -2 while the KCL rows were missing
+    @test ob.tangent_dimension == 4        # four real KCL rows are exact
+    # `redundancy` counts measurement rows beyond the tangent directions they
+    # identify: 6 readings, 4 identified. It was -2 while the KCL rows were
+    # missing from the diagnostic altogether.
+    @test ob.redundancy == 2
+    @test ob.min_singular > 1.0
 
     # With the source neutral unbonded the whole neutral system floats: a genuine
     # gauge freedom, and the one case here that IS rank deficient.
@@ -254,6 +259,9 @@ end
     @test of.observable === false
     @test of.rank < of.n_states
     @test of.min_singular < 1e-10
+    # More redundancy AND less observability than the bonded network: the
+    # missing direction is a gauge freedom, not a measurement gap.
+    @test of.redundancy > ob.redundancy
 end
 
 @testset "State estimation: Measurement validation" begin

@@ -275,13 +275,14 @@ Because the constrained estimator keeps ungrounded neutrals as explicit
 states, the freedom shows up in the diagnostic instead of being assumed away
 by grounding the neutral for convenience:
 
-| network | ``n_{\text{states}}`` | rank | redundancy | ``\sigma_{\min}`` |
-|---|---:|---:|---:|---:|
-| bonded source neutral | 8 | **8** | +2 | 2.67e−01 |
-| floating neutral system | 10 | **9** | +2 | 3.03e−16 |
+| network | ``n_{\text{states}}`` | rank | tangent | redundancy | ``\sigma_{\min}`` |
+|---|---:|---:|---:|---:|---:|
+| bonded source neutral | 8 | **8** | 4 | +2 | 1.35e+00 |
+| floating neutral system | 10 | **9** | 4 | +3 | 2.06e−15 |
 
 The second network has *more* redundancy and *less* observability. The missing
-direction is the gauge.
+direction is the gauge — and `redundancy` counting measurement rows beyond the
+directions they identify is exactly why it can rise while observability falls.
 
 !!! warning "Evaluate at a meaningful operating point"
     A local diagnostic depends on where it is evaluated. The same well-posed
