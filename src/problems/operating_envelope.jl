@@ -2228,6 +2228,52 @@ solve_diagnostics(result::DOECoverageShiftResult) =
      global_certificate=false)
 
 """
+    DOEUncertaintyModelSensitivityResult
+
+Descriptive comparison returned by
+[`compare_doe_uncertainty_models`](@ref). `rows` contains one coverage-curve
+record per uncertainty model and capacity scale. `pairwise_rows` contains every
+model-pair delta and, where stable scenario identities or timestamps permit,
+paired outcome-discordance counts.
+
+Pairing improves attribution of observed finite-sample differences but does not
+by itself establish a causal uncertainty-model effect or authorize a
+significance claim.
+"""
+struct DOEUncertaintyModelSensitivityResult <: AbstractSolveResult
+    outcome::Symbol
+    model_labels::Vector{String}
+    curves::Dict{String,DOECoverageCurveResult}
+    rows::Vector{NamedTuple}
+    pairwise_rows::Vector{NamedTuple}
+    diagnostics::Dict{String,Any}
+end
+
+function solve_status(result::DOEUncertaintyModelSensitivityResult)
+    statuses = [solve_status(coverage)
+        for label in result.model_labels
+        for coverage in result.curves[label].coverages]
+    return SolveStatus(
+        _termination_summary(status.termination_status for status in statuses),
+        all(status -> status.feasible, statuses) ?
+            "FEASIBLE_POINT" : "NO_SOLUTION",
+        all(status -> status.has_primal, statuses),
+        all(status -> status.feasible, statuses),
+        all(status -> status.optimal, statuses),
+        all(status -> status.publishable, statuses))
+end
+
+solve_diagnostics(result::DOEUncertaintyModelSensitivityResult) =
+    (outcome=result.outcome,
+     model_count=length(result.model_labels),
+     scale_count=length(first(values(result.curves)).scales),
+     paired_comparison_count=length(Set(
+         (row.reference_label, row.comparison_label)
+         for row in result.pairwise_rows
+         if row.evidence_design == :paired)),
+     global_certificate=false)
+
+"""
     SearchStableOperatingEnvelopeResult
 
 Result of [`solve_search_stable_operating_envelope`](@ref). It retains the
@@ -4646,6 +4692,324 @@ function compare_doe_coverage_shift(
         "claim" => :descriptive_held_out_performance_comparison)
     return DOECoverageShiftResult(
         outcome, reference, shifted, deltas, diagnostics)
+end
+
+function _doe_uncertainty_model_entries(models)
+    raw_entries = models isa AbstractDict ? collect(pairs(models)) :
+        models isa AbstractVector ? collect(models) : throw(ArgumentError(
+            "models must be a dictionary or vector of label => DOEScenarioSet pairs"))
+    length(raw_entries) >= 2 || throw(ArgumentError(
+        "uncertainty-model sensitivity needs at least two models"))
+    entries = Pair{String,DOEScenarioSet}[]
+    for entry in raw_entries
+        entry isa Pair || throw(ArgumentError(
+            "every uncertainty model must be provided as label => DOEScenarioSet"))
+        first(entry) isa Union{AbstractString,Symbol} || throw(ArgumentError(
+            "uncertainty-model labels must be strings or symbols"))
+        label = String(first(entry))
+        isempty(label) && throw(ArgumentError(
+            "uncertainty-model labels must be non-empty"))
+        last(entry) isa DOEScenarioSet || throw(ArgumentError(
+            "uncertainty model '$label' is not a DOEScenarioSet"))
+        push!(entries, label => last(entry))
+    end
+    labels = first.(entries)
+    length(unique(labels)) == length(labels) || throw(ArgumentError(
+        "uncertainty-model labels must be unique"))
+    return entries
+end
+
+function _doe_coverage_pair_map(coverage::DOECoverageResult,
+                                method::Symbol,
+                                pair_key::Union{Nothing,String};
+                                strict::Bool)
+    mapping = Dict{Any,NamedTuple}()
+    for row in coverage.scenario_rows
+        key = if method == :uncertainty_sample_id
+            if !haskey(row.metadata, "uncertainty_sample_id")
+                strict && throw(ArgumentError(
+                    "scenario '$(row.scenario_id)' has no uncertainty_sample_id metadata"))
+                return nothing
+            end
+            (row.interval,
+             _doe_canonical(row.metadata["uncertainty_sample_id"]))
+        elseif method == :timestamp
+            if row.timestamp === nothing
+                strict && throw(ArgumentError(
+                    "scenario '$(row.scenario_id)' has no timestamp for pairing"))
+                return nothing
+            end
+            (row.interval, row.timestamp)
+        elseif method == :scenario_id
+            (row.interval, row.scenario_id)
+        elseif method == :metadata
+            pair_key === nothing && throw(ArgumentError(
+                "pair_key is required when pairing=:metadata"))
+            if !haskey(row.metadata, pair_key)
+                strict && throw(ArgumentError(
+                    "scenario '$(row.scenario_id)' has no metadata pair key '$pair_key'"))
+                return nothing
+            end
+            (row.interval, _doe_canonical(row.metadata[pair_key]))
+        else
+            throw(ArgumentError("unsupported pairing method :$method"))
+        end
+        if haskey(mapping, key)
+            strict && throw(ArgumentError(
+                "pairing method :$method does not uniquely identify scenarios within an interval"))
+            return nothing
+        end
+        mapping[key] = row
+    end
+    return mapping
+end
+
+function _doe_coverage_pairing(reference::DOECoverageResult,
+                               comparison::DOECoverageResult;
+                               pairing::Symbol,
+                               pair_key::Union{Nothing,String})
+    pairing in (:auto, :none, :uncertainty_sample_id, :timestamp,
+                :scenario_id, :metadata) || throw(ArgumentError(
+        "pairing must be :auto, :none, :uncertainty_sample_id, :timestamp, :scenario_id, or :metadata"))
+    if pairing == :none
+        return (method=:none, reference=Dict{Any,NamedTuple}(),
+                comparison=Dict{Any,NamedTuple}(), keys=Any[],
+                evidence_design=:unpaired)
+    end
+    if pairing == :metadata && pair_key === nothing
+        throw(ArgumentError("pair_key is required when pairing=:metadata"))
+    end
+    candidates = pairing == :auto ?
+        (:uncertainty_sample_id, :timestamp, :scenario_id) : (pairing,)
+    best = nothing
+    for method in candidates
+        strict = pairing != :auto
+        left = _doe_coverage_pair_map(
+            reference, method, pair_key; strict=strict)
+        right = _doe_coverage_pair_map(
+            comparison, method, pair_key; strict=strict)
+        (left === nothing || right === nothing) && continue
+        matched = collect(intersect(Set(keys(left)), Set(keys(right))))
+        sort!(matched; by=_doe_canonical)
+        design = isempty(matched) ? :unpaired :
+            length(matched) == length(left) == length(right) ?
+                :paired : :partially_paired
+        candidate = (method=method, reference=left, comparison=right,
+                     keys=matched, evidence_design=design)
+        if best === nothing || length(candidate.keys) > length(best.keys)
+            best = candidate
+        end
+        design == :paired && break
+    end
+    if best === nothing || (pairing == :auto && isempty(best.keys))
+        return (method=:none, reference=Dict{Any,NamedTuple}(),
+                comparison=Dict{Any,NamedTuple}(), keys=Any[],
+                evidence_design=:unpaired)
+    end
+    return best
+end
+
+function _doe_model_set_identity(scenarios::DOEScenarioSet)
+    provenance = _scenario_provenance_groups(scenarios)
+    return _doe_sha256(Dict{String,Any}(
+        "dataset_id" => scenarios.dataset_id,
+        "metadata" => scenarios.metadata,
+        "scenario_provenance" => provenance))
+end
+
+"""
+    compare_doe_uncertainty_models(models, connection_points, capacities;
+        scales=(0.5, 0.75, 1.0), pairing=:auto, pair_key=nothing,
+        tolerance=0.0, kwargs...)
+
+Evaluate the same issued capacities, utilization declaration, control policy,
+solver settings, and scale grid against two or more labelled typed scenario
+sets. `models` is a dictionary or vector of `label => DOEScenarioSet` pairs.
+Coverage keywords such as `roles`, `utilizations`, and `iid_assumption` are
+forwarded unchanged to every model.
+
+`pairing=:auto` tries materialized uncertainty-sample IDs, unique timestamps,
+then interval/scenario IDs. Use `pairing=:none` for deliberately independent
+ensembles, or select `:uncertainty_sample_id`, `:timestamp`, `:scenario_id`, or
+`:metadata` explicitly; metadata pairing also requires `pair_key`. Paired and
+partially paired comparisons report conservative status discordance, counting
+unresolved outcomes as candidate violations.
+
+The result is descriptive finite-ensemble sensitivity evidence. It does not
+test that distributions differ, establish that the uncertainty model caused an
+observed difference, or verify that capacities were selected independently of
+the evaluation ensembles. Pairwise deltas are `comparison - reference` in the
+provided model order, and `outcome` summarizes conservative-frequency
+differences at the largest declared scale. Prefer a vector of pairs when that
+directional order is part of the experimental design.
+"""
+function compare_doe_uncertainty_models(
+        models,
+        connection_points::AbstractVector{ConnectionPoint}, capacities;
+        scales=(0.5, 0.75, 1.0),
+        pairing::Symbol=:auto,
+        pair_key=nothing,
+        tolerance::Float64=0.0,
+        kwargs...)
+    entries = _doe_uncertainty_model_entries(models)
+    pairing in (:auto, :none, :uncertainty_sample_id, :timestamp,
+                :scenario_id, :metadata) || throw(ArgumentError(
+        "pairing must be :auto, :none, :uncertainty_sample_id, :timestamp, :scenario_id, or :metadata"))
+    isfinite(tolerance) && tolerance >= 0 || throw(ArgumentError(
+        "tolerance must be finite and non-negative"))
+    pair_key === nothing || pair_key isa Union{AbstractString,Symbol} ||
+        throw(ArgumentError("pair_key must be a string or symbol"))
+    pair_key_value = pair_key === nothing ? nothing : String(pair_key)
+    pair_key_value === nothing || !isempty(pair_key_value) ||
+        throw(ArgumentError("pair_key must be non-empty when provided"))
+    pairing == :metadata && pair_key_value === nothing && throw(ArgumentError(
+        "pair_key is required when pairing=:metadata"))
+
+    labels = first.(entries)
+    curves = Dict{String,DOECoverageCurveResult}()
+    rows = NamedTuple[]
+    model_records = Dict{String,Any}[]
+    for (label, scenarios) in entries
+        curve = evaluate_operating_envelope_coverage_curve(
+            scenarios, connection_points, capacities;
+            scales=scales, kwargs...)
+        curves[label] = curve
+        scenario_set_id = _doe_model_set_identity(scenarios)
+        for row in curve.rows
+            push!(rows, (
+                model_label=label,
+                dataset_id=scenarios.dataset_id,
+                scenario_set_id=scenario_set_id,
+                row...))
+        end
+        push!(model_records, Dict{String,Any}(
+            "label" => label,
+            "dataset_id" => scenarios.dataset_id,
+            "scenario_set_id" => scenario_set_id,
+            "metadata" => deepcopy(scenarios.metadata),
+            "selected_roles" => first(curve.coverages).selected_roles,
+            "selected_scenario_count" =>
+                first(curve.coverages).metrics["scenario_count"]))
+    end
+    common_scales = copy(curves[first(labels)].scales)
+    all(curves[label].scales == common_scales for label in labels) ||
+        error("internal error: uncertainty-model scale grids differ")
+
+    pairwise_rows = NamedTuple[]
+    pairing_records = Dict{String,Any}[]
+    for reference_index in 1:length(labels) - 1
+        for comparison_index in reference_index + 1:length(labels)
+            reference_label = labels[reference_index]
+            comparison_label = labels[comparison_index]
+            reference_curve = curves[reference_label]
+            comparison_curve = curves[comparison_label]
+            pairing_info = _doe_coverage_pairing(
+                first(reference_curve.coverages),
+                first(comparison_curve.coverages);
+                pairing=pairing, pair_key=pair_key_value)
+            push!(pairing_records, Dict{String,Any}(
+                "reference_label" => reference_label,
+                "comparison_label" => comparison_label,
+                "pairing_method" => pairing_info.method,
+                "evidence_design" => pairing_info.evidence_design,
+                "matched_scenario_count" => length(pairing_info.keys),
+                "reference_scenario_count" =>
+                    length(first(reference_curve.coverages).scenario_rows),
+                "comparison_scenario_count" =>
+                    length(first(comparison_curve.coverages).scenario_rows)))
+
+            for scale_index in eachindex(common_scales)
+                reference_coverage = reference_curve.coverages[scale_index]
+                comparison_coverage = comparison_curve.coverages[scale_index]
+                current_pairing = _doe_coverage_pairing(
+                    reference_coverage, comparison_coverage;
+                    pairing=pairing_info.method,
+                    pair_key=pair_key_value)
+                matched_keys = current_pairing.keys
+                reference_candidates = [
+                    current_pairing.reference[key].status != :passed
+                    for key in matched_keys]
+                comparison_candidates = [
+                    current_pairing.comparison[key].status != :passed
+                    for key in matched_keys]
+                passed_to_candidate = count(
+                    index -> !reference_candidates[index] &&
+                        comparison_candidates[index], eachindex(matched_keys))
+                candidate_to_passed = count(
+                    index -> reference_candidates[index] &&
+                        !comparison_candidates[index], eachindex(matched_keys))
+                agreement_count = count(
+                    index -> reference_candidates[index] ==
+                        comparison_candidates[index], eachindex(matched_keys))
+                reference_frequency = reference_coverage.metrics[
+                    "conservative_scenario_frequency"]
+                comparison_frequency = comparison_coverage.metrics[
+                    "conservative_scenario_frequency"]
+                push!(pairwise_rows, (
+                    reference_label=reference_label,
+                    comparison_label=comparison_label,
+                    scale=common_scales[scale_index],
+                    reference_conservative_scenario_frequency=
+                        reference_frequency,
+                    comparison_conservative_scenario_frequency=
+                        comparison_frequency,
+                    conservative_scenario_frequency_delta=
+                        comparison_frequency - reference_frequency,
+                    pairing_method=pairing_info.method,
+                    pair_key=pair_key_value,
+                    evidence_design=pairing_info.evidence_design,
+                    matched_scenario_count=length(matched_keys),
+                    unmatched_reference_count=
+                        length(reference_coverage.scenario_rows) -
+                        length(matched_keys),
+                    unmatched_comparison_count=
+                        length(comparison_coverage.scenario_rows) -
+                        length(matched_keys),
+                    paired_passed_to_candidate_count=passed_to_candidate,
+                    paired_candidate_to_passed_count=candidate_to_passed,
+                    paired_conservative_agreement_count=agreement_count,
+                    paired_mean_conservative_outcome_delta=
+                        isempty(matched_keys) ? missing :
+                        (passed_to_candidate - candidate_to_passed) /
+                        length(matched_keys),
+                    statistical_test=:not_performed,
+                ))
+            end
+        end
+    end
+
+    terminal_rows = [row for row in pairwise_rows
+                     if row.scale == last(common_scales)]
+    observed_difference = any(
+        abs(row.conservative_scenario_frequency_delta) > tolerance
+        for row in terminal_rows)
+    outcome = observed_difference ? :observed_model_sensitivity :
+        :no_observed_model_sensitivity
+    diagnostics = Dict{String,Any}(
+        "model_count" => length(labels),
+        "models" => model_records,
+        "scale_count" => length(common_scales),
+        "scales" => copy(common_scales),
+        "comparison_scale" => last(common_scales),
+        "pairing_requested" => pairing,
+        "pair_key" => pair_key_value,
+        "pairings" => pairing_records,
+        "tolerance" => tolerance,
+        "common_capacities" => true,
+        "common_connection_points" => true,
+        "common_evaluation_keywords" => true,
+        "capacity_allocation_reoptimized" => false,
+        "issue_controls" => capacities isa OperatingEnvelopeResult ?
+            :retained_from_issued_result : :not_available,
+        "capacity_selection_independent_of_evaluation_models" => :not_verified,
+        "statistical_test" => :not_performed,
+        "distribution_shift_detected" => false,
+        "uncertainty_model_effect_established" => false,
+        "observed_performance_difference" => observed_difference,
+        "global_certificate" => false,
+        "claim" => :descriptive_finite_ensemble_uncertainty_model_sensitivity)
+    return DOEUncertaintyModelSensitivityResult(
+        outcome, labels, curves, rows, pairwise_rows, diagnostics)
 end
 
 function _doe_first_primes(count::Int)

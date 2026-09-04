@@ -87,7 +87,8 @@ test_low = DOEScenario(
     metadata=Dict(
         "site_id" => "synthetic-feeder",
         "aggregate_demand_kw" => 0.4,
-        "predicted_violation_probability" => 0.75),
+        "predicted_violation_probability" => 0.75,
+        "uncertainty_sample_id" => "case-low"),
 )
 
 test_high = DOEScenario(
@@ -102,7 +103,8 @@ test_high = DOEScenario(
     metadata=Dict(
         "site_id" => "synthetic-feeder",
         "aggregate_demand_kw" => 9.6,
-        "predicted_violation_probability" => 0.15),
+        "predicted_violation_probability" => 0.15,
+        "uncertainty_sample_id" => "case-high"),
 )
 
 scenarios = DOEScenarioSet(
@@ -249,6 +251,65 @@ capacity limit. A decrease in candidate count at a larger scale is preserved:
 it can arise from genuine physical non-monotonicity, discrete or control
 effects, or irregular local nonlinear solves, and should be investigated rather
 than silently smoothed.
+
+## Compare uncertainty-model assumptions
+
+Hold the issued allocation and evaluation policy fixed while changing only the
+scenario construction. Here the propagated uncertainty-sample IDs denote paired
+underlying forecast cases materialized by a deliberately more restrictive
+alternative model:
+
+```julia
+restrictive_model = DOEScenarioSet([
+    DOEScenario(
+        id="test-low-load",
+        network=coverage_feeder(100.0, 100.0),
+        role=:stress,
+        weight=0.7,
+        source="synthetic restrictive model",
+        generation_method=:alternative_uncertainty_model,
+        timestamp=DateTime(2026, 1, 15, 12),
+        metadata=Dict("uncertainty_sample_id" => "case-low")),
+    DOEScenario(
+        id="test-high-load",
+        network=coverage_feeder(100.0, 100.0),
+        role=:test,
+        weight=0.3,
+        source="synthetic restrictive model",
+        generation_method=:alternative_uncertainty_model,
+        timestamp=DateTime(2026, 1, 15, 12),
+        metadata=Dict("uncertainty_sample_id" => "case-high")),
+]; dataset_id="doe-restrictive-model-v1")
+
+model_sensitivity = compare_doe_uncertainty_models(
+    ["declared" => scenarios,
+     "restrictive" => restrictive_model],
+    cps, allocation;
+    scales=(0.5, 0.75, 1.0),
+    roles=(:test, :stress),
+    utilizations=:bound_point,
+    control_policy=PerfectRecourse(),
+    pairing=:auto)
+
+model_sensitivity.rows
+model_sensitivity.pairwise_rows
+model_sensitivity.diagnostics["pairings"]
+```
+
+The long-form rows are suitable for plotting capacity scale against candidate-
+violation frequency. Pairwise rows report aggregate conservative-frequency
+deltas and, for matched cases, pass-to-candidate and candidate-to-pass
+discordance counts. Automatic pairing prefers propagated uncertainty-sample
+IDs, then unique timestamps, then interval-local scenario IDs. Use
+`pairing=:none` for independent Monte Carlo ensembles, or
+`pairing=:metadata, pair_key="forecast_case_id"` when the study defines its own
+stable pairing unit.
+
+The comparison deliberately reports `statistical_test=:not_performed` and
+`uncertainty_model_effect_established=false`. Common inputs remove several
+avoidable confounders, but they do not prove that the uncertainty model caused
+the observed difference, that either model is well calibrated, or that the
+issued capacity was selected independently of these evaluation sets.
 
 ## Compare reference and shifted conditions
 

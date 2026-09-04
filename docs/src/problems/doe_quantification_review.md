@@ -448,8 +448,12 @@ counterexamples.
    treatment, and independence-conditional concentration intervals. A first
    temporal shift design preserves contiguous serial order through circular
    window shifts, checks ordering/spacing, and requires an explicit invariance
-   assertion stronger than stationarity. Add seasonal/block resampling and
-   estimator-specific scenario materializers next.
+   assertion stronger than stationarity. An uncertainty-model sensitivity
+   layer now holds issued capacities and evaluation settings fixed across
+   labelled scenario constructions, preserving paired discordance when stable
+   identities exist and labelling independent ensembles unpaired. It makes no
+   causal model-effect or distribution-shift claim. Add seasonal/block
+   resampling and estimator-specific scenario materializers next.
 3. Couple envelopes to storage SOC, EV energy, ramping, tap operations, and
    first-stage/recourse decisions using the package's multi-period machinery.
 4. Evaluate offered capacity, realized utilization, curtailed energy, customer
@@ -511,9 +515,10 @@ Develop the tutorials in this order:
    runnable tutorial declares calibration/test roles and provenance, allocates
    without test leakage, and reports held-out empirical and optional i.i.d.
    bounds. It now demonstrates reproducible covariance draws and explicit
-   box-conditioned physical support. Extend it with empirical DSSE covariance,
+   box-conditioned physical support, plus paired and unpaired uncertainty-model
+   sensitivity semantics. Extend it with empirical DSSE residuals,
    non-Gaussian/model-uncertainty construction, and sensitivity to the support
-   rule.
+   rule using real data.
 4. **Fairness–efficiency over time.** Compare equal kW, nameplate-normalized,
    request-normalized, proportional, max–min, and historical-curtailment rules;
    report who benefits, the price of fairness, and sensitivity to the chosen

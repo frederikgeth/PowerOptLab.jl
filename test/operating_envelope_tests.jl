@@ -748,7 +748,9 @@ end
         source="synthetic fixture",
         generation_method=:held_out_fixture,
         seed=12,
-        metadata=Dict("predicted_violation_probability" => 0.8))
+        metadata=Dict(
+            "predicted_violation_probability" => 0.8,
+            "uncertainty_sample_id" => "case-low"))
     permissive_test = DOEScenario(
         id="test-high-load",
         network=doe_feeder(p1=5000.0, p2=5000.0),
@@ -757,7 +759,9 @@ end
         source="synthetic fixture",
         generation_method=:held_out_fixture,
         seed=13,
-        metadata=Dict("predicted_violation_probability" => 0.2))
+        metadata=Dict(
+            "predicted_violation_probability" => 0.2,
+            "uncertainty_sample_id" => "case-high"))
     scenarios = DOEScenarioSet(
         [calibration, restrictive_test, permissive_test];
         dataset_id="doe-held-out-fixture-v1",
@@ -879,6 +883,78 @@ end
           (shift.outcome == :higher_candidate_frequency)
     @test shift.diagnostics["distribution_shift_test"] == :not_performed
     @test shift.diagnostics["distribution_shift_detected"] == false
+
+    restrictive_model = DOEScenarioSet([
+        DOEScenario(
+            id="test-low-load",
+            network=doe_feeder(p1=100.0, p2=100.0),
+            role=:stress, weight=0.7,
+            source="paired restrictive fixture",
+            generation_method=:alternative_uncertainty_model,
+            timestamp=DateTime(2026, 1, 15, 12),
+            metadata=Dict("uncertainty_sample_id" => "case-low")),
+        DOEScenario(
+            id="test-high-load",
+            network=doe_feeder(p1=100.0, p2=100.0),
+            role=:test, weight=0.3,
+            source="paired restrictive fixture",
+            generation_method=:alternative_uncertainty_model,
+            timestamp=DateTime(2026, 1, 15, 12),
+            metadata=Dict("uncertainty_sample_id" => "case-high")),
+    ]; dataset_id="restrictive-model-fixture")
+    model_sensitivity = compare_doe_uncertainty_models(
+        ["declared" => scenarios, "restrictive" => restrictive_model],
+        cps, allocation;
+        scales=(1.0, 0.5), roles=(:test, :stress),
+        control_policy=PerfectRecourse())
+    @test model_sensitivity.model_labels == ["declared", "restrictive"]
+    @test model_sensitivity.outcome == :observed_model_sensitivity
+    @test Set(keys(model_sensitivity.curves)) ==
+          Set(["declared", "restrictive"])
+    @test length(model_sensitivity.rows) == 4
+    @test length(model_sensitivity.pairwise_rows) == 2
+    @test all(row.evidence_design == :paired
+              for row in model_sensitivity.pairwise_rows)
+    @test all(row.pairing_method == :uncertainty_sample_id
+              for row in model_sensitivity.pairwise_rows)
+    terminal_sensitivity = only(
+        row for row in model_sensitivity.pairwise_rows if row.scale == 1.0)
+    @test terminal_sensitivity.matched_scenario_count == 2
+    @test terminal_sensitivity.unmatched_reference_count == 0
+    @test terminal_sensitivity.unmatched_comparison_count == 0
+    @test terminal_sensitivity.conservative_scenario_frequency_delta > 0
+    @test terminal_sensitivity.paired_passed_to_candidate_count == 1
+    @test terminal_sensitivity.paired_candidate_to_passed_count == 0
+    @test terminal_sensitivity.paired_mean_conservative_outcome_delta == 0.5
+    @test model_sensitivity.diagnostics["common_capacities"]
+    @test !model_sensitivity.diagnostics[
+        "capacity_allocation_reoptimized"]
+    @test model_sensitivity.diagnostics["statistical_test"] == :not_performed
+    @test !model_sensitivity.diagnostics[
+        "uncertainty_model_effect_established"]
+    @test !isempty(solve_status(model_sensitivity).termination_status)
+    @test solve_diagnostics(model_sensitivity).paired_comparison_count == 1
+
+    independent_model = DOEScenarioSet([
+        DOEScenario(id="independent-a",
+            network=doe_feeder(p1=100.0, p2=100.0), role=:test,
+            source="independent fixture"),
+        DOEScenario(id="independent-b",
+            network=doe_feeder(p1=5000.0, p2=5000.0), role=:stress,
+            source="independent fixture"),
+    ]; dataset_id="independent-model-fixture")
+    unpaired_sensitivity = compare_doe_uncertainty_models(
+        ["declared" => scenarios, "independent" => independent_model],
+        cps, allocation;
+        scales=(1.0,), roles=(:test, :stress),
+        control_policy=PerfectRecourse())
+    unpaired_row = only(unpaired_sensitivity.pairwise_rows)
+    @test unpaired_row.evidence_design == :unpaired
+    @test unpaired_row.pairing_method == :none
+    @test unpaired_row.matched_scenario_count == 0
+    @test unpaired_row.paired_mean_conservative_outcome_delta === missing
+    @test unpaired_sensitivity.diagnostics[
+        "capacity_selection_independent_of_evaluation_models"] == :not_verified
 
     historical = DOEScenarioSet([
         DOEScenario(id="history-1", network=doe_feeder(p1=1000.0, p2=1000.0),
@@ -1119,6 +1195,16 @@ end
         group_overlap_policy=:unknown)
     @test_throws ArgumentError evaluate_operating_envelope_coverage_curve(
         scenarios, cps, allocation; scales=(-0.1,))
+    @test_throws ArgumentError compare_doe_uncertainty_models(
+        ["only" => scenarios], cps, allocation)
+    @test_throws ArgumentError compare_doe_uncertainty_models(
+        ["same" => scenarios, "same" => scenarios], cps, allocation)
+    @test_throws ArgumentError compare_doe_uncertainty_models(
+        ["left" => scenarios, "right" => scenarios], cps, allocation;
+        pairing=:unknown)
+    @test_throws ArgumentError compare_doe_uncertainty_models(
+        ["left" => scenarios, "right" => scenarios], cps, allocation;
+        pairing=:metadata)
     @test_throws ArgumentError DOEProbabilityObservation(
         id="bad-probability", predicted_violation_probability=1.1,
         observed_violation=false)

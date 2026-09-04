@@ -244,6 +244,13 @@ held-out evaluation over a finite capacity-scale grid while retaining recorded
 issue-time controls. [`compare_doe_coverage_shift`](@ref) describes performance
 deltas between two evaluated ensembles without labelling them as statistical
 evidence that their generating distributions differ.
+[`compare_doe_uncertainty_models`](@ref) applies one issued envelope and one
+evaluation declaration to multiple labelled scenario sets. It returns long-form
+coverage curves and pairwise deltas, classifying comparisons as paired,
+partially paired, or unpaired from explicit sample identities, timestamps,
+scenario IDs, or a caller-selected metadata key. Pairing adds finite-sample
+discordance evidence; it does not establish a causal model effect or verify
+that the evaluation sets were independent of capacity selection.
 [`test_doe_covariate_shift`](@ref) adds pooled-scale multivariate energy
 distance and per-feature effects for explicitly named numeric metadata. Its
 permutation p-value is disabled unless the caller asserts scenario- or
