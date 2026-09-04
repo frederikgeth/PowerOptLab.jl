@@ -29,6 +29,7 @@ OperatingEnvelopeResult
 OperatingEnvelopeVerification
 OperatingEnvelopeContextResult
 OperatingEnvelopeSearchResult
+DOEAdversarialSearchResult
 SearchStableOperatingEnvelopeResult
 OperatingEnvelopeMultistartResult
 ```
@@ -41,5 +42,6 @@ solve_operating_envelope_multistart
 compare_operating_envelope_policies
 verify_operating_envelope
 search_operating_envelope_utilizations
+search_operating_envelope_adversarial
 solve_search_stable_operating_envelope
 ```

@@ -173,11 +173,13 @@ export ConnectionPoint, FairnessPolicy, DOEControlRegistration,
        doe_context_benchmark_rows,
        solve_operating_envelope, solve_operating_envelope_multistart,
        verify_operating_envelope, search_operating_envelope_utilizations,
+       search_operating_envelope_adversarial,
        solve_search_stable_operating_envelope,
        compare_operating_envelope_policies,
        OperatingEnvelopeResult, OperatingEnvelopeVerification,
        OperatingEnvelopeContextResult, OperatingEnvelopeSearchResult,
-       SearchStableOperatingEnvelopeResult, OperatingEnvelopeMultistartResult
+       DOEAdversarialSearchResult, SearchStableOperatingEnvelopeResult,
+       OperatingEnvelopeMultistartResult
 
 # Post-OPF static voltage operability (first slice: native ybus load scope)
 export OperabilitySpec, OperabilityCheck, OperabilityModelError, OperabilityResult,

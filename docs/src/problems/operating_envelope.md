@@ -41,8 +41,11 @@ status are recorded in `result.diagnostics`.
 
 Diagnostics also report worst tested voltage, ampacity and negative-sequence
 margins, their network locations, and constraints within reporting tolerance of
-binding. For `security=:corners`, these are aggregated across every scenario and
-corner rather than only the displayed representative snapshot.
+binding. `minimum_margins` retains physical units; the corresponding
+`minimum_normalized_margins` divides each margin by its declared limit so points
+can be ranked within and across these constraint families. For
+`security=:corners`, the margins are aggregated across every scenario and corner
+rather than only the displayed representative snapshot.
 
 The machine-readable claim metadata includes:
 
@@ -113,6 +116,10 @@ single offending context.
 [`search_operating_envelope_utilizations`](@ref) verifies a deterministic Halton
 set inside the advertised box. Its outcomes are deliberately limited to
 `:search_stable`, `:candidate_counterexample`, and `:inconclusive`.
+[`search_operating_envelope_adversarial`](@ref) adds deterministic coordinate
+refinement around the points with the smallest normalized constraint headroom.
+It is a more targeted falsification heuristic, but it still searches only a
+finite set and does not prove that its worst point is globally worst.
 [`solve_search_stable_operating_envelope`](@ref) adds the screened set to a
 counterexample-guided allocation loop. Neither API reports a global certificate.
 

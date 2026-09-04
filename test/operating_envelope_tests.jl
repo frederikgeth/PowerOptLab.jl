@@ -425,6 +425,7 @@ end
     @test explicit.diagnostics[1]["security_scope"] ==
           :explicit_utilization_points
     @test explicit.diagnostics[1]["dispatch_points_per_scenario"] == 3
+    @test haskey(explicit.diagnostics[1], "minimum_normalized_margins")
     @test_throws ArgumentError solve_operating_envelope(net, cps;
         security=:corners, utilizations=[[1.0, 1.0]])
 
@@ -445,6 +446,53 @@ end
     @test !isempty(unsafe.candidate_contexts)
     @test unsafe.diagnostics["claim"] ==
           :candidate_violation_requires_confirmation
+
+    adversarial = search_operating_envelope_adversarial(
+        net, cps, conservative; seed_samples=1,
+        refinement_rounds=1, restarts=1, initial_step=0.2)
+    @test adversarial.outcome == :search_stable
+    @test length(adversarial.verifications) == 2
+    @test length(adversarial.utilization_points) > 3
+    @test all(isfinite, adversarial.point_scores)
+    @test adversarial.worst_interval == 1
+    @test adversarial.worst_context !== nothing
+    @test adversarial.diagnostics["score_definition"] ==
+          :negative_minimum_declared_normalized_constraint_margin
+    @test !solve_diagnostics(adversarial).global_certificate
+
+    adversarial_unsafe = search_operating_envelope_adversarial(
+        net, cps, Dict("d1" => 10e3, "d2" => 10e3);
+        seed_samples=0, refinement_rounds=2)
+    @test adversarial_unsafe.outcome == :candidate_counterexample
+    @test length(adversarial_unsafe.verifications) == 1
+    @test !isempty(adversarial_unsafe.candidate_contexts)
+    @test adversarial_unsafe.diagnostics["global_certificate"] == false
+    @test_throws ArgumentError search_operating_envelope_adversarial(
+        net, cps, conservative; initial_step=0.0)
+
+    # A balanced three-phase upper point satisfies a tight negative-sequence
+    # limit, while partial utilization breaks the balance. This is the key
+    # range-safety failure that a bound-point allocation cannot reveal.
+    unbalanced_net = doe_unbalanced_feeder(vneg_max=1.0)
+    phase_cps = [ConnectionPoint(
+        id=string(phase), bus="b1", phase_terminals=[string(phase)],
+        neutral="n", export_max=20e3) for phase in 1:3]
+    balanced_bound = solve_operating_envelope(
+        unbalanced_net, phase_cps; security=:bound_point,
+        control_policy=PerfectRecourse())
+    @test all(isfinite, balanced_bound.total_capacity)
+    @test verify_operating_envelope(
+        unbalanced_net, phase_cps, balanced_bound;
+        utilizations=:bound_point,
+        control_policy=PerfectRecourse()).feasible == [true]
+    range_failure = search_operating_envelope_adversarial(
+        unbalanced_net, phase_cps, balanced_bound;
+        seed_samples=0, refinement_rounds=1, restarts=2,
+        initial_step=0.5, control_policy=PerfectRecourse())
+    @test range_failure.outcome == :candidate_counterexample
+    @test length(range_failure.verifications) == 2
+    @test any(context -> any(x -> 0 < x < 1, context.utilization),
+              range_failure.candidate_contexts)
 
     adaptive = solve_search_stable_operating_envelope(
         net, cps; samples_per_round=2, max_rounds=2)
@@ -505,4 +553,5 @@ end
         benchmark_spec, verification)
     @test length(context_rows) == 1
     @test context_rows[1].replay_feasible === true
+    @test !isempty(context_rows[1].minimum_normalized_margins)
 end

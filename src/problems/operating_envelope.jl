@@ -535,6 +535,40 @@ solve_diagnostics(result::OperatingEnvelopeSearchResult) =
      global_certificate=false)
 
 """
+    DOEAdversarialSearchResult
+
+Result of [`search_operating_envelope_adversarial`](@ref). The search starts
+from a deterministic coverage set and performs coordinate refinement around
+the utilization points with the smallest normalized network-constraint
+headroom. It retains every joint verification round and the final score for
+each tested point.
+
+This is a black-box falsification heuristic. `outcome=:search_stable` means no
+counterexample was found within the recorded budget; it is not a continuous-set
+or global-optimality certificate.
+"""
+struct DOEAdversarialSearchResult <: AbstractSolveResult
+    outcome::Symbol
+    utilization_points::Vector{Vector{Float64}}
+    point_scores::Vector{Float64}
+    verifications::Vector{OperatingEnvelopeVerification}
+    candidate_contexts::Vector{OperatingEnvelopeContextResult}
+    worst_interval::Union{Nothing,Int}
+    worst_context::Union{Nothing,OperatingEnvelopeContextResult}
+    diagnostics::Dict{String,Any}
+end
+
+solve_status(result::DOEAdversarialSearchResult) =
+    isempty(result.verifications) ?
+        SolveStatus("NOT_RUN", "NO_SOLUTION", false, false, false, false) :
+        solve_status(last(result.verifications))
+solve_diagnostics(result::DOEAdversarialSearchResult) =
+    (outcome=result.outcome,
+     tested_point_count=length(result.utilization_points),
+     rounds=length(result.verifications),
+     global_certificate=false)
+
+"""
     SearchStableOperatingEnvelopeResult
 
 Result of [`solve_search_stable_operating_envelope`](@ref). It retains the
@@ -851,11 +885,15 @@ end
 _has_primal(model) = _publishable(_solve_outcome(model))
 
 function _result_margins(result, net)
-    best = Dict{String,Tuple{Float64,String}}()
-    consider!(kind, margin, label) = begin
-        isfinite(margin) || return
-        if !haskey(best, kind) || margin < best[kind][1]
-            best[kind] = (margin, label)
+    # Store (normalized margin, physical margin, location). Normalization by the
+    # corresponding declared limit makes different instances of one constraint
+    # family comparable while preserving physical-unit margins for reporting.
+    best = Dict{String,Tuple{Float64,Float64,String}}()
+    consider!(kind, margin, label, scale) = begin
+        isfinite(margin) && isfinite(scale) && scale > 0 || return
+        normalized = margin / scale
+        if !haskey(best, kind) || normalized < best[kind][1]
+            best[kind] = (normalized, margin, label)
         end
     end
 
@@ -878,7 +916,8 @@ function _result_margins(result, net)
                 haskey(rb, term) || continue
                 vm = Float64(rb[term]["vm"])
                 margin = sense == :lower ? vm - Float64(limit) : Float64(limit) - vm
-                consider!("voltage", margin, "bus:$bus_id:$term:$field")
+                consider!("voltage", margin, "bus:$bus_id:$term:$field",
+                          max(abs(Float64(limit)), eps(Float64)))
             end
         end
 
@@ -898,7 +937,8 @@ function _result_margins(result, net)
             a = cis(2pi/3)
             V2 = (V[1] + a^2*V[2] + a*V[3]) / 3
             consider!("negative_sequence", Float64(vneg_max) - abs(V2),
-                      "bus:$bus_id:vneg_max")
+                      "bus:$bus_id:vneg_max",
+                      max(abs(Float64(vneg_max)), eps(Float64)))
         end
     end
 
@@ -918,14 +958,15 @@ function _result_margins(result, net)
             haskey(rl, term) || continue
             current = max(Float64(get(rl[term], "cm_fr", 0.0)),
                           Float64(get(rl[term], "cm_to", 0.0)))
-            consider!("thermal", limit - current, "line:$line_id:$term:i_max")
+            consider!("thermal", limit - current, "line:$line_id:$term:i_max",
+                      max(abs(limit), eps(Float64)))
         end
     end
     return best
 end
 
 function _merge_margins(results_and_nets)
-    worst = Dict{String,Tuple{Float64,String}}()
+    worst = Dict{String,Tuple{Float64,Float64,String}}()
     for (result, net) in results_and_nets
         for (kind, item) in _result_margins(result, net)
             if !haskey(worst, kind) || item[1] < worst[kind][1]
@@ -935,12 +976,14 @@ function _merge_margins(results_and_nets)
     end
     tolerances = Dict("voltage"=>0.05, "thermal"=>0.01,
                       "negative_sequence"=>0.01)
-    binding = [item[2] for (kind, item) in worst
-               if item[1] <= get(tolerances, kind, 0.0)]
+    binding = [item[3] for (kind, item) in worst
+               if item[2] <= get(tolerances, kind, 0.0)]
     sort!(binding)
     return Dict{String,Any}(
-        "minimum_margins" => Dict(kind=>item[1] for (kind, item) in worst),
-        "minimum_margin_locations" => Dict(kind=>item[2] for (kind, item) in worst),
+        "minimum_margins" => Dict(kind=>item[2] for (kind, item) in worst),
+        "minimum_normalized_margins" =>
+            Dict(kind=>item[1] for (kind, item) in worst),
+        "minimum_margin_locations" => Dict(kind=>item[3] for (kind, item) in worst),
         "binding_constraints" => binding)
 end
 
@@ -1537,6 +1580,7 @@ function _solve_interval_group(group, cps, policy;
     replay_values = Vector{Tuple{Int,Int,Dict{_DOEControlKey,Float64},Vector{Dict{String,Any}}}}()
     margin_diagnostics = Dict{String,Any}(
         "minimum_margins"=>Dict{String,Float64}(),
+        "minimum_normalized_margins"=>Dict{String,Float64}(),
         "minimum_margin_locations"=>Dict{String,String}(),
         "binding_constraints"=>String[])
     if feasible
@@ -2251,6 +2295,215 @@ function search_operating_envelope_utilizations(
         outcome, points, verification, candidates, diagnostics)
 end
 
+function _doe_context_adversarial_score(context::OperatingEnvelopeContextResult)
+    context.feasible === false && return Inf
+    context.feasible === nothing && return NaN
+    margins = get(context.diagnostics, "minimum_normalized_margins", nothing)
+    margins isa AbstractDict && !isempty(margins) || return NaN
+    values_ = Float64[value for value in values(margins) if value isa Real &&
+                       isfinite(value)]
+    isempty(values_) && return NaN
+    # Higher is worse: zero is a binding declared limit and positive values
+    # represent negative normalized headroom within solver tolerances.
+    return -minimum(values_)
+end
+
+function _doe_adversarial_point_scores(points, verification)
+    point_index = Dict(Tuple(point) => index for (index, point) in enumerate(points))
+    scores = fill(NaN, length(points))
+    worst_contexts = Vector{Union{Nothing,OperatingEnvelopeContextResult}}(
+        nothing, length(points))
+    worst_intervals = Vector{Union{Nothing,Int}}(nothing, length(points))
+    for (interval, contexts) in enumerate(verification.context_results)
+        for context in contexts
+            index = get(point_index, Tuple(context.utilization), nothing)
+            index === nothing && continue
+            score = _doe_context_adversarial_score(context)
+            if !isnan(score) && (isnan(scores[index]) || score > scores[index])
+                scores[index] = score
+                worst_contexts[index] = context
+                worst_intervals[index] = interval
+            end
+        end
+    end
+    return scores, worst_contexts, worst_intervals
+end
+
+function _doe_coordinate_refinement(points, scores, restarts, step)
+    ranked = [index for index in eachindex(points) if isfinite(scores[index])]
+    sort!(ranked; by=index -> (-scores[index], Tuple(points[index])))
+    resize!(ranked, min(restarts, length(ranked)))
+    seen = Set(Tuple(point) for point in points)
+    additions = Vector{Vector{Float64}}()
+    for index in ranked
+        for coordinate in eachindex(points[index]), direction in (-1.0, 1.0)
+            candidate = copy(points[index])
+            candidate[coordinate] = clamp(
+                candidate[coordinate] + direction * step, 0.0, 1.0)
+            key = Tuple(candidate)
+            key in seen && continue
+            push!(seen, key)
+            push!(additions, candidate)
+        end
+    end
+    return additions, ranked
+end
+
+"""
+    search_operating_envelope_adversarial(
+        nets, connection_points, capacities;
+        seed_samples=8, refinement_rounds=3, restarts=3,
+        initial_step=0.25, step_decay=0.5, kwargs...)
+
+Search for unsafe partial utilization using deterministic Halton seeds followed
+by coordinate refinement around points with the least normalized voltage,
+thermal, or negative-sequence headroom. Every round jointly verifies the full
+accumulated point set, preserving the selected control-recourse policy and its
+non-anticipativity constraints.
+
+The score is the negative of the smallest declared normalized constraint
+margin, maximized over intervals and scenarios for each utilization point.
+An individually infeasible context receives an infinite candidate score;
+unresolved contexts remain unscored and make the outcome inconclusive. Because
+each AC verification and the outer point search are local and finite, this
+function is a falsification heuristic, not the continuous
+violation-maximizing oracle or a robust certificate.
+"""
+function search_operating_envelope_adversarial(
+        nets, connection_points::AbstractVector{ConnectionPoint}, capacities;
+        seed_samples::Int=8,
+        sequence_offset::Int=0,
+        include_zero::Bool=true,
+        include_bound::Bool=true,
+        include_corners::Bool=false,
+        max_exact_corners::Int=10,
+        refinement_rounds::Int=3,
+        restarts::Int=3,
+        initial_step::Float64=0.25,
+        step_decay::Float64=0.5,
+        minimum_step::Float64=1e-3,
+        independent_replay::Bool=false,
+        kwargs...)
+    seed_samples >= 0 || throw(ArgumentError(
+        "seed_samples must be non-negative"))
+    refinement_rounds >= 0 || throw(ArgumentError(
+        "refinement_rounds must be non-negative"))
+    restarts >= 1 || throw(ArgumentError("restarts must be positive"))
+    isfinite(initial_step) && initial_step > 0 || throw(ArgumentError(
+        "initial_step must be finite and positive"))
+    isfinite(step_decay) && 0 < step_decay <= 1 || throw(ArgumentError(
+        "step_decay must be finite and lie in (0, 1]"))
+    isfinite(minimum_step) && minimum_step > 0 || throw(ArgumentError(
+        "minimum_step must be finite and positive"))
+
+    points = _doe_search_points(length(connection_points), seed_samples,
+        sequence_offset; include_zero, include_bound, include_corners,
+        max_exact_corners)
+    isempty(points) && throw(ArgumentError(
+        "adversarial search generated no seed points"))
+    verifications = OperatingEnvelopeVerification[]
+    candidates = OperatingEnvelopeContextResult[]
+    candidate_locations = Dict{String,Any}[]
+    scores = fill(NaN, length(points))
+    worst_contexts = Vector{Union{Nothing,OperatingEnvelopeContextResult}}(
+        nothing, length(points))
+    worst_intervals = Vector{Union{Nothing,Int}}(nothing, length(points))
+    refinement_sources = Vector{Vector{Int}}()
+    step = initial_step
+    outcome = :search_stable
+
+    for round in 0:refinement_rounds
+        verification = verify_operating_envelope(
+            nets, connection_points, capacities;
+            utilizations=points,
+            independent_replay=independent_replay,
+            max_exact_corners=max_exact_corners,
+            kwargs...)
+        push!(verifications, verification)
+        scores, worst_contexts, worst_intervals = _doe_adversarial_point_scores(
+            points, verification)
+        empty!(candidates)
+        empty!(candidate_locations)
+        for (interval, contexts) in enumerate(verification.context_results),
+            context in contexts
+            if context.feasible === false
+                push!(candidates, context)
+                push!(candidate_locations, Dict{String,Any}(
+                    "interval" => interval,
+                    "scenario" => context.scenario,
+                    "utilization_index" => context.utilization_index,
+                    "utilization" => copy(context.utilization),
+                    "termination_status" => context.termination_status,
+                    "primal_status" => context.primal_status))
+            end
+        end
+        if !isempty(candidates)
+            outcome = :candidate_counterexample
+            break
+        elseif !all(verification.feasible) || all(isnan, scores)
+            outcome = :inconclusive
+            break
+        elseif round == refinement_rounds
+            outcome = :search_stable
+            break
+        end
+
+        additions, ranked = _doe_coordinate_refinement(
+            points, scores, restarts, max(step, minimum_step))
+        push!(refinement_sources, ranked)
+        if isempty(additions)
+            outcome = :search_stable
+            break
+        end
+        append!(points, additions)
+        append!(scores, fill(NaN, length(additions)))
+        append!(worst_contexts,
+                fill(nothing, length(additions)))
+        append!(worst_intervals, fill(nothing, length(additions)))
+        step *= step_decay
+    end
+
+    scored = [index for index in eachindex(scores) if !isnan(scores[index])]
+    worst_index = isempty(scored) ? nothing :
+        scored[argmax(scores[scored])]
+    worst_context = worst_index === nothing ? nothing :
+        worst_contexts[worst_index]
+    worst_interval = worst_index === nothing ? nothing :
+        worst_intervals[worst_index]
+    diagnostics = Dict{String,Any}(
+        "method" => :adaptive_coordinate_normalized_margin_search,
+        "seed_method" => :halton_low_discrepancy,
+        "seed_samples" => seed_samples,
+        "sequence_offset" => sequence_offset,
+        "requested_refinement_rounds" => refinement_rounds,
+        "completed_verification_rounds" => length(verifications),
+        "restarts" => restarts,
+        "initial_step" => initial_step,
+        "step_decay" => step_decay,
+        "minimum_step" => minimum_step,
+        "refinement_source_indices" => refinement_sources,
+        "tested_point_count" => length(points),
+        "round_tested_point_counts" => [
+            get(verification.diagnostics[1], "dispatch_points_per_scenario", 0)
+            for verification in verifications],
+        "candidate_context_count" => length(candidates),
+        "candidate_locations" => candidate_locations,
+        "worst_point_index" => worst_index,
+        "worst_interval" => worst_interval,
+        "worst_score" => worst_index === nothing ? NaN : scores[worst_index],
+        "score_definition" =>
+            :negative_minimum_declared_normalized_constraint_margin,
+        "global_certificate" => false,
+        "claim" => outcome == :candidate_counterexample ?
+            :candidate_violation_requires_confirmation :
+            outcome == :search_stable ?
+                :no_counterexample_found_within_recorded_search_budget :
+                :numerically_or_policy_inconclusive)
+    return DOEAdversarialSearchResult(
+        outcome, points, scores, verifications, copy(candidates),
+        worst_interval, worst_context, diagnostics)
+end
+
 """
     solve_search_stable_operating_envelope(nets, connection_points;
         initial_utilizations=:bound_point, samples_per_round=16,
@@ -2399,6 +2652,9 @@ function doe_context_benchmark_rows(
             replay = get(context.diagnostics, "independent_replay", nothing)
             margins = get(context.diagnostics, "minimum_margins",
                           Dict{String,Float64}())
+            normalized_margins = get(
+                context.diagnostics, "minimum_normalized_margins",
+                Dict{String,Float64}())
             push!(rows, (
                 study_id=spec.study_id,
                 method=String(method_label),
@@ -2416,6 +2672,7 @@ function doe_context_benchmark_rows(
                 replay_voltage_difference_V=replay isa AbstractDict ?
                     get(replay, "maximum_voltage_difference_V", NaN) : NaN,
                 minimum_margins=copy(margins),
+                minimum_normalized_margins=copy(normalized_margins),
                 global_certificate=false,
             ))
         end

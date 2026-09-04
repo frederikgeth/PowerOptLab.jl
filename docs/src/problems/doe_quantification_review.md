@@ -395,13 +395,17 @@ configuration and can identify exactly what was and was not tested.
 
 ### Stage 1 — search-stable range verification
 
-1. **First screening slice implemented:** deterministic Halton utilization
-   search now distinguishes search-stable, candidate, and inconclusive results.
-   Implement an inner adversarial optimization over utilization vectors, maximizing
-   voltage, current, unbalance, or composite normalized violation.
-2. **Implemented for finite screens:** counterexample-guided outer allocation
-   solves, screens, appends the complete tested set, and repeats. Replace the
-   screen with a true violation-maximizing oracle when available.
+1. **Adaptive heuristic slice implemented:** deterministic Halton coverage can
+   now be followed by coordinate refinement around points with the least
+   normalized voltage, current, or unbalance headroom. The accumulated set is
+   jointly verified under the selected recourse policy and the search retains
+   every score and round. A true continuous inner adversarial optimization and
+   a globally valid violation bound remain future work.
+2. **Implemented for finite Halton screens:** counterexample-guided outer
+   allocation solves, screens, appends the complete tested set, and repeats.
+   Integrate the adaptive heuristic into that outer loop after its benchmark
+   behavior is characterized; replace both screens with a true
+   violation-maximizing oracle when available.
 3. Keep the outcome hierarchy explicit: falsified, search-stable under a budget,
    or certified by a valid bound.
 4. Compare full corners, random/quasi-random points, sensitivity-screened
@@ -466,9 +470,11 @@ be weakened merely to make continuous integration fast.
 
 Develop the tutorials in this order:
 
-1. **What does an envelope guarantee?** A two-part case where the bound point
-   succeeds but a partial-utilization counterexample fails, followed by corners
-   and adaptive search. This is the essential conceptual tutorial.
+1. **Implemented first runnable case — What does an envelope guarantee?** A
+   balanced three-phase bound point succeeds, while asymmetric partial
+   utilization violates a tight negative-sequence limit; the tutorial follows
+   the failure through corners and adaptive margin-directed search. Extend it
+   with a non-corner interior failure as the oracle matures.
 2. **Control recourse changes the DOE.** Compare a fixed STATCOM/tap setting,
    perfect context-dependent recourse, and a local controller. Plot both
    capacity and ex-post violations.

@@ -63,6 +63,7 @@ makedocs(
         "Tutorials" => [
             "Single-snapshot post-OPF operability study" => "tutorials/post_opf_operability_study.md",
             "Dynamic operating envelopes" => "tutorials/dynamic_operating_envelopes.md",
+            "What does a DOE guarantee?" => "tutorials/doe_range_guarantees.md",
             "DOE research workflow" => "tutorials/doe_research_workflow.md",
             "Inverse Carson reconstruction" => "tutorials/inverse_carson_reconstruction.md",
             "Battery storage models" => "tutorials/battery_storage_models.md",

@@ -166,6 +166,33 @@ screen.candidate_contexts
 means a shared-control conflict could not be assigned to one point. Every
 outcome records `global_certificate=false`.
 
+Use margin-directed refinement when uniform coverage is less useful than
+concentrating the same finite budget near stressed regions:
+
+```julia
+adversarial = search_operating_envelope_adversarial(
+    scenarios, cps, issued;
+    seed_samples=16,
+    refinement_rounds=4,
+    restarts=3,
+    initial_step=0.25,
+    control_policy=IssuePlusLocalLaws())
+
+adversarial.outcome
+adversarial.point_scores
+adversarial.worst_context
+adversarial.diagnostics["worst_score"]
+```
+
+The score is the negative minimum normalized headroom across declared voltage,
+ampacity, and negative-sequence limits. Larger scores are more stressed; zero
+denotes a binding limit. Each refinement round adds coordinate neighbours of
+the highest-scoring points and jointly re-verifies the accumulated set, so
+issue-time controls remain shared. This is a deterministic black-box
+falsification heuristic—not a proof that the returned point globally maximizes
+violation. Record all `verifications`, point scores, step settings, and the
+candidate context.
+
 For a counterexample-guided allocation loop:
 
 ```julia
@@ -236,7 +263,8 @@ Archive these objects for each reported table row:
 - the complete `OperatingEnvelopeResult`, including control and primal-residual
   diagnostics;
 - `OperatingEnvelopeVerification.context_results`;
-- utilization-search points, outcomes, and candidates;
+- utilization-search points, normalized scores, refinement rounds, outcomes,
+  and candidates;
 - every multistart run and capacity spread; and
 - an explicit statement that the result is locally solved, finitely tested, and
   either operationally non-anticipative or ideal-recourse by construction.
