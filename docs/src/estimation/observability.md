@@ -202,7 +202,7 @@ per-row whitened residuals:  -24.97,  -0.90,  0.00,  0.00,  +24.98
 ```
 
 This is the concrete argument for local redundancy, and it is also why
-[bad-data processing is the top roadmap item](state_of_the_art.md#roadmap).
+[bad-data processing is the top roadmap item](state_of_the_art.md#Roadmap).
 Turning per-row residuals into a test needs the residual **sensitivity** matrix
 ``S = I - H(H^\top W H)^{-1}H^\top W`` and the residual **covariance**
 ``\Omega = S R`` (with ``R = W^{-1}`` the measurement covariance); the

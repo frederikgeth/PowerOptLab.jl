@@ -182,7 +182,7 @@ Be clear about the gap between architecture and implementation:
 Neither estimator currently offers a non-Gaussian option. For the JuMP path
 that is a missing feature with a clear route; for the compiled path it is a
 property of the method. Both are recorded on the
-[roadmap](state_of_the_art.md#roadmap).
+[roadmap](state_of_the_art.md#Roadmap).
 
 ## Related work: Vanin et al. (2023)
 

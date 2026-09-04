@@ -129,4 +129,4 @@ other's output.
   medium cases. The sparse solver's *step* is sparse; its rank diagnostic runs
   only on exit paths, and is dense.
 * Jacobian assembly in the compiled estimator is still dense. See
-  [the roadmap](state_of_the_art.md#roadmap).
+  [the roadmap](state_of_the_art.md#Roadmap).
