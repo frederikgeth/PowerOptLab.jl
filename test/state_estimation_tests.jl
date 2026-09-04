@@ -207,6 +207,23 @@ end
     @test_throws ArgumentError solve_state_estimation(net, m_vonly)
 end
 
+@testset "State estimation: exact-row scaling cannot change numerical rank" begin
+    # Exact constraints and whitened measurements have different physical units.
+    # Ranking their stacked matrix lets the larger block set the tolerance and
+    # can erase an otherwise independent direction.
+    Hm = [1.0 0.0]
+    C = [0.0 1.0]
+    for scale in (1e-30, 1.0, 1e30)
+        d = PowerOptLab._se_observability_metrics(Hm, scale .* C)
+        @test d.observable
+        @test d.rank == d.n_states == 2
+        @test d.tangent_dimension == 1
+        @test d.redundancy == 0
+        @test d.min_singular ≈ 1.0
+        @test d.cond ≈ 1.0
+    end
+end
+
 @testset "State estimation: observability covers non-grounded return terminals" begin
     # Regression: the diagnostic used to emit rows only for measurements and for
     # DECLARED zero-injection nodes. An explicitly modelled neutral is neither,

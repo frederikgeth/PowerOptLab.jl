@@ -106,11 +106,11 @@ Result of [`solve_state_estimation`](@ref).
 - `observability::NamedTuple` — a LOCAL numerical identifiability diagnostic
   `(observable, n_states, rank, redundancy, min_singular, cond,
   tangent_dimension)` from the measurement Jacobian at the returned point.
-  `observable`/`rank`/`redundancy` come from the stacked measurement + KCL
-  system; `min_singular`/`cond` are computed on the tangent space of the exact
-  KCL equations, so they are in the measurements' whitened units and
-  `1/min_singular` is the worst-case estimate standard deviation (see
-  [`solve_state_estimation`](@ref)).
+  Exact KCL equations are ranked in their own units; measurement rank,
+  redundancy, `min_singular`, and `cond` are computed from the whitened
+  measurement Jacobian on the feasible tangent space. Thus `1/min_singular` is
+  the local worst-case estimate standard deviation under the stated Gaussian
+  model (see [`solve_state_estimation`](@ref)).
 """
 struct StateEstimationResult <: AbstractSolveResult
     termination_status::String
@@ -663,39 +663,46 @@ function _observability(net, measurements, neutral, zi::Set{Tuple{String,String}
 
     Hm = _fd_jacobian(hmeas, x0)                      # whitened measurement rows
     C  = _fd_jacobian(hkcl, x0)                       # exact KCL rows
+    _se_observability_metrics(Hm, C)
+end
 
-    # Rank of the stacked system still decides observability, and is invariant
-    # to how the two blocks are scaled relative to one another.
-    stacked = vcat(Hm, C)
-    sv_all = svdvals(stacked)
-    smax_all = isempty(sv_all) ? 0.0 : maximum(sv_all)
-    rk = count(>(smax_all * max(size(stacked)...) * eps(Float64)), sv_all)
+# Combine exact equations and stochastic measurements without stacking their
+# rows. `C` is in physical equation units while `Hm` is whitened; a numerical
+# rank test on `vcat(Hm, C)` therefore depends on their arbitrary relative
+# scaling. Rank C in its own scale, restrict Hm to C's tangent space, and rank
+# that reduced map in its own scale.
+function _se_observability_metrics(Hm::AbstractMatrix{<:Real}, C::AbstractMatrix{<:Real})
+    n_states = size(Hm, 2)
+    size(C, 2) == n_states || throw(DimensionMismatch(
+        "measurement and constraint Jacobians must have the same number of columns"))
+    n_states == 0 && return (observable=true, n_states=0, rank=0, redundancy=0,
+                             min_singular=Inf, cond=1.0, tangent_dimension=0)
 
-    # The QUANTITATIVE numbers come from the tangent space of the exact
-    # equations, so they are in the measurements' own whitened units:
-    # `sigma_min` is the inverse of the worst-case estimate standard deviation
-    # on the directions the KCL equations leave free.
-    Z = if isempty(C) || size(C, 1) == 0
-        _se_identity(n_states)
+    rankC, Z = if size(C, 1) == 0
+        (0, _se_identity(n_states))
     else
-        svC = svdvals(C)
-        tolC = (isempty(svC) ? 0.0 : maximum(svC)) * max(size(C)...) * eps(Float64)
-        nullspace(C; atol=max(tolC, eps(Float64)))
+        F = svd(Matrix{Float64}(C); full=true)
+        smaxC = isempty(F.S) ? 0.0 : maximum(F.S)
+        tolC = smaxC * max(size(C)...) * eps(Float64)
+        rC = count(>(tolC), F.S)
+        rC, Matrix(F.V[:, rC+1:n_states])
     end
+
     tangent = size(Z, 2)
-    smin, condn = if tangent == 0
-        (Inf, 1.0)
-    else
-        svr = svdvals(Hm * Z)
-        smaxr = isempty(svr) ? 0.0 : maximum(svr)
-        sminr = length(svr) >= tangent ? svr[tangent] : 0.0
-        (sminr, sminr > 0 ? smaxr / sminr : Inf)
-    end
+    Hr = Matrix{Float64}(Hm) * Z
+    svr = svdvals(Hr)
+    smaxr = isempty(svr) ? 0.0 : maximum(svr)
+    tolr = smaxr * max(size(Hr)...) * eps(Float64)
+    rankM = count(>(tolr), svr)
+    smin = tangent == 0 ? Inf : length(svr) >= tangent ? svr[tangent] : 0.0
+    condn = tangent == 0 ? 1.0 : smin > 0 ? smaxr / smin : Inf
 
-    (observable = rk == n_states,
+    (observable = rankM == tangent,
      n_states = n_states,
-     rank = rk,
-     redundancy = size(stacked, 1) - n_states,
+     rank = rankC + rankM,
+     # Exact equations reduce the tangent dimension; they are not noisy
+     # observations and must not be counted as residual redundancy.
+     redundancy = size(Hm, 1) - rankM,
      min_singular = smin,
      cond = condn,
      tangent_dimension = tangent)
