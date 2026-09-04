@@ -13,6 +13,8 @@ FairnessPolicy
 DOEScenario
 DOEScenarioSet
 select_doe_scenarios
+DOEScenarioTimeSplit
+split_doe_scenarios_by_time
 DOEControlRegistration
 DOEControlRule
 DOEControlPolicy
@@ -35,6 +37,8 @@ OperatingEnvelopeSearchResult
 DOEAdversarialSearchResult
 DOECounterexampleConfirmationResult
 DOECoverageResult
+DOECoverageCurveResult
+DOECoverageShiftResult
 AdversarialSearchStableOperatingEnvelopeResult
 SearchStableOperatingEnvelopeResult
 OperatingEnvelopeMultistartResult
@@ -51,6 +55,8 @@ search_operating_envelope_utilizations
 search_operating_envelope_adversarial
 confirm_operating_envelope_counterexample
 evaluate_operating_envelope_coverage
+evaluate_operating_envelope_coverage_curve
+compare_doe_coverage_shift
 solve_adversarial_search_stable_operating_envelope
 solve_search_stable_operating_envelope
 ```

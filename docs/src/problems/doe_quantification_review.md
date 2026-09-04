@@ -427,8 +427,12 @@ counterexamples.
 2. **Held-out evaluation slice implemented:** role-selected coverage reports
    per-scenario outcomes and empirical, weighted, and conservative candidate-
    violation rates. A one-sided Hoeffding bound is emitted only after an
-   explicit i.i.d. assertion. Add time-block split helpers, violation curves,
-   calibration diagnostics, and distribution-shift tests next.
+   explicit i.i.d. assertion. A chronological blocked split helper now exposes
+   its exclusion gap and unassessed group/site leakage; finite capacity-
+   violation curves retain issued controls; descriptive reference/shifted
+   comparisons refuse to claim that distribution shift was detected. Add
+   calibration diagnostics and data-generating-process-specific shift tests
+   next.
 3. Couple envelopes to storage SOC, EV energy, ramping, tap operations, and
    first-stage/recourse decisions using the package's multi-period machinery.
 4. Evaluate offered capacity, realized utilization, curtailed energy, customer

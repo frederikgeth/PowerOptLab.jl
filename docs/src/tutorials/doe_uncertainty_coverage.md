@@ -74,11 +74,12 @@ calibration = DOEScenario(
 test_low = DOEScenario(
     id="test-low-load",
     network=coverage_feeder(200.0, 200.0),
-    role=:test,
+    role=:stress,
     weight=0.7,
     source="synthetic tutorial fixture",
     generation_method=:held_out_fixture,
     seed=12,
+    timestamp=DateTime(2026, 1, 15, 12),
 )
 
 test_high = DOEScenario(
@@ -89,6 +90,7 @@ test_high = DOEScenario(
     source="synthetic tutorial fixture",
     generation_method=:held_out_fixture,
     seed=13,
+    timestamp=DateTime(2026, 1, 15, 12),
 )
 
 scenarios = DOEScenarioSet(
@@ -98,12 +100,35 @@ scenarios = DOEScenarioSet(
 )
 
 calibration_set = select_doe_scenarios(scenarios; roles=:calibration)
-test_set = select_doe_scenarios(scenarios; roles=:test)
+test_set = select_doe_scenarios(scenarios; roles=(:test, :stress))
 ```
 
 IDs must be unique within an interval. Weights are optional, but if one scenario
 in an interval is weighted, all must be weighted. They are relative weights;
 the coverage calculation normalizes them within each interval.
+
+For historical samples, prefer a chronological split over manual role labels:
+
+```julia
+time_split = split_doe_scenarios_by_time(
+    scenarios;
+    calibration_end=DateTime(2026, 1, 2),
+    test_start=DateTime(2026, 1, 15),
+    split_name="blocked-holdout")
+
+time_split.calibration
+time_split.test
+time_split.excluded_scenario_ids
+time_split.diagnostics
+```
+
+Samples before `calibration_end` become calibration cases, samples on or after
+`test_start` become test cases, and samples in between are explicitly excluded.
+The helper retains each original role in scenario metadata. It guarantees no
+timestamp overlap, but it does not assess leakage through feeders, sites,
+customers, weather events, or scenario-generator fitting. The current helper
+accepts one forecast interval at a time so it cannot silently confuse forecast
+intervals with statistical sample time.
 
 ## Allocate without looking at the test scenarios
 
@@ -134,7 +159,7 @@ are identical.
 ```julia
 coverage = evaluate_operating_envelope_coverage(
     scenarios, cps, allocation;
-    roles=:test,
+    roles=(:test, :stress),
     utilizations=:bound_point,
     control_policy=PerfectRecourse(),
     iid_assumption=false)
@@ -146,26 +171,85 @@ coverage.metrics["weighted_candidate_scenario_frequency"]
 coverage.metrics["one_sided_hoeffding_upper_bound"]  # missing
 ```
 
-The low-demand test scenario is more restrictive and produces a candidate
-violation; the high-demand realization passes. The result reports context and
-scenario frequencies separately. A scenario is a candidate violation if any
-tested utilization point fails. Unresolved cases are excluded from the ordinary
-empirical rate and counted as violations in the conservative rate.
+The low-demand stress scenario is more restrictive and produces a candidate
+violation; the high-demand test realization passes. The result reports context
+and scenario frequencies separately. A scenario is a candidate violation if
+any tested utilization point fails. Unresolved cases are excluded from the
+ordinary empirical rate and counted as violations in the conservative rate.
 
 Issue-time controls recorded in `allocation` are fixed during held-out replay.
 Scenario-stage controls are allowed to adapt to each newly observed scenario,
 consistent with their declared information stage. Passing a capacity dictionary
 instead loses the issuance record and is labelled `:capacity_values_only`.
 
+## Trace capacity against held-out violations
+
+A single operating point hides how quickly empirical performance deteriorates
+as offered capacity rises. Evaluate a declared scale grid:
+
+```julia
+curve = evaluate_operating_envelope_coverage_curve(
+    scenarios, cps, allocation;
+    scales=(0.25, 0.5, 0.75, 1.0),
+    roles=(:test, :stress),
+    utilizations=:bound_point,
+    control_policy=PerfectRecourse(),
+    iid_assumption=false)
+
+curve.rows
+curve.diagnostics["first_candidate_scale"]
+curve.diagnostics["candidate_count_reversals"]
+```
+
+Scales are sorted and deduplicated. Issue-time controls from `allocation` are
+retained rather than re-optimized against the held-out set. The first candidate
+scale is only a threshold on the tested grid. It is not a continuous safe
+capacity limit. A decrease in candidate count at a larger scale is preserved:
+it can arise from genuine physical non-monotonicity, discrete or control
+effects, or irregular local nonlinear solves, and should be investigated rather
+than silently smoothed.
+
+## Compare reference and shifted conditions
+
+Here the high-demand test case acts as a reference and the deliberately
+restrictive low-demand stress case as the shifted evaluation set:
+
+```julia
+reference_coverage = evaluate_operating_envelope_coverage(
+    scenarios, cps, allocation;
+    roles=:test,
+    control_policy=PerfectRecourse())
+
+stress_coverage = evaluate_operating_envelope_coverage(
+    scenarios, cps, allocation;
+    roles=:stress,
+    control_policy=PerfectRecourse())
+
+shift_comparison = compare_doe_coverage_shift(
+    reference_coverage, stress_coverage;
+    reference_label="held-out reference",
+    shifted_label="low-demand stress")
+
+shift_comparison.outcome
+shift_comparison.metric_deltas
+shift_comparison.diagnostics["distribution_shift_detected"]  # false
+```
+
+This comparison reports changed held-out performance. It intentionally does not
+claim that a distribution shift has been detected: that requires a separately
+chosen two-sample, covariate, residual, or concept-shift test with assumptions
+matched to the data-generating process. A named stress set is also not evidence
+of prevalence in the operating population.
+
 ## Add a statistical bound only when justified
 
-If the test scenarios are genuinely independent draws from the target
-distribution, make that assumption explicit:
+If the selected held-out scenarios are genuinely independent draws from the
+target distribution, make that assumption explicit:
 
 ```julia
 iid_coverage = evaluate_operating_envelope_coverage(
     scenarios, cps, allocation;
-    roles=:test,
+    roles=(:test, :stress),
     control_policy=PerfectRecourse(),
     iid_assumption=true,
     confidence=0.95)
@@ -176,7 +260,7 @@ iid_coverage.metrics["one_sided_hoeffding_upper_bound"]
 The one-sided Hoeffding bound uses the unweighted scenario count and treats
 unresolved scenarios as candidate violations. Declared scenario weights affect
 the weighted empirical estimate, not this concentration bound. With only two
-test scenarios the bound is intentionally weak.
+held-out scenarios the bound is intentionally weak.
 
 Do not set `iid_assumption=true` for hand-picked stress cases, overlapping time
 windows, scenarios reused during method development, or a split affected by

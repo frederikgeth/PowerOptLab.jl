@@ -360,6 +360,111 @@ function select_doe_scenarios(scenarios::DOEScenarioSet;
 end
 
 """
+    DOEScenarioTimeSplit
+
+Chronological calibration/test split returned by
+[`split_doe_scenarios_by_time`](@ref). Scenarios between `calibration_end` and
+`test_start` are excluded as a leakage-control gap and listed explicitly.
+"""
+struct DOEScenarioTimeSplit
+    calibration::DOEScenarioSet
+    test::DOEScenarioSet
+    calibration_end::DateTime
+    test_start::DateTime
+    excluded_scenario_ids::Vector{String}
+    diagnostics::Dict{String,Any}
+end
+
+function _doe_scenario_with_role(scenario::DOEScenario, role::Symbol,
+                                 split_name::AbstractString)
+    metadata = copy(scenario.metadata)
+    metadata["original_role"] = scenario.role
+    metadata["assigned_by_split"] = String(split_name)
+    return DOEScenario(
+        id=scenario.id,
+        network=scenario.network,
+        role=role,
+        weight=scenario.weight,
+        source=scenario.source,
+        generation_method=scenario.generation_method,
+        seed=scenario.seed,
+        timestamp=scenario.timestamp,
+        metadata=metadata)
+end
+
+"""
+    split_doe_scenarios_by_time(scenarios;
+        calibration_end, test_start=calibration_end, split_name="time_block")
+
+Create a chronological calibration/test split for a one-interval typed scenario
+ensemble. Timestamps before `calibration_end` are assigned `:calibration`;
+timestamps on or after `test_start` are assigned `:test`; the intervening gap
+is excluded. Every scenario must have a timestamp and each retained block must
+be non-empty.
+
+The one-interval restriction is deliberate in this first slice: it avoids
+silently confusing forecast intervals with statistical sample time. Build one
+split per forecast interval when their historical samples differ.
+"""
+function split_doe_scenarios_by_time(
+        scenarios::DOEScenarioSet;
+        calibration_end::DateTime,
+        test_start::DateTime=calibration_end,
+        split_name::AbstractString="time_block")
+    length(scenarios.intervals) == 1 || throw(ArgumentError(
+        "time-block DOE splitting currently requires one scenario interval"))
+    test_start >= calibration_end || throw(ArgumentError(
+        "test_start must not precede calibration_end"))
+    isempty(split_name) && throw(ArgumentError("split_name must be non-empty"))
+    group = only(scenarios.intervals)
+    all(scenario -> scenario.timestamp !== nothing, group) ||
+        throw(ArgumentError(
+            "every scenario needs a timestamp for a chronological split"))
+    calibration = DOEScenario[]
+    test = DOEScenario[]
+    excluded = String[]
+    for scenario in group
+        timestamp = something(scenario.timestamp)
+        if timestamp < calibration_end
+            push!(calibration,
+                _doe_scenario_with_role(scenario, :calibration, split_name))
+        elseif timestamp >= test_start
+            push!(test, _doe_scenario_with_role(scenario, :test, split_name))
+        else
+            push!(excluded, scenario.id)
+        end
+    end
+    isempty(calibration) && throw(ArgumentError(
+        "chronological split produced no calibration scenarios"))
+    isempty(test) && throw(ArgumentError(
+        "chronological split produced no test scenarios"))
+    common_metadata = merge(copy(scenarios.metadata), Dict{String,Any}(
+        "parent_dataset_id" => scenarios.dataset_id,
+        "split_name" => String(split_name),
+        "calibration_end" => calibration_end,
+        "test_start" => test_start,
+        "excluded_scenario_ids" => copy(excluded)))
+    calibration_set = DOEScenarioSet(calibration;
+        dataset_id=scenarios.dataset_id * "-calibration",
+        metadata=merge(copy(common_metadata),
+            Dict{String,Any}("assigned_role" => :calibration)))
+    test_set = DOEScenarioSet(test;
+        dataset_id=scenarios.dataset_id * "-test",
+        metadata=merge(copy(common_metadata),
+            Dict{String,Any}("assigned_role" => :test)))
+    diagnostics = Dict{String,Any}(
+        "method" => :chronological_holdout,
+        "calibration_count" => length(calibration),
+        "test_count" => length(test),
+        "gap_excluded_count" => length(excluded),
+        "temporal_overlap" => false,
+        "group_or_site_leakage_assessed" => false)
+    return DOEScenarioTimeSplit(
+        calibration_set, test_set, calibration_end, test_start,
+        excluded, diagnostics)
+end
+
+"""
     DOEStudySpec
 
 Immutable top-level provenance record for a reproducible DOE experiment. Use
@@ -791,6 +896,50 @@ solve_status(result::DOECoverageResult) = solve_status(result.verification)
 solve_diagnostics(result::DOECoverageResult) =
     (outcome=result.outcome,
      scenario_count=length(result.scenario_rows),
+     global_certificate=false)
+
+"""
+    DOECoverageCurveResult
+
+Capacity-scaling sensitivity returned by
+[`evaluate_operating_envelope_coverage_curve`](@ref). Each element of
+`coverages` is a full held-out evaluation at the corresponding scale. The
+curve is finite numerical evidence, not a continuous security certificate.
+"""
+struct DOECoverageCurveResult <: AbstractSolveResult
+    scales::Vector{Float64}
+    coverages::Vector{DOECoverageResult}
+    rows::Vector{NamedTuple}
+    diagnostics::Dict{String,Any}
+end
+
+solve_status(result::DOECoverageCurveResult) =
+    solve_status(last(result.coverages))
+solve_diagnostics(result::DOECoverageCurveResult) =
+    (scale_count=length(result.scales),
+     critical_scale=get(result.diagnostics, "first_candidate_scale", missing),
+     global_certificate=false)
+
+"""
+    DOECoverageShiftResult
+
+Descriptive comparison returned by [`compare_doe_coverage_shift`](@ref).
+`metric_deltas` are shifted minus reference. This record can reveal a change in
+observed performance, but does not constitute a statistical distribution-shift
+test.
+"""
+struct DOECoverageShiftResult <: AbstractSolveResult
+    outcome::Symbol
+    reference::DOECoverageResult
+    shifted::DOECoverageResult
+    metric_deltas::Dict{String,Any}
+    diagnostics::Dict{String,Any}
+end
+
+solve_status(result::DOECoverageShiftResult) = solve_status(result.shifted)
+solve_diagnostics(result::DOECoverageShiftResult) =
+    (outcome=result.outcome,
+     distribution_shift_detected=false,
      global_certificate=false)
 
 """
@@ -2755,6 +2904,192 @@ function evaluate_operating_envelope_coverage(
             :empirical_coverage_only)
     return DOECoverageResult(
         outcome, selected_roles, verification, rows, metrics, diagnostics)
+end
+
+function _doe_scaled_capacities(result::OperatingEnvelopeResult,
+                                scale::Float64)
+    envelope = Dict{String,Vector{Float64}}(
+        id => scale .* values for (id, values) in result.envelope)
+    return OperatingEnvelopeResult(
+        copy(result.termination_status), envelope,
+        scale .* result.total_export, deepcopy(result.snapshots),
+        result.direction, scale .* result.total_capacity,
+        deepcopy(result.diagnostics), deepcopy(result.fairness_metrics),
+        deepcopy(result.schedule))
+end
+
+function _doe_scaled_capacities(capacities::AbstractDict, scale::Float64)
+    scaled = Dict{String,Any}()
+    for (id, value) in pairs(capacities)
+        scaled[string(id)] = value isa AbstractVector ?
+            scale .* Float64.(value) : scale * Float64(value)
+    end
+    return scaled
+end
+
+"""
+    evaluate_operating_envelope_coverage_curve(
+        scenarios, connection_points, capacities;
+        scales=(0.5, 0.75, 1.0), kwargs...)
+
+Evaluate the same selected held-out scenarios over an ascending sequence of
+capacity multipliers. When `capacities` is an [`OperatingEnvelopeResult`](@ref),
+its recorded issue-time controls are retained at every scale; they are not
+silently re-optimized after test scenarios are observed. Other coverage
+keywords, including `roles`, `utilizations`, and `iid_assumption`, are forwarded
+to [`evaluate_operating_envelope_coverage`](@ref).
+
+The first scale with a candidate violation is a finite-grid diagnostic only.
+Candidate-count reversals are reported rather than hidden: they can reflect
+physical non-monotonicity, discrete/control effects, or local-solver behavior.
+"""
+function evaluate_operating_envelope_coverage_curve(
+        scenarios::DOEScenarioSet,
+        connection_points::AbstractVector{ConnectionPoint}, capacities;
+        scales=(0.5, 0.75, 1.0),
+        kwargs...)
+    capacities isa OperatingEnvelopeResult || capacities isa AbstractDict ||
+        throw(ArgumentError(
+            "capacities must be an OperatingEnvelopeResult or dictionary"))
+    scale_values = sort!(unique(Float64.(collect(scales))))
+    isempty(scale_values) && throw(ArgumentError("scales must be non-empty"))
+    all(scale -> isfinite(scale) && scale >= 0, scale_values) ||
+        throw(ArgumentError("scales must be finite and non-negative"))
+
+    coverages = DOECoverageResult[]
+    rows = NamedTuple[]
+    for scale in scale_values
+        coverage = evaluate_operating_envelope_coverage(
+            scenarios, connection_points,
+            _doe_scaled_capacities(capacities, scale); kwargs...)
+        push!(coverages, coverage)
+        push!(rows, (
+            scale=scale,
+            total_capacity_W=capacities isa OperatingEnvelopeResult ?
+                scale .* capacities.total_capacity : missing,
+            outcome=coverage.outcome,
+            scenario_count=coverage.metrics["scenario_count"],
+            candidate_scenario_count=
+                coverage.metrics["candidate_scenario_count"],
+            unresolved_scenario_count=
+                coverage.metrics["unresolved_scenario_count"],
+            empirical_candidate_scenario_frequency=
+                coverage.metrics["empirical_candidate_scenario_frequency"],
+            empirical_candidate_context_frequency=
+                coverage.metrics["empirical_candidate_context_frequency"],
+            conservative_scenario_frequency=
+                coverage.metrics["conservative_scenario_frequency"],
+            weighted_candidate_scenario_frequency=
+                coverage.metrics["weighted_candidate_scenario_frequency"],
+            weighted_conservative_scenario_frequency=
+                coverage.metrics["weighted_conservative_scenario_frequency"],
+            one_sided_hoeffding_upper_bound=
+                coverage.metrics["one_sided_hoeffding_upper_bound"],
+        ))
+    end
+
+    first_candidate = findfirst(
+        row -> row.candidate_scenario_count > 0, rows)
+    candidate_count_reversals = NamedTuple[]
+    for index in 2:length(rows)
+        rows[index].candidate_scenario_count >=
+            rows[index - 1].candidate_scenario_count && continue
+        push!(candidate_count_reversals, (
+            lower_scale=rows[index - 1].scale,
+            higher_scale=rows[index].scale,
+            lower_candidate_count=rows[index - 1].candidate_scenario_count,
+            higher_candidate_count=rows[index].candidate_scenario_count,
+        ))
+    end
+    diagnostics = Dict{String,Any}(
+        "first_candidate_scale" => first_candidate === nothing ? missing :
+            rows[first_candidate].scale,
+        "scale_order" => :ascending,
+        "capacity_scaling" => :uniform,
+        "issue_control_treatment" => capacities isa OperatingEnvelopeResult ?
+            :retained_from_issued_result : :not_available,
+        "control_reoptimization" => :none,
+        "candidate_count_reversals" => candidate_count_reversals,
+        "candidate_count_monotonic_nondecreasing" =>
+            isempty(candidate_count_reversals),
+        "continuous_threshold_estimated" => false,
+        "global_certificate" => false,
+        "claim" => :finite_capacity_sensitivity_curve)
+    return DOECoverageCurveResult(
+        scale_values, coverages, rows, diagnostics)
+end
+
+function _doe_coverage_metric_delta(reference::DOECoverageResult,
+                                    shifted::DOECoverageResult,
+                                    key::String)
+    left = get(reference.metrics, key, missing)
+    right = get(shifted.metrics, key, missing)
+    if left isa Real && right isa Real && isfinite(left) && isfinite(right)
+        return Float64(right - left)
+    end
+    return missing
+end
+
+"""
+    compare_doe_coverage_shift(reference, shifted;
+        reference_label="reference", shifted_label="shifted", tolerance=0.0)
+
+Compare two already evaluated held-out ensembles descriptively. Deltas are
+`shifted - reference`; the outcome uses the conservative scenario-frequency
+delta so unresolved cases are not treated as safe. This function deliberately
+does not infer that the scenario distributions differ. Establishing covariate,
+concept, or temporal distribution shift requires a separately declared test
+and assumptions appropriate to the data-generating process.
+"""
+function compare_doe_coverage_shift(
+        reference::DOECoverageResult,
+        shifted::DOECoverageResult;
+        reference_label::AbstractString="reference",
+        shifted_label::AbstractString="shifted",
+        tolerance::Float64=0.0)
+    isempty(reference_label) && throw(ArgumentError(
+        "reference_label must be non-empty"))
+    isempty(shifted_label) && throw(ArgumentError(
+        "shifted_label must be non-empty"))
+    isfinite(tolerance) && tolerance >= 0 || throw(ArgumentError(
+        "tolerance must be finite and non-negative"))
+    metric_keys = (
+        "empirical_candidate_scenario_frequency",
+        "empirical_candidate_context_frequency",
+        "conservative_scenario_frequency",
+        "weighted_candidate_scenario_frequency",
+        "weighted_conservative_scenario_frequency",
+        "one_sided_hoeffding_upper_bound",
+    )
+    deltas = Dict{String,Any}(key =>
+        _doe_coverage_metric_delta(reference, shifted, key)
+        for key in metric_keys)
+    primary_delta = deltas["conservative_scenario_frequency"]
+    outcome = primary_delta === missing ? :inconclusive :
+        primary_delta > tolerance ? :higher_candidate_frequency :
+        primary_delta < -tolerance ? :lower_candidate_frequency :
+        :no_observed_change
+    diagnostics = Dict{String,Any}(
+        "reference_label" => String(reference_label),
+        "shifted_label" => String(shifted_label),
+        "reference_dataset_id" =>
+            get(reference.diagnostics, "dataset_id", "unknown"),
+        "shifted_dataset_id" =>
+            get(shifted.diagnostics, "dataset_id", "unknown"),
+        "reference_scenario_count" =>
+            get(reference.metrics, "scenario_count", missing),
+        "shifted_scenario_count" =>
+            get(shifted.metrics, "scenario_count", missing),
+        "comparison_metric" => :conservative_scenario_frequency,
+        "tolerance" => tolerance,
+        "performance_shift_observed" => outcome in
+            (:higher_candidate_frequency, :lower_candidate_frequency),
+        "distribution_shift_test" => :not_performed,
+        "distribution_shift_detected" => false,
+        "global_certificate" => false,
+        "claim" => :descriptive_held_out_performance_comparison)
+    return DOECoverageShiftResult(
+        outcome, reference, shifted, deltas, diagnostics)
 end
 
 function _doe_first_primes(count::Int)

@@ -220,6 +220,15 @@ conservative candidate-violation rates. A one-sided Hoeffding upper bound is
 returned only when the caller explicitly sets `iid_assumption=true`; weights do
 not create an i.i.d. claim and distribution shift remains unassessed.
 
+[`split_doe_scenarios_by_time`](@ref) constructs a one-interval blocked
+calibration/test split with an optional exclusion gap. It prevents timestamp
+overlap but explicitly leaves site, group, and scenario-generator leakage
+unassessed. [`evaluate_operating_envelope_coverage_curve`](@ref) repeats held-out
+evaluation over a finite capacity-scale grid while retaining recorded
+issue-time controls. [`compare_doe_coverage_shift`](@ref) describes performance
+deltas between two evaluated ensembles without labelling them as statistical
+evidence that their generating distributions differ.
+
 ## PV and batteries with mandatory Q-V control
 
 For realistic DER behaviour, place the converter in the network's `ibr` block

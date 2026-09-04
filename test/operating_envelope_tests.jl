@@ -642,10 +642,20 @@ end
           "doe-held-out-fixture-v1"
     @test manifest["scenario_provenance"][1][1]["role"] == :calibration
 
-    coverage = evaluate_operating_envelope_coverage(
+    curve = evaluate_operating_envelope_coverage_curve(
         scenarios, cps, allocation;
+        scales=(1.0, 0.5, 1.0),
         roles=:test, iid_assumption=true, confidence=0.95,
         control_policy=PerfectRecourse())
+    @test curve.scales == [0.5, 1.0]
+    @test length(curve.coverages) == 2
+    @test curve.diagnostics["issue_control_treatment"] ==
+          :retained_from_issued_result
+    @test curve.diagnostics["control_reoptimization"] == :none
+    @test curve.diagnostics["continuous_threshold_estimated"] == false
+    @test haskey(curve.diagnostics, "candidate_count_reversals")
+    @test last(curve.rows).total_capacity_W ≈ allocation.total_capacity
+    coverage = last(curve.coverages)
     @test coverage.outcome == :candidate_violations_observed
     @test coverage.metrics["scenario_count"] == 2
     @test coverage.metrics["candidate_scenario_count"] == 1
@@ -657,6 +667,49 @@ end
     @test Set(row.scenario_id for row in coverage.scenario_rows) ==
           Set(["test-low-load", "test-high-load"])
 
+    shift = compare_doe_coverage_shift(
+        first(curve.coverages), last(curve.coverages);
+        reference_label="half capacity", shifted_label="issued capacity")
+    @test shift.outcome in (:higher_candidate_frequency,
+                            :no_observed_change)
+    @test shift.metric_deltas["conservative_scenario_frequency"] ==
+          last(curve.rows).conservative_scenario_frequency -
+          first(curve.rows).conservative_scenario_frequency
+    @test shift.diagnostics["performance_shift_observed"] ==
+          (shift.outcome == :higher_candidate_frequency)
+    @test shift.diagnostics["distribution_shift_test"] == :not_performed
+    @test shift.diagnostics["distribution_shift_detected"] == false
+
+    historical = DOEScenarioSet([
+        DOEScenario(id="history-1", network=doe_feeder(p1=1000.0, p2=1000.0),
+            role=:unspecified, weight=1.0, timestamp=DateTime(2026, 1, 1),
+            source="chronological fixture"),
+        DOEScenario(id="history-2", network=doe_feeder(p1=1100.0, p2=1100.0),
+            role=:train, weight=1.0, timestamp=DateTime(2026, 1, 2),
+            source="chronological fixture"),
+        DOEScenario(id="gap", network=doe_feeder(p1=1200.0, p2=1200.0),
+            role=:validation, weight=1.0, timestamp=DateTime(2026, 1, 3),
+            source="chronological fixture"),
+        DOEScenario(id="future", network=doe_feeder(p1=1300.0, p2=1300.0),
+            role=:stress, weight=1.0, timestamp=DateTime(2026, 1, 4),
+            source="chronological fixture"),
+    ]; dataset_id="chronological-fixture")
+    time_split = split_doe_scenarios_by_time(
+        historical;
+        calibration_end=DateTime(2026, 1, 3),
+        test_start=DateTime(2026, 1, 4),
+        split_name="blocked-holdout")
+    @test [scenario.id for scenario in time_split.calibration.intervals[1]] ==
+          ["history-1", "history-2"]
+    @test [scenario.role for scenario in time_split.calibration.intervals[1]] ==
+          [:calibration, :calibration]
+    @test only(time_split.test.intervals[1]).id == "future"
+    @test only(time_split.test.intervals[1]).role == :test
+    @test only(time_split.test.intervals[1]).metadata["original_role"] == :stress
+    @test time_split.excluded_scenario_ids == ["gap"]
+    @test time_split.diagnostics["temporal_overlap"] == false
+    @test time_split.diagnostics["group_or_site_leakage_assessed"] == false
+
     @test_throws ArgumentError DOEScenario(
         id="bad", network=doe_feeder(p1=1.0, p2=1.0), role=:unknown)
     @test_throws ArgumentError DOEScenarioSet(
@@ -665,4 +718,20 @@ end
         dataset_id="incomplete-weights")
     @test_throws ArgumentError select_doe_scenarios(
         scenarios; roles=:validation)
+    @test_throws ArgumentError split_doe_scenarios_by_time(
+        DOEScenarioSet([historical.intervals[1][1:2],
+                        historical.intervals[1][3:4]];
+                       dataset_id="multi-interval");
+        calibration_end=DateTime(2026, 1, 3))
+    @test_throws ArgumentError split_doe_scenarios_by_time(
+        DOEScenarioSet([DOEScenario(
+            id="missing-time", network=doe_feeder(p1=1.0, p2=1.0))];
+            dataset_id="missing-time");
+        calibration_end=DateTime(2026, 1, 3))
+    @test_throws ArgumentError split_doe_scenarios_by_time(
+        historical;
+        calibration_end=DateTime(2026, 1, 4),
+        test_start=DateTime(2026, 1, 3))
+    @test_throws ArgumentError evaluate_operating_envelope_coverage_curve(
+        scenarios, cps, allocation; scales=(-0.1,))
 end
