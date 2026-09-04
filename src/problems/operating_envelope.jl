@@ -569,6 +569,59 @@ solve_diagnostics(result::DOEAdversarialSearchResult) =
      global_certificate=false)
 
 """
+    DOECounterexampleConfirmationResult
+
+Multistart replay evidence returned by
+[`confirm_operating_envelope_counterexample`](@ref). `outcome` is
+`:repeated_candidate`, `:not_reproduced`, or `:inconclusive`. Repeated local
+infeasibility is stronger numerical evidence than one failed solve, but remains
+distinct from a globally certified physical violation.
+"""
+struct DOECounterexampleConfirmationResult <: AbstractSolveResult
+    outcome::Symbol
+    utilization::Vector{Float64}
+    verifications::Vector{OperatingEnvelopeVerification}
+    start_scales::Vector{Float64}
+    diagnostics::Dict{String,Any}
+end
+
+function solve_status(result::DOECounterexampleConfirmationResult)
+    feasible_index = findfirst(
+        verification -> all(verification.feasible), result.verifications)
+    return solve_status(feasible_index === nothing ?
+        last(result.verifications) : result.verifications[feasible_index])
+end
+solve_diagnostics(result::DOECounterexampleConfirmationResult) =
+    (outcome=result.outcome,
+     run_count=length(result.verifications),
+     global_certificate=false)
+
+"""
+    AdversarialSearchStableOperatingEnvelopeResult
+
+Evidence from [`solve_adversarial_search_stable_operating_envelope`](@ref),
+including every allocation and adaptive falsification search. `envelope` is the
+last allocation and `utilization_points` is the final accumulated finite set.
+"""
+struct AdversarialSearchStableOperatingEnvelopeResult <: AbstractSolveResult
+    outcome::Symbol
+    envelope::OperatingEnvelopeResult
+    allocations::Vector{OperatingEnvelopeResult}
+    searches::Vector{DOEAdversarialSearchResult}
+    utilization_points::Vector{Vector{Float64}}
+    rounds::Int
+    diagnostics::Dict{String,Any}
+end
+
+solve_status(result::AdversarialSearchStableOperatingEnvelopeResult) =
+    solve_status(result.envelope)
+solve_diagnostics(result::AdversarialSearchStableOperatingEnvelopeResult) =
+    (outcome=result.outcome,
+     rounds=result.rounds,
+     tested_point_count=length(result.utilization_points),
+     global_certificate=false)
+
+"""
     SearchStableOperatingEnvelopeResult
 
 Result of [`solve_search_stable_operating_envelope`](@ref). It retains the
@@ -1060,6 +1113,37 @@ function _capacity_trajectory(capacities, cps, T, direction)
     return result
 end
 
+function _doe_issued_values_from_result(capacities, interval,
+                                        policy::DOEControlPolicy)
+    capacities isa OperatingEnvelopeResult ||
+        return Dict{_DOEPolicyValueKey,Float64}(), :capacity_values_only
+    interval <= length(capacities.diagnostics) ||
+        return Dict{_DOEPolicyValueKey,Float64}(), :missing_interval_diagnostics
+    diagnostics = capacities.diagnostics[interval]
+    get(diagnostics, "control_policy_signature", nothing) ==
+        _doe_sha256(_doe_policy_manifest(policy)) ||
+        return Dict{_DOEPolicyValueKey,Float64}(), :policy_mismatch
+    records = get(diagnostics, "issued_control_values", nothing)
+    records isa AbstractVector ||
+        return Dict{_DOEPolicyValueKey,Float64}(), :not_recorded
+    values_ = Dict{_DOEPolicyValueKey,Float64}()
+    for record in records
+        record isa AbstractDict || continue
+        stage = get(record, "stage", nothing)
+        stage in (:issue, :scenario) || continue
+        key = _doe_control_key(
+            record["component"], record["id"], record["quantity"],
+            record["position"])
+        information_index = stage == :issue ? 0 : Int(record["scenario"])
+        value = Float64(record["value"])
+        isfinite(value) || throw(ArgumentError(
+            "recorded issued control value is not finite"))
+        values_[(key, information_index)] = value
+    end
+    return values_, isempty(values_) ? :no_issued_controls :
+        :operating_envelope_result
+end
+
 function _verification_patterns(utilizations, n)
     utilizations == :bound_point && return _dispatch_patterns(n, :bound_point)
     utilizations == :corners && return _dispatch_patterns(n, :corners)
@@ -1081,6 +1165,7 @@ end
 const _DOEControlKey = NamedTuple{
     (:component, :id, :quantity, :position),
     Tuple{Symbol,String,Symbol,Int}}
+const _DOEPolicyValueKey = Tuple{_DOEControlKey,Int}
 
 _doe_control_key(component, id, quantity, position) =
     _DOEControlKey((component, String(id), quantity, Int(position)))
@@ -1263,7 +1348,9 @@ end
 
 function _apply_doe_control_policy!(model, records, cps,
                                     policy::DOEControlPolicy;
-                                    fixed_control_values=Dict{_DOEControlKey,Float64}())
+                                    fixed_control_values=Dict{_DOEControlKey,Float64}(),
+                                    fixed_policy_control_values=
+                                        Dict{_DOEPolicyValueKey,Float64}())
     rules = _doe_rule_map(policy)
     used_rules = Set{Tuple{Symbol,String,Symbol}}()
     handles_by_record = Vector{Dict{_DOEControlKey,Any}}(undef, length(records))
@@ -1296,6 +1383,7 @@ function _apply_doe_control_policy!(model, records, cps,
     audit = Dict{String,Any}[]
     link_count = 0
     fix_count = 0
+    used_policy_values = Set{_DOEPolicyValueKey}()
     for key in sort!(collect(all_keys); by=key ->
                      (string(key.component), key.id, string(key.quantity), key.position))
         present = [index for index in eachindex(records)
@@ -1318,6 +1406,14 @@ function _apply_doe_control_policy!(model, records, cps,
                                              "pattern" => records[index].pattern)
                                         for index in group])
                 reference_index = first(group)
+                information_index = stage == :issue ? 0 :
+                    records[reference_index].scenario
+                # Fixing every member to the recorded issued value already
+                # enforces non-anticipativity. Adding the usual linking tree as
+                # well creates redundant equalities and can make Ipopt's KKT
+                # system singular at an otherwise valid replay point.
+                haskey(fixed_policy_control_values,
+                       (key, information_index)) && continue
                 reference = handles_by_record[reference_index][key]
                 reference_scale = _doe_control_scale(
                     records[reference_index], key,
@@ -1336,6 +1432,20 @@ function _apply_doe_control_policy!(model, records, cps,
             for index in present
                 JuMP.@constraint(model,
                     handles_by_record[index][key] == fixed_control_values[key])
+                fix_count += 1
+            end
+        end
+        if stage in (:issue, :scenario)
+            for index in present
+                information_index = stage == :issue ? 0 : records[index].scenario
+                value_key = (key, information_index)
+                haskey(fixed_policy_control_values, value_key) || continue
+                scale = _doe_control_scale(
+                    records[index], key, declarations_by_record[index])
+                JuMP.@constraint(model,
+                    scale * handles_by_record[index][key] ==
+                    fixed_policy_control_values[value_key])
+                push!(used_policy_values, value_key)
                 fix_count += 1
             end
         end
@@ -1364,6 +1474,10 @@ function _apply_doe_control_policy!(model, records, cps,
     unknown_fixed = setdiff(Set(keys(fixed_control_values)), all_keys)
     isempty(unknown_fixed) || throw(ArgumentError(
         "fixed replay controls were not discovered in this context: $(collect(unknown_fixed))"))
+    unused_policy_values = setdiff(
+        Set(keys(fixed_policy_control_values)), used_policy_values)
+    isempty(unused_policy_values) || throw(ArgumentError(
+        "issued policy-control values did not match the verification policy/contexts: $(collect(unused_policy_values))"))
 
     # Generator P/Q is currently represented by current variables whose power
     # depends on voltage. Linking those currents would impose the wrong policy,
@@ -1411,6 +1525,8 @@ function _apply_doe_control_policy!(model, records, cps,
     shared = [item for item in audit if item["stage"] in (:issue, :scenario)]
     diagnostics = Dict{String,Any}(
         "control_policy" => policy.name,
+        "control_policy_signature" =>
+            _doe_sha256(_doe_policy_manifest(policy)),
         "control_default_stage" => policy.default_stage,
         "control_audit" => audit,
         "control_link_constraints" => link_count,
@@ -1418,7 +1534,8 @@ function _apply_doe_control_policy!(model, records, cps,
         "shared_control_count" => length(shared),
         "adaptive_control_count" => length(adaptive),
         "control_nonanticipativity" => !isempty(shared),
-        "nonanticipativity_enforced" => link_count > 0,
+        "nonanticipativity_enforced" =>
+            link_count > 0 || !isempty(used_policy_values),
         "perfect_recourse_controls_present" => !isempty(adaptive),
         "ideal_recourse_used" => !isempty(adaptive),
         "all_discovered_free_controls_classified" => true,
@@ -1465,6 +1582,44 @@ function _doe_context_control_values(record_index, records, handles_by_record,
     return values_
 end
 
+function _doe_policy_control_values(records, handles_by_record,
+                                    declarations_by_record, audit)
+    values_ = Dict{_DOEPolicyValueKey,Float64}()
+    records_ = Dict{String,Any}[]
+    for item in audit
+        stage = item["stage"]
+        stage in (:issue, :scenario) || continue
+        key = _doe_key_from_audit(item)
+        information_indices = stage == :issue ? [0] :
+            sort!(unique(record.scenario for record in records))
+        for information_index in information_indices
+            record_index = findfirst(eachindex(records)) do index
+                haskey(handles_by_record[index], key) &&
+                    (stage == :issue ||
+                     records[index].scenario == information_index)
+            end
+            record_index === nothing && continue
+            handle = handles_by_record[record_index][key]
+            canonical_value = JuMP.value(handle) * _doe_control_scale(
+                records[record_index], key,
+                declarations_by_record[record_index])
+            value_key = (key, information_index)
+            values_[value_key] = canonical_value
+            push!(records_, Dict{String,Any}(
+                "component" => key.component,
+                "id" => key.id,
+                "quantity" => key.quantity,
+                "position" => key.position,
+                "stage" => stage,
+                "scenario" => stage == :issue ? nothing : information_index,
+                "value" => canonical_value,
+                "unit" => _doe_control_unit(
+                    key, declarations_by_record[record_index])))
+        end
+    end
+    return values_, records_
+end
+
 function _doe_context_replay_values(record_index, handles_by_record, audit)
     handles = handles_by_record[record_index]
     values_ = Dict{_DOEControlKey,Float64}()
@@ -1492,7 +1647,9 @@ function _solve_interval_group(group, cps, policy;
                                temporal_dt_h=1.0,
                                fixed_capacity=nothing,
                                patterns_override=nothing,
-                               fixed_control_values=Dict{_DOEControlKey,Float64}())
+                               fixed_control_values=Dict{_DOEControlKey,Float64}(),
+                               fixed_policy_control_values=
+                                   Dict{_DOEPolicyValueKey,Float64}())
     model = JuMP.Model(optimizer)
     pb = per_unit ? s_base : 1.0
     cap = Dict{String,Any}()
@@ -1534,7 +1691,8 @@ function _solve_interval_group(group, cps, policy;
                for (index, spec) in enumerate(specifications)]
     control_payload = _apply_doe_control_policy!(
         model, records, cps, control_policy;
-        fixed_control_values=fixed_control_values)
+        fixed_control_values=fixed_control_values,
+        fixed_policy_control_values=fixed_policy_control_values)
     control_diagnostics = control_payload.diagnostics
     foreach(r -> enforce_kcl!(r.ctx), records)
     start_hook! === nothing || start_hook!(multi.contexts)
@@ -1578,12 +1736,17 @@ function _solve_interval_group(group, cps, policy;
     objective = NaN
     context_results = OperatingEnvelopeContextResult[]
     replay_values = Vector{Tuple{Int,Int,Dict{_DOEControlKey,Float64},Vector{Dict{String,Any}}}}()
+    policy_control_values = Dict{_DOEPolicyValueKey,Float64}()
+    policy_control_records = Dict{String,Any}[]
     margin_diagnostics = Dict{String,Any}(
         "minimum_margins"=>Dict{String,Float64}(),
         "minimum_normalized_margins"=>Dict{String,Float64}(),
         "minimum_margin_locations"=>Dict{String,String}(),
         "binding_constraints"=>String[])
     if feasible
+        policy_control_values, policy_control_records = _doe_policy_control_values(
+            records, control_payload.handles_by_record,
+            control_payload.declarations_by_record, control_payload.audit)
         for cp in cps
             raw = JuMP.value(cap[cp.id]) * pb
             alloc[cp.id] = clamp(raw, 0.0, _capacity_limit(cp, direction))
@@ -1610,6 +1773,8 @@ function _solve_interval_group(group, cps, policy;
                 (record.scenario, record.pattern, values_, unsupported))
             evidence = Dict{String,Any}(
                 "evidence_scope" => :joint_policy_model,
+                "margin_evaluation" =>
+                    :independent_snapshot_quantity_recomputation,
                 "joint_solve_time_seconds" => solve_time_seconds,
                 "independent_replay" => nothing)
             merge!(evidence, local_margins)
@@ -1659,6 +1824,9 @@ function _solve_interval_group(group, cps, policy;
         "control_recourse" => control_policy.name,
         "prescribed_ibr_controls" => :retained,
         "control_policy_source" => control_policy_source,
+        "issued_policy_controls_fixed" =>
+            !isempty(fixed_policy_control_values),
+        "issued_control_values" => policy_control_records,
         "scenario_count" => length(group),
         "dispatch_points_per_scenario" => length(patterns),
         "fairness_kind" => policy.kind,
@@ -1671,7 +1839,8 @@ function _solve_interval_group(group, cps, policy;
     return (status=status, alloc=alloc, total=total,
             snapshot=snapshot, diagnostics=diag,
             context_results=context_results,
-            replay_values=replay_values)
+            replay_values=replay_values,
+            policy_control_values=policy_control_values)
 end
 
 """
@@ -2011,7 +2180,11 @@ The same local-solve and finite-test-set semantics as
 [`solve_operating_envelope`](@ref) apply. `control_policy` also applies during
 verification, so an issued envelope can be checked under the same information
 structure used to quantify it. Custom vectors are reported as
-`security_scope=:explicit_utilization_points`.
+`security_scope=:explicit_utilization_points`. When `capacities` is an
+`OperatingEnvelopeResult` produced under the same policy,
+`replay_issued_controls=true` fixes its recorded `:issue` and `:scenario`
+control values during verification. A capacity dictionary has no such issuance
+record and is labelled accordingly.
 """
 function verify_operating_envelope(nets,
                                    connection_points::AbstractVector{ConnectionPoint},
@@ -2029,6 +2202,7 @@ function verify_operating_envelope(nets,
                                    start_hook! = nothing,
                                    independent_replay::Bool=true,
                                    diagnose_infeasible_contexts::Bool=true,
+                                   replay_issued_controls::Bool=true,
                                    max_exact_corners::Int=10)
     groups = _scenario_groups(nets)
     cps = collect(connection_points)
@@ -2049,6 +2223,10 @@ function verify_operating_envelope(nets,
     diagnostics = Dict{String,Any}[]
     context_results = Vector{OperatingEnvelopeContextResult}[]
     for (t, group) in enumerate(groups)
+        issued_values, issued_source = replay_issued_controls ?
+            _doe_issued_values_from_result(
+                capacities, t, resolved_control_policy) :
+            (Dict{_DOEPolicyValueKey,Float64}(), :disabled)
         solved = _solve_interval_group(group, cps, policy;
             direction=direction, security=security, per_unit=per_unit, s_base=s_base,
             optimizer=optimizer, verbose=verbose, solver_options=solver_options,
@@ -2057,7 +2235,10 @@ function verify_operating_envelope(nets,
             control_policy_source=control_policy_source,
             context_hook! = context_hook!,
             start_hook! = start_hook!,
-            fixed_capacity=trajectory[t], patterns_override=patterns)
+            fixed_capacity=trajectory[t], patterns_override=patterns,
+            fixed_policy_control_values=issued_values)
+        solved.diagnostics["issued_control_replay_source"] = issued_source
+        solved.diagnostics["issued_control_replay_count"] = length(issued_values)
         push!(statuses, solved.status)
         push!(snapshots, solved.snapshot)
         interval_contexts = OperatingEnvelopeContextResult[]
@@ -2130,7 +2311,8 @@ function verify_operating_envelope(nets,
                         context_hook! = context_hook!,
                         start_hook! = start_hook!,
                         fixed_capacity=trajectory[t],
-                        patterns_override=[fractions])
+                        patterns_override=[fractions],
+                        fixed_policy_control_values=issued_values)
                     context = _doe_relabel_context(
                         only(individual.context_results), scenario,
                         pattern_index, fractions)
@@ -2505,6 +2687,201 @@ function search_operating_envelope_adversarial(
 end
 
 """
+    confirm_operating_envelope_counterexample(
+        nets, connection_points, capacities, utilization;
+        start_scales=(1.0, 0.9, 1.1), kwargs...)
+
+Repeat one candidate utilization point from deterministic perturbations of the
+registered OPF starting values. If `capacities` is an
+[`OperatingEnvelopeResult`](@ref), recorded issue-time/scenario controls are
+replayed by default through [`verify_operating_envelope`](@ref).
+
+`:repeated_candidate` means every start produced at least one individually
+infeasible context; `:not_reproduced` means at least one start verified every
+interval/scenario; all other combinations are `:inconclusive`. None is a global
+infeasibility certificate.
+"""
+function confirm_operating_envelope_counterexample(
+        nets, connection_points::AbstractVector{ConnectionPoint}, capacities,
+        utilization;
+        start_scales=(1.0, 0.9, 1.1),
+        base_start_hook! = nothing,
+        independent_replay::Bool=false,
+        kwargs...)
+    point = only(_verification_patterns(
+        [utilization], length(connection_points)))
+    scales = Float64.(collect(start_scales))
+    isempty(scales) && throw(ArgumentError("start_scales must be non-empty"))
+    all(scale -> isfinite(scale) && scale > 0, scales) ||
+        throw(ArgumentError("start_scales must be finite and positive"))
+    verifications = OperatingEnvelopeVerification[]
+    changed_counts = Int[]
+    run_candidates = Vector{Vector{Dict{String,Any}}}()
+    for scale in scales
+        changed = Ref(0)
+        start_hook! = contexts -> begin
+            base_start_hook! === nothing || base_start_hook!(contexts)
+            changed[] = _doe_scale_registered_starts!(contexts, scale)
+        end
+        verification = verify_operating_envelope(
+            nets, connection_points, capacities;
+            utilizations=[point],
+            start_hook! = start_hook!,
+            independent_replay=independent_replay,
+            kwargs...)
+        push!(verifications, verification)
+        push!(changed_counts, changed[])
+        locations = Dict{String,Any}[]
+        for (interval, contexts) in enumerate(verification.context_results),
+            context in contexts
+            context.feasible === false || continue
+            push!(locations, Dict{String,Any}(
+                "interval" => interval,
+                "scenario" => context.scenario,
+                "termination_status" => context.termination_status,
+                "primal_status" => context.primal_status))
+        end
+        push!(run_candidates, locations)
+    end
+    reproduced = [!isempty(locations) for locations in run_candidates]
+    fully_feasible = [all(verification.feasible)
+                      for verification in verifications]
+    outcome = any(fully_feasible) ? :not_reproduced :
+        all(reproduced) ? :repeated_candidate : :inconclusive
+    diagnostics = Dict{String,Any}(
+        "method" => :deterministic_multistart_candidate_replay,
+        "start_changed_variable_counts" => changed_counts,
+        "termination_statuses" =>
+            [verification.termination_status for verification in verifications],
+        "fully_feasible_runs" => fully_feasible,
+        "candidate_reproduced_runs" => reproduced,
+        "candidate_locations_by_run" => run_candidates,
+        "global_certificate" => false,
+        "claim" => outcome == :repeated_candidate ?
+            :candidate_repeated_across_recorded_starts :
+            outcome == :not_reproduced ?
+                :candidate_not_reproduced_from_every_start :
+                :candidate_confirmation_inconclusive)
+    return DOECounterexampleConfirmationResult(
+        outcome, point, verifications, scales, diagnostics)
+end
+
+function _doe_append_unique_points!(points, additions)
+    seen = Set(Tuple(point) for point in points)
+    added = 0
+    for point in additions
+        values_ = Float64.(point)
+        key = Tuple(values_)
+        key in seen && continue
+        push!(seen, key)
+        push!(points, values_)
+        added += 1
+    end
+    return added
+end
+
+"""
+    solve_adversarial_search_stable_operating_envelope(
+        nets, connection_points; initial_utilizations=:bound_point,
+        max_rounds=3, solve_keywords=NamedTuple(),
+        search_keywords=NamedTuple())
+
+Allocate on an accumulated finite utilization set, run
+[`search_operating_envelope_adversarial`](@ref) against the actual recorded
+issue/scenario controls, add all discovered points, and repeat. Every allocation
+and search is retained. A final reallocation is performed when the search budget
+is exhausted so the returned envelope represents every accumulated point,
+although that final allocation has not itself passed another adaptive screen.
+
+Outcomes are `:search_stable`, `:budget_exhausted`, `:inconclusive`, or
+`:allocation_failed`. They remain finite local-NLP evidence and never a global
+certificate.
+"""
+function solve_adversarial_search_stable_operating_envelope(
+        nets, connection_points::AbstractVector{ConnectionPoint};
+        initial_utilizations=:bound_point,
+        max_rounds::Int=3,
+        control_policy::Union{Nothing,DOEControlPolicy}=nothing,
+        context_hook! = nothing,
+        solve_keywords=NamedTuple(),
+        search_keywords=NamedTuple())
+    max_rounds >= 1 || throw(ArgumentError("max_rounds must be positive"))
+    solve_keywords isa NamedTuple || throw(ArgumentError(
+        "solve_keywords must be a NamedTuple"))
+    search_keywords isa NamedTuple || throw(ArgumentError(
+        "search_keywords must be a NamedTuple"))
+    points = _verification_patterns(
+        initial_utilizations, length(connection_points))
+    allocations = OperatingEnvelopeResult[]
+    searches = DOEAdversarialSearchResult[]
+    added_by_round = Int[]
+
+    for round in 1:max_rounds
+        allocation = solve_operating_envelope(
+            nets, connection_points;
+            utilizations=points,
+            control_policy=control_policy,
+            context_hook! = context_hook!,
+            solve_keywords...)
+        push!(allocations, allocation)
+        if any(!isfinite, allocation.total_capacity)
+            return AdversarialSearchStableOperatingEnvelopeResult(
+                :allocation_failed, allocation, allocations, searches, points,
+                length(searches), Dict{String,Any}(
+                    "failure_round" => round,
+                    "global_certificate" => false,
+                    "claim" => :no_publishable_allocation))
+        end
+        search = search_operating_envelope_adversarial(
+            nets, connection_points, allocation;
+            control_policy=control_policy,
+            context_hook! = context_hook!,
+            search_keywords...)
+        push!(searches, search)
+        added = _doe_append_unique_points!(
+            points, search.utilization_points)
+        push!(added_by_round, added)
+        if search.outcome == :search_stable
+            return AdversarialSearchStableOperatingEnvelopeResult(
+                :search_stable, allocation, allocations, searches, points,
+                round, Dict{String,Any}(
+                    "points_added_by_round" => added_by_round,
+                    "final_allocation_screened" => true,
+                    "global_certificate" => false,
+                    "claim" =>
+                        :no_counterexample_found_within_recorded_search_budget))
+        elseif search.outcome == :inconclusive && added == 0
+            return AdversarialSearchStableOperatingEnvelopeResult(
+                :inconclusive, allocation, allocations, searches, points,
+                round, Dict{String,Any}(
+                    "points_added_by_round" => added_by_round,
+                    "final_allocation_screened" => false,
+                    "global_certificate" => false,
+                    "claim" => :numerically_or_policy_inconclusive))
+        end
+    end
+
+    final_allocation = solve_operating_envelope(
+        nets, connection_points;
+        utilizations=points,
+        control_policy=control_policy,
+        context_hook! = context_hook!,
+        solve_keywords...)
+    push!(allocations, final_allocation)
+    outcome = any(!isfinite, final_allocation.total_capacity) ?
+        :allocation_failed : :budget_exhausted
+    return AdversarialSearchStableOperatingEnvelopeResult(
+        outcome, final_allocation, allocations, searches, points,
+        length(searches), Dict{String,Any}(
+            "points_added_by_round" => added_by_round,
+            "final_allocation_screened" => false,
+            "global_certificate" => false,
+            "claim" => outcome == :allocation_failed ?
+                :no_publishable_final_allocation :
+                :finite_search_budget_exhausted))
+end
+
+"""
     solve_search_stable_operating_envelope(nets, connection_points;
         initial_utilizations=:bound_point, samples_per_round=16,
         max_rounds=3, solve_keywords=NamedTuple(),
@@ -2620,6 +2997,10 @@ function doe_benchmark_rows(spec::DOEStudySpec,
         total_capacity_W=result.total_capacity[interval],
         fairness_kind=get(result.diagnostics[interval], "fairness_kind", missing),
         control_policy=get(result.diagnostics[interval], "control_policy", missing),
+        control_policy_signature=get(
+            result.diagnostics[interval], "control_policy_signature", missing),
+        issued_control_count=length(get(
+            result.diagnostics[interval], "issued_control_values", Any[])),
         security_scope=get(result.diagnostics[interval], "security_scope", missing),
         scenario_count=Int(get(result.diagnostics[interval], "scenario_count", 0)),
         dispatch_point_count=Int(get(result.diagnostics[interval],
@@ -2673,6 +3054,12 @@ function doe_context_benchmark_rows(
                     get(replay, "maximum_voltage_difference_V", NaN) : NaN,
                 minimum_margins=copy(margins),
                 minimum_normalized_margins=copy(normalized_margins),
+                issued_control_replay_source=get(
+                    verification.diagnostics[interval],
+                    "issued_control_replay_source", missing),
+                issued_control_replay_count=get(
+                    verification.diagnostics[interval],
+                    "issued_control_replay_count", 0),
                 global_certificate=false,
             ))
         end

@@ -401,13 +401,15 @@ configuration and can identify exactly what was and was not tested.
    jointly verified under the selected recourse policy and the search retains
    every score and round. A true continuous inner adversarial optimization and
    a globally valid violation bound remain future work.
-2. **Implemented for finite Halton screens:** counterexample-guided outer
-   allocation solves, screens, appends the complete tested set, and repeats.
-   Integrate the adaptive heuristic into that outer loop after its benchmark
-   behavior is characterized; replace both screens with a true
+2. **Implemented for finite Halton and adaptive screens:** separate outer loops
+   solve, screen, append the complete tested set, and repeat. The adaptive loop
+   replays the issue/scenario controls actually selected by each allocation and
+   retains every intermediate allocation. Replace both screens with a true
    violation-maximizing oracle when available.
-3. Keep the outcome hierarchy explicit: falsified, search-stable under a budget,
-   or certified by a valid bound.
+3. **Implemented first confirmation slice:** candidate points can be repeated
+   from deterministic start perturbations and are labelled repeated,
+   not-reproduced, or inconclusive. This improves numerical evidence without
+   relabelling repeated local infeasibility as a global certificate.
 4. Compare full corners, random/quasi-random points, sensitivity-screened
    points, and adaptive counterexamples on the same feeders.
 

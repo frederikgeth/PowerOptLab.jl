@@ -254,8 +254,10 @@ end
     @test perfect.diagnostics[1]["perfect_recourse_controls_present"]
     @test !perfect.diagnostics[1]["control_nonanticipativity"]
     @test issued.diagnostics[1]["control_policy"] == :issue_plus_local_laws
+    @test length(issued.diagnostics[1]["control_policy_signature"]) == 64
     @test issued.diagnostics[1]["control_nonanticipativity"]
     @test issued.diagnostics[1]["control_link_constraints"] == 3
+    @test length(issued.diagnostics[1]["issued_control_values"]) == 1
     q_audit = only(filter(item -> item["id"] == "statcom_bus2" &&
                                   item["quantity"] == :reactive_power,
                           issued.diagnostics[1]["control_audit"]))
@@ -274,12 +276,20 @@ end
     @test operational_replay.diagnostics[1]["infeasibility_interpretation"] ==
           :shared_control_incompatibility_or_joint_nlp_failure
 
+    issued_replay = verify_operating_envelope(net, cps, issued;
+        utilizations=:corners, control_policy=IssuePlusLocalLaws())
+    @test issued_replay.feasible == [true]
+    @test issued_replay.diagnostics[1]["issued_control_replay_source"] ==
+          :operating_envelope_result
+    @test issued_replay.diagnostics[1]["issued_control_replay_count"] == 1
+
     scenario_policy = PerfectRecourse(rules=[DOEControlRule(
         component=:ibr, id="statcom_bus2", quantity=:reactive_power,
         stage=:scenario)])
     scenario = solve_operating_envelope([[net, deepcopy(net)]], cps;
         security=:corners, control_policy=scenario_policy)
     @test scenario.diagnostics[1]["control_link_constraints"] == 6
+    @test length(scenario.diagnostics[1]["issued_control_values"]) == 2
     @test_throws ArgumentError DOEControlRule(
         component=:ibr, id="x", quantity=:reactive_power, stage=:unknown)
     @test_throws ArgumentError DOEControlPolicy(
@@ -493,6 +503,27 @@ end
     @test length(range_failure.verifications) == 2
     @test any(context -> any(x -> 0 < x < 1, context.utilization),
               range_failure.candidate_contexts)
+    candidate = first(range_failure.candidate_contexts)
+    confirmation = confirm_operating_envelope_counterexample(
+        unbalanced_net, phase_cps, balanced_bound, candidate.utilization;
+        start_scales=(1.0, 0.95), control_policy=PerfectRecourse())
+    @test confirmation.outcome == :repeated_candidate
+    @test confirmation.diagnostics["candidate_reproduced_runs"] ==
+          [true, true]
+    @test !solve_diagnostics(confirmation).global_certificate
+
+    adaptive_range = solve_adversarial_search_stable_operating_envelope(
+        unbalanced_net, phase_cps;
+        max_rounds=2,
+        control_policy=PerfectRecourse(),
+        search_keywords=(seed_samples=0, refinement_rounds=1,
+                         restarts=2, initial_step=0.5))
+    @test adaptive_range.outcome == :search_stable
+    @test adaptive_range.rounds == 2
+    @test length(adaptive_range.allocations) == 2
+    @test adaptive_range.allocations[2].total_capacity[1] <
+          adaptive_range.allocations[1].total_capacity[1]
+    @test adaptive_range.diagnostics["final_allocation_screened"]
 
     adaptive = solve_search_stable_operating_envelope(
         net, cps; samples_per_round=2, max_rounds=2)
@@ -547,6 +578,8 @@ end
     @test length(rows) == 1
     @test rows[1].study_id == benchmark_spec.study_id
     @test rows[1].method == "baseline"
+    @test length(rows[1].control_policy_signature) == 64
+    @test rows[1].issued_control_count == 0
     @test !rows[1].global_certificate
     verification = verify_operating_envelope(net, cps, result)
     context_rows = doe_context_benchmark_rows(
@@ -554,4 +587,5 @@ end
     @test length(context_rows) == 1
     @test context_rows[1].replay_feasible === true
     @test !isempty(context_rows[1].minimum_normalized_margins)
+    @test context_rows[1].issued_control_replay_source == :no_issued_controls
 end

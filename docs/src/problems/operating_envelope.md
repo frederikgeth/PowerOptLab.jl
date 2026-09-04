@@ -53,7 +53,8 @@ The machine-readable claim metadata includes:
 - `solver_class=:local_nonlinear`;
 - `uncertainty_semantics`, distinguishing one declared snapshot from a finite
   scenario set;
-- `control_policy`, `control_policy_source`, `control_default_stage`, and a
+- `control_policy`, its deterministic `control_policy_signature`,
+  `control_policy_source`, `control_default_stage`, and a
   per-control `control_audit` containing native classification, selected stage,
   automatic law, equality groups, and link count;
 - `control_nonanticipativity`, `nonanticipativity_enforced`, and
@@ -106,6 +107,14 @@ feasible joint policy solve is independently repeated one context at a time with
 its optimized free controls fixed. The replay records its status, completeness,
 snapshot, margins, and maximum complex-voltage difference from the joint solve.
 
+When verification receives an `OperatingEnvelopeResult` produced with the same
+control policy, its recorded `:issue` and `:scenario` control values are fixed
+at their canonical values in the new utilization contexts. Diagnostics report
+`issued_control_replay_source` and `issued_control_replay_count`. Passing only a
+capacity dictionary cannot reproduce issued controls and is labelled
+`:capacity_values_only`; set `replay_issued_controls=false` only for an explicit
+re-optimization experiment.
+
 When a joint model fails, contexts are diagnosed separately. If they are all
 individually feasible, diagnostics use
 `:shared_control_incompatibility_or_joint_nlp_failure`; they do not invent a
@@ -120,6 +129,12 @@ set inside the advertised box. Its outcomes are deliberately limited to
 refinement around the points with the smallest normalized constraint headroom.
 It is a more targeted falsification heuristic, but it still searches only a
 finite set and does not prove that its worst point is globally worst.
+[`confirm_operating_envelope_counterexample`](@ref) repeats a candidate from
+multiple deterministic starts and distinguishes repeated failure, successful
+reproduction of feasibility, and inconclusive evidence.
+[`solve_adversarial_search_stable_operating_envelope`](@ref) alternates
+allocation and adaptive search, replays the allocation's issued controls during
+each search, and retains every intermediate allocation.
 [`solve_search_stable_operating_envelope`](@ref) adds the screened set to a
 counterexample-guided allocation loop. Neither API reports a global certificate.
 

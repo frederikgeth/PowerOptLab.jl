@@ -143,6 +143,18 @@ individual contexts pass, the result is reported as
 silently blame one utilization point when the conflict may arise from a common
 setpoint or local solver behavior.
 
+When `issued` is an `OperatingEnvelopeResult`, verification also reuses its
+recorded issue/scenario control values by default:
+
+```julia
+check.diagnostics[1]["issued_control_replay_source"]
+check.diagnostics[1]["issued_control_replay_count"]
+```
+
+This prevents the validation set from receiving a newly optimized manual
+setting. A bare capacity dictionary has no issuance record and is explicitly
+reported as `:capacity_values_only`.
+
 ## 5. Screen the interior of the advertised box
 
 Corners do not prove that a non-convex AC feasible set contains the box
@@ -192,6 +204,31 @@ issue-time controls remain shared. This is a deterministic black-box
 falsification heuristic—not a proof that the returned point globally maximizes
 violation. Record all `verifications`, point scores, step settings, and the
 candidate context.
+
+Confirm a candidate across deterministic starts, then place the adaptive search
+inside the allocation loop:
+
+```julia
+candidate = adversarial.worst_context
+confirmation = confirm_operating_envelope_counterexample(
+    scenarios, cps, issued, candidate.utilization;
+    start_scales=(1.0, 0.9, 1.1),
+    control_policy=IssuePlusLocalLaws())
+
+adaptive_margin = solve_adversarial_search_stable_operating_envelope(
+    scenarios, cps;
+    max_rounds=4,
+    control_policy=IssuePlusLocalLaws(),
+    solve_keywords=(fairness=FairnessPolicy(
+        kind=:max_min, normalization=:capacity),),
+    search_keywords=(seed_samples=16, refinement_rounds=3),
+)
+```
+
+Candidate confirmation records repeated local failure, successful feasibility
+reproduction, or an inconclusive mix; none is global proof. The outer loop
+replays the control values selected by each allocation while searching, then
+re-optimizes them only when the enlarged utilization set is allocated again.
 
 For a counterexample-guided allocation loop:
 

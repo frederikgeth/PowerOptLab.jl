@@ -139,6 +139,44 @@ The first refinement evaluates points such as ``(0.5,1,1)``. Their unequal
 phase injections expose a failure hidden by the balanced bound point. The
 search retains both verification rounds and every normalized-headroom score.
 
+Repeat the candidate from several deterministic OPF starts before presenting it
+as numerical evidence:
+
+```julia
+confirmation = confirm_operating_envelope_counterexample(
+    net, cps, bound, search.worst_context.utilization;
+    start_scales=(1.0, 0.95, 1.05),
+    control_policy=PerfectRecourse())
+
+confirmation.outcome            # :repeated_candidate in this fixture
+confirmation.diagnostics["candidate_locations_by_run"]
+```
+
+Finally, add the discovered utilization points to the allocation and repeat the
+search:
+
+```julia
+adaptive = solve_adversarial_search_stable_operating_envelope(
+    net, cps;
+    max_rounds=2,
+    control_policy=PerfectRecourse(),
+    search_keywords=(
+        seed_samples=0,
+        refinement_rounds=1,
+        restarts=2,
+        initial_step=0.5,
+    ))
+
+adaptive.outcome
+[allocation.total_capacity for allocation in adaptive.allocations]
+adaptive.diagnostics["final_allocation_screened"]
+```
+
+The second allocation is lower because it represents the asymmetric points
+that falsified the original bound-point allocation. `:search_stable` still
+means only that no further counterexample was found within this recorded finite
+budget.
+
 ## Interpret the result
 
 This experiment distinguishes four statements:

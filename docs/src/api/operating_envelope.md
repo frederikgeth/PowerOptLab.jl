@@ -30,6 +30,8 @@ OperatingEnvelopeVerification
 OperatingEnvelopeContextResult
 OperatingEnvelopeSearchResult
 DOEAdversarialSearchResult
+DOECounterexampleConfirmationResult
+AdversarialSearchStableOperatingEnvelopeResult
 SearchStableOperatingEnvelopeResult
 OperatingEnvelopeMultistartResult
 ```
@@ -43,5 +45,7 @@ compare_operating_envelope_policies
 verify_operating_envelope
 search_operating_envelope_utilizations
 search_operating_envelope_adversarial
+confirm_operating_envelope_counterexample
+solve_adversarial_search_stable_operating_envelope
 solve_search_stable_operating_envelope
 ```
