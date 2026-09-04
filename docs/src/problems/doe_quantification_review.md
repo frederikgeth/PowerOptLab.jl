@@ -422,8 +422,11 @@ counterexamples.
 1. **Typed provenance slice implemented:** `DOEScenario` and `DOEScenarioSet`
    record scenario IDs, roles, optional relative weights, source, construction
    method, seed, timestamp, and metadata; these fields participate in the study
-   identity. Automatic DSSE covariance/profile and inverse-Carson scenario
-   construction remains future work.
+   identity. Typed uncertainty samples, PSD-aware reproducible Gaussian draws,
+   and deep-copy materialization with required callback identity now provide a
+   generic path from covariance or model candidates to scenarios. Automatic
+   selection of DSSE derived quantities, physical transforms, support rules,
+   and inverse-Carson/topology insertion remains future work.
 2. **Held-out evaluation slice implemented:** role-selected coverage reports
    per-scenario outcomes and empirical, weighted, and conservative candidate-
    violation rates. A one-sided Hoeffding bound is emitted only after an
@@ -443,7 +446,7 @@ counterexamples.
    temporal shift design preserves contiguous serial order through circular
    window shifts, checks ordering/spacing, and requires an explicit invariance
    assertion stronger than stationarity. Add seasonal/block resampling and
-   automated DSSE/model-uncertainty scenario construction next.
+   estimator-specific scenario materializers next.
 3. Couple envelopes to storage SOC, EV energy, ramping, tap operations, and
    first-stage/recourse decisions using the package's multi-period machinery.
 4. Evaluate offered capacity, realized utilization, curtailed energy, customer

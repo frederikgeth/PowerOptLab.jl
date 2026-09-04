@@ -336,6 +336,121 @@ struct DOEScenarioSet
     end
 end
 
+"""
+    DOEUncertaintySample(; id, parameters, weight=nothing,
+        timestamp=nothing, metadata=Dict())
+
+One realization in a typed uncertainty sample set. `parameters` may contain
+numeric uncertainty draws or categorical/model-candidate values; interpretation
+is delegated explicitly to [`materialize_doe_scenarios`](@ref).
+"""
+struct DOEUncertaintySample
+    id::String
+    parameters::Dict{String,Any}
+    weight::Union{Nothing,Float64}
+    timestamp::Union{Nothing,DateTime}
+    metadata::Dict{String,Any}
+
+    function DOEUncertaintySample(;
+            id::AbstractString,
+            parameters,
+            weight::Union{Nothing,Real}=nothing,
+            timestamp::Union{Nothing,DateTime}=nothing,
+            metadata=Dict{String,Any}())
+        isempty(id) && throw(ArgumentError(
+            "DOE uncertainty-sample id must be non-empty"))
+        parameter_values = Dict{String,Any}(
+            string(key) => deepcopy(value) for (key, value) in pairs(parameters))
+        isempty(parameter_values) && throw(ArgumentError(
+            "DOE uncertainty sample needs at least one parameter"))
+        all(!isempty, keys(parameter_values)) || throw(ArgumentError(
+            "DOE uncertainty parameter names must be non-empty"))
+        weight_value = weight === nothing ? nothing : Float64(weight)
+        weight_value === nothing ||
+            (isfinite(weight_value) && weight_value > 0) ||
+            throw(ArgumentError(
+                "DOE uncertainty-sample weight must be finite and positive"))
+        new(String(id), parameter_values, weight_value, timestamp,
+            Dict{String,Any}(string(key) => deepcopy(value)
+                             for (key, value) in pairs(metadata)))
+    end
+end
+
+"""
+    DOEUncertaintySampleSet(samples; parameter_names, generation_method,
+        seed=nothing, metadata=Dict(), diagnostics=Dict())
+
+Reproducible collection of typed uncertainty samples. Every sample must contain
+exactly the declared parameter names. `sample_set_id` hashes the declarations,
+samples, weights, timestamps, and metadata; derived diagnostics are deliberately
+excluded from the identity.
+"""
+struct DOEUncertaintySampleSet
+    sample_set_id::String
+    samples::Vector{DOEUncertaintySample}
+    parameter_names::Vector{String}
+    generation_method::Symbol
+    seed::Union{Nothing,Int}
+    metadata::Dict{String,Any}
+    diagnostics::Dict{String,Any}
+
+    function DOEUncertaintySampleSet(
+            samples::AbstractVector{DOEUncertaintySample};
+            parameter_names,
+            generation_method::Symbol,
+            seed::Union{Nothing,Integer}=nothing,
+            metadata=Dict{String,Any}(),
+            diagnostics=Dict{String,Any}())
+        isempty(samples) && throw(ArgumentError(
+            "DOE uncertainty sample set must be non-empty"))
+        names = parameter_names isa Union{AbstractString,Symbol} ?
+            [String(parameter_names)] : String.(collect(parameter_names))
+        isempty(names) && throw(ArgumentError(
+            "parameter_names must be non-empty"))
+        all(!isempty, names) || throw(ArgumentError(
+            "parameter names must be non-empty"))
+        length(unique(names)) == length(names) || throw(ArgumentError(
+            "parameter names must be unique"))
+        sample_values = [DOEUncertaintySample(
+            id=sample.id,
+            parameters=sample.parameters,
+            weight=sample.weight,
+            timestamp=sample.timestamp,
+            metadata=sample.metadata) for sample in samples]
+        ids = [sample.id for sample in sample_values]
+        length(unique(ids)) == length(ids) || throw(ArgumentError(
+            "DOE uncertainty-sample IDs must be unique"))
+        weighted = [sample.weight !== nothing for sample in sample_values]
+        all(weighted) || all(!, weighted) || throw(ArgumentError(
+            "DOE uncertainty-sample weights must be all present or all absent"))
+        declared = Set(names)
+        all(Set(keys(sample.parameters)) == declared for sample in sample_values) ||
+            throw(ArgumentError(
+                "every uncertainty sample must contain exactly parameter_names"))
+        seed_value = seed === nothing ? nothing : Int(seed)
+        seed_value === nothing || seed_value >= 0 || throw(ArgumentError(
+            "DOE uncertainty-set seed must be non-negative"))
+        metadata_values = Dict{String,Any}(
+            string(key) => deepcopy(value) for (key, value) in pairs(metadata))
+        diagnostic_values = Dict{String,Any}(
+            string(key) => deepcopy(value) for (key, value) in pairs(diagnostics))
+        identity = Dict{String,Any}(
+            "parameter_names" => names,
+            "generation_method" => generation_method,
+            "seed" => seed_value,
+            "metadata" => metadata_values,
+            "samples" => [Dict{String,Any}(
+                "id" => sample.id,
+                "parameters" => sample.parameters,
+                "weight" => sample.weight,
+                "timestamp" => sample.timestamp,
+                "metadata" => sample.metadata)
+                for sample in sample_values])
+        new(_doe_sha256(identity), sample_values, names, generation_method,
+            seed_value, metadata_values, diagnostic_values)
+    end
+end
+
 """Return a typed subset containing scenarios whose role is in `roles`."""
 function select_doe_scenarios(scenarios::DOEScenarioSet;
                               roles=(:test,))
@@ -683,6 +798,240 @@ function _doe_canonical(value)
 end
 
 _doe_sha256(value) = bytes2hex(SHA.sha256(codeunits(_doe_canonical(value))))
+
+"""Return a serialization-friendly manifest for a [`DOEUncertaintySampleSet`](@ref)."""
+function doe_uncertainty_manifest(sample_set::DOEUncertaintySampleSet)
+    return Dict{String,Any}(
+        "sample_set_id" => sample_set.sample_set_id,
+        "parameter_names" => copy(sample_set.parameter_names),
+        "generation_method" => sample_set.generation_method,
+        "seed" => sample_set.seed,
+        "metadata" => deepcopy(sample_set.metadata),
+        "diagnostics" => deepcopy(sample_set.diagnostics),
+        "samples" => [Dict{String,Any}(
+            "id" => sample.id,
+            "parameters" => deepcopy(sample.parameters),
+            "weight" => sample.weight,
+            "timestamp" => sample.timestamp,
+            "metadata" => deepcopy(sample.metadata))
+            for sample in sample_set.samples])
+end
+
+"""
+    sample_doe_gaussian_uncertainty(mean, covariance;
+        parameter_names, count, seed, sample_prefix="gaussian",
+        timestamps=nothing, metadata=Dict(), psd_tolerance=sqrt(eps()))
+
+Draw a reproducible typed sample set from a declared multivariate normal model.
+The covariance may be positive semidefinite; eigenvalues within
+`psd_tolerance` of zero are clipped and the retained rank is reported. Larger
+negative eigenvalues, asymmetry, non-finite inputs, and dimension mismatches are
+rejected.
+
+The result records the full declared mean/covariance, empirical sample moments,
+generator, Julia version, and seed. It does not establish that a Gaussian model
+is appropriate, and its support is unbounded: physical truncation, rejection,
+or transformation must be declared separately rather than applied silently.
+"""
+function sample_doe_gaussian_uncertainty(
+        mean_values::AbstractVector{<:Real}, covariance;
+        parameter_names,
+        count::Int,
+        seed::Int,
+        sample_prefix::AbstractString="gaussian",
+        timestamps=nothing,
+        metadata=Dict{String,Any}(),
+        psd_tolerance::Float64=sqrt(eps(Float64)))
+    count >= 1 || throw(ArgumentError("count must be positive"))
+    seed >= 0 || throw(ArgumentError("seed must be non-negative"))
+    isempty(sample_prefix) && throw(ArgumentError(
+        "sample_prefix must be non-empty"))
+    isfinite(psd_tolerance) && psd_tolerance > 0 || throw(ArgumentError(
+        "psd_tolerance must be finite and positive"))
+    means = Float64.(collect(mean_values))
+    all(isfinite, means) || throw(ArgumentError("mean values must be finite"))
+    names = parameter_names isa Union{AbstractString,Symbol} ?
+        [String(parameter_names)] : String.(collect(parameter_names))
+    length(names) == length(means) || throw(DimensionMismatch(
+        "parameter_names and mean must have equal length"))
+    isempty(names) && throw(ArgumentError("parameter_names must be non-empty"))
+    all(!isempty, names) || throw(ArgumentError(
+        "parameter names must be non-empty"))
+    length(unique(names)) == length(names) || throw(ArgumentError(
+        "parameter names must be unique"))
+    covariance_values = Float64.(collect(covariance))
+    size(covariance_values) == (length(means), length(means)) ||
+        throw(DimensionMismatch(
+            "covariance must be $(length(means))×$(length(means))"))
+    all(isfinite, covariance_values) || throw(ArgumentError(
+        "covariance must be finite"))
+    covariance_scale = max(maximum(abs, covariance_values), 1.0)
+    tolerance = psd_tolerance * covariance_scale
+    symmetry_error = maximum(abs, covariance_values - transpose(covariance_values))
+    symmetry_error <= tolerance || throw(ArgumentError(
+        "covariance must be symmetric within psd_tolerance"))
+    symmetric_covariance = 0.5 .* (covariance_values .+
+                                   transpose(covariance_values))
+    decomposition = eigen(Symmetric(symmetric_covariance))
+    minimum(decomposition.values) >= -tolerance || throw(ArgumentError(
+        "covariance must be positive semidefinite"))
+    clipped_eigenvalues = max.(decomposition.values, 0.0)
+    numerical_rank = Base.count(
+        value -> value > tolerance, clipped_eigenvalues)
+    factor = decomposition.vectors * Diagonal(sqrt.(clipped_eigenvalues))
+    rng = Random.MersenneTwister(seed)
+    draws = randn(rng, count, length(means)) * transpose(factor)
+    draws .+= reshape(means, 1, :)
+    timestamp_values = if timestamps === nothing
+        Union{Nothing,DateTime}[nothing for _ in 1:count]
+    else
+        collected = collect(timestamps)
+        length(collected) == count || throw(DimensionMismatch(
+            "timestamps must have one entry per sample"))
+        all(value -> value === nothing || value isa DateTime, collected) ||
+            throw(ArgumentError(
+                "timestamps must contain DateTime values or nothing"))
+        Union{Nothing,DateTime}[value for value in collected]
+    end
+    width = ndigits(count)
+    samples = DOEUncertaintySample[]
+    for index in 1:count
+        parameters = Dict{String,Any}(
+            names[column] => draws[index, column]
+            for column in eachindex(names))
+        push!(samples, DOEUncertaintySample(
+            id="$(sample_prefix)-$(lpad(string(index), width, '0'))",
+            parameters=parameters,
+            timestamp=timestamp_values[index],
+            metadata=Dict{String,Any}(
+                "sample_index" => index,
+                "master_seed" => seed)))
+    end
+    empirical_mean = vec(sum(draws; dims=1)) ./ count
+    empirical_covariance = if count > 1
+        centered = draws .- reshape(empirical_mean, 1, :)
+        transpose(centered) * centered / (count - 1)
+    else
+        missing
+    end
+    model_metadata = merge(
+        Dict{String,Any}(string(key) => value
+                         for (key, value) in pairs(metadata)),
+        Dict{String,Any}(
+            "distribution" => :multivariate_normal,
+            "declared_mean" => means,
+            "declared_covariance" => symmetric_covariance,
+            "unbounded_support" => true))
+    diagnostics = Dict{String,Any}(
+        "sample_count" => count,
+        "dimension" => length(means),
+        "covariance_symmetry_error" => symmetry_error,
+        "psd_tolerance" => psd_tolerance,
+        "minimum_declared_eigenvalue" => minimum(decomposition.values),
+        "maximum_declared_eigenvalue" => maximum(decomposition.values),
+        "numerical_rank" => numerical_rank,
+        "clipped_roundoff_eigenvalue_count" =>
+            Base.count(value -> value < 0, decomposition.values),
+        "empirical_mean" => empirical_mean,
+        "empirical_covariance" => empirical_covariance,
+        "random_generator" => :MersenneTwister,
+        "julia_version" => string(VERSION),
+        "independent_draws_conditional_on_model" => true,
+        "distribution_model_validated" => false,
+        "physical_support_constraints_enforced" => false,
+        "cross_platform_bitwise_reproducibility_asserted" => false)
+    return DOEUncertaintySampleSet(samples;
+        parameter_names=names,
+        generation_method=:multivariate_gaussian,
+        seed=seed,
+        metadata=model_metadata,
+        diagnostics=diagnostics)
+end
+
+"""
+    materialize_doe_scenarios(base_network, sample_set, materialize!;
+        dataset_id, materializer_id, role=:unspecified,
+        source="uncertainty sample materialization", metadata=Dict(),
+        scenario_metadata=Dict())
+
+Deep-copy `base_network` for each typed uncertainty sample, then call
+`materialize!(network, sample)`. The callback may mutate the copy and return
+`nothing`, or return a replacement `Dict{String,Any}` network. The base network
+is never intentionally mutated.
+
+`materializer_id` is required because function bodies cannot be serialized into
+the study identity; use a committed method/version identifier. Parameters,
+sample-set identity, base-network hash, generation method, seed, timestamp, and
+materializer identity are propagated into scenario provenance. The callback is
+responsible for units, physical transforms, topology validity, and any rejection
+or truncation rule.
+"""
+function materialize_doe_scenarios(
+        base_network::Dict{String,Any},
+        sample_set::DOEUncertaintySampleSet,
+        materialize!;
+        dataset_id::AbstractString,
+        materializer_id::AbstractString,
+        role::Symbol=:unspecified,
+        source::AbstractString="uncertainty sample materialization",
+        metadata=Dict{String,Any}(),
+        scenario_metadata=Dict{String,Any}())
+    isempty(dataset_id) && throw(ArgumentError("dataset_id must be non-empty"))
+    isempty(materializer_id) && throw(ArgumentError(
+        "materializer_id must be non-empty"))
+    isempty(source) && throw(ArgumentError("source must be non-empty"))
+    scenarios = DOEScenario[]
+    for sample in sample_set.samples
+        network = deepcopy(base_network)
+        callback_sample = DOEUncertaintySample(
+            id=sample.id,
+            parameters=deepcopy(sample.parameters),
+            weight=sample.weight,
+            timestamp=sample.timestamp,
+            metadata=deepcopy(sample.metadata))
+        returned = materialize!(network, callback_sample)
+        if returned !== nothing
+            returned isa Dict{String,Any} || throw(ArgumentError(
+                "materializer '$materializer_id' must return nothing or Dict{String,Any}"))
+            network = returned
+        end
+        sample_metadata = merge(
+            Dict{String,Any}(string(key) => value
+                             for (key, value) in pairs(scenario_metadata)),
+            deepcopy(sample.metadata),
+            Dict{String,Any}(
+                "uncertainty_sample_id" => sample.id,
+                "uncertainty_sample_set_id" => sample_set.sample_set_id,
+                "uncertainty_parameters" => deepcopy(sample.parameters),
+                "uncertainty_master_seed" => sample_set.seed,
+                "materializer_id" => String(materializer_id)))
+        push!(scenarios, DOEScenario(
+            id=sample.id,
+            network=network,
+            role=role,
+            weight=sample.weight,
+            source=source,
+            generation_method=sample_set.generation_method,
+            seed=sample_set.seed,
+            timestamp=sample.timestamp,
+            metadata=sample_metadata))
+    end
+    set_metadata = merge(
+        Dict{String,Any}(string(key) => value
+                         for (key, value) in pairs(metadata)),
+        Dict{String,Any}(
+            "uncertainty_sample_set_id" => sample_set.sample_set_id,
+            "uncertainty_parameter_names" => copy(sample_set.parameter_names),
+            "uncertainty_generation_method" => sample_set.generation_method,
+            "uncertainty_seed" => sample_set.seed,
+            "uncertainty_diagnostics" => deepcopy(sample_set.diagnostics),
+            "base_network_hash" => _doe_sha256(base_network),
+            "materializer_id" => String(materializer_id),
+            "base_network_deepcopied" => true,
+            "materializer_implementation_serialized" => false))
+    return DOEScenarioSet(scenarios;
+        dataset_id=dataset_id, metadata=set_metadata)
+end
 
 _doe_flat_scenarios(scenarios::DOEScenarioSet) =
     [scenario for group in scenarios.intervals for scenario in group]

@@ -449,6 +449,65 @@ windows, scenarios reused during method development, or a split affected by
 temporal leakage. In those cases, publish the empirical and weighted results
 without a confidence claim.
 
+## Construct scenarios from a covariance model
+
+The typed construction layer separates uncertainty draws from the callback that
+turns them into networks. For example, declare a correlated Gaussian model for
+the two loads:
+
+```julia
+load_samples = sample_doe_gaussian_uncertainty(
+    [5000.0, 5000.0],
+    [500.0^2 0.4 * 500.0^2;
+     0.4 * 500.0^2 500.0^2];
+    parameter_names=("p1_W", "p2_W"),
+    count=100,
+    seed=20260905,
+    sample_prefix="load",
+    metadata=Dict(
+        "covariance_source" => "synthetic tutorial declaration",
+        "units" => Dict("p1_W" => "W", "p2_W" => "W")))
+
+sample_manifest = doe_uncertainty_manifest(load_samples)
+load_samples.diagnostics
+```
+
+The implementation accepts positive-semidefinite covariance, reports its
+numerical rank, and refuses material negative eigenvalues or asymmetry. It uses
+a named `MersenneTwister` seed and records declared and empirical moments. This
+reproduces the computational draw; it does not validate Gaussianity. Gaussian
+support is unbounded, so transformations, truncation, and rejection rules must
+be explicit when nonphysical values are plausible.
+
+Materialize each sample from a deep copy of one base network:
+
+```julia
+base_network = coverage_feeder(5000.0, 5000.0)
+
+function apply_load_sample!(network, sample)
+    network["load"]["d1"]["p_nom"][1] = sample.parameters["p1_W"]
+    network["load"]["d2"]["p_nom"][1] = sample.parameters["p2_W"]
+    return nothing
+end
+
+gaussian_scenarios = materialize_doe_scenarios(
+    base_network, load_samples, apply_load_sample!;
+    dataset_id="tutorial-gaussian-loads-v1",
+    materializer_id="apply-load-sample-v1",
+    role=:calibration,
+    source="synthetic tutorial covariance model")
+
+gaussian_scenarios.metadata
+gaussian_scenarios.intervals[1][1].metadata["uncertainty_parameters"]
+```
+
+The required `materializer_id` stands in for a callback body, which cannot be
+serialized into a study manifest; use a committed method name and revision in a
+real experiment. The base-network hash, sample-set identity, parameters, seed,
+generation method, and materializer identifier all propagate into scenario
+provenance. The callback remains responsible for units, physical transforms,
+topology validity, and any acceptance rule.
+
 ## Connecting a DSSE workflow
 
 For measurement-derived studies, construct one `DOEScenario` per materialized
@@ -462,9 +521,17 @@ network realization and record at least:
 - whether impedance candidates, topology alternatives, and forecast errors are
   sampled jointly or independently.
 
-PowerOptLab does not yet turn a DSSE covariance into network scenarios
-automatically. The typed layer preserves the experiment once those networks are
-constructed; it does not validate the scenario generator.
+Pass a derived-quantity mean and the matrix returned by
+[`derived_covariance`](@ref) to `sample_doe_gaussian_uncertainty`, then implement
+the corresponding network transform in `materialize_doe_scenarios`. The same
+materializer can consume manually constructed categorical
+`DOEUncertaintySample`s for topology or inverse-Carson candidates.
+
+This is generic plumbing, not an automatic physical interpretation of a DSSE
+state covariance. The available DSSE covariance is local Gauss--Newton evidence
+under its declared measurement model. The user must choose derived quantities,
+units, transforms, correlations with forecast/model errors, and support rules;
+the framework records but does not validate those choices.
 
 ## What this does not prove
 

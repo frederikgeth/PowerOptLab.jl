@@ -34,6 +34,88 @@ using JuMP
     @test res.total_export[2] > res.total_export[1]
 end
 
+@testset "Operating envelope: uncertainty scenario construction" begin
+    parameter_names = ["p1_W", "p2_W"]
+    declared_mean = [4000.0, 5000.0]
+    declared_covariance = [250000.0 100000.0; 100000.0 360000.0]
+    timestamps = [DateTime(2026, 4, index) for index in 1:6]
+    samples = sample_doe_gaussian_uncertainty(
+        declared_mean, declared_covariance;
+        parameter_names=parameter_names,
+        count=6, seed=44, timestamps=timestamps,
+        metadata=Dict("covariance_source" => "synthetic fixture"))
+    repeated_samples = sample_doe_gaussian_uncertainty(
+        declared_mean, declared_covariance;
+        parameter_names=parameter_names,
+        count=6, seed=44, timestamps=timestamps,
+        metadata=Dict("covariance_source" => "synthetic fixture"))
+    @test samples.sample_set_id == repeated_samples.sample_set_id
+    @test [sample.parameters for sample in samples.samples] ==
+          [sample.parameters for sample in repeated_samples.samples]
+    @test samples.parameter_names == parameter_names
+    @test samples.generation_method == :multivariate_gaussian
+    @test samples.diagnostics["numerical_rank"] == 2
+    @test !samples.diagnostics["distribution_model_validated"]
+    @test !samples.diagnostics["physical_support_constraints_enforced"]
+    sample_manifest = doe_uncertainty_manifest(samples)
+    @test sample_manifest["sample_set_id"] == samples.sample_set_id
+    @test length(sample_manifest["samples"]) == 6
+
+    base_network = doe_feeder(p1=1000.0, p2=1000.0)
+    materializer = function(network, sample)
+        network["load"]["d1"]["p_nom"][1] = sample.parameters["p1_W"]
+        network["load"]["d2"]["p_nom"][1] = sample.parameters["p2_W"]
+        sample.metadata["callback_mutation"] = true
+        return nothing
+    end
+    scenarios = materialize_doe_scenarios(
+        base_network, samples, materializer;
+        dataset_id="gaussian-load-scenarios",
+        materializer_id="test-load-materializer-v1",
+        role=:calibration,
+        source="synthetic Gaussian fixture")
+    @test length(scenarios.intervals[1]) == 6
+    @test all(scenario.role == :calibration
+              for scenario in scenarios.intervals[1])
+    @test base_network["load"]["d1"]["p_nom"][1] == 1000.0
+    @test scenarios.intervals[1][1].network["load"]["d1"]["p_nom"][1] ==
+          samples.samples[1].parameters["p1_W"]
+    @test !haskey(samples.samples[1].metadata, "callback_mutation")
+    @test scenarios.intervals[1][1].metadata["uncertainty_sample_set_id"] ==
+          samples.sample_set_id
+    @test scenarios.metadata["base_network_deepcopied"]
+    @test scenarios.metadata["materializer_id"] ==
+          "test-load-materializer-v1"
+    cps = [ConnectionPoint(id="d1", bus="bus1", export_max=10e3),
+           ConnectionPoint(id="d2", bus="bus2", export_max=10e3)]
+    scenario_spec = DOEStudySpec(scenarios, cps)
+    @test scenario_spec.scenario_set_metadata["metadata"][
+        "uncertainty_sample_set_id"] == samples.sample_set_id
+
+    singular_samples = sample_doe_gaussian_uncertainty(
+        [0.0, 0.0], [1.0 1.0; 1.0 1.0];
+        parameter_names=("x", "y"), count=3, seed=45)
+    @test singular_samples.diagnostics["numerical_rank"] == 1
+    @test_throws ArgumentError sample_doe_gaussian_uncertainty(
+        [0.0, 0.0], [1.0 2.0; 2.0 1.0];
+        parameter_names=("x", "y"), count=3, seed=45)
+    @test_throws ArgumentError sample_doe_gaussian_uncertainty(
+        [0.0, 0.0], [1.0 0.1; 0.2 1.0];
+        parameter_names=("x", "y"), count=3, seed=45)
+    @test_throws DimensionMismatch sample_doe_gaussian_uncertainty(
+        [0.0], [1.0 0.0; 0.0 1.0];
+        parameter_names=("x",), count=3, seed=45)
+    @test_throws ArgumentError DOEUncertaintySampleSet([
+        DOEUncertaintySample(id="weighted", parameters=Dict("x" => 1),
+                             weight=0.5),
+        DOEUncertaintySample(id="unweighted", parameters=Dict("x" => 2)),
+    ]; parameter_names=("x",), generation_method=:manual)
+    @test_throws ArgumentError materialize_doe_scenarios(
+        base_network, samples, (network, sample) -> 1;
+        dataset_id="invalid-materializer",
+        materializer_id="returns-integer")
+end
+
 @testset "Operating envelope: :sum is more efficient but less equitable than :equal" begin
     cps = [ConnectionPoint(id="der1", bus="bus1", export_max=10e3),
            ConnectionPoint(id="der2", bus="bus2", export_max=10e3)]

@@ -214,6 +214,14 @@ methods, seeds, timestamps, and metadata. The solver includes this provenance in
 interval diagnostics, while [`DOEStudySpec`](@ref) includes it in the study
 identity.
 
+[`DOEUncertaintySample`](@ref) and [`DOEUncertaintySampleSet`](@ref) separate
+uncertainty realizations from network construction. A reproducible Gaussian
+sampler accepts positive-semidefinite covariance and records rank, seed,
+declared/empirical moments, and unbounded-support limitations.
+[`materialize_doe_scenarios`](@ref) deep-copies a base network per sample and
+requires a versioned materializer identifier, propagating sample and network
+provenance without prescribing a DSSE, impedance, topology, or forecast schema.
+
 [`evaluate_operating_envelope_coverage`](@ref) selects declared roles and
 reports per-scenario outcomes plus empirical context, scenario, weighted, and
 conservative candidate-violation rates. A one-sided Hoeffding upper bound is

@@ -168,6 +168,9 @@ export SequenceLineObservation, OverheadCarsonCandidate,
 
 # Dynamic operating envelopes
 export ConnectionPoint, FairnessPolicy, DOEScenario, DOEScenarioSet,
+       DOEUncertaintySample, DOEUncertaintySampleSet,
+       sample_doe_gaussian_uncertainty, doe_uncertainty_manifest,
+       materialize_doe_scenarios,
        select_doe_scenarios, DOEScenarioTimeSplit,
        split_doe_scenarios_by_time, DOEScenarioCalibrationAudit,
        audit_doe_scenario_calibration, DOECovariateShiftResult,

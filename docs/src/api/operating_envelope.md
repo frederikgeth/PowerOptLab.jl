@@ -12,6 +12,8 @@ ConnectionPoint
 FairnessPolicy
 DOEScenario
 DOEScenarioSet
+DOEUncertaintySample
+DOEUncertaintySampleSet
 select_doe_scenarios
 DOEScenarioTimeSplit
 split_doe_scenarios_by_time
@@ -32,6 +34,7 @@ DOECovariateShiftResult
 DOEProbabilityObservation
 DOEProbabilityCalibrationResult
 doe_study_manifest
+doe_uncertainty_manifest
 doe_benchmark_rows
 doe_context_benchmark_rows
 OperatingEnvelopeResult
@@ -52,6 +55,8 @@ OperatingEnvelopeMultistartResult
 
 ```@docs
 audit_doe_scenario_calibration
+sample_doe_gaussian_uncertainty
+materialize_doe_scenarios
 test_doe_covariate_shift
 test_doe_time_series_covariate_shift
 doe_probability_observations
