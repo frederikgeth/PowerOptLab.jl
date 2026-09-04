@@ -747,6 +747,40 @@ end
 
 _se_merit(e::SEEvaluation, μ) = 0.5 * sum(abs2, e.residual) + μ * norm(e.constraints)
 
+# A characteristic magnitude, in amperes, for the terms summed into an exact
+# KCL equation.  The constraint residual is a difference of `Y*V` products, so
+# the smallest value it can reach in double precision is about `eps` times this
+# — a quantity that spans many orders of magnitude across real networks (a
+# 230 V feeder with 20 S conductors sits near 5e3; a 132 kV feeder with short
+# 20 kS segments near 3e9).  An absolute tolerance in SI amperes is therefore
+# achievable on one network and unreachable on another that is electrically
+# identical in per unit.
+function _se_current_scale(s::SEStructure, p::SEParameters)
+    ymax = isempty(nonzeros(s.passive_pattern)) ? 0.0 : maximum(abs, nonzeros(s.passive_pattern))
+    finite = p.fixed_voltages[isfinite.(real.(p.fixed_voltages))]
+    vmax = maximum(abs, finite; init=0.0)
+    scale = ymax * vmax
+    isfinite(scale) && scale > 0 ? scale : 1.0
+end
+
+# Effective feasibility tolerance: the absolute request acts as a floor, and the
+# relative term takes over once round-off in `Y*V` alone exceeds it.
+_se_constraint_tolerance(atol, rtol, scale) = max(Float64(atol), Float64(rtol) * scale)
+
+# Stationarity measured in units of the whitened residual.
+#
+# `H' * r` carries one factor of the measurement Jacobian's magnitude, and `H`
+# is `(dh/dx)/sigma` — so with a 1 W standard deviation on a 20 kW injection its
+# entries run to tens, and the smallest gradient reachable in double precision
+# scales with them. Dividing by `norm(H, Inf)` leaves a quantity with the units
+# of `r` itself, so `optimality_tolerance` reads as "how small a residual-
+# equivalent gradient counts as stationary" on every network rather than only on
+# ones whose SI magnitudes happen to be near one.
+function _se_stationarity(H, g)
+    hscale = max(1.0, norm(H, Inf))
+    norm(g, Inf) / hscale
+end
+
 # Jacobian assembly can legitimately hit an undefined magnitude derivative: a
 # `:vmag` row at exactly zero volts, or an `:imag` row on a line carrying
 # exactly zero current (the classic flat-start failure of ampere measurements).
@@ -809,6 +843,7 @@ function solve_compiled_state_estimator(s::SEStructure, p::SEParameters,
                                         penalty::Real=10.0,
                                         acceptance_threshold::Real=0.1,
                                         constraint_tolerance::Real=1e-8,
+                                        constraint_rtol::Real=1e-11,
                                         optimality_tolerance::Real=1e-8,
                                         min_radius::Real=1e-10,
                                         rank_rtol::Real=sqrt(eps(Float64)))
@@ -817,6 +852,9 @@ function solve_compiled_state_estimator(s::SEStructure, p::SEParameters,
     0 < normal_fraction < 1 || throw(ArgumentError("normal_fraction must lie in (0, 1)"))
     penalty > 0 || throw(ArgumentError("penalty must be positive"))
     0 < acceptance_threshold < 1 || throw(ArgumentError("acceptance_threshold must lie in (0, 1)"))
+    constraint_rtol >= 0 || throw(ArgumentError("constraint_rtol must be non-negative"))
+    ctol = _se_constraint_tolerance(constraint_tolerance, constraint_rtol,
+                                    _se_current_scale(s, p))
 
     x = Float64.(x0)
     e = evaluate_state_estimator(s, p, x)
@@ -844,8 +882,8 @@ function solve_compiled_state_estimator(s::SEStructure, p::SEParameters,
         # Continuation stages and externally supplied warm starts can already
         # satisfy both tests.  Do not manufacture a zero predicted-reduction
         # failure merely because there is no step left to take.
-        gred0 = size(Z, 2) == 0 ? 0.0 : norm(Z' * (H' * r), Inf)
-        if norm(c) <= constraint_tolerance && gred0 <= optimality_tolerance
+        gred0 = size(Z, 2) == 0 ? 0.0 : _se_stationarity(H, Z' * (H' * r))
+        if norm(c) <= ctol && gred0 <= optimality_tolerance
             observable, _ = _se_rank_nullspace(H * Z; rtol=rank_rtol)
             status = observable == size(Z, 2) ? :converged_unique : :converged_underobserved
             return ConstrainedStateEstimationResult(status, x, e, iteration - 1, rankC,
@@ -928,8 +966,8 @@ function solve_compiled_state_estimator(s::SEStructure, p::SEParameters,
             end
             Hnow, Cnow = jacnow
             rankC, Znow = _se_rank_nullspace(Cnow; rtol=rank_rtol)
-            gred = size(Znow, 2) == 0 ? 0.0 : norm(Znow' * (Hnow' * e.residual), Inf)
-            if norm(e.constraints) <= constraint_tolerance && gred <= optimality_tolerance
+            gred = size(Znow, 2) == 0 ? 0.0 : _se_stationarity(Hnow, Znow' * (Hnow' * e.residual))
+            if norm(e.constraints) <= ctol && gred <= optimality_tolerance
                 observable, _ = _se_rank_nullspace(Hnow * Znow; rtol=rank_rtol)
                 status = observable == size(Znow, 2) ? :converged_unique : :converged_underobserved
                 return ConstrainedStateEstimationResult(status, x, e, iteration, rankC,
@@ -946,7 +984,7 @@ function solve_compiled_state_estimator(s::SEStructure, p::SEParameters,
     jac === nothing && return ConstrainedStateEstimationResult(:undefined_derivative, x, e,
                                                                max_iterations, 0, 0, 0, history)
     rankC, Z = _se_rank_nullspace(jac[2]; rtol=rank_rtol)
-    status = norm(e.constraints) > constraint_tolerance ?
+    status = norm(e.constraints) > ctol ?
         (rejected > 0 ? :constraint_restoration_failed : :infeasible_constraints) :
         (radius < min_radius ? :trust_region_stalled : :max_iterations)
     ConstrainedStateEstimationResult(status, x, e, max_iterations, rankC,
@@ -1070,6 +1108,7 @@ function solve_sparse_state_estimator(s::SEStructure, p::SEParameters,
                                       penalty::Real=10.0,
                                       acceptance_threshold::Real=0.1,
                                       constraint_tolerance::Real=1e-8,
+                                      constraint_rtol::Real=1e-11,
                                       optimality_tolerance::Real=1e-8,
                                       min_radius::Real=1e-10,
                                       damping::Real=1e-10,
@@ -1079,6 +1118,9 @@ function solve_sparse_state_estimator(s::SEStructure, p::SEParameters,
     penalty > 0 || throw(ArgumentError("penalty must be positive"))
     0 < acceptance_threshold < 1 || throw(ArgumentError("acceptance_threshold must lie in (0, 1)"))
     damping >= 0 || throw(ArgumentError("damping must be non-negative"))
+    constraint_rtol >= 0 || throw(ArgumentError("constraint_rtol must be non-negative"))
+    ctol = _se_constraint_tolerance(constraint_tolerance, constraint_rtol,
+                                    _se_current_scale(s, p))
 
     x = Float64.(x0)
     e = evaluate_state_estimator(s, p, x)
@@ -1120,8 +1162,8 @@ function solve_sparse_state_estimator(s::SEStructure, p::SEParameters,
         # iteration made this solver cubic in the state dimension and dominated
         # its runtime.
         λ = λtrial
-        if norm(c) <= constraint_tolerance &&
-           norm(H' * r - C' * λ, Inf) <= optimality_tolerance
+        if norm(c) <= ctol &&
+           _se_stationarity(H, H' * r - C' * λ) <= optimality_tolerance
             status, rankC, tangent, observable = _se_status_from_linearisation(H, C; rank_rtol=rank_rtol)
             _, λ = _se_hachtel_step(H, C, r, zeros(Float64, length(c)), scale, damping)
             return SparseConstrainedStateEstimationResult(status, x, e, iteration - 1, rankC,
@@ -1163,7 +1205,7 @@ function solve_sparse_state_estimator(s::SEStructure, p::SEParameters,
                                                                      max_iterations, 0, 0, 0, λ, history)
     _, rankC, tangent, observable = _se_status_from_linearisation(sparse(jac[1]), sparse(jac[2]);
                                                                  rank_rtol=rank_rtol)
-    status = norm(e.constraints) > constraint_tolerance ?
+    status = norm(e.constraints) > ctol ?
         (rejected > 0 ? :constraint_restoration_failed : :infeasible_constraints) :
         (radius < min_radius ? :trust_region_stalled : :max_iterations)
     SparseConstrainedStateEstimationResult(status, x, e, max_iterations, rankC,

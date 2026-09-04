@@ -1,4 +1,4 @@
-using BMOPFTools: parse_bmopf
+using BMOPFTools: parse_bmopf, solve_pf
 using LinearAlgebra: norm, I
 
 # A four-conductor feeder with an explicitly modelled (not perfectly grounded)
@@ -263,4 +263,226 @@ end
     @test sparse.status == :converged_unique
     @test norm(sparse.evaluation.constraints) ≤ 1e-7
     @test abs(sparse.constraint_multipliers[1]) > 1e-3
+end
+
+# ── regression coverage for the review fixes ────────────────────────────────
+
+# Single-phase feeder src—b—c, `r` ohm per segment, scaled to `vsrc` volts.
+function scaled_feeder(vsrc, r)
+    parse_bmopf("""
+    {"bus":{"src":{"terminal_names":["1"]},"b":{"terminal_names":["1"]},"c":{"terminal_names":["1"]}},
+     "voltage_source":{"s":{"bus":"src","terminal_map":["1"],"v_magnitude":[$vsrc],"v_angle":[0.0]}},
+     "linecode":{"lc":{"R_series_1_1":$r}},
+     "line":{"l1":{"bus_from":"src","bus_to":"b","terminal_map_from":["1"],"terminal_map_to":["1"],"linecode":"lc","length":1.0},
+             "l2":{"bus_from":"b","bus_to":"c","terminal_map_from":["1"],"terminal_map_to":["1"],"linecode":"lc","length":1.0}}}
+    """; from_string=true)
+end
+
+@testset "Compiled SE: magnitude_epsilon reaches branch current magnitudes" begin
+    net = compiled_se_net()
+    bm = [BranchMeasurement(kind=:imag, line="l1", side=:from, terminal="1",
+                            value=0.0, sigma=0.1)]
+    s = compile_state_estimator(net, bm)
+    x = flat_compiled_state(s)          # no load anywhere => l1 carries no current
+
+    # Without smoothing the prediction is a hard zero and the derivative does not
+    # exist; with it, both the value and the analytic Jacobian are the smoothed
+    # magnitude. The option used to be accepted and then ignored for :imag.
+    p0 = SEParameters(s, bm; magnitude_epsilon=0.0)
+    @test evaluate_state_estimator(s, p0, x).predicted == [0.0]
+    @test_throws DomainError residual_jacobian(s, p0, x)
+
+    p5 = SEParameters(s, bm; magnitude_epsilon=5.0)
+    @test evaluate_state_estimator(s, p5, x).predicted ≈ [5.0]
+    @test residual_jacobian(s, p5, x) ≈
+          central_jacobian(y -> evaluate_state_estimator(s, p5, y).residual, x) rtol=1e-5 atol=1e-6
+
+    # The same smoothing must reach a node voltage magnitude, which it always did.
+    vm = [Measurement(kind=:vmag, bus="b1", terminal="n", reference=nothing,
+                      value=0.0, sigma=1.0)]
+    sv = compile_state_estimator(net, vm)
+    @test evaluate_state_estimator(sv, SEParameters(sv, vm; magnitude_epsilon=5.0),
+                                   flat_compiled_state(sv)).predicted ≈ [5.0]
+end
+
+@testset "Compiled SE: an undefined magnitude derivative is a status, not a throw" begin
+    # A line carrying exactly zero current is the textbook flat-start failure of
+    # ampere measurements. Both solvers must diagnose it and return.
+    net = compiled_se_net()
+    seed = compile_state_estimator(net)
+    xtrue = flat_compiled_state(seed)
+    nf = length(seed.free_state_map)
+    meas = Any[BranchMeasurement(kind=:imag, line="l1", side=:from, terminal="1",
+                                 value=1.0, sigma=0.1)]
+    for ((bus, terminal), k) in seed.free_state_map
+        push!(meas, Measurement(kind=:vr, bus=bus, terminal=terminal, reference=nothing,
+                                value=xtrue[k], sigma=1.0))
+        push!(meas, Measurement(kind=:vi, bus=bus, terminal=terminal, reference=nothing,
+                                value=xtrue[nf + k], sigma=1.0))
+    end
+    s = compile_state_estimator(net, meas)
+    p = SEParameters(s, meas)
+    for solver in (solve_compiled_state_estimator, solve_sparse_state_estimator)
+        result = solver(s, p, xtrue)
+        @test result.status == :undefined_derivative
+        @test !solve_status(result).publishable
+    end
+    # Smoothing the magnitude makes the same start solvable.
+    ps = SEParameters(s, meas; magnitude_epsilon=1e-3)
+    @test solve_compiled_state_estimator(s, ps, xtrue).status != :undefined_derivative
+end
+
+@testset "Compiled SE: a bare zero-injection bus covers its neutral conductor" begin
+    net = compiled_se_net()
+    bare = compile_state_estimator(net; zero_injection=["b2"])
+    tuples = compile_state_estimator(net;
+        zero_injection=[("b2","1"), ("b2","2"), ("b2","3"), ("b2","n")])
+    covered(s) = Set(s.nodes[i] for i in s.constraint_pattern)
+    # Four-wire KCL is per conductor against earth, so "nothing is attached to
+    # b2" constrains its neutral too. Omitting it left the neutral voltage free.
+    @test covered(bare) == covered(tuples)
+    @test ("b2", "n") in covered(bare)
+    # The WLS estimator states zero injection per phase against a return
+    # terminal, so its expansion deliberately excludes the neutral.
+    @test !(("b2","n") in PowerOptLab._zero_injection_set(net, ["b2"], "n"))
+end
+
+@testset "Compiled SE: time series preserves a caller-supplied prior" begin
+    net = compiled_se_net()
+    seed = compile_state_estimator(net)
+    xtrue = flat_compiled_state(seed)
+    nf = length(seed.free_state_map)
+    meas = Measurement[]
+    for ((bus, terminal), k) in seed.free_state_map
+        push!(meas, Measurement(kind=:vr, bus=bus, terminal=terminal, reference=nothing,
+                                value=xtrue[k], sigma=1.0))
+        push!(meas, Measurement(kind=:vi, bus=bus, terminal=terminal, reference=nothing,
+                                value=xtrue[nf + k], sigma=1.0))
+    end
+    s = compile_state_estimator(net, meas)
+    prior = StatePrior([1], [xtrue[1] - 4.0], [2.0])
+
+    # Without a previous-state prior the caller's prior must survive untouched.
+    p1 = SEParameters(s, meas; prior=prior)
+    p2 = SEParameters(s, meas; prior=prior)
+    series = solve_time_series_state_estimator(s, [p1, p2], zeros(length(xtrue));
+                                               initial_radius=2.0)
+    @test series.status == :converged
+    @test p1.prior_indices == [1] && p1.prior_values == [xtrue[1] - 4.0]
+    @test p2.prior_indices == [1] && p2.prior_values == [xtrue[1] - 4.0]
+
+    # With one, it is LAYERED ON TOP of the caller's prior, not substituted for
+    # it: two independent observations of the same state, so both rows survive.
+    q1 = SEParameters(s, meas; prior=prior)
+    q2 = SEParameters(s, meas; prior=prior)
+    solve_time_series_state_estimator(s, [q1, q2], zeros(length(xtrue));
+                                      previous_state_sigma=10.0, initial_radius=2.0)
+    @test q1.prior_indices == [1]
+    @test length(q2.prior_indices) == 1 + length(xtrue)
+    @test q2.prior_values[1] == xtrue[1] - 4.0
+end
+
+@testset "Compiled SE: recovers a BMOPFTools power flow from exact telemetry" begin
+    # Ground truth from the engine's own power flow. The compiled estimator had
+    # no test tying it to a solved network state at all.
+    loaded = parse_bmopf("""
+    {"bus":{"src":{"terminal_names":["1"]},"b":{"terminal_names":["1"]},"c":{"terminal_names":["1"]}},
+     "voltage_source":{"s":{"bus":"src","terminal_map":["1"],"v_magnitude":[1000.0],"v_angle":[0.0]}},
+     "linecode":{"lc":{"R_series_1_1":0.5}},
+     "line":{"l1":{"bus_from":"src","bus_to":"b","terminal_map_from":["1"],"terminal_map_to":["1"],"linecode":"lc","length":1.0},
+             "l2":{"bus_from":"b","bus_to":"c","terminal_map_from":["1"],"terminal_map_to":["1"],"linecode":"lc","length":1.0}},
+     "load":{"d":{"bus":"c","terminal_map":["1"],"configuration":"SINGLE_PHASE","p_nom":[20000.0],"q_nom":[5000.0]}}}
+    """; from_string=true)
+    pf = solve_pf(loaded; per_unit=false)
+    vtrue = Dict(b => pf["bus"][b]["1"]["vr"] + im * pf["bus"][b]["1"]["vi"] for b in ("b","c"))
+
+    est_net = scaled_feeder(1000.0, 0.5)   # same topology, load removed
+    meas = [Measurement(kind=:vmag, bus="b", reference=nothing, value=abs(vtrue["b"]), sigma=0.1),
+            Measurement(kind=:pinj, bus="c", reference=nothing, value=-20_000.0, sigma=1.0),
+            Measurement(kind=:qinj, bus="c", reference=nothing, value=-5_000.0, sigma=1.0)]
+    s = compile_state_estimator(est_net, meas; zero_injection=["b"])
+    p = SEParameters(s, meas)
+    x0 = zeros(2length(s.free_state_map))
+    for ((_, _), k) in s.free_state_map; x0[k] = 1000.0; end
+
+    dense = solve_compiled_state_estimator(s, p, x0; initial_radius=1.0)
+    sparse_r = solve_sparse_state_estimator(s, p, x0; initial_radius=1.0)
+    @test dense.status == :converged_unique
+    @test sparse_r.status == :converged_unique
+    for r in (dense, sparse_r), b in ("b", "c")
+        k = s.free_state_map[(b, "1")]
+        v = r.state[k] + im * r.state[k + length(s.free_state_map)]
+        @test v ≈ vtrue[b] rtol=1e-6
+    end
+    # The two solvers implement different steps; on the same problem they must
+    # still land on the same estimate.
+    @test dense.state ≈ sparse_r.state rtol=1e-6
+end
+
+@testset "Compiled SE: feasibility tolerance is scale invariant" begin
+    # The same dimensionless problem at two voltage levels. `norm(c)` is a
+    # difference of Y*V products, so its double-precision floor scales with the
+    # network's SI magnitude; a purely absolute tolerance made the high-voltage
+    # case report failure at a perfectly converged point.
+    for (vsrc, r) in ((230.0, 0.1), (132_000.0, 1e-4))
+        load = ExactDeviceEquation(ConstantPowerDevice(
+            [TerminalConnection(("c", "1"), nothing)], ComplexF64[vsrc * 10 + 0im]))
+        net = scaled_feeder(vsrc, r)
+        s = compile_state_estimator(net; zero_injection=["b"], exact_devices=[load])
+        p = SEParameters(s; exact_devices=[load])
+        x0 = zeros(2length(s.free_state_map))
+        for ((_, _), k) in s.free_state_map; x0[k] = vsrc; end
+        for solver in (solve_compiled_state_estimator, solve_sparse_state_estimator)
+            result = solver(s, p, x0; initial_radius=0.5)
+            @test result.status == :converged_unique
+            # Feasible to round-off RELATIVE to the network's own current scale.
+            @test norm(result.evaluation.constraints) <=
+                  1e-11 * PowerOptLab._se_current_scale(s, p)
+        end
+    end
+end
+
+@testset "Compiled SE: |I| admits mirror solutions that |I_re|,|I_im| do not" begin
+    # The classic difficulty with ampere measurements: a magnitude carries no
+    # direction, so |V| plus |I| is satisfied exactly by a conjugate pair of
+    # states. Both are reported :converged_unique — that status is a LOCAL rank
+    # statement about one point, never a global uniqueness claim.
+    net = scaled_feeder(230.0, 0.5)
+    net["line"] = Dict("l" => net["line"]["l1"])       # keep a single segment
+    delete!(net["bus"], "c")
+    vtrue = 220.0 * cis(-0.05)
+    itrue = (230.0 - vtrue) / 0.5
+
+    ambiguous = Any[Measurement(kind=:vmag, bus="b", reference=nothing,
+                                value=abs(vtrue), sigma=0.01),
+                    BranchMeasurement(kind=:imag, line="l", side=:from, terminal="1",
+                                      value=abs(itrue), sigma=0.01)]
+    s = compile_state_estimator(net, ambiguous)
+    p = SEParameters(s, ambiguous)
+    angles = Float64[]
+    for x0 in ([219.0, -11.0], [219.0, +11.0])
+        r = solve_compiled_state_estimator(s, p, x0; initial_radius=1.0)
+        @test r.status == :converged_unique
+        @test norm(r.evaluation.residual) < 1e-6      # both fit the data exactly
+        @test abs(r.state[1] + im * r.state[2]) ≈ abs(vtrue) rtol=1e-6
+        push!(angles, angle(r.state[1] + im * r.state[2]))
+    end
+    @test angles[1] ≈ -angles[2] rtol=1e-4            # a mirror pair, not one answer
+    @test abs(angles[1] - angles[2]) > 1e-3
+
+    # The same current as a rectangular pair fixes the direction, and both starts
+    # converge to the one true state.
+    resolved = Any[Measurement(kind=:vmag, bus="b", reference=nothing,
+                               value=abs(vtrue), sigma=0.01),
+                   BranchMeasurement(kind=:ire, line="l", side=:from, terminal="1",
+                                     value=real(itrue), sigma=0.01),
+                   BranchMeasurement(kind=:iim, line="l", side=:from, terminal="1",
+                                     value=imag(itrue), sigma=0.01)]
+    s2 = compile_state_estimator(net, resolved)
+    p2 = SEParameters(s2, resolved)
+    for x0 in ([219.0, -11.0], [219.0, +11.0])
+        r = solve_compiled_state_estimator(s2, p2, x0; initial_radius=1.0)
+        @test r.status == :converged_unique
+        @test r.state[1] + im * r.state[2] ≈ vtrue rtol=1e-6
+    end
 end
