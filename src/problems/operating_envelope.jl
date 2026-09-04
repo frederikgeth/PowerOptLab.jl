@@ -375,6 +375,22 @@ struct DOEScenarioTimeSplit
     diagnostics::Dict{String,Any}
 end
 
+"""
+    DOEScenarioCalibrationAudit
+
+Provenance and leakage audit returned by
+[`audit_doe_scenario_calibration`](@ref). It summarizes calibration and
+evaluation ensembles and records which disjointness requirements were actually
+checked. It is not a probability-calibration or distribution-shift test.
+"""
+struct DOEScenarioCalibrationAudit
+    outcome::Symbol
+    calibration_summary::Dict{String,Any}
+    evaluation_summary::Dict{String,Any}
+    leakage_checks::Dict{String,Any}
+    diagnostics::Dict{String,Any}
+end
+
 function _doe_scenario_with_role(scenario::DOEScenario, role::Symbol,
                                  split_name::AbstractString)
     metadata = copy(scenario.metadata)
@@ -394,13 +410,20 @@ end
 
 """
     split_doe_scenarios_by_time(scenarios;
-        calibration_end, test_start=calibration_end, split_name="time_block")
+        calibration_end, test_start=calibration_end, split_name="time_block",
+        group_key=nothing, group_overlap_policy=:error)
 
 Create a chronological calibration/test split for a one-interval typed scenario
 ensemble. Timestamps before `calibration_end` are assigned `:calibration`;
 timestamps on or after `test_start` are assigned `:test`; the intervening gap
 is excluded. Every scenario must have a timestamp and each retained block must
 be non-empty.
+
+Set `group_key` to a scenario-metadata key such as `"site_id"` or
+`"weather_event_id"` to assess cross-block group leakage. The default
+`group_overlap_policy=:error` rejects overlapping groups. `:exclude_test`
+removes overlapping test scenarios, while `:allow` retains and reports them for
+longitudinal designs where group reuse is intentional.
 
 The one-interval restriction is deliberate in this first slice: it avoids
 silently confusing forecast intervals with statistical sample time. Build one
@@ -410,20 +433,30 @@ function split_doe_scenarios_by_time(
         scenarios::DOEScenarioSet;
         calibration_end::DateTime,
         test_start::DateTime=calibration_end,
-        split_name::AbstractString="time_block")
+        split_name::AbstractString="time_block",
+        group_key::Union{Nothing,AbstractString}=nothing,
+        group_overlap_policy::Symbol=:error)
     length(scenarios.intervals) == 1 || throw(ArgumentError(
         "time-block DOE splitting currently requires one scenario interval"))
     test_start >= calibration_end || throw(ArgumentError(
         "test_start must not precede calibration_end"))
     isempty(split_name) && throw(ArgumentError("split_name must be non-empty"))
+    group_overlap_policy in (:error, :exclude_test, :allow) ||
+        throw(ArgumentError(
+            "group_overlap_policy must be :error, :exclude_test, or :allow"))
+    group_key === nothing || !isempty(group_key) || throw(ArgumentError(
+        "group_key must be non-empty when provided"))
     group = only(scenarios.intervals)
     all(scenario -> scenario.timestamp !== nothing, group) ||
         throw(ArgumentError(
             "every scenario needs a timestamp for a chronological split"))
+    ordered_group = sort(group; by=scenario ->
+        (something(scenario.timestamp), scenario.id))
     calibration = DOEScenario[]
     test = DOEScenario[]
     excluded = String[]
-    for scenario in group
+    temporal_excluded = String[]
+    for scenario in ordered_group
         timestamp = something(scenario.timestamp)
         if timestamp < calibration_end
             push!(calibration,
@@ -432,17 +465,58 @@ function split_doe_scenarios_by_time(
             push!(test, _doe_scenario_with_role(scenario, :test, split_name))
         else
             push!(excluded, scenario.id)
+            push!(temporal_excluded, scenario.id)
         end
     end
     isempty(calibration) && throw(ArgumentError(
         "chronological split produced no calibration scenarios"))
     isempty(test) && throw(ArgumentError(
         "chronological split produced no test scenarios"))
+
+    overlapping_groups = Any[]
+    group_excluded = String[]
+    if group_key !== nothing
+        key = String(group_key)
+        all(scenario -> haskey(scenario.metadata, key), vcat(calibration, test)) ||
+            throw(ArgumentError(
+                "every retained scenario needs metadata['$key'] for group leakage assessment"))
+        calibration_groups = Dict(
+            _doe_canonical(scenario.metadata[key]) => scenario.metadata[key]
+            for scenario in calibration)
+        test_groups = Dict(
+            _doe_canonical(scenario.metadata[key]) => scenario.metadata[key]
+            for scenario in test)
+        overlap_signatures = sort!(collect(intersect(
+            Set(keys(calibration_groups)), Set(keys(test_groups)))))
+        overlapping_groups = Any[deepcopy(calibration_groups[signature])
+                                 for signature in overlap_signatures]
+        if !isempty(overlap_signatures) && group_overlap_policy == :error
+            throw(ArgumentError(
+                "chronological split has groups present in calibration and test for metadata['$key']; use :exclude_test or explicit :allow"))
+        elseif !isempty(overlap_signatures) &&
+               group_overlap_policy == :exclude_test
+            overlap_set = Set(overlap_signatures)
+            retained_test = DOEScenario[]
+            for scenario in test
+                if _doe_canonical(scenario.metadata[key]) in overlap_set
+                    push!(excluded, scenario.id)
+                    push!(group_excluded, scenario.id)
+                else
+                    push!(retained_test, scenario)
+                end
+            end
+            test = retained_test
+            isempty(test) && throw(ArgumentError(
+                "group-overlap exclusion produced no test scenarios"))
+        end
+    end
     common_metadata = merge(copy(scenarios.metadata), Dict{String,Any}(
         "parent_dataset_id" => scenarios.dataset_id,
         "split_name" => String(split_name),
         "calibration_end" => calibration_end,
         "test_start" => test_start,
+        "group_key" => group_key === nothing ? nothing : String(group_key),
+        "group_overlap_policy" => group_overlap_policy,
         "excluded_scenario_ids" => copy(excluded)))
     calibration_set = DOEScenarioSet(calibration;
         dataset_id=scenarios.dataset_id * "-calibration",
@@ -454,11 +528,23 @@ function split_doe_scenarios_by_time(
             Dict{String,Any}("assigned_role" => :test)))
     diagnostics = Dict{String,Any}(
         "method" => :chronological_holdout,
+        "ordering" => :timestamp_then_scenario_id,
         "calibration_count" => length(calibration),
         "test_count" => length(test),
-        "gap_excluded_count" => length(excluded),
+        "total_excluded_count" => length(excluded),
+        "gap_excluded_count" => length(temporal_excluded),
+        "temporal_gap_excluded_count" => length(temporal_excluded),
+        "group_overlap_excluded_count" => length(group_excluded),
         "temporal_overlap" => false,
-        "group_or_site_leakage_assessed" => false)
+        "group_or_site_leakage_assessed" => group_key !== nothing,
+        "group_key" => group_key === nothing ? nothing : String(group_key),
+        "group_overlap_policy" => group_overlap_policy,
+        "overlapping_groups" => overlapping_groups,
+        "group_overlap_detected" => !isempty(overlapping_groups),
+        "group_overlap_present" => !isempty(overlapping_groups) &&
+            group_overlap_policy == :allow,
+        "group_overlap_retained" => !isempty(overlapping_groups) &&
+            group_overlap_policy == :allow)
     return DOEScenarioTimeSplit(
         calibration_set, test_set, calibration_end, test_start,
         excluded, diagnostics)
@@ -517,6 +603,207 @@ function _doe_canonical(value)
 end
 
 _doe_sha256(value) = bytes2hex(SHA.sha256(codeunits(_doe_canonical(value))))
+
+_doe_flat_scenarios(scenarios::DOEScenarioSet) =
+    [scenario for group in scenarios.intervals for scenario in group]
+
+function _doe_scenario_set_audit_summary(scenarios::DOEScenarioSet;
+                                         group_key=nothing)
+    flat = _doe_flat_scenarios(scenarios)
+    role_counts = Dict{String,Int}()
+    source_counts = Dict{String,Int}()
+    method_counts = Dict{String,Int}()
+    for scenario in flat
+        role = String(scenario.role)
+        role_counts[role] = get(role_counts, role, 0) + 1
+        source_counts[scenario.source] = get(source_counts, scenario.source, 0) + 1
+        method = String(scenario.generation_method)
+        method_counts[method] = get(method_counts, method, 0) + 1
+    end
+    timestamps = DateTime[scenario.timestamp for scenario in flat
+                          if scenario.timestamp !== nothing]
+    hashes = [_doe_sha256(scenario.network) for scenario in flat]
+    effective_sample_sizes = Float64[]
+    for group in scenarios.intervals
+        if all(scenario -> scenario.weight !== nothing, group)
+            weights = Float64[something(scenario.weight) for scenario in group]
+            push!(effective_sample_sizes, sum(weights)^2 / sum(abs2, weights))
+        else
+            push!(effective_sample_sizes, Float64(length(group)))
+        end
+    end
+    key = group_key === nothing ? nothing : String(group_key)
+    group_missing_ids = key === nothing ? String[] :
+        [scenario.id for scenario in flat if !haskey(scenario.metadata, key)]
+    return Dict{String,Any}(
+        "dataset_id" => scenarios.dataset_id,
+        "interval_count" => length(scenarios.intervals),
+        "interval_scenario_counts" => length.(scenarios.intervals),
+        "scenario_count" => length(flat),
+        "role_counts" => role_counts,
+        "source_counts" => source_counts,
+        "generation_method_counts" => method_counts,
+        "unspecified_source_count" =>
+            count(scenario -> scenario.source == "unspecified", flat),
+        "unspecified_generation_method_count" => count(
+            scenario -> scenario.generation_method == :unspecified, flat),
+        "missing_seed_count" =>
+            count(scenario -> scenario.seed === nothing, flat),
+        "missing_timestamp_count" => length(flat) - length(timestamps),
+        "timestamp_min" => isempty(timestamps) ? missing : minimum(timestamps),
+        "timestamp_max" => isempty(timestamps) ? missing : maximum(timestamps),
+        "weights_available" =>
+            all(scenario -> scenario.weight !== nothing, flat),
+        "effective_sample_size_by_interval" => effective_sample_sizes,
+        "unique_network_count" => length(unique(hashes)),
+        "duplicate_network_count" => length(hashes) - length(unique(hashes)),
+        "group_key" => key,
+        "missing_group_id_scenario_ids" => group_missing_ids)
+end
+
+function _doe_network_overlap_records(calibration, evaluation)
+    calibration_by_hash = Dict{String,Vector{String}}()
+    evaluation_by_hash = Dict{String,Vector{String}}()
+    for scenario in calibration
+        push!(get!(calibration_by_hash, _doe_sha256(scenario.network), String[]),
+              scenario.id)
+    end
+    for scenario in evaluation
+        push!(get!(evaluation_by_hash, _doe_sha256(scenario.network), String[]),
+              scenario.id)
+    end
+    hashes = sort!(collect(intersect(
+        Set(keys(calibration_by_hash)), Set(keys(evaluation_by_hash)))))
+    return [(
+        network_hash=hash,
+        calibration_scenario_ids=sort!(calibration_by_hash[hash]),
+        evaluation_scenario_ids=sort!(evaluation_by_hash[hash]),
+    ) for hash in hashes]
+end
+
+"""
+    audit_doe_scenario_calibration(calibration, evaluation;
+        group_key=nothing, require_disjoint_ids=true,
+        require_unique_networks=true, require_group_disjoint=group_key !== nothing,
+        require_chronological_order=false)
+
+Audit whether declared calibration and evaluation scenario sets satisfy chosen
+separation requirements. The result reports ID reuse, exact network-realization
+reuse, timestamp ordering, optional metadata-group overlap, provenance
+completeness counts, interval counts, and weighted effective sample sizes.
+
+`group_key` may identify a site, feeder, customer cohort, weather event, or any
+other caller-defined blocking unit. Set `require_group_disjoint=false` for an
+intentional longitudinal design. Exact network reuse is rejected by the audit
+outcome by default but can likewise be made descriptive with
+`require_unique_networks=false`.
+
+An outcome of `:no_declared_leakage_detected` is limited to the checks and
+metadata supplied here. It does not establish probabilistic calibration,
+representativeness, independence, or absence of distribution shift.
+"""
+function audit_doe_scenario_calibration(
+        calibration::DOEScenarioSet,
+        evaluation::DOEScenarioSet;
+        group_key::Union{Nothing,AbstractString}=nothing,
+        require_disjoint_ids::Bool=true,
+        require_unique_networks::Bool=true,
+        require_group_disjoint::Bool=group_key !== nothing,
+        require_chronological_order::Bool=false)
+    group_key === nothing || !isempty(group_key) || throw(ArgumentError(
+        "group_key must be non-empty when provided"))
+    calibration_flat = _doe_flat_scenarios(calibration)
+    evaluation_flat = _doe_flat_scenarios(evaluation)
+    calibration_summary = _doe_scenario_set_audit_summary(
+        calibration; group_key=group_key)
+    evaluation_summary = _doe_scenario_set_audit_summary(
+        evaluation; group_key=group_key)
+
+    id_overlap = sort!(collect(intersect(
+        Set(scenario.id for scenario in calibration_flat),
+        Set(scenario.id for scenario in evaluation_flat))))
+    network_overlap = _doe_network_overlap_records(
+        calibration_flat, evaluation_flat)
+
+    calibration_timestamps = DateTime[
+        scenario.timestamp for scenario in calibration_flat
+        if scenario.timestamp !== nothing]
+    evaluation_timestamps = DateTime[
+        scenario.timestamp for scenario in evaluation_flat
+        if scenario.timestamp !== nothing]
+    timestamps_complete =
+        length(calibration_timestamps) == length(calibration_flat) &&
+        length(evaluation_timestamps) == length(evaluation_flat)
+    chronological_order = timestamps_complete ?
+        maximum(calibration_timestamps) < minimum(evaluation_timestamps) :
+        missing
+    timestamp_overlap = timestamps_complete ? sort!(collect(intersect(
+        Set(calibration_timestamps), Set(evaluation_timestamps)))) : DateTime[]
+
+    group_overlap = Any[]
+    missing_group_ids = String[]
+    if group_key !== nothing
+        key = String(group_key)
+        append!(missing_group_ids,
+            calibration_summary["missing_group_id_scenario_ids"])
+        append!(missing_group_ids,
+            evaluation_summary["missing_group_id_scenario_ids"])
+        calibration_groups = Dict(
+            _doe_canonical(scenario.metadata[key]) => scenario.metadata[key]
+            for scenario in calibration_flat if haskey(scenario.metadata, key))
+        evaluation_groups = Dict(
+            _doe_canonical(scenario.metadata[key]) => scenario.metadata[key]
+            for scenario in evaluation_flat if haskey(scenario.metadata, key))
+        overlap_signatures = sort!(collect(intersect(
+            Set(keys(calibration_groups)), Set(keys(evaluation_groups)))))
+        group_overlap = Any[deepcopy(calibration_groups[signature])
+                            for signature in overlap_signatures]
+    end
+
+    unassessed_requirements = String[]
+    require_chronological_order && !timestamps_complete &&
+        push!(unassessed_requirements, "chronological_order")
+    require_group_disjoint && group_key === nothing &&
+        push!(unassessed_requirements, "group_disjointness_without_group_key")
+    require_group_disjoint && !isempty(missing_group_ids) &&
+        push!(unassessed_requirements, "group_disjointness_missing_metadata")
+    violations = String[]
+    require_disjoint_ids && !isempty(id_overlap) &&
+        push!(violations, "scenario_id_overlap")
+    require_unique_networks && !isempty(network_overlap) &&
+        push!(violations, "exact_network_realization_overlap")
+    require_group_disjoint && !isempty(group_overlap) &&
+        push!(violations, "metadata_group_overlap")
+    require_chronological_order && chronological_order === false &&
+        push!(violations, "chronological_order")
+    outcome = !isempty(violations) ? :leakage_candidates_detected :
+        !isempty(unassessed_requirements) ? :required_metadata_incomplete :
+        :no_declared_leakage_detected
+    checks = Dict{String,Any}(
+        "scenario_id_overlap" => id_overlap,
+        "exact_network_overlap" => network_overlap,
+        "timestamps_complete" => timestamps_complete,
+        "timestamp_overlap" => timestamp_overlap,
+        "chronological_order" => chronological_order,
+        "group_key" => group_key === nothing ? nothing : String(group_key),
+        "group_overlap" => group_overlap,
+        "missing_group_id_scenario_ids" => sort!(unique(missing_group_ids)),
+        "violated_requirements" => violations,
+        "unassessed_requirements" => unassessed_requirements)
+    diagnostics = Dict{String,Any}(
+        "requirements" => Dict{String,Any}(
+            "disjoint_scenario_ids" => require_disjoint_ids,
+            "unique_network_realizations" => require_unique_networks,
+            "group_disjoint" => require_group_disjoint,
+            "chronological_order" => require_chronological_order),
+        "probabilistic_calibration_assessed" => false,
+        "representativeness_assessed" => false,
+        "independence_assessed" => false,
+        "distribution_shift_assessed" => false,
+        "claim" => :declared_split_provenance_and_leakage_audit)
+    return DOEScenarioCalibrationAudit(
+        outcome, calibration_summary, evaluation_summary, checks, diagnostics)
+end
 
 function _doe_policy_manifest(policy::DOEControlPolicy)
     Dict{String,Any}(

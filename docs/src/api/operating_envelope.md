@@ -27,6 +27,7 @@ IssuePlusLocalLaws
 
 ```@docs
 DOEStudySpec
+DOEScenarioCalibrationAudit
 doe_study_manifest
 doe_benchmark_rows
 doe_context_benchmark_rows
@@ -47,6 +48,7 @@ OperatingEnvelopeMultistartResult
 ## Solvers and verification
 
 ```@docs
+audit_doe_scenario_calibration
 solve_operating_envelope
 solve_operating_envelope_multistart
 compare_operating_envelope_policies

@@ -710,6 +710,95 @@ end
     @test time_split.diagnostics["temporal_overlap"] == false
     @test time_split.diagnostics["group_or_site_leakage_assessed"] == false
 
+    grouped_history = DOEScenarioSet([
+        DOEScenario(id="cal-site-a",
+            network=doe_feeder(p1=1400.0, p2=1400.0),
+            role=:unspecified, weight=1.0,
+            timestamp=DateTime(2026, 2, 1), seed=21,
+            source="grouped chronological fixture",
+            generation_method=:deterministic_fixture,
+            metadata=Dict("site_id" => "site-a")),
+        DOEScenario(id="cal-site-b",
+            network=doe_feeder(p1=1500.0, p2=1500.0),
+            role=:unspecified, weight=1.0,
+            timestamp=DateTime(2026, 2, 2), seed=22,
+            source="grouped chronological fixture",
+            generation_method=:deterministic_fixture,
+            metadata=Dict("site_id" => "site-b")),
+        DOEScenario(id="test-site-a",
+            network=doe_feeder(p1=1600.0, p2=1600.0),
+            role=:unspecified, weight=1.0,
+            timestamp=DateTime(2026, 2, 4), seed=23,
+            source="grouped chronological fixture",
+            generation_method=:deterministic_fixture,
+            metadata=Dict("site_id" => "site-a")),
+        DOEScenario(id="test-site-c",
+            network=doe_feeder(p1=1700.0, p2=1700.0),
+            role=:unspecified, weight=1.0,
+            timestamp=DateTime(2026, 2, 5), seed=24,
+            source="grouped chronological fixture",
+            generation_method=:deterministic_fixture,
+            metadata=Dict("site_id" => "site-c")),
+    ]; dataset_id="grouped-chronological-fixture")
+    @test_throws ArgumentError split_doe_scenarios_by_time(
+        grouped_history;
+        calibration_end=DateTime(2026, 2, 3),
+        group_key="site_id")
+    allowed_group_split = split_doe_scenarios_by_time(
+        grouped_history;
+        calibration_end=DateTime(2026, 2, 3),
+        group_key="site_id", group_overlap_policy=:allow)
+    @test allowed_group_split.diagnostics["group_overlap_present"]
+    @test allowed_group_split.diagnostics["group_overlap_retained"]
+    @test allowed_group_split.diagnostics["overlapping_groups"] == ["site-a"]
+    excluded_group_split = split_doe_scenarios_by_time(
+        grouped_history;
+        calibration_end=DateTime(2026, 2, 3),
+        group_key="site_id", group_overlap_policy=:exclude_test)
+    @test [scenario.id for scenario in
+           excluded_group_split.test.intervals[1]] == ["test-site-c"]
+    @test "test-site-a" in excluded_group_split.excluded_scenario_ids
+    @test excluded_group_split.diagnostics[
+        "group_overlap_excluded_count"] == 1
+    @test excluded_group_split.diagnostics["group_overlap_detected"]
+    @test !excluded_group_split.diagnostics["group_overlap_present"]
+
+    clean_audit = audit_doe_scenario_calibration(
+        excluded_group_split.calibration, excluded_group_split.test;
+        group_key="site_id", require_chronological_order=true)
+    @test clean_audit.outcome == :no_declared_leakage_detected
+    @test clean_audit.leakage_checks["chronological_order"] === true
+    @test isempty(clean_audit.leakage_checks["group_overlap"])
+    @test clean_audit.calibration_summary[
+        "effective_sample_size_by_interval"] == [2.0]
+    @test clean_audit.evaluation_summary[
+        "effective_sample_size_by_interval"] == [1.0]
+    @test clean_audit.diagnostics["probabilistic_calibration_assessed"] == false
+
+    overlap_audit = audit_doe_scenario_calibration(
+        allowed_group_split.calibration, allowed_group_split.test;
+        group_key="site_id", require_chronological_order=true)
+    @test overlap_audit.outcome == :leakage_candidates_detected
+    @test "metadata_group_overlap" in
+          overlap_audit.leakage_checks["violated_requirements"]
+    longitudinal_audit = audit_doe_scenario_calibration(
+        allowed_group_split.calibration, allowed_group_split.test;
+        group_key="site_id", require_group_disjoint=false,
+        require_chronological_order=true)
+    @test longitudinal_audit.outcome == :no_declared_leakage_detected
+    incomplete_audit = audit_doe_scenario_calibration(
+        time_split.calibration, time_split.test;
+        group_key="site_id", require_chronological_order=true)
+    @test incomplete_audit.outcome == :required_metadata_incomplete
+    @test "group_disjointness_missing_metadata" in
+          incomplete_audit.leakage_checks["unassessed_requirements"]
+    reuse_audit = audit_doe_scenario_calibration(
+        excluded_group_split.calibration,
+        excluded_group_split.calibration)
+    @test reuse_audit.outcome == :leakage_candidates_detected
+    @test !isempty(reuse_audit.leakage_checks["scenario_id_overlap"])
+    @test !isempty(reuse_audit.leakage_checks["exact_network_overlap"])
+
     @test_throws ArgumentError DOEScenario(
         id="bad", network=doe_feeder(p1=1.0, p2=1.0), role=:unknown)
     @test_throws ArgumentError DOEScenarioSet(
@@ -732,6 +821,10 @@ end
         historical;
         calibration_end=DateTime(2026, 1, 4),
         test_start=DateTime(2026, 1, 3))
+    @test_throws ArgumentError split_doe_scenarios_by_time(
+        historical;
+        calibration_end=DateTime(2026, 1, 3),
+        group_overlap_policy=:unknown)
     @test_throws ArgumentError evaluate_operating_envelope_coverage_curve(
         scenarios, cps, allocation; scales=(-0.1,))
 end

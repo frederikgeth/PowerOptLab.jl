@@ -222,9 +222,12 @@ not create an i.i.d. claim and distribution shift remains unassessed.
 
 [`split_doe_scenarios_by_time`](@ref) constructs a one-interval blocked
 calibration/test split with an optional exclusion gap. It prevents timestamp
-overlap but explicitly leaves site, group, and scenario-generator leakage
-unassessed. [`evaluate_operating_envelope_coverage_curve`](@ref) repeats held-out
-evaluation over a finite capacity-scale grid while retaining recorded
+overlap and can reject, exclude, or explicitly retain metadata-group overlap.
+[`audit_doe_scenario_calibration`](@ref) reports ID, exact-network, time, group,
+provenance, and effective-sample-size diagnostics under caller-selected
+separation requirements. It does not infer independence or probability
+calibration. [`evaluate_operating_envelope_coverage_curve`](@ref) repeats
+held-out evaluation over a finite capacity-scale grid while retaining recorded
 issue-time controls. [`compare_doe_coverage_shift`](@ref) describes performance
 deltas between two evaluated ensembles without labelling them as statistical
 evidence that their generating distributions differ.

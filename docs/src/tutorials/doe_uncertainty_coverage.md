@@ -69,6 +69,7 @@ calibration = DOEScenario(
     generation_method=:deterministic_fixture,
     seed=11,
     timestamp=DateTime(2026, 1, 1, 12),
+    metadata=Dict("site_id" => "synthetic-feeder"),
 )
 
 test_low = DOEScenario(
@@ -80,17 +81,19 @@ test_low = DOEScenario(
     generation_method=:held_out_fixture,
     seed=12,
     timestamp=DateTime(2026, 1, 15, 12),
+    metadata=Dict("site_id" => "synthetic-feeder"),
 )
 
 test_high = DOEScenario(
     id="test-high-load",
-    network=coverage_feeder(5000.0, 5000.0),
+    network=coverage_feeder(4800.0, 4800.0),
     role=:test,
     weight=0.3,
     source="synthetic tutorial fixture",
     generation_method=:held_out_fixture,
     seed=13,
     timestamp=DateTime(2026, 1, 15, 12),
+    metadata=Dict("site_id" => "synthetic-feeder"),
 )
 
 scenarios = DOEScenarioSet(
@@ -114,7 +117,9 @@ time_split = split_doe_scenarios_by_time(
     scenarios;
     calibration_end=DateTime(2026, 1, 2),
     test_start=DateTime(2026, 1, 15),
-    split_name="blocked-holdout")
+    split_name="blocked-holdout",
+    group_key="site_id",
+    group_overlap_policy=:allow)
 
 time_split.calibration
 time_split.test
@@ -125,10 +130,37 @@ time_split.diagnostics
 Samples before `calibration_end` become calibration cases, samples on or after
 `test_start` become test cases, and samples in between are explicitly excluded.
 The helper retains each original role in scenario metadata. It guarantees no
-timestamp overlap, but it does not assess leakage through feeders, sites,
-customers, weather events, or scenario-generator fitting. The current helper
-accepts one forecast interval at a time so it cannot silently confuse forecast
-intervals with statistical sample time.
+timestamp overlap. Here `:allow` declares an intentional longitudinal
+evaluation of the same feeder. Use the default `:error` for a site-
+generalization study, or `:exclude_test` to remove test scenarios whose group
+appeared during calibration. The current helper accepts one forecast interval
+at a time so it cannot silently confuse forecast intervals with statistical
+sample time.
+
+Audit the resulting evidence against the requirements of this longitudinal
+design:
+
+```julia
+calibration_audit = audit_doe_scenario_calibration(
+    time_split.calibration, time_split.test;
+    group_key="site_id",
+    require_group_disjoint=false,
+    require_chronological_order=true)
+
+calibration_audit.outcome
+calibration_audit.calibration_summary
+calibration_audit.evaluation_summary
+calibration_audit.leakage_checks
+calibration_audit.diagnostics
+```
+
+The audit checks reused scenario IDs, exact network realizations, timestamp
+ordering, optional group overlap, missing provenance, and weighted effective
+sample size. Requirements are explicit: a multi-site generalization experiment
+should set `require_group_disjoint=true`, while this same-site longitudinal
+experiment does not. `:no_declared_leakage_detected` means only that the chosen
+checks passed. The result explicitly says that probability calibration,
+representativeness, independence, and distribution shift were not assessed.
 
 ## Allocate without looking at the test scenarios
 
