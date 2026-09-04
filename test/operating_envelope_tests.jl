@@ -881,6 +881,7 @@ end
         DOEScenario(
             id="feature-reference-$index", network=feature_net,
             role=:calibration, source="feature-shift fixture",
+            timestamp=DateTime(2026, 3, index),
             metadata=Dict(
                 "load_kw" => Float64(index),
                 "temperature_c" => 20.0 + 0.1 * index,
@@ -890,6 +891,7 @@ end
         DOEScenario(
             id="feature-shifted-$index", network=feature_net,
             role=:test, source="feature-shift fixture",
+            timestamp=DateTime(2026, 3, 8 + index),
             metadata=Dict(
                 "load_kw" => 20.0 + index,
                 "temperature_c" => 30.0 + 0.1 * index,
@@ -918,6 +920,33 @@ end
     @test grouped_shift.outcome == :declared_covariate_shift_detected
     @test grouped_shift.diagnostics["reference_group_count"] == 8
     @test grouped_shift.diagnostics["shifted_group_count"] == 8
+    descriptive_temporal_shift = test_doe_time_series_covariate_shift(
+        reference_features, shifted_features;
+        features=("load_kw", "temperature_c"))
+    @test descriptive_temporal_shift.outcome == :descriptive_difference_only
+    @test descriptive_temporal_shift.p_value === missing
+    @test descriptive_temporal_shift.diagnostics["regular_spacing"]
+    temporal_shift = test_doe_time_series_covariate_shift(
+        reference_features, shifted_features;
+        features=("load_kw", "temperature_c"),
+        circular_shift_invariance_assumption=true,
+        shifts=999, seed=33, alpha=0.05)
+    @test temporal_shift.outcome in
+          (:declared_temporal_covariate_shift_detected,
+           :declared_temporal_covariate_shift_not_detected)
+    @test 0 < temporal_shift.p_value <= 1
+    @test temporal_shift.diagnostics["exact_circular_randomization"]
+    @test temporal_shift.diagnostics["available_alternative_shifts"] == 15
+    @test temporal_shift.diagnostics["evaluated_alternative_shifts"] == 15
+    irregular_temporal_shift = test_doe_time_series_covariate_shift(
+        allowed_group_split.calibration, allowed_group_split.test;
+        features="load_kw")
+    @test !irregular_temporal_shift.diagnostics["regular_spacing"]
+    @test_throws ArgumentError test_doe_time_series_covariate_shift(
+        allowed_group_split.calibration, allowed_group_split.test;
+        features="load_kw", circular_shift_invariance_assumption=true)
+    @test_throws ArgumentError test_doe_time_series_covariate_shift(
+        shifted_features, reference_features; features="load_kw")
     @test_throws ArgumentError test_doe_covariate_shift(
         reference_features, shifted_features; features="missing")
     @test_throws ArgumentError test_doe_covariate_shift(

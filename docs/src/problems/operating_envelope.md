@@ -235,6 +235,11 @@ evidence that their generating distributions differ.
 distance and per-feature effects for explicitly named numeric metadata. Its
 permutation p-value is disabled unless the caller asserts scenario- or
 group-level exchangeability, and its claim remains limited to those covariates.
+[`test_doe_time_series_covariate_shift`](@ref) provides a narrower temporal
+design: a contiguous reference window is circularly shifted over a regularly
+sampled ordered series. Inference requires an explicit circular-shift-invariance
+assertion, which is stronger than ordinary stationarity; seasonality, trends,
+interventions, and the artificial wraparound remain caller concerns.
 [`evaluate_doe_probability_calibration`](@ref) evaluates separately issued
 violation-probability forecasts using reliability bins, proper scores,
 calibration error, and a binned Brier decomposition. Its coverage adapter keeps

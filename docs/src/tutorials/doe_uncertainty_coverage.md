@@ -317,6 +317,69 @@ are not interpreted as sampling probabilities. Even a rejected permutation
 test establishes shift only in the declared metadata covariates—not concept
 shift, changed violation risk, or shift in the complete network state.
 
+## Preserve serial structure in a temporal comparison
+
+Ordinary scenario permutation destroys time dependence. For a regularly sampled
+series with a single calibration/future boundary, build chronologically distinct
+sets:
+
+```julia
+demand_series_kw = [5.0, 5.2, 4.8, 5.1, 3.0, 2.7, 2.4, 2.1]
+temporal_scenarios = [
+    DOEScenario(
+        id="daily-$index",
+        network=coverage_feeder(500 * demand, 500 * demand),
+        role=index <= 4 ? :calibration : :test,
+        source="synthetic temporal fixture",
+        generation_method=:deterministic_fixture,
+        timestamp=DateTime(2026, 2, index),
+        metadata=Dict("aggregate_demand_kw" => demand))
+    for (index, demand) in enumerate(demand_series_kw)
+]
+
+temporal_reference = DOEScenarioSet(
+    temporal_scenarios[1:4]; dataset_id="temporal-reference")
+temporal_future = DOEScenarioSet(
+    temporal_scenarios[5:8]; dataset_id="temporal-future")
+
+temporal_shift = test_doe_time_series_covariate_shift(
+    temporal_reference, temporal_future;
+    features="aggregate_demand_kw",
+    circular_shift_invariance_assumption=false)
+
+temporal_shift.energy_distance
+temporal_shift.p_value  # missing
+temporal_shift.diagnostics["regular_spacing"]
+```
+
+Inference is opt-in:
+
+```julia
+circular_test = test_doe_time_series_covariate_shift(
+    temporal_reference, temporal_future;
+    features="aggregate_demand_kw",
+    circular_shift_invariance_assumption=true,
+    shifts=999,
+    seed=41)
+
+circular_test.p_value
+circular_test.diagnostics["exact_circular_randomization"]
+circular_test.diagnostics["p_value_resolution"]
+```
+
+Each alternative moves the contiguous reference-length window around the pooled
+ordered series, preserving local serial order. With eight observations, all
+seven alternative cuts are evaluated and the test is exact under its declared
+randomization model—but necessarily has coarse resolution.
+
+The assumption is intentionally named *circular-shift invariance*. It is
+stronger than ordinary stationarity because it treats every cyclic placement,
+including the artificial last-to-first boundary, as valid under the null. The
+function checks unique timestamps, strict reference-before-future ordering, and
+regular spacing by default. It does not adjust for seasonality, trends,
+overlapping forecast windows, interventions, or an omitted time gap; those need
+a study-specific block, seasonal, or intervention-aware design.
+
 ## Evaluate violation-probability calibration
 
 Suppose the metadata probability was issued before each held-out outcome. Turn

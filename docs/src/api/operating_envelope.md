@@ -53,6 +53,7 @@ OperatingEnvelopeMultistartResult
 ```@docs
 audit_doe_scenario_calibration
 test_doe_covariate_shift
+test_doe_time_series_covariate_shift
 doe_probability_observations
 evaluate_doe_probability_calibration
 solve_operating_envelope

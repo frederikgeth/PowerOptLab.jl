@@ -885,9 +885,8 @@ function audit_doe_scenario_calibration(
         outcome, calibration_summary, evaluation_summary, checks, diagnostics)
 end
 
-function _doe_feature_matrix(scenarios::DOEScenarioSet,
+function _doe_feature_matrix(flat::AbstractVector{DOEScenario},
                              features::Vector{String})
-    flat = _doe_flat_scenarios(scenarios)
     values = Matrix{Float64}(undef, length(flat), length(features))
     for (row, scenario) in enumerate(flat), (column, feature) in enumerate(features)
         haskey(scenario.metadata, feature) || throw(ArgumentError(
@@ -900,6 +899,9 @@ function _doe_feature_matrix(scenarios::DOEScenarioSet,
     end
     return flat, values
 end
+
+_doe_feature_matrix(scenarios::DOEScenarioSet, features::Vector{String}) =
+    _doe_feature_matrix(_doe_flat_scenarios(scenarios), features)
 
 function _doe_energy_distance(left::AbstractMatrix{<:Real},
                               right::AbstractMatrix{<:Real})
@@ -1131,6 +1133,174 @@ function test_doe_covariate_shift(
         "claim" => exchangeability_assumption ?
             :exchangeability_conditional_covariate_permutation_test :
             :descriptive_covariate_comparison)
+    return DOECovariateShiftResult(
+        outcome, feature_values, observed, feature_rows, p_value, diagnostics)
+end
+
+"""
+    test_doe_time_series_covariate_shift(reference, shifted;
+        features, circular_shift_invariance_assumption=false,
+        shifts=999, seed=0, alpha=0.05, require_regular_spacing=true)
+
+Compare chronologically separated metadata-covariate series while preserving
+contiguous serial structure. All scenarios need unique timestamps, every
+reference timestamp must precede every shifted timestamp, and regular spacing
+is required by default. Descriptive energy-distance and per-feature effects are
+always returned.
+
+With `circular_shift_invariance_assumption=true`, the original reference window
+is compared with contiguous windows obtained by circularly shifting the cut
+through the pooled ordered series. This is stronger than ordinary stationarity:
+it asserts that cyclic placement, including the artificial last-to-first
+boundary, is valid under the null. Up to `shifts` alternative cuts are sampled
+without replacement; all cuts are used when their count is smaller.
+
+The test concerns only the declared metadata covariates and does not establish
+changed violation risk or concept shift. Seasonal structure, trends, irregular
+sampling, overlapping windows, or a non-exchangeable intervention boundary need
+a different resampling design.
+"""
+function test_doe_time_series_covariate_shift(
+        reference::DOEScenarioSet,
+        shifted::DOEScenarioSet;
+        features,
+        circular_shift_invariance_assumption::Bool=false,
+        shifts::Int=999,
+        seed::Int=0,
+        alpha::Float64=0.05,
+        require_regular_spacing::Bool=true)
+    feature_values = features isa Union{AbstractString,Symbol} ?
+        [String(features)] : String.(collect(features))
+    isempty(feature_values) && throw(ArgumentError("features must be non-empty"))
+    all(!isempty, feature_values) || throw(ArgumentError(
+        "feature names must be non-empty"))
+    length(unique(feature_values)) == length(feature_values) ||
+        throw(ArgumentError("feature names must be unique"))
+    shifts >= 1 || throw(ArgumentError("shifts must be positive"))
+    seed >= 0 || throw(ArgumentError("seed must be non-negative"))
+    0 < alpha < 1 || throw(ArgumentError(
+        "alpha must lie strictly between zero and one"))
+
+    reference_scenarios = _doe_flat_scenarios(reference)
+    shifted_scenarios = _doe_flat_scenarios(shifted)
+    all(scenario -> scenario.timestamp !== nothing,
+        vcat(reference_scenarios, shifted_scenarios)) || throw(ArgumentError(
+            "every scenario needs a timestamp for time-series shift testing"))
+    sort!(reference_scenarios; by=scenario ->
+        (something(scenario.timestamp), scenario.id))
+    sort!(shifted_scenarios; by=scenario ->
+        (something(scenario.timestamp), scenario.id))
+    reference_timestamps = DateTime[something(scenario.timestamp)
+                                    for scenario in reference_scenarios]
+    shifted_timestamps = DateTime[something(scenario.timestamp)
+                                  for scenario in shifted_scenarios]
+    length(unique(vcat(reference_timestamps, shifted_timestamps))) ==
+        length(reference_timestamps) + length(shifted_timestamps) ||
+        throw(ArgumentError(
+            "time-series shift testing requires unique timestamps"))
+    maximum(reference_timestamps) < minimum(shifted_timestamps) ||
+        throw(ArgumentError(
+            "every reference timestamp must precede every shifted timestamp"))
+    pooled_timestamps = vcat(reference_timestamps, shifted_timestamps)
+    spacings_ms = [Dates.value(pooled_timestamps[index + 1] -
+                               pooled_timestamps[index])
+                   for index in 1:length(pooled_timestamps) - 1]
+    regularly_spaced = isempty(spacings_ms) ||
+        all(spacing -> spacing == first(spacings_ms), spacings_ms)
+    if circular_shift_invariance_assumption && require_regular_spacing &&
+       !regularly_spaced
+        throw(ArgumentError(
+            "circular shift inference requires regular timestamp spacing unless require_regular_spacing=false"))
+    end
+
+    _, reference_values = _doe_feature_matrix(
+        reference_scenarios, feature_values)
+    _, shifted_values = _doe_feature_matrix(
+        shifted_scenarios, feature_values)
+    standardized_reference, standardized_shifted,
+        zero_variance_features, feature_scales =
+        _doe_standardize_shift_features(
+            reference_values, shifted_values, feature_values)
+    observed = _doe_energy_distance(
+        standardized_reference, standardized_shifted)
+    feature_rows = _doe_shift_feature_rows(
+        reference_values, shifted_values, feature_values)
+
+    p_value = missing
+    exceedances = missing
+    evaluated_offsets = Int[]
+    exact = false
+    total_count = length(reference_scenarios) + length(shifted_scenarios)
+    alternative_count = total_count - 1
+    if circular_shift_invariance_assumption
+        available_offsets = collect(1:alternative_count)
+        if shifts >= alternative_count
+            evaluated_offsets = available_offsets
+            exact = true
+        else
+            rng = Random.MersenneTwister(seed)
+            evaluated_offsets = sort!(available_offsets[
+                randperm(rng, alternative_count)[1:shifts]])
+        end
+        pooled_values = vcat(standardized_reference, standardized_shifted)
+        reference_count = length(reference_scenarios)
+        exceedance_count = 0
+        for offset in evaluated_offsets
+            left_indices = [mod1(offset + index, total_count)
+                            for index in 1:reference_count]
+            is_left = falses(total_count)
+            is_left[left_indices] .= true
+            right_indices = [index for index in 1:total_count if !is_left[index]]
+            statistic = _doe_energy_distance(
+                pooled_values[left_indices, :], pooled_values[right_indices, :])
+            exceedance_count += statistic >= observed - 1e-12
+        end
+        exceedances = exceedance_count
+        p_value = (exceedance_count + 1) / (length(evaluated_offsets) + 1)
+    end
+    outcome = !circular_shift_invariance_assumption ?
+        :descriptive_difference_only :
+        p_value <= alpha ? :declared_temporal_covariate_shift_detected :
+        :declared_temporal_covariate_shift_not_detected
+    diagnostics = Dict{String,Any}(
+        "reference_dataset_id" => reference.dataset_id,
+        "shifted_dataset_id" => shifted.dataset_id,
+        "reference_scenario_count" => length(reference_scenarios),
+        "shifted_scenario_count" => length(shifted_scenarios),
+        "reference_timestamp_min" => minimum(reference_timestamps),
+        "reference_timestamp_max" => maximum(reference_timestamps),
+        "shifted_timestamp_min" => minimum(shifted_timestamps),
+        "shifted_timestamp_max" => maximum(shifted_timestamps),
+        "time_ordering_verified" => true,
+        "regular_spacing" => regularly_spaced,
+        "spacing_milliseconds" => regularly_spaced && !isempty(spacings_ms) ?
+            first(spacings_ms) : missing,
+        "require_regular_spacing" => require_regular_spacing,
+        "standardization" => :pooled_sample_standard_deviation,
+        "feature_scales" => Dict(feature_values .=> feature_scales),
+        "zero_variance_features" => zero_variance_features,
+        "circular_shift_invariance_assumption" =>
+            circular_shift_invariance_assumption,
+        "resampling_design" => circular_shift_invariance_assumption ?
+            :circular_contiguous_window_shift : :none,
+        "available_alternative_shifts" => alternative_count,
+        "evaluated_alternative_shifts" => length(evaluated_offsets),
+        "evaluated_offsets" => evaluated_offsets,
+        "exact_circular_randomization" => exact,
+        "seed" => circular_shift_invariance_assumption && !exact ? seed : missing,
+        "exceedances" => exceedances,
+        "p_value_resolution" => circular_shift_invariance_assumption ?
+            1 / (length(evaluated_offsets) + 1) : missing,
+        "alpha" => alpha,
+        "tested_scope" => :declared_metadata_covariates,
+        "seasonality_assessed" => false,
+        "trend_assessed" => false,
+        "concept_shift_assessed" => false,
+        "violation_risk_shift_assessed" => false,
+        "general_distribution_shift_assessed" => false,
+        "claim" => circular_shift_invariance_assumption ?
+            :circular_shift_invariance_conditional_covariate_test :
+            :descriptive_temporal_covariate_comparison)
     return DOECovariateShiftResult(
         outcome, feature_values, observed, feature_rows, p_value, diagnostics)
 end

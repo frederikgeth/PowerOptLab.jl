@@ -439,8 +439,11 @@ counterexamples.
    exchangeability assertion and remains limited to those covariates.
    Separately issued violation-probability forecasts can now be evaluated with
    reliability tables, proper scores, calibration errors, explicit unresolved
-   treatment, and independence-conditional concentration intervals. Add time-
-   series-specific resampling designs next.
+   treatment, and independence-conditional concentration intervals. A first
+   temporal shift design preserves contiguous serial order through circular
+   window shifts, checks ordering/spacing, and requires an explicit invariance
+   assertion stronger than stationarity. Add seasonal/block resampling and
+   automated DSSE/model-uncertainty scenario construction next.
 3. Couple envelopes to storage SOC, EV energy, ramping, tap operations, and
    first-stage/recourse decisions using the package's multi-period machinery.
 4. Evaluate offered capacity, realized utilization, curtailed energy, customer
