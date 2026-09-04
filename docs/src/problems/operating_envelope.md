@@ -231,6 +231,10 @@ held-out evaluation over a finite capacity-scale grid while retaining recorded
 issue-time controls. [`compare_doe_coverage_shift`](@ref) describes performance
 deltas between two evaluated ensembles without labelling them as statistical
 evidence that their generating distributions differ.
+[`test_doe_covariate_shift`](@ref) adds pooled-scale multivariate energy
+distance and per-feature effects for explicitly named numeric metadata. Its
+permutation p-value is disabled unless the caller asserts scenario- or
+group-level exchangeability, and its claim remains limited to those covariates.
 
 ## PV and batteries with mandatory Q-V control
 

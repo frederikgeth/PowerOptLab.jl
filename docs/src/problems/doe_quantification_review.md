@@ -433,8 +433,12 @@ counterexamples.
    comparisons refuse to claim that distribution shift was detected. Group-
    aware split policies and calibration/evaluation audits now expose ID,
    exact-network, timestamp, group, provenance, and effective-sample-size
-   diagnostics under declared requirements. Add data-generating-process-
-   specific calibration and shift tests next.
+   diagnostics under declared requirements. Declared numeric metadata can now
+   be compared with multivariate energy distance and per-feature effects;
+   permutation inference requires an explicit scenario- or group-level
+   exchangeability assertion and remains limited to those covariates. Add
+   probability-calibration diagnostics and time-series-specific resampling
+   designs next.
 3. Couple envelopes to storage SOC, EV energy, ramping, tap operations, and
    first-stage/recourse decisions using the package's multi-period machinery.
 4. Evaluate offered capacity, realized utilization, curtailed energy, customer

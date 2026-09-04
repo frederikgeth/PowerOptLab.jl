@@ -717,28 +717,28 @@ end
             timestamp=DateTime(2026, 2, 1), seed=21,
             source="grouped chronological fixture",
             generation_method=:deterministic_fixture,
-            metadata=Dict("site_id" => "site-a")),
+            metadata=Dict("site_id" => "site-a", "load_kw" => 1.4)),
         DOEScenario(id="cal-site-b",
             network=doe_feeder(p1=1500.0, p2=1500.0),
             role=:unspecified, weight=1.0,
             timestamp=DateTime(2026, 2, 2), seed=22,
             source="grouped chronological fixture",
             generation_method=:deterministic_fixture,
-            metadata=Dict("site_id" => "site-b")),
+            metadata=Dict("site_id" => "site-b", "load_kw" => 1.5)),
         DOEScenario(id="test-site-a",
             network=doe_feeder(p1=1600.0, p2=1600.0),
             role=:unspecified, weight=1.0,
             timestamp=DateTime(2026, 2, 4), seed=23,
             source="grouped chronological fixture",
             generation_method=:deterministic_fixture,
-            metadata=Dict("site_id" => "site-a")),
+            metadata=Dict("site_id" => "site-a", "load_kw" => 1.6)),
         DOEScenario(id="test-site-c",
             network=doe_feeder(p1=1700.0, p2=1700.0),
             role=:unspecified, weight=1.0,
             timestamp=DateTime(2026, 2, 5), seed=24,
             source="grouped chronological fixture",
             generation_method=:deterministic_fixture,
-            metadata=Dict("site_id" => "site-c")),
+            metadata=Dict("site_id" => "site-c", "load_kw" => 1.7)),
     ]; dataset_id="grouped-chronological-fixture")
     @test_throws ArgumentError split_doe_scenarios_by_time(
         grouped_history;
@@ -798,6 +798,69 @@ end
     @test reuse_audit.outcome == :leakage_candidates_detected
     @test !isempty(reuse_audit.leakage_checks["scenario_id_overlap"])
     @test !isempty(reuse_audit.leakage_checks["exact_network_overlap"])
+
+    descriptive_shift = test_doe_covariate_shift(
+        allowed_group_split.calibration, allowed_group_split.test;
+        features="load_kw")
+    @test descriptive_shift.outcome == :descriptive_difference_only
+    @test descriptive_shift.p_value === missing
+    @test descriptive_shift.energy_distance >= 0
+    @test only(descriptive_shift.feature_rows).mean_difference ≈ 0.2
+    @test descriptive_shift.diagnostics["permutations"] == 0
+    @test descriptive_shift.diagnostics[
+        "general_distribution_shift_assessed"] == false
+    @test_throws ArgumentError test_doe_covariate_shift(
+        allowed_group_split.calibration, allowed_group_split.test;
+        features="load_kw", exchangeability_assumption=true,
+        permutation_unit=:group, group_key="site_id", permutations=19)
+
+    feature_net = doe_feeder(p1=1000.0, p2=1000.0)
+    reference_features = DOEScenarioSet([
+        DOEScenario(
+            id="feature-reference-$index", network=feature_net,
+            role=:calibration, source="feature-shift fixture",
+            metadata=Dict(
+                "load_kw" => Float64(index),
+                "temperature_c" => 20.0 + 0.1 * index,
+                "site_id" => "reference-site-$index"))
+        for index in 1:8]; dataset_id="feature-reference")
+    shifted_features = DOEScenarioSet([
+        DOEScenario(
+            id="feature-shifted-$index", network=feature_net,
+            role=:test, source="feature-shift fixture",
+            metadata=Dict(
+                "load_kw" => 20.0 + index,
+                "temperature_c" => 30.0 + 0.1 * index,
+                "site_id" => "shifted-site-$index"))
+        for index in 1:8]; dataset_id="feature-shifted")
+    tested_shift = test_doe_covariate_shift(
+        reference_features, shifted_features;
+        features=("load_kw", "temperature_c"),
+        exchangeability_assumption=true,
+        permutations=199, seed=31, alpha=0.05)
+    @test tested_shift.outcome == :declared_covariate_shift_detected
+    @test 0 < tested_shift.p_value <= 0.05
+    @test tested_shift.features == ["load_kw", "temperature_c"]
+    @test tested_shift.diagnostics["seed"] == 31
+    repeated_shift = test_doe_covariate_shift(
+        reference_features, shifted_features;
+        features=("load_kw", "temperature_c"),
+        exchangeability_assumption=true,
+        permutations=199, seed=31, alpha=0.05)
+    @test repeated_shift.p_value == tested_shift.p_value
+    grouped_shift = test_doe_covariate_shift(
+        reference_features, shifted_features;
+        features="load_kw", exchangeability_assumption=true,
+        permutation_unit=:group, group_key="site_id",
+        permutations=99, seed=32, alpha=0.1)
+    @test grouped_shift.outcome == :declared_covariate_shift_detected
+    @test grouped_shift.diagnostics["reference_group_count"] == 8
+    @test grouped_shift.diagnostics["shifted_group_count"] == 8
+    @test_throws ArgumentError test_doe_covariate_shift(
+        reference_features, shifted_features; features="missing")
+    @test_throws ArgumentError test_doe_covariate_shift(
+        reference_features, shifted_features;
+        features="load_kw", permutations=0)
 
     @test_throws ArgumentError DOEScenario(
         id="bad", network=doe_feeder(p1=1.0, p2=1.0), role=:unknown)

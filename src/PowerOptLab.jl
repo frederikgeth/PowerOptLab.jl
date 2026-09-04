@@ -88,6 +88,7 @@ using ForwardDiff
 using JuMP
 using Ipopt
 using LinearAlgebra
+using Random
 using SHA
 using SparseArrays
 
@@ -169,7 +170,8 @@ export SequenceLineObservation, OverheadCarsonCandidate,
 export ConnectionPoint, FairnessPolicy, DOEScenario, DOEScenarioSet,
        select_doe_scenarios, DOEScenarioTimeSplit,
        split_doe_scenarios_by_time, DOEScenarioCalibrationAudit,
-       audit_doe_scenario_calibration, DOEControlRegistration,
+       audit_doe_scenario_calibration, DOECovariateShiftResult,
+       test_doe_covariate_shift, DOEControlRegistration,
        DOEControlRule, DOEControlPolicy,
        PerfectRecourse, IssueFixedControls, IssuePlusLocalLaws,
        DOEStudySpec, doe_study_manifest, doe_benchmark_rows,

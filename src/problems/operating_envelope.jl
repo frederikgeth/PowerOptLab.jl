@@ -391,6 +391,23 @@ struct DOEScenarioCalibrationAudit
     diagnostics::Dict{String,Any}
 end
 
+"""
+    DOECovariateShiftResult
+
+Declared-metadata covariate comparison returned by
+[`test_doe_covariate_shift`](@ref). Descriptive feature effects are always
+available. `p_value` is `missing` unless the caller explicitly asserts the
+exchangeability required by the selected permutation design.
+"""
+struct DOECovariateShiftResult
+    outcome::Symbol
+    features::Vector{String}
+    energy_distance::Float64
+    feature_rows::Vector{NamedTuple}
+    p_value::Union{Missing,Float64}
+    diagnostics::Dict{String,Any}
+end
+
 function _doe_scenario_with_role(scenario::DOEScenario, role::Symbol,
                                  split_name::AbstractString)
     metadata = copy(scenario.metadata)
@@ -803,6 +820,256 @@ function audit_doe_scenario_calibration(
         "claim" => :declared_split_provenance_and_leakage_audit)
     return DOEScenarioCalibrationAudit(
         outcome, calibration_summary, evaluation_summary, checks, diagnostics)
+end
+
+function _doe_feature_matrix(scenarios::DOEScenarioSet,
+                             features::Vector{String})
+    flat = _doe_flat_scenarios(scenarios)
+    values = Matrix{Float64}(undef, length(flat), length(features))
+    for (row, scenario) in enumerate(flat), (column, feature) in enumerate(features)
+        haskey(scenario.metadata, feature) || throw(ArgumentError(
+            "scenario '$(scenario.id)' has no metadata feature '$feature'"))
+        value = scenario.metadata[feature]
+        value isa Real && !(value isa Bool) && isfinite(value) ||
+            throw(ArgumentError(
+                "scenario '$(scenario.id)' feature '$feature' must be a finite real scalar"))
+        values[row, column] = Float64(value)
+    end
+    return flat, values
+end
+
+function _doe_energy_distance(left::AbstractMatrix{<:Real},
+                              right::AbstractMatrix{<:Real})
+    n_left, n_right = size(left, 1), size(right, 1)
+    cross = sum(norm(view(left, i, :) .- view(right, j, :))
+                for i in 1:n_left for j in 1:n_right)
+    within_left = sum(norm(view(left, i, :) .- view(left, j, :))
+                      for i in 1:n_left for j in 1:n_left)
+    within_right = sum(norm(view(right, i, :) .- view(right, j, :))
+                       for i in 1:n_right for j in 1:n_right)
+    return max(0.0,
+        2 * cross / (n_left * n_right) - within_left / n_left^2 -
+        within_right / n_right^2)
+end
+
+function _doe_ks_distance(left::AbstractVector{<:Real},
+                          right::AbstractVector{<:Real})
+    support = sort!(unique(vcat(Float64.(left), Float64.(right))))
+    return maximum(max(
+        abs(count(value -> value <= point, left) / length(left) -
+            count(value -> value <= point, right) / length(right)),
+        abs(count(value -> value < point, left) / length(left) -
+            count(value -> value < point, right) / length(right)))
+        for point in support)
+end
+
+function _doe_shift_feature_rows(reference::Matrix{Float64},
+                                 shifted::Matrix{Float64},
+                                 features::Vector{String})
+    rows = NamedTuple[]
+    for (column, feature) in enumerate(features)
+        left = reference[:, column]
+        right = shifted[:, column]
+        left_mean = sum(left) / length(left)
+        right_mean = sum(right) / length(right)
+        degrees = length(left) + length(right) - 2
+        left_ss = sum(abs2, left .- left_mean)
+        right_ss = sum(abs2, right .- right_mean)
+        pooled_sd = degrees > 0 ? sqrt((left_ss + right_ss) / degrees) : NaN
+        standardized_difference = isfinite(pooled_sd) && pooled_sd > 0 ?
+            (right_mean - left_mean) / pooled_sd :
+            left_mean == right_mean ? 0.0 : missing
+        push!(rows, (
+            feature=feature,
+            reference_mean=left_mean,
+            shifted_mean=right_mean,
+            mean_difference=right_mean - left_mean,
+            pooled_standard_deviation=pooled_sd,
+            standardized_mean_difference=standardized_difference,
+            empirical_cdf_distance=_doe_ks_distance(left, right),
+        ))
+    end
+    return rows
+end
+
+function _doe_standardize_shift_features(reference::Matrix{Float64},
+                                         shifted::Matrix{Float64},
+                                         features::Vector{String})
+    pooled = vcat(reference, shifted)
+    scales = ones(Float64, size(pooled, 2))
+    zero_variance_features = String[]
+    for column in axes(pooled, 2)
+        mean_value = sum(view(pooled, :, column)) / size(pooled, 1)
+        centered_ss = sum(abs2, view(pooled, :, column) .- mean_value)
+        scale = size(pooled, 1) > 1 ?
+            sqrt(centered_ss / (size(pooled, 1) - 1)) : 0.0
+        if isfinite(scale) && scale > 0
+            scales[column] = scale
+        else
+            push!(zero_variance_features, features[column])
+        end
+    end
+    return reference ./ reshape(scales, 1, :),
+           shifted ./ reshape(scales, 1, :), zero_variance_features, scales
+end
+
+function _doe_group_permutation_indices(reference_scenarios,
+                                        shifted_scenarios,
+                                        group_key::String)
+    all_scenarios = vcat(reference_scenarios, shifted_scenarios)
+    all(scenario -> haskey(scenario.metadata, group_key), all_scenarios) ||
+        throw(ArgumentError(
+            "every scenario needs metadata['$group_key'] for group permutation"))
+    reference_groups = Set(_doe_canonical(scenario.metadata[group_key])
+                           for scenario in reference_scenarios)
+    shifted_groups = Set(_doe_canonical(scenario.metadata[group_key])
+                         for scenario in shifted_scenarios)
+    isempty(intersect(reference_groups, shifted_groups)) || throw(ArgumentError(
+        "group permutation requires every group to occur in only one ensemble"))
+    group_indices = Dict{String,Vector{Int}}()
+    for (index, scenario) in enumerate(all_scenarios)
+        signature = _doe_canonical(scenario.metadata[group_key])
+        push!(get!(group_indices, signature, Int[]), index)
+    end
+    return group_indices, length(reference_groups)
+end
+
+"""
+    test_doe_covariate_shift(reference, shifted;
+        features, exchangeability_assumption=false, permutation_unit=:scenario,
+        group_key=nothing, permutations=999, seed=0, alpha=0.05)
+
+Compare numeric scenario-metadata covariates using pooled-scale multivariate
+energy distance and per-feature mean differences, standardized mean differences,
+and empirical-CDF distances. `features` is an explicit list of metadata keys;
+the function never guesses covariates from network dictionaries.
+
+With the default `exchangeability_assumption=false`, the result is descriptive
+and `p_value` is `missing`. Set it to `true` only when labels are exchangeable
+under the null. `permutation_unit=:scenario` assumes scenario-level
+exchangeability. `:group` permutes whole, disjoint metadata groups identified by
+`group_key`; it is suitable only when those groups, rather than observations
+within them, are exchangeable. Neither design is automatically valid for time
+series.
+
+A rejected test concerns only the declared metadata covariates. It does not by
+itself establish concept shift, changed violation risk, or general distribution
+shift in the full network state.
+"""
+function test_doe_covariate_shift(
+        reference::DOEScenarioSet,
+        shifted::DOEScenarioSet;
+        features,
+        exchangeability_assumption::Bool=false,
+        permutation_unit::Symbol=:scenario,
+        group_key::Union{Nothing,AbstractString}=nothing,
+        permutations::Int=999,
+        seed::Int=0,
+        alpha::Float64=0.05)
+    feature_values = features isa Union{AbstractString,Symbol} ? [String(features)] :
+        String.(collect(features))
+    isempty(feature_values) && throw(ArgumentError("features must be non-empty"))
+    all(!isempty, feature_values) || throw(ArgumentError(
+        "feature names must be non-empty"))
+    length(unique(feature_values)) == length(feature_values) ||
+        throw(ArgumentError("feature names must be unique"))
+    permutation_unit in (:scenario, :group) || throw(ArgumentError(
+        "permutation_unit must be :scenario or :group"))
+    permutations >= 1 || throw(ArgumentError("permutations must be positive"))
+    seed >= 0 || throw(ArgumentError("seed must be non-negative"))
+    0 < alpha < 1 || throw(ArgumentError(
+        "alpha must lie strictly between zero and one"))
+    permutation_unit == :group && group_key === nothing && throw(ArgumentError(
+        "group_key is required for group permutation"))
+    group_key === nothing || !isempty(group_key) || throw(ArgumentError(
+        "group_key must be non-empty when provided"))
+
+    reference_scenarios, reference_values = _doe_feature_matrix(
+        reference, feature_values)
+    shifted_scenarios, shifted_values = _doe_feature_matrix(
+        shifted, feature_values)
+    standardized_reference, standardized_shifted,
+        zero_variance_features, feature_scales =
+        _doe_standardize_shift_features(
+            reference_values, shifted_values, feature_values)
+    observed = _doe_energy_distance(
+        standardized_reference, standardized_shifted)
+    feature_rows = _doe_shift_feature_rows(
+        reference_values, shifted_values, feature_values)
+
+    p_value = missing
+    exceedances = missing
+    reference_group_count = missing
+    shifted_group_count = missing
+    if exchangeability_assumption
+        rng = Random.MersenneTwister(seed)
+        pooled = vcat(standardized_reference, standardized_shifted)
+        n_reference = size(standardized_reference, 1)
+        exceedance_count = 0
+        if permutation_unit == :scenario
+            for _ in 1:permutations
+                order = randperm(rng, size(pooled, 1))
+                statistic = _doe_energy_distance(
+                    pooled[order[1:n_reference], :],
+                    pooled[order[n_reference + 1:end], :])
+                exceedance_count += statistic >= observed - 1e-12
+            end
+        else
+            key = String(group_key)
+            group_indices, n_reference_groups =
+                _doe_group_permutation_indices(
+                    reference_scenarios, shifted_scenarios, key)
+            signatures = sort!(collect(keys(group_indices)))
+            reference_group_count = n_reference_groups
+            shifted_group_count = length(signatures) - n_reference_groups
+            for _ in 1:permutations
+                order = randperm(rng, length(signatures))
+                left_groups = signatures[order[1:n_reference_groups]]
+                right_groups = signatures[order[n_reference_groups + 1:end]]
+                left_indices = reduce(vcat,
+                    (group_indices[signature] for signature in left_groups))
+                right_indices = reduce(vcat,
+                    (group_indices[signature] for signature in right_groups))
+                statistic = _doe_energy_distance(
+                    pooled[left_indices, :], pooled[right_indices, :])
+                exceedance_count += statistic >= observed - 1e-12
+            end
+        end
+        exceedances = exceedance_count
+        p_value = (exceedance_count + 1) / (permutations + 1)
+    end
+    outcome = !exchangeability_assumption ? :descriptive_difference_only :
+        p_value <= alpha ? :declared_covariate_shift_detected :
+        :declared_covariate_shift_not_detected
+    diagnostics = Dict{String,Any}(
+        "reference_dataset_id" => reference.dataset_id,
+        "shifted_dataset_id" => shifted.dataset_id,
+        "reference_scenario_count" => length(reference_scenarios),
+        "shifted_scenario_count" => length(shifted_scenarios),
+        "standardization" => :pooled_sample_standard_deviation,
+        "feature_scales" => Dict(feature_values .=> feature_scales),
+        "zero_variance_features" => zero_variance_features,
+        "exchangeability_assumption" => exchangeability_assumption,
+        "permutation_unit" => permutation_unit,
+        "group_key" => group_key === nothing ? nothing : String(group_key),
+        "reference_group_count" => reference_group_count,
+        "shifted_group_count" => shifted_group_count,
+        "permutations" => exchangeability_assumption ? permutations : 0,
+        "seed" => exchangeability_assumption ? seed : missing,
+        "exceedances" => exceedances,
+        "p_value_resolution" => exchangeability_assumption ?
+            1 / (permutations + 1) : missing,
+        "alpha" => alpha,
+        "scenario_weights_used" => false,
+        "tested_scope" => :declared_metadata_covariates,
+        "concept_shift_assessed" => false,
+        "violation_risk_shift_assessed" => false,
+        "general_distribution_shift_assessed" => false,
+        "claim" => exchangeability_assumption ?
+            :exchangeability_conditional_covariate_permutation_test :
+            :descriptive_covariate_comparison)
+    return DOECovariateShiftResult(
+        outcome, feature_values, observed, feature_rows, p_value, diagnostics)
 end
 
 function _doe_policy_manifest(policy::DOEControlPolicy)

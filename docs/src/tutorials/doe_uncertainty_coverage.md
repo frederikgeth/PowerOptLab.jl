@@ -69,7 +69,9 @@ calibration = DOEScenario(
     generation_method=:deterministic_fixture,
     seed=11,
     timestamp=DateTime(2026, 1, 1, 12),
-    metadata=Dict("site_id" => "synthetic-feeder"),
+    metadata=Dict(
+        "site_id" => "synthetic-feeder",
+        "aggregate_demand_kw" => 10.0),
 )
 
 test_low = DOEScenario(
@@ -81,7 +83,9 @@ test_low = DOEScenario(
     generation_method=:held_out_fixture,
     seed=12,
     timestamp=DateTime(2026, 1, 15, 12),
-    metadata=Dict("site_id" => "synthetic-feeder"),
+    metadata=Dict(
+        "site_id" => "synthetic-feeder",
+        "aggregate_demand_kw" => 0.4),
 )
 
 test_high = DOEScenario(
@@ -93,7 +97,9 @@ test_high = DOEScenario(
     generation_method=:held_out_fixture,
     seed=13,
     timestamp=DateTime(2026, 1, 15, 12),
-    metadata=Dict("site_id" => "synthetic-feeder"),
+    metadata=Dict(
+        "site_id" => "synthetic-feeder",
+        "aggregate_demand_kw" => 9.6),
 )
 
 scenarios = DOEScenarioSet(
@@ -272,6 +278,41 @@ claim that a distribution shift has been detected: that requires a separately
 chosen two-sample, covariate, residual, or concept-shift test with assumptions
 matched to the data-generating process. A named stress set is also not evidence
 of prevalence in the operating population.
+
+## Diagnose declared covariate shift
+
+The scenario metadata includes aggregate demand, so it can be compared without
+guessing a feature from the network dictionary:
+
+```julia
+reference_scenarios = select_doe_scenarios(scenarios; roles=:test)
+stress_scenarios = select_doe_scenarios(scenarios; roles=:stress)
+
+covariate_shift = test_doe_covariate_shift(
+    reference_scenarios, stress_scenarios;
+    features="aggregate_demand_kw",
+    exchangeability_assumption=false)
+
+covariate_shift.energy_distance
+covariate_shift.feature_rows
+covariate_shift.p_value  # missing
+covariate_shift.diagnostics
+```
+
+This one-scenario comparison is descriptive. In a study with exchangeable
+independent scenarios, explicitly setting `exchangeability_assumption=true`
+enables a reproducible Monte Carlo permutation p-value. For exchangeable,
+disjoint sites or events, use `permutation_unit=:group` with the corresponding
+`group_key`; all observations in a group then move together. Neither ordinary
+scenario permutation nor group permutation is automatically valid for serially
+dependent time samples.
+
+The joint statistic is energy distance after scaling each feature by its pooled
+sample standard deviation. Feature rows also report raw mean differences,
+standardized mean differences, and empirical-CDF distances. Scenario weights
+are not interpreted as sampling probabilities. Even a rejected permutation
+test establishes shift only in the declared metadata covariates—not concept
+shift, changed violation risk, or shift in the complete network state.
 
 ## Add a statistical bound only when justified
 
