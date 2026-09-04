@@ -3,15 +3,21 @@
 > **Audience:** anyone who has been told that ampere readings are numerically
 > dangerous in state estimation.
 
-Current-magnitude (`:imag`) measurements have a bad reputation. The folklore
-says they make the estimation problem ill-conditioned. **That is not what
-happens**, and believing it leads people to discard perfectly good telemetry
-for the wrong reason.
+Current-magnitude (`:imag`) measurements have a bad reputation, usually
+summarised as "they make the problem ill-conditioned". That summary is too
+coarse to act on. The defensible statement is:
 
-Two things really do go wrong, and neither is conditioning. This page
-demonstrates both, and shows what the estimator does about them.
+> **Current magnitude does not inevitably cause ill-conditioning. Conditioning
+> is operating-point and measurement-set dependent — and there are operating
+> points, including very ordinary ones, where it fails badly.**
 
-Everything below runs against a two-bus feeder:
+This page separates the three distinct things that get conflated: a benign
+path where conditioning stays bounded, a genuinely degenerate one that arises
+at unity power factor, and a non-uniqueness that is not a conditioning
+question at all.
+
+Everything below runs against one two-bus feeder, and every table on this page
+is pinned by a test in `test/constrained_state_estimation_tests.jl`:
 
 ```julia
 using PowerOptLab
@@ -30,12 +36,15 @@ vtrue = 220.0 * cis(-0.05)          # the state we will try to recover
 itrue = (230.0 - vtrue) / 0.5       # |I| = 30.0981 A
 ```
 
-## The myth: ill-conditioning
+The state is `[Vre_b, Vim_b]`. Unless stated otherwise every measurement below
+carries `sigma = 0.01` in its own SI unit (volts for `:vmag`, amperes for
+`:imag`), so the whitened Jacobian rows are directly comparable.
 
-It is easy to check. Take ``|V_b|`` and ``|I_\ell|``, and watch the
-conditioning of the whitened Jacobian as the line current falls by six orders
-of magnitude (holding a 0.9 lagging angle so the state stays genuinely
-complex):
+## Shrinking current alone is benign
+
+Take ``|V_b|`` and ``|I_\ell|`` and let the line current fall by six orders of
+magnitude, holding the power-factor angle fixed at 0.9 lagging so the state
+stays genuinely complex:
 
 | ``|I|`` (A) | ``\sigma_{\min}(H)`` | ``\mathrm{cond}(H)`` |
 |---:|---:|---:|
@@ -46,23 +55,49 @@ complex):
 | 0.01 | 3.96e+01 | 5.56 |
 | 0.0001 | 3.96e+01 | 5.56 |
 
-The condition number does not blow up. It *converges*, to about 5.6. The
-gradient of ``\sqrt{I_{re}^2+I_{im}^2}`` is a unit vector in the direction of
-the current — its direction depends on the operating point, but its magnitude
-does not shrink with ``|I|``. A measurement set dominated by ampere readings
-conditions just as well as any other:
+Along this path the condition number does not blow up — it *converges*, to
+about 5.6. The gradient of ``\sqrt{I_{re}^2+I_{im}^2}`` is a unit vector along
+the current direction, so its magnitude does not shrink with ``|I|``.
 
-| measurement set | rows | states | observable | cond |
-|---|---:|---:|---:|---:|
-| ``\|I\|`` on both lines only | 2 | 4 | 2 | ``\infty`` |
-| + ``\|V_b\|`` | 3 | 4 | 3 | ``\infty`` |
-| + ``\|V_b\|``, ``\|V_c\|`` | 4 | 4 | 4 | 9.71 |
+**This is one path only.** It fixes the current's direction and varies its
+magnitude. The next section varies the direction instead, and the outcome is
+completely different — which is exactly why the blanket claim in either
+direction is unhelpful.
 
-Rank grows one-for-one with rows, and the fully determined set is well
-conditioned. The under-observed rows are simply *too few equations* — the
-ordinary situation, not a pathology of ampere measurements.
+## Real problem 1: at unity power factor, ``|V|`` and ``|I|`` collapse onto each other
 
-## Real problem 1: the derivative is undefined at exactly zero current
+``|V_b|`` senses the state along the direction ``\hat V``; ``|I_\ell|`` senses it
+along ``\hat I``. When the current is in phase with the bus voltage those two
+directions coincide, the two whitened rows become **parallel**, and the pair
+loses rank — at any current magnitude whatsoever.
+
+Hold the current at 40 A and sweep the power-factor angle toward zero:
+
+| pf angle (rad) | ``\angle(V,I)`` | ``\sigma_{\min}(H)`` | ``\mathrm{cond}(H)`` | sd of ``\angle V_b`` |
+|---:|---:|---:|---:|---:|
+| −0.6 | 0.6529 | 5.61e+01 | 3.86 | 7.2e−05 |
+| −0.3 | 0.3280 | 2.91e+01 | 7.63 | 1.6e−04 |
+| −0.1 | 0.1095 | 9.78e+00 | 22.8 | 4.8e−04 |
+| −0.03 | 0.0329 | 2.94e+00 | 76.1 | 1.6e−03 |
+| −0.01 | 0.0110 | 9.80e−01 | 228 | 4.9e−03 |
+| −0.003 | 0.0033 | 2.94e−01 | 761 | 1.6e−02 |
+| **0** | **0** | **0** | ``\infty`` | undefined |
+
+At exactly unity power factor the set is rank 1 of 2 while carrying 40 A, and
+`selected_state_covariance` refuses to return a covariance. Unity and
+near-unity power factor is not exotic — resistive load, and PV inverters
+operating at unity — so this degeneracy is reachable in ordinary operation.
+
+The contrast with a rectangular pair is total. Replacing ``|V_b|`` with
+``V_{re}``, ``V_{im}`` gives ``\mathrm{cond}(H) = 1.0`` at **every** power-factor
+angle in the sweep, including zero.
+
+So: conditioning with ampere measurements depends on the geometry between the
+measured directions at the operating point. It is fine along some paths and
+singular along others, and only the diagnostic at your actual operating point
+can tell you which one you are on.
+
+## Real problem 2: the derivative is undefined at exactly zero current
 
 ``\partial |I| / \partial x`` does not exist at ``I = 0``. Not "is large" —
 does not exist. And the difficulty is a **single point**, not a
@@ -74,11 +109,15 @@ flat start — every voltage at nominal, no load anywhere — puts *every* line
 current at exactly zero.
 
 ```julia
+imeas = BranchMeasurement(kind=:imag, line="l", side=:from, terminal="1",
+                          value=1.0, sigma=0.01)
 s = compile_state_estimator(net, [imeas])
 xflat = [230.0, 0.0]          # flat: no current in the line at all
+
+evaluate_state_estimator(s, SEParameters(s, [imeas]; current_epsilon=1e-3), xflat)
 ```
 
-| `magnitude_epsilon` | predicted ``\|I\|`` | ``\|H\|`` | solver status |
+| `current_epsilon` (A) | predicted ``\|I\|`` | ``\|H\|`` | solver status |
 |---|---:|---:|---|
 | `0.0` | 0.0000 | *DomainError* | `:undefined_derivative` |
 | `1e-3` | 0.0010 | 0.0 | `:converged_underobserved` |
@@ -90,9 +129,11 @@ Three things to read off this:
   reports `:undefined_derivative` and returns. It used to throw a `DomainError`
   out of the caller's solve; a property of the measurement set at a point is a
   diagnosis, not a crash.
-* `SEParameters(...; magnitude_epsilon=ε)` replaces ``|I|`` with
+* `SEParameters(...; current_epsilon=ε)` replaces ``|I|`` with
   ``\sqrt{I_{re}^2+I_{im}^2+\varepsilon^2}``, which is differentiable
-  everywhere. The solve now runs.
+  everywhere. The solve now runs. `current_epsilon` is in **amperes**;
+  `magnitude_epsilon` is the separate volts-valued knob for ``|V|``, because one
+  scalar cannot carry both units.
 * **But the smoothed row is information-free at zero current**: its gradient
   there is exactly zero, so ``\|H\| = 0`` and the honest verdict is
   `:converged_underobserved`. Smoothing buys differentiability, not
@@ -102,10 +143,10 @@ Three things to read off this:
 
 The practical remedy is to start somewhere with current in the lines — a
 power-flow solution, the previous snapshot, or a nominal-load point — and to
-reach for `magnitude_epsilon` knowingly, sized below the instrument's
-meaningful resolution.
+reach for `current_epsilon` knowingly, sized below the ammeter's meaningful
+resolution.
 
-## Real problem 2: a magnitude carries no direction
+## Real problem 3: a magnitude carries no direction
 
 This is the difficulty that does not go away, and it is not numerical at all.
 It is a property of the measurement function.
@@ -172,12 +213,14 @@ model, so that is where it had to be repaired.
 
 ## What to actually do
 
-1. **Do not discard ampere measurements for conditioning.** That reason is
-   not supported by the numbers.
+1. **Do not discard ampere measurements on a blanket conditioning argument** —
+   but do not assume they are safe either. Check ``\sigma_{\min}`` at your
+   operating point. The failure mode to watch for is a ``|V|`` and a ``|I|``
+   measurement whose directions align, which happens near unity power factor.
 2. **Never start flat when `:imag` rows are present.** Warm start from a power
    flow, the previous snapshot, or a nominal-load point. A flat start is the
    one operating point where the derivative does not exist.
-3. **Use `magnitude_epsilon` deliberately**, sized below the meter's
+3. **Use `current_epsilon` deliberately**, sized below the ammeter's
    resolution, and read the returned status: an `ε`-smoothed row at zero
    current carries no information, and `:converged_underobserved` is telling
    you so.
@@ -196,8 +239,16 @@ The regression tests for all of the above live in
 *"|I| admits mirror solutions that |I_re|,|I_im| do not"* and
 *"an undefined magnitude derivative is a status, not a throw"*.
 
-## Reference
+## References
 
-Abur, A. and Expósito, A. G., "Detecting multiple solutions in state
-estimation in the presence of current magnitude measurements", *IEEE
-Transactions on Power Systems*, 12(1):370–375, February 1997.
+Abur, A. and Expósito, A. G., "Detecting multiple solutions in state estimation
+in the presence of current magnitude measurements", *IEEE Transactions on Power
+Systems*, 12(1):370–375, February 1997. This establishes the **multiple-solution**
+result reproduced above. It is not a statement about conditioning, and should
+not be cited as one.
+
+Abur, A. and Expósito, A. G., *Power System State Estimation: Theory and
+Implementation*, Marcel Dekker, 2004. Discusses the practical difficulties of
+ampere measurements, including ill-conditioning near low loading when they are
+load-bearing for observability — the concern the unity-power-factor result
+above makes concrete on this feeder.

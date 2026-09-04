@@ -29,6 +29,7 @@ covariance, or a time series.
 | **Covariance** | not provided | `selected_state_covariance`, `derived_covariance` |
 | **Time series / priors** | no | `solve_time_series_state_estimator`, `StatePrior` |
 | **Warm start** | Ipopt-internal, seeded from the readings | explicit `x0`, reused across snapshots |
+| **Error model** | Gaussian today; the JuMP objective could express any smooth ``-\log f``, and WLAV/Huber exactly by reformulation | Gaussian **structurally** — Gauss–Newton and the Hachtel step require a sum of squares |
 | **Bad data** | neither. `standardized` is a raw σ-normalised residual; multipliers are leads | |
 
 ## The differences that actually decide it
@@ -66,6 +67,16 @@ Note the matching difference in the `zero_injection` keyword: a bare bus id
 expands over *phase* terminals for WLS and over *all* conductors, neutral
 included, for the compiled estimator. Both are correct for their own
 formulation.
+
+### Error models run the other way
+
+Almost everything on this page favours the constrained estimator. Error models
+do not. Minimising ``\tfrac12\lVert r\rVert^2`` *is* the Gaussian
+log-likelihood, and the Gauss–Newton step, the Hachtel system and the
+``(H^\top H)^{-1}`` covariance all depend on that structure — so Laplace,
+Huber, Beta and mixtures are not expressible there at all. An NLP formulation
+has no such restriction and gets WLAV exactly, for almost no cost, via an
+epigraph reformulation. See [estimators, not curve fits](maximum_likelihood.md).
 
 ### The input contract
 

@@ -1,7 +1,15 @@
-# State of the art and roadmap
+# Background and roadmap
 
-What the literature settles, what these prototypes implement, and what they do
-not. This page is deliberately blunt about the gaps.
+Selected literature that bears on these two prototypes, what they implement,
+and what they do not. This page is deliberately blunt about the gaps.
+
+!!! note "A selective bibliography, not a survey"
+    The works below were chosen because they bear directly on decisions taken
+    in this codebase. This is not a systematic review of state estimation, and
+    the "open" items in the roadmap are open *relative to this bibliography* —
+    treat them as leads for a proper literature search, not as claims of
+    novelty. For actual surveys see Primadianto and Lu (2017) and Dehghanpour
+    et al. (2019).
 
 ## What the field settled long ago
 
@@ -10,10 +18,13 @@ as weighted least squares over a nonlinear measurement model, and that is
 still the frame. Both PowerOptLab estimators are instances of it.
 
 **Zero injections are constraints, not measurements.** Modelling a known zero
-injection as a pseudo-measurement with a tiny σ is the classic source of
-ill-conditioning: it inflates the gain matrix's condition number by the square
-of the weight ratio. Treating them as equality constraints and solving the
-resulting KKT system is the standard cure. The
+injection as a pseudo-measurement with a very small σ is a classic source of
+ill-conditioning. Two effects compound: the spread of weights inflates
+``\mathrm{cond}(W^{1/2}H)`` in proportion to the ratio of largest to smallest
+weight, and forming the normal equations then squares whatever condition number
+``W^{1/2}H`` has. Treating the zero injections as equality constraints and
+solving the resulting KKT system avoids both (Clements, Woodzell and Burchett,
+1990). The
 [constrained NLLS estimator](../problems/constrained_state_estimation.md) does
 this natively; the [WLS estimator](../problems/state_estimation.md) gets the
 same effect from the engine's KCL rather than from a weighted row.
@@ -91,13 +102,21 @@ The dense SVD rank diagnostic used to run every iteration and dominated the
 solve; it now runs only on exit paths, but it is still ``O(n^3)`` and should
 become a sparse rank-revealing factorisation before large cases are attempted.
 
-### 3. Robust estimation
+### 3. Robust and non-Gaussian estimation
 
 Least squares has an unbounded influence function: one bad reading moves the
-estimate without limit. LAV (Abur and Çelik) or a Huber M-estimator would give
-the prototypes a defensible answer under the non-Gaussian pseudo-measurement
-errors that DSSE actually faces. This changes the objective, not the
-structure, so the compiled evaluator can be reused.
+estimate without limit. LAV or a Huber M-estimator would give the prototypes a
+defensible answer under the non-Gaussian pseudo-measurement errors DSSE
+actually faces.
+
+The route differs sharply by engine, and this is the one axis where the legacy
+WLS estimator is the better platform. Its JuMP objective can express any smooth
+``-\log f`` directly, and ``\ell_1`` exactly through an epigraph
+reformulation that adds only linear rows — so WLAV costs almost nothing there.
+The compiled estimator cannot host either without abandoning Gauss–Newton,
+because its step, its augmented system and its covariance all require a sum of
+squares. See [estimators, not curve fits](maximum_likelihood.md), and Vanin et
+al. (2023) for a worked non-Gaussian DSSE in the same ecosystem.
 
 ### 4. Correlated covariance
 
@@ -144,6 +163,9 @@ neutral these are not the same quantity.
 * Abur, A. and Expósito, A. G., "Detecting multiple solutions in state
   estimation in the presence of current magnitude measurements", *IEEE Trans.
   Power Systems*, 12(1):370–375, February 1997.
+* Clements, K. A., Woodzell, G. W. and Burchett, R. C., "A new method for
+  solving equality-constrained power system static-state estimation", *IEEE
+  Trans. Power Systems*, 5(4):1260–1266, November 1990.
 * Abur, A. and Expósito, A. G., *Power System State Estimation: Theory and
   Implementation*, Marcel Dekker, 2004.
 * Monticelli, A., "Electric power system state estimation", *Proceedings of

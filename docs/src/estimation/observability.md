@@ -56,7 +56,22 @@ d = observability_diagnostics(structure, parameters, x)
 | `condition_number` | ``\sigma_{\max}/\sigma_{\min}`` |
 
 The WLS estimator's `result.observability` reports the analogous
-`(observable, n_states, rank, redundancy, min_singular, cond)`.
+`(observable, n_states, rank, redundancy, min_singular, cond,
+tangent_dimension)`. `observable`, `rank` and `redundancy` come from the
+stacked measurement + KCL system; `min_singular` and `cond` are computed on the
+tangent space of the exact KCL equations, from the **whitened** measurement
+Jacobian only, so they carry the same units and the same interpretation as the
+constrained estimator's.
+
+!!! note "Row scaling and what it does and does not affect"
+    Rank is invariant to any nonzero row scaling, so the observability boolean
+    survives almost any weighting choice. Singular values are not. An earlier
+    version of this diagnostic scaled the exact KCL rows (in amperes) by
+    `1/minimum(sigma)` taken across measurement sigmas in volts, watts and
+    vars; the boolean was fine and `min_singular` was in an arbitrary unit that
+    supported no uncertainty interpretation at all. If you build such a
+    diagnostic yourself, keep exact rows out of the whitened block rather than
+    inventing a scale for them.
 
 ## Redundancy is not observability
 
@@ -133,29 +148,35 @@ contributes to ``Z`` in the same way.
 
 ## Observability is a continuum
 
-The binary is the least useful thing the diagnostic reports. Take a set that
-approaches criticality continuously, by rotating a phase anchor until it
-becomes parallel to the magnitude rows it was supposed to complement:
+The binary is the least useful thing the diagnostic reports. Here is a set
+approaching criticality for a concrete physical reason: a ``|V_b|`` and a
+``|I_\ell|`` measurement on a two-bus feeder, as the power-factor angle falls
+toward zero and the two rows rotate onto each other
+([why](current_magnitude.md#Real-problem-1:-at-unity-power-factor,-V-and-I-collapse-onto-each-other)).
 
-| anchor angle | ``\sigma_{\min}(HZ)`` | ``\mathrm{cond}(HZ)`` | sd of estimated ``\angle V_b`` |
+| pf angle (rad) | ``\sigma_{\min}(HZ)`` | ``\mathrm{cond}(HZ)`` | sd of estimated ``\angle V_b`` |
 |---:|---:|---:|---:|
-| 0.5 | 3.50e+00 | 3.9 | 0.0013 rad |
-| 0.1 | 7.07e−01 | 20 | 0.0067 rad |
-| 0.01 | 7.07e−02 | 200 | 0.067 rad |
-| 0.001 | 7.07e−03 | 2.0e+03 | **0.67 rad** |
-| 0.0001 | 7.07e−04 | 2.0e+04 | **6.7 rad** |
+| −0.6 | 5.61e+01 | 3.86 | 7.2e−05 rad |
+| −0.3 | 2.91e+01 | 7.63 | 1.6e−04 rad |
+| −0.1 | 9.78e+00 | 22.8 | 4.8e−04 rad |
+| −0.03 | 2.94e+00 | 76.1 | 1.6e−03 rad |
+| −0.01 | 9.80e−01 | 228 | 4.9e−03 rad |
+| −0.003 | 2.94e−01 | 761 | 1.6e−02 rad |
 | 0 | 0 | ``\infty`` | undefined |
 
-Every row except the last reports `observable`. At an anchor angle of
-``10^{-3}`` the estimator is formally observable and the standard deviation of
-the estimated angle is 0.67 radians — an answer with no information in it. A
-rank test would have passed it without comment.
+Every row except the last reports `observable`, and the current is 40 A
+throughout. The rank test passes each of them without comment while the
+uncertainty in the estimated angle grows by more than two orders of magnitude.
 
-``\sigma_{\min}`` is the quantity to watch, and it has a direct
-interpretation: for the whitened, linearised model the estimate covariance is
-``(H_{red}^\top H_{red})^{-1}``, so ``1/\sigma_{\min}`` is the standard
-deviation in the worst-determined direction — the Cramér–Rao bound of the
-linearised problem. Report it next to the estimate.
+``\sigma_{\min}`` is the quantity to watch. Under this page's standing
+assumptions — independent Gaussian errors, a diagonal covariance, and the model
+linearised at the returned point — the estimate covariance on the tangent space
+is ``(H_{red}^\top H_{red})^{-1}``, so ``1/\sigma_{\min}`` is the standard
+deviation in the worst-determined direction. That is the Cramér–Rao bound *of
+the linearised Gaussian problem*, not of the nonlinear one: it is a local
+first-order quantity and it inherits every assumption in
+[the shared list](index.md#What-both-of-them-assume). Report it next to the
+estimate, with those caveats.
 
 ## Critical measurements: the bad-data blind spot
 
@@ -181,9 +202,13 @@ per-row whitened residuals:  -24.97,  -0.90,  0.00,  0.00,  +24.98
 ```
 
 This is the concrete argument for local redundancy, and it is also why
-[bad-data processing is the top roadmap item](state_of_the_art.md#roadmap):
-neither estimator currently computes the residual sensitivity matrix ``S``
-that would turn those numbers into a test.
+[bad-data processing is the top roadmap item](state_of_the_art.md#roadmap).
+Turning per-row residuals into a test needs the residual **sensitivity** matrix
+``S = I - H(H^\top W H)^{-1}H^\top W`` and the residual **covariance**
+``\Omega = S R`` (with ``R = W^{-1}`` the measurement covariance); the
+normalised residual is ``r^N_i = r_i/\sqrt{\Omega_{ii}}``. A critical
+measurement has ``\Omega_{ii} = 0``, which is the formal statement of the row
+of zeros above. Neither estimator computes either matrix today.
 
 !!! warning "Redundancy must be local"
     Global redundancy does not protect a locally critical measurement. A

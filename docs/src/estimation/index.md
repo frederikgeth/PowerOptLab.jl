@@ -29,7 +29,9 @@ wrong:
 * **Errors are independent, zero-mean, and Gaussian**, with a diagonal
   covariance. Both estimators whiten by ``1/\sigma``; neither supports a
   correlated covariance. A meter whose error is a calibration offset rather
-  than noise violates this, and no amount of redundancy repairs it.
+  than noise violates this, and no amount of redundancy repairs it. This is a
+  *likelihood* assumption, not a weighting convention — see
+  [estimators, not curve fits](maximum_likelihood.md).
 * **Topology and line parameters are exact.** Neither estimator hypothesises a
   different switch status or a different impedance. A topology error surfaces
   as a large residual that looks exactly like bad data. See
@@ -51,6 +53,8 @@ wrong:
 ## Where to go next
 
 * [Choosing a formulation](comparison.md) — the comparison, and which to reach for.
+* [Estimators, not curve fits](maximum_likelihood.md) — both are maximum-likelihood
+  estimators; what that fixes, and which error models each engine can represent.
 * [Legacy WLS state estimation](../problems/state_estimation.md) — reference.
 * [Constrained NLLS state estimation](../problems/constrained_state_estimation.md) — reference.
 * [Modelling tutorial](../tutorials/constrained_nlls_state_estimation.md) — exact
@@ -59,5 +63,5 @@ wrong:
   parts of an estimate are supported by measurements and which are decoration.
 * [Current-magnitude measurements](current_magnitude.md) — why ampere readings
   are genuinely hard, demonstrated rather than asserted.
-* [State of the art and roadmap](state_of_the_art.md) — what the literature
-  settles, and what these prototypes do not yet do.
+* [Background and roadmap](state_of_the_art.md) — selected literature, and what
+  these prototypes do not yet do.
