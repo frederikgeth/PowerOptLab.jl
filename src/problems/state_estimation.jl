@@ -191,9 +191,18 @@ end
 # ── injection coverage / P–Q pairing ────────────────────────────────────────
 
 # Normalise a `zero_injection` argument (bus ids and/or (bus, terminal) tuples)
-# into a set of (bus, terminal) pairs, expanding a bare bus id over its phase
-# terminals (all terminal_names except `neutral` and grounded terminals).
-function _zero_injection_set(net, zero_injection, neutral)
+# into a set of (bus, terminal) pairs, expanding a bare bus id over its terminals
+# (all terminal_names except grounded ones, and — unless `include_neutral` —
+# except `neutral`).
+#
+# The two estimators need different expansions, and the difference is physical.
+# The WLS formulation states zero injection per PHASE, referenced to the bus's
+# return terminal, so the return terminal itself carries the balancing current
+# and must not be constrained. The four-wire compiled formulation states KCL per
+# CONDUCTOR against earth, so a bus with no device attached injects nothing into
+# its neutral either; omitting that conductor leaves the neutral voltage
+# unconstrained and silently non-identifiable.
+function _zero_injection_set(net, zero_injection, neutral; include_neutral::Bool=false)
     zi = Set{Tuple{String,String}}()
     buses = get(net, "bus", Dict())
     for z in zero_injection
@@ -203,7 +212,7 @@ function _zero_injection_set(net, zero_injection, neutral)
             b = String(z)
             bus = get(buses, b, nothing)
             bus === nothing && throw(ArgumentError("zero_injection bus '$b' not in net"))
-            for t in _phase_terminals(bus, neutral)
+            for t in _phase_terminals(bus, include_neutral ? nothing : neutral)
                 push!(zi, (b, t))
             end
         else
