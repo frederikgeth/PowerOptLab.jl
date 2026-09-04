@@ -2,6 +2,10 @@
 
 > **Kind:** Problem specification · **Maturity:** research prototype · **Direction:** forward · **Temporal:** per-interval
 
+For the implementation audit, claim hierarchy, scientific state of the art,
+and prioritized research plan, see [DOE quantification: scientific review and
+roadmap](doe_quantification_review.md).
+
 [`solve_operating_envelope`](@ref) allocates an active-power import or export
 capacity to each participating connection while retaining the nonlinear,
 unbalanced four-wire network model and all operational limits declared in the
@@ -39,6 +43,52 @@ Diagnostics also report worst tested voltage, ampacity and negative-sequence
 margins, their network locations, and constraints within reporting tolerance of
 binding. For `security=:corners`, these are aggregated across every scenario and
 corner rather than only the displayed representative snapshot.
+
+The machine-readable claim metadata includes:
+
+- `global_certificate=false` for every current solve;
+- `solver_class=:local_nonlinear`;
+- `uncertainty_semantics`, distinguishing one declared snapshot from a finite
+  scenario set;
+- `control_policy`, `control_policy_source`, `control_default_stage`, and a
+  per-control `control_audit` containing native classification, selected stage,
+  automatic law, equality groups, and link count;
+- `control_nonanticipativity`, `nonanticipativity_enforced`, and
+  `ideal_recourse_used`;
+- `prescribed_ibr_controls=:retained`; and
+- `security_scope=:explicit_utilization_points` for custom verification sets.
+
+Prescribed connection-bound IBR control laws remain enforced, but other
+controllable-asset recourse can make a material difference. The legacy default
+is pointwise [`PerfectRecourse`](@ref). Pass it explicitly when reproducing an
+anticipative published formulation or calculating an ideal-recourse benchmark;
+use [`IssuePlusLocalLaws`](@ref) when free supported setpoints must be shared
+across the represented contexts. The limitation is an unstated mismatch between
+the selected information structure and the operational claim, not the existence
+of more than one legitimate research formulation.
+
+## Control-recourse policies
+
+```julia
+ideal = solve_operating_envelope(scenario_nets, cps;
+    security=:corners, control_policy=PerfectRecourse())
+
+operational = solve_operating_envelope(scenario_nets, cps;
+    security=:corners, control_policy=IssuePlusLocalLaws())
+
+mixed = DOEControlPolicy(
+    default_stage=:issue,
+    rules=[DOEControlRule(component=:ibr, id="statcom_lv17",
+                           quantity=:reactive_power, stage=:scenario)],
+    on_unclassified=:error)
+```
+
+`:issue` creates one value per interval, `:scenario` creates one value per
+scenario and shares it across utilization points, `:local_law` denotes an
+implemented automatic equation, and `:context` permits independent pointwise
+recourse. Native transformer taps and IBR active/reactive power can be linked.
+Free generator P/Q is audited but cannot yet be linked safely, so fail-closed
+policies reject it unless an explicit `:context` rule is supplied.
 
 If an interval has no feasible primal point, its capacities and total are `NaN`.
 The package never publishes values from an infeasible solver iterate.
@@ -279,8 +329,20 @@ operational-policy difference rather than a DOE-model comparison.
 - Ipopt returns local nonlinear solutions; diagnostics never imply global
   optimality or global robust feasibility.
 - Exact corner enumeration scales exponentially.
+- Control discovery currently covers native free transformer taps, IBR P/Q,
+  and explicit generator P/Q bounds. Generator P/Q lacks a stable power handle
+  for non-anticipativity, and custom extension controls require a future
+  registration interface.
+- A finite scenario set has no probability or confidence meaning. Scenario
+  provenance, calibration, weights, and held-out coverage are caller concerns.
+- Verification reports an interval-level result rather than one structured
+  record and violation magnitude per scenario/utilization context.
+- The current object is a one-sided active-power box. It does not jointly issue
+  lower/upper import-export limits or a coupled P-Q flexibility set.
 - Rolling fairness is causal rather than globally horizon-optimal; temporal
   storage scheduling and forecast co-optimisation remain later work.
+- Diagnostic margin summaries do not yet enumerate every inherited network and
+  device constraint family.
 - The independent DSSE validation runner presently fixes single-phase IBR
   active-power setpoints. Multi-phase dispatch replay should preserve the DOE's
   per-phase allocation before being treated as an independent validation.

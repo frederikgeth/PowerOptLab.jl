@@ -3,6 +3,11 @@
 > **Audience:** power-system researchers · **Scope:** nonlinear AC DOE studies
 > with DSSE snapshots, mandatory DER controls, and network support devices.
 
+This is the modelling primer for the current API. The implementation audit and
+the planned sequence of counterexample, uncertainty, fairness, scaling, and
+power-quality tutorials are maintained in [DOE quantification: scientific
+review and roadmap](../problems/doe_quantification_review.md).
+
 This tutorial is about *modelling choices*, not just calling an optimizer. A
 dynamic operating envelope (DOE) is an operational promise: a participant may
 operate within an advertised active-power range while the LV network remains
@@ -124,6 +129,43 @@ status, or credible feeder-parameter alternatives. If line construction is
 uncertain, materialized candidates from [`solve_inverse_carson`](@ref) are a
 natural source of network scenarios.
 
+The capacity allocation and the network-control information structure are
+separate decisions. The omitted-policy default retains the original pointwise
+perfect-recourse behavior for compatibility, but new studies should be
+explicit:
+
+```julia
+# Replicate an anticipative formulation or calculate an ideal-recourse bound.
+ideal = solve_operating_envelope(scenarios, cps;
+    security=:corners,
+    control_policy=PerfectRecourse())
+
+# Hold free tap/IBR setpoints across all represented contexts. Prescribed
+# Volt–VAr and fixed-power-factor equations still respond locally.
+operational = solve_operating_envelope(scenarios, cps;
+    security=:corners,
+    control_policy=IssuePlusLocalLaws())
+```
+
+Use `DOEControlRule` for a mixed timing model. For example, this permits one
+STATCOM reactive setpoint per forecast scenario but shares it across all of
+that scenario's participant-utilization points:
+
+```julia
+policy = PerfectRecourse(rules=[DOEControlRule(
+    component=:ibr, id="statcom17", quantity=:reactive_power,
+    stage=:scenario)])
+```
+
+The implemented stages are `:issue`, `:scenario`, `:local_law`, and
+`:context`. Transformer taps and IBR P/Q use stable public linkage handles.
+Free generator P/Q is detected but can currently remain only at `:context`,
+because linking generator currents would not preserve power as voltage changes;
+the operational preset therefore fails closed on it. The control audit records
+each control's stage, source, automatic law, context coverage, equality groups,
+and link count. This preserves `PerfectRecourse()` as a first-class published-
+work replication mode without silently presenting it as operationally causal.
+
 ### Pitfall: mixing probability and feasibility claims
 
 This is a scenario-feasibility method, not a chance-constrained guarantee. A
@@ -225,7 +267,9 @@ Before an operational study is trusted, fix the published allocation and solve
 again at the intended utilization points:
 
 ```julia
-check = verify_operating_envelope(nets, cps, r; utilizations=:corners)
+check = verify_operating_envelope(nets, cps, r;
+    utilizations=:corners,
+    control_policy=IssuePlusLocalLaws())
 all(check.feasible)
 ```
 
@@ -256,6 +300,11 @@ For each research result, record:
 5. fairness objective, normalization, weights, and reported fairness metrics;
 6. nonlinear solver status, binding margins, and independent replay/validation;
 7. issuance interval, validity window, and fallback policy.
+
+Also record whether controllable network assets were fixed, governed by a local
+law, or independently redispatched in each scenario/utilization context. Store
+the selected `DOEControlPolicy` and the returned `control_audit`; do not infer
+the policy from a capacity value alone.
 
 With those choices stated, a DOE becomes reproducible and interpretable: not
 just an attractive number from an OPF, but a precisely scoped operational claim.

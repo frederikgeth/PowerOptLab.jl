@@ -75,6 +75,96 @@ Base.@kwdef struct FairnessPolicy
     epsilon::Float64 = 1e-6
 end
 
+const _DOE_CONTROL_STAGES = (:issue, :scenario, :local_law, :context)
+const _DOE_FREE_CONTROL_STAGES = (:issue, :scenario, :context)
+const _DOE_UNCLASSIFIED_ACTIONS = (:error, :context)
+
+"""
+    DOEControlRule(; component, id, quantity, stage)
+
+Override the information stage of one DOE control family. Rules currently use
+the stable device-level identity `(component, id, quantity)` and apply to every
+phase or regulator position belonging to that device.
+
+Supported native identities are transformer `:tap` and IBR `:active_power` /
+`:reactive_power`. A stage is one of:
+
+- `:issue` — one value is shared by every scenario and utilisation context;
+- `:scenario` — one value is shared by the utilisation contexts within each
+  scenario;
+- `:local_law` — the value is determined by a prescribed automatic controller;
+- `:context` — independent pointwise recourse (perfect information).
+
+The solver rejects a rule that attempts to replace a prescribed local law or
+the envelope's own active-power allocation with a different information stage.
+"""
+struct DOEControlRule
+    component::Symbol
+    id::String
+    quantity::Symbol
+    stage::Symbol
+
+    function DOEControlRule(; component::Symbol, id::AbstractString,
+                            quantity::Symbol, stage::Symbol)
+        isempty(id) && throw(ArgumentError("DOE control-rule id must be non-empty"))
+        stage in _DOE_CONTROL_STAGES || throw(ArgumentError(
+            "DOE control-rule stage must be one of $(_DOE_CONTROL_STAGES), got :$stage"))
+        new(component, String(id), quantity, stage)
+    end
+end
+
+"""
+    DOEControlPolicy(; name=:custom, default_stage=:context,
+                       rules=DOEControlRule[], on_unclassified=:error)
+
+Information structure for controllable assets in a DOE formulation.
+`default_stage` applies to discovered free controls that have no explicit rule.
+`on_unclassified=:error` fails closed when the model contains a free native
+control that the current implementation cannot link safely;
+`on_unclassified=:context` retains it as pointwise recourse and reports it.
+
+Use [`PerfectRecourse`](@ref) to reproduce anticipative formulations and
+[`IssuePlusLocalLaws`](@ref) for an operational policy in which free setpoints
+are issued before uncertainty while prescribed automatic laws still respond
+locally.
+"""
+struct DOEControlPolicy
+    name::Symbol
+    default_stage::Symbol
+    rules::Vector{DOEControlRule}
+    on_unclassified::Symbol
+
+    function DOEControlPolicy(; name::Symbol=:custom,
+                              default_stage::Symbol=:context,
+                              rules=DOEControlRule[],
+                              on_unclassified::Symbol=:error)
+        default_stage in _DOE_FREE_CONTROL_STAGES || throw(ArgumentError(
+            "DOE default control stage must be one of $(_DOE_FREE_CONTROL_STAGES), got :$default_stage"))
+        on_unclassified in _DOE_UNCLASSIFIED_ACTIONS || throw(ArgumentError(
+            "on_unclassified must be one of $(_DOE_UNCLASSIFIED_ACTIONS), got :$on_unclassified"))
+        typed_rules = DOEControlRule[rule for rule in rules]
+        identities = [(rule.component, rule.id, rule.quantity) for rule in typed_rules]
+        length(unique(identities)) == length(identities) || throw(ArgumentError(
+            "DOE control policy contains duplicate component/id/quantity rules"))
+        new(name, default_stage, typed_rules, on_unclassified)
+    end
+end
+
+"""Policy preset retaining independent controls in every scenario/utilisation context."""
+PerfectRecourse(; rules=DOEControlRule[]) = DOEControlPolicy(
+    name=:perfect_recourse, default_stage=:context, rules=rules,
+    on_unclassified=:context)
+
+"""Policy preset fixing all discovered free setpoints at DOE issue time."""
+IssueFixedControls(; rules=DOEControlRule[]) = DOEControlPolicy(
+    name=:issue_fixed_controls, default_stage=:issue, rules=rules,
+    on_unclassified=:error)
+
+"""Operational preset: issue-time free setpoints plus prescribed local control laws."""
+IssuePlusLocalLaws(; rules=DOEControlRule[]) = DOEControlPolicy(
+    name=:issue_plus_local_laws, default_stage=:issue, rules=rules,
+    on_unclassified=:error)
+
 """
     OperatingEnvelopeResult
 
@@ -618,10 +708,274 @@ function _verification_patterns(utilizations, n)
     return patterns
 end
 
+const _DOEControlKey = NamedTuple{
+    (:component, :id, :quantity, :position),
+    Tuple{Symbol,String,Symbol,Int}}
+
+_doe_control_key(component, id, quantity, position) =
+    _DOEControlKey((component, String(id), quantity, Int(position)))
+_doe_rule_identity(key::_DOEControlKey) = (key.component, key.id, key.quantity)
+
+function _doe_rule_map(policy::DOEControlPolicy)
+    Dict((rule.component, rule.id, rule.quantity) => rule for rule in policy.rules)
+end
+
+function _doe_numeric_at(value, position::Int)
+    value isa Real && return Float64(value)
+    value isa AbstractVector && position <= length(value) &&
+        value[position] isa Real && return Float64(value[position])
+    return nothing
+end
+
+function _doe_fixed_bounds(device, quantity::Symbol, position::Int)
+    prefix = quantity == :active_power ? "p" : "q"
+    lower = _doe_numeric_at(get(device, "$(prefix)_min", nothing), position)
+    upper = _doe_numeric_at(get(device, "$(prefix)_max", nothing), position)
+    lower === nothing && return false
+    upper === nothing && return false
+    return isapprox(lower, upper; rtol=1e-12,
+                    atol=1e-12 * max(1.0, abs(lower), abs(upper)))
+end
+
+function _doe_native_control_handles(record, cps)
+    handles = Dict{_DOEControlKey,Any}()
+    constraint_families = Dict{Any,Set{Symbol}}()
+    for object_key in BMOPFTools.opf_object_keys(record.ctx)
+        if object_key.kind == :constraint && object_key.index !== nothing
+            push!(get!(constraint_families, object_key.index, Set{Symbol}()),
+                  object_key.family)
+        elseif object_key.kind == :variable && object_key.family in (:p_ibr, :q_ibr)
+            index = object_key.index
+            index isa Tuple && length(index) >= 2 || continue
+            quantity = object_key.family == :p_ibr ? :active_power : :reactive_power
+            key = _doe_control_key(:ibr, index[1], quantity, index[2])
+            handles[key] = BMOPFTools.opf_object(record.ctx, object_key)
+        elseif object_key.kind == :variable && object_key.family == :tap
+            index = object_key.index
+            if index isa Tuple
+                length(index) >= 2 || continue
+                key = _doe_control_key(:transformer, index[1], :tap, index[2])
+            else
+                key = _doe_control_key(:transformer, index, :tap, 1)
+            end
+            handles[key] = BMOPFTools.opf_object(record.ctx, object_key)
+        end
+    end
+
+    envelope_ibrs = Set(cp.ibr_id for cp in cps if cp.ibr_id !== nothing)
+    classifications = Dict{_DOEControlKey,Tuple{Symbol,Union{Nothing,Symbol}}}()
+    for key in keys(handles)
+        if key.component == :transformer
+            classifications[key] = (:free, nothing)
+            continue
+        end
+        device = get(get(record.net, "ibr", Dict()), key.id, Dict())
+        index = (key.id, key.position)
+        families = get(constraint_families, index, Set{Symbol}())
+        if key.quantity == :active_power && key.id in envelope_ibrs
+            classifications[key] = (:envelope, nothing)
+        elseif key.quantity == :reactive_power && :ibr_power_factor in families
+            classifications[key] = (:local_law, :power_factor)
+        elseif key.quantity == :reactive_power && :ibr_q_volt_var in families
+            classifications[key] = (:local_law, :volt_var)
+        elseif _doe_fixed_bounds(device, key.quantity, key.position)
+            classifications[key] = (:fixed_data, nothing)
+        else
+            classifications[key] = (:free, nothing)
+        end
+    end
+    return handles, classifications
+end
+
+function _doe_policy_stage(policy, rules, used_rules, key, native_states)
+    identity = _doe_rule_identity(key)
+    rule = get(rules, identity, nothing)
+    rule !== nothing && push!(used_rules, identity)
+    distinct_states = unique(first.(native_states))
+
+    if all(==(:fixed_data), distinct_states)
+        rule === nothing || throw(ArgumentError(
+            "control rule for $(identity) targets a value already fixed by network data"))
+        return :fixed_data, :network_data
+    elseif all(==(:envelope), distinct_states)
+        rule === nothing || throw(ArgumentError(
+            "control rule for $(identity) targets active power already governed by the DOE allocation"))
+        return :envelope, :formulation
+    elseif all(==(:local_law), distinct_states)
+        if rule !== nothing && rule.stage != :local_law
+            throw(ArgumentError(
+                "control rule for $(identity) cannot replace a prescribed local law with :$(rule.stage); change the network control profile instead"))
+        end
+        return :local_law, rule === nothing ? :network_control_profile : :explicit_rule
+    end
+
+    stage = rule === nothing ? policy.default_stage : rule.stage
+    stage == :local_law && throw(ArgumentError(
+        "control rule for $(identity) requests :local_law, but no prescribed local-law equality was discovered"))
+    if length(distinct_states) > 1 && stage != :context
+        throw(ArgumentError(
+            "control $(identity) changes native classification across scenarios ($(distinct_states)); only :context is currently safe"))
+    end
+    return stage, rule === nothing ? :policy_default : :explicit_rule
+end
+
+function _doe_link_groups(records, present_indices, stage::Symbol)
+    stage == :issue && return [present_indices]
+    stage == :scenario || return Vector{Vector{Int}}()
+    groups = Vector{Vector{Int}}()
+    for scenario in sort!(unique(records[index].scenario for index in present_indices))
+        push!(groups, [index for index in present_indices
+                       if records[index].scenario == scenario])
+    end
+    return groups
+end
+
+function _doe_generator_recourses(records)
+    recourses = Dict{_DOEControlKey,Set{Int}}()
+    for (record_index, record) in enumerate(records)
+        for (id, device) in get(record.net, "generator", Dict())
+            for quantity in (:active_power, :reactive_power)
+                prefix = quantity == :active_power ? "p" : "q"
+                lower = get(device, "$(prefix)_min", nothing)
+                upper = get(device, "$(prefix)_max", nothing)
+                positions = max(lower isa AbstractVector ? length(lower) : lower isa Real ? 1 : 0,
+                                upper isa AbstractVector ? length(upper) : upper isa Real ? 1 : 0)
+                for position in 1:positions
+                    _doe_fixed_bounds(device, quantity, position) && continue
+                    key = _doe_control_key(:generator, id, quantity, position)
+                    push!(get!(recourses, key, Set{Int}()), record_index)
+                end
+            end
+        end
+    end
+    return recourses
+end
+
+function _apply_doe_control_policy!(model, records, cps,
+                                    policy::DOEControlPolicy)
+    rules = _doe_rule_map(policy)
+    used_rules = Set{Tuple{Symbol,String,Symbol}}()
+    handles_by_record = Vector{Dict{_DOEControlKey,Any}}(undef, length(records))
+    classes_by_record = Vector{Dict{_DOEControlKey,Tuple{Symbol,Union{Nothing,Symbol}}}}(
+        undef, length(records))
+    all_keys = Set{_DOEControlKey}()
+    for (index, record) in enumerate(records)
+        handles, classifications = _doe_native_control_handles(record, cps)
+        handles_by_record[index] = handles
+        classes_by_record[index] = classifications
+        union!(all_keys, keys(handles))
+    end
+
+    audit = Dict{String,Any}[]
+    link_count = 0
+    for key in sort!(collect(all_keys); by=key ->
+                     (string(key.component), key.id, string(key.quantity), key.position))
+        present = [index for index in eachindex(records)
+                   if haskey(handles_by_record[index], key)]
+        native_states = [classes_by_record[index][key] for index in present]
+        stage, source = _doe_policy_stage(
+            policy, rules, used_rules, key, native_states)
+        local_laws = unique(last.(native_states))
+        filter!(!isnothing, local_laws)
+        links = 0
+        equality_groups = Vector{Vector{Dict{String,Int}}}()
+        if stage in (:issue, :scenario)
+            if stage == :issue && length(present) != length(records)
+                throw(ArgumentError(
+                    "issue-time control $(_doe_rule_identity(key)) is absent from one or more DOE contexts"))
+            end
+            for group in _doe_link_groups(records, present, stage)
+                isempty(group) && continue
+                push!(equality_groups, [Dict("scenario" => records[index].scenario,
+                                             "pattern" => records[index].pattern)
+                                        for index in group])
+                reference = handles_by_record[first(group)][key]
+                for index in Iterators.drop(group, 1)
+                    JuMP.@constraint(model, handles_by_record[index][key] == reference)
+                    links += 1
+                end
+            end
+        end
+        link_count += links
+        push!(audit, Dict{String,Any}(
+            "component" => key.component,
+            "id" => key.id,
+            "quantity" => key.quantity,
+            "position" => key.position,
+            "native_classification" => length(unique(first.(native_states))) == 1 ?
+                first(first(native_states)) : :mixed,
+            "automatic_laws" => Symbol[law for law in local_laws],
+            "stage" => stage,
+            "stage_source" => source,
+            "linkage_supported" => true,
+            "contexts_present" => length(present),
+            "context_count" => length(records),
+            "equality_groups" => equality_groups,
+            "link_constraints" => links))
+    end
+
+    # Generator P/Q is currently represented by current variables whose power
+    # depends on voltage. Linking those currents would impose the wrong policy,
+    # so only perfect/context recourse is accepted until stable P/Q handles exist.
+    for (key, present_set) in sort!(collect(_doe_generator_recourses(records));
+                                    by=pair -> (pair.first.id,
+                                                string(pair.first.quantity),
+                                                pair.first.position))
+        identity = _doe_rule_identity(key)
+        rule = get(rules, identity, nothing)
+        rule !== nothing && push!(used_rules, identity)
+        stage = if rule !== nothing
+            rule.stage
+        elseif policy.on_unclassified == :context
+            :context
+        else
+            throw(ArgumentError(
+                "free generator control $(identity) has no stable P/Q linkage handle; use PerfectRecourse(), an explicit :context rule, or remove/fix the control"))
+        end
+        stage == :context || throw(ArgumentError(
+            "generator control $(identity) cannot yet be linked at :$stage because the engine exposes current, not voltage-independent P/Q, handles"))
+        push!(audit, Dict{String,Any}(
+            "component" => key.component,
+            "id" => key.id,
+            "quantity" => key.quantity,
+            "position" => key.position,
+            "native_classification" => :free,
+            "automatic_laws" => Symbol[],
+            "stage" => :context,
+            "stage_source" => rule === nothing ? :unclassified_fallback : :explicit_rule,
+            "linkage_supported" => false,
+            "contexts_present" => length(present_set),
+            "context_count" => length(records),
+            "equality_groups" => Vector{Vector{Dict{String,Int}}}(),
+            "link_constraints" => 0))
+    end
+
+    unused = setdiff(Set(keys(rules)), used_rules)
+    isempty(unused) || throw(ArgumentError(
+        "DOE control rules did not match a discovered control: $(sort!(collect(unused)))"))
+    adaptive = [item for item in audit if item["stage"] == :context &&
+                item["native_classification"] in (:free, :mixed)]
+    shared = [item for item in audit if item["stage"] in (:issue, :scenario)]
+    return Dict{String,Any}(
+        "control_policy" => policy.name,
+        "control_default_stage" => policy.default_stage,
+        "control_audit" => audit,
+        "control_link_constraints" => link_count,
+        "shared_control_count" => length(shared),
+        "adaptive_control_count" => length(adaptive),
+        "control_nonanticipativity" => !isempty(shared),
+        "nonanticipativity_enforced" => link_count > 0,
+        "perfect_recourse_controls_present" => !isempty(adaptive),
+        "ideal_recourse_used" => !isempty(adaptive),
+        "all_discovered_free_controls_classified" => true,
+        "control_discovery_scope" => :native_transformer_taps_ibr_power_and_generator_bounds)
+end
+
 function _solve_interval_group(group, cps, policy;
                                direction, security, per_unit, s_base,
                                optimizer, verbose, solver_options,
                                volt_var_watt_eps, max_min_tolerance,
+                               control_policy, control_policy_source,
                                temporal_history=nothing,
                                temporal_dt_h=1.0,
                                fixed_capacity=nothing,
@@ -664,6 +1018,8 @@ function _solve_interval_group(group, cps, policy;
                 scenario=spec.scenario, pattern=spec.pattern,
                 fractions=spec.fractions)
                for (index, spec) in enumerate(specifications)]
+    control_diagnostics = _apply_doe_control_policy!(
+        model, records, cps, control_policy)
     foreach(r -> enforce_kcl!(r.ctx), records)
     if fixed_capacity === nothing
         stage = _set_fairness_objective!(model, cap, cps, policy, direction, pb;
@@ -706,21 +1062,36 @@ function _solve_interval_group(group, cps, policy;
         margin_diagnostics = _merge_margins(checked)
     end
 
+    security_scope = if security == :corners
+        :all_box_corners
+    elseif length(patterns) == 1 && all(isone, only(patterns))
+        :simultaneous_upper_bound_only
+    else
+        :explicit_utilization_points
+    end
     diag = Dict{String,Any}(
         "feasible" => feasible,
         "primal_status" => primal,
         "objective" => objective,
         "direction" => direction,
         "security" => security,
-        "security_scope" => security == :bound_point ?
-            :simultaneous_upper_bound_only : :all_box_corners,
+        "security_scope" => security_scope,
         "guarantee" => :local_ac_feasibility_at_tested_dispatches,
+        "global_certificate" => false,
+        "solver_class" => :local_nonlinear,
+        "uncertainty_semantics" => length(group) == 1 ?
+            :single_declared_snapshot : :finite_scenario_set,
+        "allocation_coupling" => :shared_across_scenarios_and_dispatch_points,
+        "control_recourse" => control_policy.name,
+        "prescribed_ibr_controls" => :retained,
+        "control_policy_source" => control_policy_source,
         "scenario_count" => length(group),
         "dispatch_points_per_scenario" => length(patterns),
         "fairness_kind" => policy.kind,
         "normalization" => policy.normalization,
         "verification" => fixed_capacity !== nothing,
         "temporal_fairness" => temporal_history === nothing ? :none : :cumulative_max_min)
+    merge!(diag, control_diagnostics)
     merge!(diag, margin_diagnostics)
     return (status=status, alloc=alloc, total=total,
             snapshot=snapshot, diagnostics=diag)
@@ -749,6 +1120,11 @@ Important keywords:
 - `security=:corners` embeds all `2^N` zero/full-utilisation corners for every
   scenario. It is deliberately capped by `max_exact_corners=10` and is reported
   as local AC feasibility at tested points, not a global robust certificate;
+- `control_policy=nothing` retains the historical pointwise-perfect-recourse
+  formulation and reports it as a legacy default. Pass [`PerfectRecourse`](@ref)
+  explicitly for published-work replication, or [`IssuePlusLocalLaws`](@ref)
+  to share free setpoints across all scenario/utilisation contexts while
+  retaining prescribed automatic IBR laws;
 - `volt_var_watt_eps=2e-3` controls the engine's smooth approximation of
   mandatory IBR Volt-VAr/Volt-Watt curve corners.
 
@@ -758,6 +1134,12 @@ STATCOM IBRs, remain available to the OPF; comparing otherwise identical nets
 with and without a STATCOM therefore quantifies its impact on active-power DOEs.
 Network voltage, phase-to-neutral, negative-sequence (`vneg_max`), branch thermal,
 neutral-current, and device limits declared by BMOPFTools remain in force.
+
+Diagnostics label the result as a local nonlinear solve, never as a global
+certificate. They also record whether uncertainty is represented by one
+declared snapshot or a finite scenario set, the selected control policy, and a
+per-control audit of shared, automatic, fixed, and context-adaptive variables.
+Connection-bound prescribed IBR controls remain enforced.
 """
 function solve_operating_envelope(nets,
                                   connection_points::AbstractVector{ConnectionPoint};
@@ -772,6 +1154,7 @@ function solve_operating_envelope(nets,
                                   volt_var_watt_eps::Float64=2e-3,
                                   max_exact_corners::Int=10,
                                   max_min_tolerance::Float64=1e-7,
+                                  control_policy::Union{Nothing,DOEControlPolicy}=nothing,
                                   temporal_fairness::Symbol=:none,
                                   fairness_history::AbstractDict=Dict{String,Float64}(),
                                   temporal_dt_h::Float64=1.0,
@@ -782,6 +1165,9 @@ function solve_operating_envelope(nets,
     groups = _scenario_groups(nets)
     cps = collect(connection_points)
     policy = _as_policy(fairness)
+    resolved_control_policy = control_policy === nothing ?
+        PerfectRecourse() : control_policy
+    control_policy_source = control_policy === nothing ? :legacy_default : :explicit
     isfinite(s_base) && s_base > 0 || throw(ArgumentError("s_base must be finite and > 0"))
     isfinite(volt_var_watt_eps) && volt_var_watt_eps > 0 || throw(ArgumentError(
         "volt_var_watt_eps must be finite and > 0"))
@@ -815,6 +1201,8 @@ function solve_operating_envelope(nets,
             s_base=s_base, optimizer=optimizer, verbose=verbose,
             solver_options=solver_options, volt_var_watt_eps=volt_var_watt_eps,
             max_min_tolerance=max_min_tolerance,
+            control_policy=resolved_control_policy,
+            control_policy_source=control_policy_source,
             temporal_history=temporal_fairness == :cumulative_max_min ? history : nothing,
             temporal_dt_h=temporal_dt_h)
         statuses[t] = solved.status
@@ -901,6 +1289,12 @@ power capacities are fixed and the normal network physics, including prescribed
 Q-V IBR controls and any STATCOM model present in the network, is solved at
 every requested scenario and utilisation point. `utilizations` is
 `:bound_point`, `:corners`, or explicit vectors in `[0, 1]^N`.
+
+The same local-solve and finite-test-set semantics as
+[`solve_operating_envelope`](@ref) apply. `control_policy` also applies during
+verification, so an issued envelope can be checked under the same information
+structure used to quantify it. Custom vectors are reported as
+`security_scope=:explicit_utilization_points`.
 """
 function verify_operating_envelope(nets,
                                    connection_points::AbstractVector{ConnectionPoint},
@@ -913,10 +1307,14 @@ function verify_operating_envelope(nets,
                                    verbose::Bool=false,
                                    solver_options=(),
                                    volt_var_watt_eps::Float64=2e-3,
+                                   control_policy::Union{Nothing,DOEControlPolicy}=nothing,
                                    max_exact_corners::Int=10)
     groups = _scenario_groups(nets)
     cps = collect(connection_points)
     policy = FairnessPolicy(kind=:max_total)
+    resolved_control_policy = control_policy === nothing ?
+        PerfectRecourse() : control_policy
+    control_policy_source = control_policy === nothing ? :legacy_default : :explicit
     isfinite(s_base) && s_base > 0 || throw(ArgumentError("s_base must be finite and > 0"))
     isfinite(volt_var_watt_eps) && volt_var_watt_eps > 0 || throw(ArgumentError(
         "volt_var_watt_eps must be finite and > 0"))
@@ -933,6 +1331,8 @@ function verify_operating_envelope(nets,
             direction=direction, security=security, per_unit=per_unit, s_base=s_base,
             optimizer=optimizer, verbose=verbose, solver_options=solver_options,
             volt_var_watt_eps=volt_var_watt_eps, max_min_tolerance=1e-7,
+            control_policy=resolved_control_policy,
+            control_policy_source=control_policy_source,
             fixed_capacity=trajectory[t], patterns_override=patterns)
         push!(statuses, solved.status)
         push!(feasible, solved.diagnostics["feasible"])

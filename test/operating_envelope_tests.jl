@@ -142,6 +142,14 @@ end
     @test r.diagnostics[1]["dispatch_points_per_scenario"] == 4
     @test r.diagnostics[1]["security_scope"] == :all_box_corners
     @test r.diagnostics[1]["guarantee"] == :local_ac_feasibility_at_tested_dispatches
+    @test !r.diagnostics[1]["global_certificate"]
+    @test r.diagnostics[1]["solver_class"] == :local_nonlinear
+    @test r.diagnostics[1]["uncertainty_semantics"] == :finite_scenario_set
+    @test r.diagnostics[1]["control_recourse"] == :perfect_recourse
+    @test r.diagnostics[1]["control_policy"] == :perfect_recourse
+    @test r.diagnostics[1]["control_policy_source"] == :legacy_default
+    @test r.diagnostics[1]["prescribed_ibr_controls"] == :retained
+    @test !r.diagnostics[1]["control_nonanticipativity"]
     @test_throws ArgumentError solve_operating_envelope(scenarios, cps;
         security=:corners, max_exact_corners=1)
 
@@ -221,6 +229,101 @@ end
     @test rs.snapshots[1]["ibr"]["statcom_bus2"]["1"]["qg"] < -1000.0
 end
 
+@testset "Operating envelope: explicit control-recourse policies" begin
+    cps = [ConnectionPoint(id="d1", bus="bus1", export_max=10e3),
+           ConnectionPoint(id="d2", bus="bus2", export_max=10e3)]
+    net = doe_feeder_rx()
+    add_statcom!(net, "bus2"; s_max=5000.0)
+    stat = net["ibr"]["statcom_bus2"]
+    stat["p_min"] = [0.0]; stat["p_max"] = [0.0]
+    stat["q_min"] = [-5000.0]; stat["q_max"] = [5000.0]
+
+    perfect = solve_operating_envelope(net, cps; security=:corners,
+        control_policy=PerfectRecourse())
+    issued = solve_operating_envelope(net, cps; security=:corners,
+        control_policy=IssuePlusLocalLaws())
+    @test all(s in ("LOCALLY_SOLVED", "OPTIMAL") for s in
+              vcat(perfect.termination_status, issued.termination_status))
+    @test perfect.total_capacity[1] > issued.total_capacity[1] + 100.0
+    @test perfect.diagnostics[1]["control_policy"] == :perfect_recourse
+    @test perfect.diagnostics[1]["control_policy_source"] == :explicit
+    @test perfect.diagnostics[1]["perfect_recourse_controls_present"]
+    @test !perfect.diagnostics[1]["control_nonanticipativity"]
+    @test issued.diagnostics[1]["control_policy"] == :issue_plus_local_laws
+    @test issued.diagnostics[1]["control_nonanticipativity"]
+    @test issued.diagnostics[1]["control_link_constraints"] == 3
+    q_audit = only(filter(item -> item["id"] == "statcom_bus2" &&
+                                  item["quantity"] == :reactive_power,
+                          issued.diagnostics[1]["control_audit"]))
+    @test q_audit["stage"] == :issue
+    @test q_audit["contexts_present"] == 4
+    @test q_audit["link_constraints"] == 3
+
+    operational_replay = verify_operating_envelope(net, cps, perfect;
+        utilizations=:corners, control_policy=IssuePlusLocalLaws())
+    @test operational_replay.feasible == [false]
+    @test operational_replay.diagnostics[1]["control_policy"] ==
+          :issue_plus_local_laws
+
+    scenario_policy = PerfectRecourse(rules=[DOEControlRule(
+        component=:ibr, id="statcom_bus2", quantity=:reactive_power,
+        stage=:scenario)])
+    scenario = solve_operating_envelope([[net, deepcopy(net)]], cps;
+        security=:corners, control_policy=scenario_policy)
+    @test scenario.diagnostics[1]["control_link_constraints"] == 6
+    @test_throws ArgumentError DOEControlRule(
+        component=:ibr, id="x", quantity=:reactive_power, stage=:unknown)
+    @test_throws ArgumentError DOEControlPolicy(
+        rules=[DOEControlRule(component=:ibr, id="x",
+                              quantity=:reactive_power, stage=:issue),
+               DOEControlRule(component=:ibr, id="x",
+                              quantity=:reactive_power, stage=:context)])
+    @test_throws ArgumentError solve_operating_envelope(net, cps;
+        control_policy=PerfectRecourse(rules=[DOEControlRule(
+            component=:ibr, id="missing", quantity=:reactive_power,
+            stage=:context)]))
+
+    qv = solve_operating_envelope(doe_ibr_feeder(volt_var=true),
+        [ConnectionPoint(id="pv", bus="b1", ibr_id="pv1", export_max=10e3)];
+        security=:corners, control_policy=IssuePlusLocalLaws())
+    qv_q = only(filter(item -> item["id"] == "pv1" &&
+                               item["quantity"] == :reactive_power,
+                       qv.diagnostics[1]["control_audit"]))
+    @test qv_q["stage"] == :local_law
+    @test qv_q["automatic_laws"] == [:volt_var]
+
+    tap_net = bilevel_demo_network()
+    tap = tap_net["transformer"]["single_phase"]["reg"]
+    tap["tap_min"] = 0.95; tap["tap_max"] = 1.05
+    tap_cps = [ConnectionPoint(id="p1", bus="lv1", ibr_id="pv1",
+                               export_max=6000.0),
+               ConnectionPoint(id="p2", bus="lv2", ibr_id="pv2",
+                               export_max=6000.0)]
+    tap_result = solve_operating_envelope(tap_net, tap_cps;
+        security=:corners, control_policy=IssuePlusLocalLaws())
+    tap_audit = only(filter(item -> item["component"] == :transformer,
+                            tap_result.diagnostics[1]["control_audit"]))
+    @test tap_audit["id"] == "reg"
+    @test tap_audit["stage"] == :issue
+    @test tap_audit["link_constraints"] == 3
+
+    generator_net = doe_feeder(p1=200.0, p2=200.0)
+    generator_net["generator"] = Dict("g1" => Dict(
+        "bus" => "bus1", "terminal_map" => ["1", "n"],
+        "configuration" => "SINGLE_PHASE",
+        "p_min" => [0.0], "p_max" => [100.0],
+        "q_min" => [0.0], "q_max" => [0.0]))
+    generator_cp = [ConnectionPoint(id="d", bus="bus2", export_max=1000.0)]
+    generator_ideal = solve_operating_envelope(generator_net, generator_cp;
+        control_policy=PerfectRecourse())
+    generator_audit = only(filter(item -> item["component"] == :generator,
+                                  generator_ideal.diagnostics[1]["control_audit"]))
+    @test generator_audit["stage"] == :context
+    @test !generator_audit["linkage_supported"]
+    @test_throws ArgumentError solve_operating_envelope(
+        generator_net, generator_cp; control_policy=IssuePlusLocalLaws())
+end
+
 @testset "Operating envelope: inherited thermal and unbalance constraints" begin
     thermal = solve_operating_envelope(doe_thermal_feeder(),
         [ConnectionPoint(id="d", bus="b1", export_max=20e3)])
@@ -260,6 +363,12 @@ end
     @test verified.diagnostics[1]["verification"]
     @test solve_status(verified).publishable
     @test solve_diagnostics(verified).verification
+
+    custom = verify_operating_envelope(nets[1], cps, compared["equal"];
+        utilizations=[[0.25, 0.75], [0.75, 0.25]])
+    @test custom.feasible == [true]
+    @test custom.diagnostics[1]["security_scope"] == :explicit_utilization_points
+    @test custom.diagnostics[1]["dispatch_points_per_scenario"] == 2
 
     fallback = solve_operating_envelope([nets[1], doe_feeder(p1=5e3, p2=5e3)], cps;
         security=:corners, fallback=:last_feasible)

@@ -120,6 +120,11 @@ materialize_inverse_carson
 ```@docs
 ConnectionPoint
 FairnessPolicy
+DOEControlRule
+DOEControlPolicy
+PerfectRecourse
+IssueFixedControls
+IssuePlusLocalLaws
 solve_operating_envelope
 compare_operating_envelope_policies
 verify_operating_envelope

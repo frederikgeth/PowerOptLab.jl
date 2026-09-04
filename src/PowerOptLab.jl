@@ -165,7 +165,9 @@ export SequenceLineObservation, OverheadCarsonCandidate,
        materialize_inverse_carson
 
 # Dynamic operating envelopes
-export ConnectionPoint, FairnessPolicy, solve_operating_envelope,
+export ConnectionPoint, FairnessPolicy, DOEControlRule, DOEControlPolicy,
+       PerfectRecourse, IssueFixedControls, IssuePlusLocalLaws,
+       solve_operating_envelope,
        verify_operating_envelope, compare_operating_envelope_policies,
        OperatingEnvelopeResult, OperatingEnvelopeVerification
 

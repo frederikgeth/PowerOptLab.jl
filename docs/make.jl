@@ -14,6 +14,7 @@ makedocs(
         "Concepts"        => "concepts.md",
         "Research program" => [
             "Overview" => "research_program.md",
+            "DOE quantification review" => "problems/doe_quantification_review.md",
             "Post-OPF operability roadmap" => "problems/post_opf_operability_roadmap.md",
         ],
         "Inverter-based resources" => [

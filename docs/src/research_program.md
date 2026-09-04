@@ -80,6 +80,10 @@ The operating-envelope implementation already states the central gap correctly:
 feasibility at the simultaneous bound, or even at every box corner, does not
 prove feasibility throughout a nonconvex AC utilization box.
 
+The detailed implementation audit, literature evidence, benchmark protocol,
+and staged tutorial/documentation plan are maintained in [DOE quantification:
+scientific review and roadmap](problems/doe_quantification_review.md).
+
 The next step is an outer allocation and inner counterexample search over both
 actual customer utilization and the plausible model ensemble. Each discovered
 violation becomes a new scenario for the allocation problem. Results should
