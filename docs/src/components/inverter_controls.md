@@ -331,6 +331,12 @@ support.
 
 ### Differentiable magnitude representation
 
+These controller expressions use the shared function-formulation primitives:
+`AlgebraicFormulation` selectors and upper/lower `MagnitudeApproximation` norms.
+PWL curves select their own family, with BMOPFTools softplus as the default.
+See [the integration map](../formulations/controllers.md#Shared-controller-primitives)
+for the shared operations, preserved settings and exact-root boundary.
+
 The representation depends on the quantity's role:
 
 | Quantity | Representation | Approximation |

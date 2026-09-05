@@ -3,6 +3,7 @@ using TOML
 using Aqua
 using PowerOptLab
 using JuMP, Ipopt
+import PiecewiseLinearOpt
 
 # JuMP + Ipopt are hard dependencies here, so they are always available. The
 # HELM OpenDSS-parity tests optionally use OpenDSSDirect and skip themselves
@@ -28,6 +29,14 @@ if _HAS_ODS
 end
 
 @testset "PowerOptLab" begin
+    include("function_formulation_tests.jl")
+    include("function_comparison_tests.jl")
+    include("formulation_research_tests.jl")
+    include("control_lowering_tests.jl")
+    include("relation_lowering_tests.jl")
+    include("formulation_observation_tests.jl")
+    include("formulation_review_tests.jl")
+    include("selector_primitive_tests.jl")
     include("multiperiod_tests.jl")
     include("ev_tests.jl")
     include("state_estimation_tests.jl")

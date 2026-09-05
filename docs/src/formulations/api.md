@@ -1,0 +1,85 @@
+# Function formulation API
+
+Use [the experiment tutorial](experiments.md) for a guided introduction.
+
+
+```@docs
+PWLFunction
+```
+
+## Control intent and lowering
+
+```@docs
+VoltVarWattIntent
+VoltVarWattEncoding
+lower_positive_policy
+formulate_control_curve!
+lowering_statistics
+PWLRelationPlan
+PWLRelationHandle
+plan_pwl_relation
+formulate_pwl_relation!
+formulate_control_relation!
+audit_pwl_relation
+```
+
+## Curve representations and graph construction
+
+```@docs
+SoftplusFormulation
+LocalC2Formulation
+AlgebraicFormulation
+ComplementarityGraph
+PWLConvexHull
+ExactPWLGraph
+primitive_value
+primitive_derivatives
+formulation_contract
+PWLFormulationHandle
+formulate_pwl!
+audit_pwl
+```
+
+## Smoothing and selector extensions
+
+```@docs
+AbstractPWLFormulation
+AbstractPWLSmoothing
+hinge_value
+hinge_derivatives
+hinge_contract
+hinge_expression
+selector_value
+selector_expression
+selector_contract
+symmetric_clip_value
+symmetric_clip_expression
+smoothing_for_error
+smooth_pwl_expression
+```
+
+## Physical magnitudes and error accounting
+
+```@docs
+MagnitudeApproximation
+magnitude_value
+magnitude_contract
+magnitude_expression
+positive_root_expression
+affine_error_bound
+hull_gap_bound
+local_error_response
+```
+
+## Experiments and reference cases
+
+```@docs
+FormulationCase
+FormulationMethod
+UnsupportedFormulation
+run_formulation_experiment
+write_formulation_results
+resistive_equilibria
+resistive_control_case
+controlled_inverter_case
+```

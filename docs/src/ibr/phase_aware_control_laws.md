@@ -519,8 +519,9 @@ error is at most ``0.1\epsilon_\eta``. The exact evaluator retains ``|U_2|``.
 ``U_{floor}`` is a declared low-voltage control regularization; it is not a norm
 smoothing width. No zero-root equality is introduced at balanced voltage.
 
-The PWL curve ``\kappa(\eta)`` can then use BMOPFTools' existing smooth-ReLU/
-softplus machinery. In rectangular form, multiplication by
+The PWL curve ``\kappa(\eta)`` uses the shared PWL interface, with BMOPFTools
+softplus as the default and a selectable smoothing family.
+In rectangular form, multiplication by
 ``-\kappa e^{-j\phi_2}`` is only two smooth algebraic equalities for ``I_2``. It avoids
 angle variables, `atan`, and a normalised ``U_2/|U_2|`` direction.
 
