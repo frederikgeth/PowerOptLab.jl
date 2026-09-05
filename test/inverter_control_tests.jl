@@ -636,8 +636,9 @@ end
     # drives the solve into a near-zero-current corner where the capability
     # limiter's implicit square roots are worst conditioned, and the result
     # then depends on the solver tolerance and the platform's linear algebra.
-    # 0.7 V keeps the backoff clearly active (current_scale ~ 0.88) while
-    # solving at tol = 1e-6, 1e-8, and 1e-10.
+    # 0.7 V keeps the backoff clearly active (current_scale ~ 0.88). Use the
+    # formulation's per-unit/device normalization directly: Ipopt's additional
+    # gradient scaling can hide accuracy in the implicit-root constraints.
     inverter = AdvancedInverter(
         id="ripple_limit", bus="poc", phase_terminals=["a", "b", "c"],
         neutral="n", topology=:THREE_LEG, s_max=20e3, i_max=40.0,
@@ -647,17 +648,12 @@ end
     result = solve_controlled_inverter(
         inv_grid3_unbal(), ControlledDevice(inverter, controller),
         _CTRL_REQUEST; per_unit=true,
-        solver_options=("max_iter" => 500, "tol" => 1e-8))
-    # These four assertions fail deterministically on Linux CI under BMOPFTools
-    # 8f121216 while passing on macOS, and do not reproduce on `main` with the
-    # same pin. Skipped rather than marked broken: `@test_broken` would report
-    # an Unexpected Pass wherever the solve succeeds, turning local runs red.
-    # The solve above still runs, so a hard error would still surface.
-    # Tracked as a cross-platform numerical-stability problem; see issue #37.
-    @test_skip result.solve.publishable
-    @test_skip result.plant.dv2 <= inverter.dv2_max + 1e-6
-    @test_skip result.control.current_scale < 1.0
-    @test_skip result.exact_smooth_current_residual < 1e-3
+        solver_options=("max_iter" => 500, "tol" => 1e-8,
+                        "nlp_scaling_method" => "none"))
+    @test result.solve.publishable
+    @test result.plant.dv2 <= inverter.dv2_max + 1e-6
+    @test result.control.current_scale < 1.0
+    @test result.exact_smooth_current_residual < 1e-3
 end
 
 @testset "Inverter controls: converter-side and grid-side current targets" begin
@@ -676,14 +672,20 @@ end
         PositiveSequenceVoltVarWatt(); current_target=:grid)
     request = InverterControlRequest(p_available=9e3, q_scale=0.0)
 
+    # The equations already carry per-unit/device normalization. Automatic
+    # gradient scaling made the grid-target solve stop at acceptable tolerance
+    # despite a sizeable unscaled KKT residual. Preserve the requested tolerance
+    # and check the returned physical current/power identities below.
     converter = solve_controlled_inverter(
         inv_grid3_bal(), ControlledDevice(inverter, converter_controller),
         request; per_unit=true,
-        solver_options=("max_iter" => 400, "tol" => 1e-8))
+        solver_options=("max_iter" => 400, "tol" => 1e-8,
+                        "nlp_scaling_method" => "none"))
     grid = solve_controlled_inverter(
         inv_grid3_bal(), ControlledDevice(inverter, grid_controller),
         request; per_unit=true,
-        solver_options=("max_iter" => 400, "tol" => 1e-8))
+        solver_options=("max_iter" => 400, "tol" => 1e-8,
+                        "nlp_scaling_method" => "none"))
 
     for result in (converter, grid)
         @test result.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
