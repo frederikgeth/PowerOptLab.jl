@@ -5507,6 +5507,9 @@ function _doe_radical_inverse(index::Int, base::Int,
         remaining ÷= base
         factor /= base
     end
+    # The digit expansion has infinitely many trailing zeros. Their images
+    # contribute a geometric tail when the permutation does not fix zero.
+    permutation === nothing || (value += permutation[1] * factor / (1 - 1 / base))
     return value
 end
 
@@ -5514,8 +5517,8 @@ end
 # equidistributed once the per-dimension base exceeds the sample count: for
 # `index < base` the radical inverse is exactly `index / base`, so the
 # high-index coordinates of a short sequence collapse onto a narrow band near
-# zero and become strongly correlated with each other. Scrambling restores
-# stratification while keeping the point set reproducible from `seed`.
+# zero and become strongly correlated with each other. Scrambling changes those
+# bands reproducibly; it cannot fill more strata than there are samples.
 function _doe_halton_permutations(bases::Vector{Int}, seed::Int)
     rng = Random.MersenneTwister(seed)
     return [Random.shuffle!(rng, collect(0:(base - 1))) for base in bases]
@@ -5524,8 +5527,19 @@ end
 # Utilization points on the faces of the hypercube adjacent to the simultaneous
 # bound point: every way of dropping 1..`depth` participants to zero while the
 # remainder stay at their issued limit. This is the family in which published
-# partial-utilization counterexamples occur, and it grows polynomially
-# (`sum(binomial(n, k) for k in 1:depth)`) rather than as `2^n`.
+# partial-utilization counterexamples occur. The count is polynomial for fixed
+# depth, but reaches 2^n - 1 when depth >= n.
+function _doe_dropout_count(n::Int, depth::Int; limit=nothing)
+    count = big(0)
+    term = big(1)
+    for k in 1:min(depth, n)
+        term = div(term * (n - k + 1), k)
+        count += term
+        limit === nothing || count <= limit || return count
+    end
+    return count
+end
+
 function _doe_dropout_points(participant_count::Int, depth::Int)
     points = Vector{Vector{Float64}}()
     depth <= 0 && return points
@@ -5572,7 +5586,8 @@ remainder stay at their issued limit, ordered by the number dropped.
 This is the family in which published partial-utilization counterexamples
 occur — a customer whose export falls below its allocation can raise the
 voltage of another phase through mutual and neutral coupling — and it grows as
-`sum(binomial(n, k) for k in 1:depth)` rather than as `2^n`. Pass the result as
+`sum(binomial(n, k) for k in 1:min(depth, n))`: polynomial for fixed depth,
+but `2^n - 1` at full depth. Pass the result as
 `utilizations` to [`verify_operating_envelope`](@ref) to trace how a violation
 depends on the number of participants that back off.
 """
@@ -5600,11 +5615,12 @@ function _doe_search_points(participant_count::Int, samples::Int,
     include_corners && participant_count > max_exact_corners &&
         throw(ArgumentError(
             "include_corners=true requires participant count <= max_exact_corners"))
-    dropout_points = _doe_dropout_points(participant_count, dropout_depth)
-    length(dropout_points) > max_dropout_points && throw(ArgumentError(
+    dropout_count = _doe_dropout_count(participant_count, dropout_depth;
+        limit=max_dropout_points)
+    dropout_count > max_dropout_points && throw(ArgumentError(
         "dropout_depth=$dropout_depth on $participant_count participants " *
-        "generates $(length(dropout_points)) points > " *
-        "max_dropout_points=$max_dropout_points"))
+        "exceeds max_dropout_points=$max_dropout_points"))
+    dropout_points = _doe_dropout_points(participant_count, dropout_depth)
     points = Vector{Vector{Float64}}()
     include_zero && push!(points, zeros(participant_count))
     include_bound && push!(points, ones(participant_count))
@@ -5630,21 +5646,27 @@ function _doe_search_points(participant_count::Int, samples::Int,
     return unique_points
 end
 
-# Provenance for the generated point set, including whether the Halton seed
-# budget is large enough to stratify the highest-base coordinate.
+# Measure first-digit marginal coverage of the actual offset sequence. This
+# says nothing about joint strata, discrepancy, independence, or box safety.
 function _doe_search_point_diagnostics(participant_count::Int, samples::Int;
                                        dropout_depth::Int,
-                                       halton_scramble_seed)
-    max_base = participant_count >= 1 ?
-        last(_doe_first_primes(participant_count)) : 0
+                                       halton_scramble_seed,
+                                       sequence_offset::Int=0)
+    bases = _doe_first_primes(participant_count)
+    permutations = halton_scramble_seed === nothing ? nothing :
+        _doe_halton_permutations(bases, halton_scramble_seed)
+    occupied = [length(Set(clamp(floor(Int, base * _doe_radical_inverse(
+            index, base, permutations === nothing ? nothing : permutations[dimension])),
+            0, base - 1) for index in (sequence_offset + 1):(sequence_offset + samples)))
+        for (dimension, base) in enumerate(bases)]
     return Dict{String,Any}(
         "dropout_depth" => dropout_depth,
-        "dropout_point_count" =>
-            length(_doe_dropout_points(participant_count, dropout_depth)),
-        "halton_maximum_base" => max_base,
+        "dropout_point_count" => _doe_dropout_count(participant_count, dropout_depth),
+        "halton_maximum_base" => isempty(bases) ? 0 : last(bases),
         "halton_scramble_seed" => halton_scramble_seed,
-        "halton_seed_stratified" =>
-            halton_scramble_seed !== nothing || samples >= max_base)
+        "halton_occupied_first_digit_strata" => occupied,
+        "halton_stratification_scope" => :marginal_first_digit_coverage_only,
+        "halton_seed_stratified" => samples > 0 && occupied == bases)
 end
 
 """
@@ -5666,10 +5688,10 @@ reproducible batches possible.
 `dropout_depth` additionally seeds every point that drops 1..`dropout_depth`
 participants to zero while the remainder stay at their issued limit; it
 defaults to `0` here so that the screening sequence stays the documented
-space-filling set. Plain Halton loses stratification when the per-dimension
-base exceeds `samples`, so set `halton_scramble_seed` for more than a handful
-of participants; `diagnostics["halton_seed_stratified"]` records whether the
-generated seed budget was adequate. Remaining keywords are forwarded to
+space-filling set. Digit scrambling is reproducible but cannot compensate for
+an inadequate sample budget. `diagnostics["halton_seed_stratified"]` reports
+only measured marginal first-digit coverage of the actual offset sequence,
+not joint coverage or a safety guarantee. Remaining keywords are forwarded to
 [`verify_operating_envelope`](@ref).
 """
 function search_operating_envelope_utilizations(
@@ -5721,7 +5743,7 @@ function search_operating_envelope_utilizations(
         "include_bound" => include_bound,
         "include_corners" => include_corners,
         _doe_search_point_diagnostics(length(connection_points), samples;
-            dropout_depth, halton_scramble_seed)...,
+            dropout_depth, halton_scramble_seed, sequence_offset)...,
         "candidate_context_count" => length(candidates),
         "unresolved_contexts_present" => unresolved,
         "global_certificate" => false,
@@ -5827,9 +5849,10 @@ and defaults to `1` because falsification is this function's purpose. Raise
 `initial_step`, lower `step_decay`, or use `include_corners` when the interior
 between those faces also matters.
 
-Plain Halton seeds lose stratification once a per-dimension base exceeds
-`seed_samples`; set `halton_scramble_seed` for more than a handful of
-participants and check `diagnostics["halton_seed_stratified"]`.
+`halton_scramble_seed` reproducibly permutes every digit, including trailing
+zeros. It does not ensure coverage with a small budget. The diagnostic
+`halton_seed_stratified` measures only marginal first-digit coverage of the
+actual offset sequence, not joint stratification or a safety guarantee.
 """
 function search_operating_envelope_adversarial(
         nets, connection_points::AbstractVector{ConnectionPoint}, capacities;
@@ -5944,7 +5967,7 @@ function search_operating_envelope_adversarial(
         "seed_samples" => seed_samples,
         "sequence_offset" => sequence_offset,
         _doe_search_point_diagnostics(length(connection_points), seed_samples;
-            dropout_depth, halton_scramble_seed)...,
+            dropout_depth, halton_scramble_seed, sequence_offset)...,
         # Optimistic lower coordinate bound over the declared finite budget,
         # assuming every move decreases this coordinate from the bound point.
         # Includes the minimum-step floor; actual search paths may reach less.

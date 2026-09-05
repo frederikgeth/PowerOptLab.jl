@@ -37,6 +37,7 @@ end
     include("inverse_carson_benchmark_tests.jl")
     include("operating_envelope_tests.jl")
     include("doe_evidence_tests.jl")
+    include("doe_cleanup_tests.jl")
     include("bilevel_tests.jl")
     include("advanced_inverter_tests.jl")
     include("inverter_control_tests.jl")

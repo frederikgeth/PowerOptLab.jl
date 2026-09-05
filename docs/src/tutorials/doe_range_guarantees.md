@@ -165,12 +165,15 @@ normalized-headroom score.
     decay factor, or number of rounds can extend reach; seeded dropout faces
     test complete backing-off immediately.
 
-    The Halton seeds have a second budget limit: for a dimension whose prime
-    base exceeds `seed_samples`, the radical inverse is just `index / base`, so
-    those coordinates collapse into a narrow band near zero and correlate with
-    each other. Beyond a handful of participants, pass
-    `halton_scramble_seed` and check
-    `diagnostics["halton_seed_stratified"]`.
+    Halton seeds also have a budget limit. For the initial plain sequence,
+    coordinates with bases larger than `seed_samples` lie in a band near zero.
+    `halton_scramble_seed` reproducibly permutes digits, including the infinite
+    trailing-zero tail, but cannot cover more strata than there are samples.
+    `diagnostics["halton_seed_stratified"]` measures whether the actual offset
+    sequence visits every first-digit stratum in each coordinate; inspect
+    `halton_occupied_first_digit_strata` for the counts. This is marginal
+    coverage only, with no assertion about joint coverage or box safety.
+    The dropout budget is checked combinatorially before points are allocated.
 
 Repeat the candidate from several deterministic OPF starts before presenting it
 as numerical evidence:
