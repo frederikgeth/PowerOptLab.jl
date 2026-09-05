@@ -1,18 +1,22 @@
 """
-    MagnitudeApproximation(epsilon; direction=:lower, unit=:unitless)
+    MagnitudeApproximation(epsilon; direction=:lower, unit=:unitless, scale=nothing)
 
 Smooth Euclidean magnitude with a physical absolute error budget. `:lower` uses
 sqrt(sum(x²)+epsilon²)-epsilon and preserves zero; `:upper` omits the shift and
 bounds the exact magnitude from above. Direction is mathematical, not a complete
-certificate that a composed network inequality is conservative.
+certificate that a composed network inequality is conservative. Optional `scale`
+is the characteristic magnitude in physical units, preserved in staged upstream
+annotations after conversion to working coordinates.
 """
 struct MagnitudeApproximation
     epsilon::Float64
     direction::Symbol
     unit::Symbol
-    function MagnitudeApproximation(epsilon::Real;direction::Symbol=:lower,unit::Symbol=:unitless)
+    scale::Union{Nothing,Float64}
+    function MagnitudeApproximation(epsilon::Real;direction::Symbol=:lower,unit::Symbol=:unitless,scale=nothing)
         direction in (:lower,:upper) || throw(ArgumentError("Choose :lower or :upper"))
-        new(_positive_width(epsilon),direction,unit)
+        new(_positive_width(epsilon,"Magnitude error budget"),direction,unit,
+            scale===nothing ? nothing : _positive_width(scale,"Characteristic magnitude scale"))
     end
 end
 
@@ -38,14 +42,23 @@ magnitude_contract(r::MagnitudeApproximation) = (
 Build the magnitude from working-coordinate real components. Physical components
 are `component_scale * components`; the returned expression is in units of
 `physical magnitude / output_scale`. On staged contexts reuse BMOPFTools.smooth_norm.
-The optional `name` labels the upstream differentiability annotation.
+The optional `name` labels the differentiability annotation. `eps_rel` can preserve
+a previously used relative-width calculation and its exact floating-point provenance;
+it must agree with the physical budget to rounding tolerance. Lower norms retain
+BMOPFTools annotations; upper norms record their own overestimation semantics.
 This adds no capability constraint: squared physical inequalities remain available.
 """
 function magnitude_expression(target,components,r::MagnitudeApproximation;
                               component_scale::Real=1,output_scale::Real=1,
-                              name::AbstractString="")
+                              name::AbstractString="",eps_rel::Union{Nothing,Real}=nothing)
     isempty(components) && throw(ArgumentError("Provide at least one component"))
     si,so = _pwl_scale(component_scale),_pwl_scale(output_scale)
+    scale = r.scale===nothing ? 1. : r.scale/si
+    relative = eps_rel===nothing ? (r.epsilon/si)/scale : Float64(eps_rel)
+    effective = relative*scale
+    isfinite(relative) && relative>0 && isfinite(effective) && effective>0 &&
+        isapprox(effective,r.epsilon/si;rtol=8eps(Float64),atol=0.) ||
+        throw(ArgumentError("Relative width and characteristic scale must match the physical magnitude budget"))
     if target isa JuMP.Model
         root = sqrt(sum(c^2 for c in components)+(r.epsilon/si)^2)
         return (r.direction == :lower ? root-r.epsilon/si : root)*(si/so)
@@ -53,11 +66,23 @@ function magnitude_expression(target,components,r::MagnitudeApproximation;
     # Preserve upstream's established two-component expression and annotation
     # for complex phasors; use its grouped helper for other dimensions.
     lower = length(components)==2 ?
-        BMOPFTools.smooth_norm(target,components[1],components[2];scale=1.,
-            eps_rel=r.epsilon/si,name=name) :
-        BMOPFTools.smooth_norm(target,collect(components);scale=1.,
-            eps_rel=r.epsilon/si,name=name)
-    return lower*(si/so)+(r.direction == :upper ? r.epsilon/so : 0.)
+        BMOPFTools.smooth_norm(target,components[1],components[2];scale=scale,
+            eps_rel=relative,name=name,annotate=r.direction==:lower) :
+        BMOPFTools.smooth_norm(target,collect(components);scale=scale,
+            eps_rel=relative,name=name,annotate=r.direction==:lower)
+    if r.direction==:upper
+        label = isempty(name) ? "upper_smooth_norm" : "upper_smooth_norm[$name]"
+        BMOPFTools.register_opf_differentiability_annotation!(target,
+            Symbol("$(label)@eps=$(effective)");kind=:nonsmooth_operator,
+            description="2-norm replaced by sqrt(sum(c^2) + eps^2); overestimates " *
+                "the exact norm by at most eps in working units. Returned output " *
+                "uses component_scale/output_scale. The surrogate is differentiable everywhere.",
+            owner=:PowerOptLab,blocking=false,replace=true,
+            metadata=Dict("eps"=>effective,"eps_rel"=>relative,"scale"=>scale,
+                "form"=>"upper_2norm","n_components"=>length(components),
+                "component_scale"=>si,"output_scale"=>so,"unit"=>string(r.unit)))
+    end
+    return lower*(si/so)+(r.direction == :upper ? effective*(si/so) : 0.)
 end
 
 """
@@ -68,7 +93,7 @@ square root. Both radicand and lower bound use the same working units. This chan
 the allowed domain explicitly; it is not a smoothing of a root at zero.
 """
 function positive_root_expression(target,radicand;lower_bound::Real)
-    lower = _positive_width(lower_bound)
+    lower = _positive_width(lower_bound,"Radicand lower bound")
     model = target isa JuMP.Model ? target : BMOPFTools.opf_model(target)
     @constraint(model,radicand >= lower)
     return sqrt(radicand)

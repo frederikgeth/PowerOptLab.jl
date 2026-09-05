@@ -36,14 +36,26 @@ an absolute width in the same units as `breakpoints`; it is used only by the
 smooth representation. Alternatively supply an `AbstractPWLSmoothing` instance via
 `formulation`, e.g. `LocalC2Formulation(0.1)`. If both keywords are supplied their
 widths must agree. The default remains BMOPFTools softplus. Numeric smooth
-assessment and JuMP stamping use the same family and flat tails.
+assessment and JuMP stamping use the same family and flat tails. Curve coordinates
+are copied and read-only; construct a new law to change them. Prepared canonical
+data are reused across numeric evaluation and model stamps.
 [`evaluate_exact`](@ref) retains exact corners.
 """
+# Read-only vector facade preserves the vector API expected by BMOPFTools while
+# preventing curve edits from invalidating prepared coefficients or replay.
+struct _LawCoordinates <: AbstractVector{Float64}
+    data::Tuple{Vararg{Float64}}
+end
+Base.size(x::_LawCoordinates) = (length(x.data),)
+Base.getindex(x::_LawCoordinates,i::Int) = x.data[i]
+Base.IndexStyle(::Type{_LawCoordinates}) = IndexLinear()
+
 struct PiecewiseLinearLaw
-    breakpoints::Vector{Float64}
-    values::Vector{Float64}
+    breakpoints::_LawCoordinates
+    values::_LawCoordinates
     smoothing_epsilon::Float64
     formulation::AbstractPWLSmoothing
+    curve::PWLFunction
     function PiecewiseLinearLaw(breakpoints::AbstractVector{<:Real},
                                 values::AbstractVector{<:Real};
                                 smoothing_epsilon::Union{Nothing,Real}=nothing,
@@ -67,7 +79,8 @@ struct PiecewiseLinearLaw
             throw(ArgumentError("smoothing_epsilon and formulation width disagree"))
         isfinite(eps) && eps > 0 || throw(ArgumentError(
             "smoothing_epsilon must be finite and > 0"))
-        new(xs, ys, eps, formulation)
+        curve = PWLFunction(xs,ys)
+        new(_LawCoordinates(curve.breakpoints),_LawCoordinates(curve.values),eps,formulation,curve)
     end
 end
 
@@ -663,11 +676,14 @@ function _unbalance_exact(::NoUnbalanceControl, u1, u2, i1)
 end
 
 _pwl_numeric_smooth(law::PiecewiseLinearLaw, input::Real) =
-    primitive_value(PWLFunction(law),input,law.formulation;domain_policy=:flat_extension)
+    law.formulation isa SoftplusFormulation ?
+        BMOPFTools.piecewise_linear_value(input,law.breakpoints,law.values;epsilon=law.formulation.width) :
+        primitive_value(law.curve,input,law.formulation;domain_policy=:flat_extension)
 
 """Extract a bounded canonical curve from a control law; supply physical unit labels explicitly when needed."""
 PWLFunction(law::PiecewiseLinearLaw;input_unit::Symbol=:unitless,output_unit::Symbol=:unitless) =
-    PWLFunction(law.breakpoints,law.values;input_unit,output_unit)
+    (input_unit,output_unit)==(:unitless,:unitless) ? law.curve :
+        PWLFunction(law.breakpoints,law.values;input_unit,output_unit)
 
 function _numeric_smooth_extrema(magnitudes, epsilon)
     vmin = _smooth_min(_smooth_min(magnitudes[1], magnitudes[2], epsilon),
@@ -1019,7 +1035,7 @@ function _smooth_dominant_expression!(
 end
 
 function _pwl_smooth(ctx, law::PiecewiseLinearLaw, input, input_scale)
-    smooth_pwl_expression(ctx,PWLFunction(law),input,law.formulation;input_scale)
+    smooth_pwl_expression(ctx,law.curve,input,law.formulation;input_scale)
 end
 
 function _sequence_pair(values_re, values_im)
@@ -1266,8 +1282,9 @@ function _unbalance_smooth(ctx, policy::NegativeSequenceAdmittanceDroop,
     floor = policy.voltage_floor / vb
     denom = u1r^2 + u1i^2 + floor^2
     u2mag = magnitude_expression(ctx,(u2r,u2i),
-        MagnitudeApproximation(_unbalance_norm_epsilon(policy);unit=:V);
-        component_scale=vb,output_scale=vb,name="controller_negative_sequence")
+        MagnitudeApproximation(_unbalance_norm_epsilon(policy);unit=:V,scale=policy.voltage_floor);
+        component_scale=vb,output_scale=vb,name="controller_negative_sequence",
+        eps_rel=_unbalance_norm_epsilon(policy)/policy.voltage_floor)
     u1denom = sqrt(denom)
     eta = u2mag / u1denom
     gain = _pwl_smooth(ctx, policy.gain, eta, 1.0) * vb / ib

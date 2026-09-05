@@ -43,7 +43,7 @@ struct VoltVarWattIntent
         curves[1] === nothing || all(y -> 0<=y<=1,curves[1].values) ||
             throw(ArgumentError("Volt-watt fractions must lie in [0,1]"))
         new(curves...,sensing,volt_watt_basis,conflict_policy,
-            _positive_width(conflict_epsilon),worst_phase_watt_guard)
+            _positive_width(conflict_epsilon,"Conflict blending width"),worst_phase_watt_guard)
     end
 end
 
@@ -61,7 +61,7 @@ struct VoltVarWattEncoding
     volt_var::Union{Nothing,AbstractPWLFormulation}
     extrema_epsilon::Float64
     function VoltVarWattEncoding(;volt_watt=nothing,volt_var=nothing,extrema_epsilon::Real=.05)
-        new(volt_watt,volt_var,_positive_width(extrema_epsilon))
+        new(volt_watt,volt_var,_positive_width(extrema_epsilon,"Extrema voltage width"))
     end
 end
 
@@ -142,6 +142,8 @@ function formulate_control_curve!(target,intent::VoltVarWattIntent,role::Symbol,
     x = x isa Union{AffExpr,QuadExpr} ? copy(x) : x
     si,so = _pwl_scale(input_scale),_pwl_scale(output_scale)
     model = target isa JuMP.Model ? target : BMOPFTools.opf_model(target)
+    x isa VariableRef && owner_model(x)!==model &&
+        throw(ArgumentError("Voltage variable belongs to another model"))
     build = function()
         if rep isa AbstractPWLSmoothing
             # Restrict the voltage, not the curve before smoothing: cutting a
@@ -161,7 +163,6 @@ function formulate_control_curve!(target,intent::VoltVarWattIntent,role::Symbol,
             input_scale=si,output_scale=so)
     end
     reuse && x isa VariableRef || return build()
-    owner_model(x) === model || throw(ArgumentError("Voltage variable belongs to another model"))
     cache = get!(model.ext,:PowerOptLabControlCurveHandles) do
         Dict{Any,PWLFormulationHandle}()
     end

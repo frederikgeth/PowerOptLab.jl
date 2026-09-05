@@ -59,7 +59,7 @@ _magnitude_epsilon(rating, ib) =
 
 "Accumulate a shared smooth loss norm with a physical, base-invariant budget."
 function _push_magnitude(ctx, total, x, y, rating, ib; name)
-    approximation = MagnitudeApproximation(_magnitude_epsilon(rating,1.);unit=:A)
+    approximation = MagnitudeApproximation(_magnitude_epsilon(rating,1.);unit=:A,scale=something(rating,1.))
     magnitude = magnitude_expression(ctx,(x,y),approximation;
         component_scale=ib,output_scale=ib,name=name)
     return total === nothing ? magnitude : total + magnitude

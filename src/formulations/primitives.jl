@@ -41,10 +41,10 @@ The scalar JuMP operator and complete PWL error accounting are then supplied her
 """
 abstract type AbstractPWLSmoothing <: AbstractPWLFormulation end
 
-function _positive_width(x)
+function _positive_width(x, label="Width in physical input units")
     value = Float64(x)
     isfinite(value) && value > 0 ||
-        throw(ArgumentError("Width must be finite and positive in physical input units"))
+        throw(ArgumentError("$label must be finite and positive"))
     return value
 end
 
@@ -209,8 +209,11 @@ end
 
 Inspect domain, units, semantics, regularity and a signed physical output-error
 interval (`surrogate - exact`). Hull error bounds are `nothing`: its feasible
-points are not a surrogate function. Smooth bounds are analytic real-arithmetic
+points are not a surrogate function; use `hull_gap_bound` for bounded vertical
+graph deviations. Smooth bounds are analytic real-arithmetic
 bounds; floating-point evaluation and solver feasibility errors are additional.
+`second_derivative_bound` bounds absolute physical curve curvature for smooth
+formulations (output units / input units²); it is not a KKT condition number.
 """
 function formulation_contract(f::PWLFunction, r::AbstractPWLFormulation)
     r isa Union{AbstractPWLSmoothing,PWLConvexHull,ExactPWLGraph,ComplementarityGraph} ||
@@ -231,7 +234,9 @@ function formulation_contract(f::PWLFunction, r::AbstractPWLFormulation)
         input_unit=f.input_unit,output_unit=f.output_unit,
         semantics=hull ? :outer_relaxation : smooth ? :surrogate_graph : :exact_graph,
         regularity=smooth ? hc.regularity : :not_applicable,
-        error_lower=lower,error_upper=upper,width=smooth ? hc.width : nothing)
+        error_lower=lower,error_upper=upper,width=smooth ? hc.width : nothing,
+        second_derivative_bound=smooth ? sum(abs(c) for (c,k) in f.hinges;init=0.) *
+            hc.second_derivative_bound : nothing)
 end
 
 """
@@ -240,12 +245,13 @@ end
 Choose a physical input width from a positive absolute output-error budget using
 signed slope-change sums. This controls function approximation, not solver or
 network error. A constant curve needs no smoothing and requires an explicit width
-if a smoothing object is still desired. Custom families can extend this method.
+if a smoothing object is still desired. Inspect `formulation_contract(curve, result)`
+for the resulting error and curvature bounds. Custom families can extend this method.
 """
 function smoothing_for_error(f::PWLFunction, family::Type{<:AbstractPWLSmoothing}, budget::Real)
     family in (SoftplusFormulation,LocalC2Formulation,AlgebraicFormulation) ||
         throw(ArgumentError("Custom families must define their error-to-width mapping"))
-    error = _positive_width(budget)
+    error = _positive_width(budget,"Error budget in physical output units")
     contract = formulation_contract(f,family(1.))
     magnitude = max(abs(contract.error_lower),abs(contract.error_upper))
     magnitude > 0 || throw(ArgumentError("Constant curves need no smoothing; choose a width explicitly"))

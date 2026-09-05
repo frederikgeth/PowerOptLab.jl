@@ -26,6 +26,8 @@ using ForwardDiff
             @test c.error_lower-1e-13 <= error <= c.error_upper+1e-13
             # Numerically differentiate the value oracle independently of the
             # supplied derivative formulas (softplus oracle is Float64-only).
+            # This guards the NLP contract: upstream BMOPFTools values and our
+            # analytic derivatives must describe the same telescoping function.
             d1,d2 = primitive_derivatives(f,x,r)
             if -1.99 < x < 1.99
                 step = 1e-5*width
@@ -108,11 +110,14 @@ end
     @test length(h2.pairs) == 2
     @test_throws ArgumentError audit_pwl(h2)
     n = num_variables(m)
+    nc = num_constraints(m;count_variable_in_set_constraints=true)
     @test_throws ArgumentError formulate_pwl!(m,f,x,SoftplusFormulation(.1); input_scale=0)
     @test num_variables(m) == n
+    @test num_constraints(m;count_variable_in_set_constraints=true) == nc
     if Base.get_extension(PowerOptLab,:PowerOptLabPiecewiseLinearOptExt) === nothing
         @test_throws ArgumentError formulate_pwl!(m,f,x,ExactPWLGraph())
         @test num_variables(m) == n
+    @test num_constraints(m;count_variable_in_set_constraints=true) == nc
     end
 end
 
