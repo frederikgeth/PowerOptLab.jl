@@ -1,14 +1,49 @@
-# Dynamic operating envelopes for LV networks: a modelling tutorial
+# Choosing a dynamic operating-envelope formulation
 
-> **Audience:** power-system researchers · **Scope:** nonlinear AC DOE studies
-> with DSSE snapshots, mandatory DER controls, and network support devices.
+This formulation guide uses schematic feeder and device names. For sequential,
+CI-tested examples, start with [DOE in 15 minutes](doe_getting_started.md) and
+[Faithful replay](doe_faithful_replay.md).
 
-This tutorial is about *modelling choices*, not just calling an optimizer. A
-dynamic operating envelope (DOE) is an operational promise: a participant may
-operate within an advertised active-power range while the LV network remains
-within its declared limits. The difficult part is deciding exactly what that
-promise means and ensuring the model represents the physical controls that will
-be present when it is used.
+> **Audience:** power-system researchers · **Prerequisite:** [Dynamic operating
+> envelopes in 15 minutes](doe_getting_started.md) · **Scope:** nonlinear AC DOE
+> studies with DSSE snapshots, mandatory DER controls, and network support
+> devices
+>
+> **Learning outcome:** choose and report a DOE geometry, coverage set, control
+> information structure, uncertainty semantics, and evidence level
+
+This is the formulation guide for the current API. The implementation audit and
+the rationale for the counterexample, uncertainty, fairness, scaling, and
+power-quality research program are maintained in the [detailed DOE scientific
+audit](../problems/doe_quantification_review.md).
+For the implemented recourse registry, structured replay, finite interior
+search, multistart, and reproducibility manifest, continue with
+[Reproducible DOE recourse, verification, and search](doe_research_workflow.md).
+The source taxonomy and boundary of each cited result are recorded in [DOE
+literature: evidence and
+interpretation](../problems/doe_literature_evidence.md).
+
+This tutorial is about *modelling choices*, not just calling an optimizer. The
+term dynamic operating envelope (DOE) covers several objects in research and
+practice. A bound-point allocation, an independently usable box, a coupled P–Q
+region, and a market-shaped envelope do not make the same promise. The
+difficult part is declaring that promise and representing the physical controls
+and information that will be present when it is used.
+
+Use this sequence before writing code:
+
+| Decision | Question | Typical choices in the current framework |
+|---|---|---|
+| Operational object | What may each participant actually do? | one bound point; independently usable one-sided box |
+| Utilization coverage | Which joint participant actions are represented? | bound point; exact corners; explicit points; finite interior search |
+| Control information | What is known when each controller acts? | issue-time; scenario-adaptive; declared local law; pointwise perfect recourse |
+| Exogenous uncertainty | Which network conditions share one allocation? | one snapshot; typed finite scenario set |
+| Allocation objective | Whose capacity or benefit is optimized? | sum, equal, weighted, max-min, rolling fairness |
+| Evidence | What justifies the reported claim? | local solve, replay, multistart, finite falsification search; never a current global certificate |
+
+These axes are independent. For example, exact utilization corners with
+pointwise perfect recourse are not equivalent to exact corners with one shared
+tap setting, and a held-out scenario evaluation is not a robust certificate.
 
 The runnable end-to-end example is
 `scripts/cases/doe_dsse_validation_demo.jl`:
@@ -30,13 +65,18 @@ is at most ``\bar p_i``. For import, the same positive quantity bounds
 withdrawal. These are two different operating studies:
 
 ```julia
-export = solve_operating_envelope(net, cps; direction=:export)
-import = solve_operating_envelope(net, cps; direction=:import)
+export_doe = solve_operating_envelope(net, cps; direction=:export)
+import_doe = solve_operating_envelope(net, cps; direction=:import)
 ```
 
 Do not infer an import envelope by negating an export result. In an LV feeder,
 the baseline P/Q, voltage profile, converter limits, and controls can make the
 two highly asymmetric.
+
+For a robust decoupled box, the intended statement is that every allowed joint
+participant utilization and every declared exogenous realization admits a
+feasible state under the declared control policy. This is a stronger contract
+than the generic field meaning of DOE and is not implied by solving one OPF.
 
 The input `net` must be a *snapshot*: topology, source conditions, DSSE-derived
 loads, DER availability, and network limits appropriate to one issuance
@@ -105,6 +145,14 @@ anything in `[0, envelope[i]]`, use corners for small studies or develop a
 screened/adaptive security set for larger ones. Even corners do not prove that a
 non-convex AC feasible set contains every interior point.
 
+[Liu and Braslavsky (2022)](https://doi.org/10.1109/ACCESS.2022.3203062)
+provide a concrete unbalanced-feeder counterexample: reducing one customer's
+export strictly inside an equal envelope can increase a voltage on another
+phase beyond its limit. The runnable [range-guarantee
+tutorial](doe_range_guarantees.md) isolates the same logical failure with a
+self-contained synthetic four-wire case; it is not presented as a reproduction
+of that feeder.
+
 ## 4. Treat uncertainty as a shared-allocation problem
 
 Forecast and model uncertainty should normally produce one conservative DOE per
@@ -123,6 +171,43 @@ sets can represent P/Q forecast error, source-voltage uncertainty, switch
 status, or credible feeder-parameter alternatives. If line construction is
 uncertain, materialized candidates from [`solve_inverse_carson`](@ref) are a
 natural source of network scenarios.
+
+The capacity allocation and the network-control information structure are
+separate decisions. The omitted-policy default retains the original pointwise
+perfect-recourse behavior for compatibility, but new studies should be
+explicit:
+
+```julia
+# Replicate an anticipative formulation or calculate an ideal-recourse bound.
+ideal = solve_operating_envelope(scenarios, cps;
+    security=:corners,
+    control_policy=PerfectRecourse())
+
+# Hold free tap/IBR setpoints across all represented contexts. Prescribed
+# Volt–VAr and fixed-power-factor equations still respond locally.
+operational = solve_operating_envelope(scenarios, cps;
+    security=:corners,
+    control_policy=IssuePlusLocalLaws())
+```
+
+Use `DOEControlRule` for a mixed timing model. For example, this permits one
+STATCOM reactive setpoint per forecast scenario but shares it across all of
+that scenario's participant-utilization points:
+
+```julia
+policy = PerfectRecourse(rules=[DOEControlRule(
+    component=:ibr, id="statcom17", quantity=:reactive_power,
+    stage=:scenario)])
+```
+
+The implemented stages are `:issue`, `:scenario`, `:local_law`, and
+`:context`. Transformer taps and IBR P/Q use stable public linkage handles.
+Free generator P/Q is detected but can currently remain only at `:context`,
+because linking generator currents would not preserve power as voltage changes;
+the operational preset therefore fails closed on it. The control audit records
+each control's stage, source, automatic law, context coverage, equality groups,
+and link count. This preserves `PerfectRecourse()` as a first-class published-
+work replication mode without silently presenting it as operationally causal.
 
 ### Pitfall: mixing probability and feasibility claims
 
@@ -162,6 +247,13 @@ frontier["efficient"].fairness_metrics[1]
 The metrics include total capacity, normalized allocations, curtailment
 fractions, and Jain's index. They describe the published allocation; they do
 not select a social-welfare objective on their own.
+
+Capacity is also not a sufficient proxy for delivered market value.
+[Attarha et al. (2024)](https://doi.org/10.1016/j.epsr.2024.110639) report a
+case in which a smaller bid-aware shaped envelope yields greater benefit than a
+capacity-oriented DOE comparator. That result motivates value-aware
+comparison; it does not establish that envelope size and value are generally
+anticorrelated.
 
 ### Pitfall: unnormalised fairness silently favours one population
 
@@ -225,7 +317,9 @@ Before an operational study is trusted, fix the published allocation and solve
 again at the intended utilization points:
 
 ```julia
-check = verify_operating_envelope(nets, cps, r; utilizations=:corners)
+check = verify_operating_envelope(nets, cps, r;
+    utilizations=:corners,
+    control_policy=IssuePlusLocalLaws())
 all(check.feasible)
 ```
 
@@ -256,6 +350,11 @@ For each research result, record:
 5. fairness objective, normalization, weights, and reported fairness metrics;
 6. nonlinear solver status, binding margins, and independent replay/validation;
 7. issuance interval, validity window, and fallback policy.
+
+Also record whether controllable network assets were fixed, governed by a local
+law, or independently redispatched in each scenario/utilization context. Store
+the selected `DOEControlPolicy` and the returned `control_audit`; do not infer
+the policy from a capacity value alone.
 
 With those choices stated, a DOE becomes reproducible and interpretable: not
 just an attractive number from an OPF, but a precisely scoped operational claim.

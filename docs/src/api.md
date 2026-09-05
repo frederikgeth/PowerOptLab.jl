@@ -115,18 +115,6 @@ InverseCarsonProfileInterval
 materialize_inverse_carson
 ```
 
-## Dynamic operating envelopes
-
-```@docs
-ConnectionPoint
-FairnessPolicy
-solve_operating_envelope
-compare_operating_envelope_policies
-verify_operating_envelope
-OperatingEnvelopeResult
-OperatingEnvelopeVerification
-```
-
 ## Bilevel distribution-network proof of concept
 
 ```@docs

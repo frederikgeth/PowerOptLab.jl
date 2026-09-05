@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="300" viewBox="0 0 960 300" role="img" aria-labelledby="title desc">
+  <title id="title">Evidence ladder for dynamic operating envelopes</title>
+  <desc id="desc">Five rising steps distinguish a feasible point, finite tests, falsification search, probabilistic evidence, and a robust certificate.</desc>
+  <rect width="960" height="300" fill="#ffffff"/>
+  <style>.title{font:600 19px sans-serif;fill:#172033}.head{font:600 15px sans-serif;fill:#172033}.text{font:12px sans-serif;fill:#44506a}.step{stroke:#fff;stroke-width:2}</style>
+  <text x="480" y="30" text-anchor="middle" class="title">Evidence strength changes the permitted claim</text>
+  <path d="M55 240 H220 V205 H385 V165 H550 V120 H715 V70 H905 V260 H55 Z" fill="#eef3f8" stroke="#526078" stroke-width="2"/>
+  <rect x="55" y="205" width="165" height="55" fill="#e7efff" class="step"/><text x="137" y="228" text-anchor="middle" class="head">Feasible point</text><text x="137" y="247" text-anchor="middle" class="text">one represented dispatch</text>
+  <rect x="220" y="165" width="165" height="95" fill="#dceeff" class="step"/><text x="302" y="190" text-anchor="middle" class="head">Finite tests</text><text x="302" y="209" text-anchor="middle" class="text">corners or samples</text>
+  <rect x="385" y="120" width="165" height="140" fill="#fff0c9" class="step"/><text x="467" y="148" text-anchor="middle" class="head">Search evidence</text><text x="467" y="167" text-anchor="middle" class="text">counterexample found or</text><text x="467" y="184" text-anchor="middle" class="text">budget exhausted</text>
+  <rect x="550" y="70" width="165" height="190" fill="#f2e7ff" class="step"/><text x="632" y="100" text-anchor="middle" class="head">Probabilistic</text><text x="632" y="119" text-anchor="middle" class="text">calibrated model and</text><text x="632" y="136" text-anchor="middle" class="text">held-out coverage</text>
+  <rect x="715" y="45" width="190" height="215" fill="#dff3e4" class="step"/><text x="810" y="78" text-anchor="middle" class="head">Robust certificate</text><text x="810" y="97" text-anchor="middle" class="text">complete declared set under</text><text x="810" y="114" text-anchor="middle" class="text">checkable assumptions</text>
+  <text x="480" y="286" text-anchor="middle" class="text">Only the final step permits “certified robust” without further qualification.</text>
+</svg>

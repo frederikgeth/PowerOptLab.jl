@@ -210,3 +210,23 @@ doe_unbalanced_feeder(; vneg_max=20.0) = parse_bmopf("""
      "terminal_map_from":["1","2","3","n"],"terminal_map_to":["1","2","3","n"],
      "linecode":"lc","length":1.0}}}
 """; from_string=true)
+
+# Same topology as `doe_unbalanced_feeder`, but the neutral is declared through
+# `terminal_conventions` under a non-"n" label. Resolving the neutral by the
+# `"n"` naming fallback would misalign the per-phase voltage limits and drop
+# the negative-sequence margin entirely on this case.
+doe_unbalanced_feeder_numeric_neutral(; vneg_max=20.0) = parse_bmopf("""
+{"terminal_conventions":{"phase":["1","2","3"],"neutral":["4"],"earth":[]},
+ "bus":{
+    "src":{"terminal_names":["1","2","3","4"],"perfectly_grounded_terminals":["4"]},
+    "b1":{"terminal_names":["1","2","3","4"],
+          "v_min":[200.0,200.0,200.0],"v_max":[260.0,260.0,260.0],
+          "vneg_max":$vneg_max}},
+ "voltage_source":{"vs":{"bus":"src","terminal_map":["1","2","3"],
+     "v_magnitude":[230.0,230.0,230.0],"v_angle":[0.0,-2.0943951024,2.0943951024]}},
+ "linecode":{"lc":{"R_series_1_1":0.4,"R_series_2_2":0.4,
+                       "R_series_3_3":0.4,"R_series_4_4":0.4}},
+ "line":{"l1":{"bus_from":"src","bus_to":"b1",
+     "terminal_map_from":["1","2","3","4"],"terminal_map_to":["1","2","3","4"],
+     "linecode":"lc","length":1.0}}}
+"""; from_string=true)

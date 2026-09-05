@@ -1,0 +1,85 @@
+# Dynamic operating envelopes API
+
+The public types and functions for defining, solving, verifying, and recording
+dynamic operating-envelope studies. See
+[Reproducible DOE recourse, verification, and search](@ref) for
+an end-to-end example and guidance on interpreting finite numerical evidence.
+The [problem specification](../problems/operating_envelope.md) defines the
+terminology, result units, missing-value semantics, and permitted claim levels;
+the [literature evidence register](../problems/doe_literature_evidence.md)
+records the scientific scope behind those distinctions.
+
+## Connections, fairness, and control recourse
+
+```@docs
+ConnectionPoint
+FairnessPolicy
+DOEScenario
+DOEScenarioSet
+DOEUncertaintySample
+DOEUncertaintySampleSet
+select_doe_scenarios
+DOEScenarioTimeSplit
+split_doe_scenarios_by_time
+DOEControlRegistration
+DOEControlRule
+DOEControlPolicy
+PerfectRecourse
+IssueFixedControls
+IssuePlusLocalLaws
+```
+
+## Study specification and evidence records
+
+```@docs
+DOEStudySpec
+DOEScenarioCalibrationAudit
+DOECovariateShiftResult
+DOEProbabilityObservation
+DOEProbabilityCalibrationResult
+doe_study_manifest
+doe_uncertainty_manifest
+doe_benchmark_rows
+doe_context_benchmark_rows
+OperatingEnvelopeResult
+OperatingEnvelopeVerification
+OperatingEnvelopeContextResult
+OperatingEnvelopeSearchResult
+DOEAdversarialSearchResult
+DOECounterexampleConfirmationResult
+DOECoverageResult
+DOECoverageCurveResult
+DOECoverageShiftResult
+DOEUncertaintyModelSensitivityResult
+AdversarialSearchStableOperatingEnvelopeResult
+SearchStableOperatingEnvelopeResult
+OperatingEnvelopeMultistartResult
+```
+
+## Solvers and verification
+
+```@docs
+audit_doe_scenario_calibration
+sample_doe_gaussian_uncertainty
+sample_doe_box_truncated_gaussian_uncertainty
+sample_doe_empirical_residual_bootstrap
+materialize_doe_scenarios
+test_doe_covariate_shift
+test_doe_time_series_covariate_shift
+doe_probability_observations
+evaluate_doe_probability_calibration
+solve_operating_envelope
+solve_operating_envelope_multistart
+compare_operating_envelope_policies
+verify_operating_envelope
+doe_dropout_utilizations
+search_operating_envelope_utilizations
+search_operating_envelope_adversarial
+confirm_operating_envelope_counterexample
+evaluate_operating_envelope_coverage
+evaluate_operating_envelope_coverage_curve
+compare_doe_coverage_shift
+compare_doe_uncertainty_models
+solve_adversarial_search_stable_operating_envelope
+solve_search_stable_operating_envelope
+```

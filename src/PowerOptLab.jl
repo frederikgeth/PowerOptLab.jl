@@ -88,6 +88,8 @@ using ForwardDiff
 using JuMP
 using Ipopt
 using LinearAlgebra
+using Random
+using SHA
 using SparseArrays
 
 # Shared validation and solver-result contracts.
@@ -165,9 +167,44 @@ export SequenceLineObservation, OverheadCarsonCandidate,
        materialize_inverse_carson
 
 # Dynamic operating envelopes
-export ConnectionPoint, FairnessPolicy, solve_operating_envelope,
-       verify_operating_envelope, compare_operating_envelope_policies,
-       OperatingEnvelopeResult, OperatingEnvelopeVerification
+export ConnectionPoint, FairnessPolicy, DOEScenario, DOEScenarioSet,
+       DOEUncertaintySample, DOEUncertaintySampleSet,
+       sample_doe_gaussian_uncertainty,
+       sample_doe_box_truncated_gaussian_uncertainty,
+       sample_doe_empirical_residual_bootstrap,
+       doe_uncertainty_manifest,
+       materialize_doe_scenarios,
+       select_doe_scenarios, DOEScenarioTimeSplit,
+       split_doe_scenarios_by_time, DOEScenarioCalibrationAudit,
+       audit_doe_scenario_calibration, DOECovariateShiftResult,
+       test_doe_covariate_shift, test_doe_time_series_covariate_shift,
+       DOEProbabilityObservation,
+       DOEProbabilityCalibrationResult, doe_probability_observations,
+       evaluate_doe_probability_calibration, DOEControlRegistration,
+       DOEControlRule, DOEControlPolicy,
+       PerfectRecourse, IssueFixedControls, IssuePlusLocalLaws,
+       DOEStudySpec, doe_study_manifest, doe_benchmark_rows,
+       doe_context_benchmark_rows,
+       solve_operating_envelope, solve_operating_envelope_multistart,
+       verify_operating_envelope, search_operating_envelope_utilizations,
+       search_operating_envelope_adversarial,
+       doe_dropout_utilizations,
+       confirm_operating_envelope_counterexample,
+       evaluate_operating_envelope_coverage,
+       evaluate_operating_envelope_coverage_curve,
+       compare_doe_coverage_shift,
+       compare_doe_uncertainty_models,
+       solve_adversarial_search_stable_operating_envelope,
+       solve_search_stable_operating_envelope,
+       compare_operating_envelope_policies,
+       OperatingEnvelopeResult, OperatingEnvelopeVerification,
+       OperatingEnvelopeContextResult, OperatingEnvelopeSearchResult,
+       DOEAdversarialSearchResult, DOECounterexampleConfirmationResult,
+       DOECoverageResult, DOECoverageCurveResult, DOECoverageShiftResult,
+       DOEUncertaintyModelSensitivityResult,
+       AdversarialSearchStableOperatingEnvelopeResult,
+       SearchStableOperatingEnvelopeResult,
+       OperatingEnvelopeMultistartResult
 
 # Post-OPF static voltage operability (first slice: native ybus load scope)
 export OperabilitySpec, OperabilityCheck, OperabilityModelError, OperabilityResult,

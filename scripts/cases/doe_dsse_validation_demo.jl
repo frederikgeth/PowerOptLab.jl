@@ -28,6 +28,23 @@ function _demo_net(; include_loads=true, include_ibrs=true)
     """; from_string=true)
 end
 
+function _demo_materialize_estimate(estimate, template)
+    # This fixture has one single-phase load per bus and zero pre-DOE DER P/Q.
+    # Consequently the estimated net injection identifies load demand directly.
+    # A real feeder with active DER needs a separate injection-disaggregation model.
+    for load in values(template["load"])
+        bus, terminal = load["bus"], first(load["terminal_map"])
+        for (kind, field) in ((:pinj, "p_nom"), (:qinj, "q_nom"))
+            row = only(r for r in estimate.residuals if
+                r.kind == kind && r.bus == bus && r.terminal == terminal)
+            isfinite(row.estimated) || error("missing estimated load injection")
+            load[field] = [-row.estimated]
+        end
+    end
+    net, _ = augment_case(template)
+    return net
+end
+
 function doe_validation_case()
     physics = _demo_net(include_loads=false, include_ibrs=false)
     operational = _demo_net()
@@ -47,14 +64,13 @@ function doe_validation_case()
     add_statcom!(statcom, "bus2"; s_max=5000.0)
     stat = statcom["ibr"]["statcom_bus2"]
     stat["p_min"] = [0.0]; stat["p_max"] = [0.0]
-    # Fix the demonstration control action so the independent PF has one
-    # reproducible STATCOM operating point. Real cases should replay/log the
-    # controller setpoint selected at DOE issuance.
-    stat["q_min"] = [-5000.0]; stat["q_max"] = [-5000.0]
+    # The runner must freeze the Q selected by DOE issuance in the separate PF.
+    stat["q_min"] = [-5000.0]; stat["q_max"] = [5000.0]
     statcom, _ = augment_case(statcom)
     return (physics_net=physics, operational_net=operational, truth_net=truth,
             with_statcom_net=statcom, measurements=measurements,
+            materialize_estimate=_demo_materialize_estimate,
             connection_points=[ConnectionPoint(id="pv1", bus="bus1", ibr_id="pv1", export_max=10e3),
                                ConnectionPoint(id="pv2", bus="bus2", ibr_id="pv2", export_max=10e3)],
-            doe_keywords=(security=:bound_point,))
+            doe_keywords=(security=:bound_point, control_policy=IssuePlusLocalLaws()))
 end

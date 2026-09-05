@@ -2,6 +2,16 @@
 
 > **Kind:** Problem specification · **Maturity:** research prototype · **Direction:** forward · **Temporal:** per-interval
 
+New readers should begin with [Dynamic operating envelopes in 15
+minutes](../tutorials/doe_getting_started.md), then return here for stable
+semantics and result-field definitions.
+
+For the stable-versus-planned implementation boundary, see the [DOE development
+roadmap](doe_development_roadmap.md). The claim hierarchy and detailed rationale
+are in the [scientific audit](doe_quantification_review.md); source-by-source
+boundaries are in [DOE literature: evidence and
+interpretation](doe_literature_evidence.md).
+
 [`solve_operating_envelope`](@ref) allocates an active-power import or export
 capacity to each participating connection while retaining the nonlinear,
 unbalanced four-wire network model and all operational limits declared in the
@@ -18,6 +28,31 @@ dispatchable:
 
 All capacities returned by this API are positive watts. `direction=:export`
 means injection into the network and `direction=:import` means withdrawal.
+
+## Terminology
+
+| Term | Meaning in PowerOptLab |
+|---|---|
+| Allocation | Capacity values selected by an optimization; not a guarantee by itself |
+| Operating point | One joint realization of participant powers, network conditions, states, and controls |
+| Utilization set | The participant fractions at which an advertised allocation is interpreted or tested |
+| Scenario | One declared realization of exogenous load, generation, source, topology, or network parameters |
+| Recourse | A free control decision allowed to depend on information revealed after issuance |
+| Local law | A declared causal controller equation, rather than a freely re-optimized setpoint |
+| Verification | A fixed-capacity evaluation at declared scenarios and utilization points |
+| Falsified | An admissible candidate point produced a repeated violation under the recorded numerical procedure |
+| Search-stable | No counterexample was found within a finite, recorded search budget |
+| Certificate | A mathematical argument covering the complete declared set under stated assumptions |
+
+The literature uses *DOE* for more than one object. A time-varying bound-point
+allocation, a finitely tested independent range, a certified decoupled box, a
+coupled P–Q operating region, and a market-shaped allocation must not inherit
+one another's claims merely because they share the same name. This API records
+geometry, tested set, recourse, uncertainty semantics, and solver class
+separately so it can represent and compare those formulations.
+
+![Information timeline for issue-time, scenario-adaptive, pointwise, and local
+controls](../assets/doe/information_timeline.svg)
 
 ## Security semantics
 
@@ -37,8 +72,180 @@ status are recorded in `result.diagnostics`.
 
 Diagnostics also report worst tested voltage, ampacity and negative-sequence
 margins, their network locations, and constraints within reporting tolerance of
-binding. For `security=:corners`, these are aggregated across every scenario and
-corner rather than only the displayed representative snapshot.
+binding. `minimum_margins` retains physical units; the corresponding
+`minimum_normalized_margins` divides each margin by its declared limit so points
+can be ranked within and across these constraint families. For
+`security=:corners`, the margins are aggregated across every scenario and corner
+rather than only the displayed representative snapshot.
+
+![Evidence ladder from a feasible operating point to a complete-set
+certificate](../assets/doe/evidence_ladder.svg)
+
+The machine-readable claim metadata includes:
+
+- `global_certificate=false` for every current solve;
+- `solver_class=:local_nonlinear`;
+- `uncertainty_semantics`, distinguishing one declared snapshot from a finite
+  scenario set;
+- `control_policy`, its deterministic `control_policy_signature`,
+  `control_policy_source`, `control_default_stage`, and a
+  per-control `control_audit` containing native classification, selected stage,
+  automatic law, equality groups, and link count;
+- `control_nonanticipativity`, `nonanticipativity_enforced`, and
+  `ideal_recourse_used`;
+- `prescribed_ibr_controls=:retained`; and
+- `security_scope=:explicit_utilization_points` for custom verification sets.
+
+### Result and missing-value semantics
+
+| Field | Unit or type | Interpretation |
+|---|---|---|
+| `envelope[id][t]` | W, positive magnitude | Published one-sided capacity for participant `id`; `NaN` if interval `t` is not publishable |
+| `total_capacity[t]` | W | Sum of published participant capacities; `NaN` follows an unpublished interval |
+| `termination_status[t]` | solver status string | Optimizer termination evidence, not a physical guarantee |
+| `diagnostics[t]["feasible"]` | `Bool` | A usable local primal point was found for the represented joint model |
+| `diagnostics[t]["security_scope"]` | `Symbol` | Exact set of utilization points represented during allocation |
+| `diagnostics[t]["global_certificate"]` | `Bool` | Always `false` for current nonlinear DOE solvers |
+| `diagnostics[t]["minimum_margins"]` | physical units by constraint family | Smallest recomputed margin among currently instrumented voltage, current, and unbalance families; absence is not an infinite margin |
+| `diagnostics[t]["control_audit"]` | records | Resolved shared, scenario-adaptive, local-law, and context-adaptive controls |
+| `verification.context_results[t]` | context records | Per-scenario and per-utilization status, margins, replay, and candidate evidence |
+
+Missing diagnostics mean that the quantity was not available or not
+instrumented; they do not mean zero violation. An infeasible solver iterate is
+never converted into an envelope value.
+
+Prescribed connection-bound IBR control laws remain enforced, but other
+controllable-asset recourse can make a material difference. The legacy default
+is pointwise [`PerfectRecourse`](@ref). Pass it explicitly when reproducing an
+anticipative published formulation or calculating an ideal-recourse benchmark;
+use [`IssuePlusLocalLaws`](@ref) when free supported setpoints must be shared
+across the represented contexts. The limitation is an unstated mismatch between
+the selected information structure and the operational claim, not the existence
+of more than one legitimate research formulation.
+
+## Control-recourse policies
+
+```julia
+ideal = solve_operating_envelope(scenario_nets, cps;
+    security=:corners, control_policy=PerfectRecourse())
+
+operational = solve_operating_envelope(scenario_nets, cps;
+    security=:corners, control_policy=IssuePlusLocalLaws())
+
+mixed = DOEControlPolicy(
+    default_stage=:issue,
+    rules=[DOEControlRule(component=:ibr, id="statcom_lv17",
+                           quantity=:reactive_power, stage=:scenario)],
+    on_unclassified=:error)
+```
+
+`:issue` creates one value per interval, `:scenario` creates one value per
+scenario and shares it across utilization points, `:local_law` denotes an
+implemented automatic equation, and `:context` permits independent pointwise
+recourse. Native transformer taps and IBR active/reactive power can be linked.
+Free generator P/Q is audited but cannot yet be linked safely, so fail-closed
+policies reject it unless an explicit `:context` rule is supplied.
+
+Research extensions can participate through [`DOEControlRegistration`](@ref)
+and `context_hook!`. A registration names a stable BMOPFTools `OpfModelKey`,
+canonical unit, native classification, automatic law, scale, and provenance
+metadata. This keeps policy rules independent of JuMP variable names.
+
+## Context evidence and fixed-control replay
+
+[`verify_operating_envelope`](@ref) returns `context_results[t]`, containing one
+[`OperatingEnvelopeContextResult`](@ref) per scenario and utilization point. A
+feasible joint policy solve is independently repeated one context at a time with
+its optimized free controls fixed. The replay records its status, completeness,
+snapshot, margins, and maximum complex-voltage difference from the joint solve.
+
+Verification inherits direction, control policy, per-unit base, smoothing and
+registered context hook from an `OperatingEnvelopeResult`, unless explicitly
+overridden. Its recorded `:issue` and `:scenario` control values are fixed
+at their canonical values in the new utilization contexts. Scenario controls
+match stable scenario IDs and network hashes, allowing reorder/subset replay.
+Untyped inputs require unique matching hashes; ambiguous repeats require typed
+IDs. Changed scenario content is rejected unless `replay_control_stages=(:issue,)`
+is selected to permit new scenario recourse, as held-out coverage does by default.
+Connection IDs, buses, phase/neutral declarations and IBR bindings must match
+issuance. Diagnostics report
+`issued_control_replay_source` and `issued_control_replay_count`. Passing only a
+capacity dictionary cannot reproduce issued controls and is labelled
+`:capacity_values_only`; set `replay_issued_controls=false` only for an explicit
+re-optimization experiment.
+
+When a joint model fails, contexts are diagnosed separately. If they are all
+individually feasible, diagnostics use
+`:shared_control_incompatibility_or_joint_nlp_failure`; they do not invent a
+single offending context. Individual witnesses count as passes only when no
+unfixed shared control couples them to other contexts. A failed or incomplete
+requested replay is unresolved, even if the original joint solve succeeded.
+
+| Numerical evidence | Interpretation |
+|---|---|
+| Published feasible witness | Local feasibility of the represented model |
+| `INFEASIBLE` / `LOCALLY_INFEASIBLE` on one context | Candidate local infeasibility; no physical impossibility certificate |
+| Time/iteration limit, interruption, invalid model, numerical error | Unresolved, regardless of the last iterate |
+| Individual witnesses without a common required policy | Unresolved policy compatibility |
+| Missing fixed-control replay handles or failed requested replay | Unresolved replay |
+
+`context.feasible` preserves the raw solve result. Use the context diagnostic
+`verification_verdict` (`:passed`, `:candidate_violation`, `:unresolved`) for
+usable verification evidence. Interval `feasible=false` means verification did
+not establish a pass, not that physical infeasibility was proved. Coverage and
+search use the same effective verdict. Unresolved cases enter conservative
+coverage rates and bounds as adverse outcomes; repeated numerical failures
+remain inconclusive under multistart confirmation.
+
+## Finite interior search and multistart
+
+[`search_operating_envelope_utilizations`](@ref) verifies a deterministic Halton
+set inside the advertised box. Its outcomes are deliberately limited to
+`:search_stable`, `:candidate_counterexample`, and `:inconclusive`.
+[`search_operating_envelope_adversarial`](@ref) adds deterministic coordinate
+refinement around the points with the smallest normalized constraint headroom.
+It is a more targeted falsification heuristic, but it still searches only a
+finite set and does not prove that its worst point is globally worst.
+[`confirm_operating_envelope_counterexample`](@ref) repeats a candidate from
+multiple deterministic starts and distinguishes repeated failure, successful
+reproduction of feasibility, and inconclusive evidence.
+[`solve_adversarial_search_stable_operating_envelope`](@ref) alternates
+allocation and adaptive search, replays the allocation's issued controls during
+each search, and retains every intermediate allocation.
+[`solve_search_stable_operating_envelope`](@ref) adds the screened set to a
+counterexample-guided allocation loop. Neither API reports a global certificate.
+
+[`solve_operating_envelope_multistart`](@ref) perturbs registered-variable start
+values deterministically, retains every run, and reports capacity spread and
+independently evaluated JuMP primal-constraint residuals. Selection follows the
+requested fairness objective, not capacity alone: intervals are compared in
+chronological order, with primary then secondary objectives for max-min
+policies. Primary differences within `max_min_tolerance` are treated as ties.
+The returned diagnostics expose the attained objective keys and tolerances.
+
+## Reproducibility manifest
+
+[`DOEStudySpec`](@ref) hashes every interval/scenario network and the connection
+declarations with SHA-256, then records coverage, control/fairness policies,
+solver options, seeds, extension metadata, and software versions. Store
+[`doe_study_manifest`](@ref) with every published result.
+
+## Migration note
+
+At allocation, omitting `control_policy` selects pointwise `PerfectRecourse()`
+and records `control_policy_source=:legacy_default`. At verification, rich
+results inherit their issued policy (`:issued_result`); bare capacity dictionaries
+retain the default and cannot reproduce issued controls. Explicit policy changes
+are re-optimization experiments and are labelled in `control_reoptimization`.
+New research allocations should name the policy explicitly.
+
+An IBR may bind only one connection point, and the connection's phase/neutral
+order must match the device terminal map. Legacy ports are now restricted to one
+phase: the old multiphase aggregate-Q equality allowed unrequested phase P/Q
+redistribution. Migrate to separate independently controlled phase ports or an
+IBR whose topology represents the intended coupled device. The original four-argument
+`OperatingEnvelopeVerification` constructor remains available; new verification
+results additionally populate `context_results`.
 
 If an interval has no feasible primal point, its capacities and total are `NaN`.
 The package never publishes values from an infeasible solver iterate.
@@ -89,6 +296,73 @@ Scenarios may represent demand/PV forecast error, source-voltage uncertainty,
 topology alternatives, or candidate impedance models. In particular, candidates
 or profile intervals produced by [`solve_inverse_carson`](@ref) can be
 materialized into alternative network scenarios.
+
+Use [`DOEScenario`](@ref) and [`DOEScenarioSet`](@ref) when the ensemble is part
+of a scientific experiment. They record stable IDs, train/calibration/
+validation/test/stress roles, optional relative weights, sources, construction
+methods, seeds, timestamps, and metadata. The solver includes this provenance in
+interval diagnostics, while [`DOEStudySpec`](@ref) includes it in the study
+identity.
+
+[`DOEUncertaintySample`](@ref) and [`DOEUncertaintySampleSet`](@ref) separate
+uncertainty realizations from network construction. A reproducible Gaussian
+sampler accepts positive-semidefinite covariance and records rank, seed,
+declared/empirical moments, and unbounded-support limitations.
+[`sample_doe_box_truncated_gaussian_uncertainty`](@ref) provides an explicit
+physical-support option: it samples the Gaussian conditional on componentwise
+bounds by rejection, never clips accepted values, and requires a finite draw
+budget whose stopping and acceptance diagnostics are recorded. The declared
+Gaussian and box remain modelling assumptions rather than validated truths.
+[`sample_doe_empirical_residual_bootstrap`](@ref) resamples a versioned residual
+library either row-wise or in contiguous moving blocks. It hashes the complete
+library, distinguishes source from target timestamps, and propagates block,
+source-row, and circular-wrap provenance. Flattened block members are not
+labelled independent, and the implementation does not establish stationarity,
+block-length adequacy, residual calibration, or bootstrap validity.
+[`materialize_doe_scenarios`](@ref) deep-copies a base network per sample and
+requires a versioned materializer identifier, propagating sample and network
+provenance without prescribing a DSSE, impedance, topology, or forecast schema.
+
+[`evaluate_operating_envelope_coverage`](@ref) selects declared roles and
+reports per-scenario outcomes plus empirical context, scenario, weighted, and
+conservative candidate-violation rates. A one-sided Hoeffding upper bound is
+returned only when the caller explicitly sets `iid_assumption=true`; weights do
+not create an i.i.d. claim and distribution shift remains unassessed.
+
+[`split_doe_scenarios_by_time`](@ref) constructs a one-interval blocked
+calibration/test split with an optional exclusion gap. It prevents timestamp
+overlap and can reject, exclude, or explicitly retain metadata-group overlap.
+[`audit_doe_scenario_calibration`](@ref) reports ID, exact-network, time, group,
+provenance, and effective-sample-size diagnostics under caller-selected
+separation requirements. It does not infer independence or probability
+calibration. [`evaluate_operating_envelope_coverage_curve`](@ref) repeats
+held-out evaluation over a finite capacity-scale grid while retaining recorded
+issue-time controls. [`compare_doe_coverage_shift`](@ref) describes performance
+deltas between two evaluated ensembles without labelling them as statistical
+evidence that their generating distributions differ.
+[`compare_doe_uncertainty_models`](@ref) applies one issued envelope and one
+evaluation declaration to multiple labelled scenario sets. It returns long-form
+coverage curves and pairwise deltas, classifying comparisons as paired,
+partially paired, or unpaired from explicit sample identities, timestamps,
+scenario IDs, or a caller-selected metadata key. Pairing adds finite-sample
+discordance evidence; it does not establish a causal model effect or verify
+that the evaluation sets were independent of capacity selection.
+[`test_doe_covariate_shift`](@ref) adds pooled-scale multivariate energy
+distance and per-feature effects for explicitly named numeric metadata. Its
+permutation p-value is disabled unless the caller asserts scenario- or
+group-level exchangeability, and its claim remains limited to those covariates.
+[`test_doe_time_series_covariate_shift`](@ref) provides a narrower temporal
+design: a contiguous reference window is circularly shifted over a regularly
+sampled ordered series. Inference requires an explicit circular-shift-invariance
+assertion, which is stronger than ordinary stationarity; seasonality, trends,
+interventions, and the artificial wraparound remain caller concerns.
+[`evaluate_doe_probability_calibration`](@ref) evaluates separately issued
+violation-probability forecasts using reliability bins, proper scores,
+calibration error, and a Brier decomposition for bin-mean forecasts with an
+explicit remainder relating it to the original forecast score. Its coverage adapter keeps
+unresolved solves missing and ignores scenario weights unless explicitly
+requested. Weighted Hoeffding intervals require a separate observation-
+independence assertion.
 
 ## PV and batteries with mandatory Q-V control
 
@@ -191,6 +465,14 @@ prioritises the least-served participant before maximizing the remaining
 weighted allocation. It is a rolling policy—not a horizon-wide optimiser—and
 therefore does not assume perfect future forecasts.
 
+History stores **unweighted** accumulated normalized service,
+``H_i = \sum_t \Delta t\,c_{it}/r_i``. The next primary objective is
+``\max\min_i (H_i + \Delta t\,c_i/r_i)/w_i``: entitlement weights divide
+both past and current service. With capacity normalization, history has units
+of hours; with a 1 W reference it is numerically energy in Wh divided by 1 W.
+Carry the returned `cumulative_normalized` history forward without dividing it
+by weights again. Keep the normalization references consistent across calls.
+
 ```julia
 using Dates
 
@@ -237,12 +519,15 @@ constraints already present in the BMOPFTools case, including:
 
 The tests include voltage-limited, thermally limited, negative-sequence-limited,
 import, multi-scenario, prescribed-Q-V and STATCOM-assisted examples. They also
-cover invalid inputs and infeasible baseline/corner cases.
+cover invalid inputs and infeasible baseline/corner cases. The independent
+[analytic reference suite](../tutorials/doe_analytic_reference.md) checks closed-form
+phase voltages, import/export limits, negative sequence, and exact affine box
+containment. The marked tutorials execute their actual Markdown code in CI.
 
 ## DSSE-to-DOE validation runner
 
 The repository includes `scripts/validate_doe_from_dsse.jl` for feeder studies
-that are too expensive or data-dependent for the unit-test suite. It keeps three
+with an executable synthetic case included in the unit-test suite. It keeps three
 questions distinct: whether DSSE reconstructs the observed state, whether the
 DOE is feasible under its own nonlinear model, and whether a separately fixed
 AC power flow reproduces the issued upper-bound point.
@@ -260,27 +545,54 @@ The returned named tuple must contain:
   controllable network assets;
 - `measurements`: the DSSE `Measurement` vector;
 - `connection_points`: DOE connection points bound to existing, single-phase
-  IBRs (`ibr_id` is required for the independent power-flow check).
+  IBRs (`ibr_id` is required for the independent power-flow check);
+- `materialize_estimate(estimate, operational_template)`: an explicit adapter
+  returning a network populated from the DSSE result. The runner passes a deep
+  copy of the operational template. Apply it to both base and STATCOM templates.
 
 It may also provide `truth_net` (the measurement-generating operational state),
 `with_statcom_net` (the otherwise-identical STATCOM case), and `doe_keywords`
 (a `NamedTuple` forwarded to `solve_operating_envelope`). The runner reports
 DSSE voltage error against the truth power flow, DOE capacity, DOE verification,
 the maximum voltage difference between DOE and a separate fixed-setpoint
-`solve_pf`, and STATCOM capacity gain where supplied. It deliberately does not
-enter the unit suite: use it for real feeder exports, a representative time
-series, and solver/runtime logging. For a controllable STATCOM or other flexible
-asset, record and replay the controller setpoint selected at issuance; a plain
-power flow may otherwise select another feasible reactive dispatch, which is an
-operational-policy difference rather than a DOE-model comparison.
+`solve_pf`, and STATCOM capacity gain where supplied. Customer active power uses
+the issued direction. Free IBR P/Q is fixed to the recorded solution; constant
+power-factor laws remain in force. The pinned PF engine strips `s_max`, which
+changes rating-normalized droop bases. This adapter therefore rejects Volt-VAr
+and Volt-Watt profiles explicitly; use the main DOE verifier to replay those
+laws faithfully. Unsupported free controls (including taps and custom
+extensions), custom smoothing, or custom context hooks cause an explicit error.
+The pinned separate-PF API cannot faithfully carry those settings yet.
+
+The runner requires convergence, a feasible primal witness, complete finite complex-voltage comparisons and a
+1 mV DOE/PF agreement tolerance. It is an independent build of the same engine's
+power-flow equations, not an independent software oracle or a range certificate.
+The synthetic adapter uses estimated net P/Q as demand only because its
+pre-DOE DER dispatch is known to be zero and each bus has one load. General
+feeders need explicit load/DER disaggregation; voltage estimates alone do not
+identify individual device demand.
 
 ## Current limitations
 
 - Ipopt returns local nonlinear solutions; diagnostics never imply global
   optimality or global robust feasibility.
 - Exact corner enumeration scales exponentially.
+- Control discovery currently covers native free transformer taps, IBR P/Q,
+  and explicit generator P/Q bounds. Generator P/Q lacks a stable power handle
+  for non-anticipativity. Custom extensions can register semantic controls, but
+  undeclared extension variables cannot yet be distinguished automatically from
+  physical state variables.
+- A finite scenario set has no probability or confidence meaning. Scenario
+  provenance, calibration, weights, and held-out coverage are caller concerns.
+- Verification returns an interval verdict plus structured per-context evidence,
+  but a proven infeasibility certificate and normalized violation-maximization
+  problem remain future work.
+- The current object is a one-sided active-power box. It does not jointly issue
+  lower/upper import-export limits or a coupled P-Q flexibility set.
 - Rolling fairness is causal rather than globally horizon-optimal; temporal
   storage scheduling and forecast co-optimisation remain later work.
+- Diagnostic margin summaries do not yet enumerate every inherited network and
+  device constraint family.
 - The independent DSSE validation runner presently fixes single-phase IBR
   active-power setpoints. Multi-phase dispatch replay should preserve the DOE's
   per-phase allocation before being treated as an independent validation.

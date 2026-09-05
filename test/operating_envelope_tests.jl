@@ -1,5 +1,6 @@
-using BMOPFTools: add_statcom!
+using BMOPFTools: OpfModelKey, add_statcom!, opf_model, register_opf_object!
 using Dates
+using JuMP
 
 @testset "Operating envelope: equal allocation is uniform, voltage-limited, load-dependent" begin
     cps = [ConnectionPoint(id="der1", bus="bus1", export_max=10e3),
@@ -13,6 +14,9 @@ using Dates
     @test solve_status(res).publishable
     @test solve_status(res).optimal
     @test solve_diagnostics(res).published_count == 2
+    @test all(diag["primal_residual_available"] for diag in res.diagnostics)
+    @test all(diag["maximum_primal_constraint_violation"] < 1e-5
+              for diag in res.diagnostics)
 
     for t in 1:2
         e1 = res.envelope["der1"][t]; e2 = res.envelope["der2"][t]
@@ -28,6 +32,289 @@ using Dates
     # Dynamic response: the high-load interval admits a larger envelope.
     @test res.envelope["der1"][2] > res.envelope["der1"][1] + 100.0
     @test res.total_export[2] > res.total_export[1]
+end
+
+@testset "Operating envelope: uncertainty scenario construction" begin
+    parameter_names = ["p1_W", "p2_W"]
+    declared_mean = [4000.0, 5000.0]
+    declared_covariance = [250000.0 100000.0; 100000.0 360000.0]
+    timestamps = [DateTime(2026, 4, index) for index in 1:6]
+    samples = sample_doe_gaussian_uncertainty(
+        declared_mean, declared_covariance;
+        parameter_names=parameter_names,
+        count=6, seed=44, timestamps=timestamps,
+        metadata=Dict("covariance_source" => "synthetic fixture"))
+    repeated_samples = sample_doe_gaussian_uncertainty(
+        declared_mean, declared_covariance;
+        parameter_names=parameter_names,
+        count=6, seed=44, timestamps=timestamps,
+        metadata=Dict("covariance_source" => "synthetic fixture"))
+    @test samples.sample_set_id == repeated_samples.sample_set_id
+    @test [sample.parameters for sample in samples.samples] ==
+          [sample.parameters for sample in repeated_samples.samples]
+    @test samples.parameter_names == parameter_names
+    @test samples.generation_method == :multivariate_gaussian
+    @test samples.diagnostics["numerical_rank"] == 2
+    @test !samples.diagnostics["distribution_model_validated"]
+    @test !samples.diagnostics["physical_support_constraints_enforced"]
+    sample_manifest = doe_uncertainty_manifest(samples)
+    @test sample_manifest["sample_set_id"] == samples.sample_set_id
+    @test length(sample_manifest["samples"]) == 6
+
+    base_network = doe_feeder(p1=1000.0, p2=1000.0)
+    materializer = function(network, sample)
+        network["load"]["d1"]["p_nom"][1] = sample.parameters["p1_W"]
+        network["load"]["d2"]["p_nom"][1] = sample.parameters["p2_W"]
+        sample.metadata["callback_mutation"] = true
+        return nothing
+    end
+    scenarios = materialize_doe_scenarios(
+        base_network, samples, materializer;
+        dataset_id="gaussian-load-scenarios",
+        materializer_id="test-load-materializer-v1",
+        role=:calibration,
+        source="synthetic Gaussian fixture")
+    @test length(scenarios.intervals[1]) == 6
+    @test all(scenario.role == :calibration
+              for scenario in scenarios.intervals[1])
+    @test base_network["load"]["d1"]["p_nom"][1] == 1000.0
+    @test scenarios.intervals[1][1].network["load"]["d1"]["p_nom"][1] ==
+          samples.samples[1].parameters["p1_W"]
+    @test !haskey(samples.samples[1].metadata, "callback_mutation")
+    @test scenarios.intervals[1][1].metadata["uncertainty_sample_set_id"] ==
+          samples.sample_set_id
+    @test scenarios.metadata["base_network_deepcopied"]
+    @test scenarios.metadata["materializer_id"] ==
+          "test-load-materializer-v1"
+    cps = [ConnectionPoint(id="d1", bus="bus1", export_max=10e3),
+           ConnectionPoint(id="d2", bus="bus2", export_max=10e3)]
+    scenario_spec = DOEStudySpec(scenarios, cps)
+    @test scenario_spec.scenario_set_metadata["metadata"][
+        "uncertainty_sample_set_id"] == samples.sample_set_id
+
+    singular_samples = sample_doe_gaussian_uncertainty(
+        [0.0, 0.0], [1.0 1.0; 1.0 1.0];
+        parameter_names=("x", "y"), count=3, seed=45)
+    @test singular_samples.diagnostics["numerical_rank"] == 1
+
+    truncated_timestamps = [DateTime(2026, 5, index) for index in 1:6]
+    truncated_samples = sample_doe_box_truncated_gaussian_uncertainty(
+        [0.0, 0.0], [1.0 0.25; 0.25 1.0];
+        parameter_names=("x", "y"),
+        lower=[0.0, -Inf], upper=[Inf, 0.0],
+        count=6, seed=46, draw_budget=200,
+        timestamps=truncated_timestamps)
+    repeated_truncated = sample_doe_box_truncated_gaussian_uncertainty(
+        [0.0, 0.0], [1.0 0.25; 0.25 1.0];
+        parameter_names=("x", "y"),
+        lower=[0.0, -Inf], upper=[Inf, 0.0],
+        count=6, seed=46, draw_budget=200,
+        timestamps=truncated_timestamps)
+    @test truncated_samples.sample_set_id == repeated_truncated.sample_set_id
+    @test truncated_samples.generation_method ==
+          :box_truncated_multivariate_gaussian
+    @test all(sample.parameters["x"] >= 0.0 &&
+              sample.parameters["y"] <= 0.0
+              for sample in truncated_samples.samples)
+    @test [sample.timestamp for sample in truncated_samples.samples] ==
+          truncated_timestamps
+    @test truncated_samples.metadata["distribution"] ==
+          :box_truncated_multivariate_normal
+    @test truncated_samples.diagnostics["accepted_count"] == 6
+    @test truncated_samples.diagnostics["proposals_generated"] == 200
+    @test 6 <= truncated_samples.diagnostics["draws_attempted"] <= 200
+    @test truncated_samples.diagnostics["empirical_acceptance_rate"] ==
+          6 / truncated_samples.diagnostics["draws_attempted"]
+    @test truncated_samples.diagnostics[
+        "physical_support_constraints_enforced"]
+    @test truncated_samples.diagnostics[
+        "support_constraints_declared_by_caller"]
+    @test !truncated_samples.diagnostics["support_model_validated"]
+    @test !truncated_samples.diagnostics[
+        "accepted_draws_clipped_or_projected"]
+    @test truncated_samples.diagnostics[
+        "exact_conditional_draws_given_declared_model"]
+
+    residual_library = [
+        -200.0 100.0
+        -100.0 0.0
+        0.0 -100.0
+        100.0 0.0
+        200.0 100.0
+    ]
+    residual_source_times = [DateTime(2026, 6, day) for day in 1:5]
+    residual_target_times = [DateTime(2026, 7, day) for day in 1:6]
+    residual_samples = sample_doe_empirical_residual_bootstrap(
+        residual_library;
+        parameter_names=("p1_W", "p2_W"),
+        block_count=2, block_length=3, seed=47,
+        center=[4000.0, 5000.0],
+        source_timestamps=residual_source_times,
+        timestamps=residual_target_times,
+        require_regular_spacing=true,
+        metadata=Dict("residual_source" => "synthetic DSSE fixture"))
+    repeated_residual_samples = sample_doe_empirical_residual_bootstrap(
+        residual_library;
+        parameter_names=("p1_W", "p2_W"),
+        block_count=2, block_length=3, seed=47,
+        center=[4000.0, 5000.0],
+        source_timestamps=residual_source_times,
+        timestamps=residual_target_times,
+        require_regular_spacing=true,
+        metadata=Dict("residual_source" => "synthetic DSSE fixture"))
+    @test residual_samples.sample_set_id ==
+          repeated_residual_samples.sample_set_id
+    @test residual_samples.generation_method ==
+          :empirical_residual_bootstrap
+    @test residual_samples.diagnostics["sampling_method"] ==
+          :moving_block_residual_bootstrap
+    @test residual_samples.metadata["require_regular_spacing"]
+    @test residual_samples.diagnostics["sampled_block_start_indices"] == [1, 3]
+    @test [sample.metadata["source_index"]
+           for sample in residual_samples.samples] == [1, 2, 3, 3, 4, 5]
+    @test [sample.metadata["bootstrap_block_id"]
+           for sample in residual_samples.samples] ==
+          ["block-1", "block-1", "block-1",
+           "block-2", "block-2", "block-2"]
+    @test [sample.timestamp for sample in residual_samples.samples] ==
+          residual_target_times
+    @test residual_samples.samples[1].metadata["source_timestamp"] ==
+          residual_source_times[1]
+    @test residual_samples.samples[1].parameters["p1_W"] == 3800.0
+    @test residual_samples.samples[1].parameters["p2_W"] == 5100.0
+    @test residual_samples.diagnostics["source_regular_spacing"]
+    @test residual_samples.diagnostics["source_row_order_semantics"] ==
+          :verified_by_strict_timestamps
+    @test residual_samples.diagnostics[
+        "within_block_row_order_preserved"]
+    @test !residual_samples.diagnostics["block_members_independent"]
+    @test !residual_samples.diagnostics["stationarity_assumption_asserted"]
+    @test !residual_samples.diagnostics[
+        "bootstrap_block_independence_established"]
+    @test !residual_samples.diagnostics["bootstrap_validity_established"]
+
+    changed_residual_library = copy(residual_library)
+    changed_residual_library[5, 1] = 999.0
+    changed_residual_samples = sample_doe_empirical_residual_bootstrap(
+        changed_residual_library;
+        parameter_names=("p1_W", "p2_W"),
+        block_count=2, block_length=3, seed=47,
+        center=[4000.0, 5000.0],
+        source_timestamps=residual_source_times,
+        timestamps=residual_target_times,
+        require_regular_spacing=true,
+        metadata=Dict("residual_source" => "synthetic DSSE fixture"))
+    # The draw depends on the seed alone, never on library content; the
+    # recorded identity depends on both. Comparing the drawn source indices
+    # states that invariant directly, rather than relying on the seed happening
+    # to miss the mutated row.
+    @test [sample.metadata["source_index"] for sample in residual_samples.samples] ==
+          [sample.metadata["source_index"]
+           for sample in changed_residual_samples.samples]
+    @test [sample.parameters for sample in residual_samples.samples] !=
+          [sample.parameters for sample in changed_residual_samples.samples]
+    @test residual_samples.metadata["residual_library_id"] !=
+          changed_residual_samples.metadata["residual_library_id"]
+    @test residual_samples.sample_set_id !=
+          changed_residual_samples.sample_set_id
+
+    circular_residual_samples = sample_doe_empirical_residual_bootstrap(
+        residual_library;
+        parameter_names=("p1_W", "p2_W"),
+        block_count=4, block_length=3, seed=47, circular=true,
+        source_timestamps=residual_source_times)
+    @test circular_residual_samples.diagnostics["sampling_method"] ==
+          :circular_moving_block_residual_bootstrap
+    @test circular_residual_samples.diagnostics[
+        "sampled_block_start_indices"] == [1, 2, 5, 1]
+    @test circular_residual_samples.diagnostics["circular_wrap_count"] == 2
+    @test count(sample -> sample.metadata["circular_wrap"],
+                circular_residual_samples.samples) == 2
+
+    iid_residual_samples = sample_doe_empirical_residual_bootstrap(
+        residual_library;
+        parameter_names=("p1_W", "p2_W"),
+        block_count=4, seed=48)
+    @test iid_residual_samples.diagnostics["sampling_method"] ==
+          :iid_empirical_residual_bootstrap
+    @test iid_residual_samples.diagnostics["block_members_independent"]
+
+    residual_scenarios = materialize_doe_scenarios(
+        base_network, residual_samples,
+        (network, sample) -> begin
+            network["load"]["d1"]["p_nom"][1] =
+                sample.parameters["p1_W"]
+            network["load"]["d2"]["p_nom"][1] =
+                sample.parameters["p2_W"]
+            nothing
+        end;
+        dataset_id="residual-bootstrap-scenarios",
+        materializer_id="test-residual-load-materializer-v1",
+        role=:test)
+    @test residual_scenarios.intervals[1][4].metadata[
+        "bootstrap_block_id"] == "block-2"
+    @test residual_scenarios.metadata["uncertainty_diagnostics"][
+        "block_length"] == 3
+
+    @test_throws ArgumentError sample_doe_gaussian_uncertainty(
+        [0.0, 0.0], [1.0 2.0; 2.0 1.0];
+        parameter_names=("x", "y"), count=3, seed=45)
+    @test_throws ArgumentError sample_doe_gaussian_uncertainty(
+        [0.0, 0.0], [1.0 0.1; 0.2 1.0];
+        parameter_names=("x", "y"), count=3, seed=45)
+    @test_throws DimensionMismatch sample_doe_gaussian_uncertainty(
+        [0.0], [1.0 0.0; 0.0 1.0];
+        parameter_names=("x",), count=3, seed=45)
+    @test_throws ArgumentError sample_doe_box_truncated_gaussian_uncertainty(
+        [0.0], reshape([1.0], 1, 1);
+        parameter_names=("x",), lower=[0.0], upper=[1.0],
+        count=5, seed=45, draw_budget=4)
+    @test_throws ArgumentError sample_doe_box_truncated_gaussian_uncertainty(
+        [0.0], reshape([1.0], 1, 1);
+        parameter_names=("x",), lower=[0.0], upper=[0.0],
+        count=1, seed=45, draw_budget=5)
+    @test_throws ArgumentError sample_doe_box_truncated_gaussian_uncertainty(
+        [0.0], reshape([1.0], 1, 1);
+        parameter_names=("x",), lower=[100.0], upper=[101.0],
+        count=2, seed=45, draw_budget=5)
+    @test_throws DimensionMismatch sample_doe_box_truncated_gaussian_uncertainty(
+        [0.0], reshape([1.0], 1, 1);
+        parameter_names=("x",), lower=[0.0], upper=[1.0],
+        count=2, seed=45, draw_budget=5,
+        timestamps=[DateTime(2026, 1, 1)])
+    @test_throws DimensionMismatch sample_doe_empirical_residual_bootstrap(
+        residual_library; parameter_names=("x",), block_count=1, seed=47)
+    @test_throws ArgumentError sample_doe_empirical_residual_bootstrap(
+        residual_library; parameter_names=("x", "y"),
+        block_count=1, block_length=6, seed=47)
+    @test_throws ArgumentError sample_doe_empirical_residual_bootstrap(
+        [1.0 NaN; 2.0 3.0]; parameter_names=("x", "y"),
+        block_count=1, seed=47)
+    @test_throws ArgumentError sample_doe_empirical_residual_bootstrap(
+        residual_library; parameter_names=("x", "y"),
+        block_count=1, seed=47,
+        source_timestamps=[DateTime(2026, 1, 2), DateTime(2026, 1, 1),
+                           DateTime(2026, 1, 3), DateTime(2026, 1, 4),
+                           DateTime(2026, 1, 5)])
+    @test_throws ArgumentError sample_doe_empirical_residual_bootstrap(
+        residual_library; parameter_names=("x", "y"),
+        block_count=1, seed=47, require_regular_spacing=true,
+        source_timestamps=[DateTime(2026, 1, 1), DateTime(2026, 1, 2),
+                           DateTime(2026, 1, 4), DateTime(2026, 1, 5),
+                           DateTime(2026, 1, 6)])
+    @test_throws DimensionMismatch sample_doe_empirical_residual_bootstrap(
+        residual_library; parameter_names=("x", "y"),
+        block_count=2, block_length=2, seed=47,
+        timestamps=[DateTime(2026, 1, 1)])
+    @test_throws ArgumentError DOEUncertaintySampleSet([
+        DOEUncertaintySample(id="weighted", parameters=Dict("x" => 1),
+                             weight=0.5),
+        DOEUncertaintySample(id="unweighted", parameters=Dict("x" => 2)),
+    ]; parameter_names=("x",), generation_method=:manual)
+    @test_throws ArgumentError materialize_doe_scenarios(
+        base_network, samples, (network, sample) -> 1;
+        dataset_id="invalid-materializer",
+        materializer_id="returns-integer")
 end
 
 @testset "Operating envelope: :sum is more efficient but less equitable than :equal" begin
@@ -142,6 +429,14 @@ end
     @test r.diagnostics[1]["dispatch_points_per_scenario"] == 4
     @test r.diagnostics[1]["security_scope"] == :all_box_corners
     @test r.diagnostics[1]["guarantee"] == :local_ac_feasibility_at_tested_dispatches
+    @test !r.diagnostics[1]["global_certificate"]
+    @test r.diagnostics[1]["solver_class"] == :local_nonlinear
+    @test r.diagnostics[1]["uncertainty_semantics"] == :finite_scenario_set
+    @test r.diagnostics[1]["control_recourse"] == :perfect_recourse
+    @test r.diagnostics[1]["control_policy"] == :perfect_recourse
+    @test r.diagnostics[1]["control_policy_source"] == :legacy_default
+    @test r.diagnostics[1]["prescribed_ibr_controls"] == :retained
+    @test !r.diagnostics[1]["control_nonanticipativity"]
     @test_throws ArgumentError solve_operating_envelope(scenarios, cps;
         security=:corners, max_exact_corners=1)
 
@@ -221,6 +516,140 @@ end
     @test rs.snapshots[1]["ibr"]["statcom_bus2"]["1"]["qg"] < -1000.0
 end
 
+@testset "Operating envelope: explicit control-recourse policies" begin
+    cps = [ConnectionPoint(id="d1", bus="bus1", export_max=10e3),
+           ConnectionPoint(id="d2", bus="bus2", export_max=10e3)]
+    net = doe_feeder_rx()
+    add_statcom!(net, "bus2"; s_max=5000.0)
+    stat = net["ibr"]["statcom_bus2"]
+    stat["p_min"] = [0.0]; stat["p_max"] = [0.0]
+    stat["q_min"] = [-5000.0]; stat["q_max"] = [5000.0]
+
+    perfect = solve_operating_envelope(net, cps; security=:corners,
+        control_policy=PerfectRecourse())
+    issued = solve_operating_envelope(net, cps; security=:corners,
+        control_policy=IssuePlusLocalLaws())
+    @test all(s in ("LOCALLY_SOLVED", "OPTIMAL") for s in
+              vcat(perfect.termination_status, issued.termination_status))
+    @test perfect.total_capacity[1] > issued.total_capacity[1] + 100.0
+    @test perfect.diagnostics[1]["control_policy"] == :perfect_recourse
+    @test perfect.diagnostics[1]["control_policy_source"] == :explicit
+    @test perfect.diagnostics[1]["perfect_recourse_controls_present"]
+    @test !perfect.diagnostics[1]["control_nonanticipativity"]
+    @test issued.diagnostics[1]["control_policy"] == :issue_plus_local_laws
+    @test length(issued.diagnostics[1]["control_policy_signature"]) == 64
+    @test issued.diagnostics[1]["control_nonanticipativity"]
+    @test issued.diagnostics[1]["control_link_constraints"] == 3
+    @test length(issued.diagnostics[1]["issued_control_values"]) == 1
+    q_audit = only(filter(item -> item["id"] == "statcom_bus2" &&
+                                  item["quantity"] == :reactive_power,
+                          issued.diagnostics[1]["control_audit"]))
+    @test q_audit["stage"] == :issue
+    @test q_audit["contexts_present"] == 4
+    @test q_audit["link_constraints"] == 3
+
+    operational_replay = verify_operating_envelope(net, cps, perfect;
+        utilizations=:corners, control_policy=IssuePlusLocalLaws())
+    @test operational_replay.feasible == [false]
+    @test operational_replay.diagnostics[1]["control_policy"] ==
+          :issue_plus_local_laws
+    @test length(operational_replay.context_results[1]) == 4
+    @test all(context.feasible === true for context in
+              operational_replay.context_results[1])
+    @test operational_replay.diagnostics[1]["infeasibility_interpretation"] ==
+          :shared_control_incompatibility_or_joint_nlp_failure
+
+    issued_replay = verify_operating_envelope(net, cps, issued;
+        utilizations=:corners, control_policy=IssuePlusLocalLaws())
+    @test issued_replay.feasible == [true]
+    @test issued_replay.diagnostics[1]["issued_control_replay_source"] ==
+          :operating_envelope_result
+    @test issued_replay.diagnostics[1]["issued_control_replay_count"] == 1
+
+    scenario_policy = PerfectRecourse(rules=[DOEControlRule(
+        component=:ibr, id="statcom_bus2", quantity=:reactive_power,
+        stage=:scenario)])
+    scenario = solve_operating_envelope([[net, deepcopy(net)]], cps;
+        security=:corners, control_policy=scenario_policy)
+    @test scenario.diagnostics[1]["control_link_constraints"] == 6
+    @test length(scenario.diagnostics[1]["issued_control_values"]) == 2
+    @test_throws ArgumentError DOEControlRule(
+        component=:ibr, id="x", quantity=:reactive_power, stage=:unknown)
+    @test_throws ArgumentError DOEControlPolicy(
+        rules=[DOEControlRule(component=:ibr, id="x",
+                              quantity=:reactive_power, stage=:issue),
+               DOEControlRule(component=:ibr, id="x",
+                              quantity=:reactive_power, stage=:context)])
+    @test_throws ArgumentError solve_operating_envelope(net, cps;
+        control_policy=PerfectRecourse(rules=[DOEControlRule(
+            component=:ibr, id="missing", quantity=:reactive_power,
+            stage=:context)]))
+
+    qv = solve_operating_envelope(doe_ibr_feeder(volt_var=true),
+        [ConnectionPoint(id="pv", bus="b1", ibr_id="pv1", export_max=10e3)];
+        security=:corners, control_policy=IssuePlusLocalLaws())
+    qv_q = only(filter(item -> item["id"] == "pv1" &&
+                               item["quantity"] == :reactive_power,
+                       qv.diagnostics[1]["control_audit"]))
+    @test qv_q["stage"] == :local_law
+    @test qv_q["automatic_laws"] == [:volt_var]
+
+    tap_net = bilevel_demo_network()
+    tap = tap_net["transformer"]["single_phase"]["reg"]
+    tap["tap_min"] = 0.95; tap["tap_max"] = 1.05
+    tap_cps = [ConnectionPoint(id="p1", bus="lv1", ibr_id="pv1",
+                               export_max=6000.0),
+               ConnectionPoint(id="p2", bus="lv2", ibr_id="pv2",
+                               export_max=6000.0)]
+    tap_result = solve_operating_envelope(tap_net, tap_cps;
+        security=:corners, control_policy=IssuePlusLocalLaws())
+    tap_audit = only(filter(item -> item["component"] == :transformer,
+                            tap_result.diagnostics[1]["control_audit"]))
+    @test tap_audit["id"] == "reg"
+    @test tap_audit["stage"] == :issue
+    @test tap_audit["link_constraints"] == 3
+
+    generator_net = doe_feeder(p1=200.0, p2=200.0)
+    generator_net["generator"] = Dict("g1" => Dict(
+        "bus" => "bus1", "terminal_map" => ["1", "n"],
+        "configuration" => "SINGLE_PHASE",
+        "p_min" => [0.0], "p_max" => [100.0],
+        "q_min" => [0.0], "q_max" => [0.0]))
+    generator_cp = [ConnectionPoint(id="d", bus="bus2", export_max=1000.0)]
+    generator_ideal = solve_operating_envelope(generator_net, generator_cp;
+        control_policy=PerfectRecourse())
+    generator_audit = only(filter(item -> item["component"] == :generator,
+                                  generator_ideal.diagnostics[1]["control_audit"]))
+    @test generator_audit["stage"] == :context
+    @test !generator_audit["linkage_supported"]
+    @test_throws ArgumentError solve_operating_envelope(
+        generator_net, generator_cp; control_policy=IssuePlusLocalLaws())
+
+    extension_key = OpfModelKey(:variable, :research_support, "setting")
+    extension_hook! = ctx -> begin
+        setting = @variable(opf_model(ctx), lower_bound=-1.0,
+                            upper_bound=1.0,
+                            base_name="research_support_setting")
+        register_opf_object!(ctx, extension_key, setting)
+    end
+    registration = DOEControlRegistration(
+        component=:research_device, id="support1", quantity=:setting,
+        handle=extension_key, canonical_unit=:per_unit_setting,
+        metadata=Dict("controller" => "laboratory fixture"))
+    extension_policy = IssuePlusLocalLaws(registrations=[registration])
+    extension_result = solve_operating_envelope(
+        doe_feeder(p1=200.0, p2=200.0), cps;
+        security=:corners, control_policy=extension_policy,
+        context_hook! = extension_hook!)
+    extension_audit = only(filter(
+        item -> item["component"] == :research_device,
+        extension_result.diagnostics[1]["control_audit"]))
+    @test extension_audit["stage"] == :issue
+    @test extension_audit["link_constraints"] == 3
+    @test extension_audit["canonical_unit"] == :per_unit_setting
+    @test extension_audit["metadata"]["controller"] == "laboratory fixture"
+end
+
 @testset "Operating envelope: inherited thermal and unbalance constraints" begin
     thermal = solve_operating_envelope(doe_thermal_feeder(),
         [ConnectionPoint(id="d", bus="b1", export_max=20e3)])
@@ -235,6 +664,40 @@ end
     @test tight.envelope["single_phase"][1] < loose.envelope["single_phase"][1] - 1000.0
     @test tight.envelope["single_phase"][1] > 0.0
     @test "bus:b1:vneg_max" in tight.diagnostics[1]["binding_constraints"]
+
+    # Binding activity is tested on the normalized margin, so the reported set
+    # cannot depend on whether the case is written in volts or per unit.
+    @test tight.diagnostics[1]["binding_relative_tolerance"] > 0
+    @test all(tight.diagnostics[1]["minimum_normalized_margins"][kind] <=
+              tight.diagnostics[1]["binding_relative_tolerance"]
+              for kind in ("negative_sequence",))
+
+    # The neutral must be resolved through the engine's terminal roles, not the
+    # "n" naming fallback. On a four-wire case with a floating, non-"n" neutral
+    # the fallback leaves four "phases", which silently suppresses the
+    # negative-sequence margin. That margin also scores the adversarial search,
+    # so losing it is not merely cosmetic.
+    numeric_net = doe_unbalanced_feeder_numeric_neutral(vneg_max=1.0)
+    numeric_bus = numeric_net["bus"]["b1"]
+    numeric_terminals = String.(numeric_bus["terminal_names"])
+    phases, resolved_neutral = PowerOptLab._doe_bus_phase_terminals(
+        numeric_net, numeric_bus, numeric_terminals)
+    @test resolved_neutral == "4"
+    @test phases == ["1", "2", "3"]
+    @test !haskey(numeric_bus, "perfectly_grounded_terminals")
+
+    numeric_cp = ConnectionPoint(id="single_phase", bus="b1",
+                                 phase_terminals=["1"], neutral="4",
+                                 export_max=20e3)
+    numeric = solve_operating_envelope(numeric_net, [numeric_cp])
+    @test haskey(numeric.diagnostics[1]["minimum_normalized_margins"],
+                 "negative_sequence")
+    @test "bus:b1:vneg_max" in numeric.diagnostics[1]["binding_constraints"]
+
+    numeric_loose = solve_operating_envelope(
+        doe_unbalanced_feeder_numeric_neutral(vneg_max=20.0), [numeric_cp])
+    @test numeric.envelope["single_phase"][1] <
+          numeric_loose.envelope["single_phase"][1]
 end
 
 @testset "Operating envelope: operational publication and verification" begin
@@ -260,9 +723,790 @@ end
     @test verified.diagnostics[1]["verification"]
     @test solve_status(verified).publishable
     @test solve_diagnostics(verified).verification
+    @test length(verified.context_results[1]) == 1
+    replay = verified.context_results[1][1].diagnostics["independent_replay"]
+    @test replay["feasible"]
+    @test replay["control_replay_complete"]
+    @test replay["maximum_voltage_difference_V"] < 1e-3
+
+    custom = verify_operating_envelope(nets[1], cps, compared["equal"];
+        utilizations=[[0.25, 0.75], [0.75, 0.25]])
+    @test custom.feasible == [true]
+    @test custom.diagnostics[1]["security_scope"] == :explicit_utilization_points
+    @test custom.diagnostics[1]["dispatch_points_per_scenario"] == 2
+    @test [context.utilization for context in custom.context_results[1]] ==
+          [[0.25, 0.75], [0.75, 0.25]]
 
     fallback = solve_operating_envelope([nets[1], doe_feeder(p1=5e3, p2=5e3)], cps;
         security=:corners, fallback=:last_feasible)
     @test fallback.schedule[2]["publication_source"] in (:optimized, :last_feasible_fallback)
     @test solve_status(fallback).publishable
+end
+
+@testset "Operating envelope: explicit utilization and search-stable screening" begin
+    net = doe_feeder(p1=200.0, p2=200.0)
+    cps = [ConnectionPoint(id="d1", bus="bus1", export_max=10e3),
+           ConnectionPoint(id="d2", bus="bus2", export_max=10e3)]
+    explicit = solve_operating_envelope(net, cps;
+        utilizations=[[0.0, 0.0], [0.5, 0.25], [1.0, 1.0]])
+    @test explicit.diagnostics[1]["security_scope"] ==
+          :explicit_utilization_points
+    @test explicit.diagnostics[1]["dispatch_points_per_scenario"] == 3
+    @test haskey(explicit.diagnostics[1], "minimum_normalized_margins")
+    @test_throws ArgumentError solve_operating_envelope(net, cps;
+        security=:corners, utilizations=[[1.0, 1.0]])
+
+    conservative = Dict(id => 0.5 * explicit.envelope[id][1]
+                        for id in keys(explicit.envelope))
+    stable = search_operating_envelope_utilizations(
+        net, cps, conservative; samples=3)
+    @test stable.outcome == :search_stable
+    @test stable.diagnostics["global_certificate"] == false
+    @test stable.utilization_points[1] == [0.0, 0.0]
+    @test stable.utilization_points[2] == [1.0, 1.0]
+    @test stable.utilization_points[3] == [0.5, 1 / 3]
+    @test solve_diagnostics(stable).tested_point_count == 5
+
+    # Dropout faces: every way of taking 1..depth participants to zero while
+    # the rest stay at the issued limit.
+    @test doe_dropout_utilizations(3, 1) ==
+          [[0.0, 1.0, 1.0], [1.0, 0.0, 1.0], [1.0, 1.0, 0.0]]
+    @test length(doe_dropout_utilizations(4, 2)) == 4 + 6
+    @test all(point -> count(iszero, point) <= 2,
+              doe_dropout_utilizations(4, 2))
+    @test isempty(doe_dropout_utilizations(3, 0))
+    @test length(doe_dropout_utilizations(3, 9)) == 7      # depth clamped to n
+    @test_throws ArgumentError search_operating_envelope_utilizations(
+        net, cps, conservative; samples=0, dropout_depth=2,
+        max_dropout_points=1)
+
+    # The screening entry point keeps the documented space-filling sequence by
+    # default; dropout seeding is opt-in there.
+    @test stable.diagnostics["dropout_depth"] == 0
+    @test stable.diagnostics["dropout_point_count"] == 0
+    seeded = search_operating_envelope_utilizations(
+        net, cps, conservative; samples=0, dropout_depth=1)
+    @test seeded.diagnostics["dropout_point_count"] == 2
+    @test [0.0, 1.0] in seeded.utilization_points
+    @test [1.0, 0.0] in seeded.utilization_points
+
+    # Plain Halton cannot stratify a coordinate whose base exceeds the sample
+    # budget; scrambling is deterministic in the declared seed.
+    @test stable.diagnostics["halton_maximum_base"] == 3
+    @test stable.diagnostics["halton_seed_stratified"] == true
+    scrambled = search_operating_envelope_utilizations(
+        net, cps, conservative; samples=3, halton_scramble_seed=7)
+    repeated = search_operating_envelope_utilizations(
+        net, cps, conservative; samples=3, halton_scramble_seed=7)
+    @test scrambled.utilization_points == repeated.utilization_points
+    @test scrambled.utilization_points != stable.utilization_points
+    @test scrambled.diagnostics["halton_scramble_seed"] == 7
+    @test scrambled.diagnostics["halton_seed_stratified"] == true
+
+    unsafe = search_operating_envelope_utilizations(
+        net, cps, Dict("d1" => 10e3, "d2" => 10e3); samples=0)
+    @test unsafe.outcome == :candidate_counterexample
+    @test !isempty(unsafe.candidate_contexts)
+    @test unsafe.diagnostics["claim"] ==
+          :candidate_violation_requires_confirmation
+
+    adversarial = search_operating_envelope_adversarial(
+        net, cps, conservative; seed_samples=1,
+        refinement_rounds=1, restarts=1, initial_step=0.2)
+    @test adversarial.outcome == :search_stable
+    @test length(adversarial.verifications) == 2
+    @test length(adversarial.utilization_points) > 3
+    @test all(isfinite, adversarial.point_scores)
+    @test adversarial.worst_interval == 1
+    @test adversarial.worst_context !== nothing
+    @test adversarial.diagnostics["score_definition"] ==
+          :negative_minimum_declared_normalized_constraint_margin
+    @test !solve_diagnostics(adversarial).global_certificate
+
+    adversarial_unsafe = search_operating_envelope_adversarial(
+        net, cps, Dict("d1" => 10e3, "d2" => 10e3);
+        seed_samples=0, refinement_rounds=2)
+    @test adversarial_unsafe.outcome == :candidate_counterexample
+    @test length(adversarial_unsafe.verifications) == 1
+    @test !isempty(adversarial_unsafe.candidate_contexts)
+    @test adversarial_unsafe.diagnostics["global_certificate"] == false
+    @test_throws ArgumentError search_operating_envelope_adversarial(
+        net, cps, conservative; initial_step=0.0)
+
+    # A balanced three-phase upper point satisfies a tight negative-sequence
+    # limit, while partial utilization breaks the balance. This is the key
+    # range-safety failure that a bound-point allocation cannot reveal.
+    unbalanced_net = doe_unbalanced_feeder(vneg_max=1.0)
+    phase_cps = [ConnectionPoint(
+        id=string(phase), bus="b1", phase_terminals=[string(phase)],
+        neutral="n", export_max=20e3) for phase in 1:3]
+    balanced_bound = solve_operating_envelope(
+        unbalanced_net, phase_cps; security=:bound_point,
+        control_policy=PerfectRecourse())
+    @test all(isfinite, balanced_bound.total_capacity)
+    @test verify_operating_envelope(
+        unbalanced_net, phase_cps, balanced_bound;
+        utilizations=:bound_point,
+        control_policy=PerfectRecourse()).feasible == [true]
+    # Default `dropout_depth=1` seeds the hypercube faces adjacent to the bound
+    # point, so the failure is exposed in the first verification round without
+    # relying on refinement reaching an interior point.
+    range_failure = search_operating_envelope_adversarial(
+        unbalanced_net, phase_cps, balanced_bound;
+        seed_samples=0, refinement_rounds=1, restarts=2,
+        initial_step=0.5, control_policy=PerfectRecourse())
+    @test range_failure.outcome == :candidate_counterexample
+    @test length(range_failure.verifications) == 1
+    @test range_failure.diagnostics["dropout_point_count"] == 3
+    @test range_failure.diagnostics["seed_method"] ==
+          :halton_low_discrepancy_with_bound_point_dropouts
+    @test any(context -> count(iszero, context.utilization) == 1 &&
+                         count(isone, context.utilization) == 2,
+              range_failure.candidate_contexts)
+
+    # One refinement move of 0.5 reaches coordinate 0.5 from the bound;
+    # this run isolates the interior-point path without dropout seeds.
+    interior_failure = search_operating_envelope_adversarial(
+        unbalanced_net, phase_cps, balanced_bound;
+        seed_samples=0, dropout_depth=0, refinement_rounds=1, restarts=2,
+        initial_step=0.5, control_policy=PerfectRecourse())
+    @test interior_failure.outcome == :candidate_counterexample
+    @test length(interior_failure.verifications) == 2
+    @test interior_failure.diagnostics[
+        "refinement_reachable_depth_from_bound"] ≈ 0.5
+    @test any(context -> any(x -> 0 < x < 1, context.utilization),
+              interior_failure.candidate_contexts)
+    candidate = first(range_failure.candidate_contexts)
+    confirmation = confirm_operating_envelope_counterexample(
+        unbalanced_net, phase_cps, balanced_bound, candidate.utilization;
+        start_scales=(1.0, 0.95), control_policy=PerfectRecourse())
+    @test confirmation.outcome == :repeated_candidate
+    @test confirmation.diagnostics["candidate_reproduced_runs"] ==
+          [true, true]
+    @test !solve_diagnostics(confirmation).global_certificate
+
+    adaptive_range = solve_adversarial_search_stable_operating_envelope(
+        unbalanced_net, phase_cps;
+        max_rounds=2,
+        control_policy=PerfectRecourse(),
+        search_keywords=(seed_samples=0, refinement_rounds=1,
+                         restarts=2, initial_step=0.5))
+    @test adaptive_range.outcome == :search_stable
+    @test adaptive_range.rounds == 2
+    @test length(adaptive_range.allocations) == 2
+    @test adaptive_range.allocations[2].total_capacity[1] <
+          adaptive_range.allocations[1].total_capacity[1]
+    @test adaptive_range.diagnostics["final_allocation_screened"]
+
+    adaptive = solve_search_stable_operating_envelope(
+        net, cps; samples_per_round=2, max_rounds=2)
+    @test adaptive.outcome == :search_stable
+    @test adaptive.rounds == 1
+    @test length(adaptive.searches) == 1
+    @test !adaptive.diagnostics["global_certificate"]
+
+    multistart = solve_operating_envelope_multistart(
+        net, cps; start_scales=(1.0, 0.98))
+    @test length(multistart.runs) == 2
+    @test multistart.selected_index in (1, 2)
+    @test all(count > 0 for count in
+              multistart.diagnostics["start_changed_variable_counts"])
+    @test isfinite(multistart.diagnostics["maximum_capacity_spread_W"])
+    @test !multistart.diagnostics["global_certificate"]
+end
+
+@testset "Operating envelope: reproducible study manifest" begin
+    net = doe_feeder(p1=200.0, p2=300.0)
+    cps = [ConnectionPoint(id="d1", bus="bus1", export_max=10e3)]
+    first_spec = DOEStudySpec(net, cps;
+        security=:corners,
+        control_policy=IssuePlusLocalLaws(),
+        fairness=FairnessPolicy(kind=:max_min, normalization=:capacity),
+        seeds=Dict("scenario_generation" => 42),
+        metadata=Dict("case" => "manifest fixture"))
+    second_spec = DOEStudySpec(deepcopy(net), deepcopy(cps);
+        security=:corners,
+        control_policy=IssuePlusLocalLaws(),
+        fairness=FairnessPolicy(kind=:max_min, normalization=:capacity),
+        seeds=Dict("scenario_generation" => 42),
+        metadata=Dict("case" => "manifest fixture"))
+    @test first_spec.study_id == second_spec.study_id
+    @test first_spec.network_hashes == second_spec.network_hashes
+    @test doe_study_manifest(first_spec)["study_id"] == first_spec.study_id
+    @test first_spec.software_versions["PowerOptLab"] == "0.1.0"
+
+    changed = deepcopy(net)
+    changed["load"]["d1"]["p_nom"][1] += 1.0
+    changed_spec = DOEStudySpec(changed, cps;
+        security=:corners, control_policy=IssuePlusLocalLaws(),
+        fairness=FairnessPolicy(kind=:max_min, normalization=:capacity),
+        seeds=Dict("scenario_generation" => 42),
+        metadata=Dict("case" => "manifest fixture"))
+    @test changed_spec.study_id != first_spec.study_id
+    @test changed_spec.network_hashes != first_spec.network_hashes
+
+    benchmark_spec = DOEStudySpec(net, cps)
+    result = solve_operating_envelope(net, cps)
+    rows = doe_benchmark_rows(benchmark_spec, result; method_label="baseline")
+    @test length(rows) == 1
+    @test rows[1].study_id == benchmark_spec.study_id
+    @test rows[1].method == "baseline"
+    @test length(rows[1].control_policy_signature) == 64
+    @test rows[1].issued_control_count == 0
+    @test !rows[1].global_certificate
+    verification = verify_operating_envelope(net, cps, result)
+    context_rows = doe_context_benchmark_rows(
+        benchmark_spec, verification)
+    @test length(context_rows) == 1
+    @test context_rows[1].replay_feasible === true
+    @test !isempty(context_rows[1].minimum_normalized_margins)
+    @test context_rows[1].issued_control_replay_source == :no_issued_controls
+
+    runner_path = joinpath(@__DIR__, "..", "scripts", "run_doe_benchmark.jl")
+    case_path = joinpath(
+        @__DIR__, "..", "scripts", "cases", "doe_range_benchmark.jl")
+    include(runner_path)
+    mktempdir() do output_dir
+        output_path = joinpath(output_dir, "doe-range.tsv")
+        smoke_rows = run_doe_benchmark(case_path, output_path)
+        @test length(smoke_rows) == 2
+        @test getproperty.(smoke_rows, :method) ==
+              ["bound_point_ideal_recourse",
+               "corners_issue_plus_local_laws"]
+        @test all(getproperty.(smoke_rows, :published))
+        @test all(.!getproperty.(smoke_rows, :global_certificate))
+        @test getproperty(smoke_rows[1], :security_scope) ==
+              :simultaneous_upper_bound_only
+        @test getproperty(smoke_rows[2], :security_scope) == :all_box_corners
+        output_lines = readlines(output_path)
+        @test length(output_lines) == 3
+        @test startswith(output_lines[1], "study_id\tmethod\tinterval")
+    end
+
+    uncertainty_case_path = joinpath(
+        @__DIR__, "..", "scripts", "cases", "doe_uncertainty_tutorial.jl")
+    include(uncertainty_case_path)
+    tutorial_case = doe_uncertainty_tutorial_case()
+    @test length(tutorial_case.scenarios.intervals) == 1
+    @test length(only(tutorial_case.scenarios.intervals)) == 3
+    @test Set(scenario.role for scenario in
+              only(tutorial_case.scenarios.intervals)) ==
+          Set((:calibration, :test, :stress))
+    @test tutorial_case.scenarios.metadata["license"] == "CC0-1.0"
+    @test length(tutorial_case.connection_points) == 2
+end
+
+@testset "Operating envelope: typed scenarios and held-out coverage" begin
+    cps = [ConnectionPoint(id="d1", bus="bus1", export_max=10e3),
+           ConnectionPoint(id="d2", bus="bus2", export_max=10e3)]
+    calibration = DOEScenario(
+        id="calibration-high-load",
+        network=doe_feeder(p1=5000.0, p2=5000.0),
+        role=:calibration,
+        weight=1.0,
+        source="synthetic fixture",
+        generation_method=:deterministic_fixture,
+        seed=11,
+        timestamp=DateTime(2026, 1, 1, 12))
+    restrictive_test = DOEScenario(
+        id="test-low-load",
+        network=doe_feeder(p1=200.0, p2=200.0),
+        role=:test,
+        weight=0.7,
+        source="synthetic fixture",
+        generation_method=:held_out_fixture,
+        seed=12,
+        metadata=Dict(
+            "predicted_violation_probability" => 0.8,
+            "pairing_namespace" => "synthetic-load-cases-v1",
+            "uncertainty_sample_id" => "case-low"))
+    permissive_test = DOEScenario(
+        id="test-high-load",
+        network=doe_feeder(p1=5000.0, p2=5000.0),
+        role=:test,
+        weight=0.3,
+        source="synthetic fixture",
+        generation_method=:held_out_fixture,
+        seed=13,
+        metadata=Dict(
+            "predicted_violation_probability" => 0.2,
+            "pairing_namespace" => "synthetic-load-cases-v1",
+            "uncertainty_sample_id" => "case-high"))
+    scenarios = DOEScenarioSet(
+        [calibration, restrictive_test, permissive_test];
+        dataset_id="doe-held-out-fixture-v1",
+        metadata=Dict("license" => "synthetic"))
+    calibration_set = select_doe_scenarios(
+        scenarios; roles=:calibration)
+    test_set = select_doe_scenarios(scenarios; roles=:test)
+    @test length(calibration_set.intervals[1]) == 1
+    @test length(test_set.intervals[1]) == 2
+    @test test_set.metadata["selected_roles"] == [:test]
+
+    allocation = solve_operating_envelope(
+        calibration_set, cps; control_policy=PerfectRecourse())
+    @test allocation.diagnostics[1]["uncertainty_semantics"] ==
+          :typed_finite_scenario_set
+    @test allocation.diagnostics[1]["scenario_provenance"][1]["id"] ==
+          "calibration-high-load"
+    typed_spec = DOEStudySpec(
+        calibration_set, cps; control_policy=PerfectRecourse())
+    manifest = doe_study_manifest(typed_spec)
+    @test manifest["scenario_set_metadata"]["dataset_id"] ==
+          "doe-held-out-fixture-v1"
+    @test manifest["scenario_provenance"][1][1]["role"] == :calibration
+
+    curve = evaluate_operating_envelope_coverage_curve(
+        scenarios, cps, allocation;
+        scales=(1.0, 0.5, 1.0),
+        roles=:test, iid_assumption=true, confidence=0.95,
+        control_policy=PerfectRecourse())
+    @test curve.scales == [0.5, 1.0]
+    @test length(curve.coverages) == 2
+    @test curve.diagnostics["issue_control_treatment"] == [:no_issued_controls]
+    @test curve.diagnostics["control_reoptimization"] == [:only_unfixed_stages]
+    @test curve.diagnostics["continuous_threshold_estimated"] == false
+    @test haskey(curve.diagnostics, "candidate_count_reversals")
+    @test last(curve.rows).total_capacity_W ≈ allocation.total_capacity
+    coverage = last(curve.coverages)
+    @test coverage.outcome == :candidate_violations_observed
+    @test coverage.metrics["scenario_count"] == 2
+    @test coverage.metrics["candidate_scenario_count"] == 1
+    @test coverage.metrics["passed_scenario_count"] == 1
+    @test coverage.metrics["weighted_candidate_scenario_frequency"] ≈ 0.7
+    # The interval mean is a cluster estimator; the pooled ratio weights every
+    # scenario directly. With a single interval the two must coincide.
+    @test coverage.diagnostics["weighted_frequency_estimator"] ==
+          :interval_mean_of_within_interval_ratios
+    @test coverage.metrics["pooled_weighted_candidate_scenario_frequency"] ≈
+          coverage.metrics["weighted_candidate_scenario_frequency"]
+    @test coverage.metrics[
+        "pooled_weighted_conservative_scenario_frequency"] ≈
+          coverage.metrics["weighted_conservative_scenario_frequency"]
+    @test 0.5 <= coverage.metrics["one_sided_hoeffding_upper_bound"] <= 1.0
+    @test coverage.diagnostics["iid_assumption"]
+    @test coverage.diagnostics["distribution_shift_assessed"] == false
+    @test Set(row.scenario_id for row in coverage.scenario_rows) ==
+          Set(["test-low-load", "test-high-load"])
+    @test all(haskey(row.metadata, "predicted_violation_probability")
+              for row in coverage.scenario_rows)
+
+    probability_observations = doe_probability_observations(
+        coverage; probability_key="predicted_violation_probability")
+    @test length(probability_observations) == 2
+    @test all(observation.weight == 1.0
+              for observation in probability_observations)
+    @test Set(observation.observed_violation
+              for observation in probability_observations) == Set([true, false])
+    weighted_probability_observations = doe_probability_observations(
+        coverage; probability_key="predicted_violation_probability",
+        use_scenario_weights=true)
+    @test sort([observation.weight
+                for observation in weighted_probability_observations]) == [0.3, 0.7]
+    adapted_calibration = evaluate_doe_probability_calibration(
+        probability_observations; bins=2)
+    @test adapted_calibration.metrics["brier_score"] ≈ 0.04
+    @test adapted_calibration.diagnostics["independence_assumption"] == false
+
+    direct_probability_observations = [
+        DOEProbabilityObservation(
+            id="safe-low", predicted_violation_probability=0.1,
+            observed_violation=false),
+        DOEProbabilityObservation(
+            id="safe-mid", predicted_violation_probability=0.2,
+            observed_violation=false),
+        DOEProbabilityObservation(
+            id="violation-mid", predicted_violation_probability=0.8,
+            observed_violation=true),
+        DOEProbabilityObservation(
+            id="violation-high", predicted_violation_probability=0.9,
+            observed_violation=true),
+        DOEProbabilityObservation(
+            id="unresolved", predicted_violation_probability=0.5,
+            observed_violation=nothing),
+    ]
+    probability_calibration = evaluate_doe_probability_calibration(
+        direct_probability_observations;
+        bins=[0.0, 0.5, 1.0], independence_assumption=true,
+        confidence=0.9)
+    @test probability_calibration.outcome == :diagnostics_available
+    @test probability_calibration.bin_edges == [0.0, 0.5, 1.0]
+    @test probability_calibration.metrics["classified_observation_count"] == 4
+    @test probability_calibration.metrics["unresolved_observation_count"] == 1
+    @test probability_calibration.metrics["brier_score"] ≈ 0.025
+    @test probability_calibration.metrics["calibration_gap"] ≈ 0.0
+    @test probability_calibration.metrics["expected_calibration_error"] ≈ 0.15
+    @test probability_calibration.metrics["maximum_calibration_error"] ≈ 0.15
+    @test probability_calibration.metrics["calibration_gap_lower"] !== missing
+    @test all(row.simultaneous_gap_lower !== missing
+              for row in probability_calibration.bin_rows if row.count > 0)
+    # Multiplicity is corrected over the declared bins. Correcting over the
+    # realised non-empty bins would make the simultaneous level depend on the
+    # data it is meant to cover, so an empty bin must not widen the others.
+    @test probability_calibration.diagnostics["bin_interval_multiplicity"] ==
+          :bonferroni_over_declared_bins
+    sparse_bins = evaluate_doe_probability_calibration(
+        direct_probability_observations;
+        bins=[0.0, 0.5, 0.75, 1.0], independence_assumption=true,
+        confidence=0.9)
+    dense_row = only(row for row in probability_calibration.bin_rows
+                     if row.count > 0 && row.lower == 0.0)
+    sparse_row = only(row for row in sparse_bins.bin_rows
+                      if row.count > 0 && row.lower == 0.0)
+    @test sparse_row.simultaneous_gap_lower < dense_row.simultaneous_gap_lower
+    conservative_calibration = evaluate_doe_probability_calibration(
+        direct_probability_observations;
+        bins=2, unresolved=:violation)
+    @test conservative_calibration.metrics[
+        "classified_observation_count"] == 5
+    @test conservative_calibration.metrics["calibration_gap"] ≈ 0.1
+    @test conservative_calibration.diagnostics["unresolved_treatment"] ==
+          :violation
+
+    shift = compare_doe_coverage_shift(
+        first(curve.coverages), last(curve.coverages);
+        reference_label="half capacity", shifted_label="issued capacity")
+    @test shift.outcome in (:higher_candidate_frequency,
+                            :no_observed_change)
+    @test shift.metric_deltas["conservative_scenario_frequency"] ==
+          last(curve.rows).conservative_scenario_frequency -
+          first(curve.rows).conservative_scenario_frequency
+    @test shift.diagnostics["performance_shift_observed"] ==
+          (shift.outcome == :higher_candidate_frequency)
+    @test shift.diagnostics["distribution_shift_test"] == :not_performed
+    @test shift.diagnostics["distribution_shift_detected"] == false
+
+    restrictive_model = DOEScenarioSet([
+        DOEScenario(
+            id="test-low-load",
+            network=doe_feeder(p1=100.0, p2=100.0),
+            role=:stress, weight=0.7,
+            source="paired restrictive fixture",
+            generation_method=:alternative_uncertainty_model,
+            timestamp=DateTime(2026, 1, 15, 12),
+            metadata=Dict("pairing_namespace" => "synthetic-load-cases-v1",
+                "uncertainty_sample_id" => "case-low")),
+        DOEScenario(
+            id="test-high-load",
+            network=doe_feeder(p1=100.0, p2=100.0),
+            role=:test, weight=0.3,
+            source="paired restrictive fixture",
+            generation_method=:alternative_uncertainty_model,
+            timestamp=DateTime(2026, 1, 15, 12),
+            metadata=Dict("pairing_namespace" => "synthetic-load-cases-v1",
+                "uncertainty_sample_id" => "case-high")),
+    ]; dataset_id="restrictive-model-fixture")
+    model_sensitivity = compare_doe_uncertainty_models(
+        ["declared" => scenarios, "restrictive" => restrictive_model],
+        cps, allocation;
+        scales=(1.0, 0.5), roles=(:test, :stress),
+        control_policy=PerfectRecourse())
+    @test model_sensitivity.model_labels == ["declared", "restrictive"]
+    @test model_sensitivity.outcome == :observed_model_sensitivity
+    @test Set(keys(model_sensitivity.curves)) ==
+          Set(["declared", "restrictive"])
+    @test length(model_sensitivity.rows) == 4
+    @test length(model_sensitivity.pairwise_rows) == 2
+    @test all(row.evidence_design == :paired
+              for row in model_sensitivity.pairwise_rows)
+    @test all(row.pairing_method == :uncertainty_sample_id
+              for row in model_sensitivity.pairwise_rows)
+    terminal_sensitivity = only(
+        row for row in model_sensitivity.pairwise_rows if row.scale == 1.0)
+    @test terminal_sensitivity.matched_scenario_count == 2
+    @test terminal_sensitivity.unmatched_reference_count == 0
+    @test terminal_sensitivity.unmatched_comparison_count == 0
+    @test terminal_sensitivity.conservative_scenario_frequency_delta > 0
+    @test terminal_sensitivity.paired_passed_to_candidate_count == 1
+    @test terminal_sensitivity.paired_candidate_to_passed_count == 0
+    @test terminal_sensitivity.paired_mean_conservative_outcome_delta == 0.5
+    @test model_sensitivity.diagnostics["common_capacities"]
+    @test !model_sensitivity.diagnostics[
+        "capacity_allocation_reoptimized"]
+    @test model_sensitivity.diagnostics["statistical_test"] == :not_performed
+    @test !model_sensitivity.diagnostics[
+        "uncertainty_model_effect_established"]
+    @test !isempty(solve_status(model_sensitivity).termination_status)
+    @test solve_diagnostics(model_sensitivity).paired_comparison_count == 1
+
+    independent_model = DOEScenarioSet([
+        DOEScenario(id="independent-a",
+            network=doe_feeder(p1=100.0, p2=100.0), role=:test,
+            source="independent fixture"),
+        DOEScenario(id="independent-b",
+            network=doe_feeder(p1=5000.0, p2=5000.0), role=:stress,
+            source="independent fixture"),
+    ]; dataset_id="independent-model-fixture")
+    unpaired_sensitivity = compare_doe_uncertainty_models(
+        ["declared" => scenarios, "independent" => independent_model],
+        cps, allocation;
+        scales=(1.0,), roles=(:test, :stress),
+        control_policy=PerfectRecourse())
+    unpaired_row = only(unpaired_sensitivity.pairwise_rows)
+    @test unpaired_row.evidence_design == :unpaired
+    @test unpaired_row.pairing_method == :none
+    @test unpaired_row.matched_scenario_count == 0
+    @test unpaired_row.paired_mean_conservative_outcome_delta === missing
+    @test unpaired_sensitivity.diagnostics[
+        "capacity_selection_independent_of_evaluation_models"] == :not_verified
+
+    historical = DOEScenarioSet([
+        DOEScenario(id="history-1", network=doe_feeder(p1=1000.0, p2=1000.0),
+            role=:unspecified, weight=1.0, timestamp=DateTime(2026, 1, 1),
+            source="chronological fixture"),
+        DOEScenario(id="history-2", network=doe_feeder(p1=1100.0, p2=1100.0),
+            role=:train, weight=1.0, timestamp=DateTime(2026, 1, 2),
+            source="chronological fixture"),
+        DOEScenario(id="gap", network=doe_feeder(p1=1200.0, p2=1200.0),
+            role=:validation, weight=1.0, timestamp=DateTime(2026, 1, 3),
+            source="chronological fixture"),
+        DOEScenario(id="future", network=doe_feeder(p1=1300.0, p2=1300.0),
+            role=:stress, weight=1.0, timestamp=DateTime(2026, 1, 4),
+            source="chronological fixture"),
+    ]; dataset_id="chronological-fixture")
+    time_split = split_doe_scenarios_by_time(
+        historical;
+        calibration_end=DateTime(2026, 1, 3),
+        test_start=DateTime(2026, 1, 4),
+        split_name="blocked-holdout")
+    @test [scenario.id for scenario in time_split.calibration.intervals[1]] ==
+          ["history-1", "history-2"]
+    @test [scenario.role for scenario in time_split.calibration.intervals[1]] ==
+          [:calibration, :calibration]
+    @test only(time_split.test.intervals[1]).id == "future"
+    @test only(time_split.test.intervals[1]).role == :test
+    @test only(time_split.test.intervals[1]).metadata["original_role"] == :stress
+    @test time_split.excluded_scenario_ids == ["gap"]
+    @test time_split.diagnostics["temporal_overlap"] == false
+    @test time_split.diagnostics["group_or_site_leakage_assessed"] == false
+
+    grouped_history = DOEScenarioSet([
+        DOEScenario(id="cal-site-a",
+            network=doe_feeder(p1=1400.0, p2=1400.0),
+            role=:unspecified, weight=1.0,
+            timestamp=DateTime(2026, 2, 1), seed=21,
+            source="grouped chronological fixture",
+            generation_method=:deterministic_fixture,
+            metadata=Dict("site_id" => "site-a", "load_kw" => 1.4)),
+        DOEScenario(id="cal-site-b",
+            network=doe_feeder(p1=1500.0, p2=1500.0),
+            role=:unspecified, weight=1.0,
+            timestamp=DateTime(2026, 2, 2), seed=22,
+            source="grouped chronological fixture",
+            generation_method=:deterministic_fixture,
+            metadata=Dict("site_id" => "site-b", "load_kw" => 1.5)),
+        DOEScenario(id="test-site-a",
+            network=doe_feeder(p1=1600.0, p2=1600.0),
+            role=:unspecified, weight=1.0,
+            timestamp=DateTime(2026, 2, 4), seed=23,
+            source="grouped chronological fixture",
+            generation_method=:deterministic_fixture,
+            metadata=Dict("site_id" => "site-a", "load_kw" => 1.6)),
+        DOEScenario(id="test-site-c",
+            network=doe_feeder(p1=1700.0, p2=1700.0),
+            role=:unspecified, weight=1.0,
+            timestamp=DateTime(2026, 2, 5), seed=24,
+            source="grouped chronological fixture",
+            generation_method=:deterministic_fixture,
+            metadata=Dict("site_id" => "site-c", "load_kw" => 1.7)),
+    ]; dataset_id="grouped-chronological-fixture")
+    @test_throws ArgumentError split_doe_scenarios_by_time(
+        grouped_history;
+        calibration_end=DateTime(2026, 2, 3),
+        group_key="site_id")
+    allowed_group_split = split_doe_scenarios_by_time(
+        grouped_history;
+        calibration_end=DateTime(2026, 2, 3),
+        group_key="site_id", group_overlap_policy=:allow)
+    @test allowed_group_split.diagnostics["group_overlap_present"]
+    @test allowed_group_split.diagnostics["group_overlap_retained"]
+    @test allowed_group_split.diagnostics["overlapping_groups"] == ["site-a"]
+    excluded_group_split = split_doe_scenarios_by_time(
+        grouped_history;
+        calibration_end=DateTime(2026, 2, 3),
+        group_key="site_id", group_overlap_policy=:exclude_test)
+    @test [scenario.id for scenario in
+           excluded_group_split.test.intervals[1]] == ["test-site-c"]
+    @test "test-site-a" in excluded_group_split.excluded_scenario_ids
+    @test excluded_group_split.diagnostics[
+        "group_overlap_excluded_count"] == 1
+    @test excluded_group_split.diagnostics["group_overlap_detected"]
+    @test !excluded_group_split.diagnostics["group_overlap_present"]
+
+    clean_audit = audit_doe_scenario_calibration(
+        excluded_group_split.calibration, excluded_group_split.test;
+        group_key="site_id", require_chronological_order=true)
+    @test clean_audit.outcome == :no_declared_leakage_detected
+    @test clean_audit.leakage_checks["chronological_order"] === true
+    @test isempty(clean_audit.leakage_checks["group_overlap"])
+    @test clean_audit.calibration_summary[
+        "effective_sample_size_by_interval"] == [2.0]
+    @test clean_audit.evaluation_summary[
+        "effective_sample_size_by_interval"] == [1.0]
+    @test clean_audit.diagnostics["probabilistic_calibration_assessed"] == false
+
+    overlap_audit = audit_doe_scenario_calibration(
+        allowed_group_split.calibration, allowed_group_split.test;
+        group_key="site_id", require_chronological_order=true)
+    @test overlap_audit.outcome == :leakage_candidates_detected
+    @test "metadata_group_overlap" in
+          overlap_audit.leakage_checks["violated_requirements"]
+    longitudinal_audit = audit_doe_scenario_calibration(
+        allowed_group_split.calibration, allowed_group_split.test;
+        group_key="site_id", require_group_disjoint=false,
+        require_chronological_order=true)
+    @test longitudinal_audit.outcome == :no_declared_leakage_detected
+    incomplete_audit = audit_doe_scenario_calibration(
+        time_split.calibration, time_split.test;
+        group_key="site_id", require_chronological_order=true)
+    @test incomplete_audit.outcome == :required_metadata_incomplete
+    @test "group_disjointness_missing_metadata" in
+          incomplete_audit.leakage_checks["unassessed_requirements"]
+    reuse_audit = audit_doe_scenario_calibration(
+        excluded_group_split.calibration,
+        excluded_group_split.calibration)
+    @test reuse_audit.outcome == :leakage_candidates_detected
+    @test !isempty(reuse_audit.leakage_checks["scenario_id_overlap"])
+    @test !isempty(reuse_audit.leakage_checks["exact_network_overlap"])
+
+    descriptive_shift = test_doe_covariate_shift(
+        allowed_group_split.calibration, allowed_group_split.test;
+        features="load_kw")
+    @test descriptive_shift.outcome == :descriptive_difference_only
+    @test descriptive_shift.p_value === missing
+    @test descriptive_shift.energy_distance >= 0
+    @test only(descriptive_shift.feature_rows).mean_difference ≈ 0.2
+    @test descriptive_shift.diagnostics["permutations"] == 0
+    @test descriptive_shift.diagnostics[
+        "general_distribution_shift_assessed"] == false
+    @test_throws ArgumentError test_doe_covariate_shift(
+        allowed_group_split.calibration, allowed_group_split.test;
+        features="load_kw", exchangeability_assumption=true,
+        permutation_unit=:group, group_key="site_id", permutations=19)
+
+    feature_net = doe_feeder(p1=1000.0, p2=1000.0)
+    reference_features = DOEScenarioSet([
+        DOEScenario(
+            id="feature-reference-$index", network=feature_net,
+            role=:calibration, source="feature-shift fixture",
+            timestamp=DateTime(2026, 3, index),
+            metadata=Dict(
+                "load_kw" => Float64(index),
+                "temperature_c" => 20.0 + 0.1 * index,
+                "site_id" => "reference-site-$index"))
+        for index in 1:8]; dataset_id="feature-reference")
+    shifted_features = DOEScenarioSet([
+        DOEScenario(
+            id="feature-shifted-$index", network=feature_net,
+            role=:test, source="feature-shift fixture",
+            timestamp=DateTime(2026, 3, 8 + index),
+            metadata=Dict(
+                "load_kw" => 20.0 + index,
+                "temperature_c" => 30.0 + 0.1 * index,
+                "site_id" => "shifted-site-$index"))
+        for index in 1:8]; dataset_id="feature-shifted")
+    tested_shift = test_doe_covariate_shift(
+        reference_features, shifted_features;
+        features=("load_kw", "temperature_c"),
+        exchangeability_assumption=true,
+        permutations=199, seed=31, alpha=0.05)
+    @test tested_shift.outcome == :declared_covariate_shift_detected
+    @test 0 < tested_shift.p_value <= 0.05
+    @test tested_shift.features == ["load_kw", "temperature_c"]
+    @test tested_shift.diagnostics["seed"] == 31
+    repeated_shift = test_doe_covariate_shift(
+        reference_features, shifted_features;
+        features=("load_kw", "temperature_c"),
+        exchangeability_assumption=true,
+        permutations=199, seed=31, alpha=0.05)
+    @test repeated_shift.p_value == tested_shift.p_value
+    grouped_shift = test_doe_covariate_shift(
+        reference_features, shifted_features;
+        features="load_kw", exchangeability_assumption=true,
+        permutation_unit=:group, group_key="site_id",
+        permutations=99, seed=32, alpha=0.1)
+    @test grouped_shift.outcome == :declared_covariate_shift_detected
+    @test grouped_shift.diagnostics["reference_group_count"] == 8
+    @test grouped_shift.diagnostics["shifted_group_count"] == 8
+    descriptive_temporal_shift = test_doe_time_series_covariate_shift(
+        reference_features, shifted_features;
+        features=("load_kw", "temperature_c"))
+    @test descriptive_temporal_shift.outcome == :descriptive_difference_only
+    @test descriptive_temporal_shift.p_value === missing
+    @test descriptive_temporal_shift.diagnostics["regular_spacing"]
+    temporal_shift = test_doe_time_series_covariate_shift(
+        reference_features, shifted_features;
+        features=("load_kw", "temperature_c"),
+        circular_shift_invariance_assumption=true,
+        shifts=999, seed=33, alpha=0.05)
+    @test temporal_shift.outcome in
+          (:declared_temporal_covariate_shift_detected,
+           :declared_temporal_covariate_shift_not_detected)
+    @test 0 < temporal_shift.p_value <= 1
+    @test temporal_shift.diagnostics["exact_circular_randomization"]
+    @test temporal_shift.diagnostics["available_alternative_shifts"] == 15
+    @test temporal_shift.diagnostics["evaluated_alternative_shifts"] == 15
+    irregular_temporal_shift = test_doe_time_series_covariate_shift(
+        allowed_group_split.calibration, allowed_group_split.test;
+        features="load_kw")
+    @test !irregular_temporal_shift.diagnostics["regular_spacing"]
+    @test_throws ArgumentError test_doe_time_series_covariate_shift(
+        allowed_group_split.calibration, allowed_group_split.test;
+        features="load_kw", circular_shift_invariance_assumption=true)
+    @test_throws ArgumentError test_doe_time_series_covariate_shift(
+        shifted_features, reference_features; features="load_kw")
+    @test_throws ArgumentError test_doe_covariate_shift(
+        reference_features, shifted_features; features="missing")
+    @test_throws ArgumentError test_doe_covariate_shift(
+        reference_features, shifted_features;
+        features="load_kw", permutations=0)
+
+    @test_throws ArgumentError DOEScenario(
+        id="bad", network=doe_feeder(p1=1.0, p2=1.0), role=:unknown)
+    @test_throws ArgumentError DOEScenarioSet(
+        [restrictive_test, DOEScenario(
+            id="unweighted", network=doe_feeder(p1=1.0, p2=1.0), role=:test)];
+        dataset_id="incomplete-weights")
+    @test_throws ArgumentError select_doe_scenarios(
+        scenarios; roles=:validation)
+    @test_throws ArgumentError split_doe_scenarios_by_time(
+        DOEScenarioSet([historical.intervals[1][1:2],
+                        historical.intervals[1][3:4]];
+                       dataset_id="multi-interval");
+        calibration_end=DateTime(2026, 1, 3))
+    @test_throws ArgumentError split_doe_scenarios_by_time(
+        DOEScenarioSet([DOEScenario(
+            id="missing-time", network=doe_feeder(p1=1.0, p2=1.0))];
+            dataset_id="missing-time");
+        calibration_end=DateTime(2026, 1, 3))
+    @test_throws ArgumentError split_doe_scenarios_by_time(
+        historical;
+        calibration_end=DateTime(2026, 1, 4),
+        test_start=DateTime(2026, 1, 3))
+    @test_throws ArgumentError split_doe_scenarios_by_time(
+        historical;
+        calibration_end=DateTime(2026, 1, 3),
+        group_overlap_policy=:unknown)
+    @test_throws ArgumentError evaluate_operating_envelope_coverage_curve(
+        scenarios, cps, allocation; scales=(-0.1,))
+    @test_throws ArgumentError compare_doe_uncertainty_models(
+        ["only" => scenarios], cps, allocation)
+    @test_throws ArgumentError compare_doe_uncertainty_models(
+        ["same" => scenarios, "same" => scenarios], cps, allocation)
+    @test_throws ArgumentError compare_doe_uncertainty_models(
+        ["left" => scenarios, "right" => scenarios], cps, allocation;
+        pairing=:unknown)
+    @test_throws ArgumentError compare_doe_uncertainty_models(
+        ["left" => scenarios, "right" => scenarios], cps, allocation;
+        pairing=:metadata)
+    @test_throws ArgumentError DOEProbabilityObservation(
+        id="bad-probability", predicted_violation_probability=1.1,
+        observed_violation=false)
+    @test_throws ArgumentError DOEProbabilityObservation(
+        id="boolean-probability", predicted_violation_probability=true,
+        observed_violation=false)
+    @test_throws ArgumentError evaluate_doe_probability_calibration(
+        direct_probability_observations; bins=[0.0, 0.7, 0.6, 1.0])
+    @test_throws ArgumentError evaluate_doe_probability_calibration(
+        direct_probability_observations; unresolved=:unknown)
 end
