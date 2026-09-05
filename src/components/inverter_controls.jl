@@ -257,8 +257,9 @@ declared per-leg limit. The physical plant independently retains every
 converter- and grid-side current constraint.
 The positive-sequence `P,Q` request is first scaled to the converter apparent-
 power rating. The exact evaluator uses hard maxima. The smooth model represents
-every magnitude by an implicit nonnegative square root and uses the stated SI
-epsilons only in smooth maximum selectors. `pq_priority` is `:proportional`,
+capability magnitudes by smooth upper norms with excess at most one quarter
+of the stated SI width. Min/max selectors use that full width. Hard physical
+capability inequalities remain exact. `pq_priority` is `:proportional`,
 `:watt`, or `:var` for the positive-sequence apparent-power allocation.
 By default, smoothing widths are rating-relative fractions, so heterogeneous
 fleets receive the same dimensionless regularization. Supplying
@@ -281,9 +282,8 @@ function CommonScaleLimiter(;
                             power_epsilon::Union{Nothing,Real}=nothing,
                             current_epsilon_fraction::Real=2.5e-5,
                             # Calibrated to the former 1e-3 VA width at 20 kVA;
-                            # at megavolt-ampere OPF bases this is intentionally
-                            # below Ipopt's tolerance and is only a declared
-                            # numerical regularisation bound.
+                            # retained as a physical approximation budget,
+                            # independently of the solver's convergence tolerance.
                             power_epsilon_fraction::Real=5e-8,
                             pq_priority::Symbol=:proportional,
                             priority_headroom_fraction::Real=1e-3)
@@ -733,7 +733,8 @@ end
 function _unbalance_numeric_smooth(policy::NegativeSequenceAdmittanceDroop,
                                    u1, u2, i1)
     denominator = abs2(u1) + policy.voltage_floor^2
-    eta = abs(u2) / sqrt(denominator)
+    epsilon = _unbalance_norm_epsilon(policy)
+    eta = (sqrt(abs2(u2) + epsilon^2) - epsilon) / sqrt(denominator)
     gain = _pwl_numeric_smooth(policy.gain, eta)
     i2v = -gain * cis(-policy.impedance_angle) * u2
     i2r = -(u2 * conj(u1) / denominator) * i1
@@ -763,7 +764,7 @@ end
 
 function _limit_positive_power_numeric_smooth(
         p, q, smax, epsilon, priority, headroom_fraction)
-    raw_magnitude = hypot(p, q)
+    raw_magnitude = _upper_magnitude(p^2 + q^2, epsilon/4)
     if priority === :proportional
         scale = smax/_smooth_max(smax, raw_magnitude, epsilon)
         return scale*p, scale*q, scale
@@ -780,8 +781,8 @@ function _limit_positive_power_numeric_smooth(
         p_capacity = sqrt(max(smax^2-q_limited^2, 0.0))
         p_limited = _smooth_min(p, p_capacity, epsilon)
     end
-    scale = iszero(raw_magnitude) ? 1.0 :
-        hypot(p_limited, q_limited)/raw_magnitude
+    scale = _upper_magnitude(p_limited^2 + q_limited^2, epsilon/4) /
+        _smooth_max(raw_magnitude, epsilon, epsilon)
     return p_limited, q_limited, scale
 end
 
@@ -822,7 +823,7 @@ function evaluate_smooth(controller::SequenceController,
     phase_request = _phase_from_sequences(i1_request, i2_request)
 
     ieps = _current_epsilon(controller.limiter, ratings)
-    imags = abs.(phase_request)
+    imags = [_upper_magnitude(abs2(i), ieps/4) for i in phase_request]
     current_denominator = foldl(
         (a, b) -> _smooth_max(a, b, ieps), imags; init=ratings.i_max)
     current_scale = ratings.i_max / current_denominator
@@ -935,7 +936,34 @@ _smooth_symmetric_clip(a, limit, epsilon) =
     _smooth_min(a, limit, epsilon) +
     _smooth_max(a, -limit, epsilon) - a
 
+# An upper norm is appropriate in a capability denominator: it cannot admit
+# more current/power by underestimating its magnitude. Its excess is <= epsilon
+# in the quantity's working units, and its derivatives exist at zero.
+_upper_magnitude(radicand, epsilon) = sqrt(radicand + epsilon^2)
+
+# Cut repeated nonlinear subexpressions without squaring the auxiliary: the
+# defining row has derivative 1 with respect to its normalized output, even
+# when the physical quantity is zero. This also avoids exponential expression
+# expansion when a scale is reused in successive capability checks.
+function _defined_control_expression!(m, expression; scale=1.0, start=scale)
+    expression isa Real && return expression
+    output = JuMP.@variable(m, start=Float64(start/scale))
+    JuMP.@constraint(m, output == expression/scale)
+    return scale*output
+end
+
+function _upper_magnitude!(m, radicand, epsilon; scale, start=scale)
+    return _defined_control_expression!(m, _upper_magnitude(radicand, epsilon);
+        scale=scale, start=start)
+end
+
+# Preserve zero at balanced U2. The eta error is at most one tenth of the
+# admittance curve's declared input smoothing width, even at the voltage floor.
+_unbalance_norm_epsilon(policy::NegativeSequenceAdmittanceDroop) =
+    0.1 * policy.gain.smoothing_epsilon * policy.voltage_floor
+
 function _implicit_sqrt!(m, radicand; start::Real=1.0, scale::Real=start)
+    _is_identically_zero(radicand) && return 0.0
     initial = max(Float64(start), 0.0)
     normalization = max(abs(Float64(scale)), eps(Float64))
     root = JuMP.@variable(m, lower_bound=0.0, start=initial)
@@ -944,48 +972,39 @@ function _implicit_sqrt!(m, radicand; start::Real=1.0, scale::Real=start)
     return root
 end
 
-function _smooth_max_implicit!(m, a, b, epsilon; start::Real=1.0)
-    root = _implicit_sqrt!(
-        m, (a-b)^2 + epsilon^2; start=max(Float64(start), epsilon))
-    return (a + b + root) / 2
+function _smooth_max_expression!(m, a, b, epsilon; start::Real=1.0)
+    return _smooth_max(a, b, epsilon)
 end
 
-function _smooth_min_implicit!(m, a, b, epsilon; start::Real=1.0)
-    root = _implicit_sqrt!(
-        m, (a-b)^2 + epsilon^2; start=max(Float64(start), epsilon))
-    return (a + b - root) / 2
+function _smooth_min_expression!(m, a, b, epsilon; start::Real=1.0)
+    return _smooth_min(a, b, epsilon)
 end
 
-function _smooth_symmetric_clip_implicit!(
+function _smooth_symmetric_clip_expression!(
         m, value, limit, epsilon; start::Real=1.0)
-    upper = _smooth_min_implicit!(
+    upper = _smooth_min_expression!(
         m, value, limit, epsilon; start=start)
-    lower = _smooth_max_implicit!(
+    lower = _smooth_max_expression!(
         m, value, -limit, epsilon; start=start)
     return upper + lower - value
 end
 
-function _smooth_positive_implicit!(m, a, epsilon; start::Real=epsilon)
-    root = _implicit_sqrt!(
-        m, a^2 + epsilon^2; start=max(Float64(start), epsilon))
-    return (a + root) / 2
+function _smooth_positive_expression!(m, a, epsilon; start::Real=epsilon)
+    return _smooth_positive(a, epsilon)
 end
 
-function _smooth_negative_implicit!(m, a, epsilon; start::Real=epsilon)
-    root = _implicit_sqrt!(
-        m, a^2 + epsilon^2; start=max(Float64(start), epsilon))
-    return (a - root) / 2
+function _smooth_negative_expression!(m, a, epsilon; start::Real=epsilon)
+    return _smooth_negative(a, epsilon)
 end
 
-function _smooth_dominant_implicit!(
+function _smooth_dominant_expression!(
         m, low, high, policy::WorstPhaseVoltVarWatt)
     positive_scale, negative_scale = _volt_var_branch_scales(policy)
     low_severity = low/positive_scale
     high_severity = -high/negative_scale
     difference = low_severity - high_severity
     epsilon = policy.conflict_epsilon
-    root = _implicit_sqrt!(
-        m, difference^2 + epsilon^2; start=epsilon, scale=1.0)
+    root = sqrt(difference^2 + epsilon^2)
     weight = (1 + difference/root)/2
     normalized_command = weight*low_severity - (1-weight)*high_severity
     selected_scale = weight*positive_scale + (1-weight)*negative_scale
@@ -1054,28 +1073,23 @@ function _control_voltage_start(policy::AbstractPositiveSequencePolicy, vb)
     for law in _policy_laws(policy)
         law === nothing || append!(voltage_points, law.breakpoints)
     end
-    # A curve-free policy has no physical voltage to start from and falls back
-    # to an LV anchor. This is deliberately NOT the network's own 1 pu base:
-    # switching the fallback from 230/vb to 1.0 moves the start and scale of
-    # every magnitude auxiliary by 6.5% on the 245 V test fixtures and flips
-    # the near-zero-current `dv2_max` regression from LOCALLY_SOLVED to a
-    # non-publishable status. The fallback therefore stays LV-anchored until the
-    # start/scale audit noted in the phase-aware design note is done; MV studies
-    # must configure curves (or an explicit start) rather than rely on it.
-    return isempty(voltage_points) ? 230.0/vb :
+    # A curve-free policy starts at the local nominal voltage, represented by
+    # one per unit. A fixed 230 V anchor would mis-scale other voltage levels.
+    # Configured curves supply their own physical operating-voltage anchor.
+    return isempty(voltage_points) ? 1.0 :
         (minimum(voltage_points) + maximum(voltage_points))/(2vb)
 end
 
-function _smooth_extrema_implicit!(
+function _smooth_extrema_expression!(
         m, magnitudes, epsilon; voltage_start)
     spread_start = max(0.05voltage_start, epsilon)
-    vmin12 = _smooth_min_implicit!(
+    vmin12 = _smooth_min_expression!(
         m, magnitudes[1], magnitudes[2], epsilon; start=spread_start)
-    vmax12 = _smooth_max_implicit!(
+    vmax12 = _smooth_max_expression!(
         m, magnitudes[1], magnitudes[2], epsilon; start=spread_start)
-    vmin = _smooth_min_implicit!(
+    vmin = _smooth_min_expression!(
         m, vmin12, magnitudes[3], epsilon; start=spread_start)
-    vmax = _smooth_max_implicit!(
+    vmax = _smooth_max_expression!(
         m, vmax12, magnitudes[3], epsilon; start=spread_start)
     return vmin, vmax
 end
@@ -1092,45 +1106,20 @@ _is_identically_zero(::Any) = false
 
 function _safe_direction_scale_implicit!(
         m, offset, direction, limit, epsilon; magnitude_start, scale)
-    offset_magnitude = all(x -> x isa Real && iszero(x), offset) ? 0.0 :
-        _implicit_sqrt!(
-            m, offset[1]^2 + offset[2]^2;
-            start=magnitude_start, scale=scale)
-    direction_magnitude = _implicit_sqrt!(
-        m, direction[1]^2 + direction[2]^2;
-        start=magnitude_start, scale=scale)
-    # The headroom left for the command must not be allowed to go negative: an
-    # offset magnitude that already exceeds the limit would otherwise produce a
-    # NEGATIVE factor — a reversed current command — where the exact allocator
-    # in `_safe_direction_scale_exact` returns 0.
-    #
-    # The clamp is stamped only where a nonzero offset is actually reachable.
-    # When the offset is identically zero the headroom equals the non-negative
-    # constant `limit` minus a quantity pinned to zero, so it cannot go negative
-    # and the model stays bit-identical to the unguarded one — which matters,
-    # because these paths sit next to fixtures that are one solver tolerance away
-    # from failing. Where the clamp is needed it uses the shifted smooth norm
-    # `(a + sqrt(a^2 + eps^2))/2` as an expression rather than one more lifted
-    # variable: lifting it was measured to push the `s_max` and `dv2_max`
-    # saturation regressions from LOCALLY_SOLVED to non-publishable, the same
-    # failure mode that moved `AdvancedInverter`'s current-magnitude term to the
-    # expression form. The clamp exceeds max(headroom, 0) by at most eps/2, so
-    # the triangle bound is relaxed by no more than the selector width already
-    # declared, and the returned factor stays in [0, 1] because
-    # smax_eps(a, b) >= a.
-    #
-    # NOTE: lifting an identically-zero radicand stamps `(y/n)^2 == 0, y >= 0`,
-    # whose gradient vanishes at its own solution, so LICQ fails there. Removing
-    # those constraints is formally an improvement and was tried; it changed
-    # which points converge at `tol=1e-8` on a different Ipopt/MUMPS build
-    # (3 assertions in `stamped P/Q priority under PV oversizing` on
-    # ubuntu-latest, clean on aarch64-darwin). They are load-bearing as
-    # regularizers, exactly like the `a_loss == 0` epigraph in the plant. The
-    # removal therefore belongs with the limiter conditioning work, not here.
+    offset_magnitude = all(_is_identically_zero, offset) ? 0.0 :
+        _upper_magnitude!(m, offset[1]^2 + offset[2]^2, epsilon/4;
+            scale=scale, start=magnitude_start)
+    direction_magnitude = _upper_magnitude!(m,
+        direction[1]^2 + direction[2]^2, epsilon/4;
+        scale=scale, start=magnitude_start)
+    # Exact zeros need no auxiliary norm. Nonzero offsets use an upper norm,
+    # so the smoothing cannot create headroom by underestimating the offset.
+    # The positive headroom approximation below can exceed max(headroom, 0)
+    # by epsilon/2; physical squared capability constraints remain exact.
     headroom = limit - offset_magnitude
     available = all(_is_identically_zero, offset) ? headroom :
         (headroom + sqrt(headroom^2 + epsilon^2))/2
-    denominator = _smooth_max_implicit!(
+    denominator = _smooth_max_expression!(
         m, available, direction_magnitude, epsilon;
         start=max(Float64(limit), epsilon))
     return available / denominator
@@ -1138,47 +1127,50 @@ end
 
 function _limit_positive_power_smooth!(
         m, p_raw, q_raw, smax, epsilon, priority, headroom_fraction)
-    raw_magnitude = _implicit_sqrt!(
-        m, p_raw^2 + q_raw^2; start=smax, scale=smax)
+    raw_magnitude = _upper_magnitude!(m, p_raw^2 + q_raw^2, epsilon/4;
+        scale=smax)
     if priority === :proportional
-        denominator = _smooth_max_implicit!(
+        denominator = _smooth_max_expression!(
             m, smax, raw_magnitude, epsilon; start=smax)
         scale = smax/denominator
         return scale*p_raw, scale*q_raw, scale
     elseif priority === :watt
         priority_limit = (1-headroom_fraction)*smax
-        p_limited = _smooth_min_implicit!(
+        p_limited = _smooth_min_expression!(
             m, p_raw, priority_limit, epsilon; start=priority_limit)
         capacity_start = smax*sqrt(
             2headroom_fraction-headroom_fraction^2)
         q_capacity = _implicit_sqrt!(
             m, smax^2-p_limited^2;
             start=capacity_start, scale=capacity_start)
-        q_limited = _smooth_symmetric_clip_implicit!(
+        q_limited = _smooth_symmetric_clip_expression!(
             m, q_raw, q_capacity, epsilon; start=smax)
     else
         priority_limit = (1-headroom_fraction)*smax
-        q_limited = _smooth_symmetric_clip_implicit!(
+        q_limited = _smooth_symmetric_clip_expression!(
             m, q_raw, priority_limit, epsilon; start=priority_limit)
         capacity_start = smax*sqrt(
             2headroom_fraction-headroom_fraction^2)
         p_capacity = _implicit_sqrt!(
             m, smax^2-q_limited^2;
             start=capacity_start, scale=capacity_start)
-        p_limited = _smooth_min_implicit!(
+        p_limited = _smooth_min_expression!(
             m, p_raw, p_capacity, epsilon; start=smax)
     end
-    limited_magnitude = _implicit_sqrt!(
-        m, p_limited^2 + q_limited^2; start=smax, scale=smax)
-    raw_denominator = _smooth_max_implicit!(
+    limited_magnitude = _upper_magnitude!(m,
+        p_limited^2 + q_limited^2, epsilon/4; scale=smax)
+    raw_denominator = _smooth_max_expression!(
         m, raw_magnitude, epsilon, epsilon; start=smax)
     scale = limited_magnitude / raw_denominator
     return p_limited, q_limited, scale
 end
 
 function _combine_safe_scale_implicit!(m, scale, candidate, epsilon)
-    return _smooth_min_implicit!(
-        m, scale, candidate, epsilon; start=1.0)
+    # For nonnegative inputs this stays in [0, min(scale, candidate)], including
+    # at zero. The ordinary smooth minimum can be negative there. Its deficit
+    # from the hard minimum is <= epsilon/2; epsilon is dimensionless.
+    return _defined_control_expression!(m,
+        scale*candidate / _smooth_max(scale, candidate, epsilon))
 end
 
 function _worst_phase_smooth(ctx, policy::WorstPhaseVoltVarWatt,
@@ -1186,22 +1178,22 @@ function _worst_phase_smooth(ctx, policy::WorstPhaseVoltVarWatt,
     m = _opf_model(ctx)
     eps_v = policy.extrema_epsilon / vb
     voltage_start = _control_voltage_start(policy, vb)
-    vmin, vmax = _smooth_extrema_implicit!(
+    vmin, vmax = _smooth_extrema_expression!(
         m, magnitudes, eps_v; voltage_start=voltage_start)
     p_fraction = policy.volt_watt === nothing ? 1.0 :
         _pwl_smooth(ctx, policy.volt_watt, vmax, vb)
     q_fraction = if policy.volt_var === nothing
         0.0
     else
-        qlo = _smooth_positive_implicit!(
+        qlo = _smooth_positive_expression!(
             m, _pwl_smooth(ctx, policy.volt_var, vmin, vb),
             policy.conflict_epsilon; start=1.0)
-        qhi = _smooth_negative_implicit!(
+        qhi = _smooth_negative_expression!(
             m, _pwl_smooth(ctx, policy.volt_var, vmax, vb),
             policy.conflict_epsilon; start=1.0)
         policy.conflict_policy === :low_voltage ? qlo :
         policy.conflict_policy === :high_voltage ? qhi :
-        policy.conflict_policy === :dominant ? _smooth_dominant_implicit!(
+        policy.conflict_policy === :dominant ? _smooth_dominant_expression!(
             m, qlo, qhi, policy) : qlo + qhi
     end
     return _volt_watt_request(policy, request, p_fraction)/sb,
@@ -1215,7 +1207,7 @@ function _average_voltage_smooth(
     voltage = sum(magnitudes)/3
     m = _opf_model(ctx)
     voltage_start = _control_voltage_start(policy, vb)
-    vmin, vmax = _smooth_extrema_implicit!(
+    vmin, vmax = _smooth_extrema_expression!(
         m, magnitudes, policy.extrema_epsilon/vb;
         voltage_start=voltage_start)
     p_fraction = policy.volt_watt === nothing ? 1.0 :
@@ -1236,7 +1228,7 @@ function _positive_sequence_smooth(
         m, u1[1]^2 + u1[2]^2;
         start=voltage_start, scale=voltage_start)
     eps_v = policy.guard_epsilon/vb
-    vmin, vmax = _smooth_extrema_implicit!(
+    vmin, vmax = _smooth_extrema_expression!(
         m, magnitudes, eps_v; voltage_start=voltage_start)
     watt_voltage = policy.worst_phase_watt_guard ? vmax : voltage
     p_fraction = policy.volt_watt === nothing ? 1.0 :
@@ -1270,11 +1262,10 @@ function _unbalance_smooth(ctx, policy::NegativeSequenceAdmittanceDroop,
     m = _opf_model(ctx)
     floor = policy.voltage_floor / vb
     denom = u1r^2 + u1i^2 + floor^2
-    u2mag = _implicit_sqrt!(
-        m, u2r^2 + u2i^2; start=0.05voltage_start,
-        scale=voltage_start)
-    u1denom = _implicit_sqrt!(
-        m, denom; start=voltage_start, scale=voltage_start)
+    u2mag = BMOPFTools.smooth_norm(ctx, u2r, u2i; scale=floor,
+        eps_rel=_unbalance_norm_epsilon(policy)/policy.voltage_floor,
+        name="controller_negative_sequence")
+    u1denom = sqrt(denom)
     eta = u2mag / u1denom
     gain = _pwl_smooth(ctx, policy.gain, eta, 1.0) * vb / ib
     c = cos(policy.impedance_angle); s = sin(policy.impedance_angle)
@@ -1334,7 +1325,7 @@ function stamp_smooth_control!(ctx, controller::SequenceController,
     power_epsilon = _power_epsilon(controller.limiter, ratings)
     seps = power_epsilon / sb
     if _volt_watt_basis(controller.positive) === :rated
-        p_raw = _smooth_min_implicit!(
+        p_raw = _smooth_min_expression!(
             m, request.p_available/sb, p_raw, seps;
             start=request.p_available/sb)
     end
@@ -1352,13 +1343,12 @@ function stamp_smooth_control!(ctx, controller::SequenceController,
 
     ieps = _current_epsilon(controller.limiter, ratings) / ib
     imax = ratings.i_max / ib
-    imags = [_implicit_sqrt!(
-        m, pair[1]^2 + pair[2]^2;
-        start=max(0.5imax, ieps), scale=imax)
+    imags = [_upper_magnitude!(m, pair[1]^2 + pair[2]^2, ieps/4;
+                scale=imax, start=0.5imax)
         for pair in phase_request]
     current_denominator = imax
     for imag in imags
-        current_denominator = _smooth_max_implicit!(
+        current_denominator = _smooth_max_expression!(
             m, current_denominator, imag, ieps; start=imax)
     end
     target_scale = imax / current_denominator
@@ -1384,15 +1374,17 @@ function stamp_smooth_control!(ctx, controller::SequenceController,
         ntuple(_ -> zero_pair, 3)
 
     capability_scale = 1.0
-    scale_eps = max(ieps, eps(Float64))
+    # Selector widths on scale factors are ratios of physical quantities, not
+    # per-unit current or power values. They must not depend on s_base.
+    scale_eps = ieps / imax
     if inverter.i_max !== nothing
         for k in 1:3
             reserve = inverter.pwm_ac_converter_reserve[k] / ib
             limit = sqrt(max((inverter.i_max/ib)^2 - reserve^2, 0.0))
             candidate = _safe_direction_scale_implicit!(
-                m, converter_offset[k], phase_pre[k], limit, scale_eps;
-                magnitude_start=max(0.25limit, scale_eps),
-                scale=max(limit, scale_eps))
+                m, converter_offset[k], phase_pre[k], limit, ieps;
+                magnitude_start=max(0.25limit, ieps),
+                scale=max(limit, ieps))
             capability_scale = _combine_safe_scale_implicit!(
                 m, capability_scale, candidate, scale_eps)
         end
@@ -1402,9 +1394,9 @@ function stamp_smooth_control!(ctx, controller::SequenceController,
             reserve = inverter.pwm_ac_grid_reserve[k] / ib
             limit = sqrt(max((inverter.i_grid_max/ib)^2 - reserve^2, 0.0))
             candidate = _safe_direction_scale_implicit!(
-                m, grid_offset[k], phase_pre[k], limit, scale_eps;
-                magnitude_start=max(0.25limit, scale_eps),
-                scale=max(limit, scale_eps))
+                m, grid_offset[k], phase_pre[k], limit, ieps;
+                magnitude_start=max(0.25limit, ieps),
+                scale=max(limit, ieps))
             capability_scale = _combine_safe_scale_implicit!(
                 m, capability_scale, candidate, scale_eps)
         end
@@ -1430,7 +1422,7 @@ function stamp_smooth_control!(ctx, controller::SequenceController,
         m, converter_power_offset, converter_power_direction, smax, seps;
         magnitude_start=max(0.25smax, seps), scale=smax)
     capability_scale = _combine_safe_scale_implicit!(
-        m, capability_scale, power_candidate, max(seps, eps(Float64)))
+        m, capability_scale, power_candidate, seps/smax)
     if inverter.dv2_max !== nothing
         ripple_offset = (0.0, 0.0)
         ripple_direction = (0.0, 0.0)
@@ -1454,7 +1446,7 @@ function stamp_smooth_control!(ctx, controller::SequenceController,
             scale=max(ripple_limit, seps))
         capability_scale = _combine_safe_scale_implicit!(
             m, capability_scale, ripple_candidate,
-            max(seps, eps(Float64)))
+            seps/smax)
     end
 
     current_scale = target_scale*capability_scale

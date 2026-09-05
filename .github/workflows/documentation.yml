@@ -21,7 +21,7 @@ jobs:
       # docs/Project.toml declares the local PowerOptLab source and pins the
       # unregistered BMOPFTools source to the tested commit.
       - name: Install dependencies
-        run: julia --project=docs/ -e 'using Pkg; Pkg.instantiate()'
+        run: julia --project=docs scripts/instantiate_pinned.jl
       - name: Build and deploy
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

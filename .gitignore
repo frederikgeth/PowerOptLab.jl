@@ -6,8 +6,8 @@
 lcov.info
 
 # Resolved dependency manifests — not consumed downstream for a library and a
-# source of churn. The environment is reproducible from Project.toml plus the
-# dev-path to BMOPFTools (see README "Development setup").
+# source of churn. The BMOPFTools source is pinned in Project.toml; use
+# scripts/instantiate_pinned.jl to align local and CI environments.
 Manifest.toml
 **/Manifest.toml
 

@@ -186,22 +186,25 @@ retrofit and preserves the source cases and provenance.
 
 ## Development setup
 
-BMOPFTools is not yet registered. For development, use a local checkout; CI and
-documentation builds pin commit `7937f9792babac62483203321803652bb2159271`
-so their dependency source is reproducible. That BMOPFTools snapshot uses
-PowerIO 0.9:
+BMOPFTools is not yet registered. Local tests, CI, and documentation builds use
+commit `5b51d2f361dab91bd7c16711019584407da79ed8`, declared in the root and docs
+`Project.toml` source tables. Set up the tested environment with:
 
-```julia
-using Pkg
-Pkg.activate(".")
-Pkg.develop(path="../BMOPFTools.jl")   # adjust to your checkout
-Pkg.instantiate()
-Pkg.test()
+```sh
+julia --project=. scripts/instantiate_pinned.jl
+julia --project=. -e 'using Pkg; Pkg.test()'
+julia --project=docs scripts/instantiate_pinned.jl
 ```
 
-`Manifest.toml` is intentionally not committed (library convention); the
-package compat pins BMOPFTools 0.1.0 exactly, while CI pins the tested source
-commit shown above.
+The setup script checks that both source declarations agree and replaces any
+previous BMOPFTools development-path override with the pinned source. It also
+supports Julia 1.10, whose package manager does not use `[sources]` directly.
+`Manifest.toml` remains local and untracked; BMOPFTools 0.1.0 alone does not
+identify its source commit. This snapshot uses PowerIO 0.9.
+
+For intentional upstream development, opt into a local checkout with
+`Pkg.develop(path="../BMOPFTools.jl")`. Re-run the setup script before comparing
+local results with CI so the tested source is identical again.
 
 ## License
 

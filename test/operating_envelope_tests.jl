@@ -548,7 +548,12 @@ end
     @test q_audit["contexts_present"] == 4
     @test q_audit["link_constraints"] == 3
 
-    operational_replay = verify_operating_envelope(net, cps, perfect;
+    # Test the recourse distinction inside the pointwise-feasible region,
+    # rather than asking each independent NLP to reproduce an optimized bound.
+    # The 1% backoff remains well above the common-control allocation here.
+    conflict_caps = Dict(id => 0.99 * only(values) for (id, values) in perfect.envelope)
+    @test sum(values(conflict_caps)) > issued.total_capacity[1] + 100.0
+    operational_replay = verify_operating_envelope(net, cps, conflict_caps;
         utilizations=:corners, control_policy=IssuePlusLocalLaws())
     @test operational_replay.feasible == [false]
     @test operational_replay.diagnostics[1]["control_policy"] ==

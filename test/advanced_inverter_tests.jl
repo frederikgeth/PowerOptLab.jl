@@ -1344,8 +1344,30 @@ end
 end
 
 @testset "Advanced inverter: square-root smoothing policy" begin
-    smooth = PowerOptLab._smooth_magnitude
+    smooth(x, epsilon) = sqrt(x + epsilon^2) - epsilon
     epsilon_of = PowerOptLab._magnitude_epsilon
+
+    # Exercise the expression actually stamped in production, including its
+    # shared BMOPFTools approximation annotation and the SI error budget.
+    ctx = PowerOptLab.build_opf_model(inv_grid(); add_objective=false)
+    model = PowerOptLab._opf_model(ctx)
+    @variable(model, norm_re)
+    @variable(model, norm_im)
+    for ib in (1.0, 4000.0)
+        expression = PowerOptLab._push_magnitude(
+            ctx, nothing, norm_re, norm_im, 40.0, ib; name="loss_budget_test")
+        epsilon_si = epsilon_of(40.0, ib)*ib
+        for radius in (0.0, epsilon_si, 1.0, 40.0)
+            actual = value(v -> v == norm_re ? radius/ib : 0.0, expression)*ib
+            @test -1e-12 <= radius-actual <= epsilon_si + 1e-12
+        end
+        annotations = PowerOptLab.BMOPFTools.opf_differentiability_annotations(ctx)
+        record = only(r for r in values(annotations)
+            if occursin("loss_budget_test", string(r.name)) &&
+               r.metadata["eps"] == epsilon_of(40.0,ib))
+        @test !record.blocking
+        @test record.metadata["form"] == "shifted_2norm"
+    end
 
     # The shifted norm is a UNIFORM eps-accurate UNDERestimator of sqrt(x):
     # 0 <= sqrt(x) - f(x) <= eps for every x >= 0, exact at x = 0. This is the
@@ -1390,10 +1412,8 @@ end
     @test solve_status(pu).publishable
     exact = a * (sum(pu.i_mag) + pu.i_neutral)
     budget = 4 * a * PowerOptLab._MAGNITUDE_EPS_REL * 40.0
-    # The absolute slack is the solver's own accuracy floor on this quantity
-    # (measured at ~5e-12 relative on the hardest case), not the eps budget:
-    # eps is deliberately set one decade under Ipopt's tol, so the analytic
-    # bias is small but must still not be exceeded in the one-sided direction.
+    # Allow for numerical solve error separately from the physical smoothing
+    # budget. The latter stays fixed when solver tolerances change.
     floor_abs = 1e-8 * exact
     @test pu.p_loss <= exact + floor_abs           # one-sided: never inflated
     @test exact - pu.p_loss <= budget + floor_abs  # within the closed form
@@ -1427,10 +1447,9 @@ end
     end
 
     # With a_loss == 0 no smooth-magnitude TERM enters the loss, so the loss
-    # is exactly zero and the expression stays quadratic. The boxed epigraph
-    # auxiliary is still stamped: it is a regulariser, and removing it was
-    # measured to push a single-phase device with no i_max into
-    # ITERATION_LIMIT. This case guards that, since it has no i_max either.
+    # is exactly zero and the expression stays quadratic. The epigraph is
+    # retained for its measured effect on solver trajectories, not as a
+    # physical loss term or a mathematically justified regularization.
     quiet = AdvancedInverter(; id="i", topology=:FOUR_LEG, v_dc=700.0,
                              c_dc=1.1e-3, In_max=40.0, r_filter_neutral=0.03,
                              _TOPO_COMMON...)

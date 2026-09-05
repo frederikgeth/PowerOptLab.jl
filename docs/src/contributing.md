@@ -84,24 +84,20 @@ and the PowerOptLab version becomes a thin re-export or is retired.
 
 ## BMOPFTools compatibility contract
 
-BMOPFTools is unregistered, so automated builds pin the exact tested source
-commit (`7937f9792babac62483203321803652bb2159271`, the current main snapshot
-with composable objective building blocks and the public OPF scaling-policy,
-diagnostic, semantic IBR, and smooth-PWL APIs) and
-`Project.toml` pins its package version to 0.1.0. Update both
-together, then run the complete test and
-documentation suites on the Julia compatibility floor and current stable.
+BMOPFTools is unregistered. The root and docs `Project.toml` source tables pin
+commit `5b51d2f361dab91bd7c16711019584407da79ed8`; package compatibility remains
+0.1.0. Update both source pins together, then run the complete tests and
+documentation build on the Julia compatibility floor and current stable.
 
-Both the repository and `docs/Manifest.toml` files are intentionally local. If
-either contains
-`path = "../BMOPFTools.jl"`, tests use whatever branch that sibling checkout is
-currently on, not the CI pin; a stale docs manifest can therefore fail inside an
-executable `@example` even when CI is healthy. Before diagnosing a controller or
-documentation failure, verify
-that the sibling contains the public `piecewise_linear_value` and
-`opf_piecewise_linear_expression` APIs. To reproduce CI without changing either
-working tree, create a temporary environment, develop this PowerOptLab checkout,
-and add BMOPFTools at the exact revision above. Record `versioninfo()`,
+Run `julia --project=. scripts/instantiate_pinned.jl` for local tests and
+`julia --project=docs scripts/instantiate_pinned.jl` for documentation. CI uses
+these commands too. The script checks agreement between the two declarations
+and explicitly installs the commit, including on Julia 1.10 where `[sources]`
+is not consumed automatically.
+
+Both manifest files remain local. A `Pkg.develop` path override means tests
+use that checkout's working tree. Re-run the setup script to restore the tested
+commit before diagnosing a discrepancy with CI. Record `versioninfo()`,
 `Pkg.status()`, the Ipopt version, and explicit solver tolerances with published
 results.
 

@@ -58,18 +58,17 @@ method roadmap.
 
 ## Installation
 
-BMOPFTools is not yet registered. Develop both from local checkouts; automated
-builds pin BMOPFTools commit
-`7937f9792babac62483203321803652bb2159271` (the current main snapshot with
-composable objective building blocks and the public OPF scaling-policy,
-diagnostic, semantic IBR, and smooth-PWL APIs):
+BMOPFTools is not yet registered. Local tests and automated builds use commit
+`5b51d2f361dab91bd7c16711019584407da79ed8`. From the PowerOptLab checkout,
+install the pinned source with the same setup script used by CI:
 
-```julia
-using Pkg
-Pkg.activate(".")
-Pkg.develop(path="../BMOPFTools.jl")
-Pkg.instantiate()
+```sh
+julia --project=. scripts/instantiate_pinned.jl
 ```
+
+This replaces a previous local BMOPFTools development-path override for this
+project without changing the sibling checkout. Use `Pkg.develop` only when
+intentionally testing uncommitted upstream work.
 
 Everything is SI at the interface (watts, vars, watt-hours, volts); per-unit
 conditioning inside each solve is handled through the engine's

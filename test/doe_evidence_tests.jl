@@ -91,7 +91,10 @@ end
     perfect = solve_operating_envelope(net, cps; security=:corners,
         control_policy=PerfectRecourse())
     heldout = DOEScenarioSet([[DOEScenario(id="heldout", network=net, role=:test)]]; dataset_id="heldout")
-    conflict = evaluate_operating_envelope_coverage(heldout, cps, perfect;
+    # Retain a shared-policy conflict with margin to each pointwise AC bound.
+    # Exact optimized endpoints can legitimately replay as unresolved.
+    conflict_caps = Dict(id => 0.99 * only(values) for (id, values) in perfect.envelope)
+    conflict = evaluate_operating_envelope_coverage(heldout, cps, conflict_caps;
         utilizations=:corners, control_policy=IssuePlusLocalLaws())
     @test all(c.feasible === true for c in conflict.verification.context_results[1])
     @test conflict.outcome == :inconclusive

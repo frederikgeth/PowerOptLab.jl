@@ -501,13 +501,15 @@ end
             (1.0 + 0im, 9.0 + 0im))      # ordinary saturation
         model = Model(Ipopt.Optimizer)
         set_silent(model)
+        @variable(model, offset_real, start=real(offset))
+        @constraint(model, offset_real == real(offset))
         smooth = PowerOptLab._safe_direction_scale_implicit!(
-            model, (real(offset), imag(offset)),
+            model, (offset_real, imag(offset)),
             (real(direction), imag(direction)), limit, epsilon;
             magnitude_start=limit, scale=limit)
         @objective(model, Min, 0.0)
         optimize!(model)
-        @test is_solved_and_feasible(model; allow_almost=true)
+        @test is_solved_and_feasible(model)
         exact = PowerOptLab._safe_direction_scale_exact(
             offset, direction, limit)
         @test 0.0 <= value(smooth) <= 1.0
@@ -631,13 +633,9 @@ end
 end
 
 @testset "Inverter controls: DC-ripple voltage saturation" begin
-    # dv2_max sets the ripple budget |S_tilde| = 2*w*c_dc*v_dc*dv2_max, so
-    # 0.1 V allows only 48 VA here and forces an ~87% current backoff. That
-    # drives the solve into a near-zero-current corner where the capability
-    # limiter's implicit square roots are worst conditioned, and the result
-    # then depends on the solver tolerance and the platform's linear algebra.
-    # 0.7 V keeps the backoff clearly active (current_scale ~ 0.88) while
-    # solving at tol = 1e-6, 1e-8, and 1e-10.
+    # Keep the 0.7 V saturation case and exercise the original 0.1 V limit in
+    # inverter_control_numerics_tests.jl. Both use fixed smoothing and the same
+    # ordinary Ipopt configuration; no fixture-specific scaling or barrier.
     inverter = AdvancedInverter(
         id="ripple_limit", bus="poc", phase_terminals=["a", "b", "c"],
         neutral="n", topology=:THREE_LEG, s_max=20e3, i_max=40.0,
@@ -648,16 +646,10 @@ end
         inv_grid3_unbal(), ControlledDevice(inverter, controller),
         _CTRL_REQUEST; per_unit=true,
         solver_options=("max_iter" => 500, "tol" => 1e-8))
-    # These four assertions fail deterministically on Linux CI under BMOPFTools
-    # 8f121216 while passing on macOS, and do not reproduce on `main` with the
-    # same pin. Skipped rather than marked broken: `@test_broken` would report
-    # an Unexpected Pass wherever the solve succeeds, turning local runs red.
-    # The solve above still runs, so a hard error would still surface.
-    # Tracked as a cross-platform numerical-stability problem; see issue #37.
-    @test_skip result.solve.publishable
-    @test_skip result.plant.dv2 <= inverter.dv2_max + 1e-6
-    @test_skip result.control.current_scale < 1.0
-    @test_skip result.exact_smooth_current_residual < 1e-3
+    @test result.solve.publishable
+    @test result.plant.dv2 <= inverter.dv2_max + 1e-6
+    @test result.control.current_scale < 1.0
+    @test result.exact_smooth_current_residual < 1e-3
 end
 
 @testset "Inverter controls: converter-side and grid-side current targets" begin
@@ -676,6 +668,8 @@ end
         PositiveSequenceVoltVarWatt(); current_target=:grid)
     request = InverterControlRequest(p_available=9e3, q_scale=0.0)
 
+    # Use the ordinary shared solver settings and check physical current/power
+    # identities. The corrected formulation needs no fixture-specific scaling.
     converter = solve_controlled_inverter(
         inv_grid3_bal(), ControlledDevice(inverter, converter_controller),
         request; per_unit=true,

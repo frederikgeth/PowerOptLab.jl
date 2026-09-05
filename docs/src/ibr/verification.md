@@ -79,6 +79,21 @@ OpenDSS comparison nor the four-leg/three-single-phase reduction validates
 negative-sequence control or shared-DC-link dynamics; those are mechanism tests,
 not universal model equivalences.
 
+### Numerical regression settings
+
+The DC-ripple saturation and LCL current-target regressions use `tol=1e-8`
+with `nlp_scaling_method="none"`; the ripple fixture additionally uses
+`mu_strategy="adaptive"` to avoid monotone-barrier stagnation on Julia 1.10.
+Their equations already include per-unit and
+device normalization. In the grid-target fixture, Ipopt's additional gradient
+scaling stopped at acceptable tolerance; solving with the declared row scales
+reaches the requested convergence criterion and satisfies the physical
+current/power comparisons. These tests require publishable solutions and keep
+their physical tolerances; the ripple assertions are active rather than skipped.
+This is a measured configuration for these fixtures, not a universal solver
+setting. Further tightening `tol` can encounter the formulation's numerical
+accuracy floor instead of improving the physical answer.
+
 ## Infeasibility triage for fleet studies
 
 Never discard a failed or non-publishable snapshot. Retain scenario identifiers,

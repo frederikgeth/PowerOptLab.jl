@@ -41,6 +41,7 @@ end
     include("bilevel_tests.jl")
     include("advanced_inverter_tests.jl")
     include("inverter_control_tests.jl")
+    include("inverter_control_numerics_tests.jl")
     include("inverter_control_study_tests.jl")
     include("inverter_control_experiment_tests.jl")
     include("inverter_control_sizing_tests.jl")

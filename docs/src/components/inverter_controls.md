@@ -274,8 +274,9 @@ The smoothing and regularisation parameters are:
 | ``\lambda`` (`ripple_blend`) | 1 | 0–1 | trades voltage actuation against 2ω ripple; publish a Pareto sweep |
 
 The near-exact limiter defaults minimise controller bias but may be too sharp
-for a difficult fleet solve. There is no universal setting: use continuation
-from wider selectors and retain the refinement evidence for reported cases.
+for a difficult fleet solve. There is no universal setting: prescribe widths
+from the physical error budget and verify independent starts at that fixed
+formulation. Automatic continuation and retries are not performed.
 
 The default `current_epsilon_fraction` and `power_epsilon_fraction` are
 rating-relative, so a heterogeneous fleet shares one dimensionless controller
@@ -330,48 +331,56 @@ support.
 
 ### Differentiable magnitude representation
 
-The JuMP formulation does not replace a magnitude by
-``\sqrt{x+\epsilon^2}``. Every required magnitude introduces a nonnegative
-auxiliary variable
+The representation depends on the quantity's role:
+
+| Quantity | Representation | Approximation |
+|---|---|---|
+| Provably zero offset | Literal zero | Exact; no auxiliary constraint |
+| Phase and positive-sequence voltage magnitude | Scaled nonnegative squared root | Exact at a feasible point; intended for energized voltages |
+| Current/power magnitude in a capability denominator | ``\sqrt{x+\epsilon_n^2}`` | Upper norm; excess at most ``\epsilon_n`` |
+| Negative-sequence voltage magnitude | BMOPFTools shifted `smooth_norm` | Underestimate by at most its declared voltage width; zero at balance |
+| Min/max selectors | Direct ``\sqrt{(a-b)^2+\epsilon^2}`` expressions | Selector deviation at most ``\epsilon/2`` |
+| Watt/var-priority remaining capacity | Scaled nonnegative squared root | Retains the capability-circle domain and declared priority headroom |
+
+For capability norms, ``\epsilon_n=\epsilon_I/4`` or ``\epsilon_S/4`` in the
+appropriate working units. Upper norms cannot enlarge a current command by
+underestimating its denominator. Hard current, apparent-power and ripple limits
+remain exact squared inequalities.
+
+Repeated nonlinear expressions are stored through normalized definitions
+``y=f(x)/s`` and used as ``s y``. Their defining row has derivative one with
+respect to ``y`` even at zero. These definitions keep the expression graph
+compact without the zero-gradient defect of ``y^2=0``. They do not introduce a
+new physical constraint or approximate ``f`` further.
+
+For negative-sequence droop, the shifted voltage width is
+``0.1\epsilon_\eta U_{floor}``, where ``\epsilon_\eta`` is the gain curve's
+`smoothing_epsilon`. Thus the error in ``\eta`` is bounded by
+``0.1\epsilon_\eta`` even at the voltage floor. This is a bound on the measured
+unbalance input, not an equilibrium-error bound.
+
+The plant-aware allocator approximates positive headroom with
+``(h+\sqrt{h^2+\epsilon^2})/2``. This can exceed ``\max(h,0)`` by at most
+``\epsilon/2``; the exact physical inequalities therefore remain necessary.
+Nonnegative scale factors are combined with
 
 ```math
-y\geq0,\qquad (y/y_b)^2=x/y_b^2,
+c_\delta(a,b)=\frac{ab}{\operatorname{smax}_\delta(a,b)},\qquad a,b\ge0.
 ```
 
-where ``y_b`` is a fixed scaling quantity used only to condition the equality.
-Thus ``y=\sqrt{x}`` exactly at every feasible point — to the solver's constraint
-tolerance, which is why the choice of ``y_b`` matters. This representation is
-used for phase-voltage, sequence-voltage, apparent-power, and phase-current
-magnitudes, and for the square roots inside smooth min/max selectors. Epsilon is
-retained only where it defines an intended smooth approximation: BMOPFTools PWL
-corners and algebraic selection between two values.
+It satisfies ``0\le c_\delta(a,b)\le\min(a,b)`` and has deficit at most
+``\delta/2``. Unlike ordinary smooth minimum, it cannot reverse the command at
+zero headroom. Its dimensionless width is ``\epsilon_I/I_{max}`` for current
+checks and ``\epsilon_S/S_{max}`` for apparent/ripple-power checks. These ratios,
+and all physical smoothing widths, are independent of the arbitrary OPF power
+base. Per-operator bounds accumulate through the controller; they are not an
+end-to-end network-equilibrium certificate.
 
-There is one deliberate exception. The zero-clamp on remaining capability
-headroom inside the plant-aware backoff uses the shifted expression
-``(a+\sqrt{a^2+\epsilon^2})/2`` rather than another lifted variable. Lifting it
-was measured to push the `s_max` and `dv2_max` saturation regressions from
-`LOCALLY_SOLVED` to non-publishable — the same failure mode that moved
-[`AdvancedInverter`](@ref)'s current-magnitude loss term to the expression form.
-The clamp exceeds ``\max(a,0)`` by at most ``\epsilon/2``, so it relaxes the
-conservative triangle bound by less than the selector width already declared.
-See the numerical-policy discussion in
+Each solve uses the requested fixed smoothing parameters. There is no automatic
+continuation, retry or exact-law re-solve. Regression checks cover original
+constraint residuals, SI capability limits, exact-versus-smooth commands at the
+solved point, perturbed starts and alternative per-unit bases. See
 [the design note](@ref ibr-phase-aware-control-laws).
-
-Implicit magnitude equalities are degenerate at an exact zero vector: the
-equality pins ``y=0`` while its gradient vanishes there, so LICQ fails at the
-model's own solution. The capability allocator still contains two such
-equalities per device for any filter without an explicit LCL midpoint
-(converter-target apparent power, and ``\Delta V_{2,max}`` when configured).
-Removing them was tried and reverted: it is bit-identical on one platform and
-costs publishable status on another, so they are load-bearing as regularizers.
-See the numerical-policy discussion in
-[the design note](@ref ibr-phase-aware-control-laws).
-
-The implementation does avoid an unnecessary `|U2|` variable for
-`NoUnbalanceControl`. Studies using negative-sequence droop should include
-balanced cases in their solver-robustness audit and report any initialization
-dependence, because both the exactly-zero and *near*-zero ``U_2`` cases are
-poorly conditioned.
 
 ## Compose with the physical inverter
 
