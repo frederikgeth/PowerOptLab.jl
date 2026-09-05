@@ -50,8 +50,13 @@ function magnitude_expression(target,components,r::MagnitudeApproximation;
         root = sqrt(sum(c^2 for c in components)+(r.epsilon/si)^2)
         return (r.direction == :lower ? root-r.epsilon/si : root)*(si/so)
     end
-    lower = BMOPFTools.smooth_norm(target,collect(components);scale=1.,
-        eps_rel=r.epsilon/si,name=name)
+    # Preserve upstream's established two-component expression and annotation
+    # for complex phasors; use its grouped helper for other dimensions.
+    lower = length(components)==2 ?
+        BMOPFTools.smooth_norm(target,components[1],components[2];scale=1.,
+            eps_rel=r.epsilon/si,name=name) :
+        BMOPFTools.smooth_norm(target,collect(components);scale=1.,
+            eps_rel=r.epsilon/si,name=name)
     return lower*(si/so)+(r.direction == :upper ? r.epsilon/so : 0.)
 end
 
