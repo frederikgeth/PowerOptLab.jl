@@ -15,12 +15,19 @@ pointwise perfect recourse for reproducing anticipative formulations.
 |---|---|---|
 | Geometry | One-sided active-power allocation per connection | No paired import/export band or coupled P–Q region |
 | Network model | Nonlinear, unbalanced, neutral-explicit AC model | Fundamental-frequency steady state; local nonlinear solve |
-| Utilization coverage | Bound point, exact small-N corners, bound-point dropout faces, explicit points, scrambled Halton and margin-directed adaptive search | Finite search; no continuous nonlinear box certificate. Coordinate refinement reaches only `1 - initial_step/(1 - step_decay)` from the bound point, so dropout faces are seeded rather than searched |
+| Utilization coverage | Bound point, exact small-N corners, bound-point dropout faces, explicit points, scrambled Halton and margin-directed adaptive search | Finite search; no general continuous nonlinear box certificate. Refinement reach depends on the finite move budget and minimum-step floor; dropout faces are seeded explicitly |
 | Exogenous uncertainty | Typed scenarios, Gaussian and box-conditioned draws, residual bootstrap, categorical materialization seam | Model validity and physical transforms remain caller responsibilities |
 | Control recourse | Issue, scenario, local-law, and context stages for supported controls | Arbitrary controls need registration; generator P/Q lacks a safe linked handle |
-| Validation | Per-context status, margins, fixed-control replay, candidate confirmation, multistart | Replay shares the formulation/solver family; no branch completeness or global bound |
+| Validation | Tri-state numerical evidence, policy-compatible context verdicts, provenance-matched fixed-control replay, candidate confirmation, multistart, analytic references | General AC replay shares the formulation/solver family; the analytic containment proof applies only to its idealized fixture |
 | Statistical evidence | Held-out coverage, leakage audits, capacity curves, model pairing, shift and probability-calibration diagnostics | Assumptions such as independence, exchangeability, and stationarity are declared, not inferred |
-| Reproducibility | Study hashes, manifests, benchmark rows, committed synthetic range fixture | Real datasets and estimator-specific materializers remain study-specific |
+| Reproducibility | Study hashes, manifests, benchmark rows, eight executable tutorials, committed synthetic fixtures | Real datasets and estimator-specific materializers remain study-specific |
+
+The cleanup adds [faithful replay](../tutorials/doe_faithful_replay.md) and an
+[analytic reference suite](../tutorials/doe_analytic_reference.md). One physical
+IBR may bind only one participant; terminal declarations must match the engine,
+and legacy ports are single-phase. Numerical limits remain unresolved rather
+than becoming candidate violations. The separate PF adapter rejects droop
+profiles whose rating bases the pinned engine would alter.
 
 ## Branch-completion gate
 

@@ -1,5 +1,10 @@
 # Advanced DOE uncertainty laboratory
 
+<!-- doe-executable -->
+
+All Julia blocks on this page run in order from the repository root. CI executes
+the exact blocks with `julia --project=. scripts/run_doe_tutorials.jl`.
+
 > **Learning path:** this page is the complete, API-dense reference workflow.
 > New readers should first complete [DOE scenario design and held-out
 > evaluation](doe_scenario_design.md), [Constructing and comparing DOE
@@ -550,13 +555,15 @@ for serial or group dependence and post-hoc model selection.
 
 ## Add a statistical bound only when justified
 
-If the selected held-out scenarios are genuinely independent draws from the
-target distribution, make that assumption explicit:
+For a concentration-bound example, generate a fresh synthetic i.i.d. test set.
+The hand-picked cases above do not justify an independence assertion:
 
 ```julia
+include("scripts/cases/doe_uncertainty_tutorial.jl")
+iid_test = doe_iid_test_scenarios(count=32, seed=7319)
 iid_coverage = evaluate_operating_envelope_coverage(
-    scenarios, cps, allocation;
-    roles=(:test, :stress),
+    iid_test, cps, allocation;
+    roles=:test,
     control_policy=PerfectRecourse(),
     iid_assumption=true,
     confidence=0.95)
@@ -566,8 +573,9 @@ iid_coverage.metrics["one_sided_hoeffding_upper_bound"]
 
 The one-sided Hoeffding bound uses the unweighted scenario count and treats
 unresolved scenarios as candidate violations. Declared scenario weights affect
-the weighted empirical estimate, not this concentration bound. With only two
-held-out scenarios the bound is intentionally weak.
+the weighted empirical estimate, not this concentration bound. These 32 independent synthetic draws represent Uniform(100,6000) W demand
+at each bus. The bound concerns numerical evaluation outcomes for this declared
+population, not a certified physical failure rate.
 
 Do not set `iid_assumption=true` for hand-picked stress cases, overlapping time
 windows, scenarios reused during method development, or a split affected by

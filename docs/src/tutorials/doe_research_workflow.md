@@ -1,5 +1,9 @@
 # Reproducible DOE recourse, verification, and search
 
+For a complete runnable experiment, start with [Faithful replay](doe_faithful_replay.md).
+This reference workflow uses schematic feeder and device names; its fragments
+are templates to adapt to your study, not one sequential script.
+
 > **Audience:** researchers comparing dynamic-operating-envelope formulations
 >
 > **Claim level:** finite tested-point evidence from local nonlinear AC models

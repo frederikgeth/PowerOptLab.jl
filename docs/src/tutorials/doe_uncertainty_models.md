@@ -1,5 +1,10 @@
 # Constructing and comparing DOE uncertainty models
 
+<!-- doe-executable -->
+
+All Julia blocks on this page run in order from the repository root. CI executes
+the exact blocks with `julia --project=. scripts/run_doe_tutorials.jl`.
+
 > **Question:** which uncertainty representation matches the physical evidence,
 > and how can alternatives be compared without changing the DOE claim?
 >
@@ -102,13 +107,32 @@ Then evaluate one issued envelope or one consistently re-issued method under
 each labelled construction:
 
 ```julia
+case = doe_uncertainty_tutorial_case()
+cps = case.connection_points
+issued = solve_operating_envelope(
+    select_doe_scenarios(case.scenarios; roles=:calibration), cps;
+    control_policy=IssuePlusLocalLaws())
+scenarios_a = select_doe_scenarios(case.scenarios; roles=(:test, :stress))
+scenarios_b = DOEScenarioSet([
+    DOEScenario(id=s.id, role=s.role, weight=s.weight,
+        source="paired half-demand sensitivity experiment",
+        generation_method=:deterministic_load_scaling,
+        metadata=s.metadata,
+        network=begin
+            network = deepcopy(s.network)
+            for load in values(network["load"])
+                load["p_nom"] .*= 0.5
+            end
+            network
+        end) for s in scenarios_a.intervals[1]];
+    dataset_id="half-demand-model")
 comparison = compare_doe_uncertainty_models(
     ["model_a" => scenarios_a,
      "model_b" => scenarios_b],
     cps,
     issued;
     scales=(0.5, 0.75, 1.0),
-    roles=:test,
+    roles=(:test, :stress),
     utilizations=:corners,
     control_policy=IssuePlusLocalLaws(),
     pairing=:auto)
@@ -116,6 +140,8 @@ comparison = compare_doe_uncertainty_models(
 comparison.rows
 comparison.pairwise_rows
 comparison.diagnostics["pairings"]
+@assert length(comparison.rows) == 6
+@assert !comparison.diagnostics["capacity_allocation_reoptimized"]
 ```
 
 Pairing reveals which same-case outcomes change classification. It does not

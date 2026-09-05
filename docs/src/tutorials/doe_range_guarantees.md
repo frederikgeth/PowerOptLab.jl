@@ -1,5 +1,10 @@
 # What does a dynamic operating envelope guarantee?
 
+<!-- doe-executable -->
+
+All Julia blocks on this page run in order from the repository root. CI executes
+the exact blocks with `julia --project=. scripts/run_doe_tutorials.jl`.
+
 > **Claim:** a feasible simultaneous upper point need not imply that partial
 > utilization of the advertised box is feasible.
 >
@@ -29,61 +34,11 @@ feeder, its parameters, or its numerical result.
 
 ```julia
 using PowerOptLab
-using BMOPFTools: parse_bmopf
-
-net = parse_bmopf(raw"""
-{
-  "bus": {
-    "src": {
-      "terminal_names": ["1", "2", "3", "n"],
-      "perfectly_grounded_terminals": ["n"]
-    },
-    "b1": {
-      "terminal_names": ["1", "2", "3", "n"],
-      "perfectly_grounded_terminals": ["n"],
-      "v_min": [200.0, 200.0, 200.0],
-      "v_max": [260.0, 260.0, 260.0],
-      "vneg_max": 1.0
-    }
-  },
-  "voltage_source": {
-    "vs": {
-      "bus": "src",
-      "terminal_map": ["1", "2", "3"],
-      "v_magnitude": [230.0, 230.0, 230.0],
-      "v_angle": [0.0, -2.0943951024, 2.0943951024]
-    }
-  },
-  "linecode": {
-    "lc": {
-      "R_series_1_1": 0.4,
-      "R_series_2_2": 0.4,
-      "R_series_3_3": 0.4,
-      "R_series_4_4": 0.4
-    }
-  },
-  "line": {
-    "l1": {
-      "bus_from": "src",
-      "bus_to": "b1",
-      "terminal_map_from": ["1", "2", "3", "n"],
-      "terminal_map_to": ["1", "2", "3", "n"],
-      "linecode": "lc",
-      "length": 1.0
-    }
-  }
-}
-"""; from_string=true)
-
-cps = [
-    ConnectionPoint(
-        id="phase_$phase",
-        bus="b1",
-        phase_terminals=[string(phase)],
-        neutral="n",
-        export_max=20e3,
-    ) for phase in 1:3
-]
+include("scripts/cases/doe_range_benchmark.jl")
+include("scripts/cases/doe_analytic_reference.jl")
+using .DOEAnalyticReference
+case = doe_benchmark_case()
+net, cps = case.nets, case.connection_points
 ```
 
 The case is intentionally small enough to inspect. It is a methodological
@@ -150,26 +105,29 @@ for (point, context) in zip(dropouts, dropout_check.context_results[1])
     dropped = count(iszero, point)
     println(dropped, " dropped → feasible=", context.feasible,
             "  worst normalized margin=",
-            minimum(values(context.diagnostics["minimum_normalized_margins"])))
+            get(context.diagnostics, "minimum_normalized_margins", missing))
+    p = point .* [bound.envelope[cp.id][1] for cp in cps]
+    println("  analytic negative sequence [V]=", negative_sequence(phase_voltages(p)))
 end
 ```
 
 The number of participants that back off is the natural x-axis for this
 network: a single dropout already breaks the phase symmetry that made the
 bound point safe, while dropping every participant returns to the trivially
-feasible zero point. Plotting the worst normalized margin against the dropout
-count gives a compact statement of what the issued box actually promises, and
-it is the shape reported in the published unbalanced-network counterexamples
-recorded in the [evidence register](../problems/doe_literature_evidence.md).
+feasible zero point. A failed NLP has no published physical margin. The independent analytic
+reference supplies the violation magnitude: 10 V negative sequence against a
+1 V limit for the nontrivial corners. See the [analytic reference
+tutorial](doe_analytic_reference.md) for the assumptions and derivation.
 
 This is `length(cps)` points at depth 1 and
-`sum(binomial(n, k) for k in 1:depth)` overall — polynomial, not `2^n`, so it
-remains available well past the point where `:corners` does not.
+`sum(binomial(n, k) for k in 1:depth)` overall. For fixed small depth this is
+polynomial in `n`; taking `depth=n`, as in this three-participant illustration,
+is exponential.
 
 ## Search without enumerating
 
-The same failure can be found without enumerating anything, by seeding those
-dropout faces and then refining around the most stressed point:
+The same failure can be found by enumerating only the single-dropout seeds.
+If those pass, the algorithm can refine around the most stressed point:
 
 ```julia
 search = search_operating_envelope_adversarial(
@@ -188,26 +146,24 @@ search.worst_context.utilization
 ```
 
 The seeded dropout faces ``(0,1,1)``, ``(1,0,1)`` and ``(1,1,0)`` are evaluated
-in the first round, and refinement then explores interior points such as
-``(0.5,1,1)``. Their unequal phase injections expose a failure hidden by the
-balanced bound point. The search retains every verification round and every
+in the first round. The search stops immediately when it finds a candidate;
+no interior refinement occurs in this run. A separate run with
+`dropout_depth=0` isolates interior refinement. The search retains every verification round and every
 normalized-headroom score.
 
-!!! warning "Refinement alone cannot reach a dropout face"
-    Coordinate refinement moves one coordinate at a time and the step shrinks
-    geometrically, so from the bound point the deepest single-coordinate
-    excursion it can ever reach is
+!!! note "Read refinement reach against the finite budget"
+    Starting from the bound, an optimistic minimum reachable coordinate after
+    `r` decreasing moves is
 
     ```
-    1 - initial_step / (1 - step_decay)
+    max(0, 1 - sum(max(initial_step * step_decay^k, minimum_step) for k in 0:r-1))
     ```
 
-    which is `0.5` at the defaults and is reported as
-    `diagnostics["refinement_reachable_depth_from_bound"]`. A participant that
-    backs off *completely* is therefore outside the reach of refinement, which
-    is why `dropout_depth` defaults to `1` for this function and seeds those
-    faces directly. Raise `initial_step`, lower `step_decay`, or add
-    `include_corners` when the interior between the faces also matters.
+    `refinement_reachable_depth_from_bound` reports this budget bound, not an
+    assurance about which paths the search takes. A positive `minimum_step`
+    invalidates an infinite geometric-series argument. Increasing the step,
+    decay factor, or number of rounds can extend reach; seeded dropout faces
+    test complete backing-off immediately.
 
     The Halton seeds have a second budget limit: for a dimension whose prime
     base exceeds `seed_samples`, the radical inverse is just `index / base`, so

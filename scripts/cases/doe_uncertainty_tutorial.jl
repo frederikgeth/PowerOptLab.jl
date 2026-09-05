@@ -3,6 +3,19 @@
 using PowerOptLab
 using BMOPFTools: parse_bmopf
 using Dates
+using Random
+
+# Independent synthetic test draws; this distribution is a teaching assumption,
+# not a calibration of the deterministic stress fixture below.
+function doe_iid_test_scenarios(; count=32, seed=7319)
+    rng = MersenneTwister(seed)
+    return DOEScenarioSet([
+        DOEScenario(id="iid-$i", role=:test,
+            network=doe_uncertainty_feeder(100 + 5900rand(rng), 100 + 5900rand(rng)),
+            source="independent Uniform(100,6000) W demands per bus",
+            generation_method=:synthetic_iid_uniform, seed=seed)
+        for i in 1:count]; dataset_id="synthetic-iid-$seed-$count")
+end
 
 function doe_uncertainty_feeder(p1_W::Real, p2_W::Real)
     return parse_bmopf("""

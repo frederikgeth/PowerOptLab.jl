@@ -1,5 +1,10 @@
 # DOE scenario design and held-out evaluation
 
+<!-- doe-executable -->
+
+All Julia blocks on this page run in order from the repository root. CI executes
+the exact blocks with `julia --project=. scripts/run_doe_tutorials.jl`.
+
 > **Question:** how can scenarios support a reproducible empirical statement
 > without being mistaken for a probability model or robust set?
 >
@@ -73,8 +78,11 @@ coverage = evaluate_operating_envelope_coverage(
     control_policy=PerfectRecourse())
 
 coverage.outcome
-coverage.scenario_results
+coverage.scenario_rows
 coverage.metrics
+@assert length(coverage.scenario_rows) == 2
+@assert coverage.metrics["candidate_scenario_count"] == 1
+@assert ismissing(coverage.metrics["one_sided_hoeffding_upper_bound"])
 ```
 
 The capacity and any issued controls are held fixed. The evaluation reports

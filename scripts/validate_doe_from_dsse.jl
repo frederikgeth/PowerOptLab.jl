@@ -11,38 +11,46 @@
 #   measurements      Vector{Measurement} for the DSSE solve
 #   connection_points Vector{ConnectionPoint}; each must bind a single-phase IBR
 #
+# Required adapter: materialize_estimate(estimate, operational_template).
 # Optional fields: `with_statcom_net`, `truth_net`, `doe_keywords`.
 # `truth_net` defaults to `operational_net`.  The independent AC check fixes each
 # bound IBR's active-power setpoint to the issued DOE and calls BMOPFTools.solve_pf.
 
 using PowerOptLab
-using BMOPFTools: solve_pf, augment_case
-
-length(ARGS) == 1 || error("usage: julia --project=. scripts/validate_doe_from_dsse.jl path/to/case_builder.jl")
-include(abspath(only(ARGS)))
-isdefined(Main, :doe_validation_case) || error("case builder must define doe_validation_case()")
-
-case = doe_validation_case()
-required = (:physics_net, :operational_net, :measurements, :connection_points)
-all(name -> hasproperty(case, name), required) || error("case is missing one of $(required)")
+using JuMP
+using BMOPFTools: solve_pf, augment_case, opf_model
 
 function _max_voltage_error(estimate, truth)
+    Set(keys(estimate)) == Set(keys(truth)) || error("voltage comparison bus sets differ")
     errors = Float64[]
     for (bus, terminals) in estimate
-        haskey(truth, bus) || continue
+        Set(keys(terminals)) == Set(keys(truth[bus])) || error("voltage terminal sets differ at $bus")
         for (terminal, value) in terminals
-            haskey(truth[bus], terminal) || continue
-            vm = get(value, "vm", NaN)
-            tm = get(truth[bus][terminal], "vm", NaN)
-            isfinite(vm) && isfinite(tm) && push!(errors, abs(vm - tm))
+            reference = truth[bus][terminal]
+            all(isfinite(get(entry, field, NaN)) for entry in (value, reference)
+                for field in ("vr", "vi")) || error("missing/nonfinite voltage at $bus/$terminal")
+            push!(errors, hypot(value["vr"] - reference["vr"], value["vi"] - reference["vi"]))
         end
     end
-    return isempty(errors) ? NaN : maximum(errors)
+    isempty(errors) && error("no voltages to compare")
+    return maximum(errors)
 end
 
-function _fixed_dispatch_net(net, cps, allocation, doe_snapshot)
+function _fixed_dispatch_net(net, cps, allocation, doe_snapshot;
+                             direction, control_audit)
+    direction in (:export, :import) || error("unknown DOE direction")
     fixed = deepcopy(net)
-    customer_ibrs = Set{String}()
+    # The pinned solve_pf strips s_max before stamping devices: VAR_MAX/S_MAX
+    # droop bases become zero. Fixing p_max would also change a P_MAX law.
+    # Do not silently replace a prescribed controller with a different equation.
+    profiles = get(fixed, "control_profile", Dict())
+    for (id, inv) in get(fixed, "ibr", Dict())
+        profile = get(profiles, get(inv, "control_profile", ""), Dict())
+        any(haskey(profile, law) for law in ("volt_var", "volt_watt")) &&
+            throw(ArgumentError("independent PF cannot preserve rating-normalized " *
+                "Volt-VAr/Volt-Watt laws for IBR '$id' with the pinned engine; " *
+                "use verify_operating_envelope for faithful same-formulation replay"))
+    end
     for cp in cps
         cp.ibr_id === nothing && error("independent PF validation requires ibr_id for '$(cp.id)'")
         inv = get(get(fixed, "ibr", Dict{String,Any}()), cp.ibr_id, nothing)
@@ -52,64 +60,97 @@ function _fixed_dispatch_net(net, cps, allocation, doe_snapshot)
         pmin, pmax = get(inv, "p_min", nothing), get(inv, "p_max", nothing)
         pmin isa AbstractVector && pmax isa AbstractVector && length(pmin) == length(pmax) || error(
             "IBR '$(cp.ibr_id)' must expose matching p_min/p_max vectors")
-        setpoint = allocation[cp.id] / length(pmin)
+        setpoint = (direction == :export ? 1 : -1) * allocation[cp.id] / length(pmin)
         inv["p_min"] = fill(setpoint, length(pmin))
         inv["p_max"] = fill(setpoint, length(pmax))
-        push!(customer_ibrs, cp.ibr_id)
     end
     # Reproduce the DOE's chosen operating point for other controllable assets
     # (for example a STATCOM). Customer IBR Q remains governed by its mandatory
     # control law rather than being converted into a dispatchable Q decision.
-    for (id, inv) in get(fixed, "ibr", Dict{String,Any}())
-        id in customer_ibrs && continue
-        qmin, qmax = get(inv, "q_min", nothing), get(inv, "q_max", nothing)
-        result = get(get(doe_snapshot, "ibr", Dict{String,Any}()), id, nothing)
-        qmin isa AbstractVector && qmax isa AbstractVector && result isa Dict || continue
-        length(qmin) == length(qmax) || continue
-        qset = Float64[]
-        for phase in 1:length(qmin)
-            entry = get(result, string(phase), nothing)
-            entry isa Dict && haskey(entry, "qg") || empty!(qset); break
-            push!(qset, Float64(entry["qg"]))
+    for item in control_audit
+        item["native_classification"] in (:free, :mixed) || continue
+        id, quantity = item["id"], item["quantity"]
+        item["component"] == :ibr && quantity in (:active_power, :reactive_power) ||
+            error("independent PF adapter cannot freeze $(item["component"])/$id/$quantity")
+        item["native_classification"] == :free || error("mixed control classification cannot be replayed")
+        inv = fixed["ibr"][id]
+        phase = item["position"]
+        field = quantity == :active_power ? "p" : "q"
+        value = doe_snapshot["ibr"][id][string(phase)][field * "g"]
+        isfinite(value) || error("nonfinite control $id/$quantity/$phase")
+        for bound in ("_min", "_max")
+            values_ = copy(inv[field * bound])
+            values_[phase] = value
+            inv[field * bound] = values_
         end
-        length(qset) == length(qmin) || continue
-        inv["q_min"] = qset
-        inv["q_max"] = qset
     end
     fixed, _ = augment_case(fixed)
     return fixed
 end
 
-function _validate_snapshot(label, net, cps; doe_keywords=NamedTuple())
+function _require_pf_witness(result)
+    get(result, "termination_status", "UNKNOWN") in ("LOCALLY_SOLVED", "OPTIMAL") ||
+        error("independent PF did not converge: $(get(result, "termination_status", "UNKNOWN"))")
+    get(result, "doe_pf_primal_status", "NO_SOLUTION") == "FEASIBLE_POINT" ||
+        error("independent PF did not return a feasible primal witness")
+    return result
+end
+
+function _solve_checked_pf(net)
+    result = solve_pf(net; per_unit=false, solution_hook! = (ctx, result) ->
+        (result["doe_pf_primal_status"] = string(JuMP.primal_status(opf_model(ctx)))))
+    return _require_pf_witness(result)
+end
+
+function _validate_snapshot(label, net, cps; doe_keywords=NamedTuple(), voltage_tolerance_V=1e-3)
     doe = solve_operating_envelope(net, cps; doe_keywords...)
+    settings = doe.diagnostics[1]["formulation_settings"]
+    settings.volt_var_watt_eps == 2e-3 && settings.context_hook! === nothing ||
+        error("independent PF API cannot reproduce custom smoothing or context hooks")
     check = verify_operating_envelope(net, cps, doe; utilizations=:bound_point)
     all(check.feasible) || error("$label DOE failed its nonlinear fixed-capacity verification")
     pf_net = _fixed_dispatch_net(net, cps,
-        Dict(cp.id => doe.envelope[cp.id][1] for cp in cps), doe.snapshots[1])
-    pf = solve_pf(pf_net; per_unit=false)
+        Dict(cp.id => doe.envelope[cp.id][1] for cp in cps), doe.snapshots[1];
+        direction=doe.direction, control_audit=doe.diagnostics[1]["control_audit"])
+    pf = _solve_checked_pf(pf_net)
     difference = _max_voltage_error(doe.snapshots[1]["bus"], pf["bus"])
+    difference <= voltage_tolerance_V || error("$label DOE/PF voltages disagree by $difference V")
     return (doe=doe, verification=check, pf=pf,
             max_doe_pf_voltage_difference_V=difference)
 end
 
-truth = solve_pf(get(case, :truth_net, case.operational_net); per_unit=false)
-estimate = solve_state_estimation(case.physics_net, case.measurements)
-estimate.primal_status == "FEASIBLE_POINT" || error("DSSE did not return a feasible estimate")
-dsse_error = _max_voltage_error(estimate.bus, truth["bus"])
-kwargs = get(case, :doe_keywords, NamedTuple())
-base = _validate_snapshot("base", case.operational_net, case.connection_points; doe_keywords=kwargs)
+function run_doe_validation(case)
+    required = (:physics_net, :operational_net, :measurements, :connection_points, :materialize_estimate)
+    all(name -> hasproperty(case, name), required) || error("case is missing one of $(required)")
+    truth = _solve_checked_pf(get(case, :truth_net, case.operational_net))
+    estimate = solve_state_estimation(case.physics_net, case.measurements)
+    estimate.primal_status == "FEASIBLE_POINT" || error("DSSE did not return a feasible estimate")
+    dsse_error = _max_voltage_error(estimate.bus, truth["bus"])
+    kwargs = get(case, :doe_keywords, NamedTuple())
+    operational = case.materialize_estimate(estimate, deepcopy(case.operational_net))
+    base = _validate_snapshot("base", operational, case.connection_points; doe_keywords=kwargs)
 
-println("DSSE-to-DOE validation")
-println("  DSSE maximum voltage error [V]: ", dsse_error)
-println("  base DOE total capacity [W]:    ", base.doe.total_capacity[1])
-println("  base DOE/PF max |ΔV| [V]:       ", base.max_doe_pf_voltage_difference_V)
-println("  base fixed-capacity verified:    ", all(base.verification.feasible))
+    println("DSSE-to-DOE validation")
+    println("  DSSE maximum voltage error [V]: ", dsse_error)
+    println("  base DOE total capacity [W]:    ", base.doe.total_capacity[1])
+    println("  base DOE/PF max |ΔV| [V]:       ", base.max_doe_pf_voltage_difference_V)
+    println("  base fixed-capacity verified:    ", all(base.verification.feasible))
 
-if hasproperty(case, :with_statcom_net)
-    statcom = _validate_snapshot("STATCOM", case.with_statcom_net, case.connection_points;
-        doe_keywords=kwargs)
-    println("  STATCOM DOE total capacity [W]: ", statcom.doe.total_capacity[1])
-    println("  STATCOM capacity gain [W]:      ",
-            statcom.doe.total_capacity[1] - base.doe.total_capacity[1])
-    println("  STATCOM DOE/PF max |ΔV| [V]:    ", statcom.max_doe_pf_voltage_difference_V)
+    statcom = nothing
+    if hasproperty(case, :with_statcom_net)
+        operational_statcom = case.materialize_estimate(estimate, deepcopy(case.with_statcom_net))
+        statcom = _validate_snapshot("STATCOM", operational_statcom, case.connection_points;
+            doe_keywords=kwargs)
+        println("  STATCOM DOE total capacity [W]: ", statcom.doe.total_capacity[1])
+        println("  STATCOM capacity gain [W]:      ",
+                statcom.doe.total_capacity[1] - base.doe.total_capacity[1])
+        println("  STATCOM DOE/PF max |ΔV| [V]:    ", statcom.max_doe_pf_voltage_difference_V)
+    end
+    return (estimate=estimate, base=base, statcom=statcom, max_dsse_voltage_error_V=dsse_error)
+end
+
+if abspath(PROGRAM_FILE) == @__FILE__
+    length(ARGS) == 1 || error("usage: julia --project=. scripts/validate_doe_from_dsse.jl path/to/case_builder.jl")
+    include(abspath(only(ARGS)))
+    Base.invokelatest(run_doe_validation, Base.invokelatest(doe_validation_case))
 end

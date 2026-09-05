@@ -112,6 +112,15 @@ that all relevant constraints attain their worst cases at corners.
 - Issuance metadata, fallback provenance, fixed-capacity re-solving, and a
   standalone DSSE-to-DOE replay provide a useful beginning for an audit trail.
 
+The cleanup now separates numerical non-results from local infeasibility
+candidates, respects shared-policy compatibility in coverage, matches replay
+controls by scenario provenance, and validates physical participant bindings.
+Legacy ports are single-phase. Eight tutorials execute their actual Markdown
+code in CI; the [analytic references](../tutorials/doe_analytic_reference.md)
+provide independent physical checks for the idealized teaching feeder and an
+exact affine-box containment oracle. These resolve implementation and teaching
+gaps without closing the general nonlinear certification gap below.
+
 ### Principal weaknesses
 
 | Priority | Weakness in the current prototype | Scientific consequence | Recommended response |
@@ -124,7 +133,6 @@ that all relevant constraints attain their worst cases at corners.
 | P1 | The envelope is a one-sided scalar active-power box ``[0,\bar p_i]``. | It cannot express a simultaneous import/export band, a nonzero baseline, asymmetric reserve, or coupled P–Q flexibility. | Generalize to lower/upper P bounds and later polyhedral/ellipsoidal P–Q sets with device feasibility. |
 | P1 | Intervals are physically independent; rolling fairness only carries an allocation history. | Storage SOC, EV energy, ramping, tap wear, thermal memory, and forecast recourse are omitted. | Reuse the multi-period infrastructure and separate first-stage envelopes from device recourse. |
 | P1 | Rolling fairness accumulates offered capacity, not realized use, denied request, customer value, or cost. | A high Jain index can coexist with unequal economic outcomes or repeated involuntary curtailment. | Define the stakeholder, benefit/burden variable, entitlement reference, time horizon, and price of fairness before selecting a metric. |
-| P1 | The legacy port constrains aggregate P and Q but can choose phase currents within the OPF. | A multi-phase teaching connection may acquire an unrealizable phase allocation. | Restrict it to an explicit phase-sharing rule or mark it single-phase only; use bound IBRs for research cases. |
 | P1 | Diagnostic margins cover a useful subset, not every inherited constraint. | A converter, transformer, neutral, phase-to-phase, control, or other constraint can bind without appearing in the summary. | Build diagnostics from named constraint families and independently recompute all claimed margins. |
 | P1 | Exact corners create ``S2^N`` full AC contexts in one monolithic model. | Memory and solution time become prohibitive before realistic fleet sizes. | Add sensitivity screening, adaptive constraint generation, decomposition, and benchmarked stopping rules. |
 | P2 | Fundamental-frequency RMS physics omits harmonics, protection, dynamics, communications, and compliance. | The electrical DOE may not be safe or implementable for the deployed system. | Add these only as question-driven fidelity layers with matched measurements and validation data. |
@@ -176,8 +184,9 @@ For operational studies, `IssuePlusLocalLaws()` is the recommended conservative
 preset. Unclassified free controls cause an error under this preset, but
 `PerfectRecourse()` deliberately classifies them as context-adaptive. A
 future API should require an explicit policy whenever a multi-context model has
-free controls. During migration, an omitted policy retains the historical
-perfect-recourse behavior and records `control_policy_source=:legacy_default`;
+free controls. During migration, an omitted allocation policy retains the historical
+perfect-recourse behavior and records `control_policy_source=:legacy_default`.
+Verification of a rich result inherits its issued policy (`:issued_result`);
 a deprecation warning or later explicit-policy requirement remains a future API
 decision.
 

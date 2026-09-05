@@ -1,5 +1,9 @@
 # Choosing a dynamic operating-envelope formulation
 
+This formulation guide uses schematic feeder and device names. For sequential,
+CI-tested examples, start with [DOE in 15 minutes](doe_getting_started.md) and
+[Faithful replay](doe_faithful_replay.md).
+
 > **Audience:** power-system researchers · **Prerequisite:** [Dynamic operating
 > envelopes in 15 minutes](doe_getting_started.md) · **Scope:** nonlinear AC DOE
 > studies with DSSE snapshots, mandatory DER controls, and network support
@@ -61,8 +65,8 @@ is at most ``\bar p_i``. For import, the same positive quantity bounds
 withdrawal. These are two different operating studies:
 
 ```julia
-export = solve_operating_envelope(net, cps; direction=:export)
-import = solve_operating_envelope(net, cps; direction=:import)
+export_doe = solve_operating_envelope(net, cps; direction=:export)
+import_doe = solve_operating_envelope(net, cps; direction=:import)
 ```
 
 Do not infer an import envelope by negating an export result. In an LV feeder,

@@ -857,9 +857,8 @@ end
                          count(isone, context.utilization) == 2,
               range_failure.candidate_contexts)
 
-    # Refinement alone can only reach `1 - initial_step/(1 - step_decay)` on any
-    # single coordinate, so the dropout faces are unreachable without seeding
-    # them. This run reproduces the older interior-point path.
+    # One refinement move of 0.5 reaches coordinate 0.5 from the bound;
+    # this run isolates the interior-point path without dropout seeds.
     interior_failure = search_operating_envelope_adversarial(
         unbalanced_net, phase_cps, balanced_bound;
         seed_samples=0, dropout_depth=0, refinement_rounds=1, restarts=2,
@@ -867,7 +866,7 @@ end
     @test interior_failure.outcome == :candidate_counterexample
     @test length(interior_failure.verifications) == 2
     @test interior_failure.diagnostics[
-        "refinement_reachable_depth_from_bound"] ≈ 0.0
+        "refinement_reachable_depth_from_bound"] ≈ 0.5
     @test any(context -> any(x -> 0 < x < 1, context.utilization),
               interior_failure.candidate_contexts)
     candidate = first(range_failure.candidate_contexts)
@@ -1055,9 +1054,8 @@ end
         control_policy=PerfectRecourse())
     @test curve.scales == [0.5, 1.0]
     @test length(curve.coverages) == 2
-    @test curve.diagnostics["issue_control_treatment"] ==
-          :retained_from_issued_result
-    @test curve.diagnostics["control_reoptimization"] == :none
+    @test curve.diagnostics["issue_control_treatment"] == [:no_issued_controls]
+    @test curve.diagnostics["control_reoptimization"] == [:only_unfixed_stages]
     @test curve.diagnostics["continuous_threshold_estimated"] == false
     @test haskey(curve.diagnostics, "candidate_count_reversals")
     @test last(curve.rows).total_capacity_W ≈ allocation.total_capacity

@@ -15,12 +15,14 @@ calculated by [`solve_operating_envelope`](@ref).
 
 - `export_max` / `import_max` are the connection's active-power nameplate limits
   (W, both non-negative). Select which one is used with `direction` on the solve.
-- `ibr_id=nothing` retains the lightweight legacy port: aggregate unity-PF power
-  is stamped directly at `bus` using `phase_terminals` and `neutral`.
+- `ibr_id=nothing` retains a single-phase unity-PF port, stamped directly at
+  `bus` using one `phase_terminals` entry and `neutral`.
 - `ibr_id="pv1"` binds the envelope to an existing BMOPFTools `ibr`. This is the
   recommended representation for PV and batteries: the IBR keeps its prescribed
   Volt-VAr/Volt-Watt or fixed-power-factor control law, apparent/current limits,
   phase topology, and DC coupling while the DOE controls active power only.
+  Each IBR may bind only one participant. The declared phases and neutral must
+  match its `terminal_map` phase order and the engine's reference conductor.
 - `requested` is an optional requested/forecast capacity (W), used by
   `FairnessPolicy(normalization=:request)`.
 - `normalization` is an optional custom fairness reference (W), used by
@@ -2239,10 +2241,13 @@ OperatingEnvelopeResult(status, envelope, total, snapshots) =
     OperatingEnvelopeContextResult
 
 Evidence for one forecast scenario and participant-utilisation point in an
-operating-envelope solve or verification. `feasible=nothing` means that a
-multi-context model failed before feasibility of this individual context could
-be determined. The nested diagnostics distinguish joint-model evidence from an
-independent fixed-control replay.
+operating-envelope solve or verification. `feasible` records raw local evidence:
+`true` is a published feasible witness, `false` a local infeasibility candidate,
+and `nothing` unresolved numerical or joint-model evidence. Time/iteration
+limits are unresolved even if they return an infeasible iterate. None of these
+statuses is a global infeasibility certificate. In verification, consult
+`diagnostics["verification_verdict"]` for usable evidence after shared-policy
+compatibility and any requested fixed-control replay have been considered.
 """
 struct OperatingEnvelopeContextResult
     scenario::Int
@@ -2681,6 +2686,9 @@ function _validate_connection_points(groups, cps, policy, direction, security,
     isempty(cps) && throw(ArgumentError("need at least one connection point"))
     ids = [cp.id for cp in cps]
     allunique(ids) || throw(ArgumentError("connection-point ids must be unique: $ids"))
+    inverter_ids = [cp.ibr_id for cp in cps if cp.ibr_id !== nothing]
+    allunique(inverter_ids) || throw(ArgumentError(
+        "each physical IBR may bind only one connection point"))
     for cp in cps
         isempty(cp.id) && throw(ArgumentError("connection-point id must not be empty"))
         isempty(cp.bus) && throw(ArgumentError("connection '$(cp.id)' bus must not be empty"))
@@ -2690,6 +2698,9 @@ function _validate_connection_points(groups, cps, policy, direction, security,
             "connection '$(cp.id)' phase terminals must be unique"))
         cp.neutral in cp.phase_terminals && throw(ArgumentError(
             "connection '$(cp.id)' neutral cannot also be a phase terminal"))
+        cp.ibr_id === nothing && length(cp.phase_terminals) != 1 &&
+            throw(ArgumentError("legacy connection '$(cp.id)' must be single-phase; " *
+                "use separate phase connections or a topology-aware IBR binding"))
         for (name, value) in (("export_max", cp.export_max), ("import_max", cp.import_max))
             isfinite(value) && value >= 0 || throw(ArgumentError(
                 "connection '$(cp.id)' $name must be finite and >= 0, got $value"))
@@ -2732,12 +2743,27 @@ function _validate_connection_points(groups, cps, policy, direction, security,
                 topo in ("SINGLE_PHASE", "FOUR_LEG") || throw(ArgumentError(
                     "connection-bound IBR '$(cp.ibr_id)' topology '$topo' is not supported; " *
                     "use SINGLE_PHASE or FOUR_LEG for prescribed Q-V control"))
+                tm = String.(get(inv, "terminal_map", String[]))
+                expected_length = topo == "SINGLE_PHASE" ? 2 : 4
+                length(tm) == expected_length && allunique(tm) || throw(ArgumentError(
+                    "IBR '$(cp.ibr_id)' has an invalid $topo terminal map"))
+                all(term -> term in terminals, tm) || throw(ArgumentError(
+                    "IBR '$(cp.ibr_id)' terminal map contains terminals absent from its bus"))
+                reference = topo == "SINGLE_PHASE" ? tm[2] :
+                    _neutral_terminal(tm, _neutral_labels(net))
+                reference === nothing && throw(ArgumentError(
+                    "FOUR_LEG IBR '$(cp.ibr_id)' needs a recognized neutral terminal"))
+                phases = topo == "SINGLE_PHASE" ? [tm[1]] :
+                    [term for term in tm if term != reference]
+                cp.phase_terminals == phases && cp.neutral == reference ||
+                    throw(ArgumentError("connection '$(cp.id)' phase/neutral declaration " *
+                        "must match IBR '$(cp.ibr_id)' terminal_map order $tm"))
             end
         end
     end
 end
 
-# Legacy connection port. It is intentionally aggregate unity-PF and exists for
+# Legacy connection port. It is intentionally single-phase unity-PF and exists for
 # backward compatibility and simple teaching examples. Real PV/battery studies
 # should bind `ConnectionPoint.ibr_id` to the engine's prescribed-control model.
 function _stamp_legacy_port!(ctx, cp::ConnectionPoint)
@@ -2781,7 +2807,7 @@ function _ibr_active_power(ctx, cp::ConnectionPoint)
             dvr*cr + dvi*ci)
     end
 
-    neutral = cp.neutral !== nothing && cp.neutral in tm ? cp.neutral : tm[end]
+    neutral = cp.neutral # validated against the engine's neutral roles
     phases = [term for term in tm if term != neutral]
     terms = JuMP.QuadExpr[]
     for (idx, ph) in enumerate(phases)
@@ -3065,7 +3091,7 @@ end
 
 function _doe_issued_values_from_result(capacities, interval,
                                         policy::DOEControlPolicy,
-                                        stages)
+                                        stages, target_provenance; typed::Bool)
     capacities isa OperatingEnvelopeResult ||
         return Dict{_DOEPolicyValueKey,Float64}(), :capacity_values_only
     interval <= length(capacities.diagnostics) ||
@@ -3077,6 +3103,31 @@ function _doe_issued_values_from_result(capacities, interval,
     records = get(diagnostics, "issued_control_values", nothing)
     records isa AbstractVector ||
         return Dict{_DOEPolicyValueKey,Float64}(), :not_recorded
+    # Scenario controls belong to an information state, never a list position.
+    # Typed inputs match stable IDs AND content; untyped inputs match content.
+    scenario_map = Dict{Int,Int}()
+    if :scenario in stages && any(r -> get(r, "stage", nothing) == :scenario, records)
+        original = get(diagnostics, "scenario_provenance", nothing)
+        original isa AbstractVector || throw(ArgumentError(
+            "scenario-control replay requires recorded scenario provenance"))
+        used = Set{Int}()
+        for (target_index, target) in enumerate(target_provenance)
+            matches = findall(eachindex(original)) do index
+                source = original[index]
+                !(index in used) && source["network_hash"] == target["network_hash"] &&
+                    (!typed || source["id"] == target["id"])
+            end
+            isempty(matches) && throw(ArgumentError(
+                "scenario '$(target["id"])' does not match issued scenario-control provenance; " *
+                "use replay_control_stages=(:issue,) for new scenario recourse"))
+            !typed && length(matches) > 1 && throw(ArgumentError(
+                "ambiguous untyped scenario-control replay: use DOEScenario IDs " *
+                "to distinguish repeated network snapshots"))
+            source_index = first(matches)
+            push!(used, source_index)
+            scenario_map[source_index] = target_index
+        end
+    end
     values_ = Dict{_DOEPolicyValueKey,Float64}()
     for record in records
         record isa AbstractDict || continue
@@ -3085,7 +3136,8 @@ function _doe_issued_values_from_result(capacities, interval,
         key = _doe_control_key(
             record["component"], record["id"], record["quantity"],
             record["position"])
-        information_index = stage == :issue ? 0 : Int(record["scenario"])
+        stage == :scenario && !haskey(scenario_map, Int(record["scenario"])) && continue
+        information_index = stage == :issue ? 0 : scenario_map[Int(record["scenario"])]
         value = Float64(record["value"])
         isfinite(value) || throw(ArgumentError(
             "recorded issued control value is not finite"))
@@ -3099,6 +3151,43 @@ function _doe_issued_values_from_result(capacities, interval,
         :no_controls_at_selected_stages
     end
     return values_, source
+end
+
+function _doe_individual_policy_values(values_, scenario)
+    Dict{_DOEPolicyValueKey,Float64}((key, index == 0 ? 0 : 1) => value
+        for ((key, index), value) in values_ if index == 0 || index == scenario)
+end
+
+_doe_connection_bindings(cps) = sort!([
+    (id=cp.id, bus=cp.bus, phases=copy(cp.phase_terminals),
+     neutral=cp.neutral, ibr_id=cp.ibr_id) for cp in cps]; by=cp -> cp.id)
+
+# A local infeasibility status is a candidate, not a physical impossibility
+# certificate. Limits, interruption, invalid models and solver errors are unknown.
+function _doe_numerical_evidence(outcome::SolveOutcome)
+    _publishable(outcome) && return :feasible_witness
+    outcome.termination_status in (JuMP.MOI.INFEASIBLE, JuMP.MOI.LOCALLY_INFEASIBLE) &&
+        !outcome.feasible && return :local_infeasibility_candidate
+    return :numerically_unresolved
+end
+
+# Raw individual diagnostic solves remain available in context.feasible. Every
+# consumer of verification evidence must also respect the common-policy solve
+# and, when requested, complete fixed-control replay.
+function _doe_context_verdict(context::OperatingEnvelopeContextResult)
+    context.feasible === false && return false
+    context.feasible === nothing && return nothing
+    if get(context.diagnostics, "evidence_scope", nothing) ==
+            :individual_context_diagnostic
+        get(context.diagnostics, "policy_compatible_individual_witness", false) ||
+            return nothing
+    end
+    replay = get(context.diagnostics, "independent_replay", nothing)
+    if replay isa AbstractDict
+        get(replay, "control_replay_complete", false) || return nothing
+        get(replay, "feasible", nothing) === true || return nothing
+    end
+    return true
 end
 
 function _verification_patterns(utilizations, n)
@@ -3665,6 +3754,7 @@ function _solve_interval_group(group, cps, policy;
     end
 
     outcome = _solve_outcome(model)
+    numerical_evidence = _doe_numerical_evidence(outcome)
     status = string(outcome.termination_status)
     primal = string(outcome.primal_status)
     feasible = _publishable(outcome)
@@ -3730,6 +3820,7 @@ function _solve_interval_group(group, cps, policy;
             push!(replay_values,
                 (record.scenario, record.pattern, values_, unsupported))
             evidence = Dict{String,Any}(
+                "numerical_evidence" => numerical_evidence,
                 "evidence_scope" => :joint_policy_model,
                 "margin_evaluation" =>
                     :independent_snapshot_quantity_recomputation,
@@ -3747,9 +3838,11 @@ function _solve_interval_group(group, cps, policy;
         for record in records
             push!(context_results, OperatingEnvelopeContextResult(
                 record.scenario, record.pattern, copy(record.fractions),
-                status, primal, individually_resolved ? false : nothing,
+                status, primal, individually_resolved &&
+                    numerical_evidence == :local_infeasibility_candidate ? false : nothing,
                 Dict{String,Any}(),
                 Dict{String,Any}(
+                    "numerical_evidence" => numerical_evidence,
                     "evidence_scope" => individually_resolved ?
                         :single_context_model : :unresolved_joint_model,
                     "joint_solve_time_seconds" => solve_time_seconds,
@@ -3766,6 +3859,11 @@ function _solve_interval_group(group, cps, policy;
         :explicit_utilization_points
     end
     diag = Dict{String,Any}(
+        "numerical_evidence" => numerical_evidence,
+        "resolved_control_policy" => deepcopy(control_policy),
+        "connection_bindings" => _doe_connection_bindings(cps),
+        "formulation_settings" => (per_unit=per_unit, s_base=s_base,
+            volt_var_watt_eps=volt_var_watt_eps, context_hook! = context_hook!),
         "feasible" => feasible,
         "primal_status" => primal,
         "objective" => objective,
@@ -3877,8 +3975,8 @@ function solve_operating_envelope(nets,
                                   fairness_history::AbstractDict=Dict{String,Float64}(),
                                   temporal_dt_h::Float64=1.0,
                                   issued_at::Union{Nothing,DateTime}=nothing,
-                                  interval_seconds::Float64=300.0,
-                                  validity_seconds::Float64=interval_seconds,
+                                  interval_seconds::Real=300.0,
+                                  validity_seconds::Real=interval_seconds,
                                   fallback::Symbol=:missing)
     groups = _scenario_groups(nets)
     scenario_provenance = _scenario_provenance_groups(nets, groups)
@@ -4108,16 +4206,18 @@ end
 function _doe_snapshot_voltage_difference(left, right)
     buses_left = get(left, "bus", Dict())
     buses_right = get(right, "bus", Dict())
+    Set(keys(buses_left)) == Set(keys(buses_right)) || return NaN
     difference = 0.0
     found = false
     for bus in intersect(Set(keys(buses_left)), Set(keys(buses_right)))
         left_bus = buses_left[bus]
         right_bus = buses_right[bus]
+        Set(keys(left_bus)) == Set(keys(right_bus)) || return NaN
         for terminal in intersect(Set(keys(left_bus)), Set(keys(right_bus)))
             left_terminal = left_bus[terminal]
             right_terminal = right_bus[terminal]
             all(haskey(left_terminal, field) && haskey(right_terminal, field)
-                for field in ("vr", "vi")) || continue
+                for field in ("vr", "vi")) || return NaN
             delta = hypot(Float64(left_terminal["vr"]) - Float64(right_terminal["vr"]),
                           Float64(left_terminal["vi"]) - Float64(right_terminal["vi"]))
             difference = max(difference, delta)
@@ -4125,6 +4225,20 @@ function _doe_snapshot_voltage_difference(left, right)
         end
     end
     return found ? difference : NaN
+end
+
+function _doe_replay_evidence(original, replay, unsupported)
+    difference = replay.feasible === true ?
+        _doe_snapshot_voltage_difference(original.snapshot, replay.snapshot) : NaN
+    return Dict{String,Any}(
+        "feasible" => replay.feasible === true && isempty(unsupported) && isfinite(difference),
+        "termination_status" => replay.termination_status,
+        "primal_status" => replay.primal_status,
+        "control_replay_complete" => isempty(unsupported),
+        "unreplayed_controls" => unsupported,
+        "maximum_voltage_difference_V" => difference,
+        "snapshot" => replay.snapshot,
+        "diagnostics" => replay.diagnostics)
 end
 
 function _doe_relabel_context(result::OperatingEnvelopeContextResult,
@@ -4150,7 +4264,13 @@ The same local-solve and finite-test-set semantics as
 verification, so an issued envelope can be checked under the same information
 structure used to quantify it. Custom vectors are reported as
 `security_scope=:explicit_utilization_points`. When `capacities` is an
-`OperatingEnvelopeResult` produced under the same policy,
+`OperatingEnvelopeResult`, its direction, control policy, per-unit base,
+smoothing settings and registered context hook are inherited unless overridden.
+Connection bindings must match. Scenario controls match stable IDs and network
+hashes (unique network hashes for untyped inputs); changed information states
+require `replay_control_stages=(:issue,)` to allow new scenario recourse.
+An explicit different policy is a re-optimization comparison, recorded in
+`control_reoptimization` and `issued_control_replay_source`. Under the same policy,
 `replay_issued_controls=true` fixes its recorded `:issue` and `:scenario`
 control values during verification. A capacity dictionary has no such issuance
 record and is labelled accordingly.
@@ -4158,14 +4278,14 @@ record and is labelled accordingly.
 function verify_operating_envelope(nets,
                                    connection_points::AbstractVector{ConnectionPoint},
                                    capacities;
-                                   direction::Symbol=:export,
+                                   direction::Union{Nothing,Symbol}=nothing,
                                    utilizations=:bound_point,
-                                   per_unit::Bool=true,
-                                   s_base::Float64=1e6,
+                                   per_unit::Union{Nothing,Bool}=nothing,
+                                   s_base::Union{Nothing,Real}=nothing,
                                    optimizer=Ipopt.Optimizer,
                                    verbose::Bool=false,
                                    solver_options=(),
-                                   volt_var_watt_eps::Float64=2e-3,
+                                   volt_var_watt_eps::Union{Nothing,Real}=nothing,
                                    control_policy::Union{Nothing,DOEControlPolicy}=nothing,
                                    context_hook! = nothing,
                                    start_hook! = nothing,
@@ -4178,9 +4298,25 @@ function verify_operating_envelope(nets,
     scenario_provenance = _scenario_provenance_groups(nets, groups)
     cps = collect(connection_points)
     policy = FairnessPolicy(kind=:max_total)
+    issued = capacities isa OperatingEnvelopeResult
+    original_diagnostics = issued && !isempty(capacities.diagnostics) ?
+        first(capacities.diagnostics) : Dict{String,Any}()
+    settings = get(original_diagnostics, "formulation_settings", NamedTuple())
+    direction = something(direction, issued ? capacities.direction : :export)
+    per_unit = something(per_unit, get(settings, :per_unit, true))
+    s_base = Float64(something(s_base, get(settings, :s_base, 1e6)))
+    volt_var_watt_eps = Float64(something(volt_var_watt_eps,
+        get(settings, :volt_var_watt_eps, 2e-3)))
+    context_hook! = context_hook! === nothing ?
+        get(settings, :context_hook!, nothing) : context_hook!
+    inherited_policy = get(original_diagnostics, "resolved_control_policy", nothing)
     resolved_control_policy = control_policy === nothing ?
-        PerfectRecourse() : control_policy
-    control_policy_source = control_policy === nothing ? :legacy_default : :explicit
+        (inherited_policy === nothing ? PerfectRecourse() : inherited_policy) : control_policy
+    control_policy_source = control_policy !== nothing ? :explicit :
+        inherited_policy === nothing ? :legacy_default : :issued_result
+    bindings = get(original_diagnostics, "connection_bindings", nothing)
+    bindings === nothing || bindings == _doe_connection_bindings(cps) ||
+        throw(ArgumentError("connection bindings differ from the issued result"))
     isfinite(s_base) && s_base > 0 || throw(ArgumentError("s_base must be finite and > 0"))
     isfinite(volt_var_watt_eps) && volt_var_watt_eps > 0 || throw(ArgumentError(
         "volt_var_watt_eps must be finite and > 0"))
@@ -4203,7 +4339,8 @@ function verify_operating_envelope(nets,
     for (t, group) in enumerate(groups)
         issued_values, issued_source = replay_issued_controls ?
             _doe_issued_values_from_result(
-                capacities, t, resolved_control_policy, replay_stages) :
+                capacities, t, resolved_control_policy, replay_stages,
+                scenario_provenance[t]; typed=nets isa DOEScenarioSet) :
             (Dict{_DOEPolicyValueKey,Float64}(), :disabled)
         solved = _solve_interval_group(group, cps, policy;
             direction=direction, security=security, per_unit=per_unit, s_base=s_base,
@@ -4217,6 +4354,12 @@ function verify_operating_envelope(nets,
             fixed_policy_control_values=issued_values)
         solved.diagnostics["issued_control_replay_source"] = issued_source
         solved.diagnostics["issued_control_replay_count"] = length(issued_values)
+        solved.diagnostics["control_reoptimization"] = issued_source in
+            (:disabled, :policy_mismatch, :capacity_values_only,
+             :missing_interval_diagnostics, :not_recorded) ? :allowed :
+            :only_unfixed_stages
+        solved.diagnostics["direction_matches_issued"] =
+            issued ? direction == capacities.direction : nothing
         solved.diagnostics["replay_control_stages"] =
             sort!(collect(replay_stages))
         solved.diagnostics["scenario_provenance"] =
@@ -4255,20 +4398,10 @@ function verify_operating_envelope(nets,
                         patterns_override=[fractions],
                         fixed_control_values=fixed_values)
                     replay_context = only(replay.context_results)
-                    replay_feasible = replay_context.feasible === true
-                    replay_all_feasible &= replay_feasible
                     joint_context = solved.context_results[context_index]
-                    joint_context.diagnostics["independent_replay"] = Dict{String,Any}(
-                        "feasible" => replay_feasible,
-                        "termination_status" => replay_context.termination_status,
-                        "primal_status" => replay_context.primal_status,
-                        "control_replay_complete" => isempty(unsupported),
-                        "unreplayed_controls" => unsupported,
-                        "maximum_voltage_difference_V" => replay_feasible ?
-                            _doe_snapshot_voltage_difference(
-                                joint_context.snapshot, replay_context.snapshot) : NaN,
-                        "snapshot" => replay_context.snapshot,
-                        "diagnostics" => replay_context.diagnostics)
+                    evidence = _doe_replay_evidence(joint_context, replay_context, unsupported)
+                    replay_all_feasible &= evidence["feasible"]
+                    joint_context.diagnostics["independent_replay"] = evidence
                     push!(interval_contexts, joint_context)
                 end
             else
@@ -4299,12 +4432,40 @@ function verify_operating_envelope(nets,
                         start_hook! = start_hook!,
                         fixed_capacity=trajectory[t],
                         patterns_override=[fractions],
-                        fixed_policy_control_values=issued_values)
+                        fixed_policy_control_values=
+                            _doe_individual_policy_values(issued_values, scenario))
                     context = _doe_relabel_context(
                         only(individual.context_results), scenario,
                         pattern_index, fractions)
                     context.diagnostics["evidence_scope"] =
                         :individual_context_diagnostic
+                    # An individual witness may establish this context only
+                    # when it has no unfixed control shared with other contexts.
+                    # E.g. perfect recourse is separable; one common scenario Q
+                    # across several utilization points is not.
+                    context.diagnostics["policy_compatible_individual_witness"] =
+                        !any(solved.diagnostics["control_audit"]) do item
+                            item["native_classification"] in (:free, :mixed) || return false
+                            stage = item["stage"]
+                            key = _doe_key_from_audit(item)
+                            (stage == :issue && length(group)*length(patterns) > 1 &&
+                                !haskey(issued_values, (key, 0))) ||
+                            (stage == :scenario && length(patterns) > 1 &&
+                                !haskey(issued_values, (key, scenario)))
+                        end
+                    if independent_replay && context.feasible === true &&
+                            context.diagnostics["policy_compatible_individual_witness"]
+                        _, _, fixed_values, unsupported = only(individual.replay_values)
+                        replay = _solve_interval_group([net], cps, policy;
+                            direction, security=:bound_point, per_unit, s_base,
+                            optimizer, verbose, solver_options, volt_var_watt_eps,
+                            max_min_tolerance=1e-7,
+                            control_policy=resolved_control_policy, control_policy_source,
+                            context_hook!, start_hook!, fixed_capacity=trajectory[t],
+                            patterns_override=[fractions], fixed_control_values=fixed_values)
+                        context.diagnostics["independent_replay"] = _doe_replay_evidence(
+                            context, only(replay.context_results), unsupported)
+                    end
                     push!(interval_contexts, context)
                     individually_feasible = context.feasible === true
                     all_individually_feasible &= individually_feasible
@@ -4321,14 +4482,27 @@ function verify_operating_envelope(nets,
                     :individual_context_diagnostics_inconclusive
             solved.diagnostics["verification_evidence"] =
                 :joint_model_plus_individual_context_diagnostics
-            push!(feasible, false)
+            composable = all(c -> _doe_context_verdict(c) === true, interval_contexts)
+            if composable
+                solved.diagnostics["verification_evidence"] = :separable_individual_witnesses
+            end
+            push!(feasible, composable)
         else
             append!(interval_contexts, solved.context_results)
             solved.diagnostics["joint_policy_feasible"] = false
             solved.diagnostics["verification_evidence"] = :joint_model_only
             push!(feasible, false)
         end
+        for context in interval_contexts
+            verdict = _doe_context_verdict(context)
+            context.diagnostics["verification_verdict"] = verdict === true ? :passed :
+                verdict === false ? :candidate_violation : :unresolved
+        end
         solved.diagnostics["context_result_count"] = length(interval_contexts)
+        solved.diagnostics["feasible"] = last(feasible)
+        solved.diagnostics["verification_outcome"] = last(feasible) ? :passed :
+            any(c -> _doe_context_verdict(c) === false, interval_contexts) ?
+                :candidate_violation : :unresolved
         push!(context_results, interval_contexts)
         push!(diagnostics, solved.diagnostics)
     end
@@ -4384,10 +4558,10 @@ function evaluate_operating_envelope_coverage(
             contexts = [context for context in
                         verification.context_results[interval]
                         if context.scenario == scenario_index]
-            failed_count = count(context -> context.feasible === false, contexts)
+            failed_count = count(context -> _doe_context_verdict(context) === false, contexts)
             unresolved_count = count(
-                context -> context.feasible === nothing, contexts)
-            passed_count = count(context -> context.feasible === true, contexts)
+                context -> _doe_context_verdict(context) === nothing, contexts)
+            passed_count = count(context -> _doe_context_verdict(context) === true, contexts)
             candidate_contexts += failed_count
             unresolved_contexts += unresolved_count
             passed_contexts += passed_count
@@ -4518,7 +4692,8 @@ function evaluate_operating_envelope_coverage(
         "scenario_weights" => weights_available ? :declared_relative_weights :
             :not_available,
         "weighted_frequency_estimator" => :interval_mean_of_within_interval_ratios,
-        "issue_controls" => :replayed_when_available,
+        "issue_controls" => unique(
+            diag["issued_control_replay_source"] for diag in verification.diagnostics),
         "scenario_controls" => :adaptive_to_selected_scenario,
         "distribution_shift_assessed" => false,
         "global_certificate" => false,
@@ -4902,9 +5077,12 @@ function evaluate_operating_envelope_coverage_curve(
             rows[first_candidate].scale,
         "scale_order" => :ascending,
         "capacity_scaling" => :uniform,
-        "issue_control_treatment" => capacities isa OperatingEnvelopeResult ?
-            :retained_from_issued_result : :not_available,
-        "control_reoptimization" => :none,
+        "issue_control_treatment" => unique(
+            diag["issued_control_replay_source"] for coverage in coverages
+            for diag in coverage.verification.diagnostics),
+        "control_reoptimization" => unique(
+            diag["control_reoptimization"] for coverage in coverages
+            for diag in coverage.verification.diagnostics),
         "candidate_count_reversals" => candidate_count_reversals,
         "candidate_count_monotonic_nondecreasing" =>
             isempty(candidate_count_reversals),
@@ -5293,8 +5471,8 @@ function compare_doe_uncertainty_models(
         "common_connection_points" => true,
         "common_evaluation_keywords" => true,
         "capacity_allocation_reoptimized" => false,
-        "issue_controls" => capacities isa OperatingEnvelopeResult ?
-            :retained_from_issued_result : :not_available,
+        "issue_controls" => Dict(label => curve.diagnostics["issue_control_treatment"]
+            for (label, curve) in curves),
         "capacity_selection_independent_of_evaluation_models" => :not_verified,
         "statistical_test" => :not_performed,
         "distribution_shift_detected" => false,
@@ -5523,8 +5701,8 @@ function search_operating_envelope_utilizations(
     unresolved = false
     for interval_contexts in verification.context_results
         for context in interval_contexts
-            context.feasible === false && push!(candidates, context)
-            context.feasible === nothing && (unresolved = true)
+            _doe_context_verdict(context) === false && push!(candidates, context)
+            _doe_context_verdict(context) === nothing && (unresolved = true)
         end
     end
     outcome = if all(verification.feasible)
@@ -5557,8 +5735,8 @@ function search_operating_envelope_utilizations(
 end
 
 function _doe_context_adversarial_score(context::OperatingEnvelopeContextResult)
-    context.feasible === false && return Inf
-    context.feasible === nothing && return NaN
+    _doe_context_verdict(context) === false && return Inf
+    _doe_context_verdict(context) === nothing && return NaN
     margins = get(context.diagnostics, "minimum_normalized_margins", nothing)
     margins isa AbstractDict && !isempty(margins) || return NaN
     values_ = Float64[value for value in values(margins) if value isa Real &&
@@ -5714,7 +5892,7 @@ function search_operating_envelope_adversarial(
         empty!(candidate_locations)
         for (interval, contexts) in enumerate(verification.context_results),
             context in contexts
-            if context.feasible === false
+            if _doe_context_verdict(context) === false
                 push!(candidates, context)
                 push!(candidate_locations, Dict{String,Any}(
                     "interval" => interval,
@@ -5767,11 +5945,12 @@ function search_operating_envelope_adversarial(
         "sequence_offset" => sequence_offset,
         _doe_search_point_diagnostics(length(connection_points), seed_samples;
             dropout_depth, halton_scramble_seed)...,
-        # Deepest single-coordinate value reachable from the bound point by
-        # refinement alone; `step_decay == 1` accumulates without bound and can
-        # therefore reach zero.
-        "refinement_reachable_depth_from_bound" => step_decay >= 1 ? 0.0 :
-            clamp(1 - initial_step / (1 - step_decay), 0.0, 1.0),
+        # Optimistic lower coordinate bound over the declared finite budget,
+        # assuming every move decreases this coordinate from the bound point.
+        # Includes the minimum-step floor; actual search paths may reach less.
+        "refinement_reachable_depth_from_bound" => clamp(1 - sum(
+            max(initial_step * step_decay^k, minimum_step)
+            for k in 0:(refinement_rounds - 1); init=0.0), 0.0, 1.0),
         "requested_refinement_rounds" => refinement_rounds,
         "completed_verification_rounds" => length(verifications),
         "restarts" => restarts,
@@ -5849,7 +6028,7 @@ function confirm_operating_envelope_counterexample(
         locations = Dict{String,Any}[]
         for (interval, contexts) in enumerate(verification.context_results),
             context in contexts
-            context.feasible === false || continue
+            _doe_context_verdict(context) === false || continue
             push!(locations, Dict{String,Any}(
                 "interval" => interval,
                 "scenario" => context.scenario,
@@ -5939,7 +6118,7 @@ function solve_adversarial_search_stable_operating_envelope(
             context_hook! = context_hook!,
             solve_keywords...)
         push!(allocations, allocation)
-        if any(!isfinite, allocation.total_capacity)
+        if any(diag -> !get(diag, "feasible", false), allocation.diagnostics)
             return AdversarialSearchStableOperatingEnvelopeResult(
                 :allocation_failed, allocation, allocations, searches, points,
                 length(searches), Dict{String,Any}(
@@ -5983,7 +6162,7 @@ function solve_adversarial_search_stable_operating_envelope(
         context_hook! = context_hook!,
         solve_keywords...)
     push!(allocations, final_allocation)
-    outcome = any(!isfinite, final_allocation.total_capacity) ?
+    outcome = any(diag -> !get(diag, "feasible", false), final_allocation.diagnostics) ?
         :allocation_failed : :budget_exhausted
     return AdversarialSearchStableOperatingEnvelopeResult(
         outcome, final_allocation, allocations, searches, points,
@@ -6043,7 +6222,7 @@ function solve_search_stable_operating_envelope(
         context_hook! = context_hook!,
         solve_keywords...)
     for round in 1:max_rounds
-        if any(!isfinite, allocation.total_capacity)
+        if any(diag -> !get(diag, "feasible", false), allocation.diagnostics)
             return SearchStableOperatingEnvelopeResult(
                 :allocation_failed, allocation, searches, points,
                 length(searches), Dict{String,Any}(
@@ -6060,7 +6239,7 @@ function solve_search_stable_operating_envelope(
             independent_replay=false,
             verification_keywords...)
         push!(searches, search)
-        points = search.utilization_points
+        _doe_append_unique_points!(points, search.utilization_points)
         if search.outcome == :search_stable
             return SearchStableOperatingEnvelopeResult(
                 :search_stable, allocation, searches, points, round,
@@ -6077,11 +6256,14 @@ function solve_search_stable_operating_envelope(
             context_hook! = context_hook!,
             solve_keywords...)
     end
+    final_outcome = any(diag -> !get(diag, "feasible", false), allocation.diagnostics) ?
+        :allocation_failed : :budget_exhausted
     return SearchStableOperatingEnvelopeResult(
-        :budget_exhausted, allocation, searches, points,
+        final_outcome, allocation, searches, points,
         length(searches), Dict{String,Any}(
             "global_certificate" => false,
-            "claim" => :finite_search_budget_exhausted,
+            "claim" => final_outcome == :allocation_failed ?
+                :no_publishable_final_allocation : :finite_search_budget_exhausted,
             "samples_per_round" => samples_per_round,
             "sequence_offset" => sequence_offset))
 end
@@ -6163,6 +6345,7 @@ function doe_context_benchmark_rows(
                 termination_status=context.termination_status,
                 primal_status=context.primal_status,
                 feasible=context.feasible,
+                effective_feasible=_doe_context_verdict(context),
                 replay_feasible=replay isa AbstractDict ?
                     get(replay, "feasible", missing) : missing,
                 control_replay_complete=replay isa AbstractDict ?

@@ -1,5 +1,10 @@
 # Dynamic operating envelopes in 15 minutes
 
+<!-- doe-executable -->
+
+All Julia blocks on this page run in order from the repository root. CI executes
+the exact blocks with `julia --project=. scripts/run_doe_tutorials.jl`.
+
 > **Audience:** power-systems researchers and PhD candidates familiar with
 > steady-state power flow; no robust-optimization background is assumed
 >

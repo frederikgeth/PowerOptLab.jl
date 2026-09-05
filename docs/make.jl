@@ -20,6 +20,8 @@ makedocs(
             "Start here: DOE in 15 minutes" => "tutorials/doe_getting_started.md",
             "Choosing a formulation" => "tutorials/dynamic_operating_envelopes.md",
             "What does a DOE guarantee?" => "tutorials/doe_range_guarantees.md",
+            "Analytic reference cases" => "tutorials/doe_analytic_reference.md",
+            "Faithful replay" => "tutorials/doe_faithful_replay.md",
             "Recourse, verification, and search" => "tutorials/doe_research_workflow.md",
             "Scenario design" => "tutorials/doe_scenario_design.md",
             "Uncertainty models" => "tutorials/doe_uncertainty_models.md",

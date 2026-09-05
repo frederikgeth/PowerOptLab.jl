@@ -159,9 +159,16 @@ feasible joint policy solve is independently repeated one context at a time with
 its optimized free controls fixed. The replay records its status, completeness,
 snapshot, margins, and maximum complex-voltage difference from the joint solve.
 
-When verification receives an `OperatingEnvelopeResult` produced with the same
-control policy, its recorded `:issue` and `:scenario` control values are fixed
-at their canonical values in the new utilization contexts. Diagnostics report
+Verification inherits direction, control policy, per-unit base, smoothing and
+registered context hook from an `OperatingEnvelopeResult`, unless explicitly
+overridden. Its recorded `:issue` and `:scenario` control values are fixed
+at their canonical values in the new utilization contexts. Scenario controls
+match stable scenario IDs and network hashes, allowing reorder/subset replay.
+Untyped inputs require unique matching hashes; ambiguous repeats require typed
+IDs. Changed scenario content is rejected unless `replay_control_stages=(:issue,)`
+is selected to permit new scenario recourse, as held-out coverage does by default.
+Connection IDs, buses, phase/neutral declarations and IBR bindings must match
+issuance. Diagnostics report
 `issued_control_replay_source` and `issued_control_replay_count`. Passing only a
 capacity dictionary cannot reproduce issued controls and is labelled
 `:capacity_values_only`; set `replay_issued_controls=false` only for an explicit
@@ -170,7 +177,25 @@ re-optimization experiment.
 When a joint model fails, contexts are diagnosed separately. If they are all
 individually feasible, diagnostics use
 `:shared_control_incompatibility_or_joint_nlp_failure`; they do not invent a
-single offending context.
+single offending context. Individual witnesses count as passes only when no
+unfixed shared control couples them to other contexts. A failed or incomplete
+requested replay is unresolved, even if the original joint solve succeeded.
+
+| Numerical evidence | Interpretation |
+|---|---|
+| Published feasible witness | Local feasibility of the represented model |
+| `INFEASIBLE` / `LOCALLY_INFEASIBLE` on one context | Candidate local infeasibility; no physical impossibility certificate |
+| Time/iteration limit, interruption, invalid model, numerical error | Unresolved, regardless of the last iterate |
+| Individual witnesses without a common required policy | Unresolved policy compatibility |
+| Missing fixed-control replay handles or failed requested replay | Unresolved replay |
+
+`context.feasible` preserves the raw solve result. Use the context diagnostic
+`verification_verdict` (`:passed`, `:candidate_violation`, `:unresolved`) for
+usable verification evidence. Interval `feasible=false` means verification did
+not establish a pass, not that physical infeasibility was proved. Coverage and
+search use the same effective verdict. Unresolved cases enter conservative
+coverage rates and bounds as adverse outcomes; repeated numerical failures
+remain inconclusive under multistart confirmation.
 
 ## Finite interior search and multistart
 
@@ -203,9 +228,18 @@ solver options, seeds, extension metadata, and software versions. Store
 
 ## Migration note
 
-Omitting `control_policy` continues to select pointwise `PerfectRecourse()` and
-records `control_policy_source=:legacy_default`. New research studies should
-pass the policy explicitly. The original four-argument
+At allocation, omitting `control_policy` selects pointwise `PerfectRecourse()`
+and records `control_policy_source=:legacy_default`. At verification, rich
+results inherit their issued policy (`:issued_result`); bare capacity dictionaries
+retain the default and cannot reproduce issued controls. Explicit policy changes
+are re-optimization experiments and are labelled in `control_reoptimization`.
+New research allocations should name the policy explicitly.
+
+An IBR may bind only one connection point, and the connection's phase/neutral
+order must match the device terminal map. Legacy ports are now restricted to one
+phase: the old multiphase aggregate-Q equality allowed unrequested phase P/Q
+redistribution. Migrate to separate independently controlled phase ports or an
+IBR whose topology represents the intended coupled device. The original four-argument
 `OperatingEnvelopeVerification` constructor remains available; new verification
 results additionally populate `context_results`.
 
@@ -472,12 +506,15 @@ constraints already present in the BMOPFTools case, including:
 
 The tests include voltage-limited, thermally limited, negative-sequence-limited,
 import, multi-scenario, prescribed-Q-V and STATCOM-assisted examples. They also
-cover invalid inputs and infeasible baseline/corner cases.
+cover invalid inputs and infeasible baseline/corner cases. The independent
+[analytic reference suite](../tutorials/doe_analytic_reference.md) checks closed-form
+phase voltages, import/export limits, negative sequence, and exact affine box
+containment. The marked tutorials execute their actual Markdown code in CI.
 
 ## DSSE-to-DOE validation runner
 
 The repository includes `scripts/validate_doe_from_dsse.jl` for feeder studies
-that are too expensive or data-dependent for the unit-test suite. It keeps three
+with an executable synthetic case included in the unit-test suite. It keeps three
 questions distinct: whether DSSE reconstructs the observed state, whether the
 DOE is feasible under its own nonlinear model, and whether a separately fixed
 AC power flow reproduces the issued upper-bound point.
@@ -495,19 +532,32 @@ The returned named tuple must contain:
   controllable network assets;
 - `measurements`: the DSSE `Measurement` vector;
 - `connection_points`: DOE connection points bound to existing, single-phase
-  IBRs (`ibr_id` is required for the independent power-flow check).
+  IBRs (`ibr_id` is required for the independent power-flow check);
+- `materialize_estimate(estimate, operational_template)`: an explicit adapter
+  returning a network populated from the DSSE result. The runner passes a deep
+  copy of the operational template. Apply it to both base and STATCOM templates.
 
 It may also provide `truth_net` (the measurement-generating operational state),
 `with_statcom_net` (the otherwise-identical STATCOM case), and `doe_keywords`
 (a `NamedTuple` forwarded to `solve_operating_envelope`). The runner reports
 DSSE voltage error against the truth power flow, DOE capacity, DOE verification,
 the maximum voltage difference between DOE and a separate fixed-setpoint
-`solve_pf`, and STATCOM capacity gain where supplied. It deliberately does not
-enter the unit suite: use it for real feeder exports, a representative time
-series, and solver/runtime logging. For a controllable STATCOM or other flexible
-asset, record and replay the controller setpoint selected at issuance; a plain
-power flow may otherwise select another feasible reactive dispatch, which is an
-operational-policy difference rather than a DOE-model comparison.
+`solve_pf`, and STATCOM capacity gain where supplied. Customer active power uses
+the issued direction. Free IBR P/Q is fixed to the recorded solution; constant
+power-factor laws remain in force. The pinned PF engine strips `s_max`, which
+changes rating-normalized droop bases. This adapter therefore rejects Volt-VAr
+and Volt-Watt profiles explicitly; use the main DOE verifier to replay those
+laws faithfully. Unsupported free controls (including taps and custom
+extensions), custom smoothing, or custom context hooks cause an explicit error.
+The pinned separate-PF API cannot faithfully carry those settings yet.
+
+The runner requires convergence, a feasible primal witness, complete finite complex-voltage comparisons and a
+1 mV DOE/PF agreement tolerance. It is an independent build of the same engine's
+power-flow equations, not an independent software oracle or a range certificate.
+The synthetic adapter uses estimated net P/Q as demand only because its
+pre-DOE DER dispatch is known to be zero and each bus has one load. General
+feeders need explicit load/DER disaggregation; voltage estimates alone do not
+identify individual device demand.
 
 ## Current limitations
 

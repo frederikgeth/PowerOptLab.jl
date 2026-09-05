@@ -1,5 +1,10 @@
 # Statistical validation of DOE claims
 
+<!-- doe-executable -->
+
+All Julia blocks on this page run in order from the repository root. CI executes
+the exact blocks with `julia --project=. scripts/run_doe_tutorials.jl`.
+
 > **Question:** when may finite out-of-sample evaluations support a probability
 > statement, and what must remain descriptive?
 >
@@ -61,16 +66,25 @@ as a separate numerical category for diagnosis.
 ## 3. Add a confidence bound only when justified
 
 ```julia
+iid_test = doe_iid_test_scenarios(count=32, seed=7319)
 iid_coverage = evaluate_operating_envelope_coverage(
-    held_out, case.connection_points, issued;
+    iid_test, case.connection_points, issued;
     roles=:test,
     utilizations=:corners,
     control_policy=PerfectRecourse(),
     iid_assumption=true,
     confidence=0.95)
 
-iid_coverage.metrics["one_sided_hoeffding_upper_bound"]
+upper = iid_coverage.metrics["one_sided_hoeffding_upper_bound"]
+@assert iid_coverage.metrics["scenario_count"] == 32
+@assert iid_coverage.metrics["conservative_scenario_frequency"] <= upper <= 1
 ```
+
+Here each observation is a fresh network with two independently sampled
+Uniform(100,6000) W demands, generated with seed 7319 after issuance. The bound
+concerns the declared evaluation outcome on this synthetic population; it is
+not a physical violation probability inferred from local infeasibility. The
+hand-picked stress cases in the previous section are excluded.
 
 The flag is a scientific assertion by the caller, not an independence test. Do
 not use it for hand-picked stress cases, overlapping windows, repeated
