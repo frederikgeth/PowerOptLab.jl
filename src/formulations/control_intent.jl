@@ -137,6 +137,9 @@ function formulate_control_curve!(target,intent::VoltVarWattIntent,role::Symbol,
         throw(ArgumentError("Need finite increasing voltage endpoints"))
     rep = getproperty(encoding,role)
     rep === nothing && throw(ArgumentError("Supply a $role encoding"))
+    # Preserve the input recorded for auditing if a caller subsequently edits
+    # an affine/quadratic expression to build a different port.
+    x = x isa Union{AffExpr,QuadExpr} ? copy(x) : x
     si,so = _pwl_scale(input_scale),_pwl_scale(output_scale)
     model = target isa JuMP.Model ? target : BMOPFTools.opf_model(target)
     build = function()

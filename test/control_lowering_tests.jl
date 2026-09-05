@@ -67,6 +67,8 @@ end
     add_to_expression!(expression,1.)
     b = formulate_control_curve!(m,intent,:volt_watt,expression,encoding;domain=(200.,270.))
     @test a !== b && lowering_statistics(m).shared_curve_blocks == 3
+    @test a.input.constant == 0.
+    @test b.input.constant == 1.
     # Truncating a segment before smoothing would change the law at the new
     # endpoint. Check faithful smoothing there and in both physical flat tails.
     for family in (SoftplusFormulation,LocalC2Formulation,AlgebraicFormulation),
