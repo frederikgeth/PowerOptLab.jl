@@ -69,4 +69,16 @@ here without a general spline or global-optimization dependency.
 
 ## Progress
 
-- Branch created from merged main f65cb32. Implementation and validation pending.
+- Branch created from merged main f65cb32; canonical primitives and all five
+  representations implemented, with optional PiecewiseLinearOpt delegation.
+- Shared electrical reference, executable tutorial, isolated external-backend
+  setup, source-fingerprinted snapshot, and dedicated optional CI job implemented.
+- Julia 1.12: 5,129 functional assertions pass; documentation examples build.
+  Julia 1.10 validation is in progress.
+- Exact graph: 20/20 strict successes and physical reference checks. CCOpt 0.1.0:
+  0/20 strict successes, 8/20 microunit canonical-equation checks. The latter is
+  explicitly a characterization backend; its numerical limitations remain work
+  rather than being hidden by the optional integration test result.
+- Subsequent research: physical complementarity normalization and stationarity,
+  purpose-specific norm/root contracts, and realistic inverter/fleet integration.
+  No migration to BMOPFTools is proposed until those interfaces are established.

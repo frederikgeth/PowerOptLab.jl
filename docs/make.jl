@@ -49,6 +49,10 @@ makedocs(
             "Verification & benchmarks" => "ibr/verification.md",
             "References"               => "ibr/references.md",
         ],
+        "Function formulations" => [
+            "Theory and executable comparison" => "formulations/index.md",
+            "Implementation plan" => "formulations/plan.md",
+        ],
         "Component models" => [
             "Storage & EVs"     => "components/devices.md",
             "IVQ battery"       => "components/ivq_battery.md",

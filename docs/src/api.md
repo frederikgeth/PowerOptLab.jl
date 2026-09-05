@@ -194,3 +194,20 @@ solve_pf_helm
 helm_series
 HelmResult
 ```
+
+## Experimental function formulations
+
+```@docs
+PWLFunction
+SoftplusFormulation
+LocalC2Formulation
+ComplementarityGraph
+PWLConvexHull
+ExactPWLGraph
+primitive_value
+primitive_derivatives
+formulation_contract
+PWLFormulationHandle
+formulate_pwl!
+audit_pwl
+```
