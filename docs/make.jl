@@ -50,7 +50,12 @@ makedocs(
             "References"               => "ibr/references.md",
         ],
         "Function formulations" => [
+            "Start a configurable experiment" => "formulations/experiments.md",
             "Theory and executable comparison" => "formulations/index.md",
+            "Physical error and conditioning" => "formulations/error_budgets.md",
+            "Controller integration" => "formulations/controllers.md",
+            "Stage a new family" => "formulations/extensions.md",
+            "Formulation API" => "formulations/api.md",
             "Implementation plan" => "formulations/plan.md",
         ],
         "Component models" => [

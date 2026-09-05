@@ -91,5 +91,22 @@ on Julia 1.10 and 1.12. The initial CCOpt snapshot is an example observation
 
 ## Progress
 
-- Expanded plan recorded in response to the staging/configurability requirement.
-- A–D implementation in progress; commit working increments along the way.
+- A delivered: public hinge extension methods, physical budget selection,
+  magnitude/root constructions, signed affine error accounting, local sensitivity
+  and independent complementarity normalization.
+- B delivered: callback cases/methods/configurations, raw outcomes and candidate
+  audits, caller-owned assessments, errors and versioned TOML export. Optional
+  backend diagnostic-getter failures do not discard primal evidence; certificates
+  are distinguished from candidate operating points.
+- C delivered: selectable `PiecewiseLinearLaw` families, faithful flat-tail numeric
+  evaluation/stamping, scalar analytic and physical inverter case adapters.
+- D delivered: executable experiment, physical-error, controller and extension
+  tutorials, with a dedicated API reference and primary scientific sources.
+
+Validation of this increment: the full Julia 1.12.6 suite passes 5,176 functional
+assertions plus package-quality checks. After the final diagnostic/certificate
+handling changes, all 49 focused checks pass on Julia 1.10.11 and 1.12.6. The 1,135
+primitive/model checks also pass on Julia 1.10.11. The expanded optional suite
+passes 231 checks on Julia 1.12.6. Documentation builds with all examples executed.
+These are compatibility and focused integration checks, not a new solver
+reliability campaign or an engine-migration gate.

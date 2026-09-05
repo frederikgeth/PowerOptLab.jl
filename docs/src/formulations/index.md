@@ -3,7 +3,9 @@
 This experimental layer separates a canonical bounded continuous PWL function
 from its numerical representation. It is a staging area for reusable BMOPFTools
 function primitives. The existing inverter controllers retain their established
-defaults; this API currently builds separate research models.
+defaults and can now select a smoothing family independently for each curve.
+Start with [a configurable experiment](experiments.md), then use this page for
+the mathematical models and the original illustrative backend comparison.
 
 | Representation | Meaning | Implementation |
 |:--|:--|:--|
@@ -81,9 +83,8 @@ They do not certify equilibrium error in a general AC network.
 
 ```@example pwl
 budget = 0.01 # A
-# This curve has positive/negative slope-change masses of 2 A/V.
-soft = SoftplusFormulation(budget/(2log(2.)))
-local_c2 = LocalC2Formulation(budget/(2*3/16))
+soft = smoothing_for_error(curve,SoftplusFormulation,budget)
+local_c2 = smoothing_for_error(curve,LocalC2Formulation,budget)
 for rep in (soft,local_c2)
     contract = formulation_contract(curve,rep)
     @assert isapprox(contract.error_upper,budget)
@@ -174,6 +175,13 @@ The optional runner loads `MathOptComplements`, `NLPModelsJuMP`, and `CCOpt`, ad
 its bridges, and selects `CCOpt.Optimizer`. CCOpt owns the relaxation/homotopy
 algorithm. PowerOptLab supplies no continuation schedule or solve retries.
 
+With `ComplementarityGraph(scale=s)`, stored hinge variables are normalized:
+`p-n=(V-k)/s` and the physical hinge is `s*p`. This scale is independent of the
+model's input coordinate base. `audit_pwl` converts minimum and product residuals
+back to physical input units and their square. The default `scale=nothing`
+preserves input-base normalization; changing the scale requires fresh evidence,
+not reinterpretation of a previous solver tolerance as a physical tolerance.
+
 ```sh
 julia --project=. scripts/instantiate_pinned.jl
 julia scripts/formulations/setup.jl /tmp/pol-pwl-env
@@ -222,11 +230,13 @@ path produces fresh evidence, including unsuccessful statuses.
 
 ## Scope and scientific references
 
-The layer currently covers continuous scalar PWL functions. Purpose-specific
-norms/root operations, a general error-propagation calculus, fleet benchmarks,
-discontinuous/hysteretic controllers, and automatic reformulation of existing
-inverter controls remain future work. The present API and scripts make those
-experiments possible without changing established production behavior.
+The layer covers continuous scalar PWL representations, purpose-specific norms
+and positive-domain roots, affine error intervals and local sensitivity estimates.
+Configurable cases and opt-in controller families support further experiments.
+A general nonlinear error-propagation calculus, discontinuous/hysteretic controller
+semantics and automatic graph reformulation of whole AC controllers remain outside
+this delivery. See [the configurable runner](experiments.md) and
+[controller integration](controllers.md) for the expanded toolkit.
 
 - Chen and Mangasarian (1996), [smoothing functions for complementarity](https://doi.org/10.1007/BF00249052): construction via integrated probability densities.
 - Chen (2012), [nonsmooth nonconvex smoothing](https://doi.org/10.1007/s10107-012-0569-0): gradient consistency and limiting stationarity require assumptions beyond function approximation.

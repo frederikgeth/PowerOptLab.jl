@@ -226,4 +226,9 @@ PiecewiseLinearOpt), and continuous hull relaxations. Contracts expose physical
 units, signed approximation bounds, and graph/relaxation semantics. The
 [executable tutorial](docs/src/formulations/index.md) compares these on an analytic
 resistive feeder; external CCOpt and MIP experiments use an isolated environment.
-Existing inverter-controller defaults are unchanged.
+The [configurable experiment tutorial](docs/src/formulations/experiments.md)
+shows user-owned cases, solver options, sweeps, assessments and result export.
+Physical error budgets, purpose-specific magnitude/root operations and local
+sensitivity diagnostics support interpretation. Existing inverter controllers can
+select a family per curve, and the [extension tutorial](docs/src/formulations/extensions.md)
+shows how to stage a new family. Controller defaults remain unchanged.
