@@ -1,4 +1,5 @@
-using Test, PowerOptLab, JuMP, Ipopt, PiecewiseLinearOpt, HiGHS
+using Test, PowerOptLab, JuMP, Ipopt, HiGHS
+import PiecewiseLinearOpt
 using MathOptComplements, NLPModelsJuMP, CCOpt
 using Pkg, TOML, SHA
 include("comparison.jl")

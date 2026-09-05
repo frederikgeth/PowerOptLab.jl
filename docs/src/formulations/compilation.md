@@ -201,7 +201,8 @@ POL_FORMULATION_RESULTS=/tmp/control-lowering.toml \
 That script explicitly configures:
 
 ```julia
-using HiGHS, PiecewiseLinearOpt, MadNLP
+using HiGHS, MadNLP
+import PiecewiseLinearOpt
 using MathOptComplements, NLPModelsJuMP, CCOpt
 
 smooth = FormulationMethod("softplus / MadNLP",SoftplusFormulation(.01),
@@ -215,6 +216,10 @@ mpcc = FormulationMethod("MPCC / CCOpt",ComplementarityGraph(scale=1.),
     configure! = m -> (MathOptComplements.Bridges.add_all_bridges(m);set_silent(m)),
     options=(tol=1e-9,))
 ```
+
+Use `import PiecewiseLinearOpt` to activate the extension without importing its
+exported `PWLFunction`, which would conflict with PowerOptLab’s type of the same
+name. If both exports are already in scope, write `PowerOptLab.PWLFunction`.
 
 `configure!` runs **before** optimizer attachment so bridges can be installed.
 The pinned CCOpt interface constructs its MPCC representation and calls CCOpt's

@@ -62,7 +62,8 @@ physical input is `input_scale * input`; a physical output is
 A BMOPFTools staged context uses its public softplus expression builder. A plain
 JuMP model uses cached scalar operators with analytic first/second derivatives.
 Complementarity requires external solver support; the exact segment graph requires
-`using PiecewiseLinearOpt`. No optimizer, homotopy, or retry is selected here.
+`import PiecewiseLinearOpt` (avoiding its exported `PWLFunction` name conflict).
+No optimizer, homotopy, or retry is selected here.
 """
 function formulate_pwl!(m::JuMP.Model, f::PWLFunction, x, r::AbstractPWLFormulation;
                         input_scale::Real=1, output_scale::Real=1)

@@ -1,6 +1,7 @@
 # Run in the environment produced by setup.jl. Each method gets one solve;
 # any relaxation/homotopy iterations belong to CCOpt, not PowerOptLab.
-using Test, PowerOptLab, JuMP, HiGHS, PiecewiseLinearOpt, MadNLP
+using Test, PowerOptLab, JuMP, HiGHS, MadNLP
+import PiecewiseLinearOpt
 using MathOptComplements, NLPModelsJuMP, CCOpt
 include("control_lowering.jl")
 methods = ControlLoweringExample.smooth_methods(MadNLP.Optimizer;solver_name="MadNLP")
