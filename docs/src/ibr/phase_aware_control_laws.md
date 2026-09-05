@@ -504,25 +504,20 @@ system, complementarity system, or integer mode selector per inverter.
 
 ### Sequence measurement
 
-The Fortescue transform is affine in rectangular voltage components and adds no
-nonlinearity. Represent each required magnitude exactly with an implicit
-nonnegative square root,
+The Fortescue transform is affine in rectangular voltage components. For
+negative-sequence droop the smooth model uses
 
 ```math
-\nu_2\geq0,\quad \nu_2^2=U_{2,r}^2+U_{2,i}^2,
-\qquad
-\nu_1\geq0,\quad
-\nu_1^2=U_{1,r}^2+U_{1,i}^2+U_{floor}^2,
-\qquad
-\eta=\frac{\nu_2}{\nu_1}.
+\nu_2=\sqrt{|U_2|^2+\epsilon_2^2}-\epsilon_2,\qquad
+\nu_1=\sqrt{|U_1|^2+U_{floor}^2},\qquad
+\eta=\nu_2/\nu_1.
 ```
 
-The implementation divides both sides of each squared equality by a fixed
-physical reference magnitude for numerical scaling; this does not change its
-feasible set. ``U_{floor}`` makes the denominator strictly positive and is a declared
-low-voltage control regularization. It does not round the ``|U_2|`` magnitude. At
-exact ``U_2=0``, the implicit norm equality is algebraically exact but locally
-degenerate, so balanced initialization and robustness tests are required.
+BMOPFTools' shared `smooth_norm` supplies ``\nu_2`` and records its approximation.
+The width is ``\epsilon_2=0.1\epsilon_\eta U_{floor}``, so the unbalance-input
+error is at most ``0.1\epsilon_\eta``. The exact evaluator retains ``|U_2|``.
+``U_{floor}`` is a declared low-voltage control regularization; it is not a norm
+smoothing width. No zero-root equality is introduced at balanced voltage.
 
 The PWL curve ``\kappa(\eta)`` can then use BMOPFTools' existing smooth-ReLU/
 softplus machinery. In rectangular form, multiplication by
@@ -534,8 +529,7 @@ angle variables, `atan`, and a normalised ``U_2/|U_2|`` direction.
 Represent the three phase-voltage magnitudes by implicit nonnegative square-root
 variables. Replace hard `max` and `min` in the model by pairwise smooth maximum
 and minimum operators using a declared SI voltage width. The square roots inside
-those selectors are also implicit; epsilon smooths the selector, not a physical
-magnitude. Because there are only three arguments, this adds constant work per
+those selectors are direct expressions with strictly positive radicands. Because there are only three arguments, this adds constant work per
 device. The firmware may retain exact comparisons; the smoothed OPF law should
 be tested against it around every transition.
 
@@ -547,37 +541,33 @@ controller equality alongside those inequalities makes a stressed equilibrium
 infeasible instead of reproducing the controller's saturation. The saturation
 policy must therefore be part of the algebraic controller model.
 
-For the simple common-scale fallback, first form unconstrained sequence commands
-``\widehat I_1``, ``\widehat I_2`` and their phase currents. Define exact implicit magnitudes and
+For the common-scale fallback, first form unconstrained sequence commands
+``\widehat I_1``, ``\widehat I_2`` and their phase currents. Use upper norms
+``n_\epsilon(z)=\sqrt{|z|^2+(\epsilon_I/4)^2}`` and
 
 ```math
-M_I=\operatorname{smax}_\epsilon
-  (|\widehat I_a|,|\widehat I_b|,|\widehat I_c|),
-\qquad
-\gamma_I=\operatorname{smin}_\epsilon
-  \left(1,\frac{I_{max}}{M_I}\right).
+M_I=\operatorname{smax}_{\epsilon_I}
+  (I_{max},n_\epsilon(\widehat I_a),n_\epsilon(\widehat I_b),
+   n_\epsilon(\widehat I_c)),\qquad
+\gamma_I=I_{max}/M_I.
 ```
 
-Because converter-terminal apparent and oscillating powers are affine in the
-command scale for fixed local voltage and filter shunt current, analogous safe
-factors can be constructed for their magnitude limits. For example,
+This denominator cannot underestimate a phase-current magnitude. Converter and
+grid per-leg checks, apparent-power and optional ripple checks then allocate
+remaining headroom using the local converter voltage and filter shunt current.
+They also use upper norms, with the appropriate current or power width. An
+identically-zero offset is exactly zero and needs no root variable. PWM reserve
+is subtracted from the relevant fundamental-current limit before allocation.
 
-```math
-\gamma_{dc}=\operatorname{smin}_\epsilon
-\left(1,\frac{\widetilde S_{max}}
-{|\widehat{\widetilde S}|}\right).
-```
+Nonnegative scale factors are combined by
+``c_\delta(a,b)=ab/\operatorname{smax}_\delta(a,b)``. This stays between zero and
+the hard minimum and deviates by at most ``\delta/2``. Use dimensionless ratios
+``\delta=\epsilon_I/I_{max}`` or ``\epsilon_S/S_{max}``; using per-unit amperes
+or VA here would change the physical law when the OPF base changes.
 
-Here epsilon belongs only to the smooth min/max operator. It is not added to a
-magnitude or denominator. The implementation applies this pattern to converter
-and grid per-leg currents, converter-terminal apparent power, and—when
-`dv2_max` is configured—the corresponding 2ω power. PWM reserve is subtracted
-from each relevant fundamental-current limit before allocation.
-
-Set ``\gamma=\operatorname{smin}(\gamma_I,\gamma_{dc},\ldots)`` and
-``(I_1,I_2)=\gamma(\widehat I_1,\widehat I_2)``. A conservative smooth minimum should remain no
-larger than either argument. The exact squared-norm capability inequalities stay
-in the model as backstops and diagnostics.
+The positive-headroom expression exceeds the exact positive part by at most
+half its width. All exact squared capability inequalities remain in the plant;
+controller approximation bounds do not replace physical validation.
 
 Watt/var/proportional priority is applied before this final protection scale.
 Power-versus-balance sequence priority can be added later as a smooth radial
@@ -605,70 +595,47 @@ For scalable Ipopt studies:
 - bound droop slopes and gains so that steep controls do not create a badly
   conditioned equilibrium problem;
 - keep the model structure fixed when coefficients are parameterised;
-- warm-start across time points and use continuation in control gain or
-  smoothing when a feeder is difficult; and
+- verify independent starts at the same declared smoothing parameters; and
 - report the exact-versus-smooth controller residual as well as ordinary KCL
   and device-limit residuals.
 
 The additional nonlinearities remain nonconvex, so Ipopt still finds a local
-equilibrium/optimum. Large-scale validation should include multiple starts or
-continuation for difficult cases and explicit scaling sweeps in both device
-count and controller gain.
+equilibrium/optimum. Large-scale validation should include independent starts
+and explicit scaling sweeps in both device count and controller gain. The
+current wrappers perform one solve with fixed smoothing; continuation and
+exact-law network re-solves are not implemented in this cleanup.
 
-### Two magnitude representations, and which one to use where
+### Accuracy, sparsity and conditioning
 
-PowerOptLab now contains both standard smoothings of a Euclidean norm, and the
-choice between them is empirical rather than aesthetic:
+The shifted expression is appropriate for current-linear losses because its
+one-sided loss error is known: at most ``a_{loss}\sum_k\epsilon_k`` in watts.
+The plant now calls BMOPFTools' `smooth_norm`, preserving its established physical
+width and recording the approximation. It is not used uncorrected in capability
+denominators, where underestimating the norm could enlarge the command.
 
-- the **lifted** form introduces ``y\ge0`` with ``(y/y_b)^2=x/y_b^2``. It is
-  exact at every feasible point and adds no bias, and it is what the controller
-  uses for phase-voltage, sequence-voltage, apparent-power, and phase-current
-  magnitudes.
-- the **shifted expression** ``\sqrt{x+\epsilon^2}-\epsilon`` adds no variable
-  and no constraint, at the cost of a closed-form one-sided bias of at most
-  ``\epsilon``. [`AdvancedInverter`](@ref) moved its current-magnitude loss term
-  to this form after measuring that the lifted form cost 2–4× the Ipopt
-  iterations in per unit and failed outright in raw SI, because it places a
-  small per-unit magnitude inside a squared equality whose residual tolerance is
-  absolute.
+Direct expressions remove unnecessary squared equalities. Repeated subexpressions
+are retained as normalized definitions ``y=f(x)/s`` with derivative one in their
+output variable. This avoids both ``y^2=0`` degeneracy and excessive duplication
+of nested limiter expressions. Squared roots are retained for energized voltage
+magnitudes and priority-capacity calculations with their declared headroom and
+domain constraints.
 
-Three consequences are already visible in the controller and should be treated
-as open numerical work rather than settled policy:
+A smaller smoothing width reduces approximation error but increases curvature
+near zero. Choose widths from physical error budgets, keep them independent of
+solver tolerances, and validate both numerical residuals and physical quantities.
+No single solver option establishes accuracy or convergence across all feeders.
 
-1. A lifted magnitude of a quantity that is **structurally zero** is formally
-   defective. ``(y/y_b)^2=0`` pins ``y=0`` while its gradient vanishes there, so
-   LICQ fails at the model's own solution. The capability allocator does exactly
-   this for converter-target apparent power and ``\Delta V_{2,max}`` on every
-   filter without an explicit LCL midpoint.
+The unused `a_loss == 0` magnitude epigraphs in the standalone physical plant
+remain an empirical solver-path workaround. Removing them in isolation regressed
+sequence/ripple tests; they are not physical loss terms or mathematically
+justified regularization. This broader plant-conditioning issue is separate
+from the eliminated controller zero-root equalities.
 
-   Removing those constraints was tried and **reverted**. It is bit-identical on
-   one platform and moves three assertions in the saturated P/Q-priority
-   regression to a non-publishable status on another Ipopt/MUMPS build. The
-   degenerate constraints are load-bearing as regularizers — the same result
-   [`AdvancedInverter`](@ref) found when it removed the `a_loss == 0` current
-   epigraph and pushed an unrelated device into `ITERATION_LIMIT`. A formally
-   correct local change to this model can therefore cost publishable status, and
-   nothing in the model tells you which ones will. This is the clearest single
-   argument that the limiter's conditioning has to be addressed as a whole
-   rather than call site by call site.
-2. The controller's requirement for `per_unit=true` was established with the
-   lifted form throughout. It should be re-measured against the shifted form
-   before it is treated as an intrinsic property of the coupled controller
-   rather than of this representation.
-3. `CommonScaleLimiter` now uses rating-relative current and power smoothing
-   fractions by default, so heterogeneous fleets receive one dimensionless
-   regularization convention. Explicit `current_epsilon` and
-   `power_epsilon` values remain available as absolute-SI overrides for
-   reproducibility or legacy comparisons. The fractions and overrides should be
-   recorded with study settings.
-
-The starts and scales handed to each lifted magnitude are likewise chosen per
-call site and are not yet audited. Their sensitivity is real: changing only the
-fallback start of a curve-free policy from 230 V to the network's own 1 pu base
-— 6.5 % on the 245 V test fixtures — is enough to move the near-zero-current
-``dv2_max`` case from `LOCALLY_SOLVED` to a non-publishable status. A systematic
-start/scale audit, normalizing each auxiliary to its own expected magnitude
-rather than to a convenient nearby rating, is the next numerical work item.
+The controller regressions use fixed target smoothing, independent starts and
+multiple per-unit bases. They check strict solve status, original constraint
+residuals, conductor currents, converter power, ripple volts and exact-versus-
+smooth command disagreement at the solved point. These checks do not certify
+global optimality or closeness to an independently solved exact-law equilibrium.
 
 ## DC capacitor implications
 

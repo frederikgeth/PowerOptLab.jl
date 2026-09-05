@@ -1620,7 +1620,7 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
                 inv.In_max === nothing ? inv.i_max : inv.In_max, ib;
                 name="loss_$(inv.id)_neutral")
         else
-            # Same regulariser as the per-phase branch; the fourth leg is
+            # Same retained epigraph as the per-phase branch; the fourth leg is
             # boxed by its own rating.
             imn = JuMP.@variable(m, base_name = "imag_$(inv.id)_neutral",
                                  lower_bound = 0.0)

@@ -501,13 +501,15 @@ end
             (1.0 + 0im, 9.0 + 0im))      # ordinary saturation
         model = Model(Ipopt.Optimizer)
         set_silent(model)
+        @variable(model, offset_real, start=real(offset))
+        @constraint(model, offset_real == real(offset))
         smooth = PowerOptLab._safe_direction_scale_implicit!(
-            model, (real(offset), imag(offset)),
+            model, (offset_real, imag(offset)),
             (real(direction), imag(direction)), limit, epsilon;
             magnitude_start=limit, scale=limit)
         @objective(model, Min, 0.0)
         optimize!(model)
-        @test is_solved_and_feasible(model; allow_almost=true)
+        @test is_solved_and_feasible(model)
         exact = PowerOptLab._safe_direction_scale_exact(
             offset, direction, limit)
         @test 0.0 <= value(smooth) <= 1.0
@@ -631,16 +633,9 @@ end
 end
 
 @testset "Inverter controls: DC-ripple voltage saturation" begin
-    # dv2_max sets the ripple budget |S_tilde| = 2*w*c_dc*v_dc*dv2_max, so
-    # 0.1 V allows only 48 VA here and forces an ~87% current backoff. That
-    # drives the solve into a near-zero-current corner where the capability
-    # limiter's implicit square roots are worst conditioned, and the result
-    # then depends on the solver tolerance and the platform's linear algebra.
-    # 0.7 V keeps the backoff clearly active (current_scale ~ 0.88). Use the
-    # formulation's per-unit/device normalization directly: Ipopt's additional
-    # gradient scaling can hide accuracy in the implicit-root constraints.
-    # Adaptive barrier updates avoid the stagnation seen with the monotone
-    # strategy on Julia 1.10 while retaining the same convergence tolerance.
+    # Keep the 0.7 V saturation case and exercise the original 0.1 V limit in
+    # inverter_control_numerics_tests.jl. Both use fixed smoothing and the same
+    # ordinary Ipopt configuration; no fixture-specific scaling or barrier.
     inverter = AdvancedInverter(
         id="ripple_limit", bus="poc", phase_terminals=["a", "b", "c"],
         neutral="n", topology=:THREE_LEG, s_max=20e3, i_max=40.0,
@@ -650,9 +645,7 @@ end
     result = solve_controlled_inverter(
         inv_grid3_unbal(), ControlledDevice(inverter, controller),
         _CTRL_REQUEST; per_unit=true,
-        solver_options=("max_iter" => 500, "tol" => 1e-8,
-                        "nlp_scaling_method" => "none",
-                        "mu_strategy" => "adaptive"))
+        solver_options=("max_iter" => 500, "tol" => 1e-8))
     @test result.solve.publishable
     @test result.plant.dv2 <= inverter.dv2_max + 1e-6
     @test result.control.current_scale < 1.0
@@ -675,20 +668,16 @@ end
         PositiveSequenceVoltVarWatt(); current_target=:grid)
     request = InverterControlRequest(p_available=9e3, q_scale=0.0)
 
-    # The equations already carry per-unit/device normalization. Automatic
-    # gradient scaling made the grid-target solve stop at acceptable tolerance
-    # despite a sizeable unscaled KKT residual. Preserve the requested tolerance
-    # and check the returned physical current/power identities below.
+    # Use the ordinary shared solver settings and check physical current/power
+    # identities. The corrected formulation needs no fixture-specific scaling.
     converter = solve_controlled_inverter(
         inv_grid3_bal(), ControlledDevice(inverter, converter_controller),
         request; per_unit=true,
-        solver_options=("max_iter" => 400, "tol" => 1e-8,
-                        "nlp_scaling_method" => "none"))
+        solver_options=("max_iter" => 400, "tol" => 1e-8))
     grid = solve_controlled_inverter(
         inv_grid3_bal(), ControlledDevice(inverter, grid_controller),
         request; per_unit=true,
-        solver_options=("max_iter" => 400, "tol" => 1e-8,
-                        "nlp_scaling_method" => "none"))
+        solver_options=("max_iter" => 400, "tol" => 1e-8))
 
     for result in (converter, grid)
         @test result.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
