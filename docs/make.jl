@@ -51,6 +51,8 @@ makedocs(
         ],
         "Function formulations" => [
             "Control intent, compilation and solvers" => "formulations/compilation.md",
+            "Bounds and relation-aware lowering" => "formulations/bounds_and_relations.md",
+            "Tolerances and whole-model solver choice" => "formulations/tolerances_and_solvers.md",
             "Start a configurable experiment" => "formulations/experiments.md",
             "Theory and executable comparison" => "formulations/index.md",
             "Physical error and conditioning" => "formulations/error_budgets.md",

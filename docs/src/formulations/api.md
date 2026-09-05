@@ -10,6 +10,12 @@ VoltVarWattEncoding
 lower_positive_policy
 formulate_control_curve!
 lowering_statistics
+PWLRelationPlan
+PWLRelationHandle
+plan_pwl_relation
+formulate_pwl_relation!
+formulate_control_relation!
+audit_pwl_relation
 SoftplusFormulation
 LocalC2Formulation
 AlgebraicFormulation

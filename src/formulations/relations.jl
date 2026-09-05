@@ -254,7 +254,9 @@ end
 Report signed `output - canonical(input)`, one-sided/equality relation violation,
 selected-surrogate violation when relevant, and physical domain violation. A slack
 upper limit is not a tracking error. These are candidate checks, not solve or
-stationarity certificates; a hull's relation violation may be positive.
+stationarity certificates; a hull's relation violation may be positive. The
+optional `graph_audit` separately checks the lifted auxiliary graph, including
+complementarity residuals; it does not treat that auxiliary as dispatched power.
 """
 function audit_pwl_relation(h::PWLRelationHandle)
     x,y = value(h.input)*h.input_scale,value(h.output)*h.output_scale
@@ -266,5 +268,6 @@ function audit_pwl_relation(h::PWLRelationHandle)
     lo,hi = h.plan.domain
     return (input=x,output=y,canonical_residual=residual,
         canonical_violation=violation(residual),surrogate_violation=surrogate,
-        domain_violation=max(lo-x,x-hi,0.),strategy=h.plan.strategy,semantics=h.plan.semantics)
+        domain_violation=max(lo-x,x-hi,0.),strategy=h.plan.strategy,semantics=h.plan.semantics,
+        graph_audit=h.graph===nothing ? nothing : audit_pwl(h.graph))
 end

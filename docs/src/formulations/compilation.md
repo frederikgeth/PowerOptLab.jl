@@ -1,5 +1,10 @@
 # From control intent to solver equations
 
+For illustrated bound-dependent equality/inequality specialization, continue to
+[bounds and relation-aware lowering](bounds_and_relations.md). The companion
+[tolerance and solver guide](tolerances_and_solvers.md) distinguishes OpenDSS
+control-loop criteria, approximation budgets and whole-model solver capabilities.
+
 A volt-var/watt characteristic specifies what the controller is meant to do.
 A softplus, local spline, exact graph or relaxation specifies how we represent
 that characteristic in an optimization model. Keep those decisions separate:
