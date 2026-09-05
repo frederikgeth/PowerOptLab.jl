@@ -1,5 +1,55 @@
 # Controller convergence investigation
 
+The baseline investigation below describes `92e42a3`. Its diagnostic script was
+committed at `6bb8dfd`, before the production changes. Run from a separate
+checkout of `6bb8dfd` to reproduce that baseline; running the script on the
+current branch evaluates the corrected formulation. Both snapshots are retained.
+
+## Implementation follow-up
+
+At `5827acb`, production removes provably zero roots, uses direct smooth
+selectors and nondegenerate normalized expression definitions, and uses upper
+norms for capability denominators. Current-linear losses and negative-sequence
+voltage smoothing use BMOPFTools helpers. Dimensionless scale-selector widths
+are independent of the OPF power base, and curve-free voltage initialization
+uses the local nominal voltage rather than a fixed 230 V anchor.
+
+The wrappers still perform one solve with fixed smoothing. No continuation,
+retry, exact-law network re-solve, or relaxed result-publication rule was added.
+
+`controller_convergence_after.toml` records 18 fresh single-solve comparisons
+on Julia 1.12.6 with the same solver/package versions as the baseline.
+
+| Fixture | Ipopt default | MadNLP default |
+|---|---|---|
+| Ripple 0.7 V | LOCALLY_SOLVED, 36 iterations | LOCALLY_INFEASIBLE, 106 iterations |
+| Ripple 0.1 V | LOCALLY_SOLVED, 42 iterations | LOCALLY_SOLVED, 41 iterations |
+| LCL grid target | LOCALLY_SOLVED, 6 iterations | LOCALLY_SOLVED, 23 iterations |
+
+All nine Ipopt configurations converge. MadNLP converges in six of nine runs,
+including an unscaled 0.7 V run, default and unscaled 0.1 V runs, and all three
+LCL runs. Three ripple runs still return local-infeasibility status despite tiny
+original-model residuals. Its initialization and configuration sensitivity
+therefore remains an open issue. The corrected LCL controller has about 0.51 mA
+exact-versus-smooth command discrepancy, within the 1 mA regression budget.
+This is larger than the old unscaled Ipopt discrepancy: the changes prioritize
+reliable convergence within a stated physical accuracy budget, rather than
+promising that every numerical discrepancy decreases.
+
+The regression suite checks all 36 combinations of four difficult cases, three
+independent starts and three power bases (0.1, 1 and 10 MVA). It checks original
+constraint residuals and physical current/power/ripple limits, and retains the
+original 0.1 V ripple case. Ripple and LCL tests now use ordinary Ipopt settings
+without fixture-specific scaling or barrier overrides.
+
+A separate removal of the unused plant loss epigraphs regressed eight assertions
+in the sequence/ripple test, so that removal was reverted. Their retention is
+an empirical solver-path workaround, not a physically necessary loss term or
+a mathematically justified regularization. Wider plant conditioning and a
+reduced upstream MadNLP restoration reproducer remain separate work.
+
+## Baseline investigation
+
 The skipped ripple regression is numerically solvable. The existing controller
 formulation nevertheless contains a demonstrable constraint-qualification defect;
 changing solver options alone does not remove it. MadNLP reproduces failures, so
@@ -39,7 +89,7 @@ relaxation. Other solver defaults are retained. See the
 
 ## Measured findings
 
-The adjacent `controller_convergence_results.toml` records the full local matrix
+The adjacent `controller_convergence_results.toml` records the baseline local matrix
 on Julia 1.12.6 / aarch64 macOS, BMOPFTools
 `5b51d2f361dab91bd7c16711019584407da79ed8`, Ipopt.jl 1.15.0 and MadNLP 0.10.1.
 This is a platform-specific diagnostic snapshot, not a cross-platform guarantee
