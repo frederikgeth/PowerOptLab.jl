@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="280" viewBox="0 0 960 280" role="img" aria-labelledby="title desc">
+  <title id="title">Information timeline for operating-envelope controls</title>
+  <desc id="desc">A timeline shows issue-time decisions, scenario observations, participant utilization, automatic local laws, and pointwise context recourse.</desc>
+  <rect width="960" height="280" fill="#ffffff"/>
+  <style>.title{font:600 19px sans-serif;fill:#172033}.head{font:600 15px sans-serif;fill:#172033}.text{font:13px sans-serif;fill:#44506a}.line{stroke:#526078;stroke-width:3}.dot{fill:#2878b5}.issue{fill:#e7efff;stroke:#3568b8}.scenario{fill:#fff0c9;stroke:#b68112}.local{fill:#dff3e4;stroke:#278245}.context{fill:#f2e7ff;stroke:#7645ad}</style>
+  <text x="480" y="30" text-anchor="middle" class="title">A control policy is an information structure</text>
+  <line x1="90" y1="112" x2="870" y2="112" class="line"/>
+  <g><circle cx="130" cy="112" r="8" class="dot"/><text x="130" y="88" text-anchor="middle" class="head">DOE issued</text><text x="130" y="142" text-anchor="middle" class="text">capacity and manual settings</text></g>
+  <g><circle cx="365" cy="112" r="8" class="dot"/><text x="365" y="88" text-anchor="middle" class="head">scenario observed</text><text x="365" y="142" text-anchor="middle" class="text">forecast/model realization</text></g>
+  <g><circle cx="600" cy="112" r="8" class="dot"/><text x="600" y="88" text-anchor="middle" class="head">customer utilization</text><text x="600" y="142" text-anchor="middle" class="text">point inside advertised range</text></g>
+  <g><circle cx="830" cy="112" r="8" class="dot"/><text x="830" y="88" text-anchor="middle" class="head">physical response</text><text x="830" y="142" text-anchor="middle" class="text">state and automatic controller</text></g>
+  <rect x="65" y="185" width="185" height="52" rx="8" class="issue"/><text x="157" y="207" text-anchor="middle" class="head">issue</text><text x="157" y="226" text-anchor="middle" class="text">shared everywhere</text>
+  <rect x="277" y="185" width="185" height="52" rx="8" class="scenario"/><text x="369" y="207" text-anchor="middle" class="head">scenario</text><text x="369" y="226" text-anchor="middle" class="text">adapts after scenario</text>
+  <rect x="489" y="185" width="185" height="52" rx="8" class="context"/><text x="581" y="207" text-anchor="middle" class="head">context</text><text x="581" y="226" text-anchor="middle" class="text">perfect pointwise recourse</text>
+  <rect x="701" y="185" width="185" height="52" rx="8" class="local"/><text x="793" y="207" text-anchor="middle" class="head">local law</text><text x="793" y="226" text-anchor="middle" class="text">declared causal equation</text>
+</svg>

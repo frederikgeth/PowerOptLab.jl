@@ -3,6 +3,11 @@
 > **Review date:** 5 September 2026 · **Scope:** literature used to define the
 > claims, examples, and research boundaries of the PowerOptLab DOE framework.
 
+For a tutorial-first introduction, begin with [Dynamic operating envelopes in
+15 minutes](../tutorials/doe_getting_started.md). For implemented capability
+versus proposed research, use the [DOE development
+roadmap](doe_development_roadmap.md).
+
 Dynamic operating envelope (DOE) does not name one mathematical object across
 the literature. It can mean a time-varying import/export limit, a feasible
 operating region, a decoupled range intended to tolerate independent customer

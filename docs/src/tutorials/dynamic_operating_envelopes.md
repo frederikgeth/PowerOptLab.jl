@@ -1,15 +1,17 @@
-# Dynamic operating envelopes for LV networks: a modelling tutorial
+# Choosing a dynamic operating-envelope formulation
 
-> **Audience:** power-system researchers · **Scope:** nonlinear AC DOE studies
-> with DSSE snapshots, mandatory DER controls, and network support devices.
+> **Audience:** power-system researchers · **Prerequisite:** [Dynamic operating
+> envelopes in 15 minutes](doe_getting_started.md) · **Scope:** nonlinear AC DOE
+> studies with DSSE snapshots, mandatory DER controls, and network support
+> devices
 >
-> **Evidence level:** modelling guidance; examples support only the claim stated
-> by their security set, control policy, and local solver evidence
+> **Learning outcome:** choose and report a DOE geometry, coverage set, control
+> information structure, uncertainty semantics, and evidence level
 
-This is the modelling primer for the current API. The implementation audit and
-the planned sequence of counterexample, uncertainty, fairness, scaling, and
-power-quality tutorials are maintained in [DOE quantification: scientific
-review and roadmap](../problems/doe_quantification_review.md).
+This is the formulation guide for the current API. The implementation audit and
+the rationale for the counterexample, uncertainty, fairness, scaling, and
+power-quality research program are maintained in the [detailed DOE scientific
+audit](../problems/doe_quantification_review.md).
 For the implemented recourse registry, structured replay, finite interior
 search, multistart, and reproducibility manifest, continue with
 [Reproducible DOE recourse, verification, and search](doe_research_workflow.md).
@@ -23,6 +25,21 @@ practice. A bound-point allocation, an independently usable box, a coupled P–Q
 region, and a market-shaped envelope do not make the same promise. The
 difficult part is declaring that promise and representing the physical controls
 and information that will be present when it is used.
+
+Use this sequence before writing code:
+
+| Decision | Question | Typical choices in the current framework |
+|---|---|---|
+| Operational object | What may each participant actually do? | one bound point; independently usable one-sided box |
+| Utilization coverage | Which joint participant actions are represented? | bound point; exact corners; explicit points; finite interior search |
+| Control information | What is known when each controller acts? | issue-time; scenario-adaptive; declared local law; pointwise perfect recourse |
+| Exogenous uncertainty | Which network conditions share one allocation? | one snapshot; typed finite scenario set |
+| Allocation objective | Whose capacity or benefit is optimized? | sum, equal, weighted, max-min, rolling fairness |
+| Evidence | What justifies the reported claim? | local solve, replay, multistart, finite falsification search; never a current global certificate |
+
+These axes are independent. For example, exact utilization corners with
+pointwise perfect recourse are not equivalent to exact corners with one shared
+tap setting, and a held-out scenario evaluation is not a robust certificate.
 
 The runnable end-to-end example is
 `scripts/cases/doe_dsse_validation_demo.jl`:

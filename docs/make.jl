@@ -14,9 +14,22 @@ makedocs(
         "Concepts"        => "concepts.md",
         "Research program" => [
             "Overview" => "research_program.md",
-            "DOE quantification review" => "problems/doe_quantification_review.md",
-            "DOE literature evidence" => "problems/doe_literature_evidence.md",
             "Post-OPF operability roadmap" => "problems/post_opf_operability_roadmap.md",
+        ],
+        "Dynamic operating envelopes" => [
+            "Start here: DOE in 15 minutes" => "tutorials/doe_getting_started.md",
+            "Choosing a formulation" => "tutorials/dynamic_operating_envelopes.md",
+            "What does a DOE guarantee?" => "tutorials/doe_range_guarantees.md",
+            "Recourse, verification, and search" => "tutorials/doe_research_workflow.md",
+            "Scenario design" => "tutorials/doe_scenario_design.md",
+            "Uncertainty models" => "tutorials/doe_uncertainty_models.md",
+            "Statistical validation" => "tutorials/doe_statistical_validation.md",
+            "Advanced uncertainty laboratory" => "tutorials/doe_uncertainty_coverage.md",
+            "Problem specification" => "problems/operating_envelope.md",
+            "Literature evidence" => "problems/doe_literature_evidence.md",
+            "Development roadmap" => "problems/doe_development_roadmap.md",
+            "Detailed scientific audit" => "problems/doe_quantification_review.md",
+            "API reference" => "api/operating_envelope.md",
         ],
         "Inverter-based resources" => [
             "Overview"                 => "ibr/index.md",
@@ -54,7 +67,6 @@ makedocs(
             "Post-OPF operability" => "problems/operability.md",
             "Parameter estimation" => "problems/parameter_estimation.md",
             "Inverse Carson"       => "problems/inverse_carson.md",
-            "Operating envelopes"  => "problems/operating_envelope.md",
             "Bilevel PV/tap POC" => "problems/bilevel.md",
         ],
         "Bespoke algorithms" => [
@@ -63,10 +75,6 @@ makedocs(
         ],
         "Tutorials" => [
             "Single-snapshot post-OPF operability study" => "tutorials/post_opf_operability_study.md",
-            "Dynamic operating envelopes" => "tutorials/dynamic_operating_envelopes.md",
-            "What does a DOE guarantee?" => "tutorials/doe_range_guarantees.md",
-            "DOE research workflow" => "tutorials/doe_research_workflow.md",
-            "DOE uncertainty and held-out coverage" => "tutorials/doe_uncertainty_coverage.md",
             "Inverse Carson reconstruction" => "tutorials/inverse_carson_reconstruction.md",
             "Battery storage models" => "tutorials/battery_storage_models.md",
             "HELM versus nonlinear power flow" => "tutorials/helm_vs_nonlinear_power_flow.md",
@@ -75,7 +83,6 @@ makedocs(
         "Contributing"       => "contributing.md",
         "API reference" => [
             "Core API" => "api.md",
-            "Dynamic operating envelopes API" => "api/operating_envelope.md",
         ],
         "Symbol index"       => "symbol_index.md",
     ],

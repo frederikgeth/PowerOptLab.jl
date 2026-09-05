@@ -885,6 +885,18 @@ end
         @test length(output_lines) == 3
         @test startswith(output_lines[1], "study_id\tmethod\tinterval")
     end
+
+    uncertainty_case_path = joinpath(
+        @__DIR__, "..", "scripts", "cases", "doe_uncertainty_tutorial.jl")
+    include(uncertainty_case_path)
+    tutorial_case = doe_uncertainty_tutorial_case()
+    @test length(tutorial_case.scenarios.intervals) == 1
+    @test length(only(tutorial_case.scenarios.intervals)) == 3
+    @test Set(scenario.role for scenario in
+              only(tutorial_case.scenarios.intervals)) ==
+          Set((:calibration, :test, :stress))
+    @test tutorial_case.scenarios.metadata["license"] == "CC0-1.0"
+    @test length(tutorial_case.connection_points) == 2
 end
 
 @testset "Operating envelope: typed scenarios and held-out coverage" begin

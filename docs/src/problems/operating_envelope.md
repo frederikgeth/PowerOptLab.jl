@@ -2,10 +2,14 @@
 
 > **Kind:** Problem specification · **Maturity:** research prototype · **Direction:** forward · **Temporal:** per-interval
 
-For the implementation audit, claim hierarchy, scientific state of the art,
-and prioritized research plan, see [DOE quantification: scientific review and
-roadmap](doe_quantification_review.md). The source-by-source boundaries behind
-that assessment are in [DOE literature: evidence and
+New readers should begin with [Dynamic operating envelopes in 15
+minutes](../tutorials/doe_getting_started.md), then return here for stable
+semantics and result-field definitions.
+
+For the stable-versus-planned implementation boundary, see the [DOE development
+roadmap](doe_development_roadmap.md). The claim hierarchy and detailed rationale
+are in the [scientific audit](doe_quantification_review.md); source-by-source
+boundaries are in [DOE literature: evidence and
 interpretation](doe_literature_evidence.md).
 
 [`solve_operating_envelope`](@ref) allocates an active-power import or export
@@ -47,6 +51,9 @@ one another's claims merely because they share the same name. This API records
 geometry, tested set, recourse, uncertainty semantics, and solver class
 separately so it can represent and compare those formulations.
 
+![Information timeline for issue-time, scenario-adaptive, pointwise, and local
+controls](../assets/doe/information_timeline.svg)
+
 ## Security semantics
 
 There are two deliberately distinct modes:
@@ -70,6 +77,9 @@ binding. `minimum_margins` retains physical units; the corresponding
 can be ranked within and across these constraint families. For
 `security=:corners`, the margins are aggregated across every scenario and corner
 rather than only the displayed representative snapshot.
+
+![Evidence ladder from a feasible operating point to a complete-set
+certificate](../assets/doe/evidence_ladder.svg)
 
 The machine-readable claim metadata includes:
 

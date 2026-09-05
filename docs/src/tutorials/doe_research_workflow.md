@@ -334,12 +334,15 @@ The committed `scripts/cases/doe_range_benchmark.jl` fixture is a complete
 example of this interface. It records its synthetic-data licence, method labels,
 seed provenance, scientific claim, and claim limitation in the study metadata.
 
-See [DOE quantification: scientific review and roadmap](../problems/doe_quantification_review.md)
-for the remaining certification, uncertainty-calibration, temporal, fairness,
-and scaling research agenda.
+See the [DOE development roadmap](../problems/doe_development_roadmap.md) for the
+remaining certification, uncertainty-calibration, temporal, fairness, and
+scaling agenda, and the [detailed scientific
+audit](../problems/doe_quantification_review.md) for its rationale.
 
 For typed calibration/test splits and empirical coverage reporting, continue to
-[DOE uncertainty provenance and held-out coverage](doe_uncertainty_coverage.md).
+[DOE scenario design and held-out evaluation](doe_scenario_design.md). The
+[advanced uncertainty laboratory](doe_uncertainty_coverage.md) collects every
+implemented uncertainty and statistical API in one longer workflow.
 
 ## What this does not prove
 

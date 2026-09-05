@@ -80,9 +80,10 @@ The operating-envelope implementation already states the central gap correctly:
 feasibility at the simultaneous bound, or even at every box corner, does not
 prove feasibility throughout a nonconvex AC utilization box.
 
-The detailed implementation audit, literature evidence, benchmark protocol,
-and staged tutorial/documentation plan are maintained in [DOE quantification:
-scientific review and roadmap](problems/doe_quantification_review.md).
+The current implementation boundary and next research increments are maintained
+in the [DOE development roadmap](problems/doe_development_roadmap.md). The
+detailed implementation audit and benchmark rationale remain in the [DOE
+quantification scientific audit](problems/doe_quantification_review.md).
 The accompanying [DOE literature evidence
 register](problems/doe_literature_evidence.md) separates established results,
 finite case evidence, reanalysis, and proposed experiments.

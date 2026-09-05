@@ -47,7 +47,7 @@ New formulations over the same physics, via the staged `build_opf_model` /
 | [Constrained NLLS state estimation](problems/constrained_state_estimation.md) | [`solve_sparse_state_estimator`](@ref) | inverse | prototype |
 | [Parameter estimation](problems/parameter_estimation.md) (line lengths / taps) | [`solve_parameter_estimation`](@ref) | inverse | prototype |
 | [Inverse Carson reconstruction](problems/inverse_carson.md) (compatible overhead constructions) | [`solve_inverse_carson`](@ref) | inverse | prototype |
-| [Dynamic operating envelopes](problems/operating_envelope.md) (active import/export capacity) | [`solve_operating_envelope`](@ref) | forward | research prototype |
+| [Dynamic operating envelopes](tutorials/doe_getting_started.md) (active import/export capacity) | [`solve_operating_envelope`](@ref) | forward | research prototype |
 | [Bilevel PV/tap POC](problems/bilevel.md) (DiffOpt lower-level response) | [`solve_bilevel_pv_tap`](@ref) | hierarchical | proof of concept |
 
 ### Bespoke algorithms

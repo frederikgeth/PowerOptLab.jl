@@ -1,4 +1,10 @@
-# DOE uncertainty provenance and held-out coverage
+# Advanced DOE uncertainty laboratory
+
+> **Learning path:** this page is the complete, API-dense reference workflow.
+> New readers should first complete [DOE scenario design and held-out
+> evaluation](doe_scenario_design.md), [Constructing and comparing DOE
+> uncertainty models](doe_uncertainty_models.md), and [Statistical validation
+> of DOE claims](doe_statistical_validation.md).
 
 > **Claim:** an envelope calibrated on declared scenarios can be evaluated on a
 > disjoint typed test set without presenting in-sample feasibility as

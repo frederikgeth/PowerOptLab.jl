@@ -1,4 +1,4 @@
-# DOE quantification: scientific review and roadmap
+# DOE quantification: detailed scientific audit
 
 > **Review date:** 5 September 2026 · **Scope:** the PowerOptLab implementation,
 > scientific quantification claims, experiments, tutorials, and documentation.
@@ -6,6 +6,9 @@
 The curated source-by-source assessment is maintained in [DOE literature:
 evidence and interpretation](doe_literature_evidence.md). That register
 separates primary results, review evidence, reanalysis, and research hypotheses.
+Current implementation status and future work are summarized separately in the
+[DOE development roadmap](doe_development_roadmap.md). This longer page retains
+the detailed reasoning behind those priorities.
 
 ## Executive assessment
 
@@ -567,17 +570,26 @@ license, random seed, solver/version information, and a “what this does not
 prove” box. Prefer runnable scripts that generate figures and tables over copied
 REPL fragments.
 
-## Documentation changes
+## Documentation architecture
 
-The documentation is organized around scientific claims as well as API entry
-points. The remaining maintenance rules are:
+The documentation now separates a short learning path from durable reference
+material:
 
-- Keep [Operating envelopes](operating_envelope.md) as the concise API and
-  semantics page; link to this review for limitations and research priorities.
-- Split the existing broad tutorial as the tutorial program matures. Its
-  current material is a good modelling primer, but it does not yet demonstrate
-  a failure mode, probabilistic calibration, scaling, or a reproducible
-  fairness frontier.
+- [Dynamic operating envelopes in 15
+  minutes](../tutorials/doe_getting_started.md) introduces the central range
+  pitfall with one progressive synthetic case.
+- The shorter scenario-design, uncertainty-model, and statistical-validation
+  tutorials each answer one research question; the [advanced uncertainty
+  laboratory](../tutorials/doe_uncertainty_coverage.md) remains the complete
+  API-dense workflow.
+- [Operating envelopes](operating_envelope.md) defines stable semantics and
+  result fields, the [literature evidence register](doe_literature_evidence.md)
+  records scientific support, and the [development
+  roadmap](doe_development_roadmap.md) separates current capability from future
+  work.
+
+The maintenance rules are:
+
 - Keep the implemented glossary for *allocation*, *operating point*,
   *utilization set*, *scenario*, *recourse*, *verification*, *search-stable*,
   and *certificate* synchronized with result diagnostics.
@@ -589,6 +601,11 @@ points. The remaining maintenance rules are:
   review evidence, reanalysis, hypotheses, preprints, and industry reports.
 - Keep benchmark case metadata, generated result tables, source data, and
   licensing together; do not commit publisher PDFs as repository assets.
+- Teach one distinction at a time, then make the learner change one modelling
+  axis and predict the result before solving.
+- Keep overview pages conceptual, tutorials runnable, the problem
+  specification normative, and the API page exhaustive; avoid copying the same
+  code across all four layers.
 - Replace absolute phrases such as “ensures network integrity” with claims tied
   to a declared model, uncertainty set, utilization set, solver status, and
   validation procedure.
