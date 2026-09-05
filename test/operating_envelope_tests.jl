@@ -169,9 +169,9 @@ end
     @test residual_samples.diagnostics["sampling_method"] ==
           :moving_block_residual_bootstrap
     @test residual_samples.metadata["require_regular_spacing"]
-    @test residual_samples.diagnostics["sampled_block_start_indices"] == [1, 2]
+    @test residual_samples.diagnostics["sampled_block_start_indices"] == [1, 3]
     @test [sample.metadata["source_index"]
-           for sample in residual_samples.samples] == [1, 2, 3, 2, 3, 4]
+           for sample in residual_samples.samples] == [1, 2, 3, 3, 4, 5]
     @test [sample.metadata["bootstrap_block_id"]
            for sample in residual_samples.samples] ==
           ["block-1", "block-1", "block-1",
@@ -204,7 +204,14 @@ end
         timestamps=residual_target_times,
         require_regular_spacing=true,
         metadata=Dict("residual_source" => "synthetic DSSE fixture"))
-    @test [sample.parameters for sample in residual_samples.samples] ==
+    # The draw depends on the seed alone, never on library content; the
+    # recorded identity depends on both. Comparing the drawn source indices
+    # states that invariant directly, rather than relying on the seed happening
+    # to miss the mutated row.
+    @test [sample.metadata["source_index"] for sample in residual_samples.samples] ==
+          [sample.metadata["source_index"]
+           for sample in changed_residual_samples.samples]
+    @test [sample.parameters for sample in residual_samples.samples] !=
           [sample.parameters for sample in changed_residual_samples.samples]
     @test residual_samples.metadata["residual_library_id"] !=
           changed_residual_samples.metadata["residual_library_id"]
@@ -219,10 +226,10 @@ end
     @test circular_residual_samples.diagnostics["sampling_method"] ==
           :circular_moving_block_residual_bootstrap
     @test circular_residual_samples.diagnostics[
-        "sampled_block_start_indices"] == [1, 3, 4, 1]
-    @test circular_residual_samples.diagnostics["circular_wrap_count"] == 1
+        "sampled_block_start_indices"] == [1, 2, 5, 1]
+    @test circular_residual_samples.diagnostics["circular_wrap_count"] == 2
     @test count(sample -> sample.metadata["circular_wrap"],
-                circular_residual_samples.samples) == 1
+                circular_residual_samples.samples) == 2
 
     iid_residual_samples = sample_doe_empirical_residual_bootstrap(
         residual_library;

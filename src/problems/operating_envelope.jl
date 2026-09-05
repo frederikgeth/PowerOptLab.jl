@@ -781,6 +781,65 @@ DOEStudySpec(study_id, network_hashes, connection_points, direction, security,
                  solver_options, seeds, software_versions, metadata,
                  Vector{Vector{Dict{String,Any}}}(), Dict{String,Any}())
 
+# Reproducibility of seeded draws across Julia versions.
+#
+# `Random.MersenneTwister` emits a stable bit stream, but the mappings Julia
+# layers on top of it — `rand(rng, ::UnitRange)`, `randperm`, `shuffle!` — are
+# implementation details that have changed between releases. A study recording
+# only `seed` therefore would not reproduce on a different Julia, which defeats
+# the purpose of the recorded seed in a study manifest. These helpers define the
+# bits-to-index mapping inside the package, so a seed fixes the draw across
+# Julia versions and platforms. The stream is package-defined: changing it is a
+# breaking change to recorded study identities.
+const _DOE_STREAM_GAMMA = 0x9e3779b97f4a7c15
+const _DOE_STREAM_MIX_1 = 0xbf58476d1ce4e5b9
+const _DOE_STREAM_MIX_2 = 0x94d049bb133111eb
+
+mutable struct _DOEStableStream
+    state::UInt64
+end
+
+_doe_stable_stream(seed::Integer) =
+    _DOEStableStream(UInt64(seed % UInt64))
+
+# SplitMix64. Chosen because it is short enough to audit in place and depends on
+# nothing outside this file.
+function _doe_next_word!(stream::_DOEStableStream)
+    stream.state += _DOE_STREAM_GAMMA
+    word = stream.state
+    word = (word ⊻ (word >> 30)) * _DOE_STREAM_MIX_1
+    word = (word ⊻ (word >> 27)) * _DOE_STREAM_MIX_2
+    return word ⊻ (word >> 31)
+end
+
+# Uniform on 1:upper by rejection, so the draw carries no modulo bias.
+function _doe_stable_index!(stream::_DOEStableStream, upper::Int)
+    upper >= 1 || throw(ArgumentError("draw upper bound must be positive"))
+    upper == 1 && return 1
+    span = UInt64(upper)
+    limit = typemax(UInt64) - ((typemax(UInt64) % span + UInt64(1)) % span)
+    while true
+        word = _doe_next_word!(stream)
+        word <= limit && return Int(word % span) + 1
+    end
+end
+
+_doe_stable_indices!(stream::_DOEStableStream, upper::Int, count::Int) =
+    [_doe_stable_index!(stream, upper) for _ in 1:count]
+
+# Fisher-Yates over an explicit stream, replacing `randperm`/`shuffle!`.
+function _doe_stable_permutation!(stream::_DOEStableStream, values::AbstractVector)
+    order = collect(values)
+    for position in length(order):-1:2
+        target = _doe_stable_index!(stream, position)
+        order[position], order[target] = order[target], order[position]
+    end
+    return order
+end
+
+_doe_stable_permutation!(stream::_DOEStableStream, count::Int) =
+    _doe_stable_permutation!(stream, 1:count)
+
 function _doe_canonical(value)
     value === nothing && return "null"
     value isa Bool && return value ? "true" : "false"
@@ -1212,8 +1271,9 @@ function sample_doe_empirical_residual_bootstrap(
 
     possible_start_count = circular ? source_count :
         source_count - block_length + 1
-    rng = Random.MersenneTwister(seed)
-    block_starts = rand(rng, 1:possible_start_count, block_count)
+    stream = _doe_stable_stream(seed)
+    block_starts = _doe_stable_indices!(
+        stream, possible_start_count, block_count)
     source_indices = Int[]
     wrapped = Bool[]
     for start in block_starts, position in 1:block_length
@@ -1812,13 +1872,13 @@ function test_doe_covariate_shift(
     reference_group_count = missing
     shifted_group_count = missing
     if exchangeability_assumption
-        rng = Random.MersenneTwister(seed)
+        stream = _doe_stable_stream(seed)
         pooled = vcat(standardized_reference, standardized_shifted)
         n_reference = size(standardized_reference, 1)
         exceedance_count = 0
         if permutation_unit == :scenario
             for _ in 1:permutations
-                order = randperm(rng, size(pooled, 1))
+                order = _doe_stable_permutation!(stream, size(pooled, 1))
                 statistic = _doe_energy_distance(
                     pooled[order[1:n_reference], :],
                     pooled[order[n_reference + 1:end], :])
@@ -1833,7 +1893,7 @@ function test_doe_covariate_shift(
             reference_group_count = n_reference_groups
             shifted_group_count = length(signatures) - n_reference_groups
             for _ in 1:permutations
-                order = randperm(rng, length(signatures))
+                order = _doe_stable_permutation!(stream, length(signatures))
                 left_groups = signatures[order[1:n_reference_groups]]
                 right_groups = signatures[order[n_reference_groups + 1:end]]
                 left_indices = reduce(vcat,
@@ -1983,9 +2043,9 @@ function test_doe_time_series_covariate_shift(
             evaluated_offsets = available_offsets
             exact = true
         else
-            rng = Random.MersenneTwister(seed)
+            stream = _doe_stable_stream(seed)
             evaluated_offsets = sort!(available_offsets[
-                randperm(rng, alternative_count)[1:shifts]])
+                _doe_stable_permutation!(stream, alternative_count)[1:shifts]])
         end
         pooled_values = vcat(standardized_reference, standardized_shifted)
         reference_count = length(reference_scenarios)
@@ -5613,8 +5673,8 @@ end
 # zero and become strongly correlated with each other. Scrambling changes those
 # bands reproducibly; it cannot fill more strata than there are samples.
 function _doe_halton_permutations(bases::Vector{Int}, seed::Int)
-    rng = Random.MersenneTwister(seed)
-    return [Random.shuffle!(rng, collect(0:(base - 1))) for base in bases]
+    stream = _doe_stable_stream(seed)
+    return [_doe_stable_permutation!(stream, 0:(base - 1)) for base in bases]
 end
 
 # Utilization points on the faces of the hypercube adjacent to the simultaneous

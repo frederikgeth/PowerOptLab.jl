@@ -14,8 +14,13 @@
         halton_scramble_seed=7)["halton_seed_stratified"]
     @test diagnostics(1, 2; dropout_depth=0, sequence_offset=2,
         halton_scramble_seed=nothing)["halton_occupied_first_digit_strata"] == [2]
+    # Seed 8 permutes the base-2 digits, which maps both samples into one
+    # first-digit stratum: scrambling redistributes coverage, it does not
+    # create it. (Seed 7 leaves base 2 unpermuted under the package stream.)
+    @test PowerOptLab._doe_stable_permutation!(
+        PowerOptLab._doe_stable_stream(8), 0:1) == [1, 0]
     @test diagnostics(1, 2; dropout_depth=0, sequence_offset=0,
-        halton_scramble_seed=7)["halton_occupied_first_digit_strata"] == [1]
+        halton_scramble_seed=8)["halton_occupied_first_digit_strata"] == [1]
     @test PowerOptLab._doe_dropout_count(64, 64) == big(2)^64 - 1
     @test_throws ArgumentError PowerOptLab._doe_search_points(64, 0, 0;
         include_zero=false, include_bound=false, include_corners=false,
@@ -210,5 +215,46 @@ end
             [rows; observation("unresolved", 0.3, nothing)]; bins=2, unresolved=treatment)
         m = unresolved.metrics
         @test m["brier_score"] ≈ m["binned_brier_reconstruction"] + m["within_bin_brier_remainder"]
+    end
+end
+
+@testset "DOE seeded draws are Julia-version independent" begin
+    stream = PowerOptLab._doe_stable_stream
+    index! = PowerOptLab._doe_stable_index!
+    permutation! = PowerOptLab._doe_stable_permutation!
+
+    # `rand(rng, ::UnitRange)`, `randperm` and `shuffle!` map random bits to
+    # indices through Julia implementation details that have changed between
+    # releases, so a recorded seed alone did not reproduce a study on a
+    # different Julia. The stream below is defined inside the package. These
+    # pins are a compatibility contract: changing them changes every recorded
+    # study identity that depends on a seeded draw.
+    @test [index!(stream(47), 3) for _ in 1:1] == [1]
+    @test [index!(stream(47), 3), index!(stream(47), 3)] == [1, 1]
+    let s = stream(47)
+        @test [index!(s, 3) for _ in 1:4] == [1, 3, 2, 3]
+    end
+    let s = stream(47)
+        @test [index!(s, 5) for _ in 1:4] == [1, 2, 5, 1]
+    end
+    @test permutation!(stream(7), 0:1) == [0, 1]
+    @test permutation!(stream(3), 4) == [3, 4, 1, 2]
+
+    # A single-outcome draw must not consume a word, so that streams stay
+    # aligned when a degenerate dimension appears.
+    let s = stream(11)
+        @test index!(s, 1) == 1
+        @test index!(s, 1) == 1
+        @test index!(s, 9) == index!(stream(11), 9)
+    end
+    @test_throws ArgumentError index!(stream(1), 0)
+
+    # Rejection sampling must not bias the low indices of a non-power-of-two
+    # range; a modulo-only draw fails this at these counts.
+    let s = stream(1234), counts = zeros(Int, 3)
+        for _ in 1:60_000
+            counts[index!(s, 3)] += 1
+        end
+        @test all(count -> abs(count - 20_000) < 700, counts)
     end
 end
