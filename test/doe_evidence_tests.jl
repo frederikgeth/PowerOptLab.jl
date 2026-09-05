@@ -197,6 +197,19 @@ end
     @test run.base.max_doe_pf_voltage_difference_V < 1e-3
     @test run.statcom.max_doe_pf_voltage_difference_V < 1e-3
     @test run.statcom.doe.total_capacity[1] > run.base.doe.total_capacity[1]
+    # Verification at the issued capacity sits on the binding constraint, so the
+    # joint solve may not converge there on every platform. A candidate
+    # violation is still an error; `:unresolved` is reported and tolerated.
+    @test all(outcome -> outcome in (:passed, :unresolved),
+              run.base.verification_outcomes)
+    @test all(outcome -> outcome in (:passed, :unresolved),
+              run.statcom.verification_outcomes)
+    @test !any(outcome -> outcome == :candidate_violation,
+               vcat(run.base.verification_outcomes,
+                    run.statcom.verification_outcomes))
+    # The independent PF replay is the substantive agreement check, and it must
+    # still hold regardless of how the boundary solve resolved.
+    @test run.statcom.pf["termination_status"] in ("LOCALLY_SOLVED", "OPTIMAL")
     @test_throws ArgumentError DOEDsseExample._validate_snapshot("Volt-VAr", doe_ibr_feeder(),
         [ConnectionPoint(id="pv", bus="b1", ibr_id="pv1", export_max=10e3)])
     result = run.statcom.doe
