@@ -314,7 +314,8 @@ builds fresh models so warm starts and mutable solver state do not silently
 cross configurations.
 
 Continue with [the full physical IBR example](controllers.md), or use the
-[analytic feeder comparison](theory.md) to study feedback and multiple equilibria.
+[analytic feeder comparison](theory.md) to study feedback and the
+[worked multiple-equilibrium example](theory.md#Multiple-equilibria-and-initialization).
 For the mathematical distinction between graph formulations and relaxations,
 see Huchette and Vielma's
 [piecewise-linear formulation study](https://arxiv.org/abs/1708.00050).

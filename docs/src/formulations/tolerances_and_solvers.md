@@ -207,6 +207,10 @@ replacing AC physics by a relaxation changes it again. Audit those changes
 separately from the solver outcome. The existing runner records these outcomes
 without promoting approximate candidates or adding local continuation methods.
 
+The [conservative relation tutorial](bounds_and_relations.md#Conservative-one-sided-smoothing)
+implements signed-error tightening and demonstrates its possible conflict with a
+nonnegative power bound at a zero cap.
+
 ## Suggested learning and experiment paths
 
 * **Power engineers:** start with the cap/equality geometry and the units of

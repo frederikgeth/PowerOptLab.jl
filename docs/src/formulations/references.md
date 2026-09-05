@@ -19,6 +19,13 @@ itself establish accuracy or scalability for a composed AC network model.
   Integrated-density constructions motivate smooth positive-part functions.
   The specific compact quartic patch and its constants are derived in
   [the mathematical guide](theory.md).
+- **Accuracy versus smoothness.** Yu. Nesterov, “Smooth minimization of non-smooth
+  functions,” *Mathematical Programming* 103, 127–152 (2005).
+  [DOI](https://doi.org/10.1007/s10107-004-0552-5),
+  [author's institutional report](https://research.dial.uclouvain.be/server/api/core/bitstreams/5e279fca-57a4-4476-9fe8-e8df213808c4/content).
+  The explicit convex max-structure framework gives O(μ) uniform error and an
+  O(1/μ) gradient-Lipschitz bound. It motivates the curvature comparison without
+  supplying a convergence theorem for nonconvex AC constraints.
 - **Nonconvex smoothing theory.** X. Chen, “Smoothing methods for nonsmooth,
   nonconvex minimization,” *Mathematical Programming* 134, 71–99 (2012).
   [DOI](https://doi.org/10.1007/s10107-012-0569-0).

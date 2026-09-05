@@ -137,10 +137,30 @@ for rep in (soft,local_c2)
 end
 ```
 
-For this particular nonincreasing scalar controller and nonnegative resistance,
-the uniform current-law error bounds equilibrium current error: if the current
-increases, voltage increases, and the exact controller command cannot increase.
-This negative-feedback argument does not generalize automatically to AC systems.
+For a non-increasing continuous controller `f` and `R≥0`, define
+`F(I)=I-f(Vs+RI)`. For any `I₂>I₁` with voltages in the declared domain,
+
+```math
+F(I_2)-F(I_1)=(I_2-I_1)+f(V_s+RI_1)-f(V_s+RI_2)\geq I_2-I_1.
+```
+
+Thus `F` is strongly monotone with modulus at least one, including at PWL kinks.
+An equilibrium, **if it exists in the domain**, is unique. If the surrogate has
+uniform law error at most `e`, and both an exact equilibrium `I*` and a surrogate
+equilibrium `Iδ` exist in the domain, then
+
+```math
+|I_\delta-I^*|\leq |F(I_\delta)-F(I^*)|=|F(I_\delta)|\leq e.
+```
+
+There is no resistance-dependent amplification factor in this scalar model.
+This sensitivity result does not imply convergence of the iteration
+`Iₖ₊₁=f(Vs+RIₖ)`: its slope magnitude can exceed one.
+For an inexact surrogate solve with current-equation residual bounded by `η`
+and an exact voltage relation, the last bound becomes `e+η`. A voltage-equation
+residual requires additional accounting, for example using a Lipschitz bound on
+`f`. In a general AC network, the coupled residual map need not be strongly
+monotone; smoothness alone does not restore this property.
 
 The hull admits convex combinations of graph vertices without requiring adjacent
 segments. Its maximum-current state instead has `I=16 A, V=246 V`. The canonical
@@ -157,6 +177,47 @@ relaxed
 This witness is electrically consistent with the resistor equation and within
 current limits, yet violates the controller. It demonstrates why a physical
 binding check must include the prescribed control law.
+
+## Multiple equilibria and initialization
+
+Strong monotonicity fails for an increasing segment with sufficient feedback.
+This synthetic tent law has two canonical equilibria; it is an analytic test
+function, not a prescribed inverter characteristic:
+
+```@example multiroot
+using PowerOptLab,JuMP,Ipopt
+tent=PWLFunction([0.,1.,2.],[0.,2.,0.])
+roots=resistive_equilibria(tent,0.,1.)
+@assert isapprox([p.current for p in roots.points],[0.,4/3])
+roots
+```
+
+The zero-current root is at an endpoint kink. Compact smoothing makes the command
+positive there and removes this root; starting near zero does not guarantee a
+nearby smooth equilibrium. To illustrate initialization without conflating it
+with a changed root set, shift the tent downward by 0.2 A. Its roots are now
+strictly inside affine segments, at `I=0.2 A` and `I=19/15 A`; local C2 leaves
+both neighborhoods unchanged.
+
+```@example multiroot
+shifted=PWLFunction([0.,1.,2.],[-.2,1.8,-.2];input_unit=:V,output_unit=:A)
+case=resistive_control_case(shifted;source_voltage=0.,resistance=1.)
+method=FormulationMethod("C2",LocalC2Formulation(.01),Ipopt.Optimizer;
+    configure! = set_silent,options=(tol=1e-10,bound_relax_factor=0.))
+rows=run_formulation_experiment([case],[method];
+    configurations=[(start_input=s,objective=:zero) for s in (.15,1.5)],on_error=:throw)
+@assert all(r->r["strict_solver_success"],rows)
+@assert isapprox([r["metrics"].current_A for r in rows],[.2,19/15];atol=1e-7)
+[(r["configuration"].start_input,r["metrics"].current_A,
+  only(r["observations"]).exact_graph_error) for r in rows]
+```
+
+The two runs solve a feasibility problem with the same equations and different
+starts. Their successful local outcomes are not uniqueness or global-selection
+certificates. MPCC and mixed-integer encodings represent different mechanisms for
+choosing graph segments; neither removes the need to specify the physical
+selection rule or optimization objective. Compare root sets and returned
+candidates as well as termination flags.
 
 ## Exact graphs and external complementarity solvers
 

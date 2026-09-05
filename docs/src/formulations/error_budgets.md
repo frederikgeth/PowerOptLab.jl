@@ -42,7 +42,68 @@ bounds such as a Lipschitz constant over a declared domain; no automatic global
 composition certificate is supplied. Clipping a surrogate afterward changes its
 regularity and should not be assumed harmless for an NLP solver.
 
+## Compare peak curvature at matched error
+
+For each built-in homogeneous hinge family, let the maximum hinge error be
+`Bδ` and the maximum absolute curvature be `C/δ`. At a fixed hinge error budget
+`e`, choosing `δ=e/B` gives peak curvature `BC/e`. Thus `BC` is independent of
+width, but **depends on the family**:
+
+| Family | B | C | BC | Peak curvature for e = 0.001 |
+|:--|--:|--:|--:|--:|
+| Local C2 | 3/16 | 3/4 | 9/64 ≈ 0.140625 | 140.625 |
+| Softplus | log(2) | 1/4 | log(2)/4 ≈ 0.173287 | 173.287 |
+| Algebraic | 1/2 | 1/2 | 1/4 | 250 |
+
+Errors have hinge-output units (the same as its input); curvature has inverse
+input units. The algebraic family has `16/9 ≈ 1.78` times the peak curvature of
+local C2 at matched hinge error. The established IBR min/max selectors use this
+algebraic family. This identifies a meaningful experiment, not a reason to
+silently change those controller equations. Binary selectors and composed
+controllers have different multivariable Hessians, scaling and domain behavior.
+
+For the complete curve, the triangle inequality gives
+
+```math
+\sup_x |\widetilde f''(x)|\leq
+\left(\sum_j |c_j|\right)\frac{C}{\delta}.
+```
+
+`formulation_contract(...).second_derivative_bound` reports this physical bound.
+It can be loose: peaks at different knots need not coincide, and signed terms
+can cancel. With working coordinates `x_phys=sᵢ x` and `y_phys=sₒ y`, the bound
+on the encoded scalar function is multiplied by `sᵢ²/sₒ`. Nonlinear sensing
+adds chain-rule terms; constraint multipliers also enter a Lagrangian Hessian.
+A smaller primitive peak curvature is not a theorem about KKT conditioning,
+iteration counts, linear-algebra cost or total solve time.
+
+```@example budgets
+rows = map((LocalC2Formulation,SoftplusFormulation,AlgebraicFormulation)) do family
+    rep=smoothing_for_error(curve,family,1e-3)
+    c=formulation_contract(curve,rep)
+    @assert c.second_derivative_bound>0
+    (family=string(family),width_V=rep.width,
+     curve_curvature_bound_per_V2=c.second_derivative_bound)
+end
+rows
+```
+
+This reciprocal tradeoff is consistent with Nesterov's smoothing framework for
+convex functions with explicit max structure: uniform error is O(μ), while the
+gradient Lipschitz bound is O(1/μ). Its convex-optimization complexity guarantees
+do not transfer to a general AC NLP. See [Nesterov (2005), Theorem 1 and Eq. (2.7)](https://research.dial.uclouvain.be/server/api/core/bitstreams/5e279fca-57a4-4476-9fe8-e8df213808c4/content)
+and the [bibliography](references.md).
+
 ## Norms: direction follows the purpose
+
+`MagnitudeApproximation(ε; scale=S)` optionally records a characteristic magnitude
+in the same physical units as ε. On staged contexts the upstream scale is `S/sᵢ`;
+the relative width is `(ε/sᵢ)/(S/sᵢ)`. This preserves the fleet-relative provenance
+instead of relabeling every norm with a unit scale. An explicit `eps_rel` in
+`magnitude_expression` can preserve a previous rounding order and must agree with
+the physical budget to rounding tolerance. Existing IBR call sites retain their
+upstream annotation names, descriptions, scales and hashes. Upper norms have
+separate annotations stating overestimation.
 
 Let `q=‖z‖₂` and `ε>0`, in the same physical units as the components. Define
 

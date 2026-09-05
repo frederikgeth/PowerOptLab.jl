@@ -160,7 +160,13 @@ end
 
 function Base.show(io::IO,p::PWLRelationPlan)
     print(io,"PWLRelationPlan(:",p.relation,", ",p.shape," on ",p.domain,
-        " → ",p.strategy,", ",length(p.lines)," lines, ",p.semantics)
+        " → ",p.strategy)
+    if p.strategy in (:affine,:supporting_lines)
+        print(io,", ",length(p.lines)," affine lines")
+    elseif p.strategy in (:local_c2,:smooth)
+        print(io,", ",length(p.active_hinges)," active hinges")
+    end
+    print(io,", ",p.semantics)
     p.conservative && print(io,", output shift=",p.output_shift)
     print(io,")")
 end

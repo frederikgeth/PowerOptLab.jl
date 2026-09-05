@@ -19,6 +19,8 @@ plt.rcParams.update({'font.family':'DejaVu Sans','font.size':11,'axes.titlesize'
 blue,orange,green,ink='#2463a6','#cb6427','#168477','#273548'
 def save(fig,name):
     fig.savefig(OUT/f'{name}.svg',bbox_inches='tight',metadata={'Date':None})
+    svg=OUT/f'{name}.svg'
+    svg.write_text('\n'.join(line.rstrip() for line in svg.read_text().splitlines())+'\n')
     fig.savefig(OUT/f'{name}.pdf',bbox_inches='tight',metadata={'CreationDate':None,'ModDate':None})
     fig.savefig(Path('/tmp')/f'{name}.png',dpi=120,bbox_inches='tight')
     plt.close(fig)
@@ -31,17 +33,20 @@ z=D['z']; delta=.05/(3/16)
 fig,axes=plt.subplots(1,3,figsize=(13.8,4),layout='constrained')
 for ax in axes: ax.axvspan(-delta,delta,color=green,alpha=.08)
 axes[0].plot(z,D['exact'],color=ink,lw=2.7,label='Original hinge')
-for field,color,label in [('soft',orange,'Softplus'),('c2',green,'Local C2')]:
-    axes[0].plot(z,D[field],color=color,lw=2,ls='--' if field=='soft' else ':',label=label)
+for field,color,label in [('soft',orange,'Softplus'),('c2',green,'Local C2'),('algebraic',blue,'Algebraic')]:
+    axes[0].plot(z,D[field],color=color,lw=2,ls={'soft':'--','c2':':','algebraic':'-.'}[field],label=label)
     axes[1].plot(z,D[field+'_error'],color=color,lw=2,label=label)
     axes[2].plot(z,D[field+'_curvature'],color=color,lw=2,label=label)
 panel(axes[0],'A  The function','Offset from breakpoint (V)','Hinge value (V)')
 panel(axes[1],'B  Where it changes','Offset from breakpoint (V)','Approximation error (V)')
-panel(axes[2],'C  What Newton sees','Offset from breakpoint (V)','Second derivative (1/V)')
+panel(axes[2],'C  Peak hinge curvature','Offset from breakpoint (V)','Second derivative (1/V)')
 axes[0].legend(frameon=False,loc='upper left')
 axes[1].annotate('C2 error is exactly zero\noutside the shaded patch',xy=(.48,0),xytext=(-.02,.028),
     arrowprops={'arrowstyle':'->','color':green},fontsize=10,color=green)
-fig.suptitle('Matched maximum hinge error: 0.05 V; widths and curvature differ',fontsize=12)
+axes[2].text(.04,.96,'Peak = BC / error budget\nC2: 2.81, softplus: 3.47, algebraic: 5.00',
+    transform=axes[2].transAxes,va='top',fontsize=9)
+axes[2].set_ylim(top=6.5)
+fig.suptitle('Matched maximum hinge error: 0.05 V; family constants BC determine peak curvature',fontsize=12)
 save(fig,'smoothing-locality')
 
 f=lambda v: np.clip((250-v)/10,0,1)

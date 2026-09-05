@@ -48,6 +48,7 @@ end
             @test abs(primitive_derivatives(l.curve,x,r;domain_policy=:flat_extension)[2])<=c.second_derivative_bound+1e-12
         end
     end
+    @test formulation_contract(PWLFunction([0.,1.],[2.,2.]),SoftplusFormulation(1e-320)).second_derivative_bound==0.
     # A rejected foreign variable must not stamp domain rows, even without reuse.
     m=Model(); other=Model(); @variable(other,x)
     intent=VoltVarWattIntent(volt_watt=law.curve)
@@ -144,6 +145,7 @@ end
     g=hull_gap_bound(f)
     @test g.upper_gap>=40/3 && g.lower_gap>=40/3
     @test g.upper_gap ≈ 40/3 && g.lower_gap ≈ 40/3
+    @test Rational{BigInt}(g.upper_gap)>=40//3 && Rational{BigInt}(g.lower_gap)>=40//3
     @test g.upper_witness.input==250. && g.lower_witness.input==240.
     @test g.input_unit==:V && g.output_unit==:A
     @test hull_gap_bound(f,(242.,248.)).upper_gap==0.

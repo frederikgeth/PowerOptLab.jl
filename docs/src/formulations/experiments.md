@@ -64,7 +64,11 @@ mathematical equations but can affect floating-point solver behavior.
 Return graph handles, relation handles, or both in `observations`. Every handle
 must belong to the returned model. The runner records canonical curve data and
 units, physical coordinate scales, the domain and candidate residuals.
-`observation_kind` distinguishes graph and relation records.
+`observation_kind` distinguishes graph and relation records. Relation records
+separate `requested_formulation` from `built_formulation`: a requested hull may
+build only `:linear_inequalities`. `formulation_type` is retained as an alias for
+the request. Use `reason_code` for filtering and `reason` for explanatory text.
+`conservative` and `output_shift` identify any contract-based one-sided correction.
 
 Graph records retain `exact_graph_error` and their formulation `contract`.
 Relation records instead include `relation`, `strategy`, `semantics`, a signed

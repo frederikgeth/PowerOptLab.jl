@@ -67,6 +67,7 @@ magnitude_contract
 magnitude_expression
 positive_root_expression
 affine_error_bound
+hull_gap_bound
 local_error_response
 ```
 

@@ -235,8 +235,8 @@ function formulation_contract(f::PWLFunction, r::AbstractPWLFormulation)
         semantics=hull ? :outer_relaxation : smooth ? :surrogate_graph : :exact_graph,
         regularity=smooth ? hc.regularity : :not_applicable,
         error_lower=lower,error_upper=upper,width=smooth ? hc.width : nothing,
-        second_derivative_bound=smooth ? sum(abs(c) for (c,k) in f.hinges;init=0.) *
-            hc.second_derivative_bound : nothing)
+        second_derivative_bound=smooth ? sum(abs(c)*hc.second_derivative_bound
+            for (c,k) in f.hinges;init=0.) : nothing)
 end
 
 """

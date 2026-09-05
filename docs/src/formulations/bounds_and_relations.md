@@ -56,6 +56,35 @@ projection remains a relaxation. Epigraphs reverse the condition: `p ≥ f(V)` i
 convex when `f` is convex. These are standard convex-analysis distinctions; see
 Boyd and Vandenberghe, [Convex Optimization, §3.1](https://web.stanford.edu/~boyd/cvxbook/index.html).
 
+The complete `formulation=:auto` policy on the effective domain is:
+
+| Curve shape | `:equal` | `:upper` (y ≤ f) | `:lower` (y ≥ f) |
+|:--|:--|:--|:--|
+| Affine | Exact affine | Exact affine | Exact affine |
+| Concave, nonaffine | Unresolved | Supporting lines | Unresolved |
+| Convex, nonaffine | Unresolved | Unresolved | Supporting lines |
+| Neither | Unresolved | Unresolved | Unresolved |
+
+A fixed input is affine after evaluation. “Unresolved” means an explicit encoding
+is needed; it does not mean the problem is impossible to solve.
+
+### Why volt-watt and volt-var often lower differently
+
+The operating role matters as much as the curve. In this example, the plateau
+followed by a descending ramp has non-increasing slopes before its output floor:
+combined with an **upper-limit** role, it admits exact linear rows. A representative
+volt-var characteristic contains descending ramps and a deadband; its slopes
+increase and decrease, and a **tracking equality** generally needs a nonconvex
+graph or a smooth surrogate. These control-versus-limit semantics are discussed
+in the [OpenDSS guide](tolerances_and_solvers.md).
+
+This is a conditional modeling advantage, not a universal grid-code property.
+Monotonic decrease of function values alone does **not** imply concavity: slopes
+`-2, -1` define a decreasing convex curve. Additional volt-watt slope changes,
+reaching the floor, or treating the law as tracking can remove the linear option.
+A volt-var occurrence confined to one segment is affine and inexpensive too.
+Always inspect the actual curve, domain and relation.
+
 ## Inspect the plan and build the relation
 
 ```@example bounded_relations
@@ -64,13 +93,14 @@ intent=VoltVarWattIntent(
     volt_watt=PWLFunction([220.,240.,250.,270.],[1.,1.,0.,0.]))
 plan=plan_pwl_relation(intent.volt_watt,(220.,250.);relation=:upper)
 @assert plan.shape==:concave && plan.strategy==:supporting_lines
-(plan.strategy,plan.semantics,plan.lines)
+plan
 ```
 
 `relation=:equal`, `:upper`, or `:lower` specifies the meaning of the output.
 `formulation=:auto` applies only justified exact affine/polyhedral lowering. An
 unresolved plan can be inspected; attempting to build it raises
-`UnsupportedFormulation` before adding constraints. This avoids silently choosing
+`UnsupportedFormulation` before adding constraints. `reason_code` provides a
+machine-readable explanation; `reason` supplies descriptive text. This avoids silently choosing
 a different problem or an optimizer when the domain is nonconvex.
 
 ```@example bounded_relations
@@ -109,7 +139,7 @@ the feasible set. Tightening the bounds and calling again produces a new plan
 and block. It does not retroactively simplify old constraints.
 
 Repeated calls share a handle only at the same input/output variables with the
-same effective domain, relation, encoding, scales, specialization setting and
+same effective domain, relation, encoding, scales, conservative-correction setting, specialization setting and
 lowering target. General expressions are not cached; affine and quadratic inputs
 are copied for faithful audits. Prepared intent is reusable across models,
 but model-specific relation handles are not. `plan_pwl_relation` is a pure
@@ -118,8 +148,8 @@ with the same curve/domain/relation/encoding, then separately caches instantiate
 blocks by their actual input/output variables and scales. This avoids repeating
 shape analysis for a fleet while preserving occurrence-specific equations.
 The existing `formulate_control_curve!` remains an output-graph builder; use the
-new relation builder when the output already exists or its one-sided meaning
-matters. Full IBR stamping is not automatically rewritten by this new interface.
+relation builder when the output already exists or its one-sided meaning
+matters. Full IBR stamping is not automatically rewritten by this interface.
 
 ### A comparison switch, not a hidden replacement
 
@@ -164,9 +194,83 @@ row and the fixed-voltage constraint; they are before solver presolve.
 Direct supporting lines give the most compact of these constructed models.
 No statistically meaningful runtime ranking is inferred from this tiny case.
 
+## Size a hull gap before solving
+
+`hull_gap_bound` computes the maximum vertical excess of the concave envelope
+and deficit to the convex envelope of a bounded graph. A monotone-chain scan
+constructs both envelopes. Between consecutive restricted curve knots, each
+vertical gap is affine, so its maximum occurs at a knot. The implementation uses
+exact rational arithmetic for the supplied Float64 data and rounds the returned
+gap bounds outward; no optimizer is called.
+
+```@example bounded_relations
+gap=hull_gap_bound(intent.volt_watt,(220.,270.))
+@assert isapprox(gap.upper_gap,2/3)
+@assert gap.upper_witness.input==250.
+@assert hull_gap_bound(intent.volt_watt,(242.,248.)).upper_gap==0.
+(gap.upper_gap,gap.lower_gap,gap.upper_envelope)
+```
+
+This is a **vertical graph discrepancy**, not the optimal-objective relaxation
+gap after network coupling. For an upper-limit relation only the upper-envelope
+excess matters; the lower envelope instead controls lower-limit relaxation.
+The 20 A curve in the [resistive reference](theory.md) has a maximum upper gap
+of 13⅓ A. Its optimized hull witness violates the controller by 8 A, within that
+bound. Emitted coefficient rounding and solver residuals remain additional.
+
+## Conservative one-sided smoothing
+
+Suppose `ℓ ≤ fδ-f ≤ u`. The tightened relations
+
+```math
+y\leq f_\delta(x)-u \ \Longrightarrow\ y\leq f(x),\qquad
+ y\geq f_\delta(x)-\ell \ \Longrightarrow\ y\geq f(x)
+```
+
+follow directly. Supply `conservative=true` with an explicit smooth upper or
+lower formulation. The planner records `semantics=:inner_approximation` and the
+physical `output_shift`; the builder applies that shift after smooth
+specialization, and the audit checks the actual shifted surrogate. Exactness of
+a surrogate on a restricted domain does not automatically tighten the global
+error contract used for the shift.
+
+```@example bounded_relations
+safe=plan_pwl_relation(intent.volt_watt,(242.,248.);relation=:upper,
+    formulation=LocalC2Formulation(.2),conservative=true)
+@assert safe.output_shift<0 && safe.semantics==:inner_approximation
+safe
+```
+
+The implication relies on the declared error contract and real arithmetic, not
+on a solver status. A solver-feasibility allowance is a separate engineering
+choice. Equality and nonsmooth requests reject `conservative=true`; it would not
+supply a meaningful one-sided correction for those requests.
+
+Tightening can remove physically feasible states. In particular, a global shift
+can make a zero cap negative, conflicting with `p≥0`:
+
+```@example bounded_relations
+m_safe=Model(Ipopt.Optimizer); set_silent(m_safe)
+@variable(m_safe,252<=v_safe<=258,start=255.)
+@constraint(m_safe,v_safe==255.)
+@variable(m_safe,p_safe>=0,start=0.)
+h_safe=formulate_control_relation!(m_safe,intent,:volt_watt,v_safe,p_safe;
+    relation=:upper,formulation=LocalC2Formulation(.2),conservative=true)
+optimize!(m_safe)
+@assert termination_status(m_safe)==MOI.LOCALLY_INFEASIBLE
+(h_safe.plan.output_shift,termination_status(m_safe))
+```
+
+Here C2 is already exactly zero on the domain, but the global shift remains
+negative. Clipping the shifted cap to zero or silently retrying a different
+formulation would change the requested construction. Use an explicit exact
+specialization when the canonical curve is affine there, or supply a separately
+justified tighter domain-specific error contract. The library does not make that
+modeling decision through a fallback solve.
+
 ## Compact patches permit exact local simplification
 
-![Original hinge, softplus and local C2 approximations; their errors and curvature are compared at the same maximum hinge error.](../assets/formulations/smoothing-locality.svg)
+![Original hinge, softplus, local C2 and algebraic approximations; their errors and curvature are compared at the same maximum hinge error.](../assets/formulations/smoothing-locality.svg)
 
 For a hinge `max(z,0)`, softplus satisfies
 
@@ -199,7 +303,10 @@ soft=plan_pwl_relation(intent.volt_watt,(242.,248.);
 The requested softplus is preserved even though the original PWL function is
 affine on that interval. Truncating its tails would introduce a new approximation
 and would need a separate error budget and audit. A local C2 law can become
-exactly affine there. Neither family is universally cheaper: matching their
+exactly affine there. Local C2 has lower peak hinge curvature than softplus
+and algebraic smoothing at matched hinge error; see the
+[width-independent curvature comparison](error_budgets.md#Compare-peak-curvature-at-matched-error).
+This does not make one family universally cheaper: matching their
 error bounds requires different widths, and curvature, sparsity and solver
 linear algebra all affect cost. The figure uses equal **hinge** errors; complete
 volt-var/watt budgets additionally depend on slope changes. See the

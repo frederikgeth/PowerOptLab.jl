@@ -28,6 +28,15 @@ struct ConverterCurrentTarget <: AbstractCurrentTarget end
 """Command the grid-side current after the output filter."""
 struct GridCurrentTarget <: AbstractCurrentTarget end
 
+# Read-only vector facade preserves the vector API expected by BMOPFTools while
+# preventing curve edits from invalidating prepared coefficients or replay.
+struct _LawCoordinates <: AbstractVector{Float64}
+    data::Tuple{Vararg{Float64}}
+end
+Base.size(x::_LawCoordinates) = (length(x.data),)
+Base.getindex(x::_LawCoordinates,i::Int) = x.data[i]
+Base.IndexStyle(::Type{_LawCoordinates}) = IndexLinear()
+
 """
     PiecewiseLinearLaw(breakpoints, values; smoothing_epsilon=nothing, formulation=nothing)
 
@@ -41,15 +50,6 @@ are copied and read-only; construct a new law to change them. Prepared canonical
 data are reused across numeric evaluation and model stamps.
 [`evaluate_exact`](@ref) retains exact corners.
 """
-# Read-only vector facade preserves the vector API expected by BMOPFTools while
-# preventing curve edits from invalidating prepared coefficients or replay.
-struct _LawCoordinates <: AbstractVector{Float64}
-    data::Tuple{Vararg{Float64}}
-end
-Base.size(x::_LawCoordinates) = (length(x.data),)
-Base.getindex(x::_LawCoordinates,i::Int) = x.data[i]
-Base.IndexStyle(::Type{_LawCoordinates}) = IndexLinear()
-
 struct PiecewiseLinearLaw
     breakpoints::_LawCoordinates
     values::_LawCoordinates
