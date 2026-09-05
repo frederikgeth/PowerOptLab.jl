@@ -81,6 +81,21 @@ certification, a new MPCC/global solver, and general multivariate spline fitting
 are outside this delivery. Composition, stationarity and equilibrium estimates
 must state what they actually assess. Reuse external solver and graph libraries.
 
+## Next increment: shared primitives in advanced IBR controls
+
+The PWL integration is complete. The next refactor moves the existing algebraic
+min/max/positive-part/clip operations and purpose-specific controller norms onto
+shared primitives. Preserve established physical widths, upper-versus-lower norm
+direction, exact hardware inequalities, expression sharing and default control
+semantics. Keep exact implicit roots where a positive-domain restriction or
+smoothing would change the feasible set. Reuse the shared magnitude primitive for
+the advanced inverter's linear-current loss term where applicable.
+
+Add focused derivative, scaling and same-state numeric/stamped comparisons; run
+the existing inverter accuracy regressions. Document precisely which operations
+are shared and which remain domain-specific. Commit working increments, then
+request the user's review once these changes and the current A–D scope are ready.
+
 ## Existing foundation
 
 The initial commits provide PWL softplus/C2/complementarity/exact-graph/hull
