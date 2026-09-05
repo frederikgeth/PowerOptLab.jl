@@ -91,6 +91,7 @@ using LinearAlgebra
 using Random
 using SHA
 using SparseArrays
+using TOML
 
 # Shared validation and solver-result contracts.
 include("contracts.jl")
@@ -103,11 +104,14 @@ include("upstream.jl")
 # Experimental function semantics and alternative optimization representations.
 include("formulations/primitives.jl")
 include("formulations/jump.jl")
+include("formulations/error_tools.jl")
+include("formulations/experiments.jl")
 
 # Component models — new network elements stamped via model_hook! / solution_hook!
 include("components/devices.jl")
 include("components/advanced_inverter.jl")
 include("components/inverter_controls.jl")
+include("formulations/cases.jl")
 include("components/battery_chemistry.jl")
 include("components/ivq_battery.jl")
 
@@ -133,7 +137,14 @@ include("algorithms/operability_continuation.jl")
 # Function formulations
 export PWLFunction, SoftplusFormulation, LocalC2Formulation, ComplementarityGraph,
        PWLConvexHull, ExactPWLGraph, primitive_value, primitive_derivatives,
-       formulation_contract, PWLFormulationHandle, formulate_pwl!, audit_pwl
+       formulation_contract, PWLFormulationHandle, formulate_pwl!, audit_pwl,
+       AbstractPWLFormulation, AbstractPWLSmoothing, hinge_value, hinge_derivatives,
+       hinge_contract, smoothing_for_error, smooth_pwl_expression,
+       MagnitudeApproximation, magnitude_value, magnitude_contract, magnitude_expression,
+       positive_root_expression, affine_error_bound, local_error_response,
+       FormulationCase, FormulationMethod, UnsupportedFormulation,
+       run_formulation_experiment, write_formulation_results,
+       resistive_equilibria, resistive_control_case, controlled_inverter_case
 
 # Shared extension interfaces
 export AbstractDevice, AbstractMeasurement, AbstractSolveResult

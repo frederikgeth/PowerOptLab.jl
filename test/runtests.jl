@@ -30,6 +30,7 @@ end
 @testset "PowerOptLab" begin
     include("function_formulation_tests.jl")
     include("function_comparison_tests.jl")
+    include("formulation_research_tests.jl")
     include("multiperiod_tests.jl")
     include("ev_tests.jl")
     include("state_estimation_tests.jl")

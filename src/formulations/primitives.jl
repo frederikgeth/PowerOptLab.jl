@@ -16,7 +16,8 @@ struct PWLFunction
         xs, ys = Tuple(Float64.(breakpoints)), Tuple(Float64.(values))
         length(xs) == length(ys) >= 2 || throw(ArgumentError("Need at least two paired knots"))
         all(isfinite, xs) && all(isfinite, ys) || throw(ArgumentError("Curve data must be finite"))
-        all(>(0), diff(collect(xs))) || throw(ArgumentError("Knots must be strictly increasing"))
+        steps = diff(collect(xs))
+        all(isfinite,steps) && all(>(0),steps) || throw(ArgumentError("Knot intervals must be finite and positive"))
         slopes = diff(collect(ys)) ./ diff(collect(xs))
         all(isfinite, slopes) && all(isfinite, diff([0.; slopes; 0.])) ||
             throw(ArgumentError("Curve slopes and slope changes must be finite"))
@@ -24,7 +25,17 @@ struct PWLFunction
     end
 end
 
+"""Supertype of PWL graph, surrogate and relaxation representations."""
 abstract type AbstractPWLFormulation end
+
+"""
+    AbstractPWLSmoothing <: AbstractPWLFormulation
+
+Extension interface for a smooth hinge family. Implement `hinge_value`,
+`hinge_derivatives`, and `hinge_contract`. Use immutable configuration objects.
+The scalar JuMP operator and complete PWL error accounting are then supplied here.
+"""
+abstract type AbstractPWLSmoothing <: AbstractPWLFormulation end
 
 function _positive_width(x)
     value = Float64(x)
@@ -34,19 +45,24 @@ function _positive_width(x)
 end
 
 """`SoftplusFormulation(width)` uses BMOPFTools' telescoping softplus with physical input width."""
-struct SoftplusFormulation <: AbstractPWLFormulation
+struct SoftplusFormulation <: AbstractPWLSmoothing
     width::Float64
     SoftplusFormulation(width::Real) = new(_positive_width(width))
 end
 
 """`LocalC2Formulation(width)` replaces each hinge in a band of physical half-width `width` by a C2 quartic."""
-struct LocalC2Formulation <: AbstractPWLFormulation
+struct LocalC2Formulation <: AbstractPWLSmoothing
     width::Float64
     LocalC2Formulation(width::Real) = new(_positive_width(width))
 end
 
-"""Exact PWL graph encoded by nonnegative hinge pairs and native MOI complementarity; requires a suitable external solver."""
-struct ComplementarityGraph <: AbstractPWLFormulation end
+"""`ComplementarityGraph(; scale=nothing)` encodes an exact graph with MOI complementarity. `scale` normalizes hinge variables in physical input units independently of network coordinates; `nothing` retains legacy input-scale normalization."""
+struct ComplementarityGraph <: AbstractPWLFormulation
+    scale::Union{Nothing,Float64}
+    function ComplementarityGraph(; scale=nothing)
+        new(isnothing(scale) ? nothing : _positive_width(scale))
+    end
+end
 
 """Continuous convex hull of a bounded PWL graph. This is an outer relaxation, not a controller equation."""
 struct PWLConvexHull <: AbstractPWLFormulation end
@@ -94,47 +110,77 @@ end
 
 _pwl_smooth(f, x, r::SoftplusFormulation) = BMOPFTools.piecewise_linear_value(
     x, collect(f.breakpoints), collect(f.values); epsilon=r.width)
-_pwl_smooth(f, x, r::LocalC2Formulation) = first(f.values) + sum(
-    c*_c2_hinge(x-k, r.width) for (c,k) in _pwl_hinges(f); init=zero(x))
+_pwl_smooth(f, x, r::AbstractPWLSmoothing) = first(f.values) + sum(
+    c*hinge_value(x-k,r) for (c,k) in _pwl_hinges(f); init=zero(x))
+
+"""`hinge_value(x, smoothing)` evaluates the smooth approximation to max(0,x). Extension method for new families."""
+function hinge_value end
+hinge_value(x,r::LocalC2Formulation) = _c2_hinge(x,r.width)
+# The PWL softplus value path delegates directly to BMOPFTools; this scalar
+# identity is stable and useful for independently inspecting its hinge family.
+function hinge_value(x,r::SoftplusFormulation)
+    z = x/r.width
+    return max(x,zero(x)) + r.width*log1p(exp(-abs(z)))
+end
+
+"""`hinge_derivatives(x, smoothing)` returns analytic first and second derivatives. Extension method for new families."""
+function hinge_derivatives end
+hinge_derivatives(x,r::LocalC2Formulation) = _c2_hinge_derivatives(x,r.width)
+hinge_derivatives(x,r::SoftplusFormulation) = _softplus_hinge_derivatives(x,r.width)
+
+"""
+    hinge_contract(smoothing)
+
+Declare a hinge's signed error interval, regularity, physical width and maximum
+absolute second derivative. Custom declarations are researcher-supplied claims,
+not automatically proved. The built-in bounds hold in real arithmetic.
+"""
+function hinge_contract end
+hinge_contract(r::SoftplusFormulation) = (error_lower=0.,error_upper=r.width*log(2.),
+    regularity=:C_infinity,width=r.width,second_derivative_bound=1/(4r.width))
+hinge_contract(r::LocalC2Formulation) = (error_lower=0.,error_upper=3r.width/16,
+    regularity=:C2,width=r.width,second_derivative_bound=3/(4r.width))
 
 """
     primitive_value(curve, x[, formulation])
 
 Evaluate in physical units on the declared domain. The default is the canonical
-PWL function; a smooth formulation evaluates its surrogate. A convex hull has no
+PWL function; a smooth formulation evaluates its surrogate. `domain_policy=:flat_extension`
+explicitly permits evaluating the flat-extended curve (or its smoothing) outside
+the declared domain, as needed for controller tails. A convex hull has no
 single-valued evaluator. Numeric softplus delegates to BMOPFTools (Float64);
 use `primitive_derivatives` for its analytic derivatives.
 """
-function primitive_value(f::PWLFunction, x::Real)
-    _check_pwl_domain(f, x)
+function primitive_value(f::PWLFunction, x::Real; domain_policy=:error)
+    _check_pwl_domain(f, x, domain_policy)
     return _pwl_exact(f, x)
 end
 function primitive_value(f::PWLFunction, x::Real,
-                         r::Union{SoftplusFormulation,LocalC2Formulation})
-    _check_pwl_domain(f, x)
+                         r::AbstractPWLSmoothing; domain_policy=:error)
+    _check_pwl_domain(f, x, domain_policy)
     return _pwl_smooth(f, x, r)
 end
 primitive_value(f::PWLFunction, x::Real, ::Union{ComplementarityGraph,ExactPWLGraph}) =
     primitive_value(f, x)
 _pwl_primal(x) = x
 _pwl_primal(x::ForwardDiff.Dual) = _pwl_primal(ForwardDiff.value(x))
-function _check_pwl_domain(f, x)
+function _check_pwl_domain(f, x, policy=:error)
+    policy in (:error,:flat_extension) || throw(ArgumentError("Unknown domain policy $policy"))
     value = _pwl_primal(x)
-    isfinite(value) && first(f.breakpoints) <= value <= last(f.breakpoints) ||
+    isfinite(value) && (policy == :flat_extension || first(f.breakpoints) <= value <= last(f.breakpoints)) ||
         throw(DomainError(x, "Input is outside the declared physical domain"))
 end
 
 """`primitive_derivatives(curve, x, smooth_formulation)` returns physical first and second derivatives, including at patch joins."""
 function primitive_derivatives(f::PWLFunction, x::Real,
-                               r::Union{SoftplusFormulation,LocalC2Formulation})
-    _check_pwl_domain(f, x)
+                               r::AbstractPWLSmoothing; domain_policy=:error)
+    _check_pwl_domain(f, x, domain_policy)
     return _pwl_derivatives(f, x, r)
 end
 function _pwl_derivatives(f, x, r)
     d1, d2 = zero(x), zero(x)
     for (c,k) in _pwl_hinges(f)
-        h1, h2 = r isa LocalC2Formulation ? _c2_hinge_derivatives(x-k, r.width) :
-            _softplus_hinge_derivatives(x-k, r.width)
+        h1, h2 = hinge_derivatives(x-k,r)
         d1 += c*h1
         d2 += c*h2
     end
@@ -150,22 +196,41 @@ points are not a surrogate function. Smooth bounds are analytic real-arithmetic
 bounds; floating-point evaluation and solver feasibility errors are additional.
 """
 function formulation_contract(f::PWLFunction, r::AbstractPWLFormulation)
-    smooth = r isa Union{SoftplusFormulation,LocalC2Formulation}
+    r isa Union{AbstractPWLSmoothing,PWLConvexHull,ExactPWLGraph,ComplementarityGraph} ||
+        throw(ArgumentError("Define formulation_contract for $(typeof(r))"))
+    smooth = r isa AbstractPWLSmoothing
     hull = r isa PWLConvexHull
-    factor = r isa SoftplusFormulation ? log(2.) : 3/16
+    hc = smooth ? hinge_contract(r) : nothing
     lower, upper = if smooth
         coeffs = first.(_pwl_hinges(f))
-        (r.width*factor*sum(min(0.,c) for c in coeffs; init=0.),
-         r.width*factor*sum(max(0.,c) for c in coeffs; init=0.))
+        (sum(min(c*hc.error_lower,c*hc.error_upper) for c in coeffs; init=0.),
+         sum(max(c*hc.error_lower,c*hc.error_upper) for c in coeffs; init=0.))
     elseif hull
-        (nothing, nothing)
+        (nothing,nothing)
     else
-        (0., 0.)
+        (0.,0.)
     end
     return (domain=(first(f.breakpoints),last(f.breakpoints)),
-        input_unit=f.input_unit, output_unit=f.output_unit,
+        input_unit=f.input_unit,output_unit=f.output_unit,
         semantics=hull ? :outer_relaxation : smooth ? :surrogate_graph : :exact_graph,
-        regularity=r isa SoftplusFormulation ? :C_infinity : r isa LocalC2Formulation ? :C2 : :piecewise_linear,
-        error_lower=lower, error_upper=upper,
-        width=smooth ? r.width : nothing)
+        regularity=smooth ? hc.regularity : :not_applicable,
+        error_lower=lower,error_upper=upper,width=smooth ? hc.width : nothing)
+end
+
+"""
+    smoothing_for_error(curve, SoftplusFormulation_or_LocalC2Formulation, budget)
+
+Choose a physical input width from a positive absolute output-error budget using
+signed slope-change sums. This controls function approximation, not solver or
+network error. A constant curve needs no smoothing and requires an explicit width
+if a smoothing object is still desired. Custom families can extend this method.
+"""
+function smoothing_for_error(f::PWLFunction, family::Type{<:AbstractPWLSmoothing}, budget::Real)
+    family in (SoftplusFormulation,LocalC2Formulation) ||
+        throw(ArgumentError("Custom families must define their error-to-width mapping"))
+    error = _positive_width(budget)
+    contract = formulation_contract(f,family(1.))
+    magnitude = max(abs(contract.error_lower),abs(contract.error_upper))
+    magnitude > 0 || throw(ArgumentError("Constant curves need no smoothing; choose a width explicitly"))
+    return family(error/magnitude)
 end

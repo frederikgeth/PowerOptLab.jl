@@ -28,19 +28,25 @@ struct ConverterCurrentTarget <: AbstractCurrentTarget end
 struct GridCurrentTarget <: AbstractCurrentTarget end
 
 """
-    PiecewiseLinearLaw(breakpoints, values; smoothing_epsilon)
+    PiecewiseLinearLaw(breakpoints, values; smoothing_epsilon=nothing, formulation=nothing)
 
 A continuous, flat-clamped piecewise-linear scalar law. `smoothing_epsilon` is
 an absolute width in the same units as `breakpoints`; it is used only by the
-smooth JuMP representation. [`evaluate_exact`](@ref) retains exact corners.
+smooth representation. Alternatively supply an `AbstractPWLSmoothing` instance via
+`formulation`, e.g. `LocalC2Formulation(0.1)`. If both keywords are supplied their
+widths must agree. The default remains BMOPFTools softplus. Numeric smooth
+assessment and JuMP stamping use the same family and flat tails.
+[`evaluate_exact`](@ref) retains exact corners.
 """
 struct PiecewiseLinearLaw
     breakpoints::Vector{Float64}
     values::Vector{Float64}
     smoothing_epsilon::Float64
+    formulation::AbstractPWLSmoothing
     function PiecewiseLinearLaw(breakpoints::AbstractVector{<:Real},
                                 values::AbstractVector{<:Real};
-                                smoothing_epsilon::Real)
+                                smoothing_epsilon::Union{Nothing,Real}=nothing,
+                                formulation::Union{Nothing,AbstractPWLSmoothing}=nothing)
         xs = Float64.(breakpoints)
         ys = Float64.(values)
         length(xs) == length(ys) || throw(ArgumentError(
@@ -51,10 +57,16 @@ struct PiecewiseLinearLaw
         all(isfinite, ys) || throw(ArgumentError("values must be finite"))
         all(diff(xs) .> 0) || throw(ArgumentError(
             "breakpoints must be strictly increasing"))
-        eps = Float64(smoothing_epsilon)
+        if formulation === nothing
+            smoothing_epsilon === nothing && throw(ArgumentError("Specify smoothing_epsilon or formulation"))
+            formulation = SoftplusFormulation(smoothing_epsilon)
+        end
+        eps = Float64(hinge_contract(formulation).width)
+        smoothing_epsilon === nothing || Float64(smoothing_epsilon)==eps ||
+            throw(ArgumentError("smoothing_epsilon and formulation width disagree"))
         isfinite(eps) && eps > 0 || throw(ArgumentError(
             "smoothing_epsilon must be finite and > 0"))
-        new(xs, ys, eps)
+        new(xs, ys, eps, formulation)
     end
 end
 
@@ -650,9 +662,11 @@ function _unbalance_exact(::NoUnbalanceControl, u1, u2, i1)
 end
 
 _pwl_numeric_smooth(law::PiecewiseLinearLaw, input::Real) =
-    BMOPFTools.piecewise_linear_value(
-        input, law.breakpoints, law.values;
-        epsilon=law.smoothing_epsilon)
+    primitive_value(PWLFunction(law),input,law.formulation;domain_policy=:flat_extension)
+
+"""Extract a bounded canonical curve from a control law; supply physical unit labels explicitly when needed."""
+PWLFunction(law::PiecewiseLinearLaw;input_unit::Symbol=:unitless,output_unit::Symbol=:unitless) =
+    PWLFunction(law.breakpoints,law.values;input_unit,output_unit)
 
 function _numeric_smooth_extrema(magnitudes, epsilon)
     vmin = _smooth_min(_smooth_min(magnitudes[1], magnitudes[2], epsilon),
@@ -1012,9 +1026,7 @@ function _smooth_dominant_expression!(
 end
 
 function _pwl_smooth(ctx, law::PiecewiseLinearLaw, input, input_scale)
-    BMOPFTools.opf_piecewise_linear_expression(
-        ctx, input, law.breakpoints ./ input_scale, law.values;
-        epsilon=law.smoothing_epsilon / input_scale)
+    smooth_pwl_expression(ctx,PWLFunction(law),input,law.formulation;input_scale)
 end
 
 function _sequence_pair(values_re, values_im)
