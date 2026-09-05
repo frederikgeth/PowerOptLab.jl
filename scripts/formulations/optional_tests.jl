@@ -74,3 +74,30 @@ for kind in ("ExactPWLGraph","ComplementarityGraph","PWLConvexHull")
         " strict solver successes; ",count(r -> get(r,"canonical_equations_satisfied",false),subset),
         "/",length(subset)," canonical-equation checks within 1e-6 physical units")
 end
+
+# Exercise the configurable runner with external graph and MPCC backends. These
+# are integration checks, not a new convergence/normalization campaign.
+configurable_case = resistive_control_case(PWLComparison.CURVE;
+    source_voltage=230.,resistance=1.)
+configurable_methods = [
+    FormulationMethod("exact / HiGHS",ExactPWLGraph(),HiGHS.Optimizer;configure! = set_silent),
+    FormulationMethod("hull / HiGHS",PWLConvexHull(),HiGHS.Optimizer;configure! = set_silent),
+    FormulationMethod("MPCC / CCOpt",ComplementarityGraph(scale=1.),CCOpt.Optimizer;
+        configure! = m -> (MathOptComplements.Bridges.add_all_bridges(m);set_silent(m)),
+        options=(tol=1e-9,))]
+configurable_rows = run_formulation_experiment([configurable_case],configurable_methods;
+    configurations=[(input_scale=230.,output_scale=20.,start_input=245.)])
+if haskey(ENV,"POL_FORMULATION_RESULTS")
+    write_formulation_results(splitext(ENV["POL_FORMULATION_RESULTS"])[1]*"-configurable.toml",
+        configurable_rows;sources=[@__FILE__],
+        metadata=(purpose="optional backend API integration",stationarity="unassessed"))
+end
+@testset "Configurable external backend integration" begin
+    @test all(r -> r["run_status"]=="finished",configurable_rows)
+    @test configurable_rows[1]["strict_solver_success"]
+    @test abs(only(configurable_rows[1]["observations"]).exact_graph_error)<1e-6
+    @test configurable_rows[2]["strict_solver_success"]
+    @test only(configurable_rows[2]["observations"]).exact_graph_error ≈ 8. atol=1e-6
+    @test configurable_rows[3]["candidate_available"]
+    @test only(configurable_rows[3]["observations"]).complementarity_scale==1.
+end

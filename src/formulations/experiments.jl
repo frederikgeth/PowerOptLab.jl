@@ -86,12 +86,28 @@ function run_formulation_experiment(cases,methods;configurations=[NamedTuple()],
                 outcome = _solve_outcome(model)
                 row["termination_status"] = string(outcome.termination_status)
                 row["primal_status"] = string(outcome.primal_status)
-                row["raw_solver_status"] = raw_status(model)
-                row["dual_status"] = string(dual_status(model))
                 row["strict_solver_success"] = _publishable(outcome)
-                row["candidate_available"] = outcome.has_primal
+                certificate = outcome.primal_status in (MOI.INFEASIBILITY_CERTIFICATE,
+                    MOI.NEARLY_INFEASIBILITY_CERTIFICATE,MOI.REDUCTION_CERTIFICATE,
+                    MOI.NEARLY_REDUCTION_CERTIFICATE)
+                row["primal_is_certificate"] = certificate
+                row["candidate_available"] = outcome.has_primal && !certificate
+                row["result_count"] = outcome.result_count
+                # Optional backend diagnostics must not erase a returned primal
+                # candidate if an external package's attribute getter fails.
+                detail_errors = Dict{String,String}()
+                for (key,getter) in (("raw_solver_status",raw_status),("dual_status",dual_status))
+                    try
+                        row[key] = string(getter(model))
+                    catch error
+                        error isa InterruptException && rethrow()
+                        row[key] = nothing
+                        detail_errors[key] = sprint(showerror,error)
+                    end
+                end
+                row["solver_detail_errors"] = detail_errors
                 row["run_status"] = "finished"
-                if outcome.has_primal
+                if row["candidate_available"]
                     row["observations"] = [merge(audit_pwl(h),
                         (contract=formulation_contract(h.curve,h.formulation),
                          formulation_type=string(typeof(h.formulation)),

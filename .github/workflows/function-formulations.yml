@@ -34,5 +34,5 @@ jobs:
         if: always()
         with:
           name: formulation-results-julia-${{ matrix.version }}
-          path: ${{ runner.temp }}/pwl-results.toml
+          path: ${{ runner.temp }}/pwl-results*.toml
           if-no-files-found: warn

@@ -81,6 +81,18 @@ end
     @test r["termination_status"] == "ITERATION_LIMIT"
     @test !r["strict_solver_success"]
     @test r["candidate_available"] && haskey(r,"metrics")
+    # A primal ray/certificate is not an operating point to feed into metrics.
+    mock = MOI.Utilities.MockOptimizer(MOI.Utilities.Model{Float64}())
+    MOI.Utilities.set_mock_optimize!(mock,opt -> MOI.Utilities.mock_optimize!(opt,
+        MOI.DUAL_INFEASIBLE,(MOI.INFEASIBILITY_CERTIFICATE,[1.])))
+    ray_case = FormulationCase("ray",(rep,c) -> begin
+        m = Model(); @variable(m,x); @objective(m,Min,-x)
+        (model=m,metrics=()->error("certificate must not be evaluated as a point"))
+    end)
+    ray = only(run_formulation_experiment([ray_case],
+        [FormulationMethod("mock ray",nothing,()->mock)];on_error=:throw))
+    @test ray["run_status"]=="finished" && ray["primal_is_certificate"]
+    @test !ray["candidate_available"] && !haskey(ray,"metrics")
     unsupported = FormulationCase("unsupported",(r,c)->throw(UnsupportedFormulation("by design")))
     broken = FormulationCase("broken",(r,c)->error("intentional failure"))
     statuses = run_formulation_experiment([unsupported,broken],methods[1:1])
