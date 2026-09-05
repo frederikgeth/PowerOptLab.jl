@@ -234,6 +234,49 @@ Scenario-stage controls are allowed to adapt to each newly observed scenario,
 consistent with their declared information stage. Passing a capacity dictionary
 instead loses the issuance record and is labelled `:capacity_values_only`.
 
+## Separate exogenous risk from range risk
+
+The number above answers one question: how often does the *bound point* fail
+across held-out realizations of load and generation? It says nothing about
+partial utilization, because `utilizations=:bound_point` tests a single point
+in the issued box. Those are two independent failure modes, and reporting only
+the first while advertising a range conflates them.
+
+Run the same scenario set again over the box instead of the bound point, and
+report both numbers:
+
+```julia
+bound_only = evaluate_operating_envelope_coverage(
+    scenarios, cps, allocation;
+    roles=(:test, :stress),
+    utilizations=:bound_point,
+    control_policy=PerfectRecourse())
+
+over_box = evaluate_operating_envelope_coverage(
+    scenarios, cps, allocation;
+    roles=(:test, :stress),
+    utilizations=:corners,               # or doe_dropout_utilizations(n, 1)
+    control_policy=PerfectRecourse())
+
+(bound = bound_only.metrics["empirical_candidate_scenario_frequency"],
+ box   = over_box.metrics["empirical_candidate_scenario_frequency"],
+ bound_contexts = bound_only.metrics["context_count"],
+ box_contexts   = over_box.metrics["context_count"])
+```
+
+The gap between the two frequencies is the part of the risk that scenario
+sampling alone cannot see, and it is the quantity to report whenever the
+operational promise is a range rather than a point. Note that the two runs
+differ in the number of AC contexts solved, so the comparison is between
+scenario-level rates, not context-level ones: a scenario counts as a candidate
+violation if *any* of its tested utilization points fails, and adding points can
+only move that rate upward.
+
+Use `doe_dropout_utilizations(length(cps), 1)` in place of `:corners` when the
+participant count makes `2^n` contexts per scenario impractical; it grows
+linearly and covers the faces adjacent to the bound point, where published
+unbalanced-network counterexamples occur.
+
 ## Trace capacity against held-out violations
 
 A single operating point hides how quickly empirical performance deteriorates
@@ -722,5 +765,11 @@ the framework records but does not validate those choices.
 - Local nonlinear infeasibility remains candidate evidence rather than a global
   infeasibility proof.
 - Testing only `:bound_point` says nothing about untested partial utilization;
-  combine held-out scenarios with corners or adaptive utilization search when
-  the operational promise is a range.
+  combine held-out scenarios with corners, dropout faces, or adaptive
+  utilization search when the operational promise is a range, and report the
+  gap between the two rates rather than the bound-point rate alone.
+- Scenario weights enter the reported frequency in two different ways. The
+  `weighted_*` metrics average within-interval ratios, treating each interval
+  as the sampling unit; the `pooled_weighted_*` metrics form a single ratio of
+  summed weights. They differ whenever intervals carry unequal total weight,
+  and neither is a probability unless the weights are calibrated.

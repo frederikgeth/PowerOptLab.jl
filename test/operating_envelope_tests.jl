@@ -657,6 +657,40 @@ end
     @test tight.envelope["single_phase"][1] < loose.envelope["single_phase"][1] - 1000.0
     @test tight.envelope["single_phase"][1] > 0.0
     @test "bus:b1:vneg_max" in tight.diagnostics[1]["binding_constraints"]
+
+    # Binding activity is tested on the normalized margin, so the reported set
+    # cannot depend on whether the case is written in volts or per unit.
+    @test tight.diagnostics[1]["binding_relative_tolerance"] > 0
+    @test all(tight.diagnostics[1]["minimum_normalized_margins"][kind] <=
+              tight.diagnostics[1]["binding_relative_tolerance"]
+              for kind in ("negative_sequence",))
+
+    # The neutral must be resolved through the engine's terminal roles, not the
+    # "n" naming fallback. On a four-wire case with a floating, non-"n" neutral
+    # the fallback leaves four "phases", which silently suppresses the
+    # negative-sequence margin. That margin also scores the adversarial search,
+    # so losing it is not merely cosmetic.
+    numeric_net = doe_unbalanced_feeder_numeric_neutral(vneg_max=1.0)
+    numeric_bus = numeric_net["bus"]["b1"]
+    numeric_terminals = String.(numeric_bus["terminal_names"])
+    phases, resolved_neutral = PowerOptLab._doe_bus_phase_terminals(
+        numeric_net, numeric_bus, numeric_terminals)
+    @test resolved_neutral == "4"
+    @test phases == ["1", "2", "3"]
+    @test !haskey(numeric_bus, "perfectly_grounded_terminals")
+
+    numeric_cp = ConnectionPoint(id="single_phase", bus="b1",
+                                 phase_terminals=["1"], neutral="4",
+                                 export_max=20e3)
+    numeric = solve_operating_envelope(numeric_net, [numeric_cp])
+    @test haskey(numeric.diagnostics[1]["minimum_normalized_margins"],
+                 "negative_sequence")
+    @test "bus:b1:vneg_max" in numeric.diagnostics[1]["binding_constraints"]
+
+    numeric_loose = solve_operating_envelope(
+        doe_unbalanced_feeder_numeric_neutral(vneg_max=20.0), [numeric_cp])
+    @test numeric.envelope["single_phase"][1] <
+          numeric_loose.envelope["single_phase"][1]
 end
 
 @testset "Operating envelope: operational publication and verification" begin
@@ -726,6 +760,42 @@ end
     @test stable.utilization_points[3] == [0.5, 1 / 3]
     @test solve_diagnostics(stable).tested_point_count == 5
 
+    # Dropout faces: every way of taking 1..depth participants to zero while
+    # the rest stay at the issued limit.
+    @test doe_dropout_utilizations(3, 1) ==
+          [[0.0, 1.0, 1.0], [1.0, 0.0, 1.0], [1.0, 1.0, 0.0]]
+    @test length(doe_dropout_utilizations(4, 2)) == 4 + 6
+    @test all(point -> count(iszero, point) <= 2,
+              doe_dropout_utilizations(4, 2))
+    @test isempty(doe_dropout_utilizations(3, 0))
+    @test length(doe_dropout_utilizations(3, 9)) == 7      # depth clamped to n
+    @test_throws ArgumentError search_operating_envelope_utilizations(
+        net, cps, conservative; samples=0, dropout_depth=2,
+        max_dropout_points=1)
+
+    # The screening entry point keeps the documented space-filling sequence by
+    # default; dropout seeding is opt-in there.
+    @test stable.diagnostics["dropout_depth"] == 0
+    @test stable.diagnostics["dropout_point_count"] == 0
+    seeded = search_operating_envelope_utilizations(
+        net, cps, conservative; samples=0, dropout_depth=1)
+    @test seeded.diagnostics["dropout_point_count"] == 2
+    @test [0.0, 1.0] in seeded.utilization_points
+    @test [1.0, 0.0] in seeded.utilization_points
+
+    # Plain Halton cannot stratify a coordinate whose base exceeds the sample
+    # budget; scrambling is deterministic in the declared seed.
+    @test stable.diagnostics["halton_maximum_base"] == 3
+    @test stable.diagnostics["halton_seed_stratified"] == true
+    scrambled = search_operating_envelope_utilizations(
+        net, cps, conservative; samples=3, halton_scramble_seed=7)
+    repeated = search_operating_envelope_utilizations(
+        net, cps, conservative; samples=3, halton_scramble_seed=7)
+    @test scrambled.utilization_points == repeated.utilization_points
+    @test scrambled.utilization_points != stable.utilization_points
+    @test scrambled.diagnostics["halton_scramble_seed"] == 7
+    @test scrambled.diagnostics["halton_seed_stratified"] == true
+
     unsafe = search_operating_envelope_utilizations(
         net, cps, Dict("d1" => 10e3, "d2" => 10e3); samples=0)
     @test unsafe.outcome == :candidate_counterexample
@@ -771,14 +841,35 @@ end
         unbalanced_net, phase_cps, balanced_bound;
         utilizations=:bound_point,
         control_policy=PerfectRecourse()).feasible == [true]
+    # Default `dropout_depth=1` seeds the hypercube faces adjacent to the bound
+    # point, so the failure is exposed in the first verification round without
+    # relying on refinement reaching an interior point.
     range_failure = search_operating_envelope_adversarial(
         unbalanced_net, phase_cps, balanced_bound;
         seed_samples=0, refinement_rounds=1, restarts=2,
         initial_step=0.5, control_policy=PerfectRecourse())
     @test range_failure.outcome == :candidate_counterexample
-    @test length(range_failure.verifications) == 2
-    @test any(context -> any(x -> 0 < x < 1, context.utilization),
+    @test length(range_failure.verifications) == 1
+    @test range_failure.diagnostics["dropout_point_count"] == 3
+    @test range_failure.diagnostics["seed_method"] ==
+          :halton_low_discrepancy_with_bound_point_dropouts
+    @test any(context -> count(iszero, context.utilization) == 1 &&
+                         count(isone, context.utilization) == 2,
               range_failure.candidate_contexts)
+
+    # Refinement alone can only reach `1 - initial_step/(1 - step_decay)` on any
+    # single coordinate, so the dropout faces are unreachable without seeding
+    # them. This run reproduces the older interior-point path.
+    interior_failure = search_operating_envelope_adversarial(
+        unbalanced_net, phase_cps, balanced_bound;
+        seed_samples=0, dropout_depth=0, refinement_rounds=1, restarts=2,
+        initial_step=0.5, control_policy=PerfectRecourse())
+    @test interior_failure.outcome == :candidate_counterexample
+    @test length(interior_failure.verifications) == 2
+    @test interior_failure.diagnostics[
+        "refinement_reachable_depth_from_bound"] ≈ 0.0
+    @test any(context -> any(x -> 0 < x < 1, context.utilization),
+              interior_failure.candidate_contexts)
     candidate = first(range_failure.candidate_contexts)
     confirmation = confirm_operating_envelope_counterexample(
         unbalanced_net, phase_cps, balanced_bound, candidate.utilization;
@@ -976,6 +1067,15 @@ end
     @test coverage.metrics["candidate_scenario_count"] == 1
     @test coverage.metrics["passed_scenario_count"] == 1
     @test coverage.metrics["weighted_candidate_scenario_frequency"] ≈ 0.7
+    # The interval mean is a cluster estimator; the pooled ratio weights every
+    # scenario directly. With a single interval the two must coincide.
+    @test coverage.diagnostics["weighted_frequency_estimator"] ==
+          :interval_mean_of_within_interval_ratios
+    @test coverage.metrics["pooled_weighted_candidate_scenario_frequency"] ≈
+          coverage.metrics["weighted_candidate_scenario_frequency"]
+    @test coverage.metrics[
+        "pooled_weighted_conservative_scenario_frequency"] ≈
+          coverage.metrics["weighted_conservative_scenario_frequency"]
     @test 0.5 <= coverage.metrics["one_sided_hoeffding_upper_bound"] <= 1.0
     @test coverage.diagnostics["iid_assumption"]
     @test coverage.diagnostics["distribution_shift_assessed"] == false
@@ -1033,6 +1133,20 @@ end
     @test probability_calibration.metrics["calibration_gap_lower"] !== missing
     @test all(row.simultaneous_gap_lower !== missing
               for row in probability_calibration.bin_rows if row.count > 0)
+    # Multiplicity is corrected over the declared bins. Correcting over the
+    # realised non-empty bins would make the simultaneous level depend on the
+    # data it is meant to cover, so an empty bin must not widen the others.
+    @test probability_calibration.diagnostics["bin_interval_multiplicity"] ==
+          :bonferroni_over_declared_bins
+    sparse_bins = evaluate_doe_probability_calibration(
+        direct_probability_observations;
+        bins=[0.0, 0.5, 0.75, 1.0], independence_assumption=true,
+        confidence=0.9)
+    dense_row = only(row for row in probability_calibration.bin_rows
+                     if row.count > 0 && row.lower == 0.0)
+    sparse_row = only(row for row in sparse_bins.bin_rows
+                      if row.count > 0 && row.lower == 0.0)
+    @test sparse_row.simultaneous_gap_lower < dense_row.simultaneous_gap_lower
     conservative_calibration = evaluate_doe_probability_calibration(
         direct_probability_observations;
         bins=2, unresolved=:violation)

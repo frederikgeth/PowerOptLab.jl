@@ -2864,6 +2864,29 @@ end
 
 _has_primal(model) = _publishable(_solve_outcome(model))
 
+# Relative activity tolerance applied to the *normalized* margin (physical
+# margin divided by the declared limit) when listing binding constraints.
+# Normalization keeps the test scale-invariant: the same network expressed in
+# volts or per unit must report the same binding set.
+const _DOE_BINDING_RELATIVE_TOLERANCE = 1e-3
+
+# Resolve the neutral terminal through the engine's terminal-role machinery
+# rather than the `"n"` naming fallback. A case that declares a non-`"n"`
+# neutral via `terminal_conventions` is stamped with `neutral_terminal` at
+# ingest, and silently missing it would misalign per-phase voltage limits and
+# suppress the negative-sequence margin on exactly the four-wire cases this
+# module targets.
+function _doe_bus_phase_terminals(net, bus, terminals::Vector{String})
+    neutral = _neutral_terminal(bus)
+    if neutral === nothing
+        labels = _neutral_labels(net)
+        neutral = isempty(labels) ? nothing : _neutral_terminal(terminals, labels)
+    end
+    grounded = Set(String.(get(bus, "perfectly_grounded_terminals", String[])))
+    phases = [t for t in terminals if !(t in grounded) && t != neutral]
+    return phases, neutral
+end
+
 function _result_margins(result, net)
     # Store (normalized margin, physical margin, location). Normalization by the
     # corresponding declared limit makes different instances of one constraint
@@ -2883,10 +2906,7 @@ function _result_margins(result, net)
         rb = get(get(result, "bus", Dict()), bus_id, nothing)
         rb isa Dict || continue
         terminals = String.(get(bus, "terminal_names", String[]))
-        grounded = Set(String.(get(bus, "perfectly_grounded_terminals", String[])))
-        neutral_term = findfirst(t -> lowercase(t) in ("n", "neutral"), terminals)
-        phases = [t for (idx, t) in enumerate(terminals)
-                  if !(t in grounded) && idx != neutral_term]
+        phases, neutral_term = _doe_bus_phase_terminals(net, bus, terminals)
         for (field, sense) in (("v_min", :lower), ("v_max", :upper))
             limits = get(bus, field, nothing)
             limits isa AbstractVector || continue
@@ -2903,10 +2923,10 @@ function _result_margins(result, net)
 
         vneg_max = get(bus, "vneg_max", nothing)
         if vneg_max isa Number && length(phases) == 3
-            vn = if neutral_term === nothing || !haskey(rb, terminals[neutral_term])
+            vn = if neutral_term === nothing || !haskey(rb, neutral_term)
                 0.0 + 0.0im
             else
-                rn = rb[terminals[neutral_term]]
+                rn = rb[neutral_term]
                 Float64(rn["vr"]) + im*Float64(rn["vi"])
             end
             V = ComplexF64[]
@@ -2954,16 +2974,19 @@ function _merge_margins(results_and_nets)
             end
         end
     end
-    tolerances = Dict("voltage"=>0.05, "thermal"=>0.01,
-                      "negative_sequence"=>0.01)
-    binding = [item[3] for (kind, item) in worst
-               if item[2] <= get(tolerances, kind, 0.0)]
+    # Activity is tested on the normalized margin. Comparing the physical
+    # margin against per-family constants would mix volts, amperes, and volts
+    # again, and would make the reported binding set depend on whether the case
+    # is expressed in volts or per unit.
+    binding = [item[3] for (_, item) in worst
+               if item[1] <= _DOE_BINDING_RELATIVE_TOLERANCE]
     sort!(binding)
     return Dict{String,Any}(
         "minimum_margins" => Dict(kind=>item[2] for (kind, item) in worst),
         "minimum_normalized_margins" =>
             Dict(kind=>item[1] for (kind, item) in worst),
         "minimum_margin_locations" => Dict(kind=>item[3] for (kind, item) in worst),
+        "binding_relative_tolerance" => _DOE_BINDING_RELATIVE_TOLERANCE,
         "binding_constraints" => binding)
 end
 
@@ -3676,6 +3699,7 @@ function _solve_interval_group(group, cps, policy;
         "minimum_margins"=>Dict{String,Float64}(),
         "minimum_normalized_margins"=>Dict{String,Float64}(),
         "minimum_margin_locations"=>Dict{String,String}(),
+        "binding_relative_tolerance"=>_DOE_BINDING_RELATIVE_TOLERANCE,
         "binding_constraints"=>String[])
     if feasible
         policy_control_values, policy_control_records = _doe_policy_control_values(
@@ -4415,6 +4439,8 @@ function evaluate_operating_envelope_coverage(
     weights_available = all(row.weight !== nothing for row in rows)
     weighted_frequency = missing
     weighted_conservative_frequency = missing
+    pooled_weighted_frequency = missing
+    pooled_weighted_conservative_frequency = missing
     if weights_available
         interval_estimates = Float64[]
         interval_conservative = Float64[]
@@ -4434,6 +4460,16 @@ function evaluate_operating_envelope_coverage(
             sum(interval_estimates) / length(interval_estimates)
         weighted_conservative_frequency =
             sum(interval_conservative) / length(interval_conservative)
+        resolved_weight_total = sum(Float64(row.weight) for row in rows
+                                    if row.status != :unresolved; init=0.0)
+        pooled_weighted_frequency = resolved_weight_total > 0 ?
+            sum(Float64(row.weight) for row in rows
+                if row.status == :candidate_violation) / resolved_weight_total :
+            missing
+        total_weight_all = sum(Float64(row.weight) for row in rows; init=0.0)
+        pooled_weighted_conservative_frequency = total_weight_all > 0 ?
+            sum(Float64(row.weight) for row in rows
+                if row.status != :passed) / total_weight_all : missing
     end
 
     hoeffding_upper = missing
@@ -4457,9 +4493,18 @@ function evaluate_operating_envelope_coverage(
         "empirical_candidate_context_frequency" => context_frequency,
         "conservative_scenario_frequency" =>
             conservative_scenario_frequency,
+        # Mean over intervals of the within-interval weighted frequency: a
+        # cluster estimator that treats each interval as the sampling unit and
+        # weights intervals equally regardless of how many scenarios they hold.
         "weighted_candidate_scenario_frequency" => weighted_frequency,
         "weighted_conservative_scenario_frequency" =>
             weighted_conservative_frequency,
+        # Ratio of summed weights across all intervals. Differs from the
+        # interval mean whenever intervals carry unequal total weight.
+        "pooled_weighted_candidate_scenario_frequency" =>
+            pooled_weighted_frequency,
+        "pooled_weighted_conservative_scenario_frequency" =>
+            pooled_weighted_conservative_frequency,
         "confidence" => confidence,
         "one_sided_hoeffding_upper_bound" => hoeffding_upper)
     diagnostics = Dict{String,Any}(
@@ -4472,6 +4517,7 @@ function evaluate_operating_envelope_coverage(
             :counted_as_candidate_in_conservative_rate_and_bound,
         "scenario_weights" => weights_available ? :declared_relative_weights :
             :not_available,
+        "weighted_frequency_estimator" => :interval_mean_of_within_interval_ratios,
         "issue_controls" => :replayed_when_available,
         "scenario_controls" => :adaptive_to_selected_scenario,
         "distribution_shift_assessed" => false,
@@ -4684,9 +4730,12 @@ function evaluate_doe_probability_calibration(
             (bin_observed - observed_frequency)^2
         expected_calibration_error += bin_weight / total_weight * abs(bin_gap)
         maximum_calibration_error = max(maximum_calibration_error, abs(bin_gap))
+        # Correct over the declared bins, not the realised non-empty ones. The
+        # latter is a random quantity, so using it would make the simultaneous
+        # level depend on the data it is meant to cover.
         radius = independence_assumption ? _doe_weighted_hoeffding_radius(
             Float64[row.weight for row in members],
-            (1 - confidence) / nonempty_bin_count) : missing
+            (1 - confidence) / (length(edges) - 1)) : missing
         push!(bin_rows, (
             bin=bin,
             lower=edges[bin],
@@ -4740,7 +4789,7 @@ function evaluate_doe_probability_calibration(
         "concentration_interval" => independence_assumption ?
             :weighted_hoeffding : :none,
         "bin_interval_multiplicity" => independence_assumption ?
-            :bonferroni_over_nonempty_bins : :not_applicable,
+            :bonferroni_over_declared_bins : :not_applicable,
         "forecast_temporality_verified" => false,
         "group_dependence_assessed" => false,
         "serial_dependence_assessed" => false,
@@ -5268,12 +5317,14 @@ function _doe_first_primes(count::Int)
     return primes
 end
 
-function _doe_radical_inverse(index::Int, base::Int)
+function _doe_radical_inverse(index::Int, base::Int,
+                              permutation::Union{Nothing,Vector{Int}}=nothing)
     value = 0.0
     factor = 1.0 / base
     remaining = index
     while remaining > 0
         digit = remaining % base
+        permutation === nothing || (digit = permutation[digit + 1])
         value += digit * factor
         remaining ÷= base
         factor /= base
@@ -5281,26 +5332,114 @@ function _doe_radical_inverse(index::Int, base::Int)
     return value
 end
 
+# Deterministic digit permutations for scrambled Halton. Plain Halton is badly
+# equidistributed once the per-dimension base exceeds the sample count: for
+# `index < base` the radical inverse is exactly `index / base`, so the
+# high-index coordinates of a short sequence collapse onto a narrow band near
+# zero and become strongly correlated with each other. Scrambling restores
+# stratification while keeping the point set reproducible from `seed`.
+function _doe_halton_permutations(bases::Vector{Int}, seed::Int)
+    rng = Random.MersenneTwister(seed)
+    return [Random.shuffle!(rng, collect(0:(base - 1))) for base in bases]
+end
+
+# Utilization points on the faces of the hypercube adjacent to the simultaneous
+# bound point: every way of dropping 1..`depth` participants to zero while the
+# remainder stay at their issued limit. This is the family in which published
+# partial-utilization counterexamples occur, and it grows polynomially
+# (`sum(binomial(n, k) for k in 1:depth)`) rather than as `2^n`.
+function _doe_dropout_points(participant_count::Int, depth::Int)
+    points = Vector{Vector{Float64}}()
+    depth <= 0 && return points
+    for size in 1:min(depth, participant_count)
+        for dropped in _doe_index_subsets(participant_count, size)
+            point = ones(Float64, participant_count)
+            for index in dropped
+                point[index] = 0.0
+            end
+            push!(points, point)
+        end
+    end
+    return points
+end
+
+# Ordered index subsets of a fixed size (lexicographic), dependency-free.
+function _doe_index_subsets(n::Int, k::Int)
+    k == 0 && return [Int[]]
+    k > n && return Vector{Int}[]
+    subsets = Vector{Int}[]
+    current = collect(1:k)
+    while true
+        push!(subsets, copy(current))
+        position = k
+        while position >= 1 && current[position] == n - k + position
+            position -= 1
+        end
+        position == 0 && break
+        current[position] += 1
+        for next in (position + 1):k
+            current[next] = current[next - 1] + 1
+        end
+    end
+    return subsets
+end
+
+"""
+    doe_dropout_utilizations(participant_count, depth=1)
+
+Utilization vectors on the hypercube faces adjacent to the simultaneous bound
+point: every way of dropping `1..depth` participants to zero while the
+remainder stay at their issued limit, ordered by the number dropped.
+
+This is the family in which published partial-utilization counterexamples
+occur — a customer whose export falls below its allocation can raise the
+voltage of another phase through mutual and neutral coupling — and it grows as
+`sum(binomial(n, k) for k in 1:depth)` rather than as `2^n`. Pass the result as
+`utilizations` to [`verify_operating_envelope`](@ref) to trace how a violation
+depends on the number of participants that back off.
+"""
+doe_dropout_utilizations(participant_count::Int, depth::Int=1) =
+    _doe_dropout_points(participant_count, depth)
+
 function _doe_search_points(participant_count::Int, samples::Int,
                             sequence_offset::Int;
                             include_zero, include_bound, include_corners,
-                            max_exact_corners)
+                            max_exact_corners,
+                            dropout_depth::Int=0,
+                            max_dropout_points::Int=4096,
+                            halton_scramble_seed::Union{Nothing,Int}=nothing)
     participant_count >= 1 || throw(ArgumentError(
         "utilization search needs at least one participant"))
     samples >= 0 || throw(ArgumentError("samples must be non-negative"))
     sequence_offset >= 0 || throw(ArgumentError(
         "sequence_offset must be non-negative"))
+    dropout_depth >= 0 || throw(ArgumentError(
+        "dropout_depth must be non-negative"))
+    max_dropout_points >= 0 || throw(ArgumentError(
+        "max_dropout_points must be non-negative"))
+    halton_scramble_seed === nothing || halton_scramble_seed >= 0 ||
+        throw(ArgumentError("halton_scramble_seed must be non-negative"))
     include_corners && participant_count > max_exact_corners &&
         throw(ArgumentError(
             "include_corners=true requires participant count <= max_exact_corners"))
+    dropout_points = _doe_dropout_points(participant_count, dropout_depth)
+    length(dropout_points) > max_dropout_points && throw(ArgumentError(
+        "dropout_depth=$dropout_depth on $participant_count participants " *
+        "generates $(length(dropout_points)) points > " *
+        "max_dropout_points=$max_dropout_points"))
     points = Vector{Vector{Float64}}()
     include_zero && push!(points, zeros(participant_count))
     include_bound && push!(points, ones(participant_count))
     include_corners && append!(points,
         _dispatch_patterns(participant_count, :corners))
+    append!(points, dropout_points)
     bases = _doe_first_primes(participant_count)
+    permutations = halton_scramble_seed === nothing ? nothing :
+        _doe_halton_permutations(bases, halton_scramble_seed)
     for index in (sequence_offset + 1):(sequence_offset + samples)
-        push!(points, [_doe_radical_inverse(index, base) for base in bases])
+        push!(points, [_doe_radical_inverse(index, base,
+                permutations === nothing ? nothing : permutations[dimension])
+              for (dimension, base) in enumerate(bases)])
     end
     unique_points = Vector{Vector{Float64}}()
     seen = Set{Tuple}()
@@ -5313,10 +5452,28 @@ function _doe_search_points(participant_count::Int, samples::Int,
     return unique_points
 end
 
+# Provenance for the generated point set, including whether the Halton seed
+# budget is large enough to stratify the highest-base coordinate.
+function _doe_search_point_diagnostics(participant_count::Int, samples::Int;
+                                       dropout_depth::Int,
+                                       halton_scramble_seed)
+    max_base = participant_count >= 1 ?
+        last(_doe_first_primes(participant_count)) : 0
+    return Dict{String,Any}(
+        "dropout_depth" => dropout_depth,
+        "dropout_point_count" =>
+            length(_doe_dropout_points(participant_count, dropout_depth)),
+        "halton_maximum_base" => max_base,
+        "halton_scramble_seed" => halton_scramble_seed,
+        "halton_seed_stratified" =>
+            halton_scramble_seed !== nothing || samples >= max_base)
+end
+
 """
     search_operating_envelope_utilizations(nets, connection_points, capacities;
         samples=16, sequence_offset=0, include_zero=true,
-        include_bound=true, include_corners=false, kwargs...)
+        include_bound=true, include_corners=false, dropout_depth=0,
+        halton_scramble_seed=nothing, kwargs...)
 
 Screen an issued operating envelope at a deterministic Halton low-discrepancy
 set of continuous participant-utilisation vectors. The generated set is solved
@@ -5326,7 +5483,15 @@ constraints apply across the search points.
 The result is deliberately labelled `:search_stable`,
 `:candidate_counterexample`, or `:inconclusive`; this finite local-NLP search is
 not a robust-feasibility certificate. `sequence_offset` makes disjoint,
-reproducible batches possible. Remaining keywords are forwarded to
+reproducible batches possible.
+
+`dropout_depth` additionally seeds every point that drops 1..`dropout_depth`
+participants to zero while the remainder stay at their issued limit; it
+defaults to `0` here so that the screening sequence stays the documented
+space-filling set. Plain Halton loses stratification when the per-dimension
+base exceeds `samples`, so set `halton_scramble_seed` for more than a handful
+of participants; `diagnostics["halton_seed_stratified"]` records whether the
+generated seed budget was adequate. Remaining keywords are forwarded to
 [`verify_operating_envelope`](@ref).
 """
 function search_operating_envelope_utilizations(
@@ -5337,11 +5502,15 @@ function search_operating_envelope_utilizations(
         include_bound::Bool=true,
         include_corners::Bool=false,
         max_exact_corners::Int=10,
+        dropout_depth::Int=0,
+        max_dropout_points::Int=4096,
+        halton_scramble_seed::Union{Nothing,Int}=nothing,
         independent_replay::Bool=false,
         kwargs...)
     points = _doe_search_points(length(connection_points), samples,
         sequence_offset; include_zero, include_bound, include_corners,
-        max_exact_corners)
+        max_exact_corners, dropout_depth, max_dropout_points,
+        halton_scramble_seed)
     isempty(points) && throw(ArgumentError(
         "utilization search generated no points"))
     verification = verify_operating_envelope(
@@ -5373,6 +5542,8 @@ function search_operating_envelope_utilizations(
         "include_zero" => include_zero,
         "include_bound" => include_bound,
         "include_corners" => include_corners,
+        _doe_search_point_diagnostics(length(connection_points), samples;
+            dropout_depth, halton_scramble_seed)...,
         "candidate_context_count" => length(candidates),
         "unresolved_contexts_present" => unresolved,
         "global_certificate" => false,
@@ -5442,14 +5613,14 @@ end
 """
     search_operating_envelope_adversarial(
         nets, connection_points, capacities;
-        seed_samples=8, refinement_rounds=3, restarts=3,
+        seed_samples=8, dropout_depth=1, refinement_rounds=3, restarts=3,
         initial_step=0.25, step_decay=0.5, kwargs...)
 
-Search for unsafe partial utilization using deterministic Halton seeds followed
-by coordinate refinement around points with the least normalized voltage,
-thermal, or negative-sequence headroom. Every round jointly verifies the full
-accumulated point set, preserving the selected control-recourse policy and its
-non-anticipativity constraints.
+Search for unsafe partial utilization using deterministic Halton seeds and
+bound-point dropout faces, followed by coordinate refinement around points with
+the least normalized voltage, thermal, or negative-sequence headroom. Every
+round jointly verifies the full accumulated point set, preserving the selected
+control-recourse policy and its non-anticipativity constraints.
 
 The score is the negative of the smallest declared normalized constraint
 margin, maximized over intervals and scenarios for each utilization point.
@@ -5458,6 +5629,29 @@ unresolved contexts remain unscored and make the outcome inconclusive. Because
 each AC verification and the outer point search are local and finite, this
 function is a falsification heuristic, not the continuous
 violation-maximizing oracle or a robust certificate.
+
+# Reachability of the coordinate refinement
+
+Refinement moves one coordinate at a time and the step shrinks geometrically,
+so from the simultaneous bound point the deepest single-coordinate excursion it
+can ever reach is
+
+```
+1 - initial_step / (1 - step_decay)
+```
+
+which is `0.5` at the defaults. Vertices in which a participant backs off
+completely are therefore unreachable by refinement alone, and published
+partial-utilization counterexamples are of exactly that form. `dropout_depth`
+seeds those faces directly — every way of dropping 1..`dropout_depth`
+participants to zero, `sum(binomial(n, k) for k in 1:dropout_depth)` points —
+and defaults to `1` because falsification is this function's purpose. Raise
+`initial_step`, lower `step_decay`, or use `include_corners` when the interior
+between those faces also matters.
+
+Plain Halton seeds lose stratification once a per-dimension base exceeds
+`seed_samples`; set `halton_scramble_seed` for more than a handful of
+participants and check `diagnostics["halton_seed_stratified"]`.
 """
 function search_operating_envelope_adversarial(
         nets, connection_points::AbstractVector{ConnectionPoint}, capacities;
@@ -5467,6 +5661,9 @@ function search_operating_envelope_adversarial(
         include_bound::Bool=true,
         include_corners::Bool=false,
         max_exact_corners::Int=10,
+        dropout_depth::Int=1,
+        max_dropout_points::Int=4096,
+        halton_scramble_seed::Union{Nothing,Int}=nothing,
         refinement_rounds::Int=3,
         restarts::Int=3,
         initial_step::Float64=0.25,
@@ -5488,7 +5685,8 @@ function search_operating_envelope_adversarial(
 
     points = _doe_search_points(length(connection_points), seed_samples,
         sequence_offset; include_zero, include_bound, include_corners,
-        max_exact_corners)
+        max_exact_corners, dropout_depth, max_dropout_points,
+        halton_scramble_seed)
     isempty(points) && throw(ArgumentError(
         "adversarial search generated no seed points"))
     verifications = OperatingEnvelopeVerification[]
@@ -5562,9 +5760,18 @@ function search_operating_envelope_adversarial(
         worst_intervals[worst_index]
     diagnostics = Dict{String,Any}(
         "method" => :adaptive_coordinate_normalized_margin_search,
-        "seed_method" => :halton_low_discrepancy,
+        "seed_method" => dropout_depth > 0 ?
+            :halton_low_discrepancy_with_bound_point_dropouts :
+            :halton_low_discrepancy,
         "seed_samples" => seed_samples,
         "sequence_offset" => sequence_offset,
+        _doe_search_point_diagnostics(length(connection_points), seed_samples;
+            dropout_depth, halton_scramble_seed)...,
+        # Deepest single-coordinate value reachable from the bound point by
+        # refinement alone; `step_decay == 1` accumulates without bound and can
+        # therefore reach zero.
+        "refinement_reachable_depth_from_bound" => step_decay >= 1 ? 0.0 :
+            clamp(1 - initial_step / (1 - step_decay), 0.0, 1.0),
         "requested_refinement_rounds" => refinement_rounds,
         "completed_verification_rounds" => length(verifications),
         "restarts" => restarts,

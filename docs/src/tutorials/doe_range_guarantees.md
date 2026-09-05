@@ -126,9 +126,50 @@ corner_check.feasible
 corner_check.context_results[1]
 ```
 
-Several asymmetric corners violate the negative-sequence constraint. The same
-failure can be found without enumerating every corner by starting from the zero
-and upper points and refining around the most stressed point:
+Several asymmetric corners violate the negative-sequence constraint.
+
+## Trace the violation against the number of participants who back off
+
+Corner enumeration answers “is some corner unsafe?” but not “how much
+asymmetry does it take?”. The operationally meaningful question is what
+happens when participants simply do not use what they were issued — a customer
+whose PV is clouded, whose battery is charging, or whose inverter is offline.
+[`doe_dropout_utilizations`](@ref) generates exactly that family: every way of
+taking `1..depth` participants to zero while the remainder stay at the issued
+limit.
+
+```julia
+dropouts = doe_dropout_utilizations(length(cps), length(cps))
+
+dropout_check = verify_operating_envelope(
+    net, cps, bound;
+    utilizations=dropouts,
+    control_policy=PerfectRecourse())
+
+for (point, context) in zip(dropouts, dropout_check.context_results[1])
+    dropped = count(iszero, point)
+    println(dropped, " dropped → feasible=", context.feasible,
+            "  worst normalized margin=",
+            minimum(values(context.diagnostics["minimum_normalized_margins"])))
+end
+```
+
+The number of participants that back off is the natural x-axis for this
+network: a single dropout already breaks the phase symmetry that made the
+bound point safe, while dropping every participant returns to the trivially
+feasible zero point. Plotting the worst normalized margin against the dropout
+count gives a compact statement of what the issued box actually promises, and
+it is the shape reported in the published unbalanced-network counterexamples
+recorded in the [evidence register](../problems/doe_literature_evidence.md).
+
+This is `length(cps)` points at depth 1 and
+`sum(binomial(n, k) for k in 1:depth)` overall — polynomial, not `2^n`, so it
+remains available well past the point where `:corners` does not.
+
+## Search without enumerating
+
+The same failure can be found without enumerating anything, by seeding those
+dropout faces and then refining around the most stressed point:
 
 ```julia
 search = search_operating_envelope_adversarial(
@@ -146,9 +187,34 @@ search.worst_interval
 search.worst_context.utilization
 ```
 
-The first refinement evaluates points such as ``(0.5,1,1)``. Their unequal
-phase injections expose a failure hidden by the balanced bound point. The
-search retains both verification rounds and every normalized-headroom score.
+The seeded dropout faces ``(0,1,1)``, ``(1,0,1)`` and ``(1,1,0)`` are evaluated
+in the first round, and refinement then explores interior points such as
+``(0.5,1,1)``. Their unequal phase injections expose a failure hidden by the
+balanced bound point. The search retains every verification round and every
+normalized-headroom score.
+
+!!! warning "Refinement alone cannot reach a dropout face"
+    Coordinate refinement moves one coordinate at a time and the step shrinks
+    geometrically, so from the bound point the deepest single-coordinate
+    excursion it can ever reach is
+
+    ```
+    1 - initial_step / (1 - step_decay)
+    ```
+
+    which is `0.5` at the defaults and is reported as
+    `diagnostics["refinement_reachable_depth_from_bound"]`. A participant that
+    backs off *completely* is therefore outside the reach of refinement, which
+    is why `dropout_depth` defaults to `1` for this function and seeds those
+    faces directly. Raise `initial_step`, lower `step_decay`, or add
+    `include_corners` when the interior between the faces also matters.
+
+    The Halton seeds have a second budget limit: for a dimension whose prime
+    base exceeds `seed_samples`, the radical inverse is just `index / base`, so
+    those coordinates collapse into a narrow band near zero and correlate with
+    each other. Beyond a handful of participants, pass
+    `halton_scramble_seed` and check
+    `diagnostics["halton_seed_stratified"]`.
 
 Repeat the candidate from several deterministic OPF starts before presenting it
 as numerical evidence:

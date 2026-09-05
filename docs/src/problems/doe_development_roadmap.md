@@ -15,7 +15,7 @@ pointwise perfect recourse for reproducing anticipative formulations.
 |---|---|---|
 | Geometry | One-sided active-power allocation per connection | No paired import/export band or coupled P–Q region |
 | Network model | Nonlinear, unbalanced, neutral-explicit AC model | Fundamental-frequency steady state; local nonlinear solve |
-| Utilization coverage | Bound point, exact small-N corners, explicit points, Halton and margin-directed adaptive search | Finite search; no continuous nonlinear box certificate |
+| Utilization coverage | Bound point, exact small-N corners, bound-point dropout faces, explicit points, scrambled Halton and margin-directed adaptive search | Finite search; no continuous nonlinear box certificate. Coordinate refinement reaches only `1 - initial_step/(1 - step_decay)` from the bound point, so dropout faces are seeded rather than searched |
 | Exogenous uncertainty | Typed scenarios, Gaussian and box-conditioned draws, residual bootstrap, categorical materialization seam | Model validity and physical transforms remain caller responsibilities |
 | Control recourse | Issue, scenario, local-law, and context stages for supported controls | Arbitrary controls need registration; generator P/Q lacks a safe linked handle |
 | Validation | Per-context status, margins, fixed-control replay, candidate confirmation, multistart | Replay shares the formulation/solver family; no branch completeness or global bound |
