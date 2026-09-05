@@ -176,3 +176,21 @@ backend checks pass on Julia 1.12.6. All 20 checks in the new external-path
 example pass on both versions. Documentation builds with every example executed.
 The additional semantic/compilation scope is ready for review; automatic graph
 lowering of the complete AC controller remains outside the delivered support.
+
+## Bounds, relation semantics and illustrated model selection
+
+Next deliverable: specialize each use by its declared voltage domain and relation
+(equality, upper bound or lower bound). Expose an inspectable plan and retain
+bound assumptions as constraints. Use exact affine/supporting-line formulations
+when justified; retain requested smooth laws and distinguish hull relaxations.
+Compact C2 hinges may be eliminated exactly outside their transition bands;
+softplus tails may not be silently truncated. Keep an unspecialized option for
+controlled experiments and context-specific caches.
+
+Add reproducible scientific diagrams for global/local smoothing and curvature,
+bounds changing feasible-set geometry, contextual compilation, and the distinction
+between approximation error, residual bands and control-loop stopping criteria.
+Ground OpenDSS discussion in EPRI and DSS-Extensions documentation and explain
+local NLP/MPCC versus MILP/MICP/nonconvex MINLP solver capabilities. Worked scalar
+experiments demonstrate geometry and structural costs without presuming a winner
+for full nonconvex AC OPF. Full-controller graph conversion remains separate.
