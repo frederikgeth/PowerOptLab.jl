@@ -135,3 +135,58 @@ problem classes. [CCOpt](https://github.com/madsuite-org/CCOpt.jl) supplies the
 external algorithm; this layer supplies the encoding and physical diagnostics.
 Primitive hulls give useful outer relaxations, but a feasible hull point alone is
 not evidence of a realizable controller or a safe operating envelope.
+
+## Binary selectors and capability scale composition
+
+For a hinge surrogate `h` with signed error `[0,B]`, define
+
+```math
+M(a,b)=b+h(a-b),\qquad m(a,b)=a-h(a-b).
+```
+
+Then `0≤M-max(a,b)≤B` and `-B≤m-min(a,b)≤0`. For the algebraic family these are
+the familiar symmetric square-root selectors. At a tie, their bias is `±δ/2`.
+The built-in softplus and C2 families also provide upper hinges, with their own
+bounds. Fold order matters when combining more than two inputs; the existing
+three-phase controller preserves its binary fold order. A two-step fold's simple
+absolute bound is `2B` because hard min/max are 1-Lipschitz in each argument.
+
+An ordinary smooth minimum can be negative even when both inputs are zero. For
+nonnegative command scale factors, use a different operation:
+
+```math
+s(a,b)=\frac{ab}{M(a,b)},\qquad a,b\geq0.
+```
+
+An upper hinge with `h(0)>0` makes the denominator positive on this domain. Since
+`M≥max(a,b)`, `0≤s≤min(a,b)` and zero is preserved. To bound the deficit, suppose
+`a≤b`; then `a-s=a(M-b)/M≤M-b≤B`. Symmetry gives the other case. These facts
+explain both the error interval `[-B,0]` and the domain requirement. Custom
+families may use this selector when their declared hinge bounds and value at zero
+satisfy these assumptions; the declaration is not an automated proof.
+
+```@example selectors
+using PowerOptLab, JuMP, Ipopt
+rep = AlgebraicFormulation(.01)
+ordinary = selector_value(0.,0.,rep;kind=:min)
+protected = selector_value(0.,0.,rep;kind=:nonnegative_min)
+@assert ordinary < 0. && protected==0.
+@assert selector_contract(rep;kind=:nonnegative_min).error_lower == -.005
+m = Model(Ipopt.Optimizer)
+set_silent(m)
+@variable(m,x>=0,start=.2)
+@constraint(m,x==.2)
+s = selector_expression(m,x,.9,rep;kind=:nonnegative_min)
+@objective(m,Max,s)
+optimize!(m)
+@assert isapprox(value(s),selector_value(.2,.9,rep;kind=:nonnegative_min);atol=1e-8)
+nothing # hide
+```
+
+Expression builders assume the caller enforces the nonnegative domain. They do
+not add hidden constraints. `input_scale` and `output_scale` use the same physical
+coordinate convention as PWL builders. The symmetric clip is
+`m(x,L)+M(x,-L)-x` for `L≥0`. At a fixed limit its two signed errors give a bound
+`[-B,B]` relative to hard clipping; if `L` is itself approximate, its error must
+also be accounted for. Local selector bounds alone do not certify the feasibility
+of a complete capability allocator or AC network.

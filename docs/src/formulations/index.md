@@ -11,6 +11,7 @@ the mathematical models and the original illustrative backend comparison.
 |:--|:--|:--|
 | `SoftplusFormulation(width)` | Smooth surrogate graph, C∞ | BMOPFTools telescoping softplus |
 | `LocalC2Formulation(width)` | Smooth surrogate graph, C2 | Compact quartic hinge patches |
+| `AlgebraicFormulation(width)` | Smooth surrogate graph, C∞ | Square-root hinge; existing IBR selector family |
 | `ComplementarityGraph()` | Exact graph, subject to numerical MPCC tolerances | Native JuMP/MOI complementarity; external solver |
 | `ExactPWLGraph()` | Exact bounded segment graph, subject to numerical MIP tolerances | Optional PiecewiseLinearOpt extension |
 | `PWLConvexHull()` | Continuous convex hull of the bounded graph | Vertex convex combinations |

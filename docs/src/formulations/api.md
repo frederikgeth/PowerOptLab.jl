@@ -7,6 +7,7 @@ Use [the experiment tutorial](experiments.md) for a guided introduction.
 PWLFunction
 SoftplusFormulation
 LocalC2Formulation
+AlgebraicFormulation
 ComplementarityGraph
 PWLConvexHull
 ExactPWLGraph
@@ -21,6 +22,12 @@ AbstractPWLSmoothing
 hinge_value
 hinge_derivatives
 hinge_contract
+hinge_expression
+selector_value
+selector_expression
+selector_contract
+symmetric_clip_value
+symmetric_clip_expression
 smoothing_for_error
 smooth_pwl_expression
 MagnitudeApproximation

@@ -110,3 +110,42 @@ accepted as `PiecewiseLinearLaw` smooth families. Their use changes the problem
 class. The scalar case already supports these objects; a researcher extending
 an AC controller should build and document the graph coupling explicitly and
 select a backend capable of the resulting nonlinear/integer/MPCC model.
+
+## What the advanced IBR refactor shares
+
+The production controller equations now call the same primitive layer used by
+standalone experiments. The following table identifies the physical role of each
+construction; these roles explain why one smoothing family should not simply be
+substituted for every square root in a model.
+
+| Operation in the existing IBR model | Shared construction | Preserved interpretation |
+|:--|:--|:--|
+| Volt-watt, volt-var and unbalance gain curves | `smooth_pwl_expression` / `primitive_value` | Selected family and flat tails; legacy softplus default |
+| Phase extrema, available-power minimum and positive/negative conflict branches | `selector_expression` / `selector_value` with `AlgebraicFormulation` | Existing physical widths and binary operation order |
+| Symmetric P/Q priority clipping | `symmetric_clip_expression` / `symmetric_clip_value` | Existing clipping formula |
+| Composition of successive capability scale factors | `selector_expression(...; kind=:nonnegative_min)` | Zero-preserving, nonnegative under-approximation of the minimum |
+| Current, apparent-power and ripple capability denominators | `MagnitudeApproximation(...; direction=:upper)` | Avoid creating headroom through magnitude underestimation |
+| Negative-sequence voltage signal | `MagnitudeApproximation(...; direction=:lower)` | Zero at balance, existing eta error budget |
+| Advanced inverter linear-current loss | `MagnitudeApproximation(...; direction=:lower)` | Existing per-leg ampere budget and loss deficit bound |
+
+The physical squared capability constraints, sequence transformations, voltage
+floors, plant-aware allocation and controller tie/conflict policies remain
+controller/plant logic. The shared layer does not infer these semantics. Named
+BMOPFTools differentiability annotations are retained for the shifted norms, and
+normalized auxiliary rows still prevent repeated expression expansion.
+
+Per-curve smoothing families and existing width/rating settings remain
+configurable. Selectors in the established controller retain their algebraic
+family. The public selector builders support softplus, local C2 and custom hinge
+families for experiments; changing the entire controller's selector family would
+require an explicit policy change and assessment of its composed behavior.
+
+### Why some roots remain exact and implicit
+
+Phase/positive-sequence voltage magnitudes and P/Q priority headroom retain their
+nonnegative implicit roots. Replacing `u²=radicand, u≥0` by a shifted norm changes
+the quantity; replacing it by `positive_root_expression` imposes a positive
+radicand floor. Neither is an algebraically neutral refactor. At zero the implicit
+root may be degenerate, so this preservation is not a claim that all numerical
+conditioning issues are solved. Use a domain restriction only when it is part of
+the intended physical/control model, and document it as such.

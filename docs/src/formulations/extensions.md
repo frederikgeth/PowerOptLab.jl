@@ -15,6 +15,9 @@ Its derivatives are `(1+x/sqrt(x²+δ²))/2` and
 `δ²/(2(x²+δ²)^(3/2))`. Subtracting `max(0,x)` gives
 `(sqrt(x²+δ²)-|x|)/2`, which lies in `[0,δ/2]`. The maximum second derivative is
 `1/(2δ)`. Unlike the compact patch, this family changes the hinge everywhere.
+This family is available as `AlgebraicFormulation`. The following small
+reimplementation is pedagogical: it shows every extension method a researcher
+would supply when staging a different family.
 
 ```@example extension
 using PowerOptLab, JuMP, Ipopt

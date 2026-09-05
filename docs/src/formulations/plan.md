@@ -81,9 +81,9 @@ certification, a new MPCC/global solver, and general multivariate spline fitting
 are outside this delivery. Composition, stationarity and equilibrium estimates
 must state what they actually assess. Reuse external solver and graph libraries.
 
-## Next increment: shared primitives in advanced IBR controls
+## Additional increment: shared primitives in advanced IBR controls
 
-The PWL integration is complete. The next refactor moves the existing algebraic
+The PWL integration is complete. This refactor moves the existing algebraic
 min/max/positive-part/clip operations and purpose-specific controller norms onto
 shared primitives. Preserve established physical widths, upper-versus-lower norm
 direction, exact hardware inequalities, expression sharing and default control
@@ -95,6 +95,19 @@ Add focused derivative, scaling and same-state numeric/stamped comparisons; run
 the existing inverter accuracy regressions. Document precisely which operations
 are shared and which remain domain-specific. Commit working increments, then
 request the user's review once these changes and the current A–D scope are ready.
+
+Implementation is now delivered: algebraic hinge/selector/clip builders and their
+signed contracts; shared controller extrema, capability norms and scale
+composition; shifted unbalance and advanced-inverter loss norms backed by
+BMOPFTools. Existing physical widths, exact roots, two-component norm provenance
+and hardware constraints are preserved. The controller tutorial includes an
+operation-by-operation integration map and explains the remaining domain logic.
+Sixty focused selector checks, the existing controller start/base regressions and
+the advanced inverter tests pass on Julia 1.10.11 and 1.12.6. All tutorials execute
+in the documentation build. The final Julia 1.12.6 complete suite passes 5,238
+functional assertions plus package-quality checks. This completes the additional
+IBR increment and is the review point for the current branch scope. Engine
+migration and broader research campaigns remain separate work.
 
 ## Existing foundation
 
