@@ -823,7 +823,9 @@ using SparseArrays
     end
 
     q_only_net = single_bus_net(pload=0.0)
-    q_only_net["load"]["ld1"]["p_nom"] = Float64[]
+    # The upstream load contract requires one P and Q entry per coil. A
+    # reactive-only load declares zero active power rather than a missing coil.
+    q_only_net["load"]["ld1"]["p_nom"] = [0.0]
     q_only_net["load"]["ld1"]["q_nom"] = [100.0]
     q_only_pf = solve_pf(q_only_net; per_unit=false)
     q_only_report = check_opf_operability(q_only_net, q_only_pf;
