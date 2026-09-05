@@ -159,3 +159,20 @@ focused semantics/domain/reuse checks, existing formulation/controller checks,
 all documentation examples and optional solver integration. Whole-controller MIP
 or MPCC compilation and general expression-graph optimization remain future
 extensions, rather than being implied by scalar graph support.
+
+
+Delivered in `c9db213`, `c42c7d5` and `0090fd0`: semantic intent, independent
+encodings, full smooth-policy lowering, bounded curve ports, prepared hinge data,
+model-local reuse and an executable compilation guide. The new tutorial compares
+three smooth families with Ipopt/MadNLP, exact graph/hull with HiGHS and external
+CCOpt. It preserves the distinction between a small physical residual and a
+strict solver success. Optional CI now executes and exports this example.
+
+Validation: the complete Julia 1.12.6 regression run passes 5,325 functional
+assertions plus 11 package-quality checks. The final mutable-input audit safeguard
+is covered by 89 focused checks passing on Julia 1.10.11 and 1.12.6. The 1,135
+existing primitive/model checks pass on Julia 1.10.11; the 231 existing optional
+backend checks pass on Julia 1.12.6. All 20 checks in the new external-path
+example pass on both versions. Documentation builds with every example executed.
+The additional semantic/compilation scope is ready for review; automatic graph
+lowering of the complete AC controller remains outside the delivered support.
