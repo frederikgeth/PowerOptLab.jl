@@ -194,3 +194,24 @@ Ground OpenDSS discussion in EPRI and DSS-Extensions documentation and explain
 local NLP/MPCC versus MILP/MICP/nonconvex MINLP solver capabilities. Worked scalar
 experiments demonstrate geometry and structural costs without presuming a winner
 for full nonconvex AC OPF. Full-controller graph conversion remains separate.
+
+Delivered: inspectable scalar relation plans; exact affine, concave-hypograph and
+convex-epigraph specialization; compact C2 patch elimination with faithful
+softplus retention; domain constraints preserving assumptions; shared physical
+plans and occurrence-specific blocks. Candidate audits distinguish slack limits
+from tracking residuals and expose auxiliary graph/complementarity evidence.
+
+Four reproducible SVG/PDF diagrams and two executable tutorials cover bounds,
+relation geometry, smoothing locality/curvature, OpenDSS stopping semantics,
+intentional residual bands, solver classes and fair experiment design. A norm/conic
+rewrite is derived pedagogically and clearly marked as future compiler support.
+Optional CI includes LP/MILP relation comparisons and MPCC characterization.
+
+Validation: the full Julia 1.12.6 run passed 5,842 functional assertions plus 11
+package-quality checks. Final physical-plan sharing is covered by 518 focused
+checks passing on Julia 1.10.11 and 1.12.6; final graph-audit metadata and external
+paths pass 108 checks on each version. All documentation examples execute in the
+successful build; every diagram was visually inspected. Model-size counts are
+reported without treating them as solve-speed evidence. This scope is ready for
+review, with general network bound propagation and whole-controller MIP/MPCC or
+conic rewriting explicitly outside the implemented frontend.
