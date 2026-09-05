@@ -28,6 +28,7 @@ if _HAS_ODS
 end
 
 @testset "PowerOptLab" begin
+    include("function_formulation_tests.jl")
     include("multiperiod_tests.jl")
     include("ev_tests.jl")
     include("state_estimation_tests.jl")

@@ -100,6 +100,10 @@ include("interfaces.jl")
 # BMOPFTools 0.1.0 does not yet expose publicly.
 include("upstream.jl")
 
+# Experimental function semantics and alternative optimization representations.
+include("formulations/primitives.jl")
+include("formulations/jump.jl")
+
 # Component models — new network elements stamped via model_hook! / solution_hook!
 include("components/devices.jl")
 include("components/advanced_inverter.jl")
@@ -125,6 +129,11 @@ include("problems/operability.jl")
 include("algorithms/pade.jl")
 include("algorithms/helm.jl")
 include("algorithms/operability_continuation.jl")
+
+# Function formulations
+export PWLFunction, SoftplusFormulation, LocalC2Formulation, ComplementarityGraph,
+       PWLConvexHull, ExactPWLGraph, primitive_value, primitive_derivatives,
+       formulation_contract, PWLFormulationHandle, formulate_pwl!, audit_pwl
 
 # Shared extension interfaces
 export AbstractDevice, AbstractMeasurement, AbstractSolveResult

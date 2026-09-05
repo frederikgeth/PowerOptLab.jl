@@ -18,7 +18,14 @@ SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 [sources]
 BMOPFTools = {url = "https://github.com/frederikgeth/BMOPFTools.jl", rev = "5b51d2f361dab91bd7c16711019584407da79ed8"}
 
+[weakdeps]
+PiecewiseLinearOpt = "0f51c51e-adfa-5141-8a04-d40246b8977c"
+
+[extensions]
+PowerOptLabPiecewiseLinearOptExt = "PiecewiseLinearOpt"
+
 [compat]
+PiecewiseLinearOpt = "0.4"
 Aqua = "0.8"
 BMOPFTools = "=0.1.0"
 Dates = "1"
