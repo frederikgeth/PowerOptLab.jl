@@ -271,3 +271,20 @@ function audit_pwl_relation(h::PWLRelationHandle)
         domain_violation=max(lo-x,x-hi,0.),strategy=h.plan.strategy,semantics=h.plan.semantics,
         graph_audit=h.graph===nothing ? nothing : audit_pwl(h.graph))
 end
+
+function _formulation_observation(h::PWLRelationHandle)
+    f,r = h.plan.curve,h.plan.formulation
+    # A projected hull relation can be exact even though the auxiliary graph is
+    # relaxed. Never overwrite relation semantics with the graph's contract.
+    merge(audit_pwl_relation(h),
+        (observation_kind=:relation,relation=h.plan.relation,
+         domain=h.plan.domain,shape=h.plan.shape,reason=h.plan.reason,
+         active_hinges=length(h.plan.active_hinges),
+         formulation_type=r===:auto ? "auto" : string(typeof(r)),
+         approximation_contract=r isa AbstractPWLSmoothing ? formulation_contract(f,r) : nothing,
+         graph_method=r isa ExactPWLGraph ? r.method : nothing,
+         complementarity_scale=h.graph===nothing ? nothing : h.graph.complementarity_scale,
+         input_scale=h.input_scale,output_scale=h.output_scale,
+         curve=(breakpoints=f.breakpoints,values=f.values,
+                input_unit=f.input_unit,output_unit=f.output_unit)))
+end

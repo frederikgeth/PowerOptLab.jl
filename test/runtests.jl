@@ -33,6 +33,7 @@ end
     include("formulation_research_tests.jl")
     include("control_lowering_tests.jl")
     include("relation_lowering_tests.jl")
+    include("formulation_observation_tests.jl")
     include("selector_primitive_tests.jl")
     include("multiperiod_tests.jl")
     include("ev_tests.jl")

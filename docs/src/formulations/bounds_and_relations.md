@@ -137,8 +137,8 @@ rows=BoundedRelationExample.run()
 @assert all(r->r["run_status"] in ("finished","unsupported"),rows)
 @assert all(r->r["run_status"]=="unsupported" || r["strict_solver_success"],rows)
 [(r["method"],r["configuration"].upper_V,r["configuration"].relation,
-  r["configuration"].specialize,r["variables"],r["metrics"].strategy,
-  r["metrics"].canonical_violation)
+  r["configuration"].specialize,r["variables"],only(r["observations"]).strategy,
+  only(r["observations"]).canonical_violation)
  for r in rows if r["run_status"]=="finished" && r["configuration"].specialize]
 ```
 
@@ -206,8 +206,6 @@ volt-var/watt budgets additionally depend on slope changes. See the
 [smoothing contracts](error_budgets.md), Chen and Mangasarian's
 [smoothing framework](https://doi.org/10.1007/BF00249052), and
 [BMOPFTools' smooth-droop note](https://github.com/frederikgeth/BMOPFTools.jl/blob/main/docs/src/relu_softplus_encoding.md).
-We use the latter's progression from curve to derivatives and numerical
-implementation, while distinguishing approximation error from solver robustness.
 
 ## Voltage magnitude and the rest of OPF
 

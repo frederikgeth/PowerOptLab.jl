@@ -1,6 +1,6 @@
 # Build your own formulation experiment
 
-Start here to use the toolkit. Read [the mathematical models](index.md) next,
+Start here to use the toolkit. Read [the mathematical models](theory.md) next,
 then [physical error and conditioning](error_budgets.md). The
 [controller tutorial](controllers.md) connects these ideas to the existing
 three-phase inverter. [Extension methods](extensions.md) let you add a family
@@ -58,6 +58,23 @@ Here the model coordinate `v` represents `230*v` volts; `h.output` represents
 `input_scale`, `output_scale`, `start_input`, `resistance`, or `objective=:zero`
 when those changes answer your question. Coordinate changes preserve the intended
 mathematical equations but can affect floating-point solver behavior.
+
+## Graph and relation observations
+
+Return graph handles, relation handles, or both in `observations`. Every handle
+must belong to the returned model. The runner records canonical curve data and
+units, physical coordinate scales, the domain and candidate residuals.
+`observation_kind` distinguishes graph and relation records.
+
+Graph records retain `exact_graph_error` and their formulation `contract`.
+Relation records instead include `relation`, `strategy`, `semantics`, a signed
+`canonical_residual` and a nonnegative `canonical_violation`. Negative residual
+for an upper limit is valid slack. A smooth relation also records its
+`approximation_contract`; an auxiliary `graph_audit` is separate from the relation
+check. In particular, an exact projected hull limit must not be labeled a relaxed
+relation merely because its auxiliary can lie off the curve. See the
+[bounded volt-watt experiment](bounds_and_relations.md) for executable examples.
+Use custom `metrics` for circuit, plant or study-specific quantities.
 
 ## Assess evidence without rewriting solver status
 
@@ -135,7 +152,7 @@ randomization and performance statistics are choices for a study, not automatic
 claims made by this runner.
 
 For exact graph or MPCC methods, use the optional environment described in
-[the backend comparison](index.md). `FormulationMethod(...; configure! =
+[the backend comparison](theory.md). `FormulationMethod(...; configure! =
 MathOptComplements.Bridges.add_all_bridges)` can install the CCOpt bridges before
 attaching `CCOpt.Optimizer`. Use `ComplementarityGraph(scale=...)` to choose hinge
 normalization independently of voltage coordinates. Preserve physical graph and

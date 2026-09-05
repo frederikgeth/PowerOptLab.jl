@@ -49,11 +49,11 @@ end
             @test r["method"]=="auto"
         else
             @test r["strict_solver_success"]
-            @test r["metrics"].domain_violation<1e-6
-            if r["metrics"].semantics==:exact_relation
-                @test r["metrics"].canonical_violation<1e-6
+            @test only(r["observations"]).domain_violation<1e-6
+            if only(r["observations"]).semantics==:exact_relation
+                @test only(r["observations"]).canonical_violation<1e-6
             elseif r["configuration"].upper_V==270.
-                @test r["metrics"].output ≈ 5/6 atol=1e-6
+                @test only(r["observations"]).output ≈ 5/6 atol=1e-6
             end
         end
     end
@@ -80,6 +80,6 @@ end
     @test r["run_status"]=="finished"
     @test haskey(r,"candidate_available")
     if r["candidate_available"]
-        @test haskey(r["metrics"].graph_audit,:complementarity_product)
+        @test haskey(only(r["observations"]).graph_audit,:complementarity_product)
     end
 end

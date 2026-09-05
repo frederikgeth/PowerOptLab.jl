@@ -2,7 +2,7 @@
     FormulationCase(id, build; metadata=NamedTuple())
 
 A researcher-defined case. `build(representation, configuration)` returns a named
-record with `model::JuMP.Model`, optional `observations` (PWL handles), and optional
+record with `model::JuMP.Model`, optional `observations` (graph or relation handles belonging to that model), and optional
 `metrics` (a zero-argument callback returning a dictionary/named tuple). Each run
 must build a fresh model. Cases may represent primitives, inverters, feeders or DOEs.
 """
@@ -108,14 +108,11 @@ function run_formulation_experiment(cases,methods;configurations=[NamedTuple()],
                 row["solver_detail_errors"] = detail_errors
                 row["run_status"] = "finished"
                 if row["candidate_available"]
-                    row["observations"] = [merge(audit_pwl(h),
-                        (contract=formulation_contract(h.curve,h.formulation),
-                         formulation_type=string(typeof(h.formulation)),
-                         input_scale=h.input_scale,output_scale=h.output_scale,
-                         domain=h.domain,
-                         complementarity_scale=h.complementarity_scale,
-                         curve=(breakpoints=h.curve.breakpoints,values=h.curve.values)))
-                        for h in get(payload,:observations,())]
+                    row["observations"] = [begin
+                        h.model === model || throw(ArgumentError(
+                            "Observation handle belongs to a different model"))
+                        _formulation_observation(h)
+                    end for h in get(payload,:observations,())]
                     row["metrics"] = haskey(payload,:metrics) ? payload.metrics() : NamedTuple()
                 end
             end
@@ -176,4 +173,15 @@ function write_formulation_results(path::AbstractString,rows;metadata=NamedTuple
         TOML.print(io,data;sorted=true)
     end
     return abspath(path)
+end
+
+# Keep graph records compatible while allowing occurrence-specific relation audits.
+function _formulation_observation(h::PWLFormulationHandle)
+    merge(audit_pwl(h),
+        (observation_kind=:graph,contract=formulation_contract(h.curve,h.formulation),
+         formulation_type=string(typeof(h.formulation)),
+         input_scale=h.input_scale,output_scale=h.output_scale,domain=h.domain,
+         complementarity_scale=h.complementarity_scale,
+         curve=(breakpoints=h.curve.breakpoints,values=h.curve.values,
+                input_unit=h.curve.input_unit,output_unit=h.curve.output_unit)))
 end

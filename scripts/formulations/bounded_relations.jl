@@ -11,9 +11,7 @@ function case()
             relation=c.relation,formulation=rep,input_scale=230.,specialize=c.specialize,
             domain=(c.lower_V,c.upper_V))
         @objective(m,Max,p)
-        (model=m,metrics=()->merge(audit_pwl_relation(h),
-            (shape=h.plan.shape,domain=h.plan.domain,reason=h.plan.reason,
-             relation=h.plan.relation,active_hinges=length(h.plan.active_hinges))))
+        (model=m,observations=[h])
     end)
 end
 function run(optimizer=Ipopt.Optimizer;options=(tol=1e-9,),graphs=false)
@@ -37,7 +35,7 @@ if abspath(PROGRAM_FILE)==@__FILE__
     using .BoundedRelationExample,PowerOptLab
     rows=BoundedRelationExample.run()
     for r in rows
-        println(r["method"]," ",r["configuration"],": ",r["run_status"]," ",get(r,"metrics",nothing))
+        println(r["method"]," ",r["configuration"],": ",r["run_status"]," ",get(r,"observations",nothing))
     end
     haskey(ENV,"POL_FORMULATION_RESULTS") && write_formulation_results(
         ENV["POL_FORMULATION_RESULTS"],rows;sources=[@__FILE__])
