@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="360" viewBox="0 0 960 360" role="img" aria-labelledby="title desc">
+  <title id="title">Operating-point and range claims inside a feasible region</title>
+  <desc id="desc">Three panels distinguish a feasible bound point, an unsafe advertised box, and a contained decoupled box inside a coupled feasible region.</desc>
+  <rect width="960" height="360" fill="#ffffff"/>
+  <style>
+    .title{font:600 18px sans-serif;fill:#172033}.label{font:15px sans-serif;fill:#172033}.small{font:13px sans-serif;fill:#44506a}
+    .axis{stroke:#8892a6;stroke-width:1.5}.region{fill:#dceeff;stroke:#2878b5;stroke-width:2}.box{fill:#ffd9d4;fill-opacity:.72;stroke:#c43d35;stroke-width:2}.safe{fill:#d9f2df;fill-opacity:.78;stroke:#278245;stroke-width:2}.point{fill:#6f42c1;stroke:#fff;stroke-width:2}
+  </style>
+  <text x="480" y="28" text-anchor="middle" class="title">The DOE label does not determine the guarantee</text>
+  <g transform="translate(35,55)">
+    <text x="135" y="18" text-anchor="middle" class="title">1. Feasible bound point</text>
+    <line x1="35" y1="260" x2="270" y2="260" class="axis"/><line x1="35" y1="260" x2="35" y2="45" class="axis"/>
+    <path d="M45 238 C72 130 128 62 215 55 C262 86 268 155 238 215 C190 250 105 258 45 238 Z" class="region"/>
+    <circle cx="208" cy="92" r="8" class="point"/>
+    <text x="214" y="82" class="small">tested point</text><text x="155" y="292" text-anchor="middle" class="label">participant 1</text>
+    <text x="13" y="160" transform="rotate(-90 13 160)" text-anchor="middle" class="label">participant 2</text>
+  </g>
+  <g transform="translate(345,55)">
+    <text x="135" y="18" text-anchor="middle" class="title">2. Unsafe advertised box</text>
+    <line x1="35" y1="260" x2="270" y2="260" class="axis"/><line x1="35" y1="260" x2="35" y2="45" class="axis"/>
+    <path d="M45 238 C72 130 128 62 215 55 C262 86 268 155 238 215 C190 250 105 258 45 238 Z" class="region"/>
+    <rect x="35" y="92" width="173" height="168" class="box"/>
+    <circle cx="208" cy="92" r="8" class="point"/>
+    <text x="125" y="287" text-anchor="middle" class="small">some allowed points leave the feasible region</text>
+  </g>
+  <g transform="translate(655,55)">
+    <text x="135" y="18" text-anchor="middle" class="title">3. Contained decoupled box</text>
+    <line x1="35" y1="260" x2="270" y2="260" class="axis"/><line x1="35" y1="260" x2="35" y2="45" class="axis"/>
+    <path d="M45 238 C72 130 128 62 215 55 C262 86 268 155 238 215 C190 250 105 258 45 238 Z" class="region"/>
+    <rect x="65" y="135" width="125" height="105" class="safe"/>
+    <text x="128" y="183" text-anchor="middle" class="label">independent</text><text x="128" y="202" text-anchor="middle" class="label">range</text>
+    <text x="145" y="287" text-anchor="middle" class="small">containment needs evidence beyond one point</text>
+  </g>
+</svg>
