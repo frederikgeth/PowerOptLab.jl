@@ -56,6 +56,12 @@ struct LocalC2Formulation <: AbstractPWLSmoothing
     LocalC2Formulation(width::Real) = new(_positive_width(width))
 end
 
+"""`AlgebraicFormulation(width)` uses the C∞ hinge `(x + sqrt(x² + width²))/2`, with physical input width. This is the established algebraic family used by inverter-control selectors."""
+struct AlgebraicFormulation <: AbstractPWLSmoothing
+    width::Float64
+    AlgebraicFormulation(width::Real) = new(_positive_width(width))
+end
+
 """`ComplementarityGraph(; scale=nothing)` encodes an exact graph with MOI complementarity. `scale` normalizes hinge variables in physical input units independently of network coordinates; `nothing` retains legacy input-scale normalization."""
 struct ComplementarityGraph <: AbstractPWLFormulation
     scale::Union{Nothing,Float64}
@@ -116,6 +122,11 @@ _pwl_smooth(f, x, r::AbstractPWLSmoothing) = first(f.values) + sum(
 """`hinge_value(x, smoothing)` evaluates the smooth approximation to max(0,x). Extension method for new families."""
 function hinge_value end
 hinge_value(x,r::LocalC2Formulation) = _c2_hinge(x,r.width)
+function hinge_value(x,r::AlgebraicFormulation)
+    root = hypot(x,r.width)
+    # Rationalize the negative tail to avoid subtractive cancellation.
+    return x>=0 ? x/2+root/2 : (r.width/2)*(r.width/(root-x))
+end
 # The PWL softplus value path delegates directly to BMOPFTools; this scalar
 # identity is stable and useful for independently inspecting its hinge family.
 function hinge_value(x,r::SoftplusFormulation)
@@ -127,6 +138,10 @@ end
 function hinge_derivatives end
 hinge_derivatives(x,r::LocalC2Formulation) = _c2_hinge_derivatives(x,r.width)
 hinge_derivatives(x,r::SoftplusFormulation) = _softplus_hinge_derivatives(x,r.width)
+function hinge_derivatives(x,r::AlgebraicFormulation)
+    root = hypot(x,r.width)
+    return ((1+x/root)/2,(r.width/root)^2/(2root))
+end
 
 """
     hinge_contract(smoothing)
@@ -140,6 +155,8 @@ hinge_contract(r::SoftplusFormulation) = (error_lower=0.,error_upper=r.width*log
     regularity=:C_infinity,width=r.width,second_derivative_bound=1/(4r.width))
 hinge_contract(r::LocalC2Formulation) = (error_lower=0.,error_upper=3r.width/16,
     regularity=:C2,width=r.width,second_derivative_bound=3/(4r.width))
+hinge_contract(r::AlgebraicFormulation) = (error_lower=0.,error_upper=r.width/2,
+    regularity=:C_infinity,width=r.width,second_derivative_bound=1/(2r.width))
 
 """
     primitive_value(curve, x[, formulation])
@@ -218,7 +235,7 @@ function formulation_contract(f::PWLFunction, r::AbstractPWLFormulation)
 end
 
 """
-    smoothing_for_error(curve, SoftplusFormulation_or_LocalC2Formulation, budget)
+    smoothing_for_error(curve, family, budget)
 
 Choose a physical input width from a positive absolute output-error budget using
 signed slope-change sums. This controls function approximation, not solver or
@@ -226,7 +243,7 @@ network error. A constant curve needs no smoothing and requires an explicit widt
 if a smoothing object is still desired. Custom families can extend this method.
 """
 function smoothing_for_error(f::PWLFunction, family::Type{<:AbstractPWLSmoothing}, budget::Real)
-    family in (SoftplusFormulation,LocalC2Formulation) ||
+    family in (SoftplusFormulation,LocalC2Formulation,AlgebraicFormulation) ||
         throw(ArgumentError("Custom families must define their error-to-width mapping"))
     error = _positive_width(budget)
     contract = formulation_contract(f,family(1.))

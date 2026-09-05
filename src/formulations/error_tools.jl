@@ -38,17 +38,20 @@ magnitude_contract(r::MagnitudeApproximation) = (
 Build the magnitude from working-coordinate real components. Physical components
 are `component_scale * components`; the returned expression is in units of
 `physical magnitude / output_scale`. On staged contexts reuse BMOPFTools.smooth_norm.
+The optional `name` labels the upstream differentiability annotation.
 This adds no capability constraint: squared physical inequalities remain available.
 """
 function magnitude_expression(target,components,r::MagnitudeApproximation;
-                              component_scale::Real=1,output_scale::Real=1)
+                              component_scale::Real=1,output_scale::Real=1,
+                              name::AbstractString="")
     isempty(components) && throw(ArgumentError("Provide at least one component"))
     si,so = _pwl_scale(component_scale),_pwl_scale(output_scale)
-    lower = if target isa JuMP.Model
-        sqrt(sum(c^2 for c in components)+(r.epsilon/si)^2)-r.epsilon/si
-    else
-        BMOPFTools.smooth_norm(target,collect(components);scale=1.,eps_rel=r.epsilon/si)
+    if target isa JuMP.Model
+        root = sqrt(sum(c^2 for c in components)+(r.epsilon/si)^2)
+        return (r.direction == :lower ? root-r.epsilon/si : root)*(si/so)
     end
+    lower = BMOPFTools.smooth_norm(target,collect(components);scale=1.,
+        eps_rel=r.epsilon/si,name=name)
     return lower*(si/so)+(r.direction == :upper ? r.epsilon/so : 0.)
 end
 

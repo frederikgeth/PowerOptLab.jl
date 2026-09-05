@@ -2,8 +2,9 @@
 #
 # The numeric evaluator is the firmware oracle: exact PWL corners, exact
 # min/max phase selection, and an algebraic common-scale limiter. The JuMP
-# evaluator stamps the same fixed computation graph with BMOPFTools' cached
-# softplus PWL expressions and smooth algebraic max/min surrogates. Neither path
+# evaluator stamps the same fixed computation graph with selectable PWL
+# smoothing (BMOPFTools softplus by default) and shared algebraic selectors.
+# Purpose-specific shared norms preserve their physical error direction. Neither path
 # solves a controller-side optimization problem.
 
 """Supertype for local inverter controllers composed with a physical device."""
@@ -593,7 +594,7 @@ function _dominant_blend_numeric(low, high, policy::WorstPhaseVoltVarWatt)
     severity_difference = low_severity - high_severity
     epsilon = policy.conflict_epsilon
     weight = (1 + severity_difference /
-              sqrt(severity_difference^2 + epsilon^2))/2
+              magnitude_value((severity_difference,), MagnitudeApproximation(epsilon;direction=:upper)))/2
     normalized_command = weight*low_severity - (1-weight)*high_severity
     selected_scale = weight*positive_scale + (1-weight)*negative_scale
     return normalized_command*selected_scale
@@ -748,7 +749,7 @@ function _unbalance_numeric_smooth(policy::NegativeSequenceAdmittanceDroop,
                                    u1, u2, i1)
     denominator = abs2(u1) + policy.voltage_floor^2
     epsilon = _unbalance_norm_epsilon(policy)
-    eta = (sqrt(abs2(u2) + epsilon^2) - epsilon) / sqrt(denominator)
+    eta = magnitude_value((real(u2),imag(u2)), MagnitudeApproximation(epsilon;unit=:V)) / sqrt(denominator)
     gain = _pwl_numeric_smooth(policy.gain, eta)
     i2v = -gain * cis(-policy.impedance_angle) * u2
     i2r = -(u2 * conj(u1) / denominator) * i1
@@ -778,7 +779,7 @@ end
 
 function _limit_positive_power_numeric_smooth(
         p, q, smax, epsilon, priority, headroom_fraction)
-    raw_magnitude = _upper_magnitude(p^2 + q^2, epsilon/4)
+    raw_magnitude = magnitude_value((p,q), MagnitudeApproximation(epsilon/4;direction=:upper,unit=:VA))
     if priority === :proportional
         scale = smax/_smooth_max(smax, raw_magnitude, epsilon)
         return scale*p, scale*q, scale
@@ -795,7 +796,7 @@ function _limit_positive_power_numeric_smooth(
         p_capacity = sqrt(max(smax^2-q_limited^2, 0.0))
         p_limited = _smooth_min(p, p_capacity, epsilon)
     end
-    scale = _upper_magnitude(p_limited^2 + q_limited^2, epsilon/4) /
+    scale = magnitude_value((p_limited,q_limited), MagnitudeApproximation(epsilon/4;direction=:upper,unit=:VA)) /
         _smooth_max(raw_magnitude, epsilon, epsilon)
     return p_limited, q_limited, scale
 end
@@ -837,7 +838,7 @@ function evaluate_smooth(controller::SequenceController,
     phase_request = _phase_from_sequences(i1_request, i2_request)
 
     ieps = _current_epsilon(controller.limiter, ratings)
-    imags = [_upper_magnitude(abs2(i), ieps/4) for i in phase_request]
+    imags = [magnitude_value((real(i),imag(i)), MagnitudeApproximation(ieps/4;direction=:upper,unit=:A)) for i in phase_request]
     current_denominator = foldl(
         (a, b) -> _smooth_max(a, b, ieps), imags; init=ratings.i_max)
     current_scale = ratings.i_max / current_denominator
@@ -942,18 +943,13 @@ function validate_device(controlled::ControlledDevice{<:AdvancedInverter}, nets=
     return controlled
 end
 
-_smooth_max(a, b, epsilon) = (a + b + sqrt((a-b)^2 + epsilon^2)) / 2
-_smooth_min(a, b, epsilon) = (a + b - sqrt((a-b)^2 + epsilon^2)) / 2
-_smooth_positive(a, epsilon) = (a + sqrt(a^2 + epsilon^2)) / 2
-_smooth_negative(a, epsilon) = (a - sqrt(a^2 + epsilon^2)) / 2
-_smooth_symmetric_clip(a, limit, epsilon) =
-    _smooth_min(a, limit, epsilon) +
-    _smooth_max(a, -limit, epsilon) - a
-
-# An upper norm is appropriate in a capability denominator: it cannot admit
-# more current/power by underestimating its magnitude. Its excess is <= epsilon
-# in the quantity's working units, and its derivatives exist at zero.
-_upper_magnitude(radicand, epsilon) = sqrt(radicand + epsilon^2)
+# Thin controller adapters preserve existing widths and operation ordering. The
+# shared layer owns the formulas and contracts for both numeric and JuMP paths.
+_smooth_max(a, b, epsilon) = selector_value(a,b,AlgebraicFormulation(epsilon);kind=:max)
+_smooth_min(a, b, epsilon) = selector_value(a,b,AlgebraicFormulation(epsilon);kind=:min)
+_smooth_positive(a, epsilon) = selector_value(a,0.,AlgebraicFormulation(epsilon);kind=:max)
+_smooth_negative(a, epsilon) = selector_value(a,0.,AlgebraicFormulation(epsilon);kind=:min)
+_smooth_symmetric_clip(a, limit, epsilon) = symmetric_clip_value(a,limit,AlgebraicFormulation(epsilon))
 
 # Cut repeated nonlinear subexpressions without squaring the auxiliary: the
 # defining row has derivative 1 with respect to its normalized output, even
@@ -966,8 +962,9 @@ function _defined_control_expression!(m, expression; scale=1.0, start=scale)
     return scale*output
 end
 
-function _upper_magnitude!(m, radicand, epsilon; scale, start=scale)
-    return _defined_control_expression!(m, _upper_magnitude(radicand, epsilon);
+function _control_upper_magnitude!(m, components, epsilon; scale, start=scale)
+    expression = magnitude_expression(m,components,MagnitudeApproximation(epsilon;direction=:upper))
+    return _defined_control_expression!(m, expression;
         scale=scale, start=start)
 end
 
@@ -987,28 +984,24 @@ function _implicit_sqrt!(m, radicand; start::Real=1.0, scale::Real=start)
 end
 
 function _smooth_max_expression!(m, a, b, epsilon; start::Real=1.0)
-    return _smooth_max(a, b, epsilon)
+    return selector_expression(m,a,b,AlgebraicFormulation(epsilon);kind=:max)
 end
 
 function _smooth_min_expression!(m, a, b, epsilon; start::Real=1.0)
-    return _smooth_min(a, b, epsilon)
+    return selector_expression(m,a,b,AlgebraicFormulation(epsilon);kind=:min)
 end
 
 function _smooth_symmetric_clip_expression!(
         m, value, limit, epsilon; start::Real=1.0)
-    upper = _smooth_min_expression!(
-        m, value, limit, epsilon; start=start)
-    lower = _smooth_max_expression!(
-        m, value, -limit, epsilon; start=start)
-    return upper + lower - value
+    return symmetric_clip_expression(m,value,limit,AlgebraicFormulation(epsilon))
 end
 
 function _smooth_positive_expression!(m, a, epsilon; start::Real=epsilon)
-    return _smooth_positive(a, epsilon)
+    return selector_expression(m,a,0.,AlgebraicFormulation(epsilon);kind=:max)
 end
 
 function _smooth_negative_expression!(m, a, epsilon; start::Real=epsilon)
-    return _smooth_negative(a, epsilon)
+    return selector_expression(m,a,0.,AlgebraicFormulation(epsilon);kind=:min)
 end
 
 function _smooth_dominant_expression!(
@@ -1018,7 +1011,7 @@ function _smooth_dominant_expression!(
     high_severity = -high/negative_scale
     difference = low_severity - high_severity
     epsilon = policy.conflict_epsilon
-    root = sqrt(difference^2 + epsilon^2)
+    root = magnitude_expression(m,(difference,),MagnitudeApproximation(epsilon;direction=:upper))
     weight = (1 + difference/root)/2
     normalized_command = weight*low_severity - (1-weight)*high_severity
     selected_scale = weight*positive_scale + (1-weight)*negative_scale
@@ -1119,10 +1112,9 @@ _is_identically_zero(::Any) = false
 function _safe_direction_scale_implicit!(
         m, offset, direction, limit, epsilon; magnitude_start, scale)
     offset_magnitude = all(_is_identically_zero, offset) ? 0.0 :
-        _upper_magnitude!(m, offset[1]^2 + offset[2]^2, epsilon/4;
+        _control_upper_magnitude!(m, offset, epsilon/4;
             scale=scale, start=magnitude_start)
-    direction_magnitude = _upper_magnitude!(m,
-        direction[1]^2 + direction[2]^2, epsilon/4;
+    direction_magnitude = _control_upper_magnitude!(m, direction, epsilon/4;
         scale=scale, start=magnitude_start)
     # Exact zeros need no auxiliary norm. Nonzero offsets use an upper norm,
     # so the smoothing cannot create headroom by underestimating the offset.
@@ -1130,7 +1122,7 @@ function _safe_direction_scale_implicit!(
     # by epsilon/2; physical squared capability constraints remain exact.
     headroom = limit - offset_magnitude
     available = all(_is_identically_zero, offset) ? headroom :
-        (headroom + sqrt(headroom^2 + epsilon^2))/2
+        selector_expression(m,headroom,0.,AlgebraicFormulation(epsilon);kind=:max)
     denominator = _smooth_max_expression!(
         m, available, direction_magnitude, epsilon;
         start=max(Float64(limit), epsilon))
@@ -1139,7 +1131,7 @@ end
 
 function _limit_positive_power_smooth!(
         m, p_raw, q_raw, smax, epsilon, priority, headroom_fraction)
-    raw_magnitude = _upper_magnitude!(m, p_raw^2 + q_raw^2, epsilon/4;
+    raw_magnitude = _control_upper_magnitude!(m, (p_raw,q_raw), epsilon/4;
         scale=smax)
     if priority === :proportional
         denominator = _smooth_max_expression!(
@@ -1169,8 +1161,7 @@ function _limit_positive_power_smooth!(
         p_limited = _smooth_min_expression!(
             m, p_raw, p_capacity, epsilon; start=smax)
     end
-    limited_magnitude = _upper_magnitude!(m,
-        p_limited^2 + q_limited^2, epsilon/4; scale=smax)
+    limited_magnitude = _control_upper_magnitude!(m, (p_limited,q_limited), epsilon/4; scale=smax)
     raw_denominator = _smooth_max_expression!(
         m, raw_magnitude, epsilon, epsilon; start=smax)
     scale = limited_magnitude / raw_denominator
@@ -1182,7 +1173,7 @@ function _combine_safe_scale_implicit!(m, scale, candidate, epsilon)
     # at zero. The ordinary smooth minimum can be negative there. Its deficit
     # from the hard minimum is <= epsilon/2; epsilon is dimensionless.
     return _defined_control_expression!(m,
-        scale*candidate / _smooth_max(scale, candidate, epsilon))
+        selector_expression(m,scale,candidate,AlgebraicFormulation(epsilon);kind=:nonnegative_min))
 end
 
 function _worst_phase_smooth(ctx, policy::WorstPhaseVoltVarWatt,
@@ -1274,9 +1265,9 @@ function _unbalance_smooth(ctx, policy::NegativeSequenceAdmittanceDroop,
     m = _opf_model(ctx)
     floor = policy.voltage_floor / vb
     denom = u1r^2 + u1i^2 + floor^2
-    u2mag = BMOPFTools.smooth_norm(ctx, u2r, u2i; scale=floor,
-        eps_rel=_unbalance_norm_epsilon(policy)/policy.voltage_floor,
-        name="controller_negative_sequence")
+    u2mag = magnitude_expression(ctx,(u2r,u2i),
+        MagnitudeApproximation(_unbalance_norm_epsilon(policy);unit=:V);
+        component_scale=vb,output_scale=vb,name="controller_negative_sequence")
     u1denom = sqrt(denom)
     eta = u2mag / u1denom
     gain = _pwl_smooth(ctx, policy.gain, eta, 1.0) * vb / ib
@@ -1355,7 +1346,7 @@ function stamp_smooth_control!(ctx, controller::SequenceController,
 
     ieps = _current_epsilon(controller.limiter, ratings) / ib
     imax = ratings.i_max / ib
-    imags = [_upper_magnitude!(m, pair[1]^2 + pair[2]^2, ieps/4;
+    imags = [_control_upper_magnitude!(m, pair, ieps/4;
                 scale=imax, start=0.5imax)
         for pair in phase_request]
     current_denominator = imax

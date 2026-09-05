@@ -34,7 +34,7 @@ end
     # Upper norms protect capability denominators. The bound holds at zero,
     # around the smoothing width and far outside it.
     for epsilon in (1e-6, 1e-3, 0.1), radius in (0., epsilon/10, epsilon, 1., 40.)
-        upper = PowerOptLab._upper_magnitude(radius^2, epsilon)
+        upper = magnitude_value((radius,),MagnitudeApproximation(epsilon;direction=:upper))
         @test radius <= upper <= radius + epsilon + 1e-14
     end
     # A nonnegative conservative scale selector must remain nonnegative even

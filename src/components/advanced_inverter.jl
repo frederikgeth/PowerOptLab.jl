@@ -59,9 +59,9 @@ _magnitude_epsilon(rating, ib) =
 
 "Accumulate a shared smooth loss norm with a physical, base-invariant budget."
 function _push_magnitude(ctx, total, x, y, rating, ib; name)
-    scale = something(rating, 1.0) / ib
-    magnitude = BMOPFTools.smooth_norm(ctx, x, y; scale=scale,
-        eps_rel=_magnitude_epsilon(rating, ib)/scale, name=name)
+    approximation = MagnitudeApproximation(_magnitude_epsilon(rating,1.);unit=:A)
+    magnitude = magnitude_expression(ctx,(x,y),approximation;
+        component_scale=ib,output_scale=ib,name=name)
     return total === nothing ? magnitude : total + magnitude
 end
 const _PAIRS_IDX = ((1, 2), (2, 3), (3, 1))

@@ -104,6 +104,7 @@ include("upstream.jl")
 # Experimental function semantics and alternative optimization representations.
 include("formulations/primitives.jl")
 include("formulations/jump.jl")
+include("formulations/selectors.jl")
 include("formulations/error_tools.jl")
 include("formulations/experiments.jl")
 
@@ -145,6 +146,8 @@ export PWLFunction, SoftplusFormulation, LocalC2Formulation, ComplementarityGrap
        FormulationCase, FormulationMethod, UnsupportedFormulation,
        run_formulation_experiment, write_formulation_results,
        resistive_equilibria, resistive_control_case, controlled_inverter_case
+export AlgebraicFormulation, hinge_expression, selector_value, selector_expression,
+       selector_contract, symmetric_clip_value, symmetric_clip_expression
 
 # Shared extension interfaces
 export AbstractDevice, AbstractMeasurement, AbstractSolveResult
