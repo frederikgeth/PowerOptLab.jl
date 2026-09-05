@@ -2,6 +2,9 @@
 
 > **Audience:** power-system researchers · **Scope:** nonlinear AC DOE studies
 > with DSSE snapshots, mandatory DER controls, and network support devices.
+>
+> **Evidence level:** modelling guidance; examples support only the claim stated
+> by their security set, control policy, and local solver evidence
 
 This is the modelling primer for the current API. The implementation audit and
 the planned sequence of counterexample, uncertainty, fairness, scaling, and
@@ -10,13 +13,16 @@ review and roadmap](../problems/doe_quantification_review.md).
 For the implemented recourse registry, structured replay, finite interior
 search, multistart, and reproducibility manifest, continue with
 [Reproducible DOE recourse, verification, and search](doe_research_workflow.md).
+The source taxonomy and boundary of each cited result are recorded in [DOE
+literature: evidence and
+interpretation](../problems/doe_literature_evidence.md).
 
-This tutorial is about *modelling choices*, not just calling an optimizer. A
-dynamic operating envelope (DOE) is an operational promise: a participant may
-operate within an advertised active-power range while the LV network remains
-within its declared limits. The difficult part is deciding exactly what that
-promise means and ensuring the model represents the physical controls that will
-be present when it is used.
+This tutorial is about *modelling choices*, not just calling an optimizer. The
+term dynamic operating envelope (DOE) covers several objects in research and
+practice. A bound-point allocation, an independently usable box, a coupled P–Q
+region, and a market-shaped envelope do not make the same promise. The
+difficult part is declaring that promise and representing the physical controls
+and information that will be present when it is used.
 
 The runnable end-to-end example is
 `scripts/cases/doe_dsse_validation_demo.jl`:
@@ -45,6 +51,11 @@ import = solve_operating_envelope(net, cps; direction=:import)
 Do not infer an import envelope by negating an export result. In an LV feeder,
 the baseline P/Q, voltage profile, converter limits, and controls can make the
 two highly asymmetric.
+
+For a robust decoupled box, the intended statement is that every allowed joint
+participant utilization and every declared exogenous realization admits a
+feasible state under the declared control policy. This is a stronger contract
+than the generic field meaning of DOE and is not implied by solving one OPF.
 
 The input `net` must be a *snapshot*: topology, source conditions, DSSE-derived
 loads, DER availability, and network limits appropriate to one issuance
@@ -112,6 +123,14 @@ was tested. If an operator tells each participant they can independently choose
 anything in `[0, envelope[i]]`, use corners for small studies or develop a
 screened/adaptive security set for larger ones. Even corners do not prove that a
 non-convex AC feasible set contains every interior point.
+
+[Liu and Braslavsky (2022)](https://doi.org/10.1109/ACCESS.2022.3203062)
+provide a concrete unbalanced-feeder counterexample: reducing one customer's
+export strictly inside an equal envelope can increase a voltage on another
+phase beyond its limit. The runnable [range-guarantee
+tutorial](doe_range_guarantees.md) isolates the same logical failure with a
+self-contained synthetic four-wire case; it is not presented as a reproduction
+of that feeder.
 
 ## 4. Treat uncertainty as a shared-allocation problem
 
@@ -207,6 +226,13 @@ frontier["efficient"].fairness_metrics[1]
 The metrics include total capacity, normalized allocations, curtailment
 fractions, and Jain's index. They describe the published allocation; they do
 not select a social-welfare objective on their own.
+
+Capacity is also not a sufficient proxy for delivered market value.
+[Attarha et al. (2024)](https://doi.org/10.1016/j.epsr.2024.110639) report a
+case in which a smaller bid-aware shaped envelope yields greater benefit than a
+capacity-oriented DOE comparator. That result motivates value-aware
+comparison; it does not establish that envelope size and value are generally
+anticorrelated.
 
 ### Pitfall: unnormalised fairness silently favours one population
 

@@ -4,7 +4,9 @@
 
 For the implementation audit, claim hierarchy, scientific state of the art,
 and prioritized research plan, see [DOE quantification: scientific review and
-roadmap](doe_quantification_review.md).
+roadmap](doe_quantification_review.md). The source-by-source boundaries behind
+that assessment are in [DOE literature: evidence and
+interpretation](doe_literature_evidence.md).
 
 [`solve_operating_envelope`](@ref) allocates an active-power import or export
 capacity to each participating connection while retaining the nonlinear,
@@ -22,6 +24,28 @@ dispatchable:
 
 All capacities returned by this API are positive watts. `direction=:export`
 means injection into the network and `direction=:import` means withdrawal.
+
+## Terminology
+
+| Term | Meaning in PowerOptLab |
+|---|---|
+| Allocation | Capacity values selected by an optimization; not a guarantee by itself |
+| Operating point | One joint realization of participant powers, network conditions, states, and controls |
+| Utilization set | The participant fractions at which an advertised allocation is interpreted or tested |
+| Scenario | One declared realization of exogenous load, generation, source, topology, or network parameters |
+| Recourse | A free control decision allowed to depend on information revealed after issuance |
+| Local law | A declared causal controller equation, rather than a freely re-optimized setpoint |
+| Verification | A fixed-capacity evaluation at declared scenarios and utilization points |
+| Falsified | An admissible candidate point produced a repeated violation under the recorded numerical procedure |
+| Search-stable | No counterexample was found within a finite, recorded search budget |
+| Certificate | A mathematical argument covering the complete declared set under stated assumptions |
+
+The literature uses *DOE* for more than one object. A time-varying bound-point
+allocation, a finitely tested independent range, a certified decoupled box, a
+coupled P–Q operating region, and a market-shaped allocation must not inherit
+one another's claims merely because they share the same name. This API records
+geometry, tested set, recourse, uncertainty semantics, and solver class
+separately so it can represent and compare those formulations.
 
 ## Security semantics
 
@@ -61,6 +85,24 @@ The machine-readable claim metadata includes:
   `ideal_recourse_used`;
 - `prescribed_ibr_controls=:retained`; and
 - `security_scope=:explicit_utilization_points` for custom verification sets.
+
+### Result and missing-value semantics
+
+| Field | Unit or type | Interpretation |
+|---|---|---|
+| `envelope[id][t]` | W, positive magnitude | Published one-sided capacity for participant `id`; `NaN` if interval `t` is not publishable |
+| `total_capacity[t]` | W | Sum of published participant capacities; `NaN` follows an unpublished interval |
+| `termination_status[t]` | solver status string | Optimizer termination evidence, not a physical guarantee |
+| `diagnostics[t]["feasible"]` | `Bool` | A usable local primal point was found for the represented joint model |
+| `diagnostics[t]["security_scope"]` | `Symbol` | Exact set of utilization points represented during allocation |
+| `diagnostics[t]["global_certificate"]` | `Bool` | Always `false` for current nonlinear DOE solvers |
+| `diagnostics[t]["minimum_margins"]` | physical units by constraint family | Smallest recomputed margin among currently instrumented voltage, current, and unbalance families; absence is not an infinite margin |
+| `diagnostics[t]["control_audit"]` | records | Resolved shared, scenario-adaptive, local-law, and context-adaptive controls |
+| `verification.context_results[t]` | context records | Per-scenario and per-utilization status, margins, replay, and candidate evidence |
+
+Missing diagnostics mean that the quantity was not available or not
+instrumented; they do not mean zero violation. An infeasible solver iterate is
+never converted into an envelope value.
 
 Prescribed connection-bound IBR control laws remain enforced, but other
 controllable-asset recourse can make a material difference. The legacy default

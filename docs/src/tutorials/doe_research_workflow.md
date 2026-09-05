@@ -3,6 +3,15 @@
 > **Audience:** researchers comparing dynamic-operating-envelope formulations
 >
 > **Claim level:** finite tested-point evidence from local nonlinear AC models
+>
+> **Model:** caller-supplied nonlinear unbalanced AC cases; examples use the
+> synthetic cases introduced by the modelling and range-guarantee tutorials
+>
+> **Expected runtime:** case dependent; the small examples run in under one
+> minute after Julia compilation
+>
+> **Data and seeds:** record both in `DOEStudySpec`; no external dataset is
+> implied by the schematic fragments below
 
 This tutorial turns the DOE framework into a reproducible experiment. It keeps
 three questions separate:
@@ -12,6 +21,9 @@ three questions separate:
 3. What numerical and replay evidence supports the reported allocation?
 
 None of the workflows below produces a global robust-feasibility certificate.
+They are intentionally formulation-neutral: pointwise recourse remains a
+first-class replication mode, while issue-time and local-law policies represent
+different information structures rather than a replacement definition of DOE.
 
 ## 1. Name the information structure
 
@@ -318,9 +330,24 @@ The runner builds a separate study identity for each method and writes stable
 interval rows. Use `doe_context_benchmark_rows` when a second table should retain
 one row per verification context.
 
+The committed `scripts/cases/doe_range_benchmark.jl` fixture is a complete
+example of this interface. It records its synthetic-data licence, method labels,
+seed provenance, scientific claim, and claim limitation in the study metadata.
+
 See [DOE quantification: scientific review and roadmap](../problems/doe_quantification_review.md)
 for the remaining certification, uncertainty-calibration, temporal, fairness,
 and scaling research agenda.
 
 For typed calibration/test splits and empirical coverage reporting, continue to
 [DOE uncertainty provenance and held-out coverage](doe_uncertainty_coverage.md).
+
+## What this does not prove
+
+- A control appearing in the audit does not establish that its timing is
+  implementable; the selected policy must be justified operationally.
+- Perfect recourse is a legitimate formulation and upper benchmark, not
+  automatically deployable capacity.
+- Fixed-control replay with the same formulation and solver is not independent
+  model validation.
+- Multistart and adaptive search provide stronger numerical evidence but no
+  global optimality, branch-completeness, or box-containment certificate.

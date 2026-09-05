@@ -1,24 +1,27 @@
 # DOE quantification: scientific review and roadmap
 
-> **Review date:** 4 September 2026 · **Scope:** the PowerOptLab implementation,
+> **Review date:** 5 September 2026 · **Scope:** the PowerOptLab implementation,
 > scientific quantification claims, experiments, tutorials, and documentation.
+
+The curated source-by-source assessment is maintained in [DOE literature:
+evidence and interpretation](doe_literature_evidence.md). That register
+separates primary results, review evidence, reanalysis, and research hypotheses.
 
 ## Executive assessment
 
-The current implementation is a useful **nonlinear, unbalanced AC allocation
-and verification prototype**. It has unusually careful result semantics for an
-early research code: it does not publish failed iterates, it distinguishes one
-simultaneous bound from box corners, it can share an allocation across a finite
-scenario set, it retains prescribed inverter controls, and it exposes several
-fairness choices.
+The current implementation is a **nonlinear, unbalanced AC framework for DOE
+allocation, recourse experiments, finite verification, and reproducible
+falsification studies**. It does not publish failed iterates, distinguishes one
+simultaneous bound from tested utilization sets, shares one allocation across
+finite network scenarios, retains prescribed inverter laws, and exposes the
+information partition of supported free controls. Pointwise perfect recourse
+remains available deliberately for published-method replication.
 
-It is not yet a robust DOE quantification method in the strong sense that the
-term *operating envelope* often implies. In particular, it does not establish
-that every realization inside a continuous utilization set is network-safe; it
-does not attach a probability or coverage guarantee to its scenario set; it
-allows controllable network-device decisions to change independently between
-represented contexts; and it relies on one local nonlinear solve. The most
-defensible current description is therefore:
+The implementation does not establish that every realization inside a
+continuous utilization and uncertainty set is network-safe, and its nonlinear
+solutions and replays remain local. Typed scenarios and held-out evaluation can
+support empirical coverage statements only under their declared sampling and
+independence assumptions. The most defensible default description is:
 
 > a locally solved active-power allocation that is feasible at a declared
 > finite set of network scenarios and participant-utilization points.
@@ -30,6 +33,12 @@ settings can reverse the intuitive monotonicity argument [Liu and Braslavsky
 (2022)](https://doi.org/10.1109/ACCESS.2022.3203062).
 
 ## What quantity should be called a DOE?
+
+Industry reports and research papers use *DOE* for several related objects,
+including time-varying connection limits, P–Q regions, tested decoupled ranges,
+and market-shaped allocations. The following formulation is therefore not a
+universal definition. It is the stronger **robust decoupled box** contract
+against which range claims in this review are assessed.
 
 Let participant utilization be ``u \in \mathcal U`` and let the advertised
 capacity vector be ``\bar p``. For the present one-sided export formulation,
@@ -55,8 +64,17 @@ Allowing a tap, capacitor, or STATCOM setpoint to be chosen after observing
 every utilization and uncertainty realization is a full-recourse assumption.
 A fixed issuance setpoint instead belongs outside the universal quantifiers.
 A local autonomous controller is neither: it must be represented by its own
-closed-loop law. The prototype currently gives each AC context independent
-controllable-asset variables, while prescribed IBR Q–V laws remain fixed.
+closed-loop law. The framework can assign supported controls to issue,
+scenario, local-law, or context stages. Its compatibility default gives free
+controls pointwise recourse, while prescribed IBR Q–V laws remain fixed
+equations.
+
+For a fixed polyhedral feasible region and an axis-aligned box, containment can
+be written with support functions or a polyhedral alternative theorem. A
+positive-width log-volume objective then gives a convex optimization problem.
+This statement does not extend automatically to optimized network models,
+integer controls, temporal coupling, uncertain coefficients, or nonlinear AC
+physics.
 
 The following claim ladder should be used throughout the package:
 
@@ -95,11 +113,11 @@ that all relevant constraints attain their worst cases at corners.
 
 | Priority | Weakness in the current prototype | Scientific consequence | Recommended response |
 |---|---|---|---|
-| P0 | The advertised range is checked only at one point, all corners, or caller-supplied samples. | Interior violations can be missed, so `:corners` is not a box-containment proof. | Add an adversarial utilization search and distinguish falsified, search-stable, and certified results. |
-| P0 | Ipopt supplies one local nonlinear result with no multistart, objective bound, or branch analysis. | Capacity and even feasibility can depend on initialization or the returned AC branch. | Record starts and residuals; add multistart and independent fixed-dispatch power-flow checks; later add valid relaxations. |
-| P0 | The historical default makes network controls independently adjustable in every scenario/corner context. | An omitted or poorly chosen policy can assume unavailable perfect recourse from taps, STATCOMs, or other flexible assets. | The first typed control-policy slice now links native taps and IBR P/Q at `:issue` or `:scenario`, retains `:local_law`, and audits `:context`; extend registration and replay coverage before treating the gap as closed. |
-| P0 | Verification returns one feasibility flag for a monolithic multi-context NLP. | A failure does not identify the offending scenario, utilization, constraint, or violation magnitude. | Return one structured record per context and an explicit worst counterexample. |
-| P0 | Scenario lists are unweighted and caller-constructed. | “Three scenarios” has no confidence level, coverage statement, or reproducible provenance. | Add typed uncertainty/scenario metadata, weights, seeds, generation method, and out-of-sample evaluation. |
+| P0 | Bound points, corners, Halton points, and adaptive points are all finite tests of a nonlinear feasible set. | Interior violations can still be missed; search stability is not box containment. | Add a globally valid inner-set or violation-bound certificate and preserve the current falsified/search-stable/certified distinction. |
+| P0 | Multistart still returns local Ipopt solutions without an objective bound or systematic branch analysis. | Capacity and feasibility evidence can depend on initialization or the returned AC branch. | Add continuation/multiple-solution diagnostics and valid relaxations or independent global bounds. |
+| P0 | Native taps and IBR P/Q have typed recourse policies, but arbitrary extension controls require explicit registration and generator P/Q lacks a safe linkage handle. | An undeclared custom control can escape the intended information structure, while an operational policy correctly fails closed on unsupported controls. | Extend semantic registration and upstream public P/Q handles without using voltage-dependent current variables as setpoint surrogates. |
+| P0 | Per-context replay uses the same nonlinear formulation and solver family as allocation. | Failures are localized, but common modelling or solver defects are not independently challenged. | Add a second power-flow engine or formulation and retain replay completeness and residual diagnostics. |
+| P0 | Typed scenarios and samplers record provenance but do not validate the generating uncertainty model. | Weights, seeds, or held-out labels do not themselves produce calibrated probabilities or robustness. | Use versioned empirical data, leakage audits, matched uncertainty designs, and out-of-sample calibration with declared assumptions. |
 | P1 | The envelope is a one-sided scalar active-power box ``[0,\bar p_i]``. | It cannot express a simultaneous import/export band, a nonzero baseline, asymmetric reserve, or coupled P–Q flexibility. | Generalize to lower/upper P bounds and later polyhedral/ellipsoidal P–Q sets with device feasibility. |
 | P1 | Intervals are physically independent; rolling fairness only carries an allocation history. | Storage SOC, EV energy, ramping, tap wear, thermal memory, and forecast recourse are omitted. | Reuse the multi-period infrastructure and separate first-stage envelopes from device recourse. |
 | P1 | Rolling fairness accumulates offered capacity, not realized use, denied request, customer value, or cost. | A high Jain index can coexist with unequal economic outcomes or repeated involuntary curtailment. | Define the stakeholder, benefit/burden variable, entitlement reference, time horizon, and price of fairness before selecting a metric. |
@@ -371,10 +389,12 @@ hidden inside an objective.
 
 Deliver this before claiming a new quantification method:
 
-1. **Implemented first slice:** `DOEStudySpec` records interval/scenario network
-   hashes, utilization coverage, control information structure, objective,
+1. **Implemented:** `DOEStudySpec` records interval/scenario network hashes,
+   utilization coverage, control information structure, objective,
    normalization, solver/options, random seeds, metadata, and software versions.
-   Typed issuance and uncertainty-construction records remain future additions.
+   Typed scenario and uncertainty-construction records cover Gaussian,
+   box-conditioned Gaussian, and empirical residual-bootstrap inputs; automated
+   estimator-specific materializers and external dataset adapters remain.
 2. **Implemented first slice:** return per-context status, margins, identifiers,
    snapshots, controls, joint timing, and independent replay timing/evidence.
 3. **Partly implemented:** independently evaluate JuMP primal residuals and
@@ -506,14 +526,17 @@ be weakened merely to make continuous integration fast.
 
 Develop the tutorials in this order:
 
-1. **Implemented first runnable case — What does an envelope guarantee?** A
+1. **Implemented synthetic runnable case — What does an envelope guarantee?** A
    balanced three-phase bound point succeeds, while asymmetric partial
    utilization violates a tight negative-sequence limit; the tutorial follows
-   the failure through corners and adaptive margin-directed search. Extend it
-   with a non-corner interior failure as the oracle matures.
-2. **Control recourse changes the DOE.** Compare a fixed STATCOM/tap setting,
-   perfect context-dependent recourse, and a local controller. Plot both
-   capacity and ex-post violations.
+   the failure through corners, a non-corner point, confirmation, and adaptive
+   margin-directed search. A faithful reproduction of the published 2.91 kW
+   Australian-feeder counterexample remains a separate licensed-data benchmark.
+2. **Implemented formulation workflow — Control recourse changes the DOE.**
+   Compare issue-time settings, scenario recourse, prescribed local laws, and
+   perfect context-dependent recourse. The control audit and paired STATCOM
+   regression quantify capacity attributable to additional information; a
+   dedicated plotted case remains useful future presentation work.
 3. **Implemented synthetic first slice — From uncertainty to a tested DOE.** A
    runnable tutorial declares calibration/test roles and provenance, allocates
    without test leakage, and reports held-out empirical and optional i.i.d.
@@ -546,8 +569,8 @@ REPL fragments.
 
 ## Documentation changes
 
-The documentation should be organized around scientific claims rather than
-only API entry points:
+The documentation is organized around scientific claims as well as API entry
+points. The remaining maintenance rules are:
 
 - Keep [Operating envelopes](operating_envelope.md) as the concise API and
   semantics page; link to this review for limitations and research priorities.
@@ -555,16 +578,17 @@ only API entry points:
   current material is a good modelling primer, but it does not yet demonstrate
   a failure mode, probabilistic calibration, scaling, or a reproducible
   fairness frontier.
-- Add a glossary for *allocation*, *operating point*, *utilization set*,
-  *scenario*, *recourse*, *verification*, *search-stable*, and *certificate*.
+- Keep the implemented glossary for *allocation*, *operating point*,
+  *utilization set*, *scenario*, *recourse*, *verification*, *search-stable*,
+  and *certificate* synchronized with result diagnostics.
 - Document the mathematical formulation, including quantifier order and which
   network controls are shared or context-dependent.
-- Provide a field-by-field result schema with units, missing-value semantics,
-  and permitted claims for every diagnostic status.
-- Maintain a dated literature/evidence table, separating peer-reviewed work,
-  preprints, and industry reports.
-- Add benchmark manifests and generated result tables to the documentation,
-  with source data and licensing recorded.
+- Maintain the implemented field-by-field result schema with units,
+  missing-value semantics, and permitted claims as diagnostics evolve.
+- Maintain the dated literature/evidence register, separating primary results,
+  review evidence, reanalysis, hypotheses, preprints, and industry reports.
+- Keep benchmark case metadata, generated result tables, source data, and
+  licensing together; do not commit publisher PDFs as repository assets.
 - Replace absolute phrases such as “ensures network integrity” with claims tied
   to a declared model, uncertainty set, utilization set, solver status, and
   validation procedure.

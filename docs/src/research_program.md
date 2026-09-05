@@ -83,6 +83,9 @@ prove feasibility throughout a nonconvex AC utilization box.
 The detailed implementation audit, literature evidence, benchmark protocol,
 and staged tutorial/documentation plan are maintained in [DOE quantification:
 scientific review and roadmap](problems/doe_quantification_review.md).
+The accompanying [DOE literature evidence
+register](problems/doe_literature_evidence.md) separates established results,
+finite case evidence, reanalysis, and proposed experiments.
 
 The next step is an outer allocation and inner counterexample search over both
 actual customer utilization and the plausible model ensemble. Each discovered
@@ -96,6 +99,14 @@ distinguish at least:
 
 Only the last case is a robust-feasibility certificate. Naming this hierarchy is
 important even before all levels are implemented.
+
+For a fixed polyhedral feasible region, non-enumerative box-containment
+machinery already exists in the literature. The open target here is narrower:
+retain a neutral-explicit nonlinear AC oracle, test scalable sensitivity-based
+screening without treating random utilization samples as a certificate, and
+eventually compare it with a valid linear robust inner-set baseline. A
+four-wire re-evaluation of sensitivity filtering is a subsequent research
+branch, not a claim of the current prototype.
 
 ## Foundational track: solution validity and differentiability
 

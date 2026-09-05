@@ -11,6 +11,9 @@
 > **Data license:** no external data; the complete case builder is below
 >
 > **Seeds:** recorded per scenario; the fixture itself is deterministic
+>
+> **Solver evidence:** local nonlinear AC allocation and fixed-capacity
+> evaluation; solver and package versions are captured by `DOEStudySpec`
 
 This tutorial separates scenario construction, allocation, and held-out
 evaluation. The example deliberately calibrates under higher demand, which
@@ -310,6 +313,18 @@ The comparison deliberately reports `statistical_test=:not_performed` and
 avoidable confounders, but they do not prove that the uncertainty model caused
 the observed difference, that either model is well calibrated, or that the
 issued capacity was selected independently of these evaluation sets.
+
+This distinction matters when comparing uncertainty *sources*. [Liu,
+Braslavsky, and Mahdavi
+(2023)](https://doi.org/10.35833/MPCE.2023.000653) report a much larger capacity
+change for one impedance-uncertainty set than for one load-uncertainty set on
+their Australian network. That is an important motivation, not a universal
+ranking: the uncertainty radii, norms, dimensions, and physical meanings are
+not matched. A publishable comparison should hold the feeder, issued-policy
+semantics, utilization search, confidence or coverage interpretation, and
+evaluation samples fixed; define commensurate perturbations from measurement
+or estimation evidence; and report paired outcomes rather than only percentage
+capacity loss.
 
 ## Compare reference and shifted conditions
 

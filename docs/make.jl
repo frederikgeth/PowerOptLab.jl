@@ -15,6 +15,7 @@ makedocs(
         "Research program" => [
             "Overview" => "research_program.md",
             "DOE quantification review" => "problems/doe_quantification_review.md",
+            "DOE literature evidence" => "problems/doe_literature_evidence.md",
             "Post-OPF operability roadmap" => "problems/post_opf_operability_roadmap.md",
         ],
         "Inverter-based resources" => [
