@@ -217,7 +217,11 @@ counterexample-guided allocation loop. Neither API reports a global certificate.
 
 [`solve_operating_envelope_multistart`](@ref) perturbs registered-variable start
 values deterministically, retains every run, and reports capacity spread and
-independently evaluated JuMP primal-constraint residuals.
+independently evaluated JuMP primal-constraint residuals. Selection follows the
+requested fairness objective, not capacity alone: intervals are compared in
+chronological order, with primary then secondary objectives for max-min
+policies. Primary differences within `max_min_tolerance` are treated as ties.
+The returned diagnostics expose the attained objective keys and tolerances.
 
 ## Reproducibility manifest
 
@@ -459,6 +463,14 @@ normalized service history between intervals and, at each new interval,
 prioritises the least-served participant before maximizing the remaining
 weighted allocation. It is a rolling policy—not a horizon-wide optimiser—and
 therefore does not assume perfect future forecasts.
+
+History stores **unweighted** accumulated normalized service,
+``H_i = \sum_t \Delta t\,c_{it}/r_i``. The next primary objective is
+``\max\min_i (H_i + \Delta t\,c_i/r_i)/w_i``: entitlement weights divide
+both past and current service. With capacity normalization, history has units
+of hours; with a 1 W reference it is numerically energy in Wh divided by 1 W.
+Carry the returned `cumulative_normalized` history forward without dividing it
+by weights again. Keep the normalization references consistent across calls.
 
 ```julia
 using Dates

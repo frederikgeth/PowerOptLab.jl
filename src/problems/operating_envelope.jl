@@ -2842,7 +2842,7 @@ function _set_fairness_objective!(model, cap, cps, policy, direction, power_base
         level = JuMP.@variable(model, base_name="doe_cumulative_fairness", lower_bound=0.0)
         for cp in cps
             prior = get(temporal_history, cp.id, 0.0)
-            JuMP.@constraint(model, prior + temporal_dt_h * x[cp.id] / weights[cp.id] >= level)
+            JuMP.@constraint(model, (prior + temporal_dt_h * x[cp.id]) / weights[cp.id] >= level)
         end
         JuMP.@objective(model, Max, level)
         return (kind=:cumulative_max_min, level=level, x=x, weights=weights)
@@ -3025,6 +3025,37 @@ function _optimize_fairness!(model, stage; max_min_tolerance)
     JuMP.@objective(model, Max,
         sum(stage.weights[id] * stage.x[id] for id in keys(stage.x)))
     JuMP.optimize!(model)
+end
+
+# Maximization-oriented objective values attained by the final primal. Staged
+# policies retain their primary and secondary objectives separately.
+function _doe_fairness_selection_key(model, stage;
+                                      temporal_history=nothing, temporal_dt_h=1.0)
+    secondary = Float64(JuMP.objective_value(model))
+    if stage.kind == :cumulative_max_min
+        primary = minimum((get(temporal_history, id, 0.0) +
+            temporal_dt_h * JuMP.value(x)) / stage.weights[id]
+            for (id, x) in stage.x)
+        return [primary, secondary]
+    elseif stage.kind == :max_min
+        return [minimum(JuMP.value(x) for x in values(stage.x)), secondary]
+    end
+    return [JuMP.objective_sense(model) == JuMP.MOI.MIN_SENSE ? -secondary : secondary]
+end
+
+# Filter against each stage's best value across remaining runs. This avoids
+# accumulating tolerance losses through a chain of pairwise near-ties.
+function _doe_select_fairness_run(selection_keys, accepted, tolerances)
+    isempty(accepted) && return 1
+    eligible = copy(accepted)
+    for interval in eachindex(tolerances)
+        for stage in eachindex(tolerances[interval])
+            best = maximum(selection_keys[index][interval][stage] for index in eligible)
+            filter!(index -> selection_keys[index][interval][stage] >=
+                best - tolerances[interval][stage], eligible)
+        end
+    end
+    return first(eligible)
 end
 
 function _fairness_metrics(alloc, cps, policy, direction; cumulative=nothing)
@@ -3781,6 +3812,8 @@ function _solve_interval_group(group, cps, policy;
     snapshot = Dict{String,Any}("termination_status"=>status,
                                 "primal_status"=>primal)
     objective = NaN
+    fairness_selection_key = Float64[]
+    fairness_selection_tolerances = Float64[]
     context_results = OperatingEnvelopeContextResult[]
     replay_values = Vector{Tuple{Int,Int,Dict{_DOEControlKey,Float64},Vector{Dict{String,Any}}}}()
     policy_control_values = Dict{_DOEPolicyValueKey,Float64}()
@@ -3801,6 +3834,12 @@ function _solve_interval_group(group, cps, policy;
         end
         total = sum(values(alloc))
         objective = JuMP.objective_value(model)
+        if fixed_capacity === nothing
+            fairness_selection_key = _doe_fairness_selection_key(model, stage;
+                temporal_history, temporal_dt_h)
+            fairness_selection_tolerances = length(fairness_selection_key) == 2 ?
+                [max_min_tolerance, 0.0] : [0.0]
+        end
         representative_index = findfirst(r -> r.scenario == 1 && all(isone, r.fractions), records)
         representative = records[something(representative_index, 1)]
         snapshot = extract_result(representative.ctx)
@@ -3867,6 +3906,9 @@ function _solve_interval_group(group, cps, policy;
         "feasible" => feasible,
         "primal_status" => primal,
         "objective" => objective,
+        "fairness_selection_key" => fairness_selection_key,
+        "fairness_selection_tolerances" => fairness_selection_tolerances,
+        "fairness_selection_orientation" => :maximize,
         "solve_time_seconds" => solve_time_seconds,
         "direction" => direction,
         "security" => security,
@@ -4122,9 +4164,12 @@ end
         start_scales=(1.0, 0.9, 1.1), base_start_hook! = nothing, kwargs...)
 
 Run the same DOE formulation from several deterministic perturbations of the
-native registered-variable starting point. The selected result maximizes total
-published capacity among runs with feasible primal solutions, while diagnostics
-retain every termination status and the per-interval capacity spread.
+native registered-variable starting point. Among runs with feasible primals,
+selection compares the requested fairness objectives in chronological interval
+order, with primary then secondary objectives for max-min policies. Primary
+max-min differences within `max_min_tolerance` are treated as ties; exact ties
+retain the earlier run. Equal-curtailment objectives are minimized. Diagnostics
+retain objective keys, every termination status, and capacity spread.
 
 This is a branch-sensitivity diagnostic, not a proof of global optimality.
 `base_start_hook!`, when supplied, runs before each scale perturbation. Remaining
@@ -4154,8 +4199,11 @@ function solve_operating_envelope_multistart(
     accepted = [index for index in eachindex(runs)
                 if all(get(diag, "feasible", false)
                        for diag in runs[index].diagnostics)]
-    selected_index = isempty(accepted) ? 1 : accepted[argmax(
-        [sum(runs[index].total_capacity) for index in accepted])]
+    selection_keys = [[diag["fairness_selection_key"] for diag in run.diagnostics]
+                      for run in runs]
+    selection_tolerances = [diag["fairness_selection_tolerances"]
+        for diag in runs[isempty(accepted) ? 1 : first(accepted)].diagnostics]
+    selected_index = _doe_select_fairness_run(selection_keys, accepted, selection_tolerances)
     interval_count = length(runs[selected_index].total_capacity)
     spreads = fill(NaN, interval_count)
     if !isempty(accepted)
@@ -4165,7 +4213,11 @@ function solve_operating_envelope_multistart(
         end
     end
     diagnostics = Dict{String,Any}(
-        "selection" => :maximum_total_capacity_among_feasible_primals,
+        "selection" => :chronological_lexicographic_fairness_among_feasible_primals,
+        "fairness_selection_keys" => selection_keys,
+        "fairness_selection_tolerances" =>
+            [diag["fairness_selection_tolerances"] for diag in runs[selected_index].diagnostics],
+        "tie_break" => :first_run,
         "accepted_run_indices" => accepted,
         "start_changed_variable_counts" => changed_counts,
         "termination_statuses" => [run.termination_status for run in runs],
