@@ -1124,9 +1124,11 @@ function _safe_direction_scale_implicit!(
     # those constraints is formally an improvement and was tried; it changed
     # which points converge at `tol=1e-8` on a different Ipopt/MUMPS build
     # (3 assertions in `stamped P/Q priority under PV oversizing` on
-    # ubuntu-latest, clean on aarch64-darwin). They are load-bearing as
-    # regularizers, exactly like the `a_loss == 0` epigraph in the plant. The
-    # removal therefore belongs with the limiter conditioning work, not here.
+    # ubuntu-latest, clean on aarch64-darwin). Their retention is an empirical
+    # solver-path workaround, not a mathematically justified regularization.
+    # Exact-zero elimination improves the ripple cases in the controlled
+    # Ipopt/MadNLP study in scripts/diagnostics/controller_convergence.md;
+    # production removal still needs validation across the controller suite.
     headroom = limit - offset_magnitude
     available = all(_is_identically_zero, offset) ? headroom :
         (headroom + sqrt(headroom^2 + epsilon^2))/2

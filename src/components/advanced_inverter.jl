@@ -1649,11 +1649,12 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
             imag_terms = _push_magnitude(
                 imag_terms, isq, _magnitude_epsilon(inv.i_max, ib))
         else
-            # Kept even though a_loss == 0 multiplies the magnitude away: this
-            # boxed epigraph is load-bearing as a REGULARISER, not as a loss
-            # term. Removing it was measured to push otherwise healthy solves
-            # (single-phase, no i_max) into ITERATION_LIMIT. It is boxed by the
-            # conductor rating so its slack cannot run away.
+            # Kept even though a_loss == 0 multiplies the magnitude away:
+            # removing this epigraph was measured to push otherwise healthy
+            # solves (single-phase, no i_max) into ITERATION_LIMIT. This is an
+            # empirical solver-path workaround, not a loss term or a
+            # mathematically justified regularization. When a conductor rating
+            # is present, it also bounds the auxiliary magnitude above.
             im = JuMP.@variable(m, base_name = "imag_$(inv.id)_$(ph)",
                                 lower_bound = 0.0)
             if inv.i_max !== nothing
