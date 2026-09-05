@@ -639,6 +639,8 @@ end
     # 0.7 V keeps the backoff clearly active (current_scale ~ 0.88). Use the
     # formulation's per-unit/device normalization directly: Ipopt's additional
     # gradient scaling can hide accuracy in the implicit-root constraints.
+    # Adaptive barrier updates avoid the stagnation seen with the monotone
+    # strategy on Julia 1.10 while retaining the same convergence tolerance.
     inverter = AdvancedInverter(
         id="ripple_limit", bus="poc", phase_terminals=["a", "b", "c"],
         neutral="n", topology=:THREE_LEG, s_max=20e3, i_max=40.0,
@@ -649,7 +651,8 @@ end
         inv_grid3_unbal(), ControlledDevice(inverter, controller),
         _CTRL_REQUEST; per_unit=true,
         solver_options=("max_iter" => 500, "tol" => 1e-8,
-                        "nlp_scaling_method" => "none"))
+                        "nlp_scaling_method" => "none",
+                        "mu_strategy" => "adaptive"))
     @test result.solve.publishable
     @test result.plant.dv2 <= inverter.dv2_max + 1e-6
     @test result.control.current_scale < 1.0

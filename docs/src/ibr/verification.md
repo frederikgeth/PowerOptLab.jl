@@ -82,7 +82,9 @@ not universal model equivalences.
 ### Numerical regression settings
 
 The DC-ripple saturation and LCL current-target regressions use `tol=1e-8`
-with `nlp_scaling_method="none"`. Their equations already include per-unit and
+with `nlp_scaling_method="none"`; the ripple fixture additionally uses
+`mu_strategy="adaptive"` to avoid monotone-barrier stagnation on Julia 1.10.
+Their equations already include per-unit and
 device normalization. In the grid-target fixture, Ipopt's additional gradient
 scaling stopped at acceptable tolerance; solving with the declared row scales
 reaches the requested convergence criterion and satisfies the physical
