@@ -1,85 +1,95 @@
-# Function formulation layer: implementation plan
+# Configurable function formulations: development plan
 
-## Objective and boundary
+## Purpose
 
-Stage a small reusable mathematical layer in PowerOptLab before proposing stable
-pieces for BMOPFTools. Preserve canonical function semantics while selecting a
-smooth surrogate, an exact graph encoding, or an explicitly labelled outer
-relaxation. External libraries may own homotopy/continuation; PowerOptLab will not
-implement a continuation or retry algorithm for this addition.
+Deliver tools that enable researchers to investigate nonsmooth inverter controls
+and operating-envelope formulations. PowerOptLab stages adaptable implementations,
+worked examples and transparent diagnostics. This branch does not prescribe a
+research protocol, declare a winning formulation, or require an engine-grade proof
+and regression programme before an experimental idea can be used.
 
-The first executable slice covers bounded, continuous, scalar PWL curves (including
-hinges, deadbands, and clamps), fixed smoothing parameters, a shared scalar
-feeder/controller equilibrium, and physical-unit error accounting. Existing
-inverter defaults are unchanged. Arbitrary discontinuous steps, hysteresis,
-multivariate surfaces, automatic error propagation through a network, and changes
-to the inverter's purpose-specific norm formulas are subsequent work.
+The same canonical function should support alternative representations, physical
+error accounting and independent evaluation. Researchers choose the cases,
+optimizers, options, tolerances, parameter sweeps and interpretation of outcomes.
+External libraries may own continuation/homotopy. PowerOptLab will not add its own
+continuation or automatic retry algorithm in this work.
 
-## Commit sequence and acceptance
+## Delivery sequence
 
-1. **Canonical curves and contracts.** Validated immutable data; physical domain
-   and unit labels; exact numeric oracle; softplus and compact C2 approximations;
-   analytic derivative and signed error bounds. Tests at knots, endpoints, narrow
-   bands, and rescaled coordinates. Reuse BMOPFTools softplus evaluation.
-2. **JuMP representations.** Model builders with explicit coordinate scaling;
-   reuse BMOPFTools' expression builder on staged contexts; analytic scalar
-   operators for standalone models; native MOI complementarity; bounded vertex
-   hull; optional PiecewiseLinearOpt exact graph extension. Returned handles carry
-   semantics and allow independent exact-graph discrepancy assessment. Check
-   derivative integration, constant/affine cases, and hull-versus-graph witnesses.
-3. **Executable comparison and external solvers.** A small voltage/controller
-   equilibrium with analytic segment reference; compare at matched output-error
-   budgets over starts and physical bases. Optional isolated CCOpt / MIP environment
-   with a reproducible setup and CI job. Record solver status, graph discrepancy,
-   electrical residual, approximation allowance, and relaxation semantics
-   independently; never promote a relaxed candidate to a physical certificate.
-4. **Documentation and validation.** Executable tutorial, API documentation,
-   assumptions, scientific sources, tests on supported Julia versions, full package
-   regressions and documentation build. Record remaining research questions.
+### A. Mathematical building blocks and physical budgets
 
-## Mathematical contracts
+- Retain the bounded PWL definitions and all existing representations.
+- Add physical-error-to-width selection and explicit flat-extension evaluation.
+- Add purpose-specific shifted-lower and upper magnitude primitives and their
+  signed error bounds; keep exact positive-domain roots distinct.
+- Supply simple composition and local equilibrium-sensitivity tools with explicit
+  assumptions. Avoid automatic claims of whole-network safety from primitive error.
+- Decouple complementarity normalization from the network coordinate base. Let
+  callers choose the normalization and inspect physical residuals.
+- Provide documented public extension methods so new smoothing families can be
+  staged without editing a central list of built-in types.
 
-- All canonical breakpoints, values, widths and absolute error budgets use the
-  declared physical units. Coordinate scales convert physical values to solver
-  variables and preserve the underlying problem.
-- Softplus and compact C2 smoothing operate on the same clamped PWL hinge
-  expansion. Signed coefficient sums bound signed function error; zero coefficients
-  are removed. Smoothing is a surrogate graph, not a physical safety certificate.
-- A continuous vertex hull is the exact convex hull of the bounded PWL graph in
-  (input, output) coordinates, but composing hulls with other equations generally
-  gives only an outer relaxation of the full model.
-- Complementarity and segment selection encode the canonical graph mathematically;
-  numerical feasibility, complementarity and solver optimality remain separate.
-- Finite domains, unit labels, smoothness, error direction, and representation kind
-  are inspectable. Unsupported combinations fail explicitly.
+### B. Configurable experiment infrastructure
 
-## Reuse and references
+- Cases are callbacks that construct models; methods supply representations,
+  optimizers, options and configuration hooks. User-owned configuration records
+  define sweeps, with no fixed feeder, source-voltage list or error target.
+- Record build/solve times, raw solver outcomes, candidate diagnostics, errors and
+  unsupported combinations. Preserve non-success candidates as diagnostics.
+- Acceptance is an optional caller callback, separate from raw solver status.
+- Export result data and caller-selected source fingerprints, with explicit
+  version/schema metadata. Do not serialize solver/model objects as evidence.
+- Keep previous fixed examples as reproducible illustrations of one configuration.
 
-BMOPFTools supplies stable telescoping softplus. PiecewiseLinearOpt supplies exact
-PWL graph formulations. JuMP/MOI supplies complementarity constraints, and CCOpt
-with MathOptComplements supplies their external solution machinery. Closed-form
-local polynomial patches and vertex hull equations are small enough to maintain
-here without a general spline or global-optimization dependency.
+### C. Controller integration and example adapters
 
-- Chen and Mangasarian (1996): https://doi.org/10.1007/BF00249052
-- Chen (2012): https://doi.org/10.1007/s10107-012-0569-0
-- Huchette and Vielma: https://arxiv.org/abs/1708.00050
-- Nurkanovic, Pozharskiy and Diehl (2024): https://arxiv.org/abs/2312.11022
-- CCOpt (2026 preprint): https://arxiv.org/abs/2604.18726
+- Let existing PiecewiseLinearLaw users select softplus or local C2 independently
+  for each curve. Preserve legacy constructors and default behavior.
+- Keep numeric smooth evaluation faithful to the stamped formulation, including
+  flat tails beyond the first/last control breakpoint.
+- Expose adapters for real controlled-inverter studies. A generic case callback
+  also supports feeder/DOE experiments without a new rigid campaign API.
+- Keep complementarity and exact/hull graph integration explicit: substituting
+  them for a smooth controller changes problem class and available guarantees.
+
+### D. Researcher documentation
+
+- An executable getting-started path from canonical curve to custom experiment.
+- A mathematical guide to smoothing, signed error, composition, norm direction,
+  conditioning, complementarity and graph/hull semantics.
+- A controller tutorial, including how to vary curves and solver settings and
+  diagnose non-publishable candidates.
+- An extension tutorial showing a researcher adding a smoothing family and a
+  custom case/metric without modifying the engine.
+- Ground claims in primary sources. Separate analytic guarantees, local estimates,
+  example observations and unassessed properties. Explain assumptions pedagogically.
+
+## Verification proportionate to staging
+
+Use focused checks for new contracts, model construction, representative solves,
+status preservation and executable examples. Existing package regressions remain
+useful for compatibility. Do not require every research solver/case combination to
+converge or encode one campaign's numerical outcomes as universal acceptance
+criteria. Exhaustive derivative/error proofs, platform-wide reliability campaigns,
+performance guarantees and final API stabilization belong to a later proposal for
+BMOPFTools' engine.
+
+## Boundaries
+
+A complete hybrid dynamical-system simulator, automatic whole-network safety
+certification, a new MPCC/global solver, and general multivariate spline fitting
+are outside this delivery. Composition, stationarity and equilibrium estimates
+must state what they actually assess. Reuse external solver and graph libraries.
+
+## Existing foundation
+
+The initial commits provide PWL softplus/C2/complementarity/exact-graph/hull
+representations, an analytic scalar feeder, source-fingerprinted example evidence,
+and optional backend CI. They pass 5,129 functional checks and 224 optional checks
+on Julia 1.10 and 1.12. The initial CCOpt snapshot is an example observation
+(0/20 strict successes), not a library-wide claim or an acceptance policy.
 
 ## Progress
 
-- Branch created from merged main f65cb32; canonical primitives and all five
-  representations implemented, with optional PiecewiseLinearOpt delegation.
-- Shared electrical reference, executable tutorial, isolated external-backend
-  setup, source-fingerprinted snapshot, and dedicated optional CI job implemented.
-- Julia 1.10 and 1.12: all 5,129 functional assertions pass; documentation
-  examples build. The optional integration suite passes 224 assertions on each
-  Julia version, with the same explicitly recorded CCOpt limitations.
-- Exact graph: 20/20 strict successes and physical reference checks. CCOpt 0.1.0:
-  0/20 strict successes, 8/20 microunit canonical-equation checks. The latter is
-  explicitly a characterization backend; its numerical limitations remain work
-  rather than being hidden by the optional integration test result.
-- Subsequent research: physical complementarity normalization and stationarity,
-  purpose-specific norm/root contracts, and realistic inverter/fleet integration.
-  No migration to BMOPFTools is proposed until those interfaces are established.
+- Expanded plan recorded in response to the staging/configurability requirement.
+- A–D implementation in progress; commit working increments along the way.
