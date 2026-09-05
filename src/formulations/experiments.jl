@@ -112,6 +112,7 @@ function run_formulation_experiment(cases,methods;configurations=[NamedTuple()],
                         (contract=formulation_contract(h.curve,h.formulation),
                          formulation_type=string(typeof(h.formulation)),
                          input_scale=h.input_scale,output_scale=h.output_scale,
+                         domain=h.domain,
                          complementarity_scale=h.complementarity_scale,
                          curve=(breakpoints=h.curve.breakpoints,values=h.curve.values)))
                         for h in get(payload,:observations,())]

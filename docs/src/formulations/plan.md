@@ -138,3 +138,24 @@ primitive/model checks also pass on Julia 1.10.11. The expanded optional suite
 passes 231 checks on Julia 1.12.6. Documentation builds with all examples executed.
 These are compatibility and focused integration checks, not a new solver
 reliability campaign or an engine-migration gate.
+
+
+## Semantic control intent and compilation guide
+
+The follow-up scope separates physical volt-var/watt intent from numerical
+encoding. Deliver immutable `VoltVarWattIntent`, independent per-curve
+`VoltVarWattEncoding`, lowering into existing smooth policies, and explicitly
+bounded curve ports for smooth/exact/hull/complementarity experiments. Preserve
+flat-tail semantics when restricting a port's voltage domain. Prepare immutable
+hinge coefficients once and reuse identical model-local curve blocks.
+
+Provide an executable explanation of numeric replay, staged and plain JuMP
+nonlinear operators, solver bridges and external CCOpt homotopy. Expose physical
+budgets, coordinate and complementarity scales, graph methods, solver options,
+cache behavior and supported full-controller versus scalar-curve boundaries.
+Demonstrate all encodings and Ipopt/MadNLP/HiGHS/CCOpt paths, plus structural reuse
+counts. Update the physical inverter example to use semantic intent. Validate
+focused semantics/domain/reuse checks, existing formulation/controller checks,
+all documentation examples and optional solver integration. Whole-controller MIP
+or MPCC compilation and general expression-graph optimization remain future
+extensions, rather than being implied by scalar graph support.

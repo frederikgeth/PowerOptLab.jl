@@ -11,6 +11,8 @@ struct PWLFunction
     values::Tuple{Vararg{Float64}}
     input_unit::Symbol
     output_unit::Symbol
+    slopes::Tuple{Vararg{Float64}}
+    hinges::Tuple{Vararg{Tuple{Float64,Float64}}}
     function PWLFunction(breakpoints, values; input_unit::Symbol=:unitless,
                          output_unit::Symbol=:unitless)
         xs, ys = Tuple(Float64.(breakpoints)), Tuple(Float64.(values))
@@ -21,7 +23,9 @@ struct PWLFunction
         slopes = diff(collect(ys)) ./ diff(collect(xs))
         all(isfinite, slopes) && all(isfinite, diff([0.; slopes; 0.])) ||
             throw(ArgumentError("Curve slopes and slope changes must be finite"))
-        new(xs, ys, input_unit, output_unit)
+        changes = diff([0.; slopes; 0.])
+        hinges = Tuple((c,k) for (c,k) in zip(changes,xs) if !iszero(c))
+        new(xs, ys, input_unit, output_unit,Tuple(slopes),hinges)
     end
 end
 
@@ -79,11 +83,7 @@ struct ExactPWLGraph <: AbstractPWLFormulation
 end
 ExactPWLGraph(; method::Symbol=:Logarithmic) = ExactPWLGraph(method)
 
-function _pwl_hinges(f::PWLFunction)
-    slopes = diff(collect(f.values)) ./ diff(collect(f.breakpoints))
-    changes = diff([0.; slopes; 0.])
-    return [(c, k) for (c, k) in zip(changes, f.breakpoints) if !iszero(c)]
-end
+_pwl_hinges(f::PWLFunction) = f.hinges
 
 function _pwl_exact(f::PWLFunction, x)
     xs, ys = f.breakpoints, f.values

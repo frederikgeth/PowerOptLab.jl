@@ -112,6 +112,7 @@ include("formulations/experiments.jl")
 include("components/devices.jl")
 include("components/advanced_inverter.jl")
 include("components/inverter_controls.jl")
+include("formulations/control_intent.jl")
 include("formulations/cases.jl")
 include("components/battery_chemistry.jl")
 include("components/ivq_battery.jl")
@@ -148,6 +149,8 @@ export PWLFunction, SoftplusFormulation, LocalC2Formulation, ComplementarityGrap
        resistive_equilibria, resistive_control_case, controlled_inverter_case
 export AlgebraicFormulation, hinge_expression, selector_value, selector_expression,
        selector_contract, symmetric_clip_value, symmetric_clip_expression
+export VoltVarWattIntent, VoltVarWattEncoding, lower_positive_policy,
+       formulate_control_curve!, lowering_statistics
 
 # Shared extension interfaces
 export AbstractDevice, AbstractMeasurement, AbstractSolveResult

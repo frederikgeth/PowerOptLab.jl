@@ -2,7 +2,9 @@
     PWLFormulationHandle
 
 A built representation: canonical `curve`, `formulation`, working-coordinate
-`input` and `output`, coordinate scales, and complementarity `pairs`. Inspect its
+`input` and `output`, coordinate scales, physical voltage/input `domain`, and
+complementarity `pairs`. The domain can differ from the curve's outer knots for
+smooth control ports, without changing the smoothed curve. Inspect its
 semantics with `formulation_contract(handle.curve, handle.formulation)` and its
 candidate values with `audit_pwl`. Handles do not certify a network solution.
 """
@@ -16,6 +18,7 @@ struct PWLFormulationHandle
     output_scale::Float64
     complementarity_scale::Float64
     pairs::Vector{Tuple{JuMP.VariableRef,JuMP.VariableRef}}
+    domain::Tuple{Float64,Float64}
 end
 
 function _pwl_scale(x)
@@ -33,8 +36,15 @@ function _pwl_operator(m, f, r, si, so)
     end
     key = (f.breakpoints, f.values, r, si, so)
     return get!(cache,key) do
+        # Capture vector conversion once. The upstream softplus oracle still
+        # owns its validation/evaluation; derivative coefficients are prepared
+        # in the immutable curve instead of reconstructed at every callback.
+        xs,ys = collect(f.breakpoints),collect(f.values)
+        evaluate = r isa SoftplusFormulation ?
+            (x -> BMOPFTools.piecewise_linear_value(x*si,xs,ys;epsilon=r.width)/so) :
+            (x -> _pwl_smooth(f,x*si,r)/so)
         JuMP.add_nonlinear_operator(m, 1,
-            x -> _pwl_smooth(f,x*si,r)/so,
+            evaluate,
             x -> _pwl_derivatives(f,x*si,r)[1]*si/so,
             x -> _pwl_derivatives(f,x*si,r)[2]*si^2/so;
             name=gensym(:pol_pwl))
@@ -104,7 +114,8 @@ function _formulate_pwl!(m,ctx,f,x,r,input_scale,output_scale)
     else
         throw(ArgumentError("Unsupported PWL formulation $(typeof(r))"))
     end
-    return PWLFormulationHandle(m,f,r,x,y,si,so,cs,pairs)
+    return PWLFormulationHandle(m,f,r,x,y,si,so,cs,pairs,
+        (first(f.breakpoints),last(f.breakpoints)))
 end
 function _require_pwl_graph_extension()
     Base.get_extension(@__MODULE__, :PowerOptLabPiecewiseLinearOptExt) === nothing &&
@@ -125,7 +136,7 @@ function audit_pwl(h::PWLFormulationHandle)
     JuMP.has_values(h.model) || throw(ArgumentError("Model has no candidate values"))
     x,y = JuMP.value(h.input)*h.input_scale,JuMP.value(h.output)*h.output_scale
     all(isfinite,(x,y)) || throw(ArgumentError("Candidate input/output is nonfinite"))
-    lo,hi = first(h.curve.breakpoints),last(h.curve.breakpoints)
+    lo,hi = h.domain
     domain_violation = max(lo-x,x-hi,0.)
     # The flat extension is used only for residual reporting outside the domain;
     # the contract's error guarantee applies only when the domain is satisfied.
