@@ -5,6 +5,11 @@ Use [the experiment tutorial](experiments.md) for a guided introduction.
 
 ```@docs
 PWLFunction
+```
+
+## Control intent and lowering
+
+```@docs
 VoltVarWattIntent
 VoltVarWattEncoding
 lower_positive_policy
@@ -16,6 +21,11 @@ plan_pwl_relation
 formulate_pwl_relation!
 formulate_control_relation!
 audit_pwl_relation
+```
+
+## Curve representations and graph construction
+
+```@docs
 SoftplusFormulation
 LocalC2Formulation
 AlgebraicFormulation
@@ -28,6 +38,11 @@ formulation_contract
 PWLFormulationHandle
 formulate_pwl!
 audit_pwl
+```
+
+## Smoothing and selector extensions
+
+```@docs
 AbstractPWLFormulation
 AbstractPWLSmoothing
 hinge_value
@@ -41,6 +56,11 @@ symmetric_clip_value
 symmetric_clip_expression
 smoothing_for_error
 smooth_pwl_expression
+```
+
+## Physical magnitudes and error accounting
+
+```@docs
 MagnitudeApproximation
 magnitude_value
 magnitude_contract
@@ -48,6 +68,11 @@ magnitude_expression
 positive_root_expression
 affine_error_bound
 local_error_response
+```
+
+## Experiments and reference cases
+
+```@docs
 FormulationCase
 FormulationMethod
 UnsupportedFormulation

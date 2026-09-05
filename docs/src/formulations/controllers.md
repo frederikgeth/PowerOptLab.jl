@@ -3,8 +3,8 @@
 Start with [control intent, compilation and solver pathways](compilation.md) for
 the separation between physical semantics, encodings and backend configuration.
 
-`PiecewiseLinearLaw` now accepts `formulation=...`. The legacy
-`smoothing_epsilon=...` constructor still selects BMOPFTools softplus. Each
+`PiecewiseLinearLaw` accepts `formulation=...`. The
+`smoothing_epsilon=...` constructor selects BMOPFTools softplus. Each
 volt-watt, volt-var or negative-sequence gain curve may select its own smoothing
 family. This changes the curve representation; the controller's extrema, limiter,
 voltage floor and plant-capability equations retain their separately configured
@@ -76,13 +76,13 @@ Requested active/reactive powers are also reported. A custom metric callback
 `metrics(ctx, handles, device, request)` can add quantities relevant to your study;
 its record is kept under `metrics.custom`.
 
-For the established full solved-result interface, pass the same device to
+For the full solved-result interface, pass the same device to
 `solve_controlled_inverter`. Its `exact_smooth_current_residual` includes the
 plant-capability comparison at the solved phasors and is published only after a
 strictly successful outcome. See [the control-study methodology](../ibr/control_study_methodology.md)
 for the distinction between same-state replay, hardware feasibility and network
-fixed-point evidence. The existing network fixed-point/sensitivity interfaces
-remain available; this branch introduces no new continuation or re-solve method.
+fixed-point evidence. The experiment runner performs one solve per configuration;
+it does not add continuation or automatic retries.
 
 ## Tail semantics and faithful evaluation
 
@@ -114,22 +114,22 @@ class. The scalar case already supports these objects; a researcher extending
 an AC controller should build and document the graph coupling explicitly and
 select a backend capable of the resulting nonlinear/integer/MPCC model.
 
-## What the advanced IBR refactor shares
+## Shared controller primitives
 
-The production controller equations now call the same primitive layer used by
+The controller equations call the same primitive layer used by
 standalone experiments. The following table identifies the physical role of each
 construction; these roles explain why one smoothing family should not simply be
 substituted for every square root in a model.
 
-| Operation in the existing IBR model | Shared construction | Preserved interpretation |
+| Operation in the IBR model | Shared construction | Physical interpretation |
 |:--|:--|:--|
-| Volt-watt, volt-var and unbalance gain curves | `smooth_pwl_expression` / `primitive_value` | Selected family and flat tails; legacy softplus default |
-| Phase extrema, available-power minimum and positive/negative conflict branches | `selector_expression` / `selector_value` with `AlgebraicFormulation` | Existing physical widths and binary operation order |
-| Symmetric P/Q priority clipping | `symmetric_clip_expression` / `symmetric_clip_value` | Existing clipping formula |
+| Volt-watt, volt-var and unbalance gain curves | `smooth_pwl_expression` / `primitive_value` | Selected family and flat tails; softplus default |
+| Phase extrema, available-power minimum and positive/negative conflict branches | `selector_expression` / `selector_value` with `AlgebraicFormulation` | Physical widths and binary operation order |
+| Symmetric P/Q priority clipping | `symmetric_clip_expression` / `symmetric_clip_value` | Symmetric clipping formula |
 | Composition of successive capability scale factors | `selector_expression(...; kind=:nonnegative_min)` | Zero-preserving, nonnegative under-approximation of the minimum |
 | Current, apparent-power and ripple capability denominators | `MagnitudeApproximation(...; direction=:upper)` | Avoid creating headroom through magnitude underestimation |
-| Negative-sequence voltage signal | `MagnitudeApproximation(...; direction=:lower)` | Zero at balance, existing eta error budget |
-| Advanced inverter linear-current loss | `MagnitudeApproximation(...; direction=:lower)` | Existing per-leg ampere budget and loss deficit bound |
+| Negative-sequence voltage signal | `MagnitudeApproximation(...; direction=:lower)` | Zero at balance, eta error budget |
+| Advanced inverter linear-current loss | `MagnitudeApproximation(...; direction=:lower)` | Per-leg ampere budget and loss deficit bound |
 
 The physical squared capability constraints, sequence transformations, voltage
 floors, plant-aware allocation and controller tie/conflict policies remain

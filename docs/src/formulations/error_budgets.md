@@ -120,7 +120,7 @@ The smooth-hinge approach belongs to established smoothing methods; see
 [Chen and Mangasarian (1996), *A class of smoothing functions for nonlinear and
 mixed complementarity problems*](https://doi.org/10.1007/BF00249052).
 The compact quartic patch and the bounds above are derived explicitly in this
-documentation and [the formulation guide](index.md); no claim of a novel algorithm
+documentation and [the formulation guide](theory.md); no claim of a novel algorithm
 or a universal reliability advantage is made.
 
 Exact MIP PWL graphs are implemented by the external library described by
@@ -160,7 +160,8 @@ s(a,b)=\frac{ab}{M(a,b)},\qquad a,b\geq0.
 
 An upper hinge with `h(0)>0` makes the denominator positive on this domain. Since
 `M≥max(a,b)`, `0≤s≤min(a,b)` and zero is preserved. To bound the deficit, suppose
-`a≤b`; then `a-s=a(M-b)/M≤M-b≤B`. Symmetry gives the other case. These facts
+`a≤b`; then `a-s=a(M-b)/M≤M-b≤B`. For `b≤a`, instead
+`b-s=b(M-a)/M≤M-a≤B`. No symmetry of the hinge is required. These facts
 explain both the error interval `[-B,0]` and the domain requirement. Custom
 families may use this selector when their declared hinge bounds and value at zero
 satisfy these assumptions; the declaration is not an automated proof.

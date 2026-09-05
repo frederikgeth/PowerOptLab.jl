@@ -2,9 +2,8 @@
 
 See [the configurable experiment tutorial](../../docs/src/formulations/experiments.md)
 to supply your own cases, configurations, methods, metrics and acceptance criteria.
-The scripts here retain one fixed illustration for reproducibility; they do not
-define the experiment API or a mandatory research protocol. The
-[mathematical guide](../../docs/src/formulations/index.md) explains the contracts.
+The scripts provide reproducible scalar and control-lowering examples. The
+[mathematical guide](../../docs/src/formulations/theory.md) explains the contracts.
 
 ```sh
 julia --project=. scripts/instantiate_pinned.jl
@@ -43,7 +42,7 @@ passing optional job is not a claim that every MPCC case converges or meets the
 physical accuracy target. The hull intentionally fails canonical controller
 agreement (16 A at 246 V, where the controller commands 8 A).
 
-`ComplementarityGraph(scale=...)` now exposes physical hinge normalization
+`ComplementarityGraph(scale=...)` exposes physical hinge normalization
 independently of model coordinates. The optional script also runs three focused
 cases through the configurable API and exports them to a separate
 `*-configurable.toml` bundle. CI uploads both bundles. No improvement in MPCC
@@ -53,3 +52,20 @@ The controller adapter and configurable runner enable studies of external solver
 controls, stationarity, normalization and realistic three-phase/fleet cases.
 Researchers choose their own physical oracles and acceptance policies while raw
 solver outcomes remain available.
+
+## Control intent and bounded relations
+
+```sh
+julia --project=. scripts/formulations/control_lowering.jl
+julia --project=. scripts/formulations/bounded_relations.jl
+POL_FORMULATION_RESULTS=/tmp/pol-control-results.toml \
+  julia --project=/tmp/pol-pwl-env scripts/formulations/control_lowering_optional.jl
+```
+
+The optional control tutorial compares smooth MadNLP, exact HiGHS, hull HiGHS
+and CCOpt paths. The bounded example varies voltage domains, equality versus
+upper-limit use, and specialization. Unsupported automatic specializations are
+recorded explicitly. Optional exports include `*-bounded.toml` and
+`*-bounded-mpcc.toml`; graph and relation observations keep their own residual
+semantics. See [bounds and relations](../../docs/src/formulations/bounds_and_relations.md)
+for the geometry and reproduction instructions for the figures.

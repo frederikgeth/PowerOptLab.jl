@@ -131,7 +131,7 @@ entire network inside one large user-defined operator. That would obscure its
 structure and generally make derivative work less efficient. See JuMP's
 [nonlinear modeling and operator documentation](https://jump.dev/JuMP.jl/stable/manual/nonlinear/).
 The curve family's smoothness also does not change every other controller
-operation: see the [IBR primitive integration map](controllers.md#What-the-advanced-IBR-refactor-shares).
+operation: see the [IBR primitive integration map](controllers.md#Shared-controller-primitives).
 
 A specialized BMOPFTools option, `build_opf_model(...; softplus=:builtin)`, emits
 native `log1p(exp(...))` expressions for wrappers that reject user-defined
@@ -314,7 +314,7 @@ builds fresh models so warm starts and mutable solver state do not silently
 cross configurations.
 
 Continue with [the full physical IBR example](controllers.md), or use the
-[analytic feeder comparison](index.md) to study feedback and multiple equilibria.
+[analytic feeder comparison](theory.md) to study feedback and multiple equilibria.
 For the mathematical distinction between graph formulations and relaxations,
 see Huchette and Vielma's
 [piecewise-linear formulation study](https://arxiv.org/abs/1708.00050).

@@ -220,8 +220,8 @@ without promoting approximate candidates or adding local continuation methods.
   emitted floating-point model or certification of solver output.
 
 The four supplied diagrams cover locality/curvature, feasible-set geometry,
-contextual lowering and stopping-versus-model tolerances. Natural next study
-figures are relaxation gap versus bound width, build/solve cost versus device
+contextual lowering and stopping-versus-model tolerances. Useful experimental
+comparisons are relaxation gap versus bound width, build/solve cost versus device
 count, and physical error versus smoothing width across starts. Generate these
 from recorded experiments; a schematic should not pretend to establish a
 numerical winner.

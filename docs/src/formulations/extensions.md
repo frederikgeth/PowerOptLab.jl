@@ -1,4 +1,4 @@
-# Stage a new smoothing family
+# Implement a smoothing family
 
 The extension interface separates a mathematical hinge approximation from model
 construction. Implement an immutable subtype of `AbstractPWLSmoothing` and three
@@ -17,7 +17,7 @@ Its derivatives are `(1+x/sqrt(x²+δ²))/2` and
 `1/(2δ)`. Unlike the compact patch, this family changes the hinge everywhere.
 This family is available as `AlgebraicFormulation`. The following small
 reimplementation is pedagogical: it shows every extension method a researcher
-would supply when staging a different family.
+would supply for a different family.
 
 ```@example extension
 using PowerOptLab, JuMP, Ipopt
@@ -75,13 +75,10 @@ error scales linearly with a parameter called width. You may also select differe
 families/widths for different curves via a named-tuple representation interpreted
 by your own case builder.
 
-For staging in PowerOptLab, start with focused checks: representative values,
-join behavior where relevant, independent derivative comparisons, and one model
-integration example. Record unassessed properties in documentation. An exhaustive
-solver campaign or engine-grade validation is not a prerequisite for trying an
-idea here. A later BMOPFTools contribution should bring the stronger verification,
-stable API, performance evidence and compatibility coverage appropriate to an
-engine primitive.
+Validate representative values, join behavior, independent derivative comparisons,
+and model integration. Distinguish analytically proved properties from numerical
+checks: sampling alone does not establish a uniform error bound or smoothness at
+every join. Document the domain, units and any unverified contract assumptions.
 
 ## Graphs, jumps and state
 
@@ -96,5 +93,5 @@ integer or complementarity constraints and an appropriate external solver.
 A graph formulation can be added through specialized construction/contract
 methods; it should not pretend to be a smooth hinge. The existing exact bounded
 PWL extension delegates to PiecewiseLinearOpt instead of maintaining a second
-implementation of its graph encodings. This is also the intended migration
-pattern: stage reusable abstractions locally and reuse mature external algorithms.
+implementation of its graph encodings. Reusing that implementation also keeps
+encoding options aligned with the external package.
