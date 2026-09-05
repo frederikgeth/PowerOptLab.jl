@@ -864,6 +864,27 @@ end
     @test context_rows[1].replay_feasible === true
     @test !isempty(context_rows[1].minimum_normalized_margins)
     @test context_rows[1].issued_control_replay_source == :no_issued_controls
+
+    runner_path = joinpath(@__DIR__, "..", "scripts", "run_doe_benchmark.jl")
+    case_path = joinpath(
+        @__DIR__, "..", "scripts", "cases", "doe_range_benchmark.jl")
+    include(runner_path)
+    mktempdir() do output_dir
+        output_path = joinpath(output_dir, "doe-range.tsv")
+        smoke_rows = run_doe_benchmark(case_path, output_path)
+        @test length(smoke_rows) == 2
+        @test getproperty.(smoke_rows, :method) ==
+              ["bound_point_ideal_recourse",
+               "corners_issue_plus_local_laws"]
+        @test all(getproperty.(smoke_rows, :published))
+        @test all(.!getproperty.(smoke_rows, :global_certificate))
+        @test getproperty(smoke_rows[1], :security_scope) ==
+              :simultaneous_upper_bound_only
+        @test getproperty(smoke_rows[2], :security_scope) == :all_box_corners
+        output_lines = readlines(output_path)
+        @test length(output_lines) == 3
+        @test startswith(output_lines[1], "study_id\tmethod\tinterval")
+    end
 end
 
 @testset "Operating envelope: typed scenarios and held-out coverage" begin

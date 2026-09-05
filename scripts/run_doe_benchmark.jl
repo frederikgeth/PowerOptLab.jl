@@ -25,45 +25,60 @@ function _usage()
     exit(2)
 end
 
-length(ARGS) == 2 || _usage()
-case_path = abspath(ARGS[1])
-output_path = abspath(ARGS[2])
-isfile(case_path) || error("case file not found: $case_path")
+"""Run every method declared by a `doe_benchmark_case()` case file."""
+function run_doe_benchmark(case_path::AbstractString,
+                           output_path::AbstractString)
+    case_path = abspath(case_path)
+    output_path = abspath(output_path)
+    isfile(case_path) || error("case file not found: $case_path")
 
-include(case_path)
-isdefined(Main, :doe_benchmark_case) || error(
-    "case file must define doe_benchmark_case()")
-case = Main.doe_benchmark_case()
-case isa NamedTuple || error("doe_benchmark_case() must return a NamedTuple")
+    case_module = Module(gensym(:DOEBenchmarkCase))
+    Base.include(case_module, case_path)
+    isdefined(case_module, :doe_benchmark_case) || error(
+        "case file must define doe_benchmark_case()")
+    case = Core.eval(case_module, :(doe_benchmark_case()))
+    case isa NamedTuple || error(
+        "doe_benchmark_case() must return a NamedTuple")
 
-nets = case.nets
-connection_points = case.connection_points
-methods = get(case, :methods, ["default" => NamedTuple()])
-metadata = get(case, :metadata, Dict{String,Any}())
-seeds = get(case, :seeds, Dict{String,Int}())
+    nets = case.nets
+    connection_points = case.connection_points
+    methods = get(case, :methods, ["default" => NamedTuple()])
+    metadata = get(case, :metadata, Dict{String,Any}())
+    seeds = get(case, :seeds, Dict{String,Int}())
 
-rows = NamedTuple[]
-for entry in methods
-    entry isa Pair || error("methods must contain label => NamedTuple pairs")
-    label = string(first(entry))
-    keywords = last(entry)
-    keywords isa NamedTuple || error("method '$label' options must be a NamedTuple")
-    control_policy = get(keywords, :control_policy, PerfectRecourse())
-    fairness = get(keywords, :fairness, :equal)
-    direction = get(keywords, :direction, :export)
-    security = get(keywords, :security, :bound_point)
-    utilizations = get(keywords, :utilizations, nothing)
-    solver_options = get(keywords, :solver_options, NamedTuple())
-    spec = DOEStudySpec(nets, connection_points;
-        direction, security, utilizations, control_policy, fairness,
-        solver_options, seeds,
-        metadata=merge(Dict{String,Any}(string(key) => value
-                       for (key, value) in pairs(metadata)),
-                       Dict("method" => label)))
-    result = solve_operating_envelope(nets, connection_points; keywords...)
-    append!(rows, doe_benchmark_rows(spec, result; method_label=label))
+    rows = NamedTuple[]
+    for entry in methods
+        entry isa Pair || error(
+            "methods must contain label => NamedTuple pairs")
+        label = string(first(entry))
+        keywords = last(entry)
+        keywords isa NamedTuple || error(
+            "method '$label' options must be a NamedTuple")
+        control_policy = get(keywords, :control_policy, PerfectRecourse())
+        fairness = get(keywords, :fairness, :equal)
+        direction = get(keywords, :direction, :export)
+        security = get(keywords, :security, :bound_point)
+        utilizations = get(keywords, :utilizations, nothing)
+        solver_options = get(keywords, :solver_options, NamedTuple())
+        spec = DOEStudySpec(nets, connection_points;
+            direction, security, utilizations, control_policy, fairness,
+            solver_options, seeds,
+            metadata=merge(Dict{String,Any}(string(key) => value
+                           for (key, value) in pairs(metadata)),
+                           Dict("method" => label)))
+        result = solve_operating_envelope(
+            nets, connection_points; keywords...)
+        append!(rows, doe_benchmark_rows(
+            spec, result; method_label=label))
+    end
+
+    mkpath(dirname(output_path))
+    _write_tsv(output_path, rows)
+    println("wrote $(length(rows)) DOE benchmark rows to $output_path")
+    return rows
 end
 
-mkpath(dirname(output_path))
-_write_tsv(output_path, rows)
-println("wrote $(length(rows)) DOE benchmark rows to $output_path")
+if abspath(PROGRAM_FILE) == @__FILE__
+    length(ARGS) == 2 || _usage()
+    run_doe_benchmark(ARGS[1], ARGS[2])
+end

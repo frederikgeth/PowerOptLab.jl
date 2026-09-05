@@ -8,11 +8,22 @@
 > **Expected runtime:** under one minute after Julia compilation
 >
 > **Data license:** no external data; the complete synthetic case is below
+>
+> **Random seed:** none; the allocation, corners, and refinement schedule are deterministic
+>
+> **Solver evidence:** local nonlinear Ipopt solutions and same-formulation AC replay
 
 This example isolates a range-safety failure. Three equal single-phase export
 limits are connected to a balanced three-phase feeder with a tight
 negative-sequence-voltage limit. Simultaneous equal export remains balanced,
 but unequal customer utilization creates voltage unbalance.
+
+The motivating field result is the published counterexample of [Liu and
+Braslavsky (2022)](https://doi.org/10.1109/ACCESS.2022.3203062), in which a
+customer moving strictly inside an equal 2.91 kW envelope produces a larger
+cross-phase voltage violation. This tutorial demonstrates the same logical
+pitfall on a self-contained case. It is **not** a reproduction of the CSIRO
+feeder, its parameters, or its numerical result.
 
 ## Build the complete case
 
@@ -176,6 +187,23 @@ The second allocation is lower because it represents the asymmetric points
 that falsified the original bound-point allocation. `:search_stable` still
 means only that no further counterexample was found within this recorded finite
 budget.
+
+## Run the committed benchmark
+
+The same synthetic network is packaged as a versioned case with explicit
+method labels, seed provenance, claim text, and CC0 licensing metadata:
+
+```sh
+julia --project=. scripts/run_doe_benchmark.jl \
+    scripts/cases/doe_range_benchmark.jl \
+    results/doe-range.tsv
+```
+
+The output contains one row for a simultaneous bound-point calculation with
+explicit ideal recourse and one for finite corner security with issue-time
+controls plus local laws. Each row has its own study identity and records
+`global_certificate=false`. The smoke test checks the row schema and these
+claim fields without fixing solver-dependent timings or capacities.
 
 ## Interpret the result
 
