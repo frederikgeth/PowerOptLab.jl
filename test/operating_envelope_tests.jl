@@ -135,6 +135,120 @@ end
     @test truncated_samples.diagnostics[
         "exact_conditional_draws_given_declared_model"]
 
+    residual_library = [
+        -200.0 100.0
+        -100.0 0.0
+        0.0 -100.0
+        100.0 0.0
+        200.0 100.0
+    ]
+    residual_source_times = [DateTime(2026, 6, day) for day in 1:5]
+    residual_target_times = [DateTime(2026, 7, day) for day in 1:6]
+    residual_samples = sample_doe_empirical_residual_bootstrap(
+        residual_library;
+        parameter_names=("p1_W", "p2_W"),
+        block_count=2, block_length=3, seed=47,
+        center=[4000.0, 5000.0],
+        source_timestamps=residual_source_times,
+        timestamps=residual_target_times,
+        require_regular_spacing=true,
+        metadata=Dict("residual_source" => "synthetic DSSE fixture"))
+    repeated_residual_samples = sample_doe_empirical_residual_bootstrap(
+        residual_library;
+        parameter_names=("p1_W", "p2_W"),
+        block_count=2, block_length=3, seed=47,
+        center=[4000.0, 5000.0],
+        source_timestamps=residual_source_times,
+        timestamps=residual_target_times,
+        require_regular_spacing=true,
+        metadata=Dict("residual_source" => "synthetic DSSE fixture"))
+    @test residual_samples.sample_set_id ==
+          repeated_residual_samples.sample_set_id
+    @test residual_samples.generation_method ==
+          :empirical_residual_bootstrap
+    @test residual_samples.diagnostics["sampling_method"] ==
+          :moving_block_residual_bootstrap
+    @test residual_samples.metadata["require_regular_spacing"]
+    @test residual_samples.diagnostics["sampled_block_start_indices"] == [1, 2]
+    @test [sample.metadata["source_index"]
+           for sample in residual_samples.samples] == [1, 2, 3, 2, 3, 4]
+    @test [sample.metadata["bootstrap_block_id"]
+           for sample in residual_samples.samples] ==
+          ["block-1", "block-1", "block-1",
+           "block-2", "block-2", "block-2"]
+    @test [sample.timestamp for sample in residual_samples.samples] ==
+          residual_target_times
+    @test residual_samples.samples[1].metadata["source_timestamp"] ==
+          residual_source_times[1]
+    @test residual_samples.samples[1].parameters["p1_W"] == 3800.0
+    @test residual_samples.samples[1].parameters["p2_W"] == 5100.0
+    @test residual_samples.diagnostics["source_regular_spacing"]
+    @test residual_samples.diagnostics["source_row_order_semantics"] ==
+          :verified_by_strict_timestamps
+    @test residual_samples.diagnostics[
+        "within_block_row_order_preserved"]
+    @test !residual_samples.diagnostics["block_members_independent"]
+    @test !residual_samples.diagnostics["stationarity_assumption_asserted"]
+    @test !residual_samples.diagnostics[
+        "bootstrap_block_independence_established"]
+    @test !residual_samples.diagnostics["bootstrap_validity_established"]
+
+    changed_residual_library = copy(residual_library)
+    changed_residual_library[5, 1] = 999.0
+    changed_residual_samples = sample_doe_empirical_residual_bootstrap(
+        changed_residual_library;
+        parameter_names=("p1_W", "p2_W"),
+        block_count=2, block_length=3, seed=47,
+        center=[4000.0, 5000.0],
+        source_timestamps=residual_source_times,
+        timestamps=residual_target_times,
+        require_regular_spacing=true,
+        metadata=Dict("residual_source" => "synthetic DSSE fixture"))
+    @test [sample.parameters for sample in residual_samples.samples] ==
+          [sample.parameters for sample in changed_residual_samples.samples]
+    @test residual_samples.metadata["residual_library_id"] !=
+          changed_residual_samples.metadata["residual_library_id"]
+    @test residual_samples.sample_set_id !=
+          changed_residual_samples.sample_set_id
+
+    circular_residual_samples = sample_doe_empirical_residual_bootstrap(
+        residual_library;
+        parameter_names=("p1_W", "p2_W"),
+        block_count=4, block_length=3, seed=47, circular=true,
+        source_timestamps=residual_source_times)
+    @test circular_residual_samples.diagnostics["sampling_method"] ==
+          :circular_moving_block_residual_bootstrap
+    @test circular_residual_samples.diagnostics[
+        "sampled_block_start_indices"] == [1, 3, 4, 1]
+    @test circular_residual_samples.diagnostics["circular_wrap_count"] == 1
+    @test count(sample -> sample.metadata["circular_wrap"],
+                circular_residual_samples.samples) == 1
+
+    iid_residual_samples = sample_doe_empirical_residual_bootstrap(
+        residual_library;
+        parameter_names=("p1_W", "p2_W"),
+        block_count=4, seed=48)
+    @test iid_residual_samples.diagnostics["sampling_method"] ==
+          :iid_empirical_residual_bootstrap
+    @test iid_residual_samples.diagnostics["block_members_independent"]
+
+    residual_scenarios = materialize_doe_scenarios(
+        base_network, residual_samples,
+        (network, sample) -> begin
+            network["load"]["d1"]["p_nom"][1] =
+                sample.parameters["p1_W"]
+            network["load"]["d2"]["p_nom"][1] =
+                sample.parameters["p2_W"]
+            nothing
+        end;
+        dataset_id="residual-bootstrap-scenarios",
+        materializer_id="test-residual-load-materializer-v1",
+        role=:test)
+    @test residual_scenarios.intervals[1][4].metadata[
+        "bootstrap_block_id"] == "block-2"
+    @test residual_scenarios.metadata["uncertainty_diagnostics"][
+        "block_length"] == 3
+
     @test_throws ArgumentError sample_doe_gaussian_uncertainty(
         [0.0, 0.0], [1.0 2.0; 2.0 1.0];
         parameter_names=("x", "y"), count=3, seed=45)
@@ -160,6 +274,30 @@ end
         [0.0], reshape([1.0], 1, 1);
         parameter_names=("x",), lower=[0.0], upper=[1.0],
         count=2, seed=45, draw_budget=5,
+        timestamps=[DateTime(2026, 1, 1)])
+    @test_throws DimensionMismatch sample_doe_empirical_residual_bootstrap(
+        residual_library; parameter_names=("x",), block_count=1, seed=47)
+    @test_throws ArgumentError sample_doe_empirical_residual_bootstrap(
+        residual_library; parameter_names=("x", "y"),
+        block_count=1, block_length=6, seed=47)
+    @test_throws ArgumentError sample_doe_empirical_residual_bootstrap(
+        [1.0 NaN; 2.0 3.0]; parameter_names=("x", "y"),
+        block_count=1, seed=47)
+    @test_throws ArgumentError sample_doe_empirical_residual_bootstrap(
+        residual_library; parameter_names=("x", "y"),
+        block_count=1, seed=47,
+        source_timestamps=[DateTime(2026, 1, 2), DateTime(2026, 1, 1),
+                           DateTime(2026, 1, 3), DateTime(2026, 1, 4),
+                           DateTime(2026, 1, 5)])
+    @test_throws ArgumentError sample_doe_empirical_residual_bootstrap(
+        residual_library; parameter_names=("x", "y"),
+        block_count=1, seed=47, require_regular_spacing=true,
+        source_timestamps=[DateTime(2026, 1, 1), DateTime(2026, 1, 2),
+                           DateTime(2026, 1, 4), DateTime(2026, 1, 5),
+                           DateTime(2026, 1, 6)])
+    @test_throws DimensionMismatch sample_doe_empirical_residual_bootstrap(
+        residual_library; parameter_names=("x", "y"),
+        block_count=2, block_length=2, seed=47,
         timestamps=[DateTime(2026, 1, 1)])
     @test_throws ArgumentError DOEUncertaintySampleSet([
         DOEUncertaintySample(id="weighted", parameters=Dict("x" => 1),

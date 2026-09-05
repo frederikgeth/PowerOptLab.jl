@@ -427,9 +427,11 @@ counterexamples.
    generic path from covariance or model candidates to scenarios. A first
    componentwise physical-support policy now draws from a box-conditioned
    Gaussian by rejection with an explicit draw budget, no clipping, and
-   recorded acceptance diagnostics. Automatic selection of DSSE-derived
-   quantities, non-box transforms/support rules, and inverse-Carson/topology
-   insertion remains future work.
+   recorded acceptance diagnostics. An empirical residual bootstrap now
+   supports row resampling and contiguous moving blocks, with full-library
+   identity, source/target time separation, and block provenance. Automatic
+   selection of DSSE-derived quantities, non-box transforms/support rules, and
+   inverse-Carson/topology insertion remains future work.
 2. **Held-out evaluation slice implemented:** role-selected coverage reports
    per-scenario outcomes and empirical, weighted, and conservative candidate-
    violation rates. A one-sided Hoeffding bound is emitted only after an
@@ -452,8 +454,9 @@ counterexamples.
    layer now holds issued capacities and evaluation settings fixed across
    labelled scenario constructions, preserving paired discordance when stable
    identities exist and labelling independent ensembles unpaired. It makes no
-   causal model-effect or distribution-shift claim. Add seasonal/block
-   resampling and estimator-specific scenario materializers next.
+   causal model-effect or distribution-shift claim. Add stationary/seasonal
+   resampling, block-length selection diagnostics, and estimator-specific
+   scenario materializers next.
 3. Couple envelopes to storage SOC, EV energy, ramping, tap operations, and
    first-stage/recourse decisions using the package's multi-period machinery.
 4. Evaluate offered capacity, realized utilization, curtailed energy, customer
@@ -516,9 +519,10 @@ Develop the tutorials in this order:
    without test leakage, and reports held-out empirical and optional i.i.d.
    bounds. It now demonstrates reproducible covariance draws and explicit
    box-conditioned physical support, plus paired and unpaired uncertainty-model
-   sensitivity semantics. Extend it with empirical DSSE residuals,
-   non-Gaussian/model-uncertainty construction, and sensitivity to the support
-   rule using real data.
+   sensitivity semantics. It also demonstrates ordinary and moving-block
+   residual bootstrap provenance. Extend it with empirical DSSE residuals from
+   a versioned dataset, non-Gaussian/model-uncertainty construction, and
+   sensitivity to block length and support rules using real data.
 4. **Fairness–efficiency over time.** Compare equal kW, nameplate-normalized,
    request-normalized, proportional, max–min, and historical-curtailment rules;
    report who benefits, the price of fairness, and sensitivity to the chosen

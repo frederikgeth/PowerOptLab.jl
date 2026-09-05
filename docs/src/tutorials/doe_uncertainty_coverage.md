@@ -599,6 +599,72 @@ provenance. The callback remains responsible for units, physical transforms,
 and topology validity. When the box-truncated sampler is used, its bounds,
 proposal identity, rejection rule, and acceptance diagnostics also propagate.
 
+## Bootstrap empirical residuals
+
+When a versioned DSSE or forecasting workflow provides residual rows, retain
+their joint cross-variable structure by resampling whole rows. A moving block
+also retains local serial order:
+
+```julia
+residual_library = [
+    -200.0  100.0
+    -100.0    0.0
+       0.0 -100.0
+     100.0    0.0
+     200.0  100.0
+]
+source_times = [DateTime(2026, 6, day) for day in 1:5]
+target_times = [DateTime(2026, 7, day) for day in 1:6]
+
+residual_samples = sample_doe_empirical_residual_bootstrap(
+    residual_library;
+    parameter_names=("p1_W", "p2_W"),
+    block_count=2,
+    block_length=3,
+    seed=20260906,
+    center=[5000.0, 5000.0],
+    source_timestamps=source_times,
+    timestamps=target_times,
+    require_regular_spacing=true,
+    sample_prefix="load-residual",
+    metadata=Dict(
+        "residual_dataset" => "synthetic tutorial residuals v1",
+        "residual_definition" => "observed minus point forecast"))
+
+residual_samples.metadata["residual_library_id"]
+residual_samples.diagnostics["sampled_block_start_indices"]
+residual_samples.samples[1].metadata
+```
+
+With `block_length=1`, the same function performs ordinary empirical row
+resampling. Longer non-circular blocks start only where the complete block fits;
+`circular=true` admits last-to-first wrapping and marks every wrapped member.
+The output is flattened in block-major order, with a `bootstrap_block_id` on
+each sample. Source timestamps identify library rows, while the sample's own
+timestamp identifies its target period.
+
+```julia
+residual_scenarios = materialize_doe_scenarios(
+    base_network, residual_samples, apply_load_sample!;
+    dataset_id="tutorial-residual-bootstrap-loads-v1",
+    materializer_id="apply-load-sample-v1",
+    role=:test,
+    source="synthetic tutorial residual bootstrap")
+
+residual_scenarios.intervals[1][1].metadata["bootstrap_block_id"]
+residual_scenarios.metadata["uncertainty_diagnostics"]
+```
+
+Do not enable an i.i.d. coverage bound merely because block starts were sampled
+with replacement: members within a moving block are dependent, and the finite
+residual library was itself estimated from data. The function reports
+`stationarity_assumption_asserted=false`, `block_length_validated=false`, and
+`bootstrap_validity_established=false`. A research study must justify the
+residual definition, data split, time ordering, block length, seasonality
+treatment, physical support, and whether independent blocks are a reasonable
+resampling unit. Use `bootstrap_block_id` as a group key in leakage and shift
+audits when appropriate.
+
 ## Connecting a DSSE workflow
 
 For measurement-derived studies, construct one `DOEScenario` per materialized
@@ -614,8 +680,11 @@ network realization and record at least:
 
 Pass a derived-quantity mean and the matrix returned by
 [`derived_covariance`](@ref) to `sample_doe_gaussian_uncertainty`, then implement
-the corresponding network transform in `materialize_doe_scenarios`. The same
-materializer can consume manually constructed categorical
+the corresponding network transform in `materialize_doe_scenarios`. When the
+DSSE or forecast workflow instead yields a historical residual matrix, use
+`sample_doe_empirical_residual_bootstrap` and record the dataset version,
+residual definition, split, and ordering in metadata. The same materializer can
+consume manually constructed categorical
 `DOEUncertaintySample`s for topology or inverse-Carson candidates.
 
 This is generic plumbing, not an automatic physical interpretation of a DSSE

@@ -1098,6 +1098,251 @@ function sample_doe_box_truncated_gaussian_uncertainty(
 end
 
 """
+    sample_doe_empirical_residual_bootstrap(residuals;
+        parameter_names, block_count, seed, block_length=1,
+        center=nothing, circular=false, source_timestamps=nothing,
+        timestamps=nothing, require_regular_spacing=false,
+        sample_prefix="residual-bootstrap", metadata=Dict())
+
+Resample rows from a declared residual library. With `block_length=1`, this is
+an ordinary empirical bootstrap. Longer blocks preserve contiguous row order;
+`circular=true` permits blocks to wrap from the last library row to the first.
+Each returned parameter equals `center + residual`, with a zero center by
+default.
+
+The output is flattened in block-major order and every sample records its block,
+position, source row, optional source timestamp, and whether a circular wrap
+occurred. The complete residual library and its timestamps participate in a
+stable library hash even when some rows are not sampled. Optional `timestamps`
+describe output/target samples and therefore remain distinct from source times.
+
+Moving-block validity generally requires a defensible ordered, approximately
+stationary residual process and a justified block length. This function records
+but does not establish those assumptions, residual calibration, block
+independence, physical support, or out-of-sample validity.
+"""
+function sample_doe_empirical_residual_bootstrap(
+        residuals::AbstractMatrix{<:Real};
+        parameter_names,
+        block_count::Int,
+        seed::Int,
+        block_length::Int=1,
+        center=nothing,
+        circular::Bool=false,
+        source_timestamps=nothing,
+        timestamps=nothing,
+        require_regular_spacing::Bool=false,
+        sample_prefix::AbstractString="residual-bootstrap",
+        metadata=Dict{String,Any}())
+    source_values = Float64.(collect(residuals))
+    source_count, dimension = size(source_values)
+    source_count >= 1 || throw(ArgumentError(
+        "residual library must contain at least one row"))
+    dimension >= 1 || throw(ArgumentError(
+        "residual library must contain at least one column"))
+    all(isfinite, source_values) || throw(ArgumentError(
+        "residual library values must be finite"))
+    block_count >= 1 || throw(ArgumentError("block_count must be positive"))
+    block_length >= 1 || throw(ArgumentError("block_length must be positive"))
+    block_length <= source_count || throw(ArgumentError(
+        "block_length must not exceed the residual-library row count"))
+    seed >= 0 || throw(ArgumentError("seed must be non-negative"))
+    isempty(sample_prefix) && throw(ArgumentError(
+        "sample_prefix must be non-empty"))
+
+    names = parameter_names isa Union{AbstractString,Symbol} ?
+        [String(parameter_names)] : String.(collect(parameter_names))
+    length(names) == dimension || throw(DimensionMismatch(
+        "parameter_names must have one entry per residual column"))
+    all(!isempty, names) || throw(ArgumentError(
+        "parameter names must be non-empty"))
+    length(unique(names)) == length(names) || throw(ArgumentError(
+        "parameter names must be unique"))
+    center_values = center === nothing ? zeros(dimension) :
+        Float64.(collect(center))
+    length(center_values) == dimension || throw(DimensionMismatch(
+        "center must have one entry per residual column"))
+    all(isfinite, center_values) || throw(ArgumentError(
+        "center values must be finite"))
+
+    source_timestamp_values = if source_timestamps === nothing
+        nothing
+    else
+        collected = collect(source_timestamps)
+        length(collected) == source_count || throw(DimensionMismatch(
+            "source_timestamps must have one entry per residual row"))
+        all(value -> value isa DateTime, collected) || throw(ArgumentError(
+            "source_timestamps must contain only DateTime values"))
+        values = DateTime[value for value in collected]
+        all(values[index] < values[index + 1]
+            for index in 1:length(values) - 1) || throw(ArgumentError(
+                "source_timestamps must be strictly increasing"))
+        values
+    end
+    spacings_ms = source_timestamp_values === nothing ? Int64[] :
+        [Dates.value(source_timestamp_values[index + 1] -
+                     source_timestamp_values[index])
+         for index in 1:length(source_timestamp_values) - 1]
+    regularly_spaced = source_timestamp_values === nothing ? false :
+        isempty(spacings_ms) || all(spacing -> spacing == first(spacings_ms),
+                                    spacings_ms)
+    if require_regular_spacing && source_timestamp_values === nothing
+        throw(ArgumentError(
+            "require_regular_spacing=true needs source_timestamps"))
+    end
+    if require_regular_spacing && !regularly_spaced
+        throw(ArgumentError(
+            "source_timestamps must be regularly spaced when require_regular_spacing=true"))
+    end
+
+    output_count = block_count * block_length
+    output_timestamps = if timestamps === nothing
+        Union{Nothing,DateTime}[nothing for _ in 1:output_count]
+    else
+        collected = collect(timestamps)
+        length(collected) == output_count || throw(DimensionMismatch(
+            "timestamps must have one entry per output sample"))
+        all(value -> value === nothing || value isa DateTime, collected) ||
+            throw(ArgumentError(
+                "timestamps must contain DateTime values or nothing"))
+        Union{Nothing,DateTime}[value for value in collected]
+    end
+
+    possible_start_count = circular ? source_count :
+        source_count - block_length + 1
+    rng = Random.MersenneTwister(seed)
+    block_starts = rand(rng, 1:possible_start_count, block_count)
+    source_indices = Int[]
+    wrapped = Bool[]
+    for start in block_starts, position in 1:block_length
+        raw_index = start + position - 1
+        push!(source_indices, circular ? mod1(raw_index, source_count) : raw_index)
+        push!(wrapped, circular && raw_index > source_count)
+    end
+
+    width = ndigits(output_count)
+    block_width = ndigits(block_count)
+    samples = DOEUncertaintySample[]
+    output_values = Matrix{Float64}(undef, output_count, dimension)
+    for sample_index in 1:output_count
+        block_index = div(sample_index - 1, block_length) + 1
+        block_position = mod(sample_index - 1, block_length) + 1
+        source_index = source_indices[sample_index]
+        values = center_values .+ source_values[source_index, :]
+        output_values[sample_index, :] .= values
+        source_timestamp = source_timestamp_values === nothing ? nothing :
+            source_timestamp_values[source_index]
+        parameters = Dict{String,Any}(
+            names[column] => values[column] for column in eachindex(names))
+        push!(samples, DOEUncertaintySample(
+            id="$(sample_prefix)-$(lpad(string(sample_index), width, '0'))",
+            parameters=parameters,
+            timestamp=output_timestamps[sample_index],
+            metadata=Dict{String,Any}(
+                "sample_index" => sample_index,
+                "master_seed" => seed,
+                "bootstrap_block_index" => block_index,
+                "bootstrap_block_id" =>
+                    "block-$(lpad(string(block_index), block_width, '0'))",
+                "block_position" => block_position,
+                "block_start_source_index" => block_starts[block_index],
+                "source_index" => source_index,
+                "source_timestamp" => source_timestamp,
+                "source_residual" => vec(copy(source_values[source_index, :])),
+                "circular_wrap" => wrapped[sample_index])))
+    end
+
+    source_mean = vec(sum(source_values; dims=1)) ./ source_count
+    source_covariance = if source_count > 1
+        centered = source_values .- reshape(source_mean, 1, :)
+        transpose(centered) * centered / (source_count - 1)
+    else
+        missing
+    end
+    output_mean = vec(sum(output_values; dims=1)) ./ output_count
+    output_covariance = if output_count > 1
+        centered = output_values .- reshape(output_mean, 1, :)
+        transpose(centered) * centered / (output_count - 1)
+    else
+        missing
+    end
+    residual_library_id = _doe_sha256(Dict{String,Any}(
+        "parameter_names" => names,
+        "residuals" => [vec(copy(source_values[row, :]))
+                        for row in 1:source_count],
+        "source_timestamps" => source_timestamp_values))
+    sampling_method = block_length == 1 ? :iid_empirical_residual_bootstrap :
+        circular ? :circular_moving_block_residual_bootstrap :
+        :moving_block_residual_bootstrap
+    model_metadata = merge(
+        Dict{String,Any}(string(key) => deepcopy(value)
+                         for (key, value) in pairs(metadata)),
+        Dict{String,Any}(
+            "distribution" => :empirical_residual_distribution,
+            "sampling_method" => sampling_method,
+            "residual_library_id" => residual_library_id,
+            "residual_source_row_count" => source_count,
+            "center" => center_values,
+            "block_count" => block_count,
+            "block_length" => block_length,
+            "circular" => circular,
+            "require_regular_spacing" => require_regular_spacing))
+    diagnostics = Dict{String,Any}(
+        "sample_count" => output_count,
+        "dimension" => dimension,
+        "residual_source_row_count" => source_count,
+        "residual_library_id" => residual_library_id,
+        "sampling_method" => sampling_method,
+        "block_count" => block_count,
+        "block_length" => block_length,
+        "possible_block_start_count" => possible_start_count,
+        "sampled_block_start_indices" => copy(block_starts),
+        "unique_sampled_block_start_count" => length(unique(block_starts)),
+        "unique_source_row_count" => length(unique(source_indices)),
+        "circular" => circular,
+        "circular_wrap_count" => count(identity, wrapped),
+        "within_block_row_order_preserved" => true,
+        "source_row_order_used" => true,
+        "source_row_order_semantics" => source_timestamp_values === nothing ?
+            :caller_declared_unverified : :verified_by_strict_timestamps,
+        "source_timestamps_available" => source_timestamp_values !== nothing,
+        "source_timestamp_min" => source_timestamp_values === nothing ?
+            missing : first(source_timestamp_values),
+        "source_timestamp_max" => source_timestamp_values === nothing ?
+            missing : last(source_timestamp_values),
+        "source_time_ordering_verified" => source_timestamp_values !== nothing,
+        "source_regular_spacing" => regularly_spaced,
+        "source_spacing_milliseconds" => regularly_spaced &&
+            !isempty(spacings_ms) ? first(spacings_ms) : missing,
+        "require_regular_spacing" => require_regular_spacing,
+        "source_residual_mean" => source_mean,
+        "source_residual_covariance" => source_covariance,
+        "output_empirical_mean" => output_mean,
+        "output_empirical_covariance" => output_covariance,
+        "center" => center_values,
+        "random_generator" => :MersenneTwister,
+        "julia_version" => string(VERSION),
+        "blocks_sampled_independently_conditional_on_library" => true,
+        "block_members_independent" => block_length == 1,
+        "bootstrap_block_independence_established" => false,
+        "circular_boundary_scientifically_validated" => false,
+        "stationarity_assumption_asserted" => false,
+        "block_length_validated" => false,
+        "residual_centering_validated" => false,
+        "residual_model_validated" => false,
+        "distribution_model_validated" => false,
+        "bootstrap_validity_established" => false,
+        "physical_support_constraints_enforced" => false,
+        "cross_platform_bitwise_reproducibility_asserted" => false)
+    return DOEUncertaintySampleSet(samples;
+        parameter_names=names,
+        generation_method=:empirical_residual_bootstrap,
+        seed=seed,
+        metadata=model_metadata,
+        diagnostics=diagnostics)
+end
+
+"""
     materialize_doe_scenarios(base_network, sample_set, materialize!;
         dataset_id, materializer_id, role=:unspecified,
         source="uncertainty sample materialization", metadata=Dict(),

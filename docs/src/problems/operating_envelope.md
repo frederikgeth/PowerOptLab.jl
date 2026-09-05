@@ -223,6 +223,12 @@ physical-support option: it samples the Gaussian conditional on componentwise
 bounds by rejection, never clips accepted values, and requires a finite draw
 budget whose stopping and acceptance diagnostics are recorded. The declared
 Gaussian and box remain modelling assumptions rather than validated truths.
+[`sample_doe_empirical_residual_bootstrap`](@ref) resamples a versioned residual
+library either row-wise or in contiguous moving blocks. It hashes the complete
+library, distinguishes source from target timestamps, and propagates block,
+source-row, and circular-wrap provenance. Flattened block members are not
+labelled independent, and the implementation does not establish stationarity,
+block-length adequacy, residual calibration, or bootstrap validity.
 [`materialize_doe_scenarios`](@ref) deep-copies a base network per sample and
 requires a versioned materializer identifier, propagating sample and network
 provenance without prescribing a DSSE, impedance, topology, or forecast schema.
