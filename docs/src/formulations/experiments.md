@@ -66,15 +66,17 @@ must belong to the returned model. The runner records canonical curve data and
 units, physical coordinate scales, the domain and candidate residuals.
 `observation_kind` distinguishes graph and relation records. Relation records
 separate `requested_formulation` from `built_formulation`: a requested hull may
-build only `:linear_inequalities`. `formulation_type` is retained as an alias for
-the request. Use `reason_code` for filtering and `reason` for explanatory text.
+build only `:linear_inequalities`. Use `reason_code` for filtering and `reason`
+for explanatory text.
 `conservative` and `output_shift` identify any contract-based one-sided correction.
 
-Graph records retain `exact_graph_error` and their formulation `contract`.
+Graph records retain `formulation_type`, `exact_graph_error` and their formulation
+`contract`.
 Relation records instead include `relation`, `strategy`, `semantics`, a signed
 `canonical_residual` and a nonnegative `canonical_violation`. Negative residual
 for an upper limit is valid slack. A smooth relation also records its
-`approximation_contract`; an auxiliary `graph_audit` is separate from the relation
+`approximation_contract`, including the domain-specific C2 bounds or global
+bounds used for a conservative shift (`error_scope`); an auxiliary `graph_audit` is separate from the relation
 check. In particular, an exact projected hull limit must not be labeled a relaxed
 relation merely because its auxiliary can lie off the curve. See the
 [bounded volt-watt experiment](bounds_and_relations.md) for executable examples.

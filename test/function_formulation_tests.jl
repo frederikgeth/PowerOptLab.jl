@@ -114,11 +114,7 @@ end
     @test_throws ArgumentError formulate_pwl!(m,f,x,SoftplusFormulation(.1); input_scale=0)
     @test num_variables(m) == n
     @test num_constraints(m;count_variable_in_set_constraints=true) == nc
-    if Base.get_extension(PowerOptLab,:PowerOptLabPiecewiseLinearOptExt) === nothing
-        @test_throws ArgumentError formulate_pwl!(m,f,x,ExactPWLGraph())
-        @test num_variables(m) == n
-    @test num_constraints(m;count_variable_in_set_constraints=true) == nc
-    end
+
 end
 
 @testset "BMOPFTools staged softplus reuse" begin
@@ -134,4 +130,23 @@ end
     @test termination_status(m) == JuMP.MOI.LOCALLY_SOLVED
     @test audit_pwl(h).output ≈ primitive_value(f,.5,SoftplusFormulation(.1)) atol=1e-7
     @test !haskey(m.ext,:PowerOptLabPWLOperators) # Upstream builder owns registration.
+end
+
+
+@testset "Missing optional graph extension fails without model mutation" begin
+    # Installation is not loading: isolate this path from the parent test suite,
+    # which imports PiecewiseLinearOpt to cover successful graph construction.
+    script = raw"""
+    using Test, PowerOptLab, JuMP
+    @test Base.get_extension(PowerOptLab,:PowerOptLabPiecewiseLinearOptExt) === nothing
+    @test_throws r"requires loading.*PiecewiseLinearOpt" PowerOptLab._require_pwl_graph_extension()
+    m=Model(); @variable(m,x); @variable(m,y)
+    f=PWLFunction([0.,1.,2.],[0.,1.,0.])
+    n=num_variables(m); nc=num_constraints(m;count_variable_in_set_constraints=true)
+    @test_throws ArgumentError formulate_pwl!(m,f,x,ExactPWLGraph())
+    @test num_variables(m)==n && num_constraints(m;count_variable_in_set_constraints=true)==nc
+    @test_throws ArgumentError formulate_pwl_relation!(m,f,x,y;domain=(0.,2.),formulation=ExactPWLGraph(),specialize=false)
+    @test num_variables(m)==n && num_constraints(m;count_variable_in_set_constraints=true)==nc
+    """
+    @test success(pipeline(`$(Base.julia_cmd()) --startup-file=no --project=$(dirname(Base.active_project())) -e $script`;stdout=stdout,stderr=stderr))
 end

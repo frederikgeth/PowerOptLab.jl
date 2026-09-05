@@ -230,14 +230,31 @@ y\leq f_\delta(x)-u \ \Longrightarrow\ y\leq f(x),\qquad
 follow directly. Supply `conservative=true` with an explicit smooth upper or
 lower formulation. The planner records `semantics=:inner_approximation` and the
 physical `output_shift`; the builder applies that shift after smooth
-specialization, and the audit checks the actual shifted surrogate. Exactness of
-a surrogate on a restricted domain does not automatically tighten the global
-error contract used for the shift.
+specialization, and the audit checks the actual shifted surrogate. The plan's
+`approximation_contract` records the signed bounds used for that shift.
+
+For local C2 smoothing, only hinges whose open patches intersect the effective
+domain contribute error. Absorbed affine hinges and dropped zero hinges are exact.
+With slope changes `cⱼ`, active set `A`, and `B=3δ/16`, the domain contract is
+
+```math
+B\sum_{j\in A,\,c_j<0}c_j \;\leq\; f_\delta(x)-f(x)
+\;\leq\; B\sum_{j\in A,\,c_j>0}c_j.
+```
+
+The curvature bound likewise counts only active patches. This accounting applies
+even with `specialize=false`, so disabling structural simplification preserves
+the same conservative relation. It does not compute the exact extremum over a
+partial patch or exploit cancellation between overlapping patches.
+Softplus, algebraic and custom smoothing families retain their global contracts;
+`error_scope` distinguishes `:domain` from `:global`.
 
 ```@example bounded_relations
 safe=plan_pwl_relation(intent.volt_watt,(242.,248.);relation=:upper,
     formulation=LocalC2Formulation(.2),conservative=true)
-@assert safe.output_shift<0 && safe.semantics==:inner_approximation
+@assert safe.strategy==:affine && safe.output_shift==0
+@assert safe.semantics==:inner_approximation
+@assert safe.approximation_contract.error_scope==:domain
 safe
 ```
 
@@ -246,27 +263,50 @@ on a solver status. A solver-feasibility allowance is a separate engineering
 choice. Equality and nonsmooth requests reject `conservative=true`; it would not
 supply a meaningful one-sided correction for those requests.
 
-Tightening can remove physically feasible states. In particular, a global shift
-can make a zero cap negative, conflicting with `p≥0`:
+For the volt-watt curve above and `δ=0.2 V`, the bounds and upper-cap shifts
+are in output-fraction units:
+
+| Voltage domain (V) | C2 hinges intersecting the domain | Signed error interval | Upper-cap shift |
+|:--|--:|:--|--:|
+| `(242,248)` | 0 | `[0,0]` | 0 |
+| `(239,242)` | 1 (negative slope change) | `[-0.00375,0]` | 0 |
+| `(249,252)` | 1 (positive slope change) | `[0,0.00375]` | -0.00375 |
+| `(220,270)` | 2 | `[-0.00375,0.00375]` | -0.00375 |
+
+Thus the exact middle segment incurs no unnecessary 45 W reduction for a 12 kW
+plant. The sign also matters: an underestimating patch already defines a safe
+upper cap. An `:affine` strategy alone is not a proof of zero approximation error:
+a fixed input inside a patch lowers to a constant evaluated surrogate, which can
+differ from the canonical value. Its contract still counts the intersecting patch.
+
+Tightening can remove physically feasible states when the retained error bound is
+loose. On the zero tail, compact C2 has zero domain error; the global softplus
+shift can still make the cap negative, conflicting with `p≥0`:
 
 ```@example bounded_relations
-m_safe=Model(Ipopt.Optimizer); set_silent(m_safe)
-@variable(m_safe,252<=v_safe<=258,start=255.)
-@constraint(m_safe,v_safe==255.)
-@variable(m_safe,p_safe>=0,start=0.)
-h_safe=formulate_control_relation!(m_safe,intent,:volt_watt,v_safe,p_safe;
-    relation=:upper,formulation=LocalC2Formulation(.2),conservative=true)
-optimize!(m_safe)
-@assert termination_status(m_safe)==MOI.LOCALLY_INFEASIBLE
-(h_safe.plan.output_shift,termination_status(m_safe))
+for rep in (LocalC2Formulation(.2),SoftplusFormulation(.2))
+    m_safe=Model(Ipopt.Optimizer); set_silent(m_safe)
+    @variable(m_safe,252<=v_safe<=258,start=255.)
+    @constraint(m_safe,v_safe==255.)
+    @variable(m_safe,p_safe>=0,start=0.)
+    h_safe=formulate_control_relation!(m_safe,intent,:volt_watt,v_safe,p_safe;
+        relation=:upper,formulation=rep,conservative=true)
+    optimize!(m_safe)
+    if rep isa LocalC2Formulation
+        @assert h_safe.plan.output_shift==0
+        @assert is_solved_and_feasible(m_safe)
+    else
+        @assert h_safe.plan.output_shift<0
+        @assert termination_status(m_safe)==MOI.LOCALLY_INFEASIBLE
+    end
+    println((typeof(rep),h_safe.plan.output_shift,termination_status(m_safe)))
+end
 ```
 
-Here C2 is already exactly zero on the domain, but the global shift remains
-negative. Clipping the shifted cap to zero or silently retrying a different
-formulation would change the requested construction. Use an explicit exact
-specialization when the canonical curve is affine there, or supply a separately
-justified tighter domain-specific error contract. The library does not make that
-modeling decision through a fallback solve.
+Clipping a negative shifted cap to zero or silently retrying a different
+formulation would change the requested construction. Domain certification removes
+provably unnecessary C2 shifts before building; it does not trigger a fallback
+solve or discard a valid nonzero error bound.
 
 ## Compact patches permit exact local simplification
 

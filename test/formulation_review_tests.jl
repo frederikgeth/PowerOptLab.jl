@@ -26,6 +26,12 @@
         @objective(m,Min,expr); PowerOptLab.enforce_kcl!(ctx); set_silent(m); optimize!(m)
         @test value(expr)*2 ≈ hypot(3.,.5) atol=1e-7
     end
+    # A relative override is honored even on a plain model (no annotation).
+    # This admissible one-ulp difference detects silently ignoring the keyword.
+    plain=Model(); upper=MagnitudeApproximation(1.;direction=:upper)
+    @test magnitude_expression(plain,(0.,0.),upper)==1.
+    @test magnitude_expression(plain,(0.,0.),upper;eps_rel=nextfloat(1.))==nextfloat(1.)
+    @test_throws ArgumentError magnitude_expression(plain,(0.,0.),upper;eps_rel=2.)
     @test_throws ArgumentError MagnitudeApproximation(.1;scale=0.)
     ctx=PowerOptLab.build_opf_model(inv_grid3_bal();add_objective=false)
     @test_throws ArgumentError magnitude_expression(ctx,(1.,2.),MagnitudeApproximation(.1);eps_rel=1.)
@@ -109,20 +115,29 @@ end
         a=audit_pwl_relation(h)
         @test a.canonical_violation<1e-7 && a.surrogate_violation<1e-7
         @test a.semantics==:inner_approximation && a.conservative
-        contract=formulation_contract(f,rep)
+        contract=h.plan.approximation_contract
+        @test PowerOptLab._formulation_observation(h).approximation_contract==contract
         @test a.output_shift==-(relation==:upper ? contract.error_upper : contract.error_lower)
         @test a.output ≈ primitive_value(f,voltage,rep)+a.output_shift atol=1e-7
         @test formulate_pwl_relation!(m,f,x,y;formulation=rep,relation,conservative=true,input_scale=230.,output_scale=2.)===h
     end
-    # A zero canonical cap plus nonnegative dispatch can become infeasible after
-    # a globally certified shift. Never silently clip the shift away.
-    m=Model(Ipopt.Optimizer); set_silent(m)
-    @variable(m,252<=x<=258,start=255.); @constraint(m,x==255.)
-    @variable(m,y>=0,start=0.)
-    h=formulate_pwl_relation!(m,f,x,y;relation=:upper,formulation=LocalC2Formulation(.2),conservative=true)
-    @test h.plan.output_shift<0.
-    optimize!(m)
-    @test termination_status(m)==MOI.LOCALLY_INFEASIBLE
+    # Compact patches incur no error on the zero tail; global softplus bounds
+    # can still make that same nonnegative-dispatch model infeasible.
+    for rep in (LocalC2Formulation(.2),SoftplusFormulation(.2))
+        m=Model(Ipopt.Optimizer); set_silent(m)
+        @variable(m,252<=x<=258,start=255.); @constraint(m,x==255.)
+        @variable(m,y>=0,start=0.)
+        h=formulate_pwl_relation!(m,f,x,y;relation=:upper,formulation=rep,conservative=true)
+        optimize!(m)
+        if rep isa LocalC2Formulation
+            @test h.plan.output_shift==0.
+            @test is_solved_and_feasible(m)
+            @test abs(value(y))<1e-7
+        else
+            @test h.plan.output_shift<0.
+            @test termination_status(m)==MOI.LOCALLY_INFEASIBLE
+        end
+    end
     for (relation,rep) in ((:equal,SoftplusFormulation(.1)),(:upper,PWLConvexHull()),(:upper,:auto))
         @test_throws ArgumentError plan_pwl_relation(f,(220.,270.);relation,formulation=rep,conservative=true)
     end
@@ -138,6 +153,7 @@ end
     @test a.built_formulation==:linear_inequalities
     @test endswith(a.requested_formulation,"PWLConvexHull")
     @test a.reason_code==:exact_polyhedral
+    @test !hasproperty(a,:formulation_type)
 end
 
 @testset "Solver-free physical graph hull gap bounds" begin
@@ -167,5 +183,44 @@ end
         end
         @test g.upper_gap ≈ up atol=1e-15
         @test g.lower_gap ≈ lo atol=1e-15
+    end
+end
+
+
+@testset "Domain-certified compact-patch conservative shifts" begin
+    f=PWLFunction([220.,240.,250.,270.],[1.,1.,0.,0.])
+    r=LocalC2Formulation(.2)
+    # Independent analytic bounds: the slope changes at 240 and 250 are
+    # -0.1 and +0.1; each active quartic hinge contributes at most 3δ/16.
+    B=.1*3*.2/16
+    domains=(((242.,248.),0.,0.), ((239.,242.),-B,0.),
+        ((249.,252.),0.,B), ((220.,270.),-B,B),
+        ((240.2,249.8),0.,0.), ((200.,210.),0.,0.),
+        ((252.,258.),0.,0.), ((240.,240.),-B,0.), ((250.,250.),0.,B))
+    for (domain,lower,upper) in domains, specialize in (false,true), relation in (:upper,:lower)
+        p=plan_pwl_relation(f,domain;relation,formulation=r,specialize,conservative=true)
+        c=p.approximation_contract
+        @test c.error_scope==:domain && c.domain==domain
+        @test c.error_lower ≈ lower atol=1e-16
+        @test c.error_upper ≈ upper atol=1e-16
+        @test p.output_shift ≈ -(relation==:upper ? upper : lower) atol=1e-16
+        @test c.second_derivative_bound ≈ (upper-lower)/(.2^2/4) atol=1e-14
+        # Compare actual functions, including fixed inputs and flat extensions.
+        for x in range(domain...;length=31)
+            error=primitive_value(f,x,r;domain_policy=:flat_extension)-primitive_value(f,x;domain_policy=:flat_extension)
+            @test lower-1e-13<=error<=upper+1e-13
+            @test relation==:upper ? error+p.output_shift<=1e-13 : error+p.output_shift>=-1e-13
+        end
+    end
+    p=plan_pwl_relation(f,(242.,248.);relation=:upper,formulation=r,conservative=true)
+    @test p.strategy==:affine && isempty(p.active_hinges) && p.output_shift==0.
+    # Affine strategy alone is insufficient: a fixed point inside a patch
+    # evaluates the surrogate, whose constant differs from the canonical value.
+    p=plan_pwl_relation(f,(250.,250.);relation=:upper,formulation=r,conservative=true)
+    @test p.strategy==:affine && isempty(p.active_hinges) && p.output_shift<0.
+    for rep in (SoftplusFormulation(.2),AlgebraicFormulation(.2))
+        p=plan_pwl_relation(f,(242.,248.);relation=:upper,formulation=rep,conservative=true)
+        @test p.approximation_contract.error_scope==:global
+        @test p.output_shift==-formulation_contract(f,rep).error_upper
     end
 end

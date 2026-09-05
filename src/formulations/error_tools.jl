@@ -44,7 +44,10 @@ are `component_scale * components`; the returned expression is in units of
 `physical magnitude / output_scale`. On staged contexts reuse BMOPFTools.smooth_norm.
 The optional `name` labels the differentiability annotation. `eps_rel` can preserve
 a previously used relative-width calculation and its exact floating-point provenance;
-it must agree with the physical budget to rounding tolerance. Lower norms retain
+it must agree with the physical budget to rounding tolerance. Both plain models
+and staged contexts honor an explicit relative width; plain models add no
+annotation. Without an override, plain models use the absolute working width
+`epsilon/component_scale` directly. Lower norms retain
 BMOPFTools annotations; upper norms record their own overestimation semantics.
 This adds no capability constraint: squared physical inequalities remain available.
 """
@@ -60,8 +63,9 @@ function magnitude_expression(target,components,r::MagnitudeApproximation;
         isapprox(effective,r.epsilon/si;rtol=8eps(Float64),atol=0.) ||
         throw(ArgumentError("Relative width and characteristic scale must match the physical magnitude budget"))
     if target isa JuMP.Model
-        root = sqrt(sum(c^2 for c in components)+(r.epsilon/si)^2)
-        return (r.direction == :lower ? root-r.epsilon/si : root)*(si/so)
+        epsilon = eps_rel===nothing ? r.epsilon/si : effective
+        root = sqrt(sum(c^2 for c in components)+epsilon^2)
+        return (r.direction == :lower ? root-epsilon : root)*(si/so)
     end
     # Preserve upstream's established two-component expression and annotation
     # for complex phasors; use its grouped helper for other dimensions.

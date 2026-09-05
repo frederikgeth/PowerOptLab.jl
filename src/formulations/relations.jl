@@ -4,8 +4,8 @@
 Inspectable, model-independent lowering decision for a PWL relation on a physical
 `domain`. Fields include `relation` (`:equal`, `:upper`, `:lower`), `shape`,
 `strategy`, `semantics`, `reason`/`reason_code`, `conservative`, physical
-`output_shift`, affine `lines`, and remaining nonlinear smooth
-`active_hinges` (empty for affine or graph strategies).
+`output_shift`, the signed `approximation_contract`, affine `lines`, and remaining
+nonlinear smooth `active_hinges` (empty for affine or graph strategies).
 Plans describe scalar relations, not convexity or solvability of an entire model.
 """
 struct PWLRelationPlan
@@ -20,6 +20,7 @@ struct PWLRelationPlan
     reason_code::Symbol
     conservative::Bool
     output_shift::Float64
+    approximation_contract::Union{Nothing,NamedTuple}
     lines::Tuple
     active_hinges::Tuple
 end
@@ -58,6 +59,23 @@ function _relation_segments(f,domain)
     return Tuple(unique(lines)),shape
 end
 
+# Structural pruning and error accounting use the same patch-intersection test.
+# A fixed input inside a patch still has approximation error even though its
+# evaluated surrogate is a constant expression with no nonlinear hinges.
+_c2_patch_intersects(k,r,domain) = domain[1]<k+r.width && domain[2]>k-r.width
+
+function _relation_approximation_contract(f,r::AbstractPWLSmoothing,domain)
+    return merge(formulation_contract(f,r),(error_scope=:global,))
+end
+function _relation_approximation_contract(f,r::LocalC2Formulation,domain)
+    hc = hinge_contract(r)
+    active = filter(h -> _c2_patch_intersects(last(h),r,domain),f.hinges)
+    return merge(formulation_contract(f,r),(domain=domain,error_scope=:domain,
+        error_lower=sum(min(c*hc.error_lower,c*hc.error_upper) for (c,k) in active;init=0.),
+        error_upper=sum(max(c*hc.error_lower,c*hc.error_upper) for (c,k) in active;init=0.),
+        second_derivative_bound=sum(abs(c)*hc.second_derivative_bound for (c,k) in active;init=0.)))
+end
+
 """
     plan_pwl_relation(curve, domain; relation=:equal, formulation=:auto, specialize=true, conservative=false)
 
@@ -76,8 +94,10 @@ comparison. A hull that is not exact remains labeled `:outer_relaxation`.
 For an explicit smooth upper/lower relation, `conservative=true` shifts the
 surrogate by `-error_upper` / `-error_lower`, respectively. This is an inner
 approximation of the canonical scalar relation under the declared real-arithmetic
-error contract. It can conflict with other constraints (e.g. nonnegative power
-at a zero cap); no clipping or fallback changes that model. Equality and nonsmooth
+error contract. For Local C2, the contract counts only patches intersecting the
+effective domain, independently of `specialize`; other smooth families retain
+their global contract. Inspect `plan.approximation_contract`. It can conflict with
+other constraints (e.g. nonnegative power at a zero cap); no clipping or fallback changes that model. Equality and nonsmooth
 requests reject this option. Finite solver residuals remain additional errors.
 """
 function plan_pwl_relation(f::PWLFunction,domain;relation::Symbol=:equal,
@@ -103,7 +123,7 @@ function plan_pwl_relation(f::PWLFunction,domain;relation::Symbol=:equal,
             for (c,k) in f.hinges
                 if bounds[1]>=k+r.width
                     slope += c; intercept -= c*k
-                elseif bounds[2]>k-r.width
+                elseif _c2_patch_intersects(k,r,bounds)
                     push!(remaining,(c,k))
                 end
             end
@@ -144,9 +164,9 @@ function plan_pwl_relation(f::PWLFunction,domain;relation::Symbol=:equal,
     else
         :exact_polyhedral
     end
+    contract = r isa AbstractPWLSmoothing ? _relation_approximation_contract(f,r,bounds) : nothing
     shift = 0.
     if conservative
-        contract = formulation_contract(f,r)
         all(isfinite,(contract.error_lower,contract.error_upper)) &&
             contract.error_lower<=contract.error_upper ||
             throw(ArgumentError("Conservative correction needs finite ordered signed error bounds"))
@@ -154,7 +174,7 @@ function plan_pwl_relation(f::PWLFunction,domain;relation::Symbol=:equal,
         semantics = :inner_approximation
     end
     return PWLRelationPlan(f,bounds,relation,r,shape,strategy,semantics,reason,
-        reason_code,conservative,shift,lines,active)
+        reason_code,conservative,shift,contract,lines,active)
 end
 
 
@@ -343,8 +363,7 @@ function _formulation_observation(h::PWLRelationHandle)
          requested_formulation=r===:auto ? "auto" : string(typeof(r)),
          built_formulation=_built_pwl_formulation(h.plan),
          active_hinges=length(h.plan.active_hinges),
-         formulation_type=r===:auto ? "auto" : string(typeof(r)),
-         approximation_contract=r isa AbstractPWLSmoothing ? formulation_contract(f,r) : nothing,
+         approximation_contract=h.plan.approximation_contract,
          graph_method=r isa ExactPWLGraph ? r.method : nothing,
          complementarity_scale=h.graph===nothing ? nothing : h.graph.complementarity_scale,
          input_scale=h.input_scale,output_scale=h.output_scale,

@@ -101,7 +101,10 @@ in the same physical units as ε. On staged contexts the upstream scale is `S/s�
 the relative width is `(ε/sᵢ)/(S/sᵢ)`. This preserves the fleet-relative provenance
 instead of relabeling every norm with a unit scale. An explicit `eps_rel` in
 `magnitude_expression` can preserve a previous rounding order and must agree with
-the physical budget to rounding tolerance. Existing IBR call sites retain their
+the physical budget to rounding tolerance. Both plain `JuMP.Model` expressions
+and staged contexts honor this override, using `eps_rel*(S/sᵢ)` as the working
+width (with `S/sᵢ=1` when no characteristic scale is supplied). Plain models add no
+annotation; without an override, they use `ε/sᵢ` directly. Existing IBR call sites retain their
 upstream annotation names, descriptions, scales and hashes. Upper norms have
 separate annotations stating overestimation.
 
