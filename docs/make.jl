@@ -50,6 +50,7 @@ makedocs(
             "References"               => "ibr/references.md",
         ],
         "Function formulations" => [
+            "Control intent, compilation and solvers" => "formulations/compilation.md",
             "Start a configurable experiment" => "formulations/experiments.md",
             "Theory and executable comparison" => "formulations/index.md",
             "Physical error and conditioning" => "formulations/error_budgets.md",

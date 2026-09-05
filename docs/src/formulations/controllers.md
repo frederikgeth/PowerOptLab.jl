@@ -1,5 +1,8 @@
 # Select smoothing in a physical inverter model
 
+Start with [control intent, compilation and solver pathways](compilation.md) for
+the separation between physical semantics, encodings and backend configuration.
+
 `PiecewiseLinearLaw` now accepts `formulation=...`. The legacy
 `smoothing_epsilon=...` constructor still selects BMOPFTools softplus. Each
 volt-watt, volt-var or negative-sequence gain curve may select its own smoothing
@@ -31,13 +34,13 @@ network = parse_bmopf("""
    "linecode":"lc","length":1}}}
 """;from_string=true)
 request = InverterControlRequest(p_available=2e3,q_scale=4e3)
+intent = VoltVarWattIntent(
+    volt_watt=PWLFunction([220.,240.,250.,270.],[1.,1.,.2,.2]),
+    sensing=:average_voltage)
 function make_device(family,config)
-    curve = PWLFunction([220.,240.,250.,270.],[1.,1.,.2,.2];
-        input_unit=:V,output_unit=:pu)
-    rep = smoothing_for_error(curve,family,config.fraction_error)
-    law = PiecewiseLinearLaw(collect(curve.breakpoints),collect(curve.values);
-        formulation=rep)
-    controller = SequenceController(AverageVoltageVoltVarWatt(volt_watt=law))
+    rep = smoothing_for_error(intent.volt_watt,family,config.fraction_error)
+    encoding = VoltVarWattEncoding(volt_watt=rep)
+    controller = SequenceController(lower_positive_policy(intent,encoding))
     plant = AdvancedInverter(id="research",bus="poc",phase_terminals=["a","b","c"],
         neutral="n",topology=:THREE_LEG,s_max=20e3,i_max=40.,v_dc=700.,
         c_dc=1.1e-3,r_filter=.05,x_filter=.15)

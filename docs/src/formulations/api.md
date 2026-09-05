@@ -5,6 +5,11 @@ Use [the experiment tutorial](experiments.md) for a guided introduction.
 
 ```@docs
 PWLFunction
+VoltVarWattIntent
+VoltVarWattEncoding
+lower_positive_policy
+formulate_control_curve!
+lowering_statistics
 SoftplusFormulation
 LocalC2Formulation
 AlgebraicFormulation

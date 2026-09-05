@@ -27,6 +27,7 @@ Pkg.add([
     PackageSpec(name="NLPModelsJuMP",version="0.13.6"),
     PackageSpec(name="PiecewiseLinearOpt",version="0.4.2"),
     PackageSpec(name="HiGHS",version="1.20.1"),
+    PackageSpec(name="MadNLP",version="0.10.1"),
 ]; preserve=Pkg.PRESERVE_DIRECT)
 Pkg.develop(path=repo; preserve=Pkg.PRESERVE_ALL)
 info = only(i for i in values(Pkg.dependencies()) if i.name == "BMOPFTools")
