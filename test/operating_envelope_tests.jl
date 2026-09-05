@@ -1011,6 +1011,7 @@ end
         seed=12,
         metadata=Dict(
             "predicted_violation_probability" => 0.8,
+            "pairing_namespace" => "synthetic-load-cases-v1",
             "uncertainty_sample_id" => "case-low"))
     permissive_test = DOEScenario(
         id="test-high-load",
@@ -1022,6 +1023,7 @@ end
         seed=13,
         metadata=Dict(
             "predicted_violation_probability" => 0.2,
+            "pairing_namespace" => "synthetic-load-cases-v1",
             "uncertainty_sample_id" => "case-high"))
     scenarios = DOEScenarioSet(
         [calibration, restrictive_test, permissive_test];
@@ -1175,7 +1177,8 @@ end
             source="paired restrictive fixture",
             generation_method=:alternative_uncertainty_model,
             timestamp=DateTime(2026, 1, 15, 12),
-            metadata=Dict("uncertainty_sample_id" => "case-low")),
+            metadata=Dict("pairing_namespace" => "synthetic-load-cases-v1",
+                "uncertainty_sample_id" => "case-low")),
         DOEScenario(
             id="test-high-load",
             network=doe_feeder(p1=100.0, p2=100.0),
@@ -1183,7 +1186,8 @@ end
             source="paired restrictive fixture",
             generation_method=:alternative_uncertainty_model,
             timestamp=DateTime(2026, 1, 15, 12),
-            metadata=Dict("uncertainty_sample_id" => "case-high")),
+            metadata=Dict("pairing_namespace" => "synthetic-load-cases-v1",
+                "uncertainty_sample_id" => "case-high")),
     ]; dataset_id="restrictive-model-fixture")
     model_sensitivity = compare_doe_uncertainty_models(
         ["declared" => scenarios, "restrictive" => restrictive_model],

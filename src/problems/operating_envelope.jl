@@ -4859,14 +4859,21 @@ end
 Evaluate forecasts of DOE candidate-violation probability against later binary
 outcomes. The result includes weighted Brier and logarithmic scores,
 calibration-in-the-large, weighted expected/maximum calibration errors, a
-binned Brier decomposition, and reliability-bin rows. `bins` is either a
+Brier decomposition for bin-mean forecasts with an explicit remainder for the
+original forecasts, and reliability-bin rows. `bins` is either a
 positive equal-width bin count or explicit edges spanning `[0, 1]`.
 
 `unresolved` must be `:exclude`, `:violation`, or `:pass`; the default preserves
 uncertainty rather than labelling unresolved nonlinear solves. Simultaneous
 bin-wise and overall weighted Hoeffding intervals are returned only with
-`independence_assumption=true`. That assertion is not inferred from timestamps,
-groups, scenario weights, or provenance.
+`independence_assumption=true`. This asserts conditional independence of outcomes
+given the forecast design, with weights, bin rules, and retained observations
+fixed independently of those outcomes. It is not inferred from timestamps,
+groups, scenario weights, or provenance. Overall and simultaneous-bin intervals
+have separate confidence guarantees; they are not one joint family. Their target
+is the weighted mean conditional event probability minus the weighted forecast,
+not a pointwise calibration function. Outcome-dependent exclusion of unresolved
+cases does not satisfy the assertion. Recoding them targets the recoded event.
 
 These are diagnostics, not a binary declaration that a forecast is calibrated.
 Reliability diagrams depend on bin choice, and temporal/group dependence,
@@ -4925,6 +4932,9 @@ function evaluate_doe_probability_calibration(
     bin_rows = NamedTuple[]
     reliability = 0.0
     resolution = 0.0
+    binned_forecast_brier_score = 0.0
+    within_bin_forecast_variance = 0.0
+    within_bin_forecast_outcome_covariance = 0.0
     expected_calibration_error = 0.0
     maximum_calibration_error = 0.0
     for bin in 1:length(edges) - 1
@@ -4952,6 +4962,13 @@ function evaluate_doe_probability_calibration(
         bin_observed = sum(row.weight * row.outcome for row in members) /
             bin_weight
         bin_gap = bin_observed - bin_probability
+        binned_forecast_brier_score += sum(row.weight *
+            (bin_probability - row.outcome)^2 for row in members) / total_weight
+        within_bin_forecast_variance += sum(row.weight *
+            (row.probability - bin_probability)^2 for row in members) / total_weight
+        within_bin_forecast_outcome_covariance += sum(row.weight *
+            (row.probability - bin_probability) * (row.outcome - bin_observed)
+            for row in members) / total_weight
         reliability += bin_weight / total_weight * bin_gap^2
         resolution += bin_weight / total_weight *
             (bin_observed - observed_frequency)^2
@@ -5005,8 +5022,17 @@ function evaluate_doe_probability_calibration(
         "binned_reliability" => reliability,
         "binned_resolution" => resolution,
         "outcome_uncertainty" => uncertainty,
-        "binned_brier_reconstruction" => reliability - resolution + uncertainty)
+        "binned_brier_reconstruction" => reliability - resolution + uncertainty,
+        "binned_forecast_brier_score" => binned_forecast_brier_score,
+        "within_bin_brier_remainder" => brier_score - binned_forecast_brier_score,
+        "within_bin_forecast_variance" => within_bin_forecast_variance,
+        "within_bin_forecast_outcome_covariance" => within_bin_forecast_outcome_covariance)
     diagnostics = Dict{String,Any}(
+        "brier_decomposition_target" => :bin_mean_forecasts,
+        "interval_target" => :weighted_mean_conditional_event_probability_minus_forecast,
+        "conditional_outcome_independence_asserted" => independence_assumption,
+        "outcome_independent_design_asserted" => independence_assumption,
+        "overall_and_bin_intervals_joint" => false,
         "binning" => binning,
         "bin_count" => length(edges) - 1,
         "nonempty_bin_count" => nonempty_bin_count,
@@ -5246,7 +5272,8 @@ end
 function _doe_coverage_pair_map(coverage::DOECoverageResult,
                                 method::Symbol,
                                 pair_key::Union{Nothing,String};
-                                strict::Bool)
+                                strict::Bool,
+                                require_namespace::Bool=false)
     mapping = Dict{Any,NamedTuple}()
     for row in coverage.scenario_rows
         key = if method == :uncertainty_sample_id
@@ -5277,6 +5304,11 @@ function _doe_coverage_pair_map(coverage::DOECoverageResult,
             (row.interval, _doe_canonical(row.metadata[pair_key]))
         else
             throw(ArgumentError("unsupported pairing method :$method"))
+        end
+        if require_namespace
+            namespace = get(row.metadata, "pairing_namespace", nothing)
+            namespace isa AbstractString && !isempty(strip(namespace)) || return nothing
+            key = (String(namespace), key)
         end
         if haskey(mapping, key)
             strict && throw(ArgumentError(
@@ -5309,9 +5341,9 @@ function _doe_coverage_pairing(reference::DOECoverageResult,
     for method in candidates
         strict = pairing != :auto
         left = _doe_coverage_pair_map(
-            reference, method, pair_key; strict=strict)
+            reference, method, pair_key; strict=strict, require_namespace=pairing == :auto)
         right = _doe_coverage_pair_map(
-            comparison, method, pair_key; strict=strict)
+            comparison, method, pair_key; strict=strict, require_namespace=pairing == :auto)
         (left === nothing || right === nothing) && continue
         matched = collect(intersect(Set(keys(left)), Set(keys(right))))
         sort!(matched; by=_doe_canonical)
@@ -5352,10 +5384,17 @@ sets. `models` is a dictionary or vector of `label => DOEScenarioSet` pairs.
 Coverage keywords such as `roles`, `utilizations`, and `iid_assumption` are
 forwarded unchanged to every model.
 
-`pairing=:auto` tries materialized uncertainty-sample IDs, unique timestamps,
-then interval/scenario IDs. Use `pairing=:none` for deliberately independent
-ensembles, or select `:uncertainty_sample_id`, `:timestamp`, `:scenario_id`, or
-`:metadata` explicitly; metadata pairing also requires `pair_key`. Paired and
+`pairing=:auto` requires a nonempty `pairing_namespace` string in every
+scenario's metadata, matching across paired rows. Within that declared scope it
+tries uncertainty-sample IDs, unique timestamps, then interval/scenario IDs.
+Coincident local IDs alone never establish pairing. Declare a shared namespace
+only for the same underlying experimental units or deliberately coupled draws.
+Use `scenario_metadata=Dict("pairing_namespace" => "study-draws-v1")` when
+materializing a reused sample set. Independent ensembles should use distinct
+namespaces or none. Alternatively select `:uncertainty_sample_id`, `:timestamp`,
+`:scenario_id`, or `:metadata` explicitly to assert that the selected keys identify
+matching units; explicit pairing does not check namespaces. Metadata pairing also
+requires `pair_key`. `pairing=:none` disables matching. Paired and
 partially paired comparisons report conservative status discordance, counting
 unresolved outcomes as candidate violations.
 
@@ -5447,7 +5486,7 @@ function compare_doe_uncertainty_models(
                 comparison_coverage = comparison_curve.coverages[scale_index]
                 current_pairing = _doe_coverage_pairing(
                     reference_coverage, comparison_coverage;
-                    pairing=pairing_info.method,
+                    pairing=pairing == :auto ? :auto : pairing_info.method,
                     pair_key=pair_key_value)
                 matched_keys = current_pairing.keys
                 reference_candidates = [
@@ -5516,6 +5555,8 @@ function compare_doe_uncertainty_models(
         "scales" => copy(common_scales),
         "comparison_scale" => last(common_scales),
         "pairing_requested" => pairing,
+        "pairing_basis" => pairing == :auto ? :declared_shared_namespace :
+            pairing == :none ? :none : :caller_asserted_matching_units,
         "pair_key" => pair_key_value,
         "pairings" => pairing_records,
         "tolerance" => tolerance,

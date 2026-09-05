@@ -144,6 +144,9 @@ comparison.diagnostics["pairings"]
 @assert !comparison.diagnostics["capacity_allocation_reoptimized"]
 ```
 
+The fixture declares a shared `pairing_namespace`, and the transformed model
+preserves it because each row reuses the same underlying case. Independent
+sampler calls with coincident local IDs would remain unpaired by default.
 Pairing reveals which same-case outcomes change classification. It does not
 prove that the uncertainty model caused the change or that either model is
 correct.

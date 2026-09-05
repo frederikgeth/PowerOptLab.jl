@@ -358,7 +358,8 @@ assertion, which is stronger than ordinary stationarity; seasonality, trends,
 interventions, and the artificial wraparound remain caller concerns.
 [`evaluate_doe_probability_calibration`](@ref) evaluates separately issued
 violation-probability forecasts using reliability bins, proper scores,
-calibration error, and a binned Brier decomposition. Its coverage adapter keeps
+calibration error, and a Brier decomposition for bin-mean forecasts with an
+explicit remainder relating it to the original forecast score. Its coverage adapter keeps
 unresolved solves missing and ignores scenario weights unless explicitly
 requested. Weighted Hoeffding intervals require a separate observation-
 independence assertion.

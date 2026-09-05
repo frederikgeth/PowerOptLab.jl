@@ -111,3 +111,104 @@ end
     @test all(only(only(key)) ≈ score for (key, score) in
         zip(result.diagnostics["fairness_selection_keys"], scores))
 end
+
+@testset "DOE pairing requires experimental identity" begin
+    net = doe_feeder(p1=300.0, p2=300.0)
+    cps = [ConnectionPoint(id="d1", bus="bus1", export_max=10e3),
+           ConnectionPoint(id="d2", bus="bus2", export_max=10e3)]
+    draws = [sample_doe_gaussian_uncertainty([300.0], fill(1.0, 1, 1);
+        parameter_names=["demand"], count=3, seed=seed) for seed in (71, 72)]
+    @test [s.id for s in draws[1].samples] == [s.id for s in draws[2].samples]
+    @test draws[1].samples[1].parameters != draws[2].samples[1].parameters
+    materialize = (_, s) -> doe_feeder(p1=s.parameters["demand"], p2=300.0)
+    models = [materialize_doe_scenarios(net, samples, materialize;
+        dataset_id="ensemble-$i", materializer_id="demand-fixture", role=:test)
+        for (i, samples) in enumerate(draws)]
+    independent = compare_doe_uncertainty_models(
+        ["a"=>models[1], "b"=>models[2]], cps, Dict("d1"=>100.0, "d2"=>100.0);
+        scales=(0.5, 1.0))
+    @test all(row.evidence_design == :unpaired && row.matched_scenario_count == 0
+              for row in independent.pairwise_rows)
+    @test independent.diagnostics["pairing_basis"] == :declared_shared_namespace
+
+    left, right = [first(independent.curves[id].coverages) for id in ("a", "b")]
+    function scoped(coverage, namespaces)
+        rows = NamedTuple[merge(row, (metadata=merge(row.metadata,
+            Dict("pairing_namespace"=>namespace)),))
+            for (row, namespace) in zip(coverage.scenario_rows, namespaces)]
+        return DOECoverageResult(coverage.outcome, coverage.selected_roles,
+            coverage.verification, rows, coverage.metrics, coverage.diagnostics)
+    end
+    pair(a, b; method=:auto, key=nothing) = PowerOptLab._doe_coverage_pairing(
+        a, b; pairing=method, pair_key=key)
+    @test pair(left, right).method == :none
+    @test pair(left, right; method=:uncertainty_sample_id).evidence_design == :paired
+    @test pair(left, right; method=:scenario_id).evidence_design == :paired
+    @test pair(left, right; method=:none).evidence_design == :unpaired
+    @test pair(scoped(left, fill("experiment-a", 3)),
+        scoped(right, fill("experiment-b", 3))).evidence_design == :unpaired
+    # Identical evaluations of the same draws are valid matching units.
+    scoped_left = scoped(left, fill("shared-draws", 3))
+    @test pair(scoped_left, scoped(left, fill("shared-draws", 3))).evidence_design == :paired
+    partial = pair(scoped_left, scoped(left, ["shared-draws", "shared-draws", "another-study"]))
+    @test partial.evidence_design == :partially_paired
+    @test length(partial.keys) == 2
+    @test pair(scoped_left, scoped(left, ["shared-draws", "shared-draws", ""])).method == :none
+    duplicate = deepcopy(left)
+    duplicate.scenario_rows[2].metadata["uncertainty_sample_id"] =
+        duplicate.scenario_rows[1].metadata["uncertainty_sample_id"]
+    @test_throws ArgumentError pair(left, duplicate; method=:uncertainty_sample_id)
+
+    reused = [materialize_doe_scenarios(net, draws[1], materialize;
+        dataset_id="reused-$i", materializer_id="demand-fixture", role=:test,
+        scenario_metadata=Dict("pairing_namespace"=>"shared-draws")) for i in 1:2]
+    paired = compare_doe_uncertainty_models(["a"=>reused[1], "b"=>reused[2]], cps,
+        Dict("d1"=>100.0, "d2"=>100.0); scales=(0.5, 1.0))
+    @test all(row.evidence_design == :paired && row.matched_scenario_count == 3
+              for row in paired.pairwise_rows)
+    @test all(row.paired_conservative_agreement_count == 3 for row in paired.pairwise_rows)
+end
+
+@testset "DOE original and binned Brier identities" begin
+    observation(id, p, y; weight=1.0) = DOEProbabilityObservation(
+        id=id, predicted_violation_probability=p, observed_violation=y, weight=weight)
+    result = evaluate_doe_probability_calibration(
+        [observation("a", 0.1, false), observation("b", 0.9, true)]; bins=1)
+    m = result.metrics
+    @test m["brier_score"] ≈ 0.01
+    @test m["binned_forecast_brier_score"] ≈ 0.25
+    @test m["within_bin_brier_remainder"] ≈ -0.24
+    @test m["within_bin_forecast_variance"] ≈ 0.16
+    @test m["within_bin_forecast_outcome_covariance"] ≈ 0.2
+    @test result.diagnostics["brier_decomposition_target"] == :bin_mean_forecasts
+    @test !result.diagnostics["conditional_outcome_independence_asserted"]
+
+    # Unequal weights and forecasts within each bin exercise the full identity.
+    probabilities = [0.1, 0.4, 0.6, 0.9]
+    outcomes = [0.0, 1.0, 0.0, 1.0]
+    weights = [1.0, 3.0, 2.0, 4.0]
+    rows = [observation(string(i), probabilities[i], Bool(outcomes[i]); weight=weights[i])
+            for i in 1:4]
+    weighted = evaluate_doe_probability_calibration(rows; bins=2, independence_assumption=true)
+    m = weighted.metrics
+    # Bin means (0.325, 0.8) computed independently from the four observations.
+    bin_forecasts = [0.325, 0.325, 0.8, 0.8]
+    @test m["brier_score"] ≈ sum(weights .* (probabilities .- outcomes).^2) / 10
+    @test m["binned_forecast_brier_score"] ≈ sum(weights .* (bin_forecasts .- outcomes).^2) / 10
+    @test m["binned_brier_reconstruction"] ≈ m["binned_forecast_brier_score"]
+    @test m["brier_score"] ≈ m["binned_brier_reconstruction"] + m["within_bin_brier_remainder"]
+    @test m["within_bin_brier_remainder"] ≈ m["within_bin_forecast_variance"] -
+        2m["within_bin_forecast_outcome_covariance"]
+    @test weighted.diagnostics["outcome_independent_design_asserted"]
+    @test !weighted.diagnostics["overall_and_bin_intervals_joint"]
+    equal_forecasts = evaluate_doe_probability_calibration(
+        [observation("a", 0.2, false), observation("b", 0.2, true)]; bins=3)
+    @test equal_forecasts.metrics["within_bin_brier_remainder"] ≈ 0 atol=1e-14
+    @test equal_forecasts.metrics["within_bin_forecast_variance"] ≈ 0 atol=1e-14
+    for treatment in (:exclude, :pass, :violation)
+        unresolved = evaluate_doe_probability_calibration(
+            [rows; observation("unresolved", 0.3, nothing)]; bins=2, unresolved=treatment)
+        m = unresolved.metrics
+        @test m["brier_score"] ≈ m["binned_brier_reconstruction"] + m["within_bin_brier_remainder"]
+    end
+end

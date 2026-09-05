@@ -60,6 +60,7 @@ function doe_uncertainty_tutorial_case()
             metadata=Dict(
                 "site_id" => "synthetic-feeder",
                 "aggregate_demand_kw" => 10.0,
+                "pairing_namespace" => "synthetic-load-cases-v1",
                 "uncertainty_sample_id" => "case-high")),
         DOEScenario(
             id="test-low-load",
@@ -73,6 +74,7 @@ function doe_uncertainty_tutorial_case()
             metadata=Dict(
                 "site_id" => "synthetic-feeder",
                 "aggregate_demand_kw" => 0.4,
+                "pairing_namespace" => "synthetic-load-cases-v1",
                 "uncertainty_sample_id" => "case-low")),
         DOEScenario(
             id="test-high-load",
@@ -86,6 +88,7 @@ function doe_uncertainty_tutorial_case()
             metadata=Dict(
                 "site_id" => "synthetic-feeder",
                 "aggregate_demand_kw" => 10.0,
+                "pairing_namespace" => "synthetic-load-cases-v1",
                 "uncertainty_sample_id" => "case-high")),
     ]; dataset_id="doe-uncertainty-tutorial-v1",
        metadata=Dict("license" => "CC0-1.0", "synthetic" => true))

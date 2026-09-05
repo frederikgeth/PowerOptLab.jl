@@ -29,6 +29,14 @@ and legacy ports are single-phase. Numerical limits remain unresolved rather
 than becoming candidate violations. The separate PF adapter rejects droop
 profiles whose rating bases the pinned engine would alter.
 
+The follow-up cleanup corrects scrambled digit tails, checks dropout budgets
+before allocation, and measures marginal Halton coverage. Rolling fairness
+applies entitlement weights to past and current service consistently; multistart
+selection follows the requested objective stages in chronological interval order.
+Automatic model pairing requires a declared shared namespace. Probability scores
+separate original and bin-mean forecasts through an explicit Brier remainder.
+Execution-derived experiment manifests remain deferred to a later pass.
+
 ## Branch-completion gate
 
 The current DOE research branch is ready for review when:

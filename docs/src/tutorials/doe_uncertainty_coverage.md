@@ -102,6 +102,7 @@ test_low = DOEScenario(
         "site_id" => "synthetic-feeder",
         "aggregate_demand_kw" => 0.4,
         "predicted_violation_probability" => 0.75,
+        "pairing_namespace" => "synthetic-load-cases-v1",
         "uncertainty_sample_id" => "case-low"),
 )
 
@@ -118,6 +119,7 @@ test_high = DOEScenario(
         "site_id" => "synthetic-feeder",
         "aggregate_demand_kw" => 9.6,
         "predicted_violation_probability" => 0.15,
+        "pairing_namespace" => "synthetic-load-cases-v1",
         "uncertainty_sample_id" => "case-high"),
 )
 
@@ -326,7 +328,8 @@ restrictive_model = DOEScenarioSet([
         source="synthetic restrictive model",
         generation_method=:alternative_uncertainty_model,
         timestamp=DateTime(2026, 1, 15, 12),
-        metadata=Dict("uncertainty_sample_id" => "case-low")),
+        metadata=Dict("pairing_namespace" => "synthetic-load-cases-v1",
+            "uncertainty_sample_id" => "case-low")),
     DOEScenario(
         id="test-high-load",
         network=coverage_feeder(100.0, 100.0),
@@ -335,7 +338,8 @@ restrictive_model = DOEScenarioSet([
         source="synthetic restrictive model",
         generation_method=:alternative_uncertainty_model,
         timestamp=DateTime(2026, 1, 15, 12),
-        metadata=Dict("uncertainty_sample_id" => "case-high")),
+        metadata=Dict("pairing_namespace" => "synthetic-load-cases-v1",
+            "uncertainty_sample_id" => "case-high")),
 ]; dataset_id="doe-restrictive-model-v1")
 
 model_sensitivity = compare_doe_uncertainty_models(
@@ -356,11 +360,17 @@ model_sensitivity.diagnostics["pairings"]
 The long-form rows are suitable for plotting capacity scale against candidate-
 violation frequency. Pairwise rows report aggregate conservative-frequency
 deltas and, for matched cases, pass-to-candidate and candidate-to-pass
-discordance counts. Automatic pairing prefers propagated uncertainty-sample
-IDs, then unique timestamps, then interval-local scenario IDs. Use
-`pairing=:none` for independent Monte Carlo ensembles, or
-`pairing=:metadata, pair_key="forecast_case_id"` when the study defines its own
-stable pairing unit.
+discordance counts. Automatic pairing requires the same declared
+`pairing_namespace` in scenario metadata, then matches sample IDs, unique
+timestamps, or interval-local scenario IDs within that scope. Here the namespace
+declares the same synthetic low/high cases in both models. Reusing local IDs
+such as `gaussian-1` across independent draws does not make them paired.
+When materializing deliberately reused draws, pass a shared namespace through
+`scenario_metadata`. Independent ensembles need distinct namespaces or none;
+`pairing=:none` explicitly disables matching. Selecting a pairing key explicitly,
+for example `pairing=:metadata, pair_key="forecast_case_id"`, is the caller's
+assertion that the keys identify matching experimental units, without a namespace
+check. Neither mechanism validates the experimental declaration itself.
 
 The comparison deliberately reports `statistical_test=:not_performed` and
 `uncertainty_model_effect_established=false`. Common inputs remove several
@@ -543,15 +553,41 @@ an observation-frequency weight.
 
 The bin rows form a reliability-diagram table. They include empty bins so bin
 definitions remain comparable across studies. Brier and logarithmic scores are
-proper scoring rules; expected/maximum calibration error and the binned Brier
-decomposition depend on the declared bin edges. No threshold is used to label a
-forecast simply “calibrated.”
+proper scoring rules for resolved binary events with suitable observation
+weights. Expected/maximum calibration error and the binned Brier decomposition
+depend on the declared bin edges. Reliability minus resolution plus uncertainty
+reconstructs `binned_forecast_brier_score`, which replaces each forecast by its
+bin's weighted mean. The original `brier_score` additionally includes
+`within_bin_brier_remainder`: within-bin forecast variance minus twice the
+within-bin forecast/outcome covariance. This remainder can be negative:
+
+```julia
+sharp = [DOEProbabilityObservation(id="low", predicted_violation_probability=0.1,
+             observed_violation=false),
+         DOEProbabilityObservation(id="high", predicted_violation_probability=0.9,
+             observed_violation=true)]
+coarse = evaluate_doe_probability_calibration(sharp; bins=1)
+m = coarse.metrics
+@assert isapprox(m["brier_score"], 0.01)
+@assert isapprox(m["binned_forecast_brier_score"], 0.25)
+@assert isapprox(m["within_bin_brier_remainder"], -0.24)
+@assert isapprox(m["brier_score"], m["binned_brier_reconstruction"] +
+    m["within_bin_brier_remainder"])
+```
+
+No threshold is used to label a forecast simply “calibrated.”
 
 Setting `independence_assumption=true` adds an overall weighted Hoeffding
 interval for the calibration gap and simultaneous Bonferroni-Hoeffding bin
-intervals. Do not do that for this two-scenario, same-site example. The function
-does not verify that probabilities predate outcomes, or account automatically
-for serial or group dependence and post-hoc model selection.
+intervals, each with a separate confidence guarantee (not one joint family).
+This asserts conditional independence of outcomes given the forecast design,
+and outcome-independent weights, bins, and retained observations. The target is
+a weighted mean conditional event probability minus the weighted forecast within
+the fixed design, not a pointwise calibration curve. Outcome-dependent removal
+of unresolved cases can invalidate those intervals; recoding unresolved cases
+changes the event being scored. Do not enable them for this two-scenario,
+same-site example. The function does not verify forecast timing or account
+automatically for serial/group dependence and post-hoc model selection.
 
 ## Add a statistical bound only when justified
 
