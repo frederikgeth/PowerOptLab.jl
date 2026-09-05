@@ -37,85 +37,13 @@
 
 const _SQRT3 = sqrt(3.0)
 const _HALF_SQRT3 = _SQRT3 / 2
-# Physical smoothing scale for the current-linear loss norm. The shifted smooth
-# norm sqrt(|I|² + ε²) - ε is zero at I=0 and differs from |I| by less than ε.
-# It removes the singular Jacobian of im²=|I|² at zero current without creating
-# an epigraph that an unrelated objective could inflate.
-# ── Square-root smoothing policy ──────────────────────────────────────────────
-# Current magnitudes enter the model only through the linear loss coefficient
-# `a_loss`. They are stamped as the shifted smooth norm
-#
-#     |I| ≈ sqrt(|I|² + ε²) − ε,
-#
-# which is a uniform ε-accurate UNDERestimator of the exact norm:
-# 0 ≤ √x − (√(x+ε²) − ε) ≤ ε for every x ≥ 0, with equality at x = 0. The
-# modelled loss is therefore biased low by at most `a_loss·ε` per conducting
-# leg — a closed-form, one-sided error budget rather than a tuning knob.
-#
-# The shift is written as an EXPRESSION, not as a lifted variable with an
-# auxiliary equality. Both compute the same function, but measurements on this
-# model showed the lifted equality costs 2–4× the Ipopt iterations in per-unit,
-# 1.4–19× in SI, and fails outright (ITERATION_LIMIT) for `per_unit=false`,
-# because it puts a tiny per-unit magnitude inside a squared equality whose
-# residual tolerance is absolute. The expression form adds no variable, no
-# constraint, and is insensitive to ε over the whole range tested.
-#
-# ε must be strictly positive but its magnitude is otherwise free: measured
-# iteration counts are IDENTICAL from ε_rel = 1e-2 down to 1e-18, in both unit
-# modes and both at a generic operating point and with a leg sitting exactly on
-# |I| = 0. So ε is a modelling-accuracy knob, not a numerical one.
-#
-# ε cannot be zero. At an exactly-zero current the exact norm's AD gradient is
-# u/sqrt(u²+v²) = 0/0, and Ipopt rejects the model outright (INVALID_MODEL).
-# Interior-point slacks do not rescue this: they are introduced in the barrier
-# reformulation of the INEQUALITIES, while the NaN is produced earlier, inside
-# the derivative callback for the objective.
-#
-# ε is NOT limited from below by machine precision. ε_pu = 9e-21 against
-# |I|²_pu ≈ 5e-5 is numerically invisible in the sum, and costs nothing —
-# where the shift matters (|I| ≈ 0) the ε² term is the entire radicand and is
-# evaluated exactly. The real floor is the SOLVER's achievable accuracy:
-# measured bias tracks the analytic prediction until it flattens at ≈5e-12
-# relative (at a singular leg; 1.6e-16 in benign cases). Below that, shrinking
-# ε buys nothing observable.
-#
-# ε_rel is therefore anchored to the solver tolerance, one decade under
-# Ipopt's default `tol = 1e-8`. That places the smoothing bias in the window
-# [solver noise, solver tolerance]: negligible for any result, yet still the
-# analytically KNOWN term rather than being swamped by — and mistaken for —
-# unstructured solver noise. Retune it with `tol`, not independently.
-#
-# ε is declared RELATIVE to the device's own conductor rating. That makes the
-# relative bias identical for every device in a heterogeneous fleet (an
-# absolute ε penalises small inverters), and identical in SI and per-unit once
-# the rating is expressed in working units. `_MAGNITUDE_EPS_FLOOR_SI` only
-# applies when no rating was declared.
-#
-# Background.
-#   Nesterov, "Smooth minimization of non-smooth functions", Math. Program.
-#     103, 127–152 (2005), doi:10.1007/s10107-004-0552-5 — the classical
-#     accuracy-versus-smoothness trade-off: O(μ) approximation error against
-#     an O(1/μ) gradient Lipschitz constant.
-#   Chen & Mangasarian, "A class of smoothing functions for nonlinear and
-#     mixed complementarity problems", Comput. Optim. Appl. 5, 97–138 (1996),
-#     doi:10.1007/BF00249052 — the smoothing class that `sqrt(x² + ε²)`
-#     belongs to, and that `inverter_controls.jl` uses for smooth min/max.
-#   Charbonnier, Blanc-Féraud, Aubert & Barlaud, "Deterministic
-#     edge-preserving regularization in computed imaging", IEEE Trans. Image
-#     Process. 6(2), 298–311 (1997), doi:10.1109/83.551699 — the same
-#     function as the pseudo-Huber / Charbonnier potential.
-#   Wächter & Biegler, "On the implementation of an interior-point filter
-#     line-search algorithm for large-scale nonlinear programming", Math.
-#     Program. 106, 25–57 (2006), doi:10.1007/s10107-004-0559-y — Ipopt;
-#     its tolerance design sets the accuracy floor measured above, and its
-#     Eqn 35 is the bound relaxation discussed in the rating-constraint note
-#     in the `AdvancedInverter` docstring.
-#
-# Note that Nesterov's O(1/μ) conditioning penalty is NOT what the measurements
-# above show, because it bounds the worst case over a function class, while
-# here the smoothed norm is one term in a problem whose conditioning is set by
-# the network equations. That is why ε can be pushed to the solver's accuracy
-# floor rather than being traded against convergence.
+# Current-linear losses use BMOPFTools' shifted smooth_norm expression.
+# Its one-sided magnitude error is at most epsilon per conducting leg, hence
+# the physical loss deficit is at most a_loss * sum(epsilon_SI). Preserve the
+# established rating-relative budget independently of solver tolerances.
+# Smoothness removes the undefined derivative of an exact norm at zero; it
+# does not guarantee good conditioning as epsilon shrinks (curvature at the
+# origin is proportional to 1/epsilon).
 const _MAGNITUDE_EPS_REL = 1e-9      # of the per-leg current rating
 const _MAGNITUDE_EPS_FLOOR_SI = 1e-3 # A, used only when no rating is declared
 
@@ -129,14 +57,13 @@ _magnitude_epsilon(rating, ib) =
     (rating === nothing ? _MAGNITUDE_EPS_FLOOR_SI :
      _MAGNITUDE_EPS_REL * rating) / ib
 
-"Shifted smooth norm `sqrt(radicand + ε²) − ε`, exact at radicand = 0."
-_smooth_magnitude(radicand, epsilon) =
-    sqrt(radicand + epsilon^2) - epsilon
-
-"Accumulate one smooth magnitude, starting the sum on the first term."
-_push_magnitude(total, radicand, epsilon) =
-    total === nothing ? _smooth_magnitude(radicand, epsilon) :
-    total + _smooth_magnitude(radicand, epsilon)
+"Accumulate a shared smooth loss norm with a physical, base-invariant budget."
+function _push_magnitude(ctx, total, x, y, rating, ib; name)
+    scale = something(rating, 1.0) / ib
+    magnitude = BMOPFTools.smooth_norm(ctx, x, y; scale=scale,
+        eps_rel=_magnitude_epsilon(rating, ib)/scale, name=name)
+    return total === nothing ? magnitude : total + magnitude
+end
 const _PAIRS_IDX = ((1, 2), (2, 3), (3, 1))
 # Relaxation weight on the previous PWM reserve in the outer closure below.
 # The audited ripple depends only weakly on the reserve already allocated, so
@@ -1647,7 +1574,8 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
         end
         if inv.a_loss != 0.0
             imag_terms = _push_magnitude(
-                imag_terms, isq, _magnitude_epsilon(inv.i_max, ib))
+                ctx, imag_terms, cri[k], cii[k], inv.i_max, ib;
+                name="loss_$(inv.id)_$(ph)")
         else
             # Kept even though a_loss == 0 multiplies the magnitude away:
             # removing this epigraph was measured to push otherwise healthy
@@ -1688,8 +1616,9 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
         isq_sum += isq_n
         if inv.a_loss != 0.0
             imag_terms = _push_magnitude(
-                imag_terms, isq_n,
-                _magnitude_epsilon(something(inv.In_max, inv.i_max), ib))
+                ctx, imag_terms, sumcr, sumci,
+                inv.In_max === nothing ? inv.i_max : inv.In_max, ib;
+                name="loss_$(inv.id)_neutral")
         else
             # Same regulariser as the per-phase branch; the fourth leg is
             # boxed by its own rating.

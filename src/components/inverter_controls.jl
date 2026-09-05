@@ -936,6 +936,7 @@ _smooth_symmetric_clip(a, limit, epsilon) =
     _smooth_max(a, -limit, epsilon) - a
 
 function _implicit_sqrt!(m, radicand; start::Real=1.0, scale::Real=start)
+    _is_identically_zero(radicand) && return 0.0
     initial = max(Float64(start), 0.0)
     normalization = max(abs(Float64(scale)), eps(Float64))
     root = JuMP.@variable(m, lower_bound=0.0, start=initial)
@@ -945,15 +946,11 @@ function _implicit_sqrt!(m, radicand; start::Real=1.0, scale::Real=start)
 end
 
 function _smooth_max_implicit!(m, a, b, epsilon; start::Real=1.0)
-    root = _implicit_sqrt!(
-        m, (a-b)^2 + epsilon^2; start=max(Float64(start), epsilon))
-    return (a + b + root) / 2
+    return _smooth_max(a, b, epsilon)
 end
 
 function _smooth_min_implicit!(m, a, b, epsilon; start::Real=1.0)
-    root = _implicit_sqrt!(
-        m, (a-b)^2 + epsilon^2; start=max(Float64(start), epsilon))
-    return (a + b - root) / 2
+    return _smooth_min(a, b, epsilon)
 end
 
 function _smooth_symmetric_clip_implicit!(
@@ -966,15 +963,11 @@ function _smooth_symmetric_clip_implicit!(
 end
 
 function _smooth_positive_implicit!(m, a, epsilon; start::Real=epsilon)
-    root = _implicit_sqrt!(
-        m, a^2 + epsilon^2; start=max(Float64(start), epsilon))
-    return (a + root) / 2
+    return _smooth_positive(a, epsilon)
 end
 
 function _smooth_negative_implicit!(m, a, epsilon; start::Real=epsilon)
-    root = _implicit_sqrt!(
-        m, a^2 + epsilon^2; start=max(Float64(start), epsilon))
-    return (a - root) / 2
+    return _smooth_negative(a, epsilon)
 end
 
 function _smooth_dominant_implicit!(
@@ -984,8 +977,7 @@ function _smooth_dominant_implicit!(
     high_severity = -high/negative_scale
     difference = low_severity - high_severity
     epsilon = policy.conflict_epsilon
-    root = _implicit_sqrt!(
-        m, difference^2 + epsilon^2; start=epsilon, scale=1.0)
+    root = sqrt(difference^2 + epsilon^2)
     weight = (1 + difference/root)/2
     normalized_command = weight*low_severity - (1-weight)*high_severity
     selected_scale = weight*positive_scale + (1-weight)*negative_scale
@@ -1092,43 +1084,17 @@ _is_identically_zero(::Any) = false
 
 function _safe_direction_scale_implicit!(
         m, offset, direction, limit, epsilon; magnitude_start, scale)
-    offset_magnitude = all(x -> x isa Real && iszero(x), offset) ? 0.0 :
+    offset_magnitude = all(_is_identically_zero, offset) ? 0.0 :
         _implicit_sqrt!(
             m, offset[1]^2 + offset[2]^2;
             start=magnitude_start, scale=scale)
     direction_magnitude = _implicit_sqrt!(
         m, direction[1]^2 + direction[2]^2;
         start=magnitude_start, scale=scale)
-    # The headroom left for the command must not be allowed to go negative: an
-    # offset magnitude that already exceeds the limit would otherwise produce a
-    # NEGATIVE factor — a reversed current command — where the exact allocator
-    # in `_safe_direction_scale_exact` returns 0.
-    #
-    # The clamp is stamped only where a nonzero offset is actually reachable.
-    # When the offset is identically zero the headroom equals the non-negative
-    # constant `limit` minus a quantity pinned to zero, so it cannot go negative
-    # and the model stays bit-identical to the unguarded one — which matters,
-    # because these paths sit next to fixtures that are one solver tolerance away
-    # from failing. Where the clamp is needed it uses the shifted smooth norm
-    # `(a + sqrt(a^2 + eps^2))/2` as an expression rather than one more lifted
-    # variable: lifting it was measured to push the `s_max` and `dv2_max`
-    # saturation regressions from LOCALLY_SOLVED to non-publishable, the same
-    # failure mode that moved `AdvancedInverter`'s current-magnitude term to the
-    # expression form. The clamp exceeds max(headroom, 0) by at most eps/2, so
-    # the triangle bound is relaxed by no more than the selector width already
-    # declared, and the returned factor stays in [0, 1] because
-    # smax_eps(a, b) >= a.
-    #
-    # NOTE: lifting an identically-zero radicand stamps `(y/n)^2 == 0, y >= 0`,
-    # whose gradient vanishes at its own solution, so LICQ fails there. Removing
-    # those constraints is formally an improvement and was tried; it changed
-    # which points converge at `tol=1e-8` on a different Ipopt/MUMPS build
-    # (3 assertions in `stamped P/Q priority under PV oversizing` on
-    # ubuntu-latest, clean on aarch64-darwin). Their retention is an empirical
-    # solver-path workaround, not a mathematically justified regularization.
-    # Exact-zero elimination improves the ripple cases in the controlled
-    # Ipopt/MadNLP study in scripts/diagnostics/controller_convergence.md;
-    # production removal still needs validation across the controller suite.
+    # Exact zeros need no auxiliary norm. Nonzero offsets use an upper norm,
+    # so the smoothing cannot create headroom by underestimating the offset.
+    # The positive headroom approximation below can exceed max(headroom, 0)
+    # by epsilon/2; physical squared capability constraints remain exact.
     headroom = limit - offset_magnitude
     available = all(_is_identically_zero, offset) ? headroom :
         (headroom + sqrt(headroom^2 + epsilon^2))/2

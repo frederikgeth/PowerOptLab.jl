@@ -1344,7 +1344,7 @@ end
 end
 
 @testset "Advanced inverter: square-root smoothing policy" begin
-    smooth = PowerOptLab._smooth_magnitude
+    smooth(x, epsilon) = sqrt(x + epsilon^2) - epsilon
     epsilon_of = PowerOptLab._magnitude_epsilon
 
     # The shifted norm is a UNIFORM eps-accurate UNDERestimator of sqrt(x):
