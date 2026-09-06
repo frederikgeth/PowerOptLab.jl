@@ -49,6 +49,8 @@ end
     include("doe_cleanup_tests.jl")
     include("bilevel_tests.jl")
     include("advanced_inverter_tests.jl")
+    include("generalized_generator_tests.jl")
+    include("generator_data_tests.jl")
     include("inverter_control_tests.jl")
     include("inverter_control_numerics_tests.jl")
     include("inverter_control_study_tests.jl")

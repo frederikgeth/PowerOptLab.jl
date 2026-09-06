@@ -87,6 +87,8 @@ using DiffOpt
 using ForwardDiff
 using JuMP
 using Ipopt
+import JSON3
+import JSONSchema
 using LinearAlgebra
 using Random
 using SHA
@@ -110,6 +112,8 @@ include("formulations/experiments.jl")
 
 # Component models — new network elements stamped via model_hook! / solution_hook!
 include("components/devices.jl")
+include("components/generalized_generator.jl")
+include("components/generator_data.jl")
 include("components/advanced_inverter.jl")
 include("components/inverter_controls.jl")
 include("formulations/control_intent.jl")
@@ -121,6 +125,7 @@ include("components/ivq_battery.jl")
 
 # Problem specifications — new objective/constraint structures over the staged API
 include("problems/multiperiod.jl")
+include("problems/generator_opf.jl")
 include("problems/state_estimation.jl")
 include("problems/constrained_state_estimation.jl")
 include("problems/parameter_estimation.jl")
@@ -166,6 +171,12 @@ export measurement_kind, measurement_value, measurement_sigma, measurement_predi
 
 # Devices
 export StorageDevice, EVDevice
+export GeneralizedGenerator, SourceGenerator, GeneratorVoltageLaw, GeneratorControl,
+       GeneratorCapability, GeneratorSequenceLimits, GeneratorResult,
+       generator_sequence_impedance, build_generator_model, solve_generator_opf,
+       GeneratorOPFResult
+export GeneratorDataSet, generator_data_schema, generator_from_data,
+       read_generator_data, generator_data, write_generator_data
 
 # Shared solve-result contract
 export SolveOutcome

@@ -152,7 +152,8 @@ function solve_multiperiod_opf(nets::AbstractVector, devices::AbstractVector;
 
     # One combined objective: total generation cost across the horizon.
     JuMP.@objective(model, Min,
-        sum(grid[t] * generation_cost(ctxs[t]) for t in 1:T))
+        sum(grid[t] * (generation_cost(ctxs[t]) +
+            sum(_snapshot_device_cost(d,ports[device_id(d)][t]) for d in devices;init=0.0)) for t in 1:T))
 
     foreach(enforce_kcl!, ctxs)
     JuMP.optimize!(model)
@@ -164,6 +165,12 @@ function solve_multiperiod_opf(nets::AbstractVector, devices::AbstractVector;
     obj = solved ? JuMP.objective_value(model) : NaN
 
     snapshots = [_extract_result(ctxs[t], outcome) for t in 1:T]
+    for t in 1:T, d in devices
+        injection=_snapshot_device_injection(d,ports[device_id(d)][t],status_contract)
+        injection===nothing && continue
+        ledger=get!(snapshots[t],"custom_injection",Dict("p"=>0.0,"q"=>0.0))
+        ledger["p"]+=injection.p; ledger["q"]+=injection.q
+    end
 
     dispatch = Dict{String,NamedTuple}()
     for d in devices

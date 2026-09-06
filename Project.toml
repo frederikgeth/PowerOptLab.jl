@@ -4,6 +4,8 @@ authors = ["Frederik Geth <frederik.geth@gmail.com>"]
 version = "0.1.0"
 
 [deps]
+JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
+JSONSchema = "7d188eb4-7ad8-530c-ae41-71a32a6d4692"
 TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 BMOPFTools = "5f9a3b62-8f63-4a39-b67b-af9b51e6a7c3"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
@@ -26,6 +28,8 @@ PiecewiseLinearOpt = "0f51c51e-adfa-5141-8a04-d40246b8977c"
 PowerOptLabPiecewiseLinearOptExt = "PiecewiseLinearOpt"
 
 [compat]
+JSON3 = "1.14"
+JSONSchema = "1.5"
 PiecewiseLinearOpt = "0.4"
 Aqua = "0.8"
 BMOPFTools = "=0.1.0"
