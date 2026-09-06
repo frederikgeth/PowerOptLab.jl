@@ -3,8 +3,9 @@
 These pages stage mathematical and JSON data-model specifications for the
 `GeneralizedGenerator` and `SourceGenerator` components. They are proposals for
 later contributions to the IEEE PES Task Force specification, **not an adopted
-schema or a JSON reader implemented by PowerOptLab**. The executable interface
-remains the [Julia API](../../components/generalized_generator_api.md).
+upstream schema**. PowerOptLab implements an experimental local schema and
+[JSON reader/writer](serialization.md), in addition to the
+[Julia API](../../components/generalized_generator_api.md).
 
 The drafts follow the upstream component structure: **1. Data model; 2. Input
 symbols; 3. Variables; 4. Equality constraints; 5. Inequality constraints**, followed
@@ -18,6 +19,8 @@ assumptions; they are not competing numerical formulations of the same device.
   independent neutral and earth returns, and complete power accounting.
 - [Shared voltage laws, controls, and capabilities](operating-model.md): every
   field and equation shared by the two components, including modes a–f.
+- [Reading and writing generator data](serialization.md): executable schema,
+  semantic checks, canonicalization, and physical round trips.
 - [Implementation and upstream migration](integration.md): rectangular equations,
   exact limits, API mapping, upstream inconsistencies, and proposed PR boundaries.
 

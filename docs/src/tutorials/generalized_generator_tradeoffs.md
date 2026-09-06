@@ -36,10 +36,11 @@ rows = generator_tradeoff_study()
 print_generator_tradeoffs(rows)
 ```
 
-All phasors are fundamental-frequency RMS values. `Iph` is the maximum phase
-current, `In` the neutral-lead current magnitude, and `Ig` the source earth-current
-magnitude. VUF is ``100|V_2|/|V_1|`` at the PCC, using phase-to-PCC-neutral
-voltages and the 1/3 Fortescue transform. The loss column contains the local
+All phasors are fundamental-frequency RMS values. `Iw` is maximum winding
+current, `IL` maximum external conductor current, `In` neutral-lead current,
+`Ig` earth current, and `Ic` delta circulating current. VUF is
+``100|V_2|/|V_1|`` at the PCC with the 1/3 Fortescue transform. The delta section
+below explains its line-line sequence quantities and the `V1*` conversion. The loss column contains the local
 component's physical series and grounding losses; it excludes feeder losses.
 
 ## What is held fixed?

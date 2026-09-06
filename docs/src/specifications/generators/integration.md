@@ -3,8 +3,9 @@
 The component and shared operating pages define the physical feasible set.
 This page documents an equivalent rectangular realization, the mapping to the
 current PowerOptLab prototype, and the changes needed before upstream adoption.
-The proposed JSON collections are **not accepted by an implemented PowerOptLab
-JSON importer**, and these pages do not supply a released upstream JSON Schema.
+The proposed JSON collections are implemented by PowerOptLab's experimental
+[reader/writer and local schema](serialization.md). They are not a released
+upstream JSON Schema.
 
 ## 1. Rectangular electrical equations
 
@@ -278,8 +279,9 @@ claim dynamic stability, uniqueness, or global optimality.
 
 ## 4. Mapping the draft data to PowerOptLab
 
-This is an explicit translation contract for a **future** importer. It does not
-claim that `parse_bmopf` or a current JSON Schema recognizes the new collections.
+This is the translation contract implemented by `generator_from_data` and
+`read_generator_data`. The extension is read separately from `parse_bmopf`;
+its schema does not reinterpret native network collections.
 
 | Draft field(s) | Current Julia API | Translation |
 |:--|:--|:--|
@@ -394,7 +396,7 @@ The upstream guide asks normative proposals to begin with an issue or discussion
 That is a future upstream contribution step, not a prerequisite for drafting
 these files locally. No issue, PR, schema release, or publication has been created.
 
-Before proposing a schema, encode conditional required fields, dimensions,
+The local schema and semantic translator encode conditional required fields, dimensions,
 configuration/port incidence rules, enum sets, mutually exclusive per-port/total
 representations, finite numeric values, positive magnitude domains, passivity,
 and bus-terminal references. Several of these require semantic validation beyond
@@ -434,8 +436,10 @@ No impedance inverse, internal voltage variable, or extra cycle row is needed.
 
 
 An exact sequence-current restriction can also follow from a delta voltage law
-and its series matrix. Before adding affine delta equalities, the implementation
+and its series matrix. Before adding optional affine delta sequence-bound equalities, the implementation
 checks dependence within this component's small row set using normalized
 elimination (relative coefficient tolerance ``10^{-12}``). It retains the original
-scaled physical rows in the optimization model. This is local algebraic cleanup,
+scaled physical rows in the optimization model. Constitutive/source-law rows
+are never discarded by this tolerance; a tiny finite loop impedance is not
+converted to an ideal loop. This is local algebraic cleanup,
 not a proof of full-network Jacobian rank or numerical robustness for every case.

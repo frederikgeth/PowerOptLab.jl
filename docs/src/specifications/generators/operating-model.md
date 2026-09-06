@@ -27,7 +27,7 @@ are defined below. ✔ means required; other conditions are stated explicitly.
 | `e_min`, `e_max` | number[] | V | | Length ``r``; nonnegative internal EMF magnitude limits; e requires strictly positive `e_min` |
 | `v_min`, `v_max` | number[] | V | | Length ``r``; nonnegative **PCC port-voltage** magnitude limits, not phase-to-ground limits |
 | `v_target` | number | V | | Strictly positive hard terminal-voltage target |
-| `v_target_measurement` | string | – | with `v_target` | `POSITIVE_SEQUENCE` for three common-return ports, or `PORT` for exactly one port |
+| `v_target_measurement` | string | – | with `v_target` | `POSITIVE_SEQUENCE` for three common-return or delta ports, or `PORT` for exactly one port |
 
 Here b–e denote the laws in Part 4. `v_magnitude`/`v_angle` are forbidden in the
 other modes; `angle_offsets` is forbidden in a–c. All required vectors have the

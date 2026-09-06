@@ -308,8 +308,11 @@ function validate_device(d::_GeneralizedDevice, nets; periods::Integer=length(ne
     end
     if law.mode in (:fixed_phasor,:fixed_magnitudes)
         lo = _gg_vector(law.magnitude_min,n); hi = _gg_vector(law.magnitude_max,n)
-        all(k -> (lo[k] === nothing || lo[k] <= abs(law.phasor[k])) &&
-                 (hi[k] === nothing || abs(law.phasor[k]) <= hi[k]), 1:n) ||
+        all(k -> begin
+            mag=abs(law.phasor[k]); roundoff=8eps(Float64)*max(1.0,mag)
+            (lo[k]===nothing || lo[k]<=mag+roundoff) &&
+                (hi[k]===nothing || mag<=hi[k]+roundoff)
+        end, 1:n) ||
             throw(ArgumentError("fixed EMF violates its declared magnitude limits"))
     end
     c, cap = d.control, d.capability
@@ -380,6 +383,13 @@ _GGBuilder(ctx,id,rows;delta=false)=_GGBuilder(ctx,id,rows,Dict{Any,Any}(),Set{A
 function _gg_circuit_redundant!(b,f,name)
     rows=b.circuit_equalities
     rows===nothing && return false
+    # Never discard constitutive/source-law rows based on a rank tolerance:
+    # a tiny but nonzero loop impedance is still a physical impedance. Only
+    # optional sequence-bound equalities are candidates for this cleanup.
+    if !startswith(name,"sequence_")
+        push!(rows,f)
+        return false
+    end
     basis=Dict{Int,Dict{Int,Float64}}()
     for (k,expr) in enumerate(vcat(rows,[f]))
         x=_gg_simplify(expr)
@@ -398,7 +408,7 @@ function _gg_circuit_redundant!(b,f,name)
         filter!(p->abs(p.second)>1e-12,r)
         variables=sort!([j for j in keys(r) if j!=0])
         if isempty(variables)
-            abs(get(r,0,0.0))<=1e-12 || throw(ArgumentError("inconsistent delta equality $name"))
+            abs(get(r,0,0.0))<=1e-12 || return false
             k==length(rows)+1 && return true
         else
             pivot=first(variables); factor=r[pivot]

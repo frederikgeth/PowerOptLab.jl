@@ -1,0 +1,1439 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PowerOptLab experimental generator extension",
+  "description": "Local draft; not an upstream dsopt-schema release. Dimensions, topology, passivity, bound consistency and bus membership additionally require semantic validation.",
+  "type": "object",
+  "minProperties": 1,
+  "additionalProperties": false,
+  "properties": {
+    "generalized_generator": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "$ref": "#/definitions/generalized_generator"
+      }
+    },
+    "source_generator": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "$ref": "#/definitions/source_generator"
+      }
+    }
+  },
+  "definitions": {
+    "generalized_generator": {
+      "type": "object",
+      "properties": {
+        "bus": {
+          "type": "string",
+          "minLength": 1
+        },
+        "terminal_map": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 2,
+          "uniqueItems": true
+        },
+        "configuration": {
+          "enum": [
+            "WYE",
+            "SINGLE_PHASE",
+            "DELTA",
+            "PORTS"
+          ]
+        },
+        "voltage_model": {
+          "enum": [
+            "NONE",
+            "FIXED_PHASOR",
+            "FIXED_MAGNITUDES",
+            "COMMON_MAGNITUDE",
+            "PHASE_MAGNITUDES"
+          ]
+        },
+        "cost_total": {
+          "type": "number"
+        },
+        "v_magnitude": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "minItems": 1
+        },
+        "v_angle": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 1
+        },
+        "angle_offsets": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 1
+        },
+        "e_min": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0
+          },
+          "minItems": 1
+        },
+        "e_max": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0
+          },
+          "minItems": 1
+        },
+        "v_min": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0
+          },
+          "minItems": 1
+        },
+        "v_max": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0
+          },
+          "minItems": 1
+        },
+        "v_target": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "v_target_measurement": {
+          "enum": [
+            "POSITIVE_SEQUENCE",
+            "PORT"
+          ]
+        },
+        "power_setpoint_location": {
+          "enum": [
+            "POC",
+            "INTERNAL"
+          ]
+        },
+        "power_limit_location": {
+          "enum": [
+            "POC",
+            "INTERNAL"
+          ]
+        },
+        "v_sequence_location": {
+          "enum": [
+            "POC",
+            "INTERNAL"
+          ]
+        },
+        "i_max": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0
+          },
+          "minItems": 1
+        },
+        "i_port_max": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0
+          },
+          "minItems": 1
+        },
+        "p_set": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 1
+        },
+        "p_total_set": {
+          "type": "number"
+        },
+        "q_set": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 1
+        },
+        "q_total_set": {
+          "type": "number"
+        },
+        "p_min": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 1
+        },
+        "p_total_min": {
+          "type": "number"
+        },
+        "p_max": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 1
+        },
+        "p_total_max": {
+          "type": "number"
+        },
+        "q_min": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 1
+        },
+        "q_total_min": {
+          "type": "number"
+        },
+        "q_max": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 1
+        },
+        "q_total_max": {
+          "type": "number"
+        },
+        "s_max": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0
+          },
+          "minItems": 1
+        },
+        "s_total_max": {
+          "type": "number",
+          "minimum": 0
+        },
+        "v_seq_min": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "v_seq_max": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "i_seq_min": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "i_seq_max": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "port_map": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "minItems": 1
+        }
+      },
+      "patternProperties": {
+        "^[RX]_series_[1-9][0-9]*_[1-9][0-9]*$": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "bus",
+        "terminal_map",
+        "configuration",
+        "voltage_model",
+        "cost_total"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "voltage_model": {
+                  "enum": [
+                    "FIXED_PHASOR",
+                    "FIXED_MAGNITUDES"
+                  ]
+                }
+              },
+              "required": [
+                "v_magnitude",
+                "v_angle"
+              ],
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "angle_offsets"
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "properties": {
+                "voltage_model": {
+                  "enum": [
+                    "NONE"
+                  ]
+                }
+              },
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "v_magnitude"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "v_angle"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "angle_offsets"
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "properties": {
+                "voltage_model": {
+                  "enum": [
+                    "COMMON_MAGNITUDE"
+                  ]
+                }
+              },
+              "required": [
+                "angle_offsets"
+              ],
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "v_magnitude"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "v_angle"
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "properties": {
+                "voltage_model": {
+                  "enum": [
+                    "PHASE_MAGNITUDES"
+                  ]
+                },
+                "e_min": {
+                  "type": "array",
+                  "items": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "minItems": 1
+                }
+              },
+              "required": [
+                "angle_offsets",
+                "e_min"
+              ],
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "v_magnitude"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "v_angle"
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "anyOf": [
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "p_set"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "q_set"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "p_total_set"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "q_total_set"
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "required": [
+                "power_setpoint_location"
+              ]
+            }
+          ]
+        },
+        {
+          "anyOf": [
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "p_min"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "p_max"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "q_min"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "q_max"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "s_max"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "p_total_min"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "p_total_max"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "q_total_min"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "q_total_max"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "s_total_max"
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "required": [
+                "power_limit_location"
+              ]
+            }
+          ]
+        },
+        {
+          "anyOf": [
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "v_seq_min"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "v_seq_max"
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "required": [
+                "v_sequence_location"
+              ]
+            }
+          ]
+        },
+        {
+          "anyOf": [
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "v_target"
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "required": [
+                "v_target_measurement"
+              ]
+            }
+          ]
+        },
+        {
+          "anyOf": [
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "v_target_measurement"
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "required": [
+                "v_target"
+              ]
+            }
+          ]
+        },
+        {
+          "if": {
+            "required": [
+              "v_target"
+            ]
+          },
+          "then": {
+            "properties": {
+              "voltage_model": {
+                "enum": [
+                  "COMMON_MAGNITUDE"
+                ]
+              }
+            },
+            "anyOf": [
+              {
+                "required": [
+                  "p_set"
+                ]
+              },
+              {
+                "required": [
+                  "p_total_set"
+                ]
+              }
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "q_set"
+                  ]
+                },
+                {
+                  "required": [
+                    "q_total_set"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "p_set",
+              "p_total_set"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "q_set",
+              "q_total_set"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "p_min",
+              "p_total_min"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "p_max",
+              "p_total_max"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "q_min",
+              "q_total_min"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "q_max",
+              "q_total_max"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "s_max",
+              "s_total_max"
+            ]
+          }
+        },
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "configuration": {
+                  "enum": [
+                    "PORTS"
+                  ]
+                }
+              },
+              "required": [
+                "port_map"
+              ]
+            },
+            {
+              "properties": {
+                "configuration": {
+                  "enum": [
+                    "WYE",
+                    "SINGLE_PHASE",
+                    "DELTA"
+                  ]
+                }
+              },
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "port_map"
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "if": {
+            "properties": {
+              "configuration": {
+                "enum": [
+                  "SINGLE_PHASE"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "terminal_map": {
+                "minItems": 2,
+                "maxItems": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "configuration": {
+                "enum": [
+                  "DELTA"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "terminal_map": {
+                "minItems": 3,
+                "maxItems": 3
+              }
+            }
+          }
+        }
+      ]
+    },
+    "source_generator": {
+      "type": "object",
+      "properties": {
+        "bus": {
+          "type": "string",
+          "minLength": 1
+        },
+        "terminal_map": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 2,
+          "uniqueItems": true
+        },
+        "configuration": {
+          "enum": [
+            "WYE"
+          ]
+        },
+        "voltage_model": {
+          "enum": [
+            "NONE",
+            "FIXED_PHASOR",
+            "FIXED_MAGNITUDES",
+            "COMMON_MAGNITUDE",
+            "PHASE_MAGNITUDES"
+          ]
+        },
+        "cost_total": {
+          "type": "number"
+        },
+        "v_magnitude": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "minItems": 1
+        },
+        "v_angle": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 1
+        },
+        "angle_offsets": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 1
+        },
+        "e_min": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0
+          },
+          "minItems": 1
+        },
+        "e_max": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0
+          },
+          "minItems": 1
+        },
+        "v_min": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0
+          },
+          "minItems": 1
+        },
+        "v_max": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0
+          },
+          "minItems": 1
+        },
+        "v_target": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "v_target_measurement": {
+          "enum": [
+            "POSITIVE_SEQUENCE",
+            "PORT"
+          ]
+        },
+        "power_setpoint_location": {
+          "enum": [
+            "POC",
+            "INTERNAL"
+          ]
+        },
+        "power_limit_location": {
+          "enum": [
+            "POC",
+            "INTERNAL"
+          ]
+        },
+        "v_sequence_location": {
+          "enum": [
+            "POC",
+            "INTERNAL"
+          ]
+        },
+        "i_max": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0
+          },
+          "minItems": 1
+        },
+        "i_port_max": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0
+          },
+          "minItems": 1
+        },
+        "p_set": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 1
+        },
+        "p_total_set": {
+          "type": "number"
+        },
+        "q_set": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 1
+        },
+        "q_total_set": {
+          "type": "number"
+        },
+        "p_min": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 1
+        },
+        "p_total_min": {
+          "type": "number"
+        },
+        "p_max": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 1
+        },
+        "p_total_max": {
+          "type": "number"
+        },
+        "q_min": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 1
+        },
+        "q_total_min": {
+          "type": "number"
+        },
+        "q_max": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 1
+        },
+        "q_total_max": {
+          "type": "number"
+        },
+        "s_max": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0
+          },
+          "minItems": 1
+        },
+        "s_total_max": {
+          "type": "number",
+          "minimum": 0
+        },
+        "v_seq_min": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "v_seq_max": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "i_seq_min": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "i_seq_max": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "grounding_model": {
+          "enum": [
+            "OPEN",
+            "IMPEDANCE",
+            "IDEAL"
+          ]
+        },
+        "r_ground": {
+          "type": "number",
+          "minimum": 0
+        },
+        "x_ground": {
+          "type": "number"
+        },
+        "ig_max": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "patternProperties": {
+        "^[RX]_series_[1-9][0-9]*_[1-9][0-9]*$": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "bus",
+        "terminal_map",
+        "configuration",
+        "voltage_model",
+        "cost_total",
+        "grounding_model"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "voltage_model": {
+                  "enum": [
+                    "FIXED_PHASOR",
+                    "FIXED_MAGNITUDES"
+                  ]
+                }
+              },
+              "required": [
+                "v_magnitude",
+                "v_angle"
+              ],
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "angle_offsets"
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "properties": {
+                "voltage_model": {
+                  "enum": [
+                    "NONE"
+                  ]
+                }
+              },
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "v_magnitude"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "v_angle"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "angle_offsets"
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "properties": {
+                "voltage_model": {
+                  "enum": [
+                    "COMMON_MAGNITUDE"
+                  ]
+                }
+              },
+              "required": [
+                "angle_offsets"
+              ],
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "v_magnitude"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "v_angle"
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "properties": {
+                "voltage_model": {
+                  "enum": [
+                    "PHASE_MAGNITUDES"
+                  ]
+                },
+                "e_min": {
+                  "type": "array",
+                  "items": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "minItems": 1
+                }
+              },
+              "required": [
+                "angle_offsets",
+                "e_min"
+              ],
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "v_magnitude"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "v_angle"
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "anyOf": [
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "p_set"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "q_set"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "p_total_set"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "q_total_set"
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "required": [
+                "power_setpoint_location"
+              ]
+            }
+          ]
+        },
+        {
+          "anyOf": [
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "p_min"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "p_max"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "q_min"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "q_max"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "s_max"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "p_total_min"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "p_total_max"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "q_total_min"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "q_total_max"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "s_total_max"
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "required": [
+                "power_limit_location"
+              ]
+            }
+          ]
+        },
+        {
+          "anyOf": [
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "v_seq_min"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "v_seq_max"
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "required": [
+                "v_sequence_location"
+              ]
+            }
+          ]
+        },
+        {
+          "anyOf": [
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "v_target"
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "required": [
+                "v_target_measurement"
+              ]
+            }
+          ]
+        },
+        {
+          "anyOf": [
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "v_target_measurement"
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "required": [
+                "v_target"
+              ]
+            }
+          ]
+        },
+        {
+          "if": {
+            "required": [
+              "v_target"
+            ]
+          },
+          "then": {
+            "properties": {
+              "voltage_model": {
+                "enum": [
+                  "COMMON_MAGNITUDE"
+                ]
+              }
+            },
+            "anyOf": [
+              {
+                "required": [
+                  "p_set"
+                ]
+              },
+              {
+                "required": [
+                  "p_total_set"
+                ]
+              }
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "q_set"
+                  ]
+                },
+                {
+                  "required": [
+                    "q_total_set"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "p_set",
+              "p_total_set"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "q_set",
+              "q_total_set"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "p_min",
+              "p_total_min"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "p_max",
+              "p_total_max"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "q_min",
+              "q_total_min"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "q_max",
+              "q_total_max"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "s_max",
+              "s_total_max"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "grounding_model": {
+                "enum": [
+                  "OPEN",
+                  "IDEAL"
+                ]
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "r_ground"
+                  ]
+                },
+                {
+                  "required": [
+                    "x_ground"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

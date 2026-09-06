@@ -1,6 +1,6 @@
 # Generalized generators
 
-A **generalized generator** exchanges currents through an oriented collection
+A **generalized generator** exchanges currents through a collection
 of oriented two-terminal ports at one bus. Its internal voltage source is connected
 to those ports through a linear impedance. Source-voltage laws, power controls,
 and capability limits determine its operating region. Without an explicit power
@@ -270,7 +270,7 @@ Whether its hard voltage target is feasible depends on the assembled unbalanced
 network. The same JSON conventions describe a line-line port with
 `SINGLE_PHASE` and `terminal_map=["a","b"]`.
 
-## 7. Closed delta and circulating current
+## 8. Closed delta and circulating current
 
 For terminal order a,b,c and winding order ab,bc,ca,
 

@@ -68,6 +68,7 @@ makedocs(
             "Generalized generators: scientific model" => "components/generalized_generator.md",
             "Generalized generators: API" => "components/generalized_generator_api.md",
             "Generator trade-offs under unbalance" => "tutorials/generalized_generator_tradeoffs.md",
+                "Generator circuit and rank validation" => "tutorials/generalized_generator_validation.md",
             "Generator models: worked examples" => "tutorials/generalized_generator_models.md",
             "Generator literature evidence" => "components/generalized_generator_evidence.md",
             "Generator specification drafts" => [
@@ -76,6 +77,7 @@ makedocs(
                 "Source generator data and equations" => "specifications/generators/source.md",
                 "Voltage laws, controls and capabilities" => "specifications/generators/operating-model.md",
                 "Implementation and upstream migration" => "specifications/generators/integration.md",
+                "Reading and writing data" => "specifications/generators/serialization.md",
             ],
         ],
         "State estimation" => [

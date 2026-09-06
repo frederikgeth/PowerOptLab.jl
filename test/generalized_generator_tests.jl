@@ -666,3 +666,14 @@ end
         @test !_gg_solve(inv_grid3_unbal(),make(cap);per_unit=true,s_base=1e4).solve.publishable
     end
 end
+
+@testset "Finite delta loop impedance is never erased by rank tolerance" begin
+    for z in (1e-6+2e-6im,1e-14+2e-14im)
+        d=GeneralizedGenerator(id="delta",bus="poc",connections=_GG_DELTA,impedance=z,
+            voltage=GeneratorVoltageLaw(:common_magnitude;magnitude_min=320.0,magnitude_max=470.0))
+        b=build_generator_model(inv_grid3_unbal(),[d];per_unit=true,s_base=1e4)
+        @test !PowerOptLab._gg_ideal_delta(d)
+        @test haskey(b.handles["delta"].constraints,"relative_r_3")
+        @test haskey(b.handles["delta"].constraints,"relative_i_3")
+    end
+end
