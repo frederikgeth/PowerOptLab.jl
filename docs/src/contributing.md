@@ -85,7 +85,7 @@ and the PowerOptLab version becomes a thin re-export or is retired.
 ## BMOPFTools compatibility contract
 
 BMOPFTools is unregistered. The root and docs `Project.toml` source tables pin
-commit `5b51d2f361dab91bd7c16711019584407da79ed8`; package compatibility remains
+commit `8ca84ab12c0c91aaa8ad4c9986d6adbeb969ea0b`; package compatibility remains
 0.1.0. Update both source pins together, then run the complete tests and
 documentation build on the Julia compatibility floor and current stable.
 

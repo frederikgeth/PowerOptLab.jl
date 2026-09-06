@@ -187,7 +187,7 @@ retrofit and preserves the source cases and provenance.
 ## Development setup
 
 BMOPFTools is not yet registered. Local tests, CI, and documentation builds use
-commit `5b51d2f361dab91bd7c16711019584407da79ed8`, declared in the root and docs
+commit `8ca84ab12c0c91aaa8ad4c9986d6adbeb969ea0b`, declared in the root and docs
 `Project.toml` source tables. Set up the tested environment with:
 
 ```sh
@@ -200,7 +200,7 @@ The setup script checks that both source declarations agree and replaces any
 previous BMOPFTools development-path override with the pinned source. It also
 supports Julia 1.10, whose package manager does not use `[sources]` directly.
 `Manifest.toml` remains local and untracked; BMOPFTools 0.1.0 alone does not
-identify its source commit. This snapshot uses PowerIO 0.9.
+identify its source commit. This snapshot uses PowerIO 0.11.
 
 For intentional upstream development, opt into a local checkout with
 `Pkg.develop(path="../BMOPFTools.jl")`. Re-run the setup script before comparing
