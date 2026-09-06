@@ -172,6 +172,10 @@ function link_device! end
 """Extract one device's published numerical result from its model handles."""
 function extract_device end
 
+# Optional stateless-device contributions to the existing multi-period wrapper.
+_snapshot_device_cost(::AbstractDevice, handle) = 0.0
+_snapshot_device_injection(::AbstractDevice, handle, ::SolveStatus) = nothing
+
 """Return the symbolic quantity represented by a scalar measurement."""
 measurement_kind(m::AbstractMeasurement) = getfield(m, :kind)
 
