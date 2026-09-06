@@ -120,3 +120,36 @@ sweep neutral impedance with fixed grounding, or sweep a negative-sequence curre
 limit with the same objective and total P/Q. Record solver status, physical
 residuals, active constraints and alternative starts, as well as the decision
 metric. Local NLP results do not establish global optimality or dynamic stability.
+
+
+## Delta: the terminal meter cannot see every winding current
+
+The final three cases use ordered ab,bc,ca windings. `delta: fixed EMF` uses
+line-line EMFs obtained from the same balanced 230 V phase template. The
+`delta: circulation` case adds the same ``10+j5`` V to all three internal EMFs.
+With equal winding impedance ``z=0.8+j1.2`` Ω, this adds
+
+```math
+\Delta I_{\mathrm{circ}}=\frac{10+j5}{0.8+j1.2}\ \mathrm A
+```
+
+to every winding current. Their differences, and therefore external line currents
+and voltages, are unchanged. The executable tutorial checks that equality and the
+increase in loss. This is why a line-current limit cannot replace winding-current
+limits, even if the externally delivered P and Q are identical. Neither delta
+case has a neutral or earth terminal.
+
+`Iw` is maximum winding current, `IL` maximum external conductor current,
+`Ic` the magnitude of delta circulating current, and `In`/`Ig` the neutral/earth
+currents. For a common-return component, `IL` also includes its neutral.
+`V1*` reports phase-neutral positive-sequence magnitude for wye and line-line
+positive-sequence magnitude divided by ``\sqrt3`` for delta, allowing comparison
+on the same voltage scale. This conversion does not reconstruct a delta's
+unobservable phase-to-earth zero-sequence voltage. VUF uses the same magnitude
+ratio for either convention.
+
+`delta: ideal PQ` instead fixes three unequal winding P/Q injections with zero
+series impedance. Winding voltages close around the triangle automatically;
+internal nodes and extra cycle equations are unnecessary. These winding P/Q
+setpoints differ from wye phase-to-neutral setpoints, so that comparison changes
+the connection and the physical location of the prescribed phase powers.

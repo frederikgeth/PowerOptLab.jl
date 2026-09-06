@@ -193,7 +193,7 @@ end
         GeneralizedGenerator(id="",bus="poc",connections=_GG_PORTS),
         GeneralizedGenerator(id="g",bus="missing",connections=_GG_PORTS),
         GeneralizedGenerator(id="g",bus="poc",connections=[("a","a")]),
-        GeneralizedGenerator(id="g",bus="poc",connections=[("a","b"),("b","c"),("c","a")]),
+        GeneralizedGenerator(id="g",bus="poc",connections=[("a","b"),("b","a")]),
         GeneralizedGenerator(id="g",bus="poc",connections=_GG_PORTS,impedance=-0.1),
         GeneralizedGenerator(id="g",bus="poc",connections=_GG_PORTS,impedance=ones(2,2)),
         GeneralizedGenerator(id="g",bus="poc",connections=_GG_PORTS,voltage=GeneratorVoltageLaw(:unknown)),
@@ -525,4 +525,144 @@ end
     r=_gg_solve(inv_grid3_unbal(),d;per_unit=true,s_base=1e4)
     @test r.solve.publishable
     @test real.(r.devices["g"].port_voltage.*conj.(r.devices["g"].port_current)) ≈ [500,200,800] atol=1e-5
+end
+
+const _GG_DELTA = [("a","b"),("b","c"),("c","a")]
+const _GG_DELTA_C = [1.0 0 -1; -1 1 0; 0 -1 1]
+
+@testset "Delta windings: independent complex network oracle" begin
+    # No JuMP expressions are used in this reference network solve.
+    C=_GG_DELTA_C
+    grid=[245,215,230].*cis.([0.05,-2.15,2.0])
+    e=C'*([238,222,231].*cis.([0.04,-2.10,2.07])) .+ (1.2+0.7im)
+    Z=ComplexF64[0.4+0.6im 0.02+0.03im 0.01; 0.02+0.03im 0.5+0.7im 0.04im; 0.01 0.04im 0.3+0.8im]
+    expected_i=(Z+0.05C'*C)\(e-C'*grid)
+    expected_v=grid+0.05C*expected_i
+    for pu in (false,true), base in (1e4,1e8)
+        d=GeneralizedGenerator(id="delta",bus="poc",connections=_GG_DELTA,impedance=Z,
+            voltage=GeneratorVoltageLaw(:fixed_phasor;phasor=e))
+        r=_gg_solve(inv_grid3_unbal(),d;per_unit=pu,s_base=base)
+        @test r.solve.publishable
+        g=r.devices["delta"]
+        @test g.port_current ≈ expected_i atol=1e-5
+        @test g.terminal_voltage ≈ expected_v atol=1e-5
+        @test g.terminal_current ≈ C*expected_i atol=1e-5
+        @test abs(sum(g.terminal_current))<1e-7
+        @test abs(sum(g.port_voltage))<1e-7
+        @test sum(g.emf) ≈ sum(Z*g.port_current) atol=1e-6
+        @test abs(g.current_sequence[1])>0.1 # a real circulating-current solution
+        @test g.p_internal-g.p ≈ real(dot(expected_i,Z*expected_i)) atol=1e-4
+        @test complex(g.p_internal-g.p,g.q_internal-g.q) ≈ dot(expected_i,Z*expected_i) atol=1e-4
+        @test abs(g.voltage_sequence[1])<1e-7
+        # Winding-current and conductor-current Fortescue are different.
+        a=cis(2pi/3)
+        Jseq=PowerOptLab._gg_transform()*g.terminal_current
+        @test Jseq[2] ≈ (1-a)*g.current_sequence[2] atol=1e-6
+        @test Jseq[3] ≈ (1-a^2)*g.current_sequence[3] atol=1e-6
+    end
+end
+
+@testset "Delta laws, controls and capabilities under unbalance" begin
+    emf=_GG_DELTA_C'*_GG_E
+    laws=[GeneratorVoltageLaw(),GeneratorVoltageLaw(:fixed_phasor;phasor=emf),
+        GeneratorVoltageLaw(:fixed_magnitudes;phasor=emf),
+        GeneratorVoltageLaw(:common_magnitude;magnitude_min=320.0,magnitude_max=470.0),
+        GeneratorVoltageLaw(:phase_magnitudes;magnitude_min=320.0,magnitude_max=470.0)]
+    controls=[GeneratorControl(p=[600.0,300.0,900.0],q=[50.0,100.0,150.0]),
+        GeneratorControl(),GeneratorControl(p=1800.0),GeneratorControl(p=1800.0,q=300.0),
+        GeneratorControl(p=1800.0,q=[50.0,100.0,150.0])]
+    for (law,ctl) in zip(laws,controls)
+        d=GeneralizedGenerator(id="delta",bus="poc",connections=_GG_DELTA,impedance=0.8+1.2im,
+            voltage=law,control=ctl,capability=GeneratorCapability(i_max=80.0,terminal_i_max=120.0,
+                voltage_min=300.0,voltage_max=500.0,s_max=1e5))
+        r=_gg_solve(inv_grid3_unbal(),d;per_unit=true,s_base=1e4)
+        @test r.solve.publishable
+        g=r.devices["delta"]
+        @test maximum(abs.(g.terminal_current))-minimum(abs.(g.terminal_current))>0.1
+        @test g.emf ≈ g.port_voltage+(0.8+1.2im)*g.port_current atol=1e-6
+        @test abs(g.power_balance_error)<1e-4
+        if ctl.p!==nothing
+            @test g.p ≈ sum(ctl.p) atol=1e-4
+        end
+        if law.mode in (:common_magnitude,:phase_magnitudes)
+            @test angle.(g.emf./g.emf[1]) ≈ _GG_PHI atol=1e-6
+        end
+    end
+    # Sequence overlay includes the circulating current and winding line-line V1.
+    d=GeneralizedGenerator(id="delta",bus="poc",connections=_GG_DELTA,impedance=0.8+1.2im,
+        voltage=GeneratorVoltageLaw(:common_magnitude;magnitude_min=320.0,magnitude_max=470.0),
+        control=GeneratorControl(p=1800.0,voltage_target=400.0),
+        capability=GeneratorCapability(sequence=GeneratorSequenceLimits(
+            voltage_max=[0.0,450.0,50.0],current_max=[0.0,80.0,80.0])))
+    pvnet=inv_grid3_unbal()
+    for k in 1:4; pvnet["linecode"]["lc"]["X_series_$(k)_$(k)"]=0.2; end
+    r=_gg_solve(pvnet,d;per_unit=true,s_base=1e4)
+    @test r.solve.publishable
+    @test abs(r.devices["delta"].voltage_sequence[2]) ≈ 400 atol=1e-5
+    @test abs(r.devices["delta"].current_sequence[1])<1e-6
+end
+
+@testset "Ideal delta: KVL reduction and retained circulation" begin
+    emf=_GG_DELTA_C'*([238,222,231].*cis.([0.04,-2.10,2.07]))
+    laws=[GeneratorVoltageLaw(:fixed_phasor;phasor=emf),
+        GeneratorVoltageLaw(:fixed_magnitudes;phasor=emf),
+        GeneratorVoltageLaw(:common_magnitude;magnitude_min=320.0,magnitude_max=470.0),
+        GeneratorVoltageLaw(:phase_magnitudes;angles=angle.(emf),magnitude_min=320.0,magnitude_max=470.0)]
+    for (k,law) in enumerate(laws)
+        # Choose an analytically feasible point; a fixed excitation need not be
+        # capable of arbitrary positive dispatch on this stiff resistive feeder.
+        grid=[245,215,230].*cis.([0.05,-2.15,2.0])
+        target=k==3 ? _GG_DELTA_C'*_GG_E : emf
+        vpoc=pinv(_GG_DELTA_C')*target .+ sum(grid)/3
+        j=(vpoc-grid)/0.05
+        power=sum(vpoc.*conj.(j))
+        ctl=k==1 ? GeneratorControl() : k==2 ? GeneratorControl(p=real(power)) :
+            GeneratorControl(p=real(power),q=imag(power))
+        for circulation in (0.0,2.0+1im)
+            d=GeneralizedGenerator(id="delta",bus="poc",connections=_GG_DELTA,voltage=law,control=ctl)
+            hook! = (ctx,h) -> begin
+                g=h["delta"]; m=BMOPFTools.opf_model(ctx)
+                @constraint(m,sum(g.ir)/3==real(circulation)/g.bases.current)
+                @constraint(m,sum(g.ii)/3==imag(circulation)/g.bases.current)
+            end
+            r=_gg_solve(inv_grid3_unbal(),d;per_unit=true,s_base=1e4,generator_hook! = hook!)
+            @test r.solve.publishable
+            g=r.devices["delta"]
+            @test g.emf ≈ g.port_voltage atol=1e-6
+            @test abs(sum(g.emf))<1e-6
+            @test g.current_sequence[1] ≈ circulation atol=1e-6
+            @test abs(g.series_loss)<1e-8
+            b=build_generator_model(inv_grid3_unbal(),[d];per_unit=true,s_base=1e4)
+            @test b.handles["delta"].internal_voltage_variables==0
+            @test !haskey(b.handles["delta"].constraints,k==1 ? "emf_r_3" : "relative_r_3")
+        end
+    end
+    bad=GeneralizedGenerator(id="delta",bus="poc",connections=_GG_DELTA,
+        voltage=GeneratorVoltageLaw(:fixed_phasor;phasor=emf.+1))
+    @test_throws ArgumentError validate_device(bad,(inv_grid3_unbal(),))
+    badangles=GeneralizedGenerator(id="delta",bus="poc",connections=_GG_DELTA,
+        voltage=GeneratorVoltageLaw(:phase_magnitudes;angles=[0.0,0.1,0.2],magnitude_min=1.0))
+    @test_throws ArgumentError validate_device(badangles,(inv_grid3_unbal(),))
+end
+
+@testset "Delta ideal PQ, singular impedance and independent current ratings" begin
+    for Z in (0.0,(0.4+0.8im)*(_GG_DELTA_C'*_GG_DELTA_C))
+        d=GeneralizedGenerator(id="delta",bus="poc",connections=_GG_DELTA,impedance=Z,
+            control=GeneratorControl(p=[600.0,300.0,900.0],q=[50.0,100.0,150.0]))
+        r=_gg_solve(inv_grid3_unbal(),d;per_unit=true,s_base=1e4)
+        @test r.solve.publishable
+        g=r.devices["delta"]
+        @test g.port_voltage.*conj.(g.port_current) ≈ [600+50im,300+100im,900+150im] atol=1e-4
+        @test abs(sum(g.emf))<1e-6
+    end
+    emf=_GG_DELTA_C'*_GG_E .+ (10+5im)
+    make(cap)=GeneralizedGenerator(id="delta",bus="poc",connections=_GG_DELTA,impedance=0.8+1.2im,
+        voltage=GeneratorVoltageLaw(:fixed_phasor;phasor=emf),capability=cap)
+    g=_gg_solve(inv_grid3_unbal(),make(GeneratorCapability());per_unit=true,s_base=1e4).devices["delta"]
+    @test g.solve.publishable
+    for cap in (GeneratorCapability(i_max=0.95abs.(g.port_current)),
+                GeneratorCapability(terminal_i_max=0.95abs.(g.terminal_current)),
+                GeneratorCapability(sequence=GeneratorSequenceLimits(current_max=[0.95abs(g.current_sequence[1]),100.0,100.0])))
+        @test !_gg_solve(inv_grid3_unbal(),make(cap);per_unit=true,s_base=1e4).solve.publishable
+    end
 end

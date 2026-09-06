@@ -150,7 +150,9 @@ later with explicit definitions, normalization, and a physical interpretation.
 
 For delta, also check winding-cycle consistency. The unequal 120-degree template
 in example 3 does not sum to zero, so it cannot be three ideal voltage differences
-around a closed delta. A topology abstraction must enforce that circuit fact.
+around a closed delta. The implementation validates ideal-loop closure. Finite loop impedance can
+support that template by carrying circulating winding current. The
+[network tutorial](generalized_generator_tradeoffs.md) includes delta cases.
 
 ## From examples to a scientific study
 

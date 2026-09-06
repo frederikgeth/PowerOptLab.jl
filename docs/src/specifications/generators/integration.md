@@ -406,15 +406,36 @@ measurement location, and voltage-source shape.
 
 The [scientific model](../../components/generalized_generator.md) and
 [literature register](../../components/generalized_generator_evidence.md) discuss
-prior work and physical limitations. The [eleven-case network tutorial](../../tutorials/generalized_generator_tradeoffs.md)
+prior work and physical limitations. The [fourteen-case network tutorial](../../tutorials/generalized_generator_tradeoffs.md)
 compares model choices under unbalance. Unit tests independently check circuit
 power/grounding identities, every source law and capability field, SI/per-unit
 conversion, exact zeros, singular impedances, connection types, and native/custom
 ownership. These support the prototype's declared scope, not universal device
 fidelity or comparative speed claims.
 
-Closed delta circuits, open source-neutral leads, soil networks, dynamical machine
+Open source-neutral leads, soil networks, dynamical machine
 states, physical shunts/filters, automatic PV/PQ switching, and controller limit
 priority remain outside the implemented model. A mathematical feasible point is
 not proof that a particular machine or converter can realize the selected control
 freedoms or withstand the declared unbalance.
+
+
+### Delta constraint lowering
+
+The incidence equations above also apply to the rank-two delta matrix. Keep
+three complex winding currents to retain circulation. Never invert ``C`` or
+replace winding currents with line currents. For an exact ideal loop
+``\mathbf1^{\mathrm T}Z=0``, validate template closure, impose only the first
+two fixed-phasor equations (or only the second-to-first complex ratio), and
+reconstruct the third winding voltage. For mode e, combine ideal-loop closure
+and any exact internal sequence zeros in the real magnitude-space nullspace
+before forming ratios. This removes dependent equations at construction time.
+No impedance inverse, internal voltage variable, or extra cycle row is needed.
+
+
+An exact sequence-current restriction can also follow from a delta voltage law
+and its series matrix. Before adding affine delta equalities, the implementation
+checks dependence within this component's small row set using normalized
+elimination (relative coefficient tolerance ``10^{-12}``). It retains the original
+scaled physical rows in the optimization model. This is local algebraic cleanup,
+not a proof of full-network Jacobian rank or numerical robustness for every case.

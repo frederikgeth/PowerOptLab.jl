@@ -54,7 +54,10 @@ end
 Optional three-entry magnitude limits in order **zero, positive, negative**.
 Voltage location is `:poc` or `:internal`; currents are the three oriented port
 currents. Uses amplitude-invariant Fortescue (1/3 normalization). Three ports
-must be explicitly ordered a,b,c and share the same return. Bounds are SI V/A.
+must be ordered a,b,c with a common return, or ab,bc,ca in a closed delta.
+Delta sequences are winding quantities: voltage is line-line and zero-sequence
+winding current is circulating current, not external zero-sequence current.
+Bounds are SI V/A.
 Zero upper bounds become linear real/imaginary equalities. These limits do not
 replace phase, neutral, earth, or converter hardware limits.
 """
@@ -97,10 +100,11 @@ end
     GeneralizedGenerator(; id, bus, connections, impedance=0, voltage=..., control=...,
                            capability=..., voltage_scale=230, cost=0)
 
-An arbitrary independent collection of oriented two-terminal source ports.
+An oriented collection of two-terminal source windings.
 `connections=[("a","n"), ...]` specifies outgoing/return terminal pairs at
 `bus`. Wye, single-phase line-neutral/line-line and split-phase are supported;
-closed connection cycles are rejected. `impedance` is a scalar, diagonal vector,
+closed delta uses ordered `[("a","b"),("b","c"),("c","a")]` windings.
+Other cycles and duplicate windings are rejected. `impedance` is a scalar, diagonal vector,
 or full port impedance matrix in ohms, including any already-reduced neutral
 drop. It must be passive at the modeled frequency. This component has no earth
 path: its terminal currents sum to zero. Use `SourceGenerator` for grounding.
@@ -152,6 +156,13 @@ const _GeneralizedDevice = Union{GeneralizedGenerator,SourceGenerator}
 _gg_connections(d::GeneralizedGenerator) = d.connections
 _gg_connections(d::SourceGenerator) = [(p, d.neutral) for p in d.phase_terminals]
 _gg_terminals(d) = unique(vcat(first.(_gg_connections(d)), last.(_gg_connections(d))))
+# A delta is an ordered, consistently oriented triangle; labels are arbitrary.
+_gg_delta(d) = d isa GeneralizedGenerator && length(d.connections)==3 &&
+    length(_gg_terminals(d))==3 && all(k -> d.connections[k][2]==d.connections[mod1(k+1,3)][1],1:3)
+_gg_sequence_valid(d) = _gg_n(d)==3 &&
+    (length(unique(last.(_gg_connections(d))))==1 || _gg_delta(d))
+# Exact ideal loop, including singular nonzero matrices whose column sums vanish.
+_gg_ideal_delta(d) = _gg_delta(d) && all(iszero,sum(_gg_matrix(d.impedance,3);dims=1))
 _gg_n(d) = length(_gg_connections(d))
 _gg_vector(x, n) = x === nothing ? fill(nothing, n) : x isa Real ? fill(Float64(x), n) : Float64.(x)
 function _gg_matrix(z, n)
@@ -208,18 +219,19 @@ function _gg_shape(d)
     law.mode==:common_magnitude && return cis.(_gg_angles(law,n).-first(_gg_angles(law,n)))
     law.mode==:phase_magnitudes || return nothing
     seq=d.capability.sequence
-    seq===nothing || seq.location!=:internal || seq.voltage_max===nothing || begin
-        zeros_idx=findall(iszero,seq.voltage_max)
-        isempty(zeros_idx) && return nothing
-        phi=_gg_angles(law,n)
-        M=_gg_transform()[zeros_idx,:]*Diagonal(cis.(phi))
-        N=nullspace(vcat(real(M),imag(M));atol=1e-12)
-        size(N,2)==1 || throw(ArgumentError("exact internal sequence zeros require a unique positive magnitude shape for :phase_magnitudes; use :none or an explicit template"))
-        amplitudes=N[:,1]/N[1,1]
-        all(x -> isfinite(x) && x>1e-12,amplitudes) || throw(ArgumentError("sequence zeros conflict with positive phase magnitudes and relative angles"))
-        return amplitudes.*cis.(phi.-phi[1])
+    phi=_gg_angles(law,n)
+    rows=Matrix{ComplexF64}(undef,0,n)
+    if seq!==nothing && seq.location==:internal && seq.voltage_max!==nothing
+        rows=vcat(rows,_gg_transform()[findall(iszero,seq.voltage_max),:])
     end
-    nothing
+    _gg_ideal_delta(d) && (rows=vcat(rows,ones(1,n)))
+    isempty(rows) && return nothing
+    M=rows*Diagonal(cis.(phi))
+    N=nullspace(vcat(real(M),imag(M));atol=1e-12)
+    size(N,2)==1 || throw(ArgumentError("exact internal sequence/cycle restrictions require a unique positive magnitude shape for :phase_magnitudes; use :none or an explicit template"))
+    amplitudes=N[:,1]/N[1,1]
+    all(x -> isfinite(x) && x>1e-12,amplitudes) || throw(ArgumentError("sequence/cycle restrictions conflict with positive magnitudes and relative angles"))
+    return amplitudes.*cis.(phi.-phi[1])
 end
 function _gg_shape_bounds(d,ratios)
     n=length(ratios); law=d.voltage
@@ -252,7 +264,7 @@ function validate_device(d::_GeneralizedDevice, nets; periods::Integer=length(ne
     n > 0 || throw(ArgumentError("generator needs at least one port"))
     all(p -> p[1] != p[2], pairs) || throw(ArgumentError("a port cannot connect to itself"))
     C = [Float64(t == p[1]) - Float64(t == p[2]) for t in ts, p in pairs]
-    rank(C) == n || throw(ArgumentError("closed/duplicate winding connections are not supported"))
+    rank(C) == n || _gg_delta(d) || throw(ArgumentError("connections must be a forest or an ordered closed delta; duplicate windings and other cycles are unsupported"))
     Z = _gg_matrix(d.impedance, d isa SourceGenerator ? n+1 : n)
     isfinite(d.voltage_scale) && d.voltage_scale > 0 || throw(ArgumentError("voltage_scale must be positive"))
     isfinite(d.cost) || throw(ArgumentError("cost must be finite"))
@@ -317,8 +329,8 @@ function validate_device(d::_GeneralizedDevice, nets; periods::Integer=length(ne
     seq = cap.sequence
     needs_sequence = seq !== nothing || (c.voltage_target !== nothing && c.voltage_metric == :positive_sequence)
     if needs_sequence
-        n == 3 && length(unique(last.(pairs))) == 1 ||
-            throw(ArgumentError("sequence quantities require three ordered ports with a common return"))
+        _gg_sequence_valid(d) ||
+            throw(ArgumentError("sequence quantities require three ordered common-return ports or delta windings"))
     end
     if seq !== nothing
         seq.location in (:poc,:internal) || throw(ArgumentError("invalid sequence voltage location"))
@@ -333,6 +345,11 @@ function validate_device(d::_GeneralizedDevice, nets; periods::Integer=length(ne
     end
     shape=_gg_shape(d)
     shape===nothing || _gg_shape_bounds(d,shape)
+    if _gg_ideal_delta(d)
+        template=law.mode in (:fixed_phasor,:fixed_magnitudes) ? law.phasor : shape
+        template===nothing || abs(sum(template))<=1e-12*maximum(abs,template) ||
+            throw(ArgumentError("ideal delta loop requires EMFs summing to zero"))
+    end
     if c.voltage_target !== nothing
         isfinite(c.voltage_target) && c.voltage_target > 0 || throw(ArgumentError("voltage target must be positive"))
         c.p !== nothing && c.q === nothing && law.mode == :common_magnitude ||
@@ -351,8 +368,46 @@ struct _GGBuilder
     rows::Dict{String,Any}
     magnitudes::Dict{Any,Any}
     affine_equalities::Set{Any}
+    circuit_equalities::Union{Nothing,Vector{JuMP.AffExpr}}
 end
-_GGBuilder(ctx,id,rows)=_GGBuilder(ctx,id,rows,Dict{Any,Any}(),Set{Any}())
+_GGBuilder(ctx,id,rows;delta=false)=_GGBuilder(ctx,id,rows,Dict{Any,Any}(),Set{Any}(),
+    delta ? JuMP.AffExpr[] : nothing)
+
+# Delta topology can imply an exact current restriction from voltage-law rows
+# (e.g. balanced EMF and equal impedances imply zero circulating current).
+# Reduce only this component's small affine row set, never the network Jacobian.
+# Retain original, scaled physical rows in JuMP; elimination only tests dependence.
+function _gg_circuit_redundant!(b,f,name)
+    rows=b.circuit_equalities
+    rows===nothing && return false
+    basis=Dict{Int,Dict{Int,Float64}}()
+    for (k,expr) in enumerate(vcat(rows,[f]))
+        x=_gg_simplify(expr)
+        x isa Number && (x=JuMP.AffExpr(x))
+        x isa JuMP.VariableRef && (x=JuMP.AffExpr(0.0,x=>1.0))
+        r=Dict(JuMP.index(v).value=>c for (c,v) in JuMP.linear_terms(x) if !iszero(c))
+        r[0]=JuMP.constant(x)
+        sc=maximum(abs,values(r);init=0.0)
+        if sc>0
+            for j in keys(r); r[j]/=sc; end
+        end
+        for pivot in sort!(collect(keys(basis)))
+            factor=get(r,pivot,0.0)
+            for (j,c) in basis[pivot]; r[j]=get(r,j,0.0)-factor*c; end
+        end
+        filter!(p->abs(p.second)>1e-12,r)
+        variables=sort!([j for j in keys(r) if j!=0])
+        if isempty(variables)
+            abs(get(r,0,0.0))<=1e-12 || throw(ArgumentError("inconsistent delta equality $name"))
+            k==length(rows)+1 && return true
+        else
+            pivot=first(variables); factor=r[pivot]
+            basis[pivot]=Dict(j=>c/factor for (j,c) in r)
+        end
+    end
+    push!(rows,f)
+    false
+end
 _gg_model(b) = _opf_model(b.ctx)
 function _gg_record!(b, name, row)
     b.rows[name] = row
@@ -387,6 +442,7 @@ function _gg_eq!(b,name,x,y=0.0;scale=1.0)
     end
     f isa JuMP.VariableRef && (f=JuMP.AffExpr(0.0,f=>1.0))
     if f isa JuMP.AffExpr
+        _gg_circuit_redundant!(b,f,name) && return nothing
         terms=sort!([(JuMP.index(v).value,c) for (c,v) in JuMP.linear_terms(f) if !iszero(c)])
         factor=last(first(terms))
         key=(JuMP.constant(f)/factor,Tuple((idx,c/factor) for (idx,c) in terms))
@@ -486,15 +542,17 @@ function _gg_law!(b,d,er,ei,vb)
     law = d.voltage; n=length(er); scale=d.voltage_scale/vb
     shape=_gg_shape(d)
     lo,hi = _gg_vector(law.magnitude_min,n),_gg_vector(law.magnitude_max,n)
+    # The third ideal-loop voltage follows from KVL; do not stamp redundant rows.
+    last_voltage=_gg_ideal_delta(d) ? 2 : n
     if law.mode == :fixed_phasor
-        for k in 1:n
+        for k in 1:last_voltage
             _gg_eq!(b,"emf_r_$k",er[k],real(law.phasor[k])/vb;scale)
             _gg_eq!(b,"emf_i_$k",ei[k],imag(law.phasor[k])/vb;scale)
         end
     elseif law.mode==:fixed_magnitudes || shape!==nothing
         ratios = law.mode == :fixed_magnitudes ? law.phasor ./ law.phasor[1] :
             shape
-        for k in 2:n
+        for k in 2:last_voltage
             z=ratios[k]
             _gg_eq!(b,"relative_r_$k",er[k],real(z)*er[1]-imag(z)*ei[1];scale)
             _gg_eq!(b,"relative_i_$k",ei[k],imag(z)*er[1]+real(z)*ei[1];scale)
@@ -583,7 +641,7 @@ function stamp_device!(ctx,d::_GeneralizedDevice; period::Integer=1)
     # Data validation is structural/SI only; net voltages are never used as SI data.
     m=_opf_model(ctx); n=_gg_n(d); ts=_gg_terminals(d); pairs=_gg_connections(d)
     bs=BMOPFTools.opf_coordinate_bases(ctx,d.bus); vb,ib,sb=bs.voltage,bs.current,bs.power
-    b=_GGBuilder(ctx,d.id,Dict{String,Any}())
+    b=_GGBuilder(ctx,d.id,Dict{String,Any}();delta=_gg_delta(d))
     key=BMOPFTools.OpfModelKey(:expression,:generalized_generator,(d.id,:p))
     key in BMOPFTools.opf_object_keys(ctx) && throw(ArgumentError("generator $(d.id) already stamped"))
     vr=[_opf_voltage(ctx,d.bus,t) for t in ts]
@@ -665,7 +723,7 @@ function stamp_device!(ctx,d::_GeneralizedDevice; period::Integer=1)
     for k in 1:n
         _gg_mag!(b,"poc_voltage_$k",ur[k],ui[k],vlo[k]===nothing ? nothing : vlo[k]/vb,vhi[k]===nothing ? nothing : vhi[k]/vb)
     end
-    seqvalid=n==3 && length(unique(last.(pairs)))==1
+    seqvalid=_gg_sequence_valid(d)
     seqv=seqvalid ? _gg_complex_map(_gg_transform(),ur,ui) : nothing
     seqe=seqvalid ? _gg_complex_map(_gg_transform(),er,ei) : nothing
     seqi=seqvalid ? _gg_complex_map(_gg_transform(),ir[1:n],ii[1:n]) : nothing

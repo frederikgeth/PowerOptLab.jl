@@ -52,6 +52,16 @@ function generator_tradeoff_study()
     # excitation is unconstrained, so terminal dispatch/voltage should agree.
     push!(devices,"a: ideal series"=>GeneralizedGenerator(id="device",bus="poc",connections=ports,
         control=GeneratorControl(p=[600.0,300.0,900.0],q=[100.0,100.0,100.0]),capability=cap))
+    delta=[("a","b"),("b","c"),("c","a")]
+    delta_emf=[emf[1]-emf[2],emf[2]-emf[3],emf[3]-emf[1]]
+    for (label,offset) in (("delta: fixed EMF",0.0),("delta: circulation",10.0+5im))
+        push!(devices,label=>GeneralizedGenerator(id="device",bus="poc",connections=delta,
+            impedance=0.8+1.2im,voltage=GeneratorVoltageLaw(:fixed_phasor;phasor=delta_emf.+offset),
+            capability=GeneratorCapability(i_max=60.0,terminal_i_max=100.0)))
+    end
+    push!(devices,"delta: ideal PQ"=>GeneralizedGenerator(id="device",bus="poc",connections=delta,
+        control=GeneratorControl(p=[600.0,300.0,900.0],q=[100.0,100.0,100.0]),
+        capability=GeneratorCapability(i_max=60.0,terminal_i_max=100.0)))
     options=Pair{String,Any}["tol"=>1e-9,"constr_viol_tol"=>1e-9,"bound_relax_factor"=>0.0,"max_iter"=>1500]
     rows=NamedTuple[]
     for (label,d) in devices
@@ -59,21 +69,32 @@ function generator_tradeoff_study()
             objective=:loss,solver_options=options)
         result.solve.publishable || error("tutorial case '$label' failed: $(result.solve)")
         g=result.devices["device"]
+        isdelta=length(g.terminals)==3 && length(g.port_current)==3
+        ni=findfirst(==("n"),g.terminals)
         push!(rows,(case=label,p_kw=g.p/1000,q_kvar=g.q/1000,
-            v1=abs(g.voltage_sequence[2]),vuf_percent=100abs(g.voltage_sequence[3])/abs(g.voltage_sequence[2]),
-            i_phase=maximum(abs.(g.port_current)),i_neutral=abs(g.terminal_current[end]),
+            v1=abs(g.voltage_sequence[2])/(isdelta ? sqrt(3) : 1),vuf_percent=100abs(g.voltage_sequence[3])/abs(g.voltage_sequence[2]),
+            i_phase=maximum(abs.(g.port_current)),i_line=maximum(abs.(g.terminal_current)),
+            i_circ=isdelta ? abs(g.current_sequence[1]) : 0.0,
+            i_neutral=ni===nothing ? 0.0 : abs(g.terminal_current[ni]),
             i_earth=abs(g.earth_current),loss_w=g.series_loss+g.ground_loss,
             power_error_w=abs(g.power_balance_error),result=g))
     end
+    # Same external operating point, different internal circulating current/loss.
+    a=only(filter(r->r.case=="delta: fixed EMF",rows))
+    b=only(filter(r->r.case=="delta: circulation",rows))
+    @assert isapprox(a.result.terminal_voltage,b.result.terminal_voltage;atol=1e-5)
+    @assert isapprox(a.result.terminal_current,b.result.terminal_current;atol=1e-5)
+    @assert b.loss_w>a.loss_w
+    @assert maximum(r.power_error_w for r in rows)<1e-4
     rows
 end
 
 function print_generator_tradeoffs(rows)
-    @printf("%-23s %7s %7s %7s %7s %7s %7s %7s %8s\n",
-        "Case","P kW","Q kvar","V1 V","VUF %","Iph A","In A","Ig A","Loss W")
+    @printf("%-23s %7s %7s %7s %7s %7s %7s %7s %7s %7s %8s\n",
+        "Case","P kW","Q kvar","V1* V","VUF %","Iw A","In A","Ig A","IL A","Ic A","Loss W")
     for r in rows
-        @printf("%-23s %7.3f %7.3f %7.2f %7.3f %7.2f %7.2f %7.2f %8.2f\n",
-            r.case,r.p_kw,r.q_kvar,r.v1,r.vuf_percent,r.i_phase,r.i_neutral,r.i_earth,r.loss_w)
+        @printf("%-23s %7.3f %7.3f %7.2f %7.3f %7.2f %7.2f %7.2f %7.2f %7.2f %8.2f\n",
+            r.case,r.p_kw,r.q_kvar,r.v1,r.vuf_percent,r.i_phase,r.i_neutral,r.i_earth,r.i_line,r.i_circ,r.loss_w)
     end
 end
 

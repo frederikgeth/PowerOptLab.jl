@@ -12,7 +12,7 @@ by implementation notes and examples. The electrical primitive is specified once
 for each component. Voltage laws and capabilities are composable physical
 assumptions; they are not competing numerical formulations of the same device.
 
-- [Generalized generators](generator.md): independently connected source ports,
+- [Generalized generators](generator.md): oriented source ports, including delta,
   series impedance, terminal injection, and power conservation.
 - [Source generators](source.md): explicit internal star, conductor impedance,
   independent neutral and earth returns, and complete power accounting.

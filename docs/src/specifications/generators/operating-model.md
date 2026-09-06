@@ -84,7 +84,10 @@ still be infeasible when assembled with the device and network equations.
 | `v_seq_min`, `v_seq_max` | number[] | V | | Length 3; nonnegative zero/positive/negative voltage-magnitude limits |
 | `i_seq_min`, `i_seq_max` | number[] | A | | Length 3; nonnegative zero/positive/negative **port-current** magnitude limits |
 
-Sequence fields require exactly three ordered ports with a common return.
+Sequence fields require exactly three ordered ports with a common return, or
+closed-delta windings ordered ab,bc,ca. Delta voltage/current sequences refer to
+line-line winding voltages and winding currents; see the delta equations in
+[Generalized generators](generator.md).
 The order of the ports defines a,b,c; labels are not permuted automatically.
 All three entries of a supplied sequence-bound vector are required, ordered
 **zero, positive, negative**. A current lower bound is an optional service

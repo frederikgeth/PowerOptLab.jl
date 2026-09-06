@@ -238,8 +238,11 @@ sharing, and complete power ledgers. Other tests cover SI/per-unit bases, native
 replacement/cost equivalence, zero/singular impedances, single-phase/split-phase,
 multi-period composition, domain rejection, and exact-zero constraint structure.
 
-Supported connections are independent terminal pairs (a forest). Closed delta
-cycles, open neutral leads on `SourceGenerator`, explicit soil/earth-network
+Supported connections are independent terminal pairs (a forest) and ordered
+closed delta windings `[("a","b"),("b","c"),("c","a")]`. Delta ratings and
+sequence quantities use winding coordinates; `terminal_i_max` limits line
+currents. See the [delta equations](../specifications/generators/generator.md).
+Open neutral leads on `SourceGenerator`, explicit soil/earth-network
 terminals, physical shunts/LCL filters, machine saliency/saturation, and automatic
 PV/PQ limiter switching are not implemented. The hard PV target reports
 infeasibility if the capability cannot support it. The advanced IBR remains a

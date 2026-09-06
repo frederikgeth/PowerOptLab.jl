@@ -386,8 +386,11 @@ Winding voltages must satisfy circuit cycles. For a closed delta,
 ``u_{ab}+u_{bc}+u_{ca}=0``. Arbitrary fixed unequal magnitudes at exact 120-degree
 offsets cannot generally be imposed on these three winding voltages. The source
 DOF table assumes independent ports; rank/cycle validation must precede applying
-it to delta or other redundant winding descriptions. Reject unsupported topology
-in the first implementation rather than silently reducing it to wye.
+it to delta or other redundant winding descriptions. The implemented delta
+retains winding circulation and reduces dependent ideal-loop voltage rows; see
+the [complete delta equations](../specifications/generators/generator.md).
+For finite series impedance, it is the terminal winding voltages that sum to
+zero; internal EMFs instead satisfy ``\sum e_k=\sum (Zi)_k``.
 
 For relative-angle source laws, avoid tangent equations and all-pairs redundant
 angle constraints. A rectangular implementation can use a shared complex
@@ -485,9 +488,9 @@ make the generalized generator a converter capability model.
 
 The first implementation covers all five voltage laws, optional sequence
 capability, hard terminal-PV control, open/finite/ideal source-star grounding,
-independent single-phase/split-phase/wye port connections, and stateless
-multi-period composition. The saturation policy in increment 3, closed delta
-cycles, explicit earth-network terminals, higher-order primitives and IBR
+single-phase/split-phase/wye and closed-delta connections, and stateless
+multi-period composition. The saturation policy in increment 3,
+explicit earth-network terminals, higher-order primitives and IBR
 refactoring remain future work. The table preserves the development/evidence
 plan rather than implying that every item below has been delivered.
 
