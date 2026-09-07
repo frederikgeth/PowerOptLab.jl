@@ -1,0 +1,11 @@
+clear
+new circuit.mv21_328bus angle=-30 basekv=11 phases=3 bus1=B1726 model=ideal
+set defaultbasefrequency=50
+set basefrequency=50
+redirect Linecodes.dss
+redirect lines.dss
+redirect Loads.dss
+redirect Transformers.dss
+redirect Switches.dss
+redirect Groundings.dss
+solve

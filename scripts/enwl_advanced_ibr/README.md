@@ -1,5 +1,7 @@
 # ENWL advanced-IBR showcase
 
+For new Australian engineering studies, use the [Australian LV study](../../studies/australian_pv/README.md). This ENWL campaign remains available as the earlier synthetic-retrofit experiment.
+
 These scripts use the 150 BMOPF snapshots under the sibling
 `BMOPFDraftData/benchmarks/ENWLsnapshots` checkout as inputs to PowerOptLab's
 network-scale, phase-aware advanced-inverter study runner.
