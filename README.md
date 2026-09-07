@@ -187,7 +187,7 @@ retrofit and preserves the source cases and provenance.
 ## Development setup
 
 BMOPFTools is not yet registered. Local tests, CI, and documentation builds use
-commit `8ca84ab12c0c91aaa8ad4c9986d6adbeb969ea0b`, declared in the root and docs
+commit `72e6cec22a66cf376c37ec4d64aef350b9f1100d`, declared in the root and docs
 `Project.toml` source tables. Set up the tested environment with:
 
 ```sh
