@@ -274,7 +274,7 @@ export NoUnbalanceControl, NegativeSequenceAdmittanceDroop, CommonScaleLimiter
 export SequenceController, InverterControlMeasurement, InverterControlRequest
 export InverterControlRatings, InverterControlResult, ConverterTerminalResult
 export ControlledDevice, ControlledInverterResult
-export evaluate_exact, evaluate_smooth, stamp_smooth_control!, solve_controlled_inverter
+export evaluate_exact, evaluate_smooth, stamp_smooth_control!, stamp_control!, solve_controlled_inverter
 export inverter_spec, inverter_handles
 export ControlledInverterFleetSpec, ControlledInverterFleetResult
 export solve_controlled_inverter_fleet, controlled_inverter_rows

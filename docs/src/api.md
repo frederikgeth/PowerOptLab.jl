@@ -163,6 +163,7 @@ ControlledInverterResult
 evaluate_exact
 evaluate_smooth
 stamp_smooth_control!
+stamp_control!
 solve_controlled_inverter
 inverter_spec
 inverter_handles

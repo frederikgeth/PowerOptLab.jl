@@ -344,10 +344,16 @@ _power_epsilon(limiter::CommonScaleLimiter, ratings) =
 """
     SequenceController(positive, unbalance, limiter;
                        current_target=ConverterCurrentTarget(),
-                       power_voltage_floor=1)
+                       power_voltage_floor=1, encoding=:smooth)
 
 Closed-form three-leg controller combining a positive-sequence Volt-var/Watt
-policy, a negative-sequence policy, and an algebraic feasibility limiter.
+policy, a negative-sequence policy, and a feasibility limiter.
+`encoding=:smooth` retains the configured curve smoothing and algebraic selectors.
+`encoding=ComplementarityGraph()` uses exact flat-tail curves, extrema, clips and
+norms throughout the controller. It requires a compatible MPCC optimizer.
+Physical voltage floors, priority headroom and conflict blending are unchanged.
+`evaluate_exact` and `evaluate_smooth` remain independent numeric references;
+the latter always evaluates the configured smooth law, regardless of encoding.
 `current_target` selects converter-leg or post-filter grid current.
 `power_voltage_floor` is the strictly positive SI voltage floor in the
 regularized `P,Q`-to-`I1` conversion; it is not a magnitude-smoothing epsilon.
@@ -364,7 +370,7 @@ policies are not. See the sensing-reference discussion in the
 [phase-aware control design](@ref ibr-phase-aware-control-laws).
 
 The controller equalities themselves use only these voltage phasors, but the
-final plant-aware capability backoff in [`stamp_smooth_control!`](@ref)
+final plant-aware capability backoff in [`stamp_control!`](@ref)
 additionally reads converter-terminal internal voltage and both filter-arm
 currents. It is a protection surrogate, not part of the voltage-curve law.
 """
@@ -377,7 +383,12 @@ struct SequenceController{P<:AbstractPositiveSequencePolicy,
     limiter::L
     current_target::T
     power_voltage_floor::Float64
+    encoding::Union{Symbol,ComplementarityGraph}
 end
+
+SequenceController(p::AbstractPositiveSequencePolicy, u::AbstractUnbalancePolicy,
+                   l::AbstractLimiterPolicy, t::AbstractCurrentTarget, floor::Real) =
+    SequenceController(p,u,l;current_target=t,power_voltage_floor=floor)
 
 _current_target(target::Union{ConverterCurrentTarget,GridCurrentTarget}) = target
 _current_target(::AbstractCurrentTarget) = throw(ArgumentError(
@@ -391,23 +402,27 @@ function SequenceController(
         unbalance::AbstractUnbalancePolicy,
         limiter::AbstractLimiterPolicy;
         current_target=ConverterCurrentTarget(),
-        power_voltage_floor::Real=1.0)
+        power_voltage_floor::Real=1.0,
+        encoding=:smooth)
     floor = Float64(power_voltage_floor)
     isfinite(floor) && floor > 0 || throw(ArgumentError(
         "power_voltage_floor must be finite and > 0"))
+    (encoding === :smooth || encoding isa ComplementarityGraph) ||
+        throw(ArgumentError("encoding must be :smooth or ComplementarityGraph()"))
     SequenceController(
-        positive, unbalance, limiter, _current_target(current_target), floor)
+        positive, unbalance, limiter, _current_target(current_target), floor, encoding)
 end
 
 SequenceController(positive::AbstractPositiveSequencePolicy;
                    unbalance::AbstractUnbalancePolicy=NoUnbalanceControl(),
                    limiter::AbstractLimiterPolicy=CommonScaleLimiter(),
                    current_target=ConverterCurrentTarget(),
-                   power_voltage_floor::Real=1.0) =
+                   power_voltage_floor::Real=1.0,
+                   encoding=:smooth) =
     SequenceController(
         positive, unbalance, limiter;
         current_target=current_target,
-        power_voltage_floor=power_voltage_floor)
+        power_voltage_floor=power_voltage_floor, encoding=encoding)
 
 """Local three-phase RMS voltage phasors in the declared a-b-c terminal order."""
 struct InverterControlMeasurement
@@ -967,6 +982,94 @@ _smooth_positive(a, epsilon) = selector_value(a,0.,AlgebraicFormulation(epsilon)
 _smooth_negative(a, epsilon) = selector_value(a,0.,AlgebraicFormulation(epsilon);kind=:min)
 _smooth_symmetric_clip(a, limit, epsilon) = symmetric_clip_value(a,limit,AlgebraicFormulation(epsilon))
 
+# A scoped dispatch adapter keeps the physical controller graph shared. It is
+# never installed in model.ext: different devices may use different encodings.
+struct _ComplementarityControlModel
+    model::JuMP.Model
+    formulation::ComplementarityGraph
+end
+struct _ComplementarityControlContext{C}
+    context::C
+    backend::_ComplementarityControlModel
+end
+_opf_model(ctx::_ComplementarityControlContext) = ctx.backend
+
+function _implicit_sqrt!(b::_ComplementarityControlModel, x; start=1.0, scale=start)
+    initial = JuMP.value(v -> something(JuMP.start_value(v),0.0),x)
+    return _implicit_sqrt!(b.model,x;start=isfinite(initial) ? sqrt(max(initial,0.0)) : start,scale)
+end
+function _defined_control_expression!(b::_ComplementarityControlModel, x; scale=1.0, start=scale)
+    initial = JuMP.value(v -> something(JuMP.start_value(v),0.0),x)
+    return _defined_control_expression!(b.model,x;scale,start=isfinite(initial) ? initial : start)
+end
+function _control_upper_magnitude!(b::_ComplementarityControlModel, components, epsilon;
+                                   scale, start=scale)
+    # Materialize affine components before squaring: expanding |U2|² in phase
+    # voltages loses near-zero sequence energy through cancellation.
+    parts = map(x -> _defined_control_expression!(b,x;scale,start=0.),components)
+    return _implicit_sqrt!(b, sum(x^2 for x in parts); scale, start)
+end
+function _smooth_max_expression!(b::_ComplementarityControlModel, a, c, epsilon; start=1.0)
+    # Selectors are in working coordinates, with role-specific normalization.
+    scale = max(abs(Float64(start)), 1e-8)
+    return selector_expression(b.model, a, c, ComplementarityGraph(); input_scale=scale)
+end
+_smooth_min_expression!(b::_ComplementarityControlModel, a, c, epsilon; start=1.0) =
+    a+c-_smooth_max_expression!(b,a,c,epsilon;start)
+_smooth_positive_expression!(b::_ComplementarityControlModel, a, epsilon; start=1.0) =
+    _smooth_max_expression!(b,a,0.,epsilon;start)
+_smooth_negative_expression!(b::_ComplementarityControlModel, a, epsilon; start=1.0) =
+    _smooth_min_expression!(b,a,0.,epsilon;start)
+function _smooth_symmetric_clip_expression!(b::_ComplementarityControlModel, a, limit, epsilon; start=1.0)
+    return _smooth_max_expression!(b,-limit,
+        _smooth_min_expression!(b,a,limit,epsilon;start),epsilon;start)
+end
+_smooth_dominant_expression!(b::_ComplementarityControlModel, low, high, policy::WorstPhaseVoltVarWatt) =
+    _smooth_dominant_expression!(b.model,low,high,policy)
+function _pwl_smooth(ctx::_ComplementarityControlContext, law::PiecewiseLinearLaw, x, si)
+    b = ctx.backend
+    # Include endpoint hinges: firmware curves have flat tails, with no
+    # artificial bounds on measured voltage or unbalance ratio.
+    return first(law.curve.values) + sum(c*selector_expression(
+        b.model, si*x-k, 0.0, b.formulation; input_scale=si)
+        for (c,k) in law.curve.hinges; init=0.0)
+end
+function _safe_direction_scale_implicit!(b::_ComplementarityControlModel,
+        offset, direction, limit, epsilon; magnitude_start, scale)
+    norm_offset = _control_upper_magnitude!(b,offset,epsilon;scale,start=magnitude_start)
+    norm_direction = _control_upper_magnitude!(b,direction,epsilon;scale,start=magnitude_start)
+    if all(_is_identically_zero, offset)
+        limit == 0 && return 0.0
+        return limit/_smooth_max_expression!(b,limit,norm_direction,epsilon;start=scale)
+    end
+    available = _smooth_positive_expression!(b,limit-norm_offset,epsilon;start=scale)
+    initial(x) = JuMP.value(v -> something(JuMP.start_value(v),0.0),x)
+    a, d = initial(available), initial(norm_direction)
+    factor_start = a <= 0 ? 0.0 : d <= a ? 1.0 : a/d
+    m = b.model
+    factor = JuMP.@variable(m, lower_bound=0, upper_bound=1, start=factor_start)
+    slack = JuMP.@variable(m, lower_bound=0, start=max(0.0,(a-factor_start*d)/scale))
+    JuMP.@constraint(m, slack == (available-factor*norm_direction)/scale)
+    JuMP.@constraint(m, [1-factor, slack] in JuMP.MOI.Complements(2))
+    # At zero headroom and zero direction factor is nonunique, but its current
+    # contribution is identically zero. This avoids a spurious 0/0 equation.
+    return factor
+end
+_combine_safe_scale_implicit!(b::_ComplementarityControlModel, scale, candidate, epsilon) =
+    _defined_control_expression!(b, _smooth_min_expression!(b,scale,candidate,epsilon))
+
+"""
+    stamp_smooth_control!(ctx, controller, request, inverter, handles)
+
+Stamp the smooth controller encoding. Use [`stamp_control!`](@ref) to dispatch
+on `controller.encoding` (including `ComplementarityGraph()`).
+"""
+function stamp_smooth_control!(ctx, controller::SequenceController, request, inverter, handles)
+    controller.encoding === :smooth || throw(ArgumentError(
+        "stamp_smooth_control! requires encoding=:smooth; use stamp_control!"))
+    return stamp_control!(ctx,controller,request,inverter,handles)
+end
+
 # Cut repeated nonlinear subexpressions without squaring the auxiliary: the
 # defining row has derivative 1 with respect to its normalized output, even
 # when the physical quantity is zero. This also avoids exponential expression
@@ -1178,6 +1281,15 @@ function _limit_positive_power_smooth!(
             m, p_raw, p_capacity, epsilon; start=smax)
     end
     limited_magnitude = _control_upper_magnitude!(m, (p_limited,q_limited), epsilon/4; scale=smax)
+    if m isa _ComplementarityControlModel
+        model = m.model
+        initial(x) = JuMP.value(v -> something(JuMP.start_value(v),0.0),x)
+        raw_start = initial(raw_magnitude)
+        factor_start = raw_start > 0 ? clamp(initial(limited_magnitude)/raw_start,0,1) : 1.0
+        factor = JuMP.@variable(model, lower_bound=0, upper_bound=1, start=factor_start)
+        JuMP.@constraint(model, factor*raw_magnitude == limited_magnitude)
+        return p_limited, q_limited, factor
+    end
     raw_denominator = _smooth_max_expression!(
         m, raw_magnitude, epsilon, epsilon; start=smax)
     scale = limited_magnitude / raw_denominator
@@ -1281,7 +1393,9 @@ function _unbalance_smooth(ctx, policy::NegativeSequenceAdmittanceDroop,
     m = _opf_model(ctx)
     floor = policy.voltage_floor / vb
     denom = u1r^2 + u1i^2 + floor^2
-    u2mag = magnitude_expression(ctx,(u2r,u2i),
+    u2mag = ctx isa _ComplementarityControlContext ?
+        _control_upper_magnitude!(m,(u2r,u2i),0.;start=0.01voltage_start,scale=voltage_start) :
+        magnitude_expression(ctx,(u2r,u2i),
         MagnitudeApproximation(_unbalance_norm_epsilon(policy);unit=:V,scale=policy.voltage_floor);
         component_scale=vb,output_scale=vb,name="controller_negative_sequence",
         eps_rel=_unbalance_norm_epsilon(policy)/policy.voltage_floor)
@@ -1302,10 +1416,10 @@ function _unbalance_smooth(ctx, policy::NegativeSequenceAdmittanceDroop,
 end
 
 """
-    stamp_smooth_control!(ctx, controller, request, inverter, handles)
+    stamp_control!(ctx, controller, request, inverter, handles)
 
-Constrain an already-stamped [`AdvancedInverter`](@ref) to the smooth,
-fixed-structure counterpart of [`evaluate_exact`](@ref). The voltage-curve law
+Constrain an already-stamped [`AdvancedInverter`](@ref) using the controller's
+smooth or complementarity encoding of [`evaluate_exact`](@ref). The voltage-curve law
 uses local POC phasors referred to the plant's declared neutral (see
 [`SequenceController`](@ref)) and commands the configured converter- or
 grid-side phase currents.
@@ -1317,15 +1431,18 @@ saturates the command instead of making the controller equality infeasible.
 [`solve_controlled_inverter`](@ref) applies the same backoff to the exact law at
 the solved point, which is why the two commands are comparable.
 """
-function stamp_smooth_control!(ctx, controller::SequenceController,
+function stamp_control!(ctx, controller::SequenceController,
                                request::InverterControlRequest,
                                inverter::AdvancedInverter,
                                handles::_InvHandles)
     inverter.topology == :THREE_LEG || throw(ArgumentError(
-        "smooth SequenceController stamping currently supports THREE_LEG only"))
+        "SequenceController stamping currently supports THREE_LEG only"))
     ratings = InverterControlRatings(inverter, controller.current_target)
     m = _opf_model(ctx)
     sb, vb, ib = handles.sb, handles.vb, handles.ib
+    control_ctx = controller.encoding isa ComplementarityGraph ?
+        _ComplementarityControlContext(ctx, _ComplementarityControlModel(m, controller.encoding)) : ctx
+    m = _opf_model(control_ctx)
     phase_voltage = ntuple(3) do k
         ph = inverter.phase_terminals[k]
         _dv(ctx, inverter.bus, ph, inverter.neutral)
@@ -1340,7 +1457,7 @@ function stamp_smooth_control!(ctx, controller::SequenceController,
     u0, u1, u2 = _sequence_pair(vre, vim)
 
     p_raw, q_raw, vmin, vmax = _positive_smooth(
-        ctx, controller.positive, magnitudes, u1, request, sb, vb)
+        control_ctx, controller.positive, magnitudes, u1, request, sb, vb)
     smax = ratings.s_max / sb
     power_epsilon = _power_epsilon(controller.limiter, ratings)
     seps = power_epsilon / sb
@@ -1358,7 +1475,7 @@ function stamp_smooth_control!(ctx, controller::SequenceController,
     i1_request = ((p*u1[1] + q*u1[2]) / denominator,
                   (p*u1[2] - q*u1[1]) / denominator)
     i2v, i2r, i2_request, eta = _unbalance_smooth(
-        ctx, controller.unbalance, u1, u2, i1_request, vb, ib, voltage_start)
+        control_ctx, controller.unbalance, u1, u2, i1_request, vb, ib, voltage_start)
     phase_request = _phase_pairs(i1_request, i2_request)
 
     ieps = _current_epsilon(controller.limiter, ratings) / ib
@@ -1475,6 +1592,7 @@ function stamp_smooth_control!(ctx, controller::SequenceController,
     phase_current = _phase_pairs(i1, i2)
     target_re, target_im = controller.current_target isa ConverterCurrentTarget ?
         (handles.cri, handles.cii) : (handles.gri, handles.gii)
+    m = _opf_model(ctx)
     for k in 1:3
         JuMP.@constraint(m, target_re[k] == phase_current[k][1])
         JuMP.@constraint(m, target_im[k] == phase_current[k][2])
@@ -1504,7 +1622,7 @@ function stamp_device!(ctx, controlled::ControlledDevice{<:AdvancedInverter};
                        request::InverterControlRequest)
     inverter = inverter_spec(controlled)
     plant = stamp_device!(ctx, inverter)
-    control = stamp_smooth_control!(ctx, controlled.controller, request,
+    control = stamp_control!(ctx, controlled.controller, request,
                                     inverter,
                                     inverter_handles(controlled, plant))
     _ControlledHandles(plant, control)
@@ -1658,6 +1776,27 @@ struct ControlledInverterResult <: AbstractSolveResult
     exact_smooth_current_residual::Float64
     bus::Dict{String,Any}
     solve::SolveStatus
+    encoding_audit::NamedTuple
+end
+
+# Preserve the result constructor used by existing study adapters.
+ControlledInverterResult(t,p,c,v,g,e,r,b,s) = ControlledInverterResult(
+    t,p,c,v,g,e,r,b,s,(status=:NOT_RUN,))
+
+function _controller_complementarity_error(model)
+    error = 0.0
+    for (F,S) in JuMP.list_of_constraint_types(model)
+        S <: JuMP.MOI.Complements || continue
+        for ref in JuMP.all_constraints(model,F,S)
+            values = JuMP.value(JuMP.constraint_object(ref).func)
+            all(isfinite,values) || return Inf
+            n = length(values) ÷ 2
+            for k in 1:n
+                error = max(error,-values[k],-values[k+n],abs(values[k]*values[k+n]))
+            end
+        end
+    end
+    return error
 end
 
 solve_status(result::ControlledInverterResult) = result.solve
@@ -1668,6 +1807,7 @@ solve_diagnostics(result::ControlledInverterResult) = (
     converter_positive_sequence_power=
         result.converter_terminal.positive_sequence_power,
     exact_smooth_current_residual=result.exact_smooth_current_residual,
+    encoding_audit=result.encoding_audit,
 )
 
 """
@@ -1684,8 +1824,14 @@ SI. This is a controlled power flow: the controller equalities determine the
 command, while `selection_objective` only selects remaining plant allocation
 freedom (`:loss`, the default, or `:zero` for an objective-invariance check).
 
-`exact_smooth_current_residual` compares the exact law with the stamped smooth
-law **at the smooth model's own solved operating point**, using the same solved
+`configure!(model)` runs before optimizer attachment; install optional MPCC bridges
+there. Solver options are passed through unchanged. Complementarity results also
+require finite exact-replay current error at most `controller_tolerance*i_max`
+(default relative tolerance `1e-6`) before publication. This is a firmware check,
+not a proof of uniqueness, global optimality or MPCC stationarity.
+
+`exact_smooth_current_residual` retains its historical name for both encodings.
+It compares the exact law with the stamped law **at the model's own solved operating point**, using the same solved
 plant phasors for both. It therefore bounds the smoothing error of the
 controller algebra, not the distance between the exact-law and smooth-law
 network equilibria; an independent fixed-point oracle is still outstanding
@@ -1700,7 +1846,11 @@ function solve_controlled_inverter(
         optimizer=Ipopt.Optimizer,
         verbose::Bool=false,
         selection_objective::Symbol=:loss,
-        solver_options=())
+        solver_options=(),
+        configure! = identity,
+        controller_tolerance::Real=1e-6)
+    isfinite(controller_tolerance) && controller_tolerance > 0 || throw(ArgumentError(
+        "controller_tolerance must be finite and positive"))
     selection_objective in (:loss, :zero) || throw(ArgumentError(
         "selection_objective must be :loss or :zero"))
     per_unit || throw(ArgumentError(
@@ -1719,7 +1869,10 @@ function solve_controlled_inverter(
     end
     ctx = build_opf_model(net; per_unit=per_unit, s_base=Float64(s_base),
                           add_objective=false, model_hook! = hook!,
-                          optimizer=optimizer, verbose=verbose)
+                          optimizer=nothing, verbose=verbose)
+    configure!(_opf_model(ctx))
+    JuMP.set_optimizer(_opf_model(ctx), optimizer)
+    verbose || JuMP.set_silent(_opf_model(ctx))
     _set_solver_options!(_opf_model(ctx), solver_options)
     enforce_kcl!(ctx)
     JuMP.optimize!(_opf_model(ctx))
@@ -1742,9 +1895,30 @@ function solve_controlled_inverter(
     end
     residual = status.publishable ? maximum(abs,
         exact_control.phase_current .- extracted.control.phase_current) : NaN
+    is_mpcc = controlled.controller.encoding isa ComplementarityGraph
+    current_tolerance = controller_tolerance*handles[].control.ratings.i_max
+    complementarity_error = is_mpcc && status.has_primal ?
+        _controller_complementarity_error(_opf_model(ctx)) : NaN
+    audit_passed = status.publishable && isfinite(residual) &&
+        residual <= current_tolerance && isfinite(complementarity_error) &&
+        complementarity_error <= controller_tolerance
+    audit = (status = !is_mpcc ? :NOT_REQUESTED : !status.publishable ? :INNER_SOLVE_FAILED :
+            audit_passed ? :PASSED : :FAILED,
+        current_error_A=residual, current_tolerance_A=current_tolerance,
+        complementarity_error=complementarity_error,
+        complementarity_tolerance=Float64(controller_tolerance))
+    if is_mpcc && status.publishable && !audit_passed
+        # Inner solver success does not override a failed exact firmware replay.
+        status = SolveStatus(status.termination_status,status.primal_status,
+            status.has_primal,false,false,false)
+        extracted = extract_device(controlled,handles[],status)
+        grid_current = _extract_grid_current(handles[].plant,status)
+        exact_control = extracted.control
+        result = _mask_unpublished(result)
+    end
     return ControlledInverterResult(string(outcome.termination_status),
                                     extracted.plant, extracted.control,
                                     extracted.converter_terminal,
                                     grid_current,
-                                    exact_control, residual, result["bus"], status)
+                                    exact_control, residual, result["bus"], status, audit)
 end

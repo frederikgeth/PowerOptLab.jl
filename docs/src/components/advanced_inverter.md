@@ -329,10 +329,12 @@ utilisation factor on the ideal switching hull:
 - **split-DC (4-wire)** — each phase is an independent half-bridge against the
   capacitor midpoint. With `CΣ=C_u+C_l`, the fundamental midpoint ripple
   `N = I_{ret}/(j\omega CΣ)` (where `I_{ret} = \sum_x I_x`) and signed mean
-  offset `N̄` merge into the phase reference `W_x = U_x + N + N̄`:
+  offset `N̄` combine with a 2ω displacement `α d(θ)`, where
+`α=(C_u-C_l)/(2CΣ)`. This follows from equal series charge when the total bus
+voltage varies; it is first order in ripple and vanishes for equal banks:
 
 ```math
-\pm\left(\sqrt2\big[(U^{re}_x+N_{re})\cos\theta_k - (U^{im}_x+N_{im})\sin\theta_k\big]+\bar N\right)
+\pm\left(\sqrt2\big[(U^{re}_x+N_{re})\cos\theta_k - (U^{im}_x+N_{im})\sin\theta_k\big]+\bar N+\alpha[D_{re}\cos2\theta_k-D_{im}\sin2\theta_k]\right)
    \le \tfrac{m}{2}\,v_{dc}(\theta_k);\qquad
    \underbrace{|I_n| \le I_{n,\max}}_{\text{optional — see below}},
 ```
@@ -434,6 +436,13 @@ r = solve_advanced_inverter(net, pwm_inv)
 ```
 
 `i_cap_switching` is the post-solve carrier prediction;
+Require `solve_status(r).publishable` before using an operating point.
+`r.inner_solve` retains the last NLP status and `r.pwm_status` records whether
+closure converged. Failed or nonfinite audits, negative dense hull/modulation
+margins beyond `1e-6*max(v_dc,1)` V, and exhausted outer iterations are
+non-publishable. Their carrier diagnostics remain available, but operating
+quantities are masked with `NaN`.
+
 `i_cap_switching_reserved` is the conservative current actually present in the
 smooth capacitor constraint. Require a non-negative `pwm_reserve_margin` before
 publishing the point. `dv_switching_rms` and `dv_switching_pp` use the physical
@@ -460,9 +469,10 @@ r = solve_advanced_inverter(net, finite_dc)
 ```
 
 The reported harmonic currents satisfy DC-node KCL frequency by frequency.
-Unretained bridge-current energy is assigned to the capacitor for conservative
-thermal closure; source current and switching voltage contain the retained
-series. Require a finite positive `pwm_dc_network_margin` and demonstrate
+Unretained sampled bridge-current energy is multiplied by the maximum
+capacitor-current gain over omitted integer carrier harmonics. This bounds the
+thermal tail even with an inductive source resonance beyond the cutoff;
+source current and switching voltage contain the retained series only. Require a finite positive `pwm_dc_network_margin` and demonstrate
 convergence in `pwm_dc_harmonics`/`pwm_carrier_samples`. A value near zero flags
 parallel cancellation between source inductance and link capacitance, not a
 certified small-signal stability margin. Source resistance loss belongs to the

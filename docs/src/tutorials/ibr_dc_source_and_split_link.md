@@ -58,8 +58,8 @@ cases = [
 ]
 
 function dc_summary(label, device)
-    r = solve_advanced_inverter(network, device)
-    @assert r.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+    r = solve_advanced_inverter(network, device; per_unit=true, s_base=100e3)
+    @assert solve_status(r).publishable
     return (
         case=label,
         bridge_a=r.i_dc_bridge_switching_rms,
@@ -87,7 +87,7 @@ before RMS aggregation.
 For a resistive source branch, verify the independent loss identity:
 
 ```julia
-r_finite = solve_advanced_inverter(network, four_leg(source_r=0.01))
+r_finite = solve_advanced_inverter(network, four_leg(source_r=0.01); per_unit=true, s_base=100e3)
 @assert isapprox(r_finite.p_dc_source_switching_loss,
     0.01*r_finite.i_dc_source_switching_rms^2; rtol=1e-8)
 ```
@@ -99,14 +99,18 @@ impedance.
 ## 3. Check spectral convergence
 
 The source-current and voltage diagnostics use the retained Fourier series.
-Unretained bridge-current energy is assigned to the capacitor, conservatively,
-for thermal reserve closure.
+Unretained sampled bridge-current energy is multiplied by the largest
+capacitor-current gain over omitted integer carrier harmonics. An inductive
+source can make this bound much larger than the omitted bridge RMS; refining
+the spectrum usually tightens it. The bound does not cover carrier sampling
+error or unmodelled source dynamics.
 
 ```julia
 for h in (16, 32, 64)
     r = solve_advanced_inverter(network,
-        four_leg(source_r=0.02, source_l=0.2e-6, harmonics=h))
-    @assert r.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+        four_leg(source_r=0.02, source_l=0.2e-6, harmonics=h);
+        per_unit=true, s_base=100e3)
+    @assert solve_status(r).publishable
     println((harmonics=h,
         cap=r.i_cap_switching,
         source=r.i_dc_source_switching_rms,
@@ -136,8 +140,8 @@ split = AdvancedInverter(
     pwm_dc_harmonics=64, pwm_dc_source_r=0.05,
 )
 
-r_split = solve_advanced_inverter(network, split)
-@assert r_split.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+r_split = solve_advanced_inverter(network, split; per_unit=true, s_base=100e3)
+@assert solve_status(r_split).publishable
 ceq = cu*cl/(cu+cl)
 
 @assert isapprox(r_split.dv_switching_upper_rms,
@@ -173,7 +177,9 @@ passive R–L/C network; it is not a Nyquist stability margin.
 
 ## 6. Publication checks
 
-Require all of the following:
+Require `solve_status(r).publishable`, which includes PWM convergence and audit
+validity. On failure inspect `r.pwm_status`, `r.inner_solve`, and the retained
+carrier diagnostics. Also require all of the following:
 
 - `pwm_reserve_margin ≥ 0` within the selected closure tolerance;
 - `pwm_modulation_margin ≥ 0`;

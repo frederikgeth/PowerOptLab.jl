@@ -1336,8 +1336,16 @@ end
     @test apu.p_poc ≈ asi.p_poc rtol=1e-3
     @test apu.dv2 ≈ asi.dv2 rtol=1e-2
     @test apu.dv_mid ≈ asi.dv_mid rtol=1e-2
-    @test apu.v_mid_mean ≈ asi.v_mid_mean atol=1e-3
-    @test apu.q_mid_balance ≈ asi.q_mid_balance atol=1e-6
+    # Balancing charge has no objective cost and these rails have headroom:
+    # different solves may choose different feasible mean offsets. Verify the
+    # physical SI charge identity and both bounds, rather than an arbitrary
+    # optimizer selection along that free direction.
+    for r in (asi, apu)
+        @test solve_status(r).publishable
+        @test abs(r.v_mid_mean) <= 1.0 + 1e-6
+        @test abs(r.q_mid_balance) <= 0.25 + 1e-6
+        @test r.v_mid_mean ≈ -75.0 + 2r.q_mid_balance/6e-3 atol=1e-6
+    end
     @test apu.i_cap_thermal_upper ≈ asi.i_cap_thermal_upper rtol=1e-2
     @test apu.i_cap_thermal_lower ≈ asi.i_cap_thermal_lower rtol=1e-2
     @test apu.p_cap_loss ≈ asi.p_cap_loss rtol=1e-2

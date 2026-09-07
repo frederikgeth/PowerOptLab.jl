@@ -57,10 +57,10 @@ lcl = AdvancedInverter(; r_filter=0.02, x_filter=0.05,
     r_filter_grid=0.03, x_filter_grid=0.10,
     c_filter_mid=20e-6, r_filter_damping=1.0, common...)
 
-r_reduced = solve_advanced_inverter(network, reduced)
-r_series = solve_advanced_inverter(network, series_only)
-r_lcl = solve_advanced_inverter(network, lcl)
-@assert all(r.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+r_reduced = solve_advanced_inverter(network, reduced; per_unit=true, s_base=100e3)
+r_series = solve_advanced_inverter(network, series_only; per_unit=true, s_base=100e3)
+r_lcl = solve_advanced_inverter(network, lcl; per_unit=true, s_base=100e3)
+@assert all(solve_status(r).publishable
             for r in (r_reduced, r_series, r_lcl))
 
 @show r_reduced.i_ac_switching_rms r_reduced.i_grid_switching_rms
@@ -145,8 +145,8 @@ for (samples, harmonics) in ((128,32), (128,64), (256,128))
         pwm_carrier_samples=samples, pwm_ac_harmonics=harmonics,
     ))
     device = AdvancedInverter(; parameters...)
-    r = solve_advanced_inverter(network, device)
-    @assert r.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+    r = solve_advanced_inverter(network, device; per_unit=true, s_base=100e3)
+    @assert solve_status(r).publishable
     println((samples=samples, harmonics=harmonics,
         converter=maximum(r.i_ac_switching_rms),
         grid=maximum(r.i_grid_switching_rms),

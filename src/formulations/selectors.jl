@@ -124,3 +124,34 @@ function symmetric_clip_expression(target,x,limit,r::AbstractPWLSmoothing;
     return selector_expression(target,x,limit,r;kind=:min,input_scale=si,output_scale=so)+
         selector_expression(target,x,-limit,r;kind=:max,input_scale=si,output_scale=so)-x*(si/so)
 end
+
+"""
+    selector_expression(model, a, b, ComplementarityGraph(); kind=:max, input_scale=1)
+
+Exact max/min graph using nonnegative output slacks and complementary simplex
+weights. At a tie, the weight is nonunique but the output is unique. If both
+normalized complementarity products are at most τ and the defining equations
+and nonnegativity hold, output error is at most `2τ*scale`, including ties.
+This avoids the square-root error of a complementary pair of output slacks.
+`scale` is the formulation's explicit scale or `input_scale` when omitted.
+"""
+function selector_expression(m::JuMP.Model, a, b, r::ComplementarityGraph;
+                             kind::Symbol=:max, input_scale::Real=1)
+    kind in (:max,:min,:nonnegative_min) || throw(ArgumentError("Unknown selector kind"))
+    if kind !== :max
+        return -selector_expression(m,-a,-b,r;kind=:max,input_scale)
+    end
+    a isa Real && b isa Real && return max(a,b)
+    scale = r.scale === nothing ? _pwl_scale(input_scale) : r.scale
+    initial(x) = JuMP.value(v -> something(JuMP.start_value(v),0.0),x)
+    difference = (initial(a)-initial(b))/scale
+    isfinite(difference) || (difference = 0.0)
+    left = JuMP.@variable(m, lower_bound=0, start=max(-difference,0.0))
+    right = JuMP.@variable(m, lower_bound=0, start=max(difference,0.0))
+    weight = JuMP.@variable(m, lower_bound=0, upper_bound=1,
+        start=difference > 0 ? 1.0 : difference < 0 ? 0.0 : 0.5)
+    JuMP.@constraint(m, left-right == (b-a)/scale)
+    JuMP.@constraint(m, [weight,left] in JuMP.MOI.Complements(2))
+    JuMP.@constraint(m, [1-weight,right] in JuMP.MOI.Complements(2))
+    return a+scale*left
+end

@@ -1,0 +1,1262 @@
+{
+  "runtime": {
+    "BMOPFTools": "0.1.0",
+    "JuMP": "1.30.1",
+    "PowerOptLab": "0.1.0",
+    "architecture": "aarch64",
+    "julia": "1.12.6",
+    "kernel": "Darwin"
+  },
+  "package_versions": {
+    "AMD": "0.5.4",
+    "ASL_jll": "0.1.5+0",
+    "ArgTools": "1.1.2",
+    "ArnoldiMethod": "0.4.0",
+    "ArrayLayouts": "1.12.2",
+    "Artifacts": "1.11.0",
+    "BMOPFTools": "0.1.0",
+    "Base64": "1.11.0",
+    "BlockDiagonals": "0.2.0",
+    "Bzip2_jll": "1.0.9+0",
+    "CCOpt": "0.1.0",
+    "ChainRulesCore": "1.26.1",
+    "CodecBzip2": "0.8.5",
+    "CodecZlib": "0.7.9",
+    "CommonSubexpressions": "0.3.1",
+    "Compat": "4.18.1",
+    "CompilerSupportLibraries_jll": "1.3.0+1",
+    "DataStructures": "0.18.22",
+    "Dates": "1.11.0",
+    "DiffOpt": "0.6.2",
+    "DiffResults": "1.1.0",
+    "DiffRules": "1.16.0",
+    "Distributed": "1.11.0",
+    "DocStringExtensions": "0.9.5",
+    "Downloads": "1.7.0",
+    "ExprTools": "0.1.11",
+    "FastClosures": "0.3.2",
+    "FileWatching": "1.11.0",
+    "FillArrays": "1.17.0",
+    "ForwardDiff": "1.4.1",
+    "Gamma": "1.2.0",
+    "Graphs": "1.13.1",
+    "HiGHS": "1.20.1",
+    "HiGHS_jll": "1.12.0+0",
+    "Hwloc_jll": "2.14.0+0",
+    "HypergeometricFunctions": "0.3.30",
+    "Inflate": "0.1.5",
+    "InteractiveUtils": "1.11.0",
+    "Ipopt": "1.15.0",
+    "Ipopt_jll": "300.1400.1902+0",
+    "IrrationalConstants": "0.2.6",
+    "IterativeSolvers": "0.9.4",
+    "JLLWrappers": "1.8.0",
+    "JSON": "1.8.0",
+    "JSON3": "1.14.3",
+    "JSONSchema": "1.5.0",
+    "JuMP": "1.30.1",
+    "JuliaSyntaxHighlighting": "1.12.0",
+    "LDLFactorizations": "0.10.2",
+    "LazyArrays": "2.12.0",
+    "LazyArtifacts": "1.11.0",
+    "LibCURL": "0.6.4",
+    "LibCURL_jll": "8.15.0+0",
+    "LibGit2": "1.11.0",
+    "LibGit2_jll": "1.9.0+0",
+    "LibSSH2_jll": "1.11.3+1",
+    "Libdl": "1.11.0",
+    "Libiconv_jll": "1.18.0+0",
+    "LinearAlgebra": "1.12.0",
+    "LinearOperators": "2.14.2",
+    "LogExpFunctions": "1.0.1",
+    "Logging": "1.11.0",
+    "METIS_jll": "5.1.3+0",
+    "MPCCModels": "0.1.0",
+    "MUMPS_seq_jll": "500.900.100+0",
+    "MacroTools": "0.5.16",
+    "MadNLP": "0.10.1",
+    "Markdown": "1.11.0",
+    "MathOptComplements": "0.1.1",
+    "MathOptIIS": "0.1.2",
+    "MathOptInterface": "1.53.0",
+    "MathOptSetDistances": "0.2.12",
+    "Mmap": "1.11.0",
+    "MozillaCACerts_jll": "2025.11.4",
+    "MutableArithmetics": "1.8.0",
+    "NLPModels": "0.21.12",
+    "NLPModelsJuMP": "0.13.6",
+    "NaNMath": "1.1.4",
+    "NetworkOptions": "1.3.0",
+    "OpenBLAS32_jll": "0.3.34+0",
+    "OpenBLAS_jll": "0.3.29+0",
+    "OpenLibm_jll": "0.8.7+0",
+    "OpenSSL_jll": "3.5.4+0",
+    "OpenSpecFun_jll": "0.5.6+0",
+    "OrderedCollections": "1.8.2",
+    "ParametricOptInterface": "0.15.3",
+    "Parsers": "2.8.8",
+    "PiecewiseLinearOpt": "0.4.2",
+    "Pkg": "1.12.1",
+    "PowerIO": "0.11.0",
+    "PowerOptLab": "0.1.0",
+    "PrecompileTools": "1.3.4",
+    "Preferences": "1.5.2",
+    "Printf": "1.11.0",
+    "Random": "1.11.0",
+    "RecipesBase": "1.3.4",
+    "Reexport": "1.2.2",
+    "Rmath": "0.9.0",
+    "Rmath_jll": "0.5.2+0",
+    "SHA": "0.7.0",
+    "SPRAL_jll": "2025.9.18+1",
+    "Serialization": "1.11.0",
+    "SharedArrays": "1.11.0",
+    "SimpleTraits": "0.9.6",
+    "Sockets": "1.11.0",
+    "SolverCore": "0.3.10",
+    "SparseArrays": "1.12.0",
+    "SpecialFunctions": "2.9.0",
+    "StaticArrays": "1.9.20",
+    "StaticArraysCore": "1.4.4",
+    "Statistics": "1.11.5",
+    "StatsFuns": "2.2.1",
+    "StructTypes": "1.11.0",
+    "StructUtils": "2.8.5",
+    "StyledStrings": "1.11.0",
+    "SuiteSparse_jll": "7.8.3+2",
+    "TOML": "1.0.3",
+    "Tar": "1.10.0",
+    "Test": "1.11.0",
+    "TimerOutputs": "0.5.29",
+    "TranscodingStreams": "0.11.3",
+    "URIs": "1.7.0",
+    "UUIDs": "1.11.0",
+    "Unicode": "1.11.0",
+    "XML2_jll": "2.13.9+0",
+    "Xorg_libpciaccess_jll": "0.19.0+0",
+    "Zlib_jll": "1.3.1+2",
+    "libblastrampoline_jll": "5.15.0+0",
+    "nghttp2_jll": "1.64.0+1",
+    "p7zip_jll": "17.7.0+0"
+  },
+  "source_sha256": {
+    "/Users/uqfgeth/Documents/GitHub/PowerOptLab.jl/scripts/formulations/inverter_controller_comparison.jl": "a60c824ce73ec8b94514288f6c17a0fe973666b6e93d2c9ebb6838310fecaa49",
+    "/Users/uqfgeth/Documents/GitHub/PowerOptLab.jl/src/components/inverter_controls.jl": "26b3e9a99cf06bc6d73b21700ee8c6cc90197cddb5f02fb7b1c90d91ac10d786",
+    "/Users/uqfgeth/Documents/GitHub/PowerOptLab.jl/src/formulations/selectors.jl": "f506b130a11ba0aed67d7a3c97fa7cb8737c8fa72173724fe6e5147cd78a7cce",
+    "/tmp/pol-controller-encodings/Manifest.toml": "f5ee10114bcb87e44715076809d2b0d8c831c3423fdc44362d8ead0079ba223a"
+  },
+  "raw_bundle_sha256": "74fc08eba2034d0b39e43520c70aff8ba49549d07017cd6bde2dc55657dc9793",
+  "note": "Compact PR attachment. Full worst-equality expressions, phasors and timing are in the script-generated/CI TOML bundle. Null complementarity error denotes the smooth encoding.",
+  "runs": [
+    {
+      "method": "smooth / Ipopt",
+      "configuration": {
+        "case": "balanced_constant",
+        "s_base": 1000000.0,
+        "selection_objective": "loss"
+      },
+      "termination_status": "LOCALLY_SOLVED",
+      "primal_status": "FEASIBLE_POINT",
+      "strict_solver_success": true,
+      "candidate_available": true,
+      "solver_options": {
+        "max_iter": 500,
+        "tol": 1e-08
+      },
+      "solver_detail_errors": {},
+      "metrics": {
+        "converter_apparent_power_margin_VA": 7954.7573137601175,
+        "converter_current_margin_A": 22.674730694710462,
+        "exact_current_replay_error_A": 0.00045379264359652954,
+        "max_equality_residual_raw_units": 2.220446049250313e-15,
+        "max_inequality_violation_raw_units": 0.0,
+        "worst_equality_prefix": "2066.947312881757 vrint_comparison_a*cii_comparison_a + 2066.947312881757 viint_comparison_a*cri_comparison_a + 2066.947312881757 vrint_comparison_b*cii_comparison_b + 2066.947312881757 viint_comparison_b*cri_comparison_b + 2066.94731288175",
+        "worst_equality_length": 354,
+        "worst_equality_sha256": "04d236b42efd8cb1f0ddd8ffb5070a54e7ce017c5e70c068856d3b3aa38703da",
+        "complementarity_error": null
+      }
+    },
+    {
+      "method": "smooth / Ipopt",
+      "configuration": {
+        "case": "balanced_curve",
+        "s_base": 1000000.0,
+        "selection_objective": "loss"
+      },
+      "termination_status": "LOCALLY_SOLVED",
+      "primal_status": "FEASIBLE_POINT",
+      "strict_solver_success": true,
+      "candidate_available": true,
+      "solver_options": {
+        "max_iter": 500,
+        "tol": 1e-08
+      },
+      "solver_detail_errors": {},
+      "metrics": {
+        "converter_apparent_power_margin_VA": 7954.757313760119,
+        "converter_current_margin_A": 22.674730694710462,
+        "exact_current_replay_error_A": 0.00045379264359013405,
+        "max_equality_residual_raw_units": 3.552713678800501e-15,
+        "max_inequality_violation_raw_units": 0.0,
+        "worst_equality_prefix": "-2066.947312881757 vrint_comparison_a*cri_comparison_a + 2066.947312881757 viint_comparison_a*cii_comparison_a - 2066.947312881757 vrint_comparison_b*cri_comparison_b + 2066.947312881757 viint_comparison_b*cii_comparison_b - 2066.9473128817",
+        "worst_equality_length": 355,
+        "worst_equality_sha256": "08f5c4bb8e11a91a36a66a77479f3377efd2545e640b432c694bd7cc2c8cd782",
+        "complementarity_error": null
+      }
+    },
+    {
+      "method": "smooth / Ipopt",
+      "configuration": {
+        "case": "unbalanced_droop",
+        "s_base": 1000000.0,
+        "selection_objective": "loss"
+      },
+      "termination_status": "LOCALLY_SOLVED",
+      "primal_status": "FEASIBLE_POINT",
+      "strict_solver_success": true,
+      "candidate_available": true,
+      "solver_options": {
+        "max_iter": 500,
+        "tol": 1e-08
+      },
+      "solver_detail_errors": {},
+      "metrics": {
+        "converter_apparent_power_margin_VA": 13249.447425174181,
+        "converter_current_margin_A": 30.005942193423152,
+        "exact_current_replay_error_A": 0.0002619417111497195,
+        "max_equality_residual_raw_units": 7.993605777301127e-15,
+        "max_inequality_violation_raw_units": 0.0,
+        "worst_equality_prefix": "-1.1346880907372399 vr_poc_a\u00b2 + 2.2693761814744797 vr_poc_n*vr_poc_a - 1.1346880907372399 vi_poc_a\u00b2 + 2.2693761814744797 vi_poc_n*vi_poc_a - 1.1346880907372399 vr_poc_n\u00b2 - 1.1346880907372399 vi_poc_n\u00b2 + 1.1346880907372396 _[54]\u00b2 = 0",
+        "worst_equality_length": 232,
+        "worst_equality_sha256": "9b7d7e61a6c7848bbc05b220d33acd46e4eb02fc50d4fa8f44b43224a8679098",
+        "complementarity_error": null
+      }
+    },
+    {
+      "method": "smooth / Ipopt",
+      "configuration": {
+        "case": "apparent_power_saturation",
+        "s_base": 1000000.0,
+        "selection_objective": "loss"
+      },
+      "termination_status": "LOCALLY_SOLVED",
+      "primal_status": "FEASIBLE_POINT",
+      "strict_solver_success": true,
+      "candidate_available": true,
+      "solver_options": {
+        "max_iter": 500,
+        "tol": 1e-08
+      },
+      "solver_detail_errors": {},
+      "metrics": {
+        "converter_apparent_power_margin_VA": -2.9908804208389483e-05,
+        "converter_current_margin_A": 28.463982647627816,
+        "exact_current_replay_error_A": 3.776037044049546e-12,
+        "max_equality_residual_raw_units": 9.920458118178876e-12,
+        "max_inequality_violation_raw_units": 9.934946865186589e-09,
+        "worst_equality_prefix": "cri_comparison_a - (((_[67]) * ((0.0092 / ((((((((((((0.0092 _[57] + 0.0092) + sqrt(8.464e-5 _[57]\u00b2 - 0.00016928 _[57] + 8.46400000529e-5)) / 2) * 1) + (0.0092 _[58])) + sqrt(((((((0.0092 _[57] + 0.0092) + sqrt(8.464e-5 _[57]\u00b2 - 0.00016928 ",
+        "worst_equality_length": 2188,
+        "worst_equality_sha256": "4301cbb1030e56a15d9ba876f9c27e9c46b47e8c990ab045643965ca9742eb32",
+        "complementarity_error": null
+      }
+    },
+    {
+      "method": "smooth / Ipopt",
+      "configuration": {
+        "case": "lcl_grid_target",
+        "s_base": 1000000.0,
+        "selection_objective": "loss"
+      },
+      "termination_status": "LOCALLY_SOLVED",
+      "primal_status": "FEASIBLE_POINT",
+      "strict_solver_success": true,
+      "candidate_available": true,
+      "solver_options": {
+        "max_iter": 500,
+        "tol": 1e-08
+      },
+      "solver_detail_errors": {},
+      "metrics": {
+        "converter_apparent_power_margin_VA": 10854.895137165435,
+        "converter_current_margin_A": 26.81378609894216,
+        "exact_current_replay_error_A": 0.0005142942406313359,
+        "max_equality_residual_raw_units": 6.046448055782583e-10,
+        "max_inequality_violation_raw_units": 0.0,
+        "worst_equality_prefix": "cii_comparison_c - 0.000498559682804311 vrmid_comparison_c - 2.3494071553111217e-6 vimid_comparison_c - gii_comparison_c = 0",
+        "worst_equality_length": 124,
+        "worst_equality_sha256": "64e16c83c30326ea5dc3916bdb26002e07693278f9016ba1592a5c39f63fe7a4",
+        "complementarity_error": null
+      }
+    },
+    {
+      "method": "smooth / MadNLP",
+      "configuration": {
+        "case": "balanced_constant",
+        "s_base": 1000000.0,
+        "selection_objective": "loss"
+      },
+      "termination_status": "LOCALLY_INFEASIBLE",
+      "primal_status": "INFEASIBLE_POINT",
+      "strict_solver_success": false,
+      "candidate_available": true,
+      "solver_options": {
+        "max_iter": 500,
+        "tol": 1e-08
+      },
+      "solver_detail_errors": {},
+      "metrics": {
+        "converter_apparent_power_margin_VA": 7954.757313760121,
+        "converter_current_margin_A": 22.674730694710465,
+        "exact_current_replay_error_A": 0.0004537926435939288,
+        "max_equality_residual_raw_units": 1.7763568394002505e-15,
+        "max_inequality_violation_raw_units": 0.0,
+        "worst_equality_prefix": "-2066.947312881757 vrint_comparison_a*cri_comparison_a + 2066.947312881757 viint_comparison_a*cii_comparison_a - 2066.947312881757 vrint_comparison_b*cri_comparison_b + 2066.947312881757 viint_comparison_b*cii_comparison_b - 2066.9473128817",
+        "worst_equality_length": 355,
+        "worst_equality_sha256": "08f5c4bb8e11a91a36a66a77479f3377efd2545e640b432c694bd7cc2c8cd782",
+        "complementarity_error": null
+      }
+    },
+    {
+      "method": "smooth / MadNLP",
+      "configuration": {
+        "case": "balanced_curve",
+        "s_base": 1000000.0,
+        "selection_objective": "loss"
+      },
+      "termination_status": "LOCALLY_SOLVED",
+      "primal_status": "FEASIBLE_POINT",
+      "strict_solver_success": true,
+      "candidate_available": true,
+      "solver_options": {
+        "max_iter": 500,
+        "tol": 1e-08
+      },
+      "solver_detail_errors": {},
+      "metrics": {
+        "converter_apparent_power_margin_VA": 7954.757313760132,
+        "converter_current_margin_A": 22.674730694710476,
+        "exact_current_replay_error_A": 0.00045379264359013405,
+        "max_equality_residual_raw_units": 5.329070518200751e-15,
+        "max_inequality_violation_raw_units": 0.0,
+        "worst_equality_prefix": "2066.947312881757 vrint_comparison_a*cii_comparison_a + 2066.947312881757 viint_comparison_a*cri_comparison_a + 2066.947312881757 vrint_comparison_b*cii_comparison_b + 2066.947312881757 viint_comparison_b*cri_comparison_b + 2066.94731288175",
+        "worst_equality_length": 354,
+        "worst_equality_sha256": "04d236b42efd8cb1f0ddd8ffb5070a54e7ce017c5e70c068856d3b3aa38703da",
+        "complementarity_error": null
+      }
+    },
+    {
+      "method": "smooth / MadNLP",
+      "configuration": {
+        "case": "unbalanced_droop",
+        "s_base": 1000000.0,
+        "selection_objective": "loss"
+      },
+      "termination_status": "LOCALLY_SOLVED",
+      "primal_status": "FEASIBLE_POINT",
+      "strict_solver_success": true,
+      "candidate_available": true,
+      "solver_options": {
+        "max_iter": 500,
+        "tol": 1e-08
+      },
+      "solver_detail_errors": {},
+      "metrics": {
+        "converter_apparent_power_margin_VA": 13249.447425173958,
+        "converter_current_margin_A": 30.00594219342282,
+        "exact_current_replay_error_A": 0.00026194171239497316,
+        "max_equality_residual_raw_units": 1.1657341758564144e-15,
+        "max_inequality_violation_raw_units": 0.0,
+        "worst_equality_prefix": "_[67] - ((sqrt((((((0 + ((vrint_comparison_a * (((0.0098 / ((((((((((((0.0098 _[58] + 0.0098) + sqrt(9.604e-5 _[58]\u00b2 - 0.00019208 _[58] + 9.604000006002499e-5)) / 2) * 1) + (0.0098 _[59])) + sqrt(((((((0.0098 _[58] + 0.0098) + sqrt(9.604e-5",
+        "worst_equality_length": 561127,
+        "worst_equality_sha256": "50219292188b29a65e4792d0e55e9bdada102f8499dee24446f3cc7df896bc6e",
+        "complementarity_error": null
+      }
+    },
+    {
+      "method": "smooth / MadNLP",
+      "configuration": {
+        "case": "apparent_power_saturation",
+        "s_base": 1000000.0,
+        "selection_objective": "loss"
+      },
+      "termination_status": "LOCALLY_INFEASIBLE",
+      "primal_status": "INFEASIBLE_POINT",
+      "strict_solver_success": false,
+      "candidate_available": true,
+      "solver_options": {
+        "max_iter": 500,
+        "tol": 1e-08
+      },
+      "solver_detail_errors": {},
+      "metrics": {
+        "converter_apparent_power_margin_VA": 1.2874716048827395e-07,
+        "converter_current_margin_A": 28.463982690723576,
+        "exact_current_replay_error_A": 5.823396519566006e-12,
+        "max_equality_residual_raw_units": 4.136491496553596e-14,
+        "max_inequality_violation_raw_units": 0.0,
+        "worst_equality_prefix": "cri_comparison_a - (((_[67]) * ((0.0092 / ((((((((((((0.0092 _[57] + 0.0092) + sqrt(8.464e-5 _[57]\u00b2 - 0.00016928 _[57] + 8.46400000529e-5)) / 2) * 1) + (0.0092 _[58])) + sqrt(((((((0.0092 _[57] + 0.0092) + sqrt(8.464e-5 _[57]\u00b2 - 0.00016928 ",
+        "worst_equality_length": 2188,
+        "worst_equality_sha256": "4301cbb1030e56a15d9ba876f9c27e9c46b47e8c990ab045643965ca9742eb32",
+        "complementarity_error": null
+      }
+    },
+    {
+      "method": "smooth / MadNLP",
+      "configuration": {
+        "case": "lcl_grid_target",
+        "s_base": 1000000.0,
+        "selection_objective": "loss"
+      },
+      "termination_status": "LOCALLY_SOLVED",
+      "primal_status": "FEASIBLE_POINT",
+      "strict_solver_success": true,
+      "candidate_available": true,
+      "solver_options": {
+        "max_iter": 500,
+        "tol": 1e-08
+      },
+      "solver_detail_errors": {},
+      "metrics": {
+        "converter_apparent_power_margin_VA": 10854.89419993343,
+        "converter_current_margin_A": 26.813785443185125,
+        "exact_current_replay_error_A": 0.0005142939909993126,
+        "max_equality_residual_raw_units": 1.99816937815708e-09,
+        "max_inequality_violation_raw_units": 0.0,
+        "worst_equality_prefix": "cii_comparison_a - 0.000498559682804311 vrmid_comparison_a - 2.3494071553111217e-6 vimid_comparison_a - gii_comparison_a = 0",
+        "worst_equality_length": 124,
+        "worst_equality_sha256": "0a55e70900514ca79fbd1d22fe3a31c48da05b989101182204bcafd8c50a5429",
+        "complementarity_error": null
+      }
+    },
+    {
+      "method": "MPCC / CCOpt 0.1.0",
+      "configuration": {
+        "case": "balanced_constant",
+        "s_base": 1000000.0,
+        "selection_objective": "loss"
+      },
+      "termination_status": "ALMOST_LOCALLY_SOLVED",
+      "primal_status": "NEARLY_FEASIBLE_POINT",
+      "strict_solver_success": false,
+      "candidate_available": true,
+      "solver_options": {
+        "max_iter": 500,
+        "tol": 1e-08
+      },
+      "solver_detail_errors": {
+        "raw_solver_status": "FieldError: type CCOpt.RelaxationSolver has no field `opt`, available fields: `mpcc`, `rnlp`, `ipm`, `logger`, `iterate_logger`, `opts`, `cnt`, `inf_pr_cc`, `_cc1`, `multipliers_cc1`, `multipliers_cc2`, `ind_cc1`, `ind_cc2`, `ind_cc1_lb`, `ind_cc2_lb`, `x`, `b`"
+      },
+      "metrics": {
+        "converter_apparent_power_margin_VA": 7954.4417701320035,
+        "converter_current_margin_A": 22.674280256645755,
+        "exact_current_replay_error_A": 1.6644506910133614e-06,
+        "max_equality_residual_raw_units": 1.8311447138300593e-15,
+        "max_inequality_violation_raw_units": 0.0,
+        "worst_equality_prefix": "20 _[54] - 20 _[56] + _[60] + _[66] - _[67] = 0",
+        "worst_equality_length": 47,
+        "worst_equality_sha256": "80ffc459465e1b3aca3e07d35aab7fffca2f60c211e43f8bc661465b435ef9fc",
+        "complementarity_error": 1.3780078252683994e-08
+      }
+    },
+    {
+      "method": "MPCC / CCOpt 0.1.0",
+      "configuration": {
+        "case": "balanced_curve",
+        "s_base": 1000000.0,
+        "selection_objective": "loss"
+      },
+      "termination_status": "ALMOST_LOCALLY_SOLVED",
+      "primal_status": "NEARLY_FEASIBLE_POINT",
+      "strict_solver_success": false,
+      "candidate_available": true,
+      "solver_options": {
+        "max_iter": 500,
+        "tol": 1e-08
+      },
+      "solver_detail_errors": {
+        "raw_solver_status": "FieldError: type CCOpt.RelaxationSolver has no field `opt`, available fields: `mpcc`, `rnlp`, `ipm`, `logger`, `iterate_logger`, `opts`, `cnt`, `inf_pr_cc`, `_cc1`, `multipliers_cc1`, `multipliers_cc2`, `ind_cc1`, `ind_cc2`, `ind_cc1_lb`, `ind_cc2_lb`, `x`, `b`"
+      },
+      "metrics": {
+        "converter_apparent_power_margin_VA": 7954.449309807373,
+        "converter_current_margin_A": 22.67429101951917,
+        "exact_current_replay_error_A": 1.2467708423002932e-05,
+        "max_equality_residual_raw_units": 1.7763568394002505e-15,
+        "max_inequality_violation_raw_units": 9.84477351851836e-09,
+        "worst_equality_prefix": "2066.947312881757 vrint_comparison_a*cii_comparison_a + 2066.947312881757 viint_comparison_a*cri_comparison_a + 2066.947312881757 vrint_comparison_b*cii_comparison_b + 2066.947312881757 viint_comparison_b*cri_comparison_b + 2066.94731288175",
+        "worst_equality_length": 354,
+        "worst_equality_sha256": "04d236b42efd8cb1f0ddd8ffb5070a54e7ce017c5e70c068856d3b3aa38703da",
+        "complementarity_error": 1.9844773661165653e-08
+      }
+    },
+    {
+      "method": "MPCC / CCOpt 0.1.0",
+      "configuration": {
+        "case": "unbalanced_droop",
+        "s_base": 1000000.0,
+        "selection_objective": "loss"
+      },
+      "termination_status": "LOCALLY_INFEASIBLE",
+      "primal_status": "INFEASIBLE_POINT",
+      "strict_solver_success": false,
+      "candidate_available": true,
+      "solver_options": {
+        "max_iter": 500,
+        "tol": 1e-08
+      },
+      "solver_detail_errors": {
+        "raw_solver_status": "FieldError: type CCOpt.RelaxationSolver has no field `opt`, available fields: `mpcc`, `rnlp`, `ipm`, `logger`, `iterate_logger`, `opts`, `cnt`, `inf_pr_cc`, `_cc1`, `multipliers_cc1`, `multipliers_cc2`, `ind_cc1`, `ind_cc2`, `ind_cc1_lb`, `ind_cc2_lb`, `x`, `b`"
+      },
+      "metrics": {
+        "converter_apparent_power_margin_VA": 13249.281938878667,
+        "converter_current_margin_A": 30.0056978996263,
+        "exact_current_replay_error_A": 7.926020711818986e-07,
+        "max_equality_residual_raw_units": 2.3740052184020124e-12,
+        "max_inequality_violation_raw_units": 0.0,
+        "worst_equality_prefix": "-_[168]\u00b2 - _[169]\u00b2 + 2500 _[170]\u00b2 = 0",
+        "worst_equality_length": 37,
+        "worst_equality_sha256": "fbd50a7fdaa52c089d1f1b21f32feba482722c41a425fd405a081bf1f132af6e",
+        "complementarity_error": 1.3260301606470815e-08
+      }
+    },
+    {
+      "method": "MPCC / CCOpt 0.1.0",
+      "configuration": {
+        "case": "apparent_power_saturation",
+        "s_base": 1000000.0,
+        "selection_objective": "loss"
+      },
+      "termination_status": "ALMOST_LOCALLY_SOLVED",
+      "primal_status": "NEARLY_FEASIBLE_POINT",
+      "strict_solver_success": false,
+      "candidate_available": true,
+      "solver_options": {
+        "max_iter": 500,
+        "tol": 1e-08
+      },
+      "solver_detail_errors": {
+        "raw_solver_status": "FieldError: type CCOpt.RelaxationSolver has no field `opt`, available fields: `mpcc`, `rnlp`, `ipm`, `logger`, `iterate_logger`, `opts`, `cnt`, `inf_pr_cc`, `_cc1`, `multipliers_cc1`, `multipliers_cc2`, `ind_cc1`, `ind_cc2`, `ind_cc1_lb`, `ind_cc2_lb`, `x`, `b`"
+      },
+      "metrics": {
+        "converter_apparent_power_margin_VA": 0.0002470565041221562,
+        "converter_current_margin_A": 28.463983045006096,
+        "exact_current_replay_error_A": 3.5625601135791385e-07,
+        "max_equality_residual_raw_units": 1.6742566823870216e-15,
+        "max_inequality_violation_raw_units": 0.0,
+        "worst_equality_prefix": "20 _[54] - 20 _[56] + _[60] + _[66] - _[67] = 0",
+        "worst_equality_length": 47,
+        "worst_equality_sha256": "80ffc459465e1b3aca3e07d35aab7fffca2f60c211e43f8bc661465b435ef9fc",
+        "complementarity_error": 1.545757824476294e-08
+      }
+    },
+    {
+      "method": "MPCC / CCOpt 0.1.0",
+      "configuration": {
+        "case": "lcl_grid_target",
+        "s_base": 1000000.0,
+        "selection_objective": "loss"
+      },
+      "termination_status": "LOCALLY_INFEASIBLE",
+      "primal_status": "INFEASIBLE_POINT",
+      "strict_solver_success": false,
+      "candidate_available": true,
+      "solver_options": {
+        "max_iter": 500,
+        "tol": 1e-08
+      },
+      "solver_detail_errors": {
+        "raw_solver_status": "FieldError: type CCOpt.RelaxationSolver has no field `opt`, available fields: `mpcc`, `rnlp`, `ipm`, `logger`, `iterate_logger`, `opts`, `cnt`, `inf_pr_cc`, `_cc1`, `multipliers_cc1`, `multipliers_cc2`, `ind_cc1`, `ind_cc2`, `ind_cc1_lb`, `ind_cc2_lb`, `x`, `b`"
+      },
+      "metrics": {
+        "converter_apparent_power_margin_VA": 10854.672078809685,
+        "converter_current_margin_A": 26.813466254934234,
+        "exact_current_replay_error_A": 0.00018894100423777444,
+        "max_equality_residual_raw_units": 6.747254823323466e-10,
+        "max_inequality_violation_raw_units": 0.0,
+        "worst_equality_prefix": "cii_comparison_a - 0.000498559682804311 vrmid_comparison_a - 2.3494071553111217e-6 vimid_comparison_a - gii_comparison_a = 0",
+        "worst_equality_length": 124,
+        "worst_equality_sha256": "0a55e70900514ca79fbd1d22fe3a31c48da05b989101182204bcafd8c50a5429",
+        "complementarity_error": 1.4901166722788926e-06
+      }
+    },
+    {
+      "method": "MPCC / CCOpt tighter relaxation",
+      "configuration": {
+        "case": "balanced_constant",
+        "s_base": 1000000.0,
+        "selection_objective": "loss"
+      },
+      "termination_status": "LOCALLY_INFEASIBLE",
+      "primal_status": "INFEASIBLE_POINT",
+      "strict_solver_success": false,
+      "candidate_available": true,
+      "solver_options": {
+        "bound_relax_factor": 1e-12,
+        "max_iter": 500,
+        "tol": 1e-09,
+        "relaxation_update": {
+          "monotone": false,
+          "sigma_min": 1e-14,
+          "sigma_mu_exp": 1.0,
+          "sigma_mu_ratio": 0.0001,
+          "type": "CCOpt.ProportionalRelaxationUpdate"
+        }
+      },
+      "solver_detail_errors": {
+        "raw_solver_status": "FieldError: type CCOpt.RelaxationSolver has no field `opt`, available fields: `mpcc`, `rnlp`, `ipm`, `logger`, `iterate_logger`, `opts`, `cnt`, `inf_pr_cc`, `_cc1`, `multipliers_cc1`, `multipliers_cc2`, `ind_cc1`, `ind_cc2`, `ind_cc1_lb`, `ind_cc2_lb`, `x`, `b`"
+      },
+      "metrics": {
+        "converter_apparent_power_margin_VA": 7954.4406085188,
+        "converter_current_margin_A": 22.67427859841233,
+        "exact_current_replay_error_A": 2.8006041950290156e-11,
+        "max_equality_residual_raw_units": 1.0162989008919799e-13,
+        "max_inequality_violation_raw_units": 6.677678988164382e-14,
+        "worst_equality_prefix": "-_[121]\u00b2 - _[122]\u00b2 + 2500 _[123]\u00b2 = 0",
+        "worst_equality_length": 37,
+        "worst_equality_sha256": "aada52c6a2545bdb3a0fd8eea7b03ae90aca9c72df4e465bf74b38a7d44ac971",
+        "complementarity_error": 5.667424596849625e-13
+      }
+    },
+    {
+      "method": "MPCC / CCOpt tighter relaxation",
+      "configuration": {
+        "case": "balanced_curve",
+        "s_base": 1000000.0,
+        "selection_objective": "loss"
+      },
+      "termination_status": "LOCALLY_SOLVED",
+      "primal_status": "FEASIBLE_POINT",
+      "strict_solver_success": true,
+      "candidate_available": true,
+      "solver_options": {
+        "bound_relax_factor": 1e-12,
+        "max_iter": 500,
+        "tol": 1e-09,
+        "relaxation_update": {
+          "monotone": false,
+          "sigma_min": 1e-14,
+          "sigma_mu_exp": 1.0,
+          "sigma_mu_ratio": 0.0001,
+          "type": "CCOpt.ProportionalRelaxationUpdate"
+        }
+      },
+      "solver_detail_errors": {
+        "raw_solver_status": "FieldError: type CCOpt.RelaxationSolver has no field `opt`, available fields: `mpcc`, `rnlp`, `ipm`, `logger`, `iterate_logger`, `opts`, `cnt`, `inf_pr_cc`, `_cc1`, `multipliers_cc1`, `multipliers_cc2`, `ind_cc1`, `ind_cc2`, `ind_cc1_lb`, `ind_cc2_lb`, `x`, `b`"
+      },
+      "metrics": {
+        "converter_apparent_power_margin_VA": 7954.440608520217,
+        "converter_current_margin_A": 22.674278598446968,
+        "exact_current_replay_error_A": 3.003631526461179e-11,
+        "max_equality_residual_raw_units": 2.6645352591003757e-15,
+        "max_inequality_violation_raw_units": 2.849713086413246e-13,
+        "worst_equality_prefix": "-2066.947312881757 vrint_comparison_a*cri_comparison_a + 2066.947312881757 viint_comparison_a*cii_comparison_a - 2066.947312881757 vrint_comparison_b*cri_comparison_b + 2066.947312881757 viint_comparison_b*cii_comparison_b - 2066.9473128817",
+        "worst_equality_length": 355,
+        "worst_equality_sha256": "08f5c4bb8e11a91a36a66a77479f3377efd2545e640b432c694bd7cc2c8cd782",
+        "complementarity_error": 6.611837394020101e-13
+      }
+    },
+    {
+      "method": "MPCC / CCOpt tighter relaxation",
+      "configuration": {
+        "case": "unbalanced_droop",
+        "s_base": 1000000.0,
+        "selection_objective": "loss"
+      },
+      "termination_status": "NUMERICAL_ERROR",
+      "primal_status": "UNKNOWN_RESULT_STATUS",
+      "strict_solver_success": false,
+      "candidate_available": true,
+      "solver_options": {
+        "bound_relax_factor": 1e-12,
+        "max_iter": 500,
+        "tol": 1e-09,
+        "relaxation_update": {
+          "monotone": false,
+          "sigma_min": 1e-14,
+          "sigma_mu_exp": 1.0,
+          "sigma_mu_ratio": 0.0001,
+          "type": "CCOpt.ProportionalRelaxationUpdate"
+        }
+      },
+      "solver_detail_errors": {
+        "raw_solver_status": "FieldError: type CCOpt.RelaxationSolver has no field `opt`, available fields: `mpcc`, `rnlp`, `ipm`, `logger`, `iterate_logger`, `opts`, `cnt`, `inf_pr_cc`, `_cc1`, `multipliers_cc1`, `multipliers_cc2`, `ind_cc1`, `ind_cc2`, `ind_cc1_lb`, `ind_cc2_lb`, `x`, `b`"
+      },
+      "metrics": {
+        "converter_apparent_power_margin_VA": 13249.281443663087,
+        "converter_current_margin_A": 30.00569717055798,
+        "exact_current_replay_error_A": 1.3017298291698744e-08,
+        "max_equality_residual_raw_units": 2.8016587065497515e-12,
+        "max_inequality_violation_raw_units": 0.0,
+        "worst_equality_prefix": "-_[168]\u00b2 - _[169]\u00b2 + 2500 _[170]\u00b2 = 0",
+        "worst_equality_length": 37,
+        "worst_equality_sha256": "fbd50a7fdaa52c089d1f1b21f32feba482722c41a425fd405a081bf1f132af6e",
+        "complementarity_error": 1.237891739283841e-10
+      }
+    },
+    {
+      "method": "MPCC / CCOpt tighter relaxation",
+      "configuration": {
+        "case": "apparent_power_saturation",
+        "s_base": 1000000.0,
+        "selection_objective": "loss"
+      },
+      "termination_status": "LOCALLY_SOLVED",
+      "primal_status": "FEASIBLE_POINT",
+      "strict_solver_success": true,
+      "candidate_available": true,
+      "solver_options": {
+        "bound_relax_factor": 1e-12,
+        "max_iter": 500,
+        "tol": 1e-09,
+        "relaxation_update": {
+          "monotone": false,
+          "sigma_min": 1e-14,
+          "sigma_mu_exp": 1.0,
+          "sigma_mu_ratio": 0.0001,
+          "type": "CCOpt.ProportionalRelaxationUpdate"
+        }
+      },
+      "solver_detail_errors": {
+        "raw_solver_status": "FieldError: type CCOpt.RelaxationSolver has no field `opt`, available fields: `mpcc`, `rnlp`, `ipm`, `logger`, `iterate_logger`, `opts`, `cnt`, `inf_pr_cc`, `_cc1`, `multipliers_cc1`, `multipliers_cc2`, `ind_cc1`, `ind_cc2`, `ind_cc1_lb`, `ind_cc2_lb`, `x`, `b`"
+      },
+      "metrics": {
+        "converter_apparent_power_margin_VA": 5.812580639030784e-09,
+        "converter_current_margin_A": 28.4639826905472,
+        "exact_current_replay_error_A": 8.383214612414073e-12,
+        "max_equality_residual_raw_units": 4.440892098500626e-16,
+        "max_inequality_violation_raw_units": 1.7518617639300125e-13,
+        "worst_equality_prefix": "2066.947312881757 vrint_comparison_a*cii_comparison_a + 2066.947312881757 viint_comparison_a*cri_comparison_a + 2066.947312881757 vrint_comparison_b*cii_comparison_b + 2066.947312881757 viint_comparison_b*cri_comparison_b + 2066.94731288175",
+        "worst_equality_length": 354,
+        "worst_equality_sha256": "04d236b42efd8cb1f0ddd8ffb5070a54e7ce017c5e70c068856d3b3aa38703da",
+        "complementarity_error": 6.705435786611023e-13
+      }
+    },
+    {
+      "method": "MPCC / CCOpt tighter relaxation",
+      "configuration": {
+        "case": "lcl_grid_target",
+        "s_base": 1000000.0,
+        "selection_objective": "loss"
+      },
+      "termination_status": "LOCALLY_INFEASIBLE",
+      "primal_status": "INFEASIBLE_POINT",
+      "strict_solver_success": false,
+      "candidate_available": true,
+      "solver_options": {
+        "bound_relax_factor": 1e-12,
+        "max_iter": 500,
+        "tol": 1e-09,
+        "relaxation_update": {
+          "monotone": false,
+          "sigma_min": 1e-14,
+          "sigma_mu_exp": 1.0,
+          "sigma_mu_ratio": 0.0001,
+          "type": "CCOpt.ProportionalRelaxationUpdate"
+        }
+      },
+      "solver_detail_errors": {
+        "raw_solver_status": "FieldError: type CCOpt.RelaxationSolver has no field `opt`, available fields: `mpcc`, `rnlp`, `ipm`, `logger`, `iterate_logger`, `opts`, `cnt`, `inf_pr_cc`, `_cc1`, `multipliers_cc1`, `multipliers_cc2`, `ind_cc1`, `ind_cc2`, `ind_cc1_lb`, `ind_cc2_lb`, `x`, `b`"
+      },
+      "metrics": {
+        "converter_apparent_power_margin_VA": 10854.542532418895,
+        "converter_current_margin_A": 26.813279978035702,
+        "exact_current_replay_error_A": 8.053824274191933e-11,
+        "max_equality_residual_raw_units": 1.0427194287113143e-09,
+        "max_inequality_violation_raw_units": 0.0,
+        "worst_equality_prefix": "cii_comparison_a - 0.000498559682804311 vrmid_comparison_a - 2.3494071553111217e-6 vimid_comparison_a - gii_comparison_a = 0",
+        "worst_equality_length": 124,
+        "worst_equality_sha256": "0a55e70900514ca79fbd1d22fe3a31c48da05b989101182204bcafd8c50a5429",
+        "complementarity_error": 9.82755813401722e-13
+      }
+    },
+    {
+      "method": "smooth / MadNLP zero bound relaxation",
+      "configuration": {
+        "case": "balanced_constant",
+        "s_base": 1000000.0,
+        "selection_objective": "loss"
+      },
+      "termination_status": "LOCALLY_INFEASIBLE",
+      "primal_status": "INFEASIBLE_POINT",
+      "strict_solver_success": false,
+      "candidate_available": true,
+      "solver_options": {
+        "bound_relax_factor": 0.0,
+        "max_iter": 500,
+        "tol": 1e-08
+      },
+      "solver_detail_errors": {},
+      "metrics": {
+        "converter_apparent_power_margin_VA": 7954.757313760121,
+        "converter_current_margin_A": 22.674730694710465,
+        "exact_current_replay_error_A": 0.0004537926435939288,
+        "max_equality_residual_raw_units": 1.7763568394002505e-15,
+        "max_inequality_violation_raw_units": 0.0,
+        "worst_equality_prefix": "-2066.947312881757 vrint_comparison_a*cri_comparison_a + 2066.947312881757 viint_comparison_a*cii_comparison_a - 2066.947312881757 vrint_comparison_b*cri_comparison_b + 2066.947312881757 viint_comparison_b*cii_comparison_b - 2066.9473128817",
+        "worst_equality_length": 355,
+        "worst_equality_sha256": "08f5c4bb8e11a91a36a66a77479f3377efd2545e640b432c694bd7cc2c8cd782",
+        "complementarity_error": null
+      }
+    },
+    {
+      "method": "smooth / MadNLP zero bound relaxation",
+      "configuration": {
+        "case": "balanced_curve",
+        "s_base": 1000000.0,
+        "selection_objective": "loss"
+      },
+      "termination_status": "LOCALLY_INFEASIBLE",
+      "primal_status": "INFEASIBLE_POINT",
+      "strict_solver_success": false,
+      "candidate_available": true,
+      "solver_options": {
+        "bound_relax_factor": 0.0,
+        "max_iter": 500,
+        "tol": 1e-08
+      },
+      "solver_detail_errors": {},
+      "metrics": {
+        "converter_apparent_power_margin_VA": 7954.7573137601175,
+        "converter_current_margin_A": 22.674730694710462,
+        "exact_current_replay_error_A": 0.00045379264358771156,
+        "max_equality_residual_raw_units": 1.7763568394002505e-15,
+        "max_inequality_violation_raw_units": 0.0,
+        "worst_equality_prefix": "2066.947312881757 vrint_comparison_a*cii_comparison_a + 2066.947312881757 viint_comparison_a*cri_comparison_a + 2066.947312881757 vrint_comparison_b*cii_comparison_b + 2066.947312881757 viint_comparison_b*cri_comparison_b + 2066.94731288175",
+        "worst_equality_length": 354,
+        "worst_equality_sha256": "04d236b42efd8cb1f0ddd8ffb5070a54e7ce017c5e70c068856d3b3aa38703da",
+        "complementarity_error": null
+      }
+    },
+    {
+      "method": "smooth / MadNLP zero bound relaxation",
+      "configuration": {
+        "case": "unbalanced_droop",
+        "s_base": 1000000.0,
+        "selection_objective": "loss"
+      },
+      "termination_status": "LOCALLY_INFEASIBLE",
+      "primal_status": "INFEASIBLE_POINT",
+      "strict_solver_success": false,
+      "candidate_available": true,
+      "solver_options": {
+        "bound_relax_factor": 0.0,
+        "max_iter": 500,
+        "tol": 1e-08
+      },
+      "solver_detail_errors": {},
+      "metrics": {
+        "converter_apparent_power_margin_VA": 13249.447425173958,
+        "converter_current_margin_A": 30.00594219342282,
+        "exact_current_replay_error_A": 0.00026194171239497316,
+        "max_equality_residual_raw_units": 1.1657341758564144e-15,
+        "max_inequality_violation_raw_units": 0.0,
+        "worst_equality_prefix": "_[67] - ((sqrt((((((0 + ((vrint_comparison_a * (((0.0098 / ((((((((((((0.0098 _[58] + 0.0098) + sqrt(9.604e-5 _[58]\u00b2 - 0.00019208 _[58] + 9.604000006002499e-5)) / 2) * 1) + (0.0098 _[59])) + sqrt(((((((0.0098 _[58] + 0.0098) + sqrt(9.604e-5",
+        "worst_equality_length": 561127,
+        "worst_equality_sha256": "50219292188b29a65e4792d0e55e9bdada102f8499dee24446f3cc7df896bc6e",
+        "complementarity_error": null
+      }
+    },
+    {
+      "method": "smooth / MadNLP zero bound relaxation",
+      "configuration": {
+        "case": "apparent_power_saturation",
+        "s_base": 1000000.0,
+        "selection_objective": "loss"
+      },
+      "termination_status": "LOCALLY_SOLVED",
+      "primal_status": "FEASIBLE_POINT",
+      "strict_solver_success": true,
+      "candidate_available": true,
+      "solver_options": {
+        "bound_relax_factor": 0.0,
+        "max_iter": 500,
+        "tol": 1e-08
+      },
+      "solver_detail_errors": {},
+      "metrics": {
+        "converter_apparent_power_margin_VA": 4.418325261212885e-09,
+        "converter_current_margin_A": 28.46398269054278,
+        "exact_current_replay_error_A": 6.830534678638181e-12,
+        "max_equality_residual_raw_units": 1.106004177131581e-11,
+        "max_inequality_violation_raw_units": 0.0,
+        "worst_equality_prefix": "-vr_poc_a\u00b2 + 2 vr_poc_n*vr_poc_a - vi_poc_a\u00b2 + 2 vi_poc_n*vi_poc_a - vr_poc_n\u00b2 - vi_poc_n\u00b2 + _[54]\u00b2 = 0",
+        "worst_equality_length": 103,
+        "worst_equality_sha256": "cfd8a33c20463271744f18357ed1933670808b38af9f4baedde4d24468ddc4a1",
+        "complementarity_error": null
+      }
+    },
+    {
+      "method": "smooth / MadNLP zero bound relaxation",
+      "configuration": {
+        "case": "lcl_grid_target",
+        "s_base": 1000000.0,
+        "selection_objective": "loss"
+      },
+      "termination_status": "LOCALLY_SOLVED",
+      "primal_status": "FEASIBLE_POINT",
+      "strict_solver_success": true,
+      "candidate_available": true,
+      "solver_options": {
+        "bound_relax_factor": 0.0,
+        "max_iter": 500,
+        "tol": 1e-08
+      },
+      "solver_detail_errors": {},
+      "metrics": {
+        "converter_apparent_power_margin_VA": 10854.89664604664,
+        "converter_current_margin_A": 26.813789301236653,
+        "exact_current_replay_error_A": 0.0005142942364344159,
+        "max_equality_residual_raw_units": 2.257061119599047e-09,
+        "max_inequality_violation_raw_units": 0.0,
+        "worst_equality_prefix": "cii_comparison_a - 0.000498559682804311 vrmid_comparison_a - 2.3494071553111217e-6 vimid_comparison_a - gii_comparison_a = 0",
+        "worst_equality_length": 124,
+        "worst_equality_sha256": "0a55e70900514ca79fbd1d22fe3a31c48da05b989101182204bcafd8c50a5429",
+        "complementarity_error": null
+      }
+    },
+    {
+      "method": "MPCC / CCOpt zero bound relaxation",
+      "configuration": {
+        "case": "balanced_constant",
+        "s_base": 1000000.0,
+        "selection_objective": "loss"
+      },
+      "termination_status": "LOCALLY_INFEASIBLE",
+      "primal_status": "INFEASIBLE_POINT",
+      "strict_solver_success": false,
+      "candidate_available": true,
+      "solver_options": {
+        "bound_relax_factor": 0.0,
+        "max_iter": 500,
+        "tol": 1e-08
+      },
+      "solver_detail_errors": {
+        "raw_solver_status": "FieldError: type CCOpt.RelaxationSolver has no field `opt`, available fields: `mpcc`, `rnlp`, `ipm`, `logger`, `iterate_logger`, `opts`, `cnt`, `inf_pr_cc`, `_cc1`, `multipliers_cc1`, `multipliers_cc2`, `ind_cc1`, `ind_cc2`, `ind_cc1_lb`, `ind_cc2_lb`, `x`, `b`"
+      },
+      "metrics": {
+        "converter_apparent_power_margin_VA": 7963.756086130676,
+        "converter_current_margin_A": 22.687576504001512,
+        "exact_current_replay_error_A": 0.013347801961650418,
+        "max_equality_residual_raw_units": 2.8016854209095742e-12,
+        "max_inequality_violation_raw_units": 0.0,
+        "worst_equality_prefix": "-_[121]\u00b2 - _[122]\u00b2 + 2500 _[123]\u00b2 = 0",
+        "worst_equality_length": 37,
+        "worst_equality_sha256": "aada52c6a2545bdb3a0fd8eea7b03ae90aca9c72df4e465bf74b38a7d44ac971",
+        "complementarity_error": 0.00011586843167199121
+      }
+    },
+    {
+      "method": "MPCC / CCOpt zero bound relaxation",
+      "configuration": {
+        "case": "balanced_curve",
+        "s_base": 1000000.0,
+        "selection_objective": "loss"
+      },
+      "termination_status": "LOCALLY_SOLVED",
+      "primal_status": "FEASIBLE_POINT",
+      "strict_solver_success": true,
+      "candidate_available": true,
+      "solver_options": {
+        "bound_relax_factor": 0.0,
+        "max_iter": 500,
+        "tol": 1e-08
+      },
+      "solver_detail_errors": {
+        "raw_solver_status": "FieldError: type CCOpt.RelaxationSolver has no field `opt`, available fields: `mpcc`, `rnlp`, `ipm`, `logger`, `iterate_logger`, `opts`, `cnt`, `inf_pr_cc`, `_cc1`, `multipliers_cc1`, `multipliers_cc2`, `ind_cc1`, `ind_cc2`, `ind_cc1_lb`, `ind_cc2_lb`, `x`, `b`"
+      },
+      "metrics": {
+        "converter_apparent_power_margin_VA": 7954.443585753272,
+        "converter_current_margin_A": 22.674282848441933,
+        "exact_current_replay_error_A": 4.2659717962578725e-06,
+        "max_equality_residual_raw_units": 1.7466487800493065e-15,
+        "max_inequality_violation_raw_units": 0.0,
+        "worst_equality_prefix": "19.166666666666664 _[54] - 19.166666666666664 _[55] + _[57] - _[58] = 0",
+        "worst_equality_length": 71,
+        "worst_equality_sha256": "d4b166e5c9ee9a26c460271f9c960e5db5feba3f16e60e72e4a0d6f797ade486",
+        "complementarity_error": 9.736408237844317e-09
+      }
+    },
+    {
+      "method": "MPCC / CCOpt zero bound relaxation",
+      "configuration": {
+        "case": "unbalanced_droop",
+        "s_base": 1000000.0,
+        "selection_objective": "loss"
+      },
+      "termination_status": "LOCALLY_INFEASIBLE",
+      "primal_status": "INFEASIBLE_POINT",
+      "strict_solver_success": false,
+      "candidate_available": true,
+      "solver_options": {
+        "bound_relax_factor": 0.0,
+        "max_iter": 500,
+        "tol": 1e-08
+      },
+      "solver_detail_errors": {
+        "raw_solver_status": "FieldError: type CCOpt.RelaxationSolver has no field `opt`, available fields: `mpcc`, `rnlp`, `ipm`, `logger`, `iterate_logger`, `opts`, `cnt`, `inf_pr_cc`, `_cc1`, `multipliers_cc1`, `multipliers_cc2`, `ind_cc1`, `ind_cc2`, `ind_cc1_lb`, `ind_cc2_lb`, `x`, `b`"
+      },
+      "metrics": {
+        "converter_apparent_power_margin_VA": 13249.360597464154,
+        "converter_current_margin_A": 30.0058136598223,
+        "exact_current_replay_error_A": 0.00012457889247918818,
+        "max_equality_residual_raw_units": 2.801685352252065e-12,
+        "max_inequality_violation_raw_units": 0.0,
+        "worst_equality_prefix": "-_[168]\u00b2 - _[169]\u00b2 + 2500 _[170]\u00b2 = 0",
+        "worst_equality_length": 37,
+        "worst_equality_sha256": "fbd50a7fdaa52c089d1f1b21f32feba482722c41a425fd405a081bf1f132af6e",
+        "complementarity_error": 1.2641853977401365e-06
+      }
+    },
+    {
+      "method": "MPCC / CCOpt zero bound relaxation",
+      "configuration": {
+        "case": "apparent_power_saturation",
+        "s_base": 1000000.0,
+        "selection_objective": "loss"
+      },
+      "termination_status": "SLOW_PROGRESS",
+      "primal_status": "UNKNOWN_RESULT_STATUS",
+      "strict_solver_success": false,
+      "candidate_available": true,
+      "solver_options": {
+        "bound_relax_factor": 0.0,
+        "max_iter": 500,
+        "tol": 1e-08
+      },
+      "solver_detail_errors": {
+        "raw_solver_status": "FieldError: type CCOpt.RelaxationSolver has no field `opt`, available fields: `mpcc`, `rnlp`, `ipm`, `logger`, `iterate_logger`, `opts`, `cnt`, `inf_pr_cc`, `_cc1`, `multipliers_cc1`, `multipliers_cc2`, `ind_cc1`, `ind_cc2`, `ind_cc1_lb`, `ind_cc2_lb`, `x`, `b`"
+      },
+      "metrics": {
+        "converter_apparent_power_margin_VA": 0.015473391078558052,
+        "converter_current_margin_A": 28.464004891169566,
+        "exact_current_replay_error_A": 2.231266363139639e-05,
+        "max_equality_residual_raw_units": 3.593984513220779e-14,
+        "max_inequality_violation_raw_units": 0.0,
+        "worst_equality_prefix": "-_[121]\u00b2 - _[122]\u00b2 + 15625 _[123]\u00b2 = 0",
+        "worst_equality_length": 38,
+        "worst_equality_sha256": "9f0e66d2e683d574412880a8b5fba1f54625b5b43387dad90bca1bf774b165fb",
+        "complementarity_error": 1.833602231614328e-06
+      }
+    },
+    {
+      "method": "MPCC / CCOpt zero bound relaxation",
+      "configuration": {
+        "case": "lcl_grid_target",
+        "s_base": 1000000.0,
+        "selection_objective": "loss"
+      },
+      "termination_status": "LOCALLY_INFEASIBLE",
+      "primal_status": "INFEASIBLE_POINT",
+      "strict_solver_success": false,
+      "candidate_available": true,
+      "solver_options": {
+        "bound_relax_factor": 0.0,
+        "max_iter": 500,
+        "tol": 1e-08
+      },
+      "solver_detail_errors": {
+        "raw_solver_status": "FieldError: type CCOpt.RelaxationSolver has no field `opt`, available fields: `mpcc`, `rnlp`, `ipm`, `logger`, `iterate_logger`, `opts`, `cnt`, `inf_pr_cc`, `_cc1`, `multipliers_cc1`, `multipliers_cc2`, `ind_cc1`, `ind_cc2`, `ind_cc1_lb`, `ind_cc2_lb`, `x`, `b`"
+      },
+      "metrics": {
+        "converter_apparent_power_margin_VA": 10854.54300287627,
+        "converter_current_margin_A": 26.813281404328546,
+        "exact_current_replay_error_A": 9.941608640078061e-07,
+        "max_equality_residual_raw_units": 8.708762899191369e-10,
+        "max_inequality_violation_raw_units": 0.0,
+        "worst_equality_prefix": "gii_comparison_c - ((((0.8660254037844386 * (_[192]) * (0.00805 / (0.00805 _[94] + 0.00805 _[97] + 0.00805 _[100] + 0.00805)) * (((((0.02 / (0.02 _[82] + 0.02)) * 0.009) * (0.3333333333333333 vr_poc_a - 0.16666666666666666 vr_poc_b - 0.2886",
+        "worst_equality_length": 2586,
+        "worst_equality_sha256": "833d6ff1028401a43acc9d4dee891570fa0e5f3e38aa993ce02744e867fe3ba1",
+        "complementarity_error": 6.777641473240396e-09
+      }
+    },
+    {
+      "method": "MPCC / CCOpt tighter relaxation with zero bounds",
+      "configuration": {
+        "case": "balanced_constant",
+        "s_base": 1000000.0,
+        "selection_objective": "loss"
+      },
+      "termination_status": "LOCALLY_INFEASIBLE",
+      "primal_status": "INFEASIBLE_POINT",
+      "strict_solver_success": false,
+      "candidate_available": true,
+      "solver_options": {
+        "bound_relax_factor": 0.0,
+        "max_iter": 500,
+        "tol": 1e-09,
+        "relaxation_update": {
+          "monotone": false,
+          "sigma_min": 1e-14,
+          "sigma_mu_exp": 1.0,
+          "sigma_mu_ratio": 0.0001,
+          "type": "CCOpt.ProportionalRelaxationUpdate"
+        }
+      },
+      "solver_detail_errors": {
+        "raw_solver_status": "FieldError: type CCOpt.RelaxationSolver has no field `opt`, available fields: `mpcc`, `rnlp`, `ipm`, `logger`, `iterate_logger`, `opts`, `cnt`, `inf_pr_cc`, `_cc1`, `multipliers_cc1`, `multipliers_cc2`, `ind_cc1`, `ind_cc2`, `ind_cc1_lb`, `ind_cc2_lb`, `x`, `b`"
+      },
+      "metrics": {
+        "converter_apparent_power_margin_VA": 7954.569539280155,
+        "converter_current_margin_A": 22.674462646895226,
+        "exact_current_replay_error_A": 0.0001847390625844143,
+        "max_equality_residual_raw_units": 2.4229409048455157e-13,
+        "max_inequality_violation_raw_units": 0.0,
+        "worst_equality_prefix": "-_[121]\u00b2 - _[122]\u00b2 + 2500 _[123]\u00b2 = 0",
+        "worst_equality_length": 37,
+        "worst_equality_sha256": "aada52c6a2545bdb3a0fd8eea7b03ae90aca9c72df4e465bf74b38a7d44ac971",
+        "complementarity_error": 1.333333333347785e-06
+      }
+    },
+    {
+      "method": "MPCC / CCOpt tighter relaxation with zero bounds",
+      "configuration": {
+        "case": "balanced_curve",
+        "s_base": 1000000.0,
+        "selection_objective": "loss"
+      },
+      "termination_status": "LOCALLY_INFEASIBLE",
+      "primal_status": "INFEASIBLE_POINT",
+      "strict_solver_success": false,
+      "candidate_available": true,
+      "solver_options": {
+        "bound_relax_factor": 0.0,
+        "max_iter": 500,
+        "tol": 1e-09,
+        "relaxation_update": {
+          "monotone": false,
+          "sigma_min": 1e-14,
+          "sigma_mu_exp": 1.0,
+          "sigma_mu_ratio": 0.0001,
+          "type": "CCOpt.ProportionalRelaxationUpdate"
+        }
+      },
+      "solver_detail_errors": {
+        "raw_solver_status": "FieldError: type CCOpt.RelaxationSolver has no field `opt`, available fields: `mpcc`, `rnlp`, `ipm`, `logger`, `iterate_logger`, `opts`, `cnt`, `inf_pr_cc`, `_cc1`, `multipliers_cc1`, `multipliers_cc2`, `ind_cc1`, `ind_cc2`, `ind_cc1_lb`, `ind_cc2_lb`, `x`, `b`"
+      },
+      "metrics": {
+        "converter_apparent_power_margin_VA": 7954.4415790823205,
+        "converter_current_margin_A": 22.674279983922492,
+        "exact_current_replay_error_A": 1.390704305492818e-06,
+        "max_equality_residual_raw_units": 1.2205237723465824e-13,
+        "max_inequality_violation_raw_units": 0.0,
+        "worst_equality_prefix": "-_[128]\u00b2 - _[129]\u00b2 + 2500 _[130]\u00b2 = 0",
+        "worst_equality_length": 37,
+        "worst_equality_sha256": "6272153077ca45c8ee31fb828bf61b7e7ce952c590f25d03e09dde56d7c80baa",
+        "complementarity_error": 1.1280223894282087e-08
+      }
+    },
+    {
+      "method": "MPCC / CCOpt tighter relaxation with zero bounds",
+      "configuration": {
+        "case": "unbalanced_droop",
+        "s_base": 1000000.0,
+        "selection_objective": "loss"
+      },
+      "termination_status": "ITERATION_LIMIT",
+      "primal_status": "UNKNOWN_RESULT_STATUS",
+      "strict_solver_success": false,
+      "candidate_available": true,
+      "solver_options": {
+        "bound_relax_factor": 0.0,
+        "max_iter": 500,
+        "tol": 1e-09,
+        "relaxation_update": {
+          "monotone": false,
+          "sigma_min": 1e-14,
+          "sigma_mu_exp": 1.0,
+          "sigma_mu_ratio": 0.0001,
+          "type": "CCOpt.ProportionalRelaxationUpdate"
+        }
+      },
+      "solver_detail_errors": {
+        "raw_solver_status": "FieldError: type CCOpt.RelaxationSolver has no field `opt`, available fields: `mpcc`, `rnlp`, `ipm`, `logger`, `iterate_logger`, `opts`, `cnt`, `inf_pr_cc`, `_cc1`, `multipliers_cc1`, `multipliers_cc2`, `ind_cc1`, `ind_cc2`, `ind_cc1_lb`, `ind_cc2_lb`, `x`, `b`"
+      },
+      "metrics": {
+        "converter_apparent_power_margin_VA": 13249.28209894583,
+        "converter_current_margin_A": 30.00569813498668,
+        "exact_current_replay_error_A": 1.0443056577774517e-06,
+        "max_equality_residual_raw_units": 2.801704115926351e-12,
+        "max_inequality_violation_raw_units": 0.0,
+        "worst_equality_prefix": "-_[168]\u00b2 - _[169]\u00b2 + 2500 _[170]\u00b2 = 0",
+        "worst_equality_length": 37,
+        "worst_equality_sha256": "fbd50a7fdaa52c089d1f1b21f32feba482722c41a425fd405a081bf1f132af6e",
+        "complementarity_error": 1.0028283529475066e-08
+      }
+    },
+    {
+      "method": "MPCC / CCOpt tighter relaxation with zero bounds",
+      "configuration": {
+        "case": "apparent_power_saturation",
+        "s_base": 1000000.0,
+        "selection_objective": "loss"
+      },
+      "termination_status": "LOCALLY_INFEASIBLE",
+      "primal_status": "INFEASIBLE_POINT",
+      "strict_solver_success": false,
+      "candidate_available": true,
+      "solver_options": {
+        "bound_relax_factor": 0.0,
+        "max_iter": 500,
+        "tol": 1e-09,
+        "relaxation_update": {
+          "monotone": false,
+          "sigma_min": 1e-14,
+          "sigma_mu_exp": 1.0,
+          "sigma_mu_ratio": 0.0001,
+          "type": "CCOpt.ProportionalRelaxationUpdate"
+        }
+      },
+      "solver_detail_errors": {
+        "raw_solver_status": "FieldError: type CCOpt.RelaxationSolver has no field `opt`, available fields: `mpcc`, `rnlp`, `ipm`, `logger`, `iterate_logger`, `opts`, `cnt`, `inf_pr_cc`, `_cc1`, `multipliers_cc1`, `multipliers_cc2`, `ind_cc1`, `ind_cc2`, `ind_cc1_lb`, `ind_cc2_lb`, `x`, `b`"
+      },
+      "metrics": {
+        "converter_apparent_power_margin_VA": 0.01920658313883905,
+        "converter_current_margin_A": 28.464010247411053,
+        "exact_current_replay_error_A": 2.769593477288471e-05,
+        "max_equality_residual_raw_units": 3.814136789443153e-13,
+        "max_inequality_violation_raw_units": 0.0,
+        "worst_equality_prefix": "-_[121]\u00b2 - _[122]\u00b2 + 15625 _[123]\u00b2 = 0",
+        "worst_equality_length": 38,
+        "worst_equality_sha256": "9f0e66d2e683d574412880a8b5fba1f54625b5b43387dad90bca1bf774b165fb",
+        "complementarity_error": 1.3333932517643498e-06
+      }
+    },
+    {
+      "method": "MPCC / CCOpt tighter relaxation with zero bounds",
+      "configuration": {
+        "case": "lcl_grid_target",
+        "s_base": 1000000.0,
+        "selection_objective": "loss"
+      },
+      "termination_status": "LOCALLY_INFEASIBLE",
+      "primal_status": "INFEASIBLE_POINT",
+      "strict_solver_success": false,
+      "candidate_available": true,
+      "solver_options": {
+        "bound_relax_factor": 0.0,
+        "max_iter": 500,
+        "tol": 1e-09,
+        "relaxation_update": {
+          "monotone": false,
+          "sigma_min": 1e-14,
+          "sigma_mu_exp": 1.0,
+          "sigma_mu_ratio": 0.0001,
+          "type": "CCOpt.ProportionalRelaxationUpdate"
+        }
+      },
+      "solver_detail_errors": {
+        "raw_solver_status": "FieldError: type CCOpt.RelaxationSolver has no field `opt`, available fields: `mpcc`, `rnlp`, `ipm`, `logger`, `iterate_logger`, `opts`, `cnt`, `inf_pr_cc`, `_cc1`, `multipliers_cc1`, `multipliers_cc2`, `ind_cc1`, `ind_cc2`, `ind_cc1_lb`, `ind_cc2_lb`, `x`, `b`"
+      },
+      "metrics": {
+        "converter_apparent_power_margin_VA": 10854.542532164804,
+        "converter_current_margin_A": 26.813279981526296,
+        "exact_current_replay_error_A": 4.879474602389777e-11,
+        "max_equality_residual_raw_units": 1.0424547824128092e-09,
+        "max_inequality_violation_raw_units": 0.0,
+        "worst_equality_prefix": "cii_comparison_a - 0.000498559682804311 vrmid_comparison_a - 2.3494071553111217e-6 vimid_comparison_a - gii_comparison_a = 0",
+        "worst_equality_length": 124,
+        "worst_equality_sha256": "0a55e70900514ca79fbd1d22fe3a31c48da05b989101182204bcafd8c50a5429",
+        "complementarity_error": 6.278947291409838e-13
+      }
+    }
+  ]
+}

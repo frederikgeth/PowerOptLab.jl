@@ -69,10 +69,12 @@ starts, a different objective, or extra model constraints.
 
 The recorded phasors are candidate POC quantities in volts and amperes. They can
 be present even for an unsuccessful solve. `pre_capability_target_gap_A` compares
-numeric exact and smooth controller targets at the **same candidate voltage**,
+numeric exact and encoded controller targets at the **same candidate voltage**,
 before the plant-specific capability backoff. It is neither the distance between
 two equilibria nor a residual of the complete plant/controller equations.
-Requested active/reactive powers are also reported. A custom metric callback
+For complementarity, this numeric-reference gap is zero by construction; the
+recorded `complementarity_error` is a separate candidate diagnostic, not a full
+firmware-replay certificate. Requested active/reactive powers are also reported. A custom metric callback
 `metrics(ctx, handles, device, request)` can add quantities relevant to your study;
 its record is kept under `metrics.custom`.
 
@@ -152,3 +154,86 @@ radicand floor. Neither is an algebraically neutral refactor. At zero the implic
 root may be degenerate, so this preservation is not a claim that all numerical
 conditioning issues are solved. Use a domain restriction only when it is part of
 the intended physical/control model, and document it as such.
+
+## Smooth and complementarity controller encodings
+
+A complete `SequenceController` now selects its encoding independently of the
+physical policy:
+
+```julia
+smooth_controller = SequenceController(policy; encoding=:smooth)
+mpcc_controller = SequenceController(policy; encoding=ComplementarityGraph())
+```
+
+Here `policy` can be the result of `lower_positive_policy(intent, encoding)`.
+Existing curve smoothing settings remain available for smooth replay; the MPCC
+controller uses their canonical breakpoint/value data. The complementarity path
+covers flat-tail curves, phase extrema, positive/negative parts, clipping, P/Q
+priority, exact norms, current limiting, and the final plant-capability backoff.
+`stamp_control!` dispatches on this choice, as does `stamp_device!` for a
+`ControlledDevice`. `stamp_smooth_control!` remains an explicitly smooth API.
+
+Both encodings retain the physical voltage floors, priority headroom reserve,
+and the `:dominant` conflict blend. Those define the firmware law and are not
+removed by selecting exact complementarity. `evaluate_exact` always replays that
+law; `evaluate_smooth` always replays its configured smooth approximation.
+Neither numeric evaluator solves the network.
+
+Exact magnitudes use nonnegative quadratic root equations. Their constraints can
+be degenerate at zero. At simultaneous zero headroom and zero requested direction,
+the capability scale can be nonunique, but the commanded current is zero. The
+priority power-scale diagnostic is likewise nonunique at zero P/Q; the power
+command is unique. These formulations do not establish uniqueness of an AC
+network equilibrium or MPCC stationarity.
+
+### Optional CCOpt backend
+
+Load the optional packages in the environment prepared by
+`scripts/formulations/setup.jl`. CCOpt is not a mandatory PowerOptLab dependency.
+The single-snapshot solver accepts a callback that installs bridges **before**
+optimizer attachment:
+
+```julia
+using MathOptComplements, NLPModelsJuMP, CCOpt
+controlled = ControlledDevice(plant, mpcc_controller)
+result = solve_controlled_inverter(network, controlled, request;
+    optimizer=CCOpt.Optimizer,
+    configure! = m -> MathOptComplements.Bridges.add_all_bridges(m),
+    solver_options=(tol=1e-9, max_iter=500, bound_relax_factor=1e-12,
+        relaxation_update=CCOpt.ProportionalRelaxationUpdate(
+            sigma_mu_ratio=1e-4, sigma_min=1e-14)))
+solve_status(result)
+solve_diagnostics(result).encoding_audit
+```
+
+This is the explicit tighter-relaxation configuration exercised by
+`scripts/formulations/inverter_controller_comparison.jl`. That script compares
+five complete controllers with smooth/Ipopt and smooth/MadNLP, records failures
+as well as successes, and runs in optional-backend CI. It does not guarantee
+convergence for an arbitrary network or controller.
+
+Solver tolerances and homotopy floors must be compatible with each other and
+with the required physical accuracy. In particular, a complementarity product
+bound of `τ` can permit errors of order `sqrt(τ)` at tied selectors. A small
+product alone does not certify accurate phase currents. The controller uses
+complementary simplex weights and nonnegative output slacks for exact max/min:
+`λ ⟂ (z-a)`, `(1-λ) ⟂ (z-b)`, `0 ≤ λ ≤ 1`. With exact defining equations
+and nonnegativity, normalized product errors bounded by `τ` imply an output error
+of at most `2τ*scale`, even at a tie. This improves the error bound but does not
+guarantee that an MPCC solver will converge. PowerOptLab passes
+solver options through unchanged and does not silently select another solver,
+relax its acceptance criteria, or retry.
+
+In addition to strict solver success, `solve_controlled_inverter` checks the
+finite complementarity products/nonnegativity and the exact firmware current
+replay at the **same solved phasors**, including the plant-capability backoff.
+`controller_tolerance` defaults to `1e-6`: the current-error limit is this value
+times the target current rating, and normalized complementarity error uses this
+value directly. `encoding_audit` records the checks. A failed check masks operating
+quantities and sets `publishable=false` even if the inner solver says
+`LOCALLY_SOLVED`. The historical field `exact_smooth_current_residual` is retained
+for both encodings and records the replay error in amperes.
+
+The callback and full encoding audit described here apply to the single-snapshot
+solver. Custom staged/fleet integrations must install their backend bridges and
+apply appropriate candidate acceptance checks themselves.

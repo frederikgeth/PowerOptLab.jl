@@ -60,7 +60,8 @@ oracle. A solver returning `LOCALLY_SOLVED` is necessary, but not sufficient.
 | Balanced AC topology reduction | one four-leg model versus three independent 1φ models | aggregate `P,Q` and per-phase current/internal voltage agree; neutral and zero sequence vanish |
 | Volt-watt external oracle | OpenDSS `PVSystem`/`InvControl` | balanced slope/saturation and a partial-irradiance rated-basis point agree in POC voltage and active power |
 
-These tests live in `test/advanced_inverter_tests.jl` and
+These tests live in `test/advanced_inverter_tests.jl`,
+`test/advanced_inverter_reliability_tests.jl`, and
 `test/inverter_control_tests.jl`. They intentionally include balanced cases,
 pure sequence excitations, strong mixed unbalance, and binding
 limits. A balanced feeder alone cannot validate a four-wire topology because it
@@ -234,17 +235,17 @@ and whether the DC source absorbs 2ω power.
 
 For every claimed boundary point:
 
-1. check the per-unit base against the device ratings. Ratings are stamped as
-   squared per-unit inequalities, and Ipopt's `bound_relax_factor` floors its
-   relaxation at `max(1, |bound|)`, so the admissible physical violation grows
-   as `s_base²`: a 20 kVA rating is honoured to ~0.25 VA at `s_base=1e6` but
-   exceeded by ~2.4 kVA (12 %) at `s_base=1e8`. Keep `s_base` within a couple of
-   decades of the ratings or pass `bound_relax_factor=0`. The mechanism and the
-   durable fix are documented on [`AdvancedInverter`](@ref). No hardware-sizing
-   claim should be published from a base that has not been checked this way;
+1. check physical rating residuals and repeat representative cases at multiple
+   per-unit bases. AC rating inequalities and capacitor-current budgets are normalized by their own ratings with
+   right-hand sides of one, removing the previous squared-bound relaxation
+   failure. The 2ω voltage-ripple constraint remains in SI volts to preserve
+   controller conditioning. Network equation tolerances still depend on scale;
 2. require non-negative `switching_margin`, increase `n_samples`, and
    demonstrate convergence;
-3. for PWM-enabled points, require non-negative `pwm_reserve_margin` and
+3. for PWM-enabled points, require `solve_status(result).publishable` and
+   `pwm_status == :CONVERGED`; an inner `LOCALLY_SOLVED` status is insufficient.
+   Failed closure, nonfinite audits, and failed dense hull/modulation checks
+   produce non-publishable results. Require non-negative `pwm_reserve_margin` and
    `pwm_modulation_margin`, require every AC `*_reserved` value to cover its
    predicted ripple, then refine both sampling grids and `pwm_ac_harmonics`;
 4. resolve from more than one physically sensible initial point;
