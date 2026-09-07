@@ -1,0 +1,15 @@
+{
+    "worst_vv_vw_fixed_PQ_replay_max_difference_V": 7.03549433534516e-8,
+    "sequence_droop_fixed_PQ_replay_max_difference_V": 5.026081362473182e-7,
+    "unity_fixed_PQ_replay_max_difference_V": 1.0852655663608759e-7,
+    "losses": {
+        "q_loss": 11.00328898242885,
+        "p_loss": 40.17202191194957
+    },
+    "per_unit_status": "LOCALLY_SOLVED",
+    "phase_load_records": 36,
+    "SI_status": "LOCALLY_SOLVED",
+    "max_SI_per_unit_difference_V": 6.47732536180968e-8,
+    "bus_count": 56,
+    "customer_count": 12
+}

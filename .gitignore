@@ -14,5 +14,8 @@ Manifest.toml
 # Documenter build output
 docs/build/
 
+# Generated Australian PV study figures and presentation customer key
+/studies/australian_pv/figures/
+
 # Scratch
 /scratch/

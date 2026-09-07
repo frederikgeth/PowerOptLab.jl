@@ -1,0 +1,78 @@
+{
+  "repository": "https://github.com/frederikgeth/BMOPFTools.jl",
+  "revision": "8ca84ab12c0c91aaa8ad4c9986d6adbeb969ea0b",
+  "dataset_doi": "https://doi.org/10.25919/ghnz-bk28",
+  "license": "CC-BY-NC-SA-4.0",
+  "files": [
+    {
+      "source": "LV/LV3_55bus/Groundings.dss",
+      "copy": "LV3_55bus/Groundings.dss",
+      "sha256": "fad7f315e75fae098b8ffaecfda27360ed124bef773ccc1b012b72a2c492422f"
+    },
+    {
+      "source": "LV/LV3_55bus/Linecodes.dss",
+      "copy": "LV3_55bus/Linecodes.dss",
+      "sha256": "ec88fb74ab565f041a86b16f5d83e74df3444563544dbc39fa6a4c14c91ea734"
+    },
+    {
+      "source": "LV/LV3_55bus/Loads.dss",
+      "copy": "LV3_55bus/Loads.dss",
+      "sha256": "c67bb4ccae7eca9f381bf7f82d10e54ec51c7b9223a0a4562bf56fd6369842f8"
+    },
+    {
+      "source": "LV/LV3_55bus/Master.dss",
+      "copy": "LV3_55bus/Master.dss",
+      "sha256": "8561ba18ea842d0d05fb1e1e4ac5496dd7905876f60f6867fcc11c16fef48db3"
+    },
+    {
+      "source": "LV/LV3_55bus/Switches.dss",
+      "copy": "LV3_55bus/Switches.dss",
+      "sha256": "16b4153eb597f4c71374279183043868ea491ea9e2a2bff055f9a30469665f8f"
+    },
+    {
+      "source": "LV/LV3_55bus/Transformers.dss",
+      "copy": "LV3_55bus/Transformers.dss",
+      "sha256": "097fdb79020bb5e4b1cd4f15c464e2b15fc399a9b75aa1363f31e87274811d5d"
+    },
+    {
+      "source": "LV/LV3_55bus/lines.dss",
+      "copy": "LV3_55bus/lines.dss",
+      "sha256": "e137eddf858910c13febf27ce369a83d6e9071fa9c0bf329eb97e39a76fbfd75"
+    },
+    {
+      "source": "MV/MV21_328bus/Groundings.dss",
+      "copy": "MV21_328bus/Groundings.dss",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "MV/MV21_328bus/License.md",
+      "copy": "MV21_328bus/License.md",
+      "sha256": "65088c16e323a836dc1923e63ce99ba4e0c8a42a7996b012acee778ed5ef1d0f"
+    },
+    {
+      "source": "MV/MV21_328bus/Linecodes.dss",
+      "copy": "MV21_328bus/Linecodes.dss",
+      "sha256": "cc024e916f21426d7a0b0b6a16c48743e305af699d8427b0d8d847009c4f5ad0"
+    },
+    {
+      "source": "MV/MV21_328bus/Loads.dss",
+      "copy": "MV21_328bus/Loads.dss",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "MV/MV21_328bus/Switches.dss",
+      "copy": "MV21_328bus/Switches.dss",
+      "sha256": "ad56460f8d85840d9bb8f3018345185bd7685d8d16e68b9118ca26d0d7978f38"
+    },
+    {
+      "source": "MV/MV21_328bus/Transformers.dss",
+      "copy": "MV21_328bus/Transformers.dss",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "MV/MV21_328bus/lines.dss",
+      "copy": "MV21_328bus/lines.dss",
+      "sha256": "510d19801afcf4cd2b42156d1ee9c3ce3c804d5d0916794e18671a3765778e61"
+    }
+  ]
+}
