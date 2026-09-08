@@ -99,6 +99,9 @@ using TOML
 include("contracts.jl")
 include("interfaces.jl")
 
+# Pure BMOPF JSON/dict network transformations.
+include("io/kron_reduction.jl")
+
 # One isolated compatibility adapter for the load decomposition that
 # BMOPFTools 0.1.0 does not yet expose publicly.
 include("upstream.jl")
@@ -177,6 +180,9 @@ export GeneralizedGenerator, SourceGenerator, GeneratorVoltageLaw, GeneratorCont
        GeneratorOPFResult
 export GeneratorDataSet, generator_data_schema, generator_from_data,
        read_generator_data, generator_data, write_generator_data
+
+# BMOPF explicit-neutral Kron reduction
+export kron_reduce_bmopf, reduce_bmopf_neutrals, kron_reduce_neutrals
 
 # Shared solve-result contract
 export SolveOutcome

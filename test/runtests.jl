@@ -20,13 +20,10 @@ include("fixtures.jl")
     Aqua.test_all(PowerOptLab; persistent_tasks = VERSION >= v"1.11")
 end
 
-# Load the optional OpenDSS oracle only after Aqua. OpenDSSDirect 0.9.9 extends
-# several Base constructor names during load, which can interfere with Aqua's
-# isolated persistent-task probe even though PowerOptLab starts no such tasks.
-const _HAS_ODS = !isnothing(Base.identify_package("OpenDSSDirect"))
-if _HAS_ODS
-    @eval using OpenDSSDirect
-end
+# OpenDSSDirect is a declared test dependency. Load it unconditionally for the
+# oracle; unlike PowerOptLab's package runtime, the test target owns this dep.
+using OpenDSSDirect
+const _HAS_ODS = true
 
 @testset "PowerOptLab" begin
     include("function_formulation_tests.jl")
@@ -60,4 +57,5 @@ end
     include("operability_tests.jl")
     include("battery_tests.jl")
     include("helm_tests.jl")
+    include("kron_reduction_tests.jl")
 end
