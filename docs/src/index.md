@@ -59,7 +59,7 @@ method roadmap.
 ## Installation
 
 BMOPFTools is not yet registered. Local tests and automated builds use commit
-`8ca84ab12c0c91aaa8ad4c9986d6adbeb969ea0b`. From the PowerOptLab checkout,
+`72e6cec22a66cf376c37ec4d64aef350b9f1100d`. From the PowerOptLab checkout,
 install the pinned source with the same setup script used by CI:
 
 ```sh
