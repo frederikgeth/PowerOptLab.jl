@@ -195,7 +195,11 @@ helm_series
 HelmResult
 ```
 
-# Explicit-neutral Kron reduction
+## Explicit-neutral Kron reduction
+
+```@docs
+kron_reduce_bmopf
+```
 
 `kron_reduce_bmopf(net; neutral_terminals=nothing, as_json=false)` returns a
 new BMOPF dictionary (or schema-valid JSON when `as_json=true`) and never
