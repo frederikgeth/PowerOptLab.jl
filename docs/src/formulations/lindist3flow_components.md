@@ -147,7 +147,7 @@ variables.
 | Variable | Domain | Meaning |
 |:--------:|:------:|---------|
 | ``w_{i\phi}\ge0`` | real | squared phase-to-ground voltage magnitude |
-| ``p_{\ell\phi},q_{\ell\phi}`` | real | sending-end branch terminal power; identical to the receiving end under the lossless balance |
+| ``p_{\ell\phi},q_{\ell\phi}`` | real | lossless series or transformer child-side power, oriented from the source-side parent toward the child; endpoint terminal totals used by ratings are affine expressions derived from it |
 | ``p^g_{dk},q^g_{dk}`` | real | generator channel injection |
 | ``p^s_{dk},q^s_{dk}`` | real | voltage-source terminal injection |
 
@@ -292,6 +292,8 @@ s_i^{source}+s_i^{generator}+\sum_{\ell:\,\ell\to i}s_\ell
 ```
 
 Lines have ``s_\ell^{parent}=s_\ell``; transformers use the fixed map above.
+At a child balance the same lossless flow enters with the opposite device-side
+sign. Endpoint shunts remain separate terms in nodal balance.
 The implementation stamps the real and imaginary parts separately.
 
 ## 5. Inequality constraints
@@ -299,22 +301,21 @@ The implementation stamps the real and imaginary parts separately.
 ### Voltage and box bounds
 
 A rating is enforced at the physical endpoint where BMOPF declares it. Lines
-and lowered closed switches receive from- and to-end constraints. At an
-endpoint with a pi or exciting shunt, the constrained power is the total
-terminal power
+and lowered closed switches receive constraints at both input endpoints. Let
+``e`` be an endpoint and define its sign from the source-oriented topology,
+not from the input's `from`/`to` labels:
 
 ```math
-(p^{end},q^{end})=(\sigma p^{series}+p^{sh},
-                    \sigma q^{series}+q^{sh}),
-\qquad \sigma=+1\text{ at from},\ -1\text{ at to}.
+\sigma_e=\begin{cases}+1,&e=\operatorname{parent}(\ell),\\
+-1,&e=\operatorname{child}(\ell),\end{cases}
+\qquad
+s^{end}_{\ell e\phi}=\sigma_e s^{series}_{\ell\phi}+s^{sh}_{\ell e\phi}.
 ```
 
-Thus line pi-shunt current and a transformer's to-side magnetising current are
+The endpoint is still keyed by its original `from` or `to` label, even when
+that label is opposite to the oriented traversal. Thus line pi-shunt power is
 inside the corresponding rating cone even though canonical lowering represents
-those shunts as standalone elements. Connection-aware Yd/Dy and open-delta
-banks use side-specific terminal-power expressions; the shared phase of an
-open-delta bank, which carries both units' current, is deliberately unrated,
-matching BMOPF's two-element declaration.
+the shunt as a standalone element.
 
 Retained bus limits impose
 
@@ -327,49 +328,118 @@ Generator and source channel boxes impose their declared ``p_min/p_max`` and
 
 ### Native second-order-cone bounds
 
-Every apparent-power rating is represented by the native SOC
+For compactness define the two native cone templates
 
 ```math
-\left\|\begin{bmatrix}p\\q\end{bmatrix}\right\|_2\le S^{max}.
+\mathcal S(p,q;S):\quad [S,p,q]\in\mathcal Q_3
+\quad\Longleftrightarrow\quad p^2+q^2\le S^2,
 ```
 
-Every current rating is represented by the native rotated SOC equivalent of
-
 ```math
-(p^{end})^2+(q^{end})^2\le w^{end}(I^{max})^2.
+\mathcal I(p,q;w,I):\quad [w,I^2/2,p,q]\in\mathcal Q_4^r
+\quad\Longleftrightarrow\quad p^2+q^2\le wI^2.
 ```
 
-Here ``w^{end}`` is the live squared phase-ground terminal voltage. For a
-connected generator channel it is instead the affine fixed-angle closure of
-``|Dv|^2``. The implementation stamps
-``[w^{end},(I^{max})^2/2,p^{end},q^{end}]`` in the rotated second-order cone;
-there is no quadratic non-convexity and no outer linearisation.
+The model uses the following complete set of conic bounds.
 
-For a Yd/Dy bank, the total nameplate is distributed across its three wye
-coils before the SOC is stamped:
+**Generators.** For every channel ``k`` with declared ratings,
 
 ```math
-\left\|\begin{bmatrix}p_{Y,k}\\q_{Y,k}\end{bmatrix}\right\|_2
-\le S^{max}_{bank}/3,
+\mathcal S(p^g_k,q^g_k;S^{max}_k),\qquad
+\mathcal I(p^g_k,q^g_k;\widehat{|d_kv_i|^2},I^{max}_k).
+```
+
+The current cone therefore uses the live affine fixed-angle winding-voltage
+closure, not ``|d_k\bar v|^2``.
+
+**Voltage sources.** For each source terminal ``\phi``,
+
+```math
+\mathcal S(p^s_\phi,q^s_\phi;S^{max}_\phi),\qquad
+\mathcal I(p^s_\phi,q^s_\phi;w_{i\phi},I^{max}_\phi).
+```
+
+The source equality fixes ``w_{i\phi}=|\bar v_{i\phi}|^2``, but the same native
+rotated-SOC template is retained.
+
+**Lines and lowered closed switches.** For every conductor ``\phi`` and both
+physical endpoints ``e``, using the endpoint total defined above,
+
+```math
+\mathcal S(\Re s^{end}_{\ell e\phi},\Im s^{end}_{\ell e\phi};S^{max}_{\ell\phi}),
+```
+
+```math
+\mathcal I(\Re s^{end}_{\ell e\phi},\Im s^{end}_{\ell e\phi};
+           w_{e\phi},I^{max}_{\ell\phi}).
+```
+
+A rating declared directly on a line takes precedence; otherwise the linecode
+rating is inherited. A lowered switch copies both `s_max` and `i_max` onto its
+zero-impedance line. A lowered pi shunt contributes ``s^{sh}_{\ell e\phi}`` at
+its own endpoint.
+
+**Ordinary single-phase transformers and single-phase autotransformers.** Let
+``s^{end}_{te\phi}`` be power entering the transformer at original endpoint
+``e\in\{from,to\}``: the oriented parent expression is ``Hs_t``, the child
+expression is ``-s_t``, and any lowered exciting shunt is added at the original
+to-side endpoint. The scalar nameplate is applied at both endpoints,
+
+```math
+\mathcal S(\Re s^{end}_{te\phi},\Im s^{end}_{te\phi};S^{rating}_t),
+\qquad e\in\{from,to\},
+```
+
+while a current rating is stamped only on a side that declares it:
+
+```math
+\mathcal I(\Re s^{end}_{te\phi},\Im s^{end}_{te\phi};
+           w_{e\phi},I^{max}_{te\phi}).
+```
+
+**Yd/Dy banks.** BMOPF's scalar ``S^{rating}_{bank}`` is a total-bank
+nameplate. It is divided equally across the three wye coils and is not copied
+onto the delta terminals:
+
+```math
+\mathcal S(p_{Y,k},q_{Y,k};S^{rating}_{bank}/3),
 \qquad k=1,2,3.
 ```
 
-The delta-side terminal limits retain BMOPFTools' bushing-current semantics
-when explicitly declared. For an open-delta unit whose coil spans terminals
-``a,b`` but whose terminal
-power variable is at terminal ``a``, its winding nameplate is converted by the
-fixed reference ratio:
+Declared side-specific current limits retain BMOPF's terminal/bushing-current
+semantics on both wye and delta sides:
 
 ```math
-\left\|\begin{bmatrix}p_a\\q_a\end{bmatrix}\right\|_2
-\le S^{max}_{coil}\frac{|\bar v_a|}{|\bar v_a-\bar v_b|}.
+\mathcal I(\Re s^{end}_{te\phi},\Im s^{end}_{te\phi};
+           w_{e\phi},I^{max}_{te\phi}),
+\qquad e\in\{from,to\}.
 ```
 
-Both declared winding-current sides are likewise converted with the appropriate
-fixed terminal voltage. No exponential, power, or other exotic cone appears;
-no SOC is replaced by a polyhedral outer approximation.
+In particular, a delta-side current cone uses live phase-to-ground terminal
+``w_{e\phi}``; it is not an internal delta-coil current bound.
 
-## 6. Objective and implementation
+**Open-delta regulators.** For unit ``k`` spanning terminals ``a,b``, choose
+the unit's non-shared terminal ``a`` as prescribed by the ABBC/BCAC/CABA
+connection. At each original side ``e``, the fixed-reference conversion from
+coil nameplate to terminal apparent power is
+
+```math
+\mathcal S(p_{tea},q_{tea};
+S^{rating}_{t}|\bar v_{ea}|/|\bar v_{ea}-\bar v_{eb}|).
+```
+
+Its current rating instead uses the live terminal voltage:
+
+```math
+\mathcal I(p_{tea},q_{tea};w_{ea},I^{max}_{te,k}).
+```
+
+The common terminal, which carries both units' current, receives no separate
+cone because BMOPF declares two unit ratings rather than three conductor
+ratings. No exponential, power, or other exotic cone appears, and no SOC is
+replaced by a polyhedral outer approximation.
+
+## 6. Objective, extraction, and implementation
 
 `objective=:cost` minimizes the sum of per-channel linear energy-cost
 coefficients times generator and source active power, following BMOPF's
@@ -382,6 +452,53 @@ copy, which exactly cancels the ``1/S_b`` on the power variable.
 Because series losses are omitted, both priced objectives understate the true
 cost of serving a load — on IEEE 37 by about 1.95 % of feeder load. They are
 sound for comparing dispatches under one formulation, not as absolute costs.
+
+### Result extraction
+
+The stable result is deliberately a small semantic projection of the JuMP
+solution, not a reconstructed AC state. Numerical decision-variable values are
+published only when the solve is optimal; otherwise they are `NaN`. In SI mode
+they are copied directly. In per-unit mode the extractor applies only
+
+```math
+w^{SI}_{i\phi}=V_{b,i}^2w^{pu}_{i\phi},\qquad
+(p^{SI},q^{SI})=S_b(p^{pu},q^{pu}).
+```
+
+It then derives
+
+```math
+v^{mag}_{i\phi}=\sqrt{\max(0,w^{SI}_{i\phi})}.
+```
+
+The `max` protects the square root against a tiny negative solver-tolerance
+artifact; the separately published `w` is the unclamped scaled value. The
+extractor also attaches fixed or discrete metadata rather than new electrical
+solutions:
+
+- `reference_angle` is ``\arg\bar v`` and is not optimized;
+- `parent`, `child`, aligned terminal maps, and `reversed_from_input` describe
+  the source-oriented topology;
+- `effective_ratio_from_to` is recomputed from transformer input data.
+
+For a line, published `p` and `q` are the lossless series-flow variables. For a
+transformer, they are the child-side variables ``s_t`` used by the fixed power
+map. Neither is converted back to input `from → to` orientation, and the affine
+endpoint totals used inside rating cones are not published separately. Loads,
+shunts, currents, complex voltage phasors, losses, and residual corrections are
+not synthesized during extraction.
+
+In per-unit mode `objective=:source_import` is multiplied by ``S_b``. The cost
+objective is already physical because its prepared coefficient scaling cancels
+the power-variable scaling, while the feasibility objective remains zero.
+
+Canonical preprocessing is also not undone: `L3FBuild.network` and
+`L3FResult.network` are the SI Kron-reduced, lowered, or projected snapshots,
+and synthetic `_l3f_...` buses and branches remain in the published topology.
+An optional nonlinear replay fixes generator dispatch on a deep copy and fills
+the `validation` dictionary; it does not overwrite or polish any linear result.
+
+### Build sequence
 
 The build sequence is:
 

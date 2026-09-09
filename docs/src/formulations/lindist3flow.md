@@ -34,13 +34,14 @@ with stable codes; it is never silently dropped.
 
 Version `0.1-prototype` builds a continuous affine LP or SOCP for radial AC islands with
 exactly one fixed-voltage source per island. It supports neutral-reduced series
-lines without line shunts, grounded-wye, single-phase and delta constant-power,
+lines, grounded-wye, single-phase and delta constant-power,
 constant-impedance, and pure ZP ZIP loads, constant-power generators, fixed bus
 shunts, ideal fixed-ratio single-phase
 transformers, ideal Yd/Dy banks, and ANSI A/B autotransformer regulators, retained phase-to-ground
 voltage-magnitude bounds, linear per-channel energy costs, and reverse power
 flow. Apparent-power bounds are native second-order cones. Ampacity bounds use
-the declared fixed reference voltage and are also native second-order cones.
+the live squared terminal or affine winding voltage and are native rotated
+second-order cones.
 Fixed ideal three-phase `open_delta_regulator` banks are supported on three
 retained phase terminals, including AB/CB and its two cyclic permutations.
 
@@ -72,9 +73,11 @@ M = 2\Re(\overline Z \odot \Gamma),\quad
 N = -2\Im(\overline Z \odot \Gamma).
 ```
 
-``p,q`` are sending-end branch powers. Because the dropped term is exactly what
-distinguishes the two ends, the same variable serves as the receiving-end power
-and the nodal balance is lossless. On IEEE 37 the omitted losses are about
+``p,q`` are lossless series-flow variables oriented from the source-side parent
+to the child. Because the dropped term is exactly what distinguishes the two
+ends of the series path, the same variable serves both nodal balances with
+opposite signs. Endpoint terminal power can nevertheless differ when a local
+pi shunt is present; the rating cones include that shunt explicitly. On IEEE 37 the omitted losses are about
 **1.95 % of feeder load** (see [accuracy](#Accuracy-and-when-it-degrades)).
 
 ### The linearization point
@@ -558,13 +561,15 @@ each code below has a reachable case.
 
 ## Result contract
 
-[`solve_l3f_opf`](@ref) returns an [`L3FResult`](@ref). Every numeric field is
-SI regardless of `per_unit`, and is `NaN` when the solve was not optimal.
+[`solve_l3f_opf`](@ref) returns an [`L3FResult`](@ref). Electrical result fields
+are SI regardless of `per_unit`, and decision-variable values are `NaN` when
+the solve was not optimal. Dimensionless ratios, angles in radians, and metadata
+retain the units stated below.
 
 | Path | Contents |
 |---|---|
 | `buses[bus][terminal]` | `"w"` (V²), `"vm"` (V), `"reference_angle"` (rad, coefficient data — not a solved angle) |
-| `lines[id]`, `transformers[id]` | `"p"`, `"q"` (W, var), `"parent"`, `"child"`, `"terminal_map_parent"`, `"terminal_map_child"`, `"reversed_from_input"` |
+| `lines[id]`, `transformers[id]` | model branch `"p"`, `"q"` (W, var), `"parent"`, `"child"`, `"terminal_map_parent"`, `"terminal_map_child"`, `"reversed_from_input"` |
 | `transformers[id]` also | `"subtype"`, `"effective_ratio_from_to"` |
 | `generators[id]`, `sources[id]` | `"pg"`, `"qg"` (W, var), `"terminal_map"` |
 | `objective` | currency/h for `:cost`, W for `:source_import`, `0.0` for `:feasibility` |
@@ -572,16 +577,26 @@ SI regardless of `per_unit`, and is `NaN` when the solve was not optimal.
 | `validation` | see below |
 
 !!! warning "Branch flows are oriented parent → child"
-    `lines[id]["p"]` is positive when power flows from `"parent"` toward
-    `"child"`, which is the direction away from the island's source — **not**
-    necessarily BMOPF's `bus_from → bus_to`. When `"reversed_from_input"` is
-    `true` the sign is opposite to the input orientation, and the entries are
-    indexed by `"terminal_map_parent"` rather than `terminal_map_from`.
+    For lines, `p` and `q` are the lossless series-flow variables and are
+    positive from `"parent"` toward `"child"`, away from the island's source —
+    **not** necessarily BMOPF's `bus_from → bus_to`. Transformer `p` and `q`
+    are the corresponding child-side variables used by its fixed power map.
+    When `"reversed_from_input"` is true the orientation is opposite to the
+    input declaration. Endpoint totals used by rating cones, including local
+    shunts, are affine model expressions and are not separately returned.
 
 Under `unsupported=:lower` or `:approximate` the result also contains the
 internal buses and branches the lowering introduced, under `_l3f_`-prefixed
 names. They are real model elements, not bookkeeping, and the corresponding
 `L.L3F.*` finding names each one.
+
+Extraction rescales `w` by ``V_b^2`` and every published power by ``S_b`` in
+per-unit mode, then reports `vm = sqrt(max(0,w))`. The published `w` itself is
+not clamped. `reference_angle` comes from the fixed reference, transformer
+ratios are recomputed from input data, and no phasors, endpoint flows, currents,
+losses, or residual corrections are reconstructed. Canonical Kron reduction,
+lowering, and projection are not undone. See the
+[normative extraction contract](lindist3flow_components.md#Result-extraction).
 
 `validation["status"]` is `"replayed"`, `"failed"`, or `"not_run"`. It reports
 whether the nonlinear replay *ran*, never whether the linear answer was accurate
