@@ -37,7 +37,7 @@ exactly one fixed-voltage source per island. It supports neutral-reduced series
 lines without line shunts, grounded-wye, single-phase and delta constant-power,
 constant-impedance, and pure ZP ZIP loads, constant-power generators, fixed bus
 shunts, ideal fixed-ratio single-phase
-transformers and ANSI A/B autotransformer regulators, retained phase-to-ground
+transformers, ideal Yd/Dy banks, and ANSI A/B autotransformer regulators, retained phase-to-ground
 voltage-magnitude bounds, linear per-channel energy costs, and reverse power
 flow. Apparent-power bounds are native second-order cones. Ampacity bounds use
 the declared fixed reference voltage and are also native second-order cones.
@@ -150,6 +150,63 @@ Fixed regulator and transformer settings preserve affine physics. Adjustable
 tap intervals are rejected: there are no integer taps, McCormick envelopes, or
 continuous voltage-ratio relaxations. Nonzero transformer leakage and no-load
 admittance must be represented as separate supported network elements.
+
+## Delta-wye and wye-delta banks
+
+`wye_delta` and `delta_wye` are supported as ideal three-phase banks on three
+retained conductors per side, the wye star point being the eliminated
+conductor. Their coil relation is
+
+```math
+D\,\boldsymbol v_{\Delta}=g\,\boldsymbol v_{Y},\qquad
+g=\sqrt3\,\frac{V^{nom}_{\Delta}}{V^{nom}_{Y}},
+```
+
+where ``D`` is the delta incidence and ``\boldsymbol v_Y`` is measured against
+the grounded star point. This is BMOPFTools' executable convention:
+`wye_delta` uses ``n_{eff}=\sqrt3/N`` and `delta_wye` uses
+``n_{eff}=N\sqrt3``, with ``N=V^{nom}_{from}/V^{nom}_{to}`` and both nominals
+quoted phase-to-neutral. The two spellings collapse to the same statement, and
+the ``\sqrt3`` is exactly the difference between a coil that spans a
+line-to-line voltage and a nominal quoted phase-to-neutral.
+
+### Orientation is part of the model
+
+``D`` has **rank 2**, and that single fact determines how the component
+behaves. The relation fixes the wye voltages given the delta ones, but not the
+reverse: a delta winding neither imposes nor carries a zero-sequence terminal
+voltage.
+
+- **Delta winding upstream** — ``T=D/g``, exact. The downstream wye voltages
+  are fully determined, and their zero-sequence component is zero, which is the
+  correct behaviour of an ideal bank whose zero-sequence impedance is zero.
+  This is the ordinary substation and service-transformer arrangement, and it
+  works at the default `unsupported=:reject`.
+- **Wye winding upstream** — the delta terminal voltages are determined only up
+  to a common offset. `E.L3F.DELTA_ORIENTATION_UNSUPPORTED` by default. Under
+  `unsupported=:approximate` the pseudo-inverse ``T=g\,D^{+}`` selects the
+  minimum-norm solution, which is the one with **zero zero-sequence voltage at
+  the delta bus**, and `A.L3F.DELTA_ZERO_SEQUENCE_GAUGE` records the
+  assumption. It is an assumption, not physics: in a phase-to-ground
+  formulation the delta bus's ground reference actually comes from capacitive
+  coupling this formulation has already discarded.
+
+Because the map is not diagonal, the two sides of the bank carry different
+terminal power, so `s_rating` and `i_max_from`/`i_max_to` are each applied to
+the winding they are declared on rather than to whichever side the traversal
+happened to reach. (For a diagonal map the distinction is vacuous, which is why
+it went unnoticed for the single-phase subtypes.)
+
+!!! note "Vector group: BMOPFTools leads where OpenDSS lags"
+    BMOPFTools pairs delta coil ``k`` with wye phase ``k``
+    (``v_{\Delta,k}-v_{\Delta,k+1}=n_{eff}v_{Y,k}``), which puts the wye side
+    **30° ahead**. OpenDSS's default three-phase delta-wye lags instead, so a
+    side-by-side comparison shows a uniform 60° offset on every downstream bus.
+    It does not change any solved quantity here: every coefficient in the
+    formulation — ``\Gamma``, the cross-voltage closure, and ``H`` — depends
+    only on angle *differences within a bus*, so a uniform rotation of a whole
+    downstream subtree is unobservable. The regression asserts both the offset
+    and the invariance.
 
 ## Fixed regulator banks
 
@@ -404,11 +461,12 @@ That last one is the substantive one: it turns "ideal transformers only" into
 Projection must not invent physics. These stay errors at every policy level,
 because there is no defensible substitution:
 
-- **`wye_delta`, `delta_wye`, `center_tap`, `n_winding` transformers.** Each
-  needs a real voltage map; treating one as a per-conductor ratio would destroy
-  the phase shift and the zero-sequence blocking. These are a missing feature —
-  the maps are fixed matrices of exactly the form ``T`` already takes — not an
-  impossibility.
+- **`center_tap` and `n_winding` transformers.** Each needs a real voltage map;
+  treating one as a per-conductor ratio would destroy the phase shift and the
+  zero-sequence blocking. These remain a missing feature — the maps are fixed
+  matrices of exactly the form ``T`` already takes — rather than an
+  impossibility. (`wye_delta` and `delta_wye` were in this list and are now
+  [implemented](#Delta-wye-and-wye-delta-banks).)
 - **Meshed islands, multiple or missing sources.** Choosing a spanning tree or
   a slack would change which problem is being solved.
 - **IBR component models.** Replacing a control law with a free P/Q box would
@@ -444,6 +502,8 @@ each code below has a reachable case.
 | `E.L3F.TRANSFORMER_UNSUPPORTED` | E | A transformer subtype outside the supported three. |
 | `E.L3F.TRANSFORMER_RATIO_INVALID` | E | A ratio is missing, non-positive, non-finite, or the wrong arity. |
 | `E.L3F.TRANSFORMER_NONIDEAL_UNSUPPORTED` | E | Nonzero leakage or no-load admittance on a device modelled as ideal. |
+| `E.L3F.DELTA_ORIENTATION_UNSUPPORTED` | E | A Yd/Dy bank has its wye winding facing the source, leaving the delta terminals undetermined in their common component. |
+| `A.L3F.DELTA_ZERO_SEQUENCE_GAUGE` | W | That orientation accepted under `:approximate` by assuming zero zero-sequence voltage at the delta bus. |
 | `E.L3F.ADJUSTABLE_TAP_UNSUPPORTED` | E | A tap interval with `min < max`; taps are fixed data here. |
 | `E.L3F.TOPOLOGY_NOT_RADIAL` | E | Two devices share a conductor between the same buses, or a conductor component contains a cycle. |
 | `E.L3F.SOURCE_MISSING` | E | An energized island has no voltage source. |

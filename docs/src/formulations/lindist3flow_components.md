@@ -22,6 +22,7 @@ coordinates. Supported top-level component families are shown below.
 | `shunt` | fixed full G/B matrix | S |
 | `transformer/single_phase` | fixed ideal ratio | V/V |
 | `transformer/single_phase_autotransformer` | fixed ideal ANSI A/B ratio | – |
+| `transformer/wye_delta`, `transformer/delta_wye` | fixed ideal three-phase bank, three retained conductors per side | V, VA, A |
 | `transformer/open_delta_regulator` | fixed ideal two-unit bank, ABBC/BCAC/CABA | –, VA, A |
 
 Ratings follow BMOPF's declared shapes: `s_rating` is a scalar nameplate, while
@@ -254,6 +255,14 @@ reading of `tap_ratio` as a regulated/source ratio: a type-B unit with
 ``a=1.05`` raises the regulated side by 5 %. The prose table in BMOPF's
 regulator specification states the reciprocal pairing and is the side that needs
 correcting upstream.
+
+For `wye_delta` and `delta_wye` the coil relation is
+``D\boldsymbol v_\Delta=g\boldsymbol v_Y`` with
+``g=\sqrt3\,V^{nom}_\Delta/V^{nom}_Y``. Since ``\operatorname{rank}D=2`` the
+map exists only with the delta winding upstream, where ``T_t=D/g``; the reverse
+orientation is closed by the zero-zero-sequence gauge ``T_t=g\,D^{+}`` under
+`unsupported=:approximate`. See
+[delta-wye and wye-delta banks](lindist3flow.md#Delta-wye-and-wye-delta-banks).
 
 For `open_delta_regulator`, ``v_{from}=Av_{to}`` and ``T=A^{-1}``. With effective
 ratios ``r_1,r_2`` and ABBC connection,

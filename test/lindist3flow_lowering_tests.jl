@@ -419,9 +419,10 @@ end
 @testset "LinDist3Flow lowering leaves genuine obstacles alone" begin
     # Projection must never invent physics. A transformer subtype with no
     # supported voltage map, a meshed island, and a DC subsystem stay errors at
-    # every policy level, because there is no defensible substitution.
+    # every policy level, because there is no defensible substitution. (Yd/Dy
+    # banks left this list once their maps were written; center_tap has not.)
     for (name, mutate!) in (
-        "wye_delta" => net -> (delete!(net["line"], "l2"); net["transformer"] = Dict("wye_delta" => Dict(
+        "center_tap" => net -> (delete!(net["line"], "l2"); net["transformer"] = Dict("center_tap" => Dict(
             "t" => Dict{String,Any}("bus_from" => "m", "bus_to" => "l",
                 "terminal_map_from" => ["a"], "terminal_map_to" => ["a"])))),
         "meshed" => net -> (net["line"]["l3"] = Dict{String,Any}(

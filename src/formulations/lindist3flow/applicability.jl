@@ -1,3 +1,7 @@
+# Yd / Dy banks. Their voltage map is singular, so which winding faces the
+# source is part of the model rather than a bookkeeping detail.
+const _L3F_DELTA_SUBTYPES = ("wye_delta", "delta_wye")
+
 const _L3F_UNSUPPORTED_FAMILIES = (
     "switch", "capacitor", "ibr",
     "dc_bus", "dc_line", "dc_load", "dc_source", "dc_converter",
@@ -101,33 +105,112 @@ function _l3f_transformer_neff(subtype::String, data)
     elseif subtype == "open_delta_regulator"
         tap = Float64.(get(data, "tap_ratio", [1.0, 1.0]))
         uppercase(String(get(data, "regulator_type", "B"))) == "A" ? tap : inv.(tap)
+    elseif subtype in _L3F_DELTA_SUBTYPES
+        # Both v_nom are phase-to-neutral equivalents, so this is the nominal
+        # from/to ratio; the sqrt(3) of the delta coil lives in the gain, not here.
+        Float64(data["v_nom_from"]) / Float64(data["v_nom_to"])
     else
         throw(ArgumentError("unsupported transformer subtype '$subtype'"))
     end
 end
 
-function _l3f_transformer_forward_map(subtype::String, data)
+"""
+    _l3f_delta_transformer_gain(subtype, data) -> (g, delta_is_from)
+
+Coil relation of an ideal Yd/Dy bank as ``D v_{delta} = g\\,v_{wye}``, where `D`
+is the delta incidence and `v_wye` is measured against the (grounded, reduced)
+star point.
+
+This is BMOPFTools' executable convention. Its `wye_delta` uses
+``n_{eff}=\\sqrt3/N`` and its `delta_wye` uses ``n_{eff}=N\\sqrt3``, both with
+``N = v^{nom}_{from}/v^{nom}_{to}`` and both `v_nom` given as phase-to-neutral
+equivalents. The two collapse to the same statement,
+``g=\\sqrt3\\,v^{nom}_{delta}/v^{nom}_{wye}``: the delta coil spans a
+line-to-line voltage while its nominal is quoted phase-to-neutral, and the
+``\\sqrt3`` is exactly that difference.
+"""
+function _l3f_delta_transformer_gain(subtype::String, data)
+    ratio = Float64(data["v_nom_from"]) / Float64(data["v_nom_to"])
+    isfinite(ratio) && ratio > 0 ||
+        throw(ArgumentError("v_nom_from / v_nom_to must be positive and finite"))
+    subtype == "wye_delta" ? (sqrt(3.0) / ratio, false) : (sqrt(3.0) * ratio, true)
+end
+
+"""
+    _l3f_transformer_map(subtype, data, parent_is_from) -> Matrix{Float64}
+
+The fixed voltage map ``v_{child} = T v_{parent}`` for one orientation.
+
+Every supported subtype is built directly for the orientation asked for rather
+than by inverting a forward map, because a delta winding's map is singular: the
+delta incidence has rank 2, so the transform cannot be inverted and the
+orientation genuinely matters.
+
+With the delta winding upstream the map is ``T = D/g`` and is exact — the
+downstream wye voltages are fully determined, and their zero-sequence component
+is zero, which is the correct behaviour of an ideal bank with no zero-sequence
+impedance. With the wye winding upstream, the delta terminals are determined
+only up to a common offset; that case needs a gauge and is handled by
+[`_l3f_delta_gauge_map`](@ref).
+"""
+function _l3f_transformer_map(subtype::String, data, parent_is_from::Bool)
     if subtype in ("single_phase", "single_phase_autotransformer")
-        return reshape([inv(_l3f_transformer_neff(subtype, data))], 1, 1)
+        n = _l3f_transformer_neff(subtype, data)
+        return reshape([parent_is_from ? inv(n) : n], 1, 1)
     elseif subtype == "open_delta_regulator"
         A = regulator_gain_matrix("OPEN_DELTA", get(data, "tap_ratio", [1.0, 1.0]);
             connection=String(get(data, "connection", "")),
             regulator_type=String(get(data, "regulator_type", "B")))
-        return inv(A)
+        return parent_is_from ? inv(A) : A
+    elseif subtype in _L3F_DELTA_SUBTYPES
+        g, delta_is_from = _l3f_delta_transformer_gain(subtype, data)
+        D = _l3f_connection_incidence("DELTA", 3, 3)
+        return parent_is_from == delta_is_from ? D ./ g : _l3f_delta_gauge_map(D, g)
     end
     throw(ArgumentError("unsupported transformer subtype '$subtype'"))
 end
 
+"""
+    _l3f_delta_gauge_map(D, g) -> Matrix{Float64}
+
+Voltage map for a Yd/Dy bank traversed with the **wye** winding upstream.
+
+``D v_{delta} = g\\,v_{wye}`` leaves the delta terminal voltages free in their
+common (zero-sequence) component, because a delta winding neither imposes nor
+carries one. The pseudo-inverse selects the minimum-norm solution, which is the
+one orthogonal to `D`'s null space `span{1}` — that is, the solution with zero
+zero-sequence voltage at the delta bus.
+
+That is a modelling assumption, not physics: in a phase-to-ground formulation
+the delta bus's ground reference actually comes from capacitive coupling the
+formulation has already discarded. It is offered only under
+`L3FOptions(unsupported=:approximate)`, with `A.L3F.DELTA_ZERO_SEQUENCE_GAUGE`
+recording it.
+"""
+_l3f_delta_gauge_map(D::AbstractMatrix, g::Real) = g .* pinv(Matrix{Float64}(D))
+
+function _l3f_transformer_forward_map(subtype::String, data)
+    _l3f_transformer_map(subtype, data, true)
+end
+
 _l3f_transformer_oriented_map(edge::L3FOrientedLine, data) =
-    edge.reversed ? inv(_l3f_transformer_forward_map(edge.subtype, data)) :
-                    _l3f_transformer_forward_map(edge.subtype, data)
+    _l3f_transformer_map(edge.subtype, data, !edge.reversed)
+
+"""Whether `edge` presents a delta winding to its parent bus."""
+function _l3f_delta_parent(edge::L3FOrientedLine, data)
+    edge.subtype in _L3F_DELTA_SUBTYPES || return nothing
+    _, delta_is_from = _l3f_delta_transformer_gain(edge.subtype, data)
+    (!edge.reversed) == delta_is_from
+end
 
 function _l3f_validate_transformers!(findings, net)
     buses = get(net, "bus", Dict())
     for (subtype, id, data) in _l3f_transformers(net)
-        subtype in ("single_phase", "single_phase_autotransformer", "open_delta_regulator") || begin
+        subtype in ("single_phase", "single_phase_autotransformer",
+                    "open_delta_regulator", _L3F_DELTA_SUBTYPES...) || begin
             _l3f_error!(findings, "E.L3F.TRANSFORMER_UNSUPPORTED", :transformer, id,
-                "only fixed ideal single_phase, single_phase_autotransformer, and open_delta_regulator devices are supported")
+                "only fixed ideal single_phase, single_phase_autotransformer, " *
+                "wye_delta, delta_wye, and open_delta_regulator devices are supported")
             continue
         end
         bf, bt = String(get(data, "bus_from", "")), String(get(data, "bus_to", ""))
@@ -139,11 +222,15 @@ function _l3f_validate_transformers!(findings, net)
             all(in(string.(get(buses[bt], "terminal_names", String[]))), mt)
         valid || _l3f_error!(findings, "E.L3F.TERMINAL_MAP_INVALID", :transformer, id,
             "transformer terminal maps must be aligned retained conductors on declared buses")
-        expected_arity = subtype == "open_delta_regulator" ? 3 : 1
+        expected_arity = subtype == "open_delta_regulator" ||
+                         subtype in _L3F_DELTA_SUBTYPES ? 3 : 1
         length(mf) == expected_arity || _l3f_error!(findings,
             "E.L3F.DEVICE_ARITY", :transformer, id,
             subtype == "open_delta_regulator" ?
                 "a Kron-reduced open-delta regulator requires three retained phase terminals" :
+            subtype in _L3F_DELTA_SUBTYPES ?
+                "a Kron-reduced $subtype bank requires three retained phase terminals " *
+                "on each side; the wye star point is the eliminated conductor" :
                 "single-phase transformer/regulator support requires one retained power channel")
         lo_key, hi_key = subtype == "single_phase" ? ("tap_min", "tap_max") :
                                                     ("tap_ratio_min", "tap_ratio_max")
@@ -160,6 +247,7 @@ function _l3f_validate_transformers!(findings, net)
             neff = _l3f_transformer_neff(subtype, data)
             neff_values = neff isa AbstractVector ? neff : [neff]
             expected_ratio_count = subtype == "open_delta_regulator" ? 2 : 1
+            subtype in _L3F_DELTA_SUBTYPES && _l3f_delta_transformer_gain(subtype, data)
             length(neff_values) == expected_ratio_count || throw(DimensionMismatch(
                 "expected $expected_ratio_count effective ratio(s)"))
             all(x -> isfinite(x) && x > 0, neff_values) ||
@@ -183,10 +271,12 @@ function _l3f_validate_transformers!(findings, net)
             haskey(data, key) || continue
             value = data[key]
             positive(x) = x isa Real && isfinite(x) && x > 0
+            # Per-conductor, except for an open-delta bank whose two entries
+            # are its two units rather than its three conductors.
+            expected = subtype == "open_delta_regulator" ? 2 : length(mf)
             valid_limit = if key == "s_rating"
                 positive(value)
             else
-                expected = subtype == "open_delta_regulator" ? 2 : 1
                 (value isa AbstractVector && length(value) == expected &&
                  all(positive, value)) || (expected == 1 && positive(value))
             end
@@ -195,7 +285,9 @@ function _l3f_validate_transformers!(findings, net)
                 key == "s_rating" ? "$key must be a positive finite scalar" :
                 subtype == "open_delta_regulator" ?
                     "$key must contain two positive finite winding ratings" :
-                    "$key must be a positive finite scalar or one-element vector")
+                expected == 1 ?
+                    "$key must be a positive finite scalar or one-element vector" :
+                    "$key must contain $expected positive finite per-conductor ratings")
         end
     end
 end
@@ -736,6 +828,51 @@ function _l3f_topology!(findings, net)
     topology, roots, islands
 end
 
+"""
+Gate Yd/Dy banks on which winding faces the source.
+
+The delta incidence has rank 2, so `D v_delta = g v_wye` determines the wye
+voltages from the delta ones but not the reverse: a delta winding neither
+imposes nor carries a zero-sequence terminal voltage. With the delta winding
+upstream the map is exact. With the wye winding upstream the delta bus's common
+voltage is genuinely undetermined by the transformer, and only a gauge can close
+it — so that orientation is an error unless `unsupported=:approximate` accepts
+the zero-zero-sequence assumption.
+"""
+function _l3f_validate_delta_orientation!(findings, net, topology, options::L3FOptions)
+    for edge in topology
+        edge.family == :transformer || continue
+        edge.subtype in _L3F_DELTA_SUBTYPES || continue
+        data = net["transformer"][edge.subtype][edge.id]
+        delta_parent = try
+            _l3f_delta_parent(edge, data)
+        catch
+            continue                      # ratio already reported as invalid
+        end
+        delta_parent === true && continue
+        wye_bus, delta_bus = edge.parent, edge.child
+        if options.unsupported == :approximate
+            _l3f_warning!(findings, "A.L3F.DELTA_ZERO_SEQUENCE_GAUGE", :transformer,
+                edge.id,
+                "the wye winding faces the source, so the delta terminals at bus " *
+                "'$delta_bus' are determined only up to a common offset; the " *
+                "zero-sequence voltage there is assumed zero. A different ground " *
+                "reference at that bus would give a different answer";
+                evidence=Dict("wye_bus" => wye_bus, "delta_bus" => delta_bus))
+        else
+            _l3f_error!(findings, "E.L3F.DELTA_ORIENTATION_UNSUPPORTED", :transformer,
+                edge.id,
+                "the wye winding faces the source at bus '$wye_bus', so the delta " *
+                "terminals at '$delta_bus' are determined only up to a common " *
+                "offset — a delta winding neither imposes nor carries a " *
+                "zero-sequence terminal voltage. Put the delta winding upstream, " *
+                "or accept the zero-zero-sequence gauge with " *
+                "L3FOptions(unsupported=:approximate)";
+                evidence=Dict("wye_bus" => wye_bus, "delta_bus" => delta_bus))
+        end
+    end
+end
+
 function _l3f_prepare(input; options::L3FOptions=L3FOptions(), reference=nothing)
     net = _l3f_input(input)
     findings = L3FFinding[]
@@ -785,6 +922,7 @@ function _l3f_prepare(input; options::L3FOptions=L3FOptions(), reference=nothing
     _l3f_validate_lines!(findings, net)
     _l3f_validate_objective!(findings, net, options)
     topology, roots, islands = _l3f_topology!(findings, net)
+    _l3f_validate_delta_orientation!(findings, net, topology, options)
     report = L3FApplicabilityReport(
         any(f -> f.severity == :error, findings) ? :inapplicable : :applicable,
         findings, roots, islands, reduced, lowered)

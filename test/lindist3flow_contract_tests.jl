@@ -618,7 +618,9 @@ end
         record!(check_l3f_applicability(net))
     end
     let net = _l3f_two_bus()
-        net["transformer"] = Dict("wye_delta" => Dict("t" => Dict{String,Any}(
+        # center_tap still has no supported voltage map; wye_delta and delta_wye
+        # do, so they are no longer examples of an unsupported subtype.
+        net["transformer"] = Dict("center_tap" => Dict("t" => Dict{String,Any}(
             "bus_from" => "source", "bus_to" => "load",
             "terminal_map_from" => ["a"], "terminal_map_to" => ["a"])))
         record!(check_l3f_applicability(net))
@@ -692,6 +694,10 @@ end
         "L.L3F.TRANSFORMER_NO_LOAD_LOWERED", "A.L3F.LOAD_LAW_PROJECTED",
         "A.L3F.ADJUSTABLE_TAP_PROJECTED", "A.L3F.BUS_LIMIT_DROPPED",
     ])
+    # Yd/Dy orientation codes; reachable cases live in
+    # lindist3flow_delta_transformer_tests.jl.
+    delta = Set(["E.L3F.DELTA_ORIENTATION_UNSUPPORTED",
+                 "A.L3F.DELTA_ZERO_SEQUENCE_GAUGE"])
     # Codes whose reachable case lives in a dedicated testset above.
     covered = union(emitted, Set([
         "E.L3F.MULTIPLE_SOURCES", "E.L3F.SOURCE_MISSING",
@@ -700,7 +706,8 @@ end
     @test setdiff(expected, covered) == Set{String}()
     # Anything emitted here that the inventory does not name is a new code.
     @test setdiff(emitted,
-        union(expected, lowering, Set(["E.L3F.KRON_REDUCTION_FAILED"]))) == Set{String}()
+        union(expected, lowering, delta,
+              Set(["E.L3F.KRON_REDUCTION_FAILED"]))) == Set{String}()
 end
 
 @testset "LinDist3Flow build refuses inapplicable input" begin

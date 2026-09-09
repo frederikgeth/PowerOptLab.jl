@@ -424,20 +424,28 @@ function _l3f_build_model(net, topology, reference, report, optimizer, options;
                 _l3f_open_delta_limits!(model, constraints, edge, transformer,
                     child_p, child_q, parent_power, reference)
             else
+                # Ratings bind the winding they are declared on. For a diagonal
+                # map the two sides carry identical terminal power and the
+                # distinction is vacuous, but a Yd/Dy map is not diagonal, so
+                # each limit must reach its own side's expression.
+                parent_is_from = !edge.reversed
                 for phi in eachindex(edge.parent_map)
-                    p, q = child_p[phi], child_q[phi]
+                    side_power(from::Bool) = (from == parent_is_from) ?
+                        parent_power[phi] : (child_p[phi], child_q[phi])
+                    from_p, from_q = side_power(true)
+                    to_p, to_q = side_power(false)
                     _l3f_add_power_circle!(model, constraints, :transformer_apparent_power,
-                        (edge.subtype, edge.id, phi), p, q,
+                        (edge.subtype, edge.id, phi), from_p, from_q,
                         get(transformer, "s_rating", nothing))
                     from_vm = abs(reference.voltage[(String(transformer["bus_from"]),
                                                       string.(transformer["terminal_map_from"])[phi])])
                     to_vm = abs(reference.voltage[(String(transformer["bus_to"]),
                                                     string.(transformer["terminal_map_to"])[phi])])
                     _l3f_add_power_circle!(model, constraints, :transformer_from_reference_current,
-                        (edge.subtype, edge.id, phi), p, q,
+                        (edge.subtype, edge.id, phi), from_p, from_q,
                         _l3f_scalar_or_indexed(transformer, "i_max_from", phi, from_vm))
                     _l3f_add_power_circle!(model, constraints, :transformer_to_reference_current,
-                        (edge.subtype, edge.id, phi), p, q,
+                        (edge.subtype, edge.id, phi), to_p, to_q,
                         _l3f_scalar_or_indexed(transformer, "i_max_to", phi, to_vm))
                 end
             end
