@@ -232,6 +232,64 @@ end
     @test shunt_result.buses["load"]["a"]["w"] ≈ 48_500 / 1.004 atol=1e-3
 end
 
+@testset "LinDist3Flow SI/per-unit coordinate equivalence" begin
+    net = _l3f_case(generator=true)
+    merge!(net["load"]["load"], Dict{String,Any}(
+        "model" => "zip", "v_nom" => [230.0],
+        "alpha_z" => [0.35], "alpha_p" => [0.65],
+        "beta_z" => [0.20], "beta_p" => [0.80]))
+    net["shunt"] = Dict("fixed" => Dict{String,Any}(
+        "bus" => "load", "terminal_map" => ["a"],
+        "G_1_1" => 1e-4, "B_1_1" => -2e-4))
+    original = deepcopy(net)
+    common = (; validate_nonlinear=false, objective=:feasibility)
+    si = solve_l3f_opf(net, Ipopt.Optimizer;
+        options=L3FOptions(; common..., per_unit=false),
+        solver_options=("print_level" => 0,))
+    pu = solve_l3f_opf(net, Ipopt.Optimizer;
+        options=L3FOptions(; common..., per_unit=true, s_base=25_000.0),
+        solver_options=("print_level" => 0,))
+
+    @test si.solve.optimal && pu.solve.optimal
+    @test net == original
+    @test pu.formulation["working_units"] == "per_unit"
+    @test pu.formulation["result_units"] == "SI"
+    @test pu.formulation["s_base"] == 25_000.0
+    @test si.formulation["working_units"] == "SI"
+    @test pu.buses["load"]["a"]["w"] ≈ si.buses["load"]["a"]["w"] rtol=1e-8
+    @test pu.lines["line"]["p"] ≈ si.lines["line"]["p"] rtol=1e-8
+    @test pu.lines["line"]["q"] ≈ si.lines["line"]["q"] rtol=1e-8
+    @test pu.generators["pv"]["pg"] ≈ si.generators["pv"]["pg"] rtol=1e-8
+    @test pu.sources["source"]["pg"] ≈ si.sources["source"]["pg"] rtol=1e-8
+
+    pu_build = build_l3f_opf(net, Ipopt.Optimizer;
+        options=L3FOptions(; common..., per_unit=true, s_base=25_000.0))
+    @test pu_build.bases !== nothing
+    @test pu_build.network == original
+    @test pu_build.working_network !== pu_build.network
+    @test pu_build.working_network["load"]["load"]["p_nom"][1] == 0.4
+    @test pu_build.working_reference.voltage[("source", "a")] ≈ 1.0 + 0im
+
+    reg_si = solve_l3f_opf(_l3f_regulator_case(), Clarabel.Optimizer;
+        options=L3FOptions(; common..., per_unit=false),
+        solver_options=("verbose" => false,))
+    reg_pu = solve_l3f_opf(_l3f_regulator_case(), Clarabel.Optimizer;
+        options=L3FOptions(; common..., per_unit=true, s_base=100_000.0),
+        solver_options=("verbose" => false,))
+    @test reg_pu.buses["load"]["a"]["vm"] ≈ reg_si.buses["load"]["a"]["vm"] rtol=1e-9
+    @test reg_pu.transformers["reg"]["p"] ≈ reg_si.transformers["reg"]["p"] rtol=1e-9
+
+    cost_si = solve_l3f_opf(_l3f_case(generator=true), Ipopt.Optimizer;
+        options=L3FOptions(validate_nonlinear=false, objective=:cost, per_unit=false),
+        solver_options=("print_level" => 0,))
+    cost_pu = solve_l3f_opf(_l3f_case(generator=true), Ipopt.Optimizer;
+        options=L3FOptions(validate_nonlinear=false, objective=:cost,
+                           per_unit=true, s_base=17_000.0),
+        solver_options=("print_level" => 0,))
+    @test cost_pu.objective ≈ cost_si.objective rtol=1e-9
+    @test_throws ArgumentError L3FOptions(s_base=0.0)
+end
+
 @testset "LinDist3Flow affine ZP load laws" begin
     options = L3FOptions(validate_nonlinear=false, objective=:feasibility)
     w0 = 230.0^2
@@ -314,7 +372,16 @@ end
 
     result = solve_l3f_opf(net, Clarabel.Optimizer; options,
         solver_options=("verbose" => false,))
+    result_si = solve_l3f_opf(net, Clarabel.Optimizer;
+        options=L3FOptions(validate_nonlinear=false, objective=:feasibility,
+                           per_unit=false),
+        solver_options=("verbose" => false,))
     @test result.solve.optimal
+    @test result_si.solve.optimal
+    @test result.buses["regulated"]["a"]["w"] ≈
+        result_si.buses["regulated"]["a"]["w"] rtol=1e-8
+    @test result.transformers["reg"]["p"] ≈
+        result_si.transformers["reg"]["p"] rtol=1e-8
     source_v = 2400.0 .* cis.([0.0, -2pi / 3, 2pi / 3])
     A = regulator_gain_matrix("open-delta", [0.9, 0.95];
                               connection="ABBC", regulator_type="B")

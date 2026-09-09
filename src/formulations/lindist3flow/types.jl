@@ -4,7 +4,9 @@
 Options for the staged LinDist3Flow BMOPF formulation. It deliberately supports
 only affine physics with exact linear or second-order-cone bounds. Unsupported
 physics is reported by [`check_l3f_applicability`](@ref), never silently
-dropped.
+dropped. BMOPF input and results are always SI; `per_unit=true` (the default)
+uses BMOPFTools' public classic-base preparation for the independent model's
+working coordinates, with system power base `s_base`.
 """
 struct L3FOptions
     current_limit_policy::Symbol
@@ -13,6 +15,8 @@ struct L3FOptions
     kron_reduce::Bool
     require_neutral_provenance::Bool
     objective::Symbol
+    per_unit::Bool
+    s_base::Float64
 end
 
 function L3FOptions(;
@@ -21,15 +25,19 @@ function L3FOptions(;
         reference_policy::Symbol=:auto,
         kron_reduce::Bool=true,
         require_neutral_provenance::Bool=false,
-        objective::Symbol=:cost)
+        objective::Symbol=:cost,
+        per_unit::Bool=true,
+        s_base::Real=1e6)
     current_limit_policy == :reference_current ||
         throw(ArgumentError("only current_limit_policy=:reference_current is defined"))
     reference_policy in (:auto, :explicit, :source_propagated) ||
         throw(ArgumentError("unknown reference_policy"))
     objective in (:cost, :feasibility, :source_import) ||
         throw(ArgumentError("objective must be :cost, :feasibility, or :source_import"))
+    isfinite(s_base) && s_base > 0 ||
+        throw(ArgumentError("s_base must be finite and > 0"))
     L3FOptions(current_limit_policy, validate_nonlinear, reference_policy, kron_reduce,
-        require_neutral_provenance, objective)
+        require_neutral_provenance, objective, per_unit, Float64(s_base))
 end
 
 """A stable, structured applicability diagnostic emitted by the L3F compiler."""
@@ -126,18 +134,22 @@ end
 """
     L3FBuild
 
-Staged LinDist3Flow LP containing semantic variable/constraint maps, the
-working BMOPF snapshot, reference state, and applicability evidence.
+Staged LinDist3Flow LP/SOCP containing semantic variable/constraint maps, SI
+and working-coordinate BMOPF snapshots/reference states, scaling bases, and
+applicability evidence.
 """
 struct L3FBuild
     model::JuMP.Model
     variables::Dict{Symbol,Any}
     constraints::Dict{Symbol,Any}
     reference::L3FReferenceState
+    working_reference::L3FReferenceState
     applicability::L3FApplicabilityReport
     options::L3FOptions
     network::Dict{String,Any}
+    working_network::Dict{String,Any}
     topology::Vector{L3FOrientedLine}
+    bases::Any
 end
 
 """

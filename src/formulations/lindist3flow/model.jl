@@ -102,6 +102,26 @@ function _l3f_reference(net, topology, reference)
     _l3f_validate_reference(result, net)
 end
 
+function _l3f_working_coordinates(net, reference::L3FReferenceState,
+                                  options::L3FOptions)
+    options.per_unit || return deepcopy(net), reference, nothing
+
+    # Reuse BMOPFTools' public coordinate-preparation contract, but none of its
+    # nonlinear component builders.  The returned network is a private working
+    # copy and the caller's BMOPF dictionary remains in SI.
+    context = BMOPFTools.initialize_opf_model(net;
+        per_unit=true, s_base=options.s_base, model=JuMP.Model(), kcl_guard=false)
+    working = BMOPFTools.opf_network(context)
+    bases = BMOPFTools.opf_bases(context)
+    voltage = Dict{Tuple{String,String},ComplexF64}(
+        key => value / bases.v_base[key[1]] for (key, value) in reference.voltage)
+    working_reference = L3FReferenceState(
+        voltage, reference.provenance, _l3f_reference_hash(voltage),
+        reference.nonlinear_status)
+    _l3f_validate_reference(working_reference, working)
+    working, working_reference, bases
+end
+
 function _l3f_report_error(report::L3FApplicabilityReport, code, message)
     findings = copy(report.findings)
     _l3f_error!(findings, code, :network, nothing, message)
@@ -250,7 +270,9 @@ function _l3f_cost_coefficient(component, k::Int, kind::String, id::String)
     Float64(cost[k]) / 1000.0
 end
 
-function _l3f_build_model(net, topology, reference, report, optimizer, options)
+function _l3f_build_model(net, topology, reference, report, optimizer, options;
+                          physical_network=net, physical_reference=reference,
+                          bases=nothing)
     model = optimizer === nothing ? JuMP.Model() : JuMP.Model(optimizer)
     variables = Dict{Symbol,Any}()
     constraints = Dict{Symbol,Any}()
@@ -523,8 +545,8 @@ function _l3f_build_model(net, topology, reference, report, optimizer, options)
         end
     end
     @objective(model, Min, objective)
-    L3FBuild(model, variables, constraints, reference, report, options,
-             net, topology)
+    L3FBuild(model, variables, constraints, physical_reference, reference,
+             report, options, physical_network, net, topology, bases)
 end
 
 """
@@ -534,20 +556,26 @@ end
 Build the L3F-BMOPF lossless radial LP/SOCP. Explicit-neutral inputs are
 Kron-reduced on a copy when enabled. Inapplicable networks raise
 [`L3FInapplicableError`](@ref), whose report contains stable diagnostics.
+Input and extracted results are SI. `options.per_unit` selects only the model's
+working coordinates.
 """
 function build_l3f_opf(net, optimizer=Clarabel.Optimizer;
                        options::L3FOptions=L3FOptions(), reference=nothing)
     prepared = _l3f_prepare(net; options, reference)
     is_l3f_applicable(prepared.applicability) ||
         throw(L3FInapplicableError(prepared.applicability))
-    ref = try
+    physical_reference = try
         _l3f_reference(prepared.network, prepared.topology, reference)
     catch err
         throw(L3FInapplicableError(_l3f_report_error(prepared.applicability,
             "E.L3F.REFERENCE_MISSING", sprint(showerror, err))))
     end
-    _l3f_build_model(prepared.network, prepared.topology, ref,
-                     prepared.applicability, optimizer, options)
+    working, working_reference, bases = _l3f_working_coordinates(
+        prepared.network, physical_reference, options)
+    _l3f_build_model(working, prepared.topology, working_reference,
+                     prepared.applicability, optimizer, options;
+                     physical_network=prepared.network,
+                     physical_reference=physical_reference, bases)
 end
 
 """Classify a continuous L3F model as `:LP`, `:QP`, or `:SOCP`."""
@@ -573,11 +601,13 @@ end
 function _l3f_extract(build::L3FBuild, outcome::SolveOutcome)
     publish = outcome.optimal
     value(variable) = publish ? JuMP.value(variable) : NaN
+    voltage_scale(bus) = build.bases === nothing ? 1.0 : build.bases.v_base[bus]
+    power_scale() = build.bases === nothing ? 1.0 : build.options.s_base
     buses = Dict{String,Any}()
     for (busid_raw, bus) in get(build.network, "bus", Dict())
         busid = String(busid_raw); terminals = Dict{String,Any}()
         for terminal in string.(bus["terminal_names"])
-            wv = value(build.variables[:w][(busid, terminal)])
+            wv = value(build.variables[:w][(busid, terminal)]) * voltage_scale(busid)^2
             terminals[terminal] = Dict{String,Any}(
                 "w" => wv,
                 "vm" => isfinite(wv) ? sqrt(max(0.0, wv)) : NaN,
@@ -593,8 +623,8 @@ function _l3f_extract(build::L3FBuild, outcome::SolveOutcome)
             "reversed_from_input" => edge.reversed,
             "terminal_map_parent" => edge.parent_map,
             "terminal_map_child" => edge.child_map,
-            "p" => [value(build.variables[:p_line][(edge.family, edge.id, k)]) for k in eachindex(edge.parent_map)],
-            "q" => [value(build.variables[:q_line][(edge.family, edge.id, k)]) for k in eachindex(edge.parent_map)],
+            "p" => [value(build.variables[:p_line][(edge.family, edge.id, k)]) * power_scale() for k in eachindex(edge.parent_map)],
+            "q" => [value(build.variables[:q_line][(edge.family, edge.id, k)]) * power_scale() for k in eachindex(edge.parent_map)],
         )
         if edge.family == :line
             lines[edge.id] = output
@@ -611,8 +641,8 @@ function _l3f_extract(build::L3FBuild, outcome::SolveOutcome)
         gid = String(gid_raw); n = length(gen["p_min"])
         generators[gid] = Dict{String,Any}(
             "terminal_map" => string.(gen["terminal_map"]),
-            "pg" => [value(build.variables[:p_generator][(gid, k)]) for k in 1:n],
-            "qg" => [value(build.variables[:q_generator][(gid, k)]) for k in 1:n],
+            "pg" => [value(build.variables[:p_generator][(gid, k)]) * power_scale() for k in 1:n],
+            "qg" => [value(build.variables[:q_generator][(gid, k)]) * power_scale() for k in 1:n],
         )
     end
     sources = Dict{String,Any}()
@@ -620,11 +650,18 @@ function _l3f_extract(build::L3FBuild, outcome::SolveOutcome)
         sid = String(sid_raw); n = length(source["terminal_map"])
         sources[sid] = Dict{String,Any}(
             "terminal_map" => string.(source["terminal_map"]),
-            "pg" => [value(build.variables[:p_source][(sid, k)]) for k in 1:n],
-            "qg" => [value(build.variables[:q_source][(sid, k)]) for k in 1:n],
+            "pg" => [value(build.variables[:p_source][(sid, k)]) * power_scale() for k in 1:n],
+            "qg" => [value(build.variables[:q_source][(sid, k)]) * power_scale() for k in 1:n],
         )
     end
     buses, lines, transformers, generators, sources
+end
+
+function _l3f_physical_objective(build::L3FBuild, outcome::SolveOutcome)
+    outcome.optimal || return NaN
+    value = JuMP.objective_value(build.model)
+    build.bases === nothing && return value
+    build.options.objective == :source_import ? value * build.options.s_base : value
 end
 
 function _l3f_fix_dispatch!(net, result::L3FResult)
@@ -701,10 +738,14 @@ function solve_l3f_opf(net, optimizer=Clarabel.Optimizer;
     status = SolveStatus(outcome)
     buses, lines, transformers, generators, sources = _l3f_extract(build, outcome)
     result = L3FResult(buses, lines, transformers, generators, sources,
-        outcome.optimal ? JuMP.objective_value(build.model) : NaN,
+        _l3f_physical_objective(build, outcome),
         Dict{String,Any}(
             "name" => "L3F-BMOPF", "version" => "0.1-prototype",
             "problem_class" => String(l3f_model_class(build)),
+            "working_units" => options.per_unit ? "per_unit" : "SI",
+            "per_unit" => options.per_unit,
+            "s_base" => options.s_base,
+            "result_units" => "SI",
             "series_losses" => "omitted",
             "voltage_angles" => "fixed reference coefficients; not decision variables",
         ), build.reference, build.applicability,

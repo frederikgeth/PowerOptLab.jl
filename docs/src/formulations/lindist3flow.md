@@ -3,13 +3,26 @@
 PowerOptLab provides an independent LinDist3Flow model builder for normalized
 BMOPF JSON. It does not depend on PowerModelsDistribution and does not turn the
 BMOPFTools nonlinear OPF engine into a multi-formulation engine. BMOPFTools is
-reused at the boundaries: parsing and nonlinear replay; PowerOptLab's
+reused at the boundaries: parsing, public SI/per-unit coordinate preparation,
+and nonlinear replay; PowerOptLab's
 [`kron_reduce_bmopf`](@ref) supplies the neutral-reduced network representation.
+The complete component equations are specified in the
+[LinDist3Flow component model](lindist3flow_components.md), using the same
+data/symbols/variables/equalities/inequalities/implementation organization as
+the BMOPFTools mathematical-model documentation.
 
 ```julia
-options = L3FOptions(validate_nonlinear=true)
+options = L3FOptions(validate_nonlinear=true, per_unit=true, s_base=1e6)
 result = solve_l3f_opf(network, Clarabel.Optimizer; options)
 ```
+
+BMOPF JSON is always supplied in SI and results are always returned in SI.
+`per_unit=true` (the default) changes only the optimization coordinates;
+`per_unit=false` builds the identical formulation in raw SI. PowerOptLab uses
+BMOPFTools' public classic-base preparation to scale a private working copy,
+then constructs its own JuMP model. It does not invoke the nonlinear OPF
+component builders. SI/per-unit equivalence is regression-tested across lines,
+ZP loads, shunts, generators, sources, and fixed regulators.
 
 An explicit-neutral input is reduced on a deep copy by default. Pass
 `L3FOptions(kron_reduce=false)` to require callers to supply an already reduced
