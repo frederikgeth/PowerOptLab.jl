@@ -174,6 +174,7 @@ export L3FOptions, L3FFinding, L3FApplicabilityReport, L3FInapplicableError,
        winding_voltage_coefficients, evaluate_affine, connection_power_map,
        line_drop_coefficients, regulator_gain_matrix,
        check_l3f_applicability, build_l3f_opf, solve_l3f_opf,
+       l3f_reference_from_powerflow,
        validate_l3f_solution, l3f_model_class
 export VoltVarWattIntent, VoltVarWattEncoding, lower_positive_policy,
        formulate_control_curve!, lowering_statistics

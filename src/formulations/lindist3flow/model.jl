@@ -722,6 +722,99 @@ function _l3f_fix_dispatch!(net, result::L3FResult)
 end
 
 """
+    l3f_reference_from_powerflow(net; options=L3FOptions(), dispatch=nothing,
+                                 nonlinear_optimizer=Ipopt.Optimizer,
+                                 solver_options=()) -> L3FReferenceState
+
+Build the linearization reference from a converged nonlinear power flow instead
+of the flat propagated profile.
+
+The default reference carries the source phasors outward through the topology
+applying ratios but no line drop, so on a loaded feeder every coefficient is
+formed at roughly nominal voltage. Linearizing at an actual operating point
+tightens the fixed-angle closure and the frozen channel-to-terminal split, which
+is the direct remedy for accuracy loss under heavy loading or strong unbalance.
+
+The returned state has provenance `:power_flow` and can be passed straight back
+as the `reference` argument, giving the standard successive-linearization loop:
+
+```julia
+first = solve_l3f_opf(net, Clarabel.Optimizer; options)
+better = l3f_reference_from_powerflow(net; options, dispatch=first)
+second = solve_l3f_opf(net, Clarabel.Optimizer; options, reference=better)
+```
+
+A power flow is a determined problem, so BMOPFTools requires every generator to
+be a fixed setpoint. Pass an [`L3FResult`](@ref) as `dispatch` to pin them at a
+previous solution, or fix `p_min == p_max` and `q_min == q_max` in the input.
+Transformer nameplates are stripped from the private working copy first: a
+reference is a linearization point, not a feasibility claim, and an overloaded
+coil would otherwise make the reference solve fail rather than report the
+operating point being linearized at.
+
+Source terminals are restored to their exactly declared phasors, so the result
+always satisfies the reference/source consistency check.
+"""
+function l3f_reference_from_powerflow(net; options::L3FOptions=L3FOptions(),
+                                      dispatch=nothing,
+                                      nonlinear_optimizer=Ipopt.Optimizer,
+                                      solver_options=())
+    prepared = _l3f_prepare(net; options)
+    is_l3f_applicable(prepared.applicability) ||
+        throw(L3FInapplicableError(prepared.applicability))
+    working = deepcopy(prepared.network)
+    dispatch === nothing || _l3f_fix_dispatch!(working, dispatch)
+    for (_, table) in get(working, "transformer", Dict())
+        table isa AbstractDict || continue
+        for (_, transformer) in table
+            transformer isa AbstractDict && delete!(transformer, "s_rating")
+        end
+    end
+    for (gid, generator) in get(working, "generator", Dict())
+        generator isa AbstractDict || continue
+        lo, hi = Float64.(get(generator, "p_min", Float64[])), Float64.(get(generator, "p_max", Float64[]))
+        qlo, qhi = Float64.(get(generator, "q_min", Float64[])), Float64.(get(generator, "q_max", Float64[]))
+        lo == hi && qlo == qhi || throw(ArgumentError(
+            "generator '$gid' is a P/Q range, but a reference power flow is a " *
+            "determined problem. Pass `dispatch=<L3FResult>` to pin it at a " *
+            "previous solution, or set p_min == p_max and q_min == q_max."))
+    end
+
+    pf = BMOPFTools.solve_pf(working; optimizer=nonlinear_optimizer, solver_options)
+    termination = String(get(pf, "termination_status", "UNKNOWN"))
+    termination in ("OPTIMAL", "LOCALLY_SOLVED") || throw(ErrorException(
+        "reference power flow did not converge (status $termination)"))
+
+    voltage = Dict{Tuple{String,String},ComplexF64}()
+    for (busid, bus) in get(prepared.network, "bus", Dict())
+        pf_bus = get(get(pf, "bus", Dict()), String(busid), nothing)
+        pf_bus isa AbstractDict || throw(ErrorException(
+            "reference power flow returned no voltages for bus '$busid'"))
+        for terminal in string.(get(bus, "terminal_names", String[]))
+            entry = get(pf_bus, terminal, nothing)
+            entry isa AbstractDict || throw(ErrorException(
+                "reference power flow returned no voltage for $busid.$terminal"))
+            voltage[(String(busid), terminal)] =
+                ComplexF64(Float64(entry["vr"]), Float64(entry["vi"]))
+        end
+    end
+    # The source is fixed data, not a solved quantity; restoring the declared
+    # phasors keeps the state exactly consistent with the network it describes.
+    for (_, source) in get(prepared.network, "voltage_source", Dict())
+        bus = String(source["bus"])
+        tm = string.(source["terminal_map"])
+        vm = Float64.(source["v_magnitude"])
+        va = Float64.(source["v_angle"])
+        for k in eachindex(tm)
+            voltage[(bus, tm[k])] = vm[k] * cis(va[k])
+        end
+    end
+    state = L3FReferenceState(voltage, :power_flow, _l3f_reference_hash(voltage),
+                              Symbol(termination))
+    _l3f_validate_reference(state, prepared.network)
+end
+
+"""
     validate_l3f_solution(result; nonlinear_optimizer=Ipopt.Optimizer,
                           voltage_tolerance=nothing)
 

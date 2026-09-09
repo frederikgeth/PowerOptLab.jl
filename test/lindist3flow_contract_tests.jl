@@ -218,6 +218,78 @@ end
     @test nested.reference.source_hash != propagated.reference.source_hash
 end
 
+@testset "LinDist3Flow power-flow reference" begin
+    net = _l3f_two_bus()
+    reference = l3f_reference_from_powerflow(net; solver_options=_l3f_ipopt())
+    @test reference isa L3FReferenceState
+    @test reference.provenance == :power_flow
+    @test reference.nonlinear_status in (:OPTIMAL, :LOCALLY_SOLVED)
+    @test length(reference.source_hash) == 64
+
+    # The source is fixed data and is restored exactly; the load bus carries the
+    # real drop, which the flat profile by construction does not.
+    @test reference.voltage[("source", "a")] ≈ 230.0 + 0im
+    @test abs(reference.voltage[("load", "a")]) < 230.0
+    @test abs(reference.voltage[("load", "a")]) ≈ 220.2 atol=0.5
+
+    flat = build_l3f_opf(net, Clarabel.Optimizer;
+        options=L3FOptions(validate_nonlinear=false))
+    @test abs(flat.reference.voltage[("load", "a")]) ≈ 230.0
+
+    # It feeds straight back in and is recorded in the published provenance.
+    refined = solve_l3f_opf(net, Clarabel.Optimizer; options=_L3F_FEASIBLE,
+        reference=reference, solver_options=_l3f_clarabel())
+    @test refined.solve.optimal
+    @test refined.formulation["reference_provenance"] == "power_flow"
+    @test refined.formulation["reference_hash"] == reference.source_hash
+    # Linearizing elsewhere changes the answer; both remain close to the truth.
+    @test refined.buses["load"]["a"]["w"] != flat.reference.voltage[("load", "a")]
+    @test abs(refined.buses["load"]["a"]["vm"] - 220.2) < 1.0
+
+    # `:source_propagated` still refuses to be displaced, even by a real
+    # power-flow reference — the policy names the profile, not the quality.
+    forced = build_l3f_opf(net, Clarabel.Optimizer;
+        options=L3FOptions(validate_nonlinear=false, reference_policy=:source_propagated),
+        reference=reference)
+    @test forced.reference.provenance == :source_propagated
+
+    # A power flow is determined, so an unpinned generator range is refused with
+    # an actionable message rather than a solver failure.
+    ranged = _l3f_two_bus()
+    ranged["generator"] = Dict("pv" => Dict{String,Any}(
+        "bus" => "load", "terminal_map" => ["a"], "configuration" => "SINGLE_PHASE",
+        "p_min" => [0.0], "p_max" => [4_000.0], "q_min" => [0.0], "q_max" => [0.0],
+        "cost" => [0.0]))
+    err = try
+        l3f_reference_from_powerflow(ranged; solver_options=_l3f_ipopt()); nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError
+    @test occursin("dispatch", sprint(showerror, err))
+
+    # Pinning it at a previous solution is the successive-linearization loop.
+    first_pass = solve_l3f_opf(ranged, Clarabel.Optimizer;
+        options=L3FOptions(validate_nonlinear=false, objective=:cost),
+        solver_options=_l3f_clarabel())
+    @test first_pass.generators["pv"]["pg"] ≈ [4_000.0] atol=1e-3
+    looped = l3f_reference_from_powerflow(ranged; dispatch=first_pass,
+        solver_options=_l3f_ipopt())
+    @test looped.provenance == :power_flow
+    # The generator lifts the load-bus voltage, so this reference sits above the
+    # one taken without any dispatch.
+    @test abs(looped.voltage[("load", "a")]) > abs(reference.voltage[("load", "a")])
+    second_pass = solve_l3f_opf(ranged, Clarabel.Optimizer;
+        options=L3FOptions(validate_nonlinear=false, objective=:cost),
+        reference=looped, solver_options=_l3f_clarabel())
+    @test second_pass.solve.optimal
+    @test second_pass.formulation["reference_provenance"] == "power_flow"
+
+    # An inapplicable network is refused before any solver runs.
+    @test_throws L3FInapplicableError l3f_reference_from_powerflow(
+        _l3f_two_bus(load_extra=Dict{String,Any}("configuration" => "ZIGZAG")))
+end
+
 @testset "LinDist3Flow objectives and cost hygiene" begin
     net = _l3f_two_bus()
     net["generator"] = Dict("pv" => Dict{String,Any}(

@@ -186,6 +186,35 @@ not invent private JSON subtypes.
 
 ## Literature and OpenDSS evidence
 
+Two feeder regressions run against OpenDSS as a nonlinear oracle.
+
+### Modified IEEE 13
+
+Transcribed from the IEEE PES Distribution Test Feeder Working Group archive and
+cross-checked against the maintained OpenDSS deck; the impedance matrices are
+Ω/1000 ft and reproduce the published Ω/mile values exactly on multiplication by
+5.28. This feeder is the one whose regulator is a **bank of three single-phase
+units on a single bus pair** — radial per conductor, three parallel edges on the
+bus graph — so it is the direct test of the conductor-level radiality rule. It
+also covers what IEEE 37 does not: buses retaining only one or two phases, a
+single delta leg spanning two terminals, constant-impedance loads in both wye
+and delta connection, an in-line transformer, and fixed shunt capacitors derived
+from the two capacitor banks.
+
+The modifications are each forced by the supported slice and mirrored in the
+OpenDSS deck, so both describe identical physics: the 115 kV source and
+substation transformer are dropped in favour of a nominal 4.16 kV source at bus
+650; the regulator bank and XFM-1 are ideal at fixed taps 1.0625 / 1.0500 /
+1.06875; and loads 692 and 611, constant-current in the original, become
+constant power. Everything else is the published feeder.
+
+Because the OpenDSS regulator bank is built as ideal single-phase transformers
+at the same fixed taps rather than being bypassed, the regulated bus matches to
+better than 1e-4 pu and the bank itself is independently validated — not just
+the feeder downstream of it.
+
+### IEEE 37
+
 The larger regression independently transcribes the IEEE 37 topology and the
 four impedance matrices used by [Bazrafshan, Gatsis, and Zhu
 (PSCC 2018)](https://arxiv.org/abs/1901.04566). It applies the repository's
@@ -224,11 +253,17 @@ as interchangeable would be a misleading test.
 The two error sources with a measurable size are the omitted losses and the
 fixed-angle closure. On the IEEE 37 regression:
 
-| Quantity | Value |
-|---|---|
-| Omitted series losses | 48.0 kW, **1.95 %** of feeder load |
-| Max phase-voltage error vs OpenDSS (108 terminals) | **≈1.2 %** of nominal |
-| RMS phase-voltage error vs OpenDSS | **≈0.6 %** of nominal |
+| Quantity | IEEE 37 | Modified IEEE 13 |
+|---|---|---|
+| Omitted series losses | 48.0 kW, **1.95 %** of load | 103.6 kW, **2.98 %** of load |
+| Max phase-voltage error vs OpenDSS | **≈1.2 %** of nominal (108 terminals) | **0.51 %** of nominal (35 terminals) |
+| RMS phase-voltage error vs OpenDSS | **≈0.6 %** | **0.37 %** |
+| Signed mean error | positive | **+0.30 %** |
+
+The signed mean is the informative one: every deviation on IEEE 13 is an
+*overestimate*. Omitting series losses can only make the linear model optimistic
+about voltage, so a sign flip in that column would mean a different error source
+had appeared. The regression asserts the sign, not just the magnitude.
 
 These sit inside the published LinDist3Flow envelopes. Sankur, Dobbe, Stewart,
 Callaway and Arnold ([arXiv:1606.04492](https://arxiv.org/abs/1606.04492))
@@ -246,8 +281,9 @@ Accuracy degrades where the underlying assumptions weaken:
   long, heavily loaded feeders lose accuracy fastest — and always in the same
   direction: source import is understated.
 - **Large voltage deviation from the reference.** The closure is a first-order
-  expansion about ``\bar v``. Supplying a power-flow reference instead of the
-  flat profile is the direct remedy.
+  expansion about ``\bar v``. [`l3f_reference_from_powerflow`](@ref) makes it
+  exact at a real operating point — but see the caveat below before assuming
+  that improves the answer.
 - **Strong unbalance.** The fixed-angle assumption freezes the inter-phase angle
   differences at their reference values; delta devices and the open-delta bank
   additionally freeze their channel-to-terminal split.
@@ -255,6 +291,34 @@ Accuracy degrades where the underlying assumptions weaken:
 Because losses are omitted, `objective=:cost` and `:source_import` systematically
 understate the true cost of serving a load. Treat them as comparative rather
 than absolute.
+
+### A better reference is not automatically a better answer
+
+[`l3f_reference_from_powerflow`](@ref) removes the closure error by linearizing
+at a converged operating point. It does nothing about the omitted losses, and
+the two errors can partially cancel. Measured against the same nonlinear power
+flow:
+
+| Case | Flat reference | Power-flow reference |
+|---|---|---|
+| IEEE 37 (wye, constant power) | 0.081 % max | 0.077 % max |
+| IEEE 37 at 4x load | 2.19 % max | 2.08 % max |
+| 5-bus delta constant-impedance feeder | 0.046 % max | 0.071 % max |
+| the same feeder at 3x load | 0.359 % max | **0.558 % max** |
+
+The last two rows are not a defect. Omitting losses makes LinDist3Flow
+*overestimate* voltages; linearizing a ZP load at nominal makes it overestimate
+the load's power draw, which pushes voltages back down. On a delta ZP feeder
+those two biases partly cancel, and a reference that removes the second one
+leaves the first standing alone. The signed error is positive under both
+references — the flat profile is simply closer by accident, not by construction.
+
+So: use a power-flow reference when you need the closure itself to be faithful —
+delta devices, voltage-dependent loads, strong unbalance, or a linearization you
+intend to differentiate through. Do not assume it lowers voltage error. IEEE 37
+gains about 5 % because its all-wye constant-power loads barely exercise the
+closure at all; the only reference dependence left there is ``\Gamma`` in the
+line-drop coefficients.
 
 ## Diagnostic codes
 
@@ -393,6 +457,7 @@ line_drop_coefficients
 regulator_gain_matrix
 check_l3f_applicability
 build_l3f_opf
+l3f_reference_from_powerflow
 l3f_model_class
 validate_l3f_solution
 solve_l3f_opf
