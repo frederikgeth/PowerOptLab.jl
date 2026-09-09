@@ -320,12 +320,109 @@ gains about 5 % because its all-wye constant-power loads barely exercise the
 closure at all; the only reference dependence left there is ``\Gamma`` in the
 line-drop coefficients.
 
+## Widening the admissible input
+
+`L3FOptions(unsupported=...)` controls what happens to data outside the
+supported vocabulary. The important point is that "unsupported" covers three
+different situations, and collapsing them into one lenient switch would hide
+which one you are in.
+
+| | What it is | Example | Accuracy cost |
+|---|---|---|---|
+| **Lowering** | outside the component vocabulary, inside the mathematical class | transformer leakage | **none** |
+| **Missing feature** | expressible in the existing closure, simply not written yet | `vpp` / sequence limits | none, once implemented |
+| **Projection** | genuinely destroys information | adjustable tap | real, and not quantifiable from inside |
+
+The policy is a ladder:
+
+| `unsupported` | Behaviour |
+|---|---|
+| `:reject` (default) | Nothing is rewritten. Unsupported data is an error, as the formulation's contract promises. |
+| `:lower` | Exact re-representations only, reported as `L.L3F.*` at severity `:info`. **The solved model is the same physics.** |
+| `:approximate` | Also the lossy projections, reported as `A.L3F.*` at severity `:warning`. **The solved model is a different problem.** |
+
+Every rewrite appears in the applicability report, and
+`result.formulation["unsupported_policy"]` and `["lowered"]` record what was in
+force, so a result can always be traced to what was actually solved.
+
+### Exact lowerings
+
+Each of these replaces a component with supported components that reproduce the
+same two-port or shunt behaviour. There is no approximation, and the regression
+suite proves it by solving each case twice — once from the richer component,
+once from a hand-written equivalent — and requiring agreement to solver
+tolerance.
+
+- **Closed switch → zero-impedance line.** A closed ideal switch is a branch
+  with no series drop. An open switch is removed; if that leaves a subnetwork
+  unenergized, the island check reports it rather than this pass guessing.
+- **Fixed capacitor → fixed shunt.** ``B = q_{rated}/v_{nom}^2`` per coil, and
+  for a delta bank ``D^{\mathsf T}\operatorname{diag}(b)D`` — the terminal
+  admittance matrix of the same three coils. BMOPF capacitors carry no switching
+  state, so nothing is assumed.
+- **Line shunt → terminal shunts.** BMOPF already declares the from- and to-side
+  halves separately, so moving each onto its own bus restates the same π model.
+  Linecode entries are per unit length and scale with `length`.
+- **Transformer leakage and no-load admittance → series line and shunt.** A
+  winding leakage is a series impedance in the coil's own coordinates and the
+  no-load admittance is a shunt across the winding-2 coil. Introducing one
+  internal bus per non-zero winding and stamping ordinary line and shunt
+  elements reproduces the two-port exactly. The internal buses and branches
+  appear in the result under `_l3f_` names, which is what makes the rewrite
+  auditable rather than hidden.
+
+That last one is the substantive one: it turns "ideal transformers only" into
+"any transformer of a supported connection", at no cost in fidelity.
+
+### Projections
+
+- **Constant-current, ZIP with a current fraction, and exponential loads → ZP.**
+  A term ``(V/V_{nom})^\gamma`` is matched in value and first derivative at
+  ``V=V_{nom}`` by ``\alpha_P+\alpha_Z(V/V_{nom})^2`` with
+  ``\alpha_Z=\gamma/2``, ``\alpha_P=1-\gamma/2``. Exact for ``\gamma=0`` and
+  ``\gamma=2``; for ``\gamma=1`` it is the familiar half-to-Z, half-to-P split
+  of a constant-current term. The error is second order in the voltage deviation
+  from nominal.
+- **Adjustable tap → fixed tap.** The declared operating tap when it lies inside
+  the interval, otherwise the midpoint. This removes a decision variable: the
+  answer is feasible *for that setting*, not optimal over the range.
+- **Unassessed bus limits are dropped.** `vpp_*`, `vpos_*`, `vneg_max`,
+  `vzero_max` and `vm_unbalance_max` are removed with a warning. The solved
+  problem is a **relaxation** and its solution may violate them. These are the
+  "missing feature" row of the table above rather than a true impossibility —
+  each is affine in ``w`` through the same cross-voltage closure the model
+  already forms, so implementing them properly is the right eventual fix.
+
+!!! warning "The replay does not measure the projection error"
+    Under `:approximate` the snapshot the nonlinear replay runs on is the
+    *projected* network, so both sides describe the same substituted physics.
+    `validation["replayed_network"]` is `"projected"` in that case and
+    `"as_supplied"` otherwise.
+
+### What is never projected
+
+Projection must not invent physics. These stay errors at every policy level,
+because there is no defensible substitution:
+
+- **`wye_delta`, `delta_wye`, `center_tap`, `n_winding` transformers.** Each
+  needs a real voltage map; treating one as a per-conductor ratio would destroy
+  the phase shift and the zero-sequence blocking. These are a missing feature —
+  the maps are fixed matrices of exactly the form ``T`` already takes — not an
+  impossibility.
+- **Meshed islands, multiple or missing sources.** Choosing a spanning tree or
+  a slack would change which problem is being solved.
+- **IBR component models.** Replacing a control law with a free P/Q box would
+  make the OPF optimistic in exactly the dimension the IBR exists to constrain.
+- **DC subsystems.**
+
 ## Diagnostic codes
 
 Every rejection is a typed [`L3FFinding`](@ref) with a stable code. Errors make
 the report inapplicable and cause [`build_l3f_opf`](@ref) to raise
-[`L3FInapplicableError`](@ref); warnings never block a build. A test enforces
-that each code below has a reachable case.
+[`L3FInapplicableError`](@ref); warnings and `:info` findings never block a
+build. The prefix carries the severity: `E.` error, `W.` warning, `L.` an exact
+lowering (`:info`), `A.` a lossy projection (`:warning`). A test enforces that
+each code below has a reachable case.
 
 | Code | Severity | Meaning |
 |---|:--:|---|
@@ -362,7 +459,17 @@ that each code below has a reachable case.
 | `E.L3F.SWITCH_UNSUPPORTED` | E | Switches are outside the slice. |
 | `E.L3F.COMPONENT_UNSUPPORTED` | E | Capacitors, IBR component models, and other unsupported families. |
 | `E.L3F.DC_SUBSYSTEM_UNSUPPORTED` | E | Any DC subsystem table. |
+| `E.L3F.CAPACITOR_INVALID` | E | A capacitor could not be lowered: non-positive `v_nom`, non-finite `q_rated`, or a connection the incidence map does not cover. |
 | `W.L3F.COST_MISSING` | W | `objective=:cost` but a dispatchable unit declares no `cost`; it is priced at zero and the optimum may be non-unique. |
+| `L.L3F.SWITCH_LOWERED` | I | Closed switch represented exactly as a zero-impedance line. |
+| `L.L3F.SWITCH_OPEN_REMOVED` | I | Open switch removed; any subnetwork it alone energized is now a separate island. |
+| `L.L3F.CAPACITOR_LOWERED` | I | Fixed capacitor represented exactly as a shunt. |
+| `L.L3F.LINE_SHUNT_LOWERED` | I | A declared π half moved onto its own bus as a shunt. |
+| `L.L3F.TRANSFORMER_LEAKAGE_LOWERED` | I | Winding leakage represented exactly as a series line through an internal bus. |
+| `L.L3F.TRANSFORMER_NO_LOAD_LOWERED` | I | No-load admittance represented exactly as a shunt across the to-side coil. |
+| `A.L3F.LOAD_LAW_PROJECTED` | W | A constant-current, ZIP-with-current, or exponential law projected onto its ZP tangent at `v_nom`. |
+| `A.L3F.ADJUSTABLE_TAP_PROJECTED` | W | A tap interval collapsed to one fixed setting; the optimizer no longer selects the tap. |
+| `A.L3F.BUS_LIMIT_DROPPED` | W | A bus limit the formulation does not assess was removed; the solved problem is a relaxation. |
 
 ## Result contract
 
@@ -376,7 +483,7 @@ SI regardless of `per_unit`, and is `NaN` when the solve was not optimal.
 | `transformers[id]` also | `"subtype"`, `"effective_ratio_from_to"` |
 | `generators[id]`, `sources[id]` | `"pg"`, `"qg"` (W, var), `"terminal_map"` |
 | `objective` | currency/h for `:cost`, W for `:source_import`, `0.0` for `:feasibility` |
-| `formulation` | `"name"`, `"version"`, `"problem_class"`, `"per_unit"`, `"s_base"`, `"working_units"`, `"result_units"`, `"series_losses"`, `"voltage_angles"`, `"reference_provenance"`, `"reference_hash"` |
+| `formulation` | `"name"`, `"version"`, `"problem_class"`, `"per_unit"`, `"s_base"`, `"working_units"`, `"result_units"`, `"series_losses"`, `"voltage_angles"`, `"unsupported_policy"`, `"lowered"`, `"reference_provenance"`, `"reference_hash"` |
 | `validation` | see below |
 
 !!! warning "Branch flows are oriented parent → child"
@@ -385,6 +492,11 @@ SI regardless of `per_unit`, and is `NaN` when the solve was not optimal.
     necessarily BMOPF's `bus_from → bus_to`. When `"reversed_from_input"` is
     `true` the sign is opposite to the input orientation, and the entries are
     indexed by `"terminal_map_parent"` rather than `terminal_map_from`.
+
+Under `unsupported=:lower` or `:approximate` the result also contains the
+internal buses and branches the lowering introduced, under `_l3f_`-prefixed
+names. They are real model elements, not bookkeeping, and the corresponding
+`L.L3F.*` finding names each one.
 
 `validation["status"]` is `"replayed"`, `"failed"`, or `"not_run"`. It reports
 whether the nonlinear replay *ran*, never whether the linear answer was accurate

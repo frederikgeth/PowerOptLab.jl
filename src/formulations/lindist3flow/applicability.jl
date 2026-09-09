@@ -775,6 +775,7 @@ function _l3f_prepare(input; options::L3FOptions=L3FOptions(), reference=nothing
         _l3f_error!(findings, "E.L3F.NEUTRAL_REDUCTION_UNDECLARED", :network, nothing,
             "neutral-reduction provenance or an explicit reference is required by options")
     end
+    lowered = _l3f_lower!(findings, net, options)
     options.reference_policy == :explicit && reference === nothing && _l3f_error!(findings,
         "E.L3F.REFERENCE_MISSING", :network, nothing,
         "reference_policy=:explicit requires a reference argument")
@@ -786,7 +787,7 @@ function _l3f_prepare(input; options::L3FOptions=L3FOptions(), reference=nothing
     topology, roots, islands = _l3f_topology!(findings, net)
     report = L3FApplicabilityReport(
         any(f -> f.severity == :error, findings) ? :inapplicable : :applicable,
-        findings, roots, islands, reduced)
+        findings, roots, islands, reduced, lowered)
     (network=net, applicability=report, topology=topology)
 end
 

@@ -32,6 +32,13 @@ Line shunts, series losses, variable taps, and every component not listed here
 are rejected by [`check_l3f_applicability`](@ref); they are not silently
 omitted. The full exclusion list is on the [formulation overview](lindist3flow.md).
 
+`L3FOptions(unsupported=:lower)` widens the *input* vocabulary without changing
+any equation on this page: switches, capacitors, line shunts, and transformer
+leakage and no-load admittance are rewritten into the components above, exactly.
+`unsupported=:approximate` additionally substitutes load laws and taps, which
+does change the problem. Both are described under
+[widening the admissible input](lindist3flow.md#Widening-the-admissible-input).
+
 `L3FOptions(per_unit=true, s_base=S_b)` is the default. BMOPFTools' public
 classic scaling preparation supplies the working copy and bases
 

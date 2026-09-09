@@ -160,7 +160,7 @@ function _l3f_report_error(report::L3FApplicabilityReport, code, message)
     findings = copy(report.findings)
     _l3f_error!(findings, code, :network, nothing, message)
     L3FApplicabilityReport(:inapplicable, findings, report.roots,
-                           report.islands, report.kron_reduced)
+                           report.islands, report.kron_reduced, report.lowered)
 end
 
 function _l3f_add_bounds!(variable, data, index::Int,
@@ -827,6 +827,11 @@ about the replay, not about accuracy**: the linearization omits series losses,
 so a converged replay always differs from the linear solution by some margin.
 Supply `voltage_tolerance` (in volts) to have that margin judged; the result
 then carries `within_tolerance`. Physical limits are never certified here.
+
+`replayed_network` is `"as_supplied"` normally and `"projected"` when
+`unsupported=:approximate` substituted a load law, tap, or limit. In that case
+both the linear model and the replay describe the *substituted* network, so the
+reported error measures the linearization but not the projection.
 """
 function validate_l3f_solution(result::L3FResult;
                                nonlinear_optimizer=Ipopt.Optimizer,
@@ -834,7 +839,13 @@ function validate_l3f_solution(result::L3FResult;
     result.solve.optimal || return Dict{String,Any}(
         "status" => "not_run", "reason" => "L3F solve was not optimal",
         "physical_limits" => "unassessed")
+
     working = _l3f_fix_dispatch!(deepcopy(result.network), result)
+    # Under `unsupported=:approximate` the snapshot is the projected network, so
+    # the replay measures the linearization error but NOT the projection error:
+    # both sides are solving the same substituted physics. The flag says which.
+    replayed_network = any(f -> startswith(f.code, "A.L3F."),
+                           result.applicability.findings) ? "projected" : "as_supplied"
     try
         pf = BMOPFTools.solve_pf(working; optimizer=nonlinear_optimizer)
         termination = String(get(pf, "termination_status", "UNKNOWN"))
@@ -859,6 +870,7 @@ function validate_l3f_solution(result::L3FResult;
             "rms_voltage_magnitude_error" => isempty(errors) ? NaN : sqrt(sum(abs2, errors) / length(errors)),
             "compared_terminals" => length(errors),
             "physical_limits" => "unassessed",
+            "replayed_network" => replayed_network,
             "claim" => "nonlinear replay comparison, not a physical-feasibility certificate",
         )
         if voltage_tolerance !== nothing
@@ -905,6 +917,8 @@ function solve_l3f_opf(net, optimizer=Clarabel.Optimizer;
             "s_base" => options.s_base,
             "result_units" => "SI",
             "series_losses" => "omitted",
+            "unsupported_policy" => String(options.unsupported),
+            "lowered" => build.applicability.lowered,
             "reference_provenance" => String(build.reference.provenance),
             "reference_hash" => build.reference.source_hash,
             "voltage_angles" => "fixed reference coefficients; not decision variables",

@@ -683,6 +683,15 @@ end
         "E.L3F.VOLTAGE_BOUND_INVALID", "E.L3F.ZIP_CURRENT_UNSUPPORTED",
         "W.L3F.COST_MISSING",
     ])
+    # Codes that only the lowering pass can emit; reachable cases live in
+    # lindist3flow_lowering_tests.jl, which owns that policy surface.
+    lowering = Set([
+        "E.L3F.CAPACITOR_INVALID", "L.L3F.SWITCH_LOWERED",
+        "L.L3F.SWITCH_OPEN_REMOVED", "L.L3F.CAPACITOR_LOWERED",
+        "L.L3F.LINE_SHUNT_LOWERED", "L.L3F.TRANSFORMER_LEAKAGE_LOWERED",
+        "L.L3F.TRANSFORMER_NO_LOAD_LOWERED", "A.L3F.LOAD_LAW_PROJECTED",
+        "A.L3F.ADJUSTABLE_TAP_PROJECTED", "A.L3F.BUS_LIMIT_DROPPED",
+    ])
     # Codes whose reachable case lives in a dedicated testset above.
     covered = union(emitted, Set([
         "E.L3F.MULTIPLE_SOURCES", "E.L3F.SOURCE_MISSING",
@@ -690,7 +699,8 @@ end
     ]))
     @test setdiff(expected, covered) == Set{String}()
     # Anything emitted here that the inventory does not name is a new code.
-    @test setdiff(emitted, union(expected, Set(["E.L3F.KRON_REDUCTION_FAILED"]))) == Set{String}()
+    @test setdiff(emitted,
+        union(expected, lowering, Set(["E.L3F.KRON_REDUCTION_FAILED"]))) == Set{String}()
 end
 
 @testset "LinDist3Flow build refuses inapplicable input" begin

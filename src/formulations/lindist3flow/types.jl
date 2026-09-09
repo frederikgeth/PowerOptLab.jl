@@ -15,6 +15,7 @@ working coordinates, with system power base `s_base`.
 | `reference_policy` | `:auto`, `:explicit`, `:source_propagated` | Which linearization point to use. `:auto` prefers a supplied `reference` and otherwise propagates the source phasors; `:explicit` requires a supplied `reference`; `:source_propagated` always uses the propagated flat profile and ignores a supplied `reference`. |
 | `kron_reduce` | `Bool` (`true`) | Kron-reduce an explicit-neutral input on a copy. When `false`, an explicit neutral is an error. |
 | `require_neutral_provenance` | `Bool` (`false`) | Require recorded `_meta["kron_reduction"]` provenance, or an explicit reference, before building. |
+| `unsupported` | `:reject` (default), `:lower`, `:approximate` | How to treat data outside the supported vocabulary. `:reject` reports it and refuses. `:lower` applies only exact re-representations (switches, capacitors, line shunts, transformer leakage and no-load admittance), reported as `L.L3F.*` at severity `:info`. `:approximate` additionally applies lossy projections (constant-current and exponential load laws, adjustable taps, unassessed bus limits), reported as `A.L3F.*` at severity `:warning`. |
 | `objective` | `:cost`, `:feasibility`, `:source_import` | Linear per-channel energy cost, a zero objective, or total source active injection. |
 | `per_unit` | `Bool` (`true`) | Optimization coordinates only. Input and results are SI either way. |
 | `s_base` | `Real` (`1e6`) | System VA base for the per-unit working copy. |
@@ -25,6 +26,7 @@ struct L3FOptions
     reference_policy::Symbol
     kron_reduce::Bool
     require_neutral_provenance::Bool
+    unsupported::Symbol
     objective::Symbol
     per_unit::Bool
     s_base::Float64
@@ -36,6 +38,7 @@ function L3FOptions(;
         reference_policy::Symbol=:auto,
         kron_reduce::Bool=true,
         require_neutral_provenance::Bool=false,
+        unsupported::Symbol=:reject,
         objective::Symbol=:cost,
         per_unit::Bool=true,
         s_base::Real=1e6)
@@ -43,12 +46,14 @@ function L3FOptions(;
         throw(ArgumentError("only current_limit_policy=:reference_current is defined"))
     reference_policy in (:auto, :explicit, :source_propagated) ||
         throw(ArgumentError("unknown reference_policy"))
+    unsupported in (:reject, :lower, :approximate) ||
+        throw(ArgumentError("unsupported must be :reject, :lower, or :approximate"))
     objective in (:cost, :feasibility, :source_import) ||
         throw(ArgumentError("objective must be :cost, :feasibility, or :source_import"))
     isfinite(s_base) && s_base > 0 ||
         throw(ArgumentError("s_base must be finite and > 0"))
     L3FOptions(current_limit_policy, validate_nonlinear, reference_policy, kron_reduce,
-        require_neutral_provenance, objective, per_unit, Float64(s_base))
+        require_neutral_provenance, unsupported, objective, per_unit, Float64(s_base))
 end
 
 """A stable, structured applicability diagnostic emitted by the L3F compiler."""
@@ -69,7 +74,10 @@ L3FFinding(code, severity, component, id, message) =
     L3FApplicabilityReport
 
 Result of [`check_l3f_applicability`](@ref). `status` is `:applicable` or
-`:inapplicable`; warnings remain available even when a build is permitted.
+`:inapplicable`; warnings and `:info` findings remain available even when a
+build is permitted. `lowered` records whether
+`L3FOptions(unsupported=:lower|:approximate)` rewrote anything, in which case
+the `L.L3F.*` and `A.L3F.*` findings say exactly what.
 """
 struct L3FApplicabilityReport
     status::Symbol
@@ -77,7 +85,11 @@ struct L3FApplicabilityReport
     roots::Vector{String}
     islands::Vector{Vector{String}}
     kron_reduced::Bool
+    lowered::Bool
 end
+
+L3FApplicabilityReport(status, findings, roots, islands, kron_reduced) =
+    L3FApplicabilityReport(status, findings, roots, islands, kron_reduced, false)
 
 """`true` when the report carries no findings at all, warnings included. This is
 strictly stronger than [`is_l3f_applicable`](@ref), which tolerates warnings."""

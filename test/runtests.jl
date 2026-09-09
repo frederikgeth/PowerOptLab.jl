@@ -60,6 +60,7 @@ const _HAS_ODS = true
     include("kron_reduction_tests.jl")
     include("lindist3flow_tests.jl")
     include("lindist3flow_contract_tests.jl")
+    include("lindist3flow_lowering_tests.jl")
     include("lindist3flow_literature_tests.jl")
     include("lindist3flow_ieee13_tests.jl")
 end

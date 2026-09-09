@@ -117,6 +117,7 @@ include("formulations/experiments.jl")
 # Independent linearized multiphase OPF for neutral-reduced BMOPF networks.
 include("formulations/lindist3flow/types.jl")
 include("formulations/lindist3flow/coefficients.jl")
+include("formulations/lindist3flow/lowering.jl")
 include("formulations/lindist3flow/applicability.jl")
 include("formulations/lindist3flow/model.jl")
 
