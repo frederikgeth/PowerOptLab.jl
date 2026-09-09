@@ -173,6 +173,19 @@ end
     net = _l3f_two_bus()
     flat = Dict(("source", "a") => 230.0 + 0im, ("load", "a") => 230.0 + 0im)
 
+    # Internal option derivation preserves every field except explicit
+    # overrides, so adding a future field has one centralized copy path.
+    original_options = L3FOptions(validate_nonlinear=false,
+        reference_policy=:explicit, kron_reduce=false,
+        require_neutral_provenance=true, unsupported=:approximate,
+        objective=:source_import, per_unit=false, s_base=12_345.0)
+    copied_options = PowerOptLab._l3f_with_options(original_options;
+        reference_policy=:source_propagated)
+    @test copied_options.reference_policy == :source_propagated
+    for name in setdiff(collect(fieldnames(L3FOptions)), [:reference_policy])
+        @test getfield(copied_options, name) == getfield(original_options, name)
+    end
+
     auto = build_l3f_opf(net, Clarabel.Optimizer;
         options=L3FOptions(validate_nonlinear=false, reference_policy=:auto),
         reference=flat)
@@ -630,6 +643,11 @@ end
         record!(check_l3f_applicability(net))
     end
     let net = _l3f_two_bus()
+        merge!(net["line"]["line"], Dict{String,Any}(
+            "R_series_1_1" => 0.2, "X_series_1_1" => 0.1))
+        record!(check_l3f_applicability(net))
+    end
+    let net = _l3f_two_bus()
         delete!(net["line"]["line"], "linecode")
         record!(check_l3f_applicability(net))
     end
@@ -699,7 +717,8 @@ end
         "E.L3F.EMPTY_NETWORK", "E.L3F.EXPLICIT_NEUTRAL_UNSUPPORTED",
         "E.L3F.GROUNDED_TERMINAL_RETAINED",
         "E.L3F.LIMIT_INVALID", "E.L3F.LIMIT_UNSUPPORTED",
-        "E.L3F.LINE_MATRIX_INVALID", "E.L3F.LINE_SHUNT_UNSUPPORTED",
+        "E.L3F.LINE_IMPEDANCE_SOURCE", "E.L3F.LINE_MATRIX_INVALID",
+        "E.L3F.LINE_SHUNT_UNSUPPORTED",
         "E.L3F.LOAD_MODEL_UNSUPPORTED", "E.L3F.MULTIPLE_SOURCES",
         "E.L3F.NEUTRAL_REDUCTION_UNDECLARED", "E.L3F.REFERENCE_MISSING",
         "E.L3F.REFERENCE_ZERO_WINDING", "E.L3F.SHUNT_INVALID",
@@ -714,7 +733,7 @@ end
     # lindist3flow_lowering_tests.jl, which owns that policy surface.
     lowering = Set([
         "E.L3F.CAPACITOR_INVALID", "L.L3F.SWITCH_LOWERED",
-        "E.L3F.LINE_SHUNT_INVALID",
+        "E.L3F.LINE_SHUNT_INVALID", "W.L3F.LINE_SHUNT_ASYMMETRIC",
         "L.L3F.SWITCH_OPEN_REMOVED", "L.L3F.CAPACITOR_LOWERED",
         "L.L3F.LINE_SHUNT_LOWERED", "L.L3F.TRANSFORMER_LEAKAGE_LOWERED",
         "L.L3F.TRANSFORMER_NO_LOAD_LOWERED", "A.L3F.LOAD_LAW_PROJECTED",

@@ -379,6 +379,21 @@ rating is inherited. A lowered switch copies both `s_max` and `i_max` onto its
 zero-impedance line. A lowered pi shunt contributes ``s^{sh}_{\ell e\phi}`` at
 its own endpoint.
 
+Both endpoint cones are stamped even for a shunt-free line. In an exact AC
+series branch,
+
+```math
+|S_{parent}|^2/w_{parent}=|S_{child}|^2/w_{child}=|I^{series}|^2.
+```
+
+The lossless model instead reuses one series ``S`` while allowing the endpoint
+voltages to differ, so ``|S|/\sqrt{w_{parent}}`` and
+``|S|/\sqrt{w_{child}}`` need not agree. Requiring both current cones takes the
+tighter endpoint-derived value. This is deliberate conservatism and differs
+from BMOPFTools' nonlinear branch builder, which omits its separate to-side
+current cone on a shunt-free line. Both ``S^{max}`` cones are also retained at
+all lines and lowered switches for one uniform endpoint contract.
+
 **Ordinary single-phase transformers and single-phase autotransformers.** Let
 ``s^{end}_{te\phi}`` be power entering the transformer at original endpoint
 ``e\in\{from,to\}``: the oriented parent expression is ``Hs_t``, the child

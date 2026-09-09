@@ -34,7 +34,9 @@ with stable codes; it is never silently dropped.
 
 Version `0.1-prototype` builds a continuous affine LP or SOCP for radial AC islands with
 exactly one fixed-voltage source per island. It supports neutral-reduced series
-lines, grounded-wye, single-phase and delta constant-power,
+lines without shunts under the default `unsupported=:reject` policy; `:lower`
+adds the documented endpoint-shunt representation. It also supports
+grounded-wye, single-phase and delta constant-power,
 constant-impedance, and pure ZP ZIP loads, constant-power generators, fixed bus
 shunts, ideal fixed-ratio single-phase
 transformers, ideal Yd/Dy banks, and ANSI A/B autotransformer regulators, retained phase-to-ground
@@ -96,6 +98,11 @@ reference, `:explicit` demands one, and `:source_propagated` always uses the
 propagated profile. Source values, missing or zero phasors, and topology maps
 are validated before model construction. Angles are coefficient data, not
 decision variables.
+
+The BMOPF bus field `va_nom` is nominal angle-difference centering metadata,
+not an absolute operating-point phasor. It therefore does not select or alter
+the L3F reference. Supply explicit phasors, or use source propagation (including
+the declared transformer vector groups), when choosing the fixed-angle closure.
 
 The reference actually used is published as
 `result.formulation["reference_provenance"]` and a content hash under
@@ -524,9 +531,11 @@ each code below has a reachable case.
 | `E.L3F.CONNECTION_UNSUPPORTED` | E | A device configuration outside `WYE`/`SINGLE_PHASE`/`DELTA` (sources: wye only). |
 | `E.L3F.LOAD_MODEL_UNSUPPORTED` | E | A load model other than constant power, constant impedance, or ZIP. |
 | `E.L3F.ZIP_CURRENT_UNSUPPORTED` | E | A ZIP load with a nonzero current fraction; not affine in squared voltage. |
-| `E.L3F.LINE_MATRIX_INVALID` | E | A line has no impedance source or a malformed series matrix. Inline markers take precedence over a referenced linecode. |
+| `E.L3F.LINE_MATRIX_INVALID` | E | A line has no impedance source or has a malformed selected series matrix. |
+| `E.L3F.LINE_IMPEDANCE_SOURCE` | E | A line declares both inline series impedance and a linecode; BMOPF requires exactly one source. |
 | `E.L3F.LINE_SHUNT_UNSUPPORTED` | E | A line or linecode declares shunt admittance. |
 | `E.L3F.LINE_SHUNT_INVALID` | E | A selected line-shunt matrix declares an entry outside its terminal-map arity. |
+| `W.L3F.LINE_SHUNT_ASYMMETRIC` | W | A lowered line-shunt matrix is asymmetric; it is preserved, but is not the reciprocal passive-line form normally expected. |
 | `E.L3F.SHUNT_INVALID` | E | A shunt admittance is non-finite or declares an entry outside its terminal-map arity. |
 | `E.L3F.TRANSFORMER_UNSUPPORTED` | E | A transformer subtype outside the supported set. |
 | `E.L3F.TRANSFORMER_RATIO_INVALID` | E | A ratio is missing, non-positive, non-finite, or the wrong arity. |

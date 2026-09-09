@@ -197,8 +197,8 @@ end
 end
 
 @testset "LinDist3Flow canonical lowering: line shunts" begin
-    # Inline series coefficients select the inline absolute shunt source even
-    # when a linecode is also referenced; the two sources are never merged.
+    # BMOPF requires exactly one impedance source. Retain deterministic inline
+    # precedence internally, but reject the ambiguous public declaration.
     shunted = _l3f_low_case()
     merge!(shunted["line"]["l2"], Dict{String,Any}(
         "R_series_1_1" => 0.2, "X_series_1_1" => 0.1,
@@ -208,6 +208,10 @@ end
         "R_series_1_1" => 0.2, "X_series_1_1" => 0.1,
         "G_from_1_1" => 9.0)
     shunted["line"]["l2"]["linecode"] = "lc2"
+    dual_source = check_l3f_applicability(shunted;
+        options=L3FOptions(unsupported=:lower))
+    @test _l3f_low_has(dual_source, "E.L3F.LINE_IMPEDANCE_SOURCE")
+    delete!(shunted["line"]["l2"], "linecode")
 
     # Hand-written pi equivalent: each declared half on its own bus.
     manual = _l3f_low_case()
@@ -226,8 +230,7 @@ end
     # Still rejected under the default policy.
     @test _l3f_low_has(check_l3f_applicability(shunted), "E.L3F.LINE_SHUNT_UNSUPPORTED")
 
-    # The referenced linecode shunt is inactive because inline Z selected the
-    # line's own coefficient source.
+    # The unused linecode is never merged into the selected inline source.
     prepared = PowerOptLab._l3f_prepare(shunted;
         options=L3FOptions(validate_nonlinear=false, unsupported=:lower))
     @test prepared.network["shunt"]["_l3f_lineshunt_l2_from"]["G_1_1"] == 2e-4
@@ -241,6 +244,21 @@ end
     @test length(rated_build.constraints[:line_current]) == 2
     @test all(JuMP.constraint_object(c).set isa JuMP.MOI.RotatedSecondOrderCone
               for c in values(rated_build.constraints[:line_current]))
+
+    # The line-owned pi shunt belongs inside the line's endpoint ampacity cone;
+    # an electrically identical standalone bank belongs only in nodal balance.
+    manual_rated = deepcopy(manual)
+    manual_rated["line"]["l2"]["i_max"] = [100.0]
+    manual_build = build_l3f_opf(manual_rated, Clarabel.Optimizer;
+        options=L3FOptions(validate_nonlinear=false))
+    lowered_cone = JuMP.constraint_object(
+        rated_build.constraints[:line_current][("l2", "from", 1)]).func
+    standalone_cone = JuMP.constraint_object(
+        manual_build.constraints[:line_current][("l2", "from", 1)]).func
+    lowered_w = rated_build.variables[:w][("m", "a")]
+    standalone_w = manual_build.variables[:w][("m", "a")]
+    @test any(!iszero(JuMP.coefficient(lowered_cone[i], lowered_w)) for i in 3:4)
+    @test all(iszero(JuMP.coefficient(standalone_cone[i], standalone_w)) for i in 3:4)
 
     # A linecode carries per-unit-length shunt, so it scales with `length`.
     coded = _l3f_low_case()
@@ -266,6 +284,7 @@ end
     # cone stamped on the series-flow variable alone.
     endpoint_rated = _l3f_low_case()
     empty!(endpoint_rated["load"])
+    delete!(endpoint_rated["line"]["l2"], "linecode")
     merge!(endpoint_rated["line"]["l2"], Dict{String,Any}(
         "R_series_1_1" => 0.2, "X_series_1_1" => 0.1,
         "B_from_1_1" => 1.0e-2, "s_max" => [100.0]))
@@ -299,16 +318,20 @@ end
         "linecode" => Dict{String,Any}(), "shunt" => Dict{String,Any}())
     triangular = deepcopy(full)
     delete!(triangular["line"]["l"], "G_from_2_1")
-    PowerOptLab._l3f_lower_line_shunts!(PowerOptLab.L3FFinding[], full)
+    full_findings = PowerOptLab.L3FFinding[]
+    PowerOptLab._l3f_lower_line_shunts!(full_findings, full)
     lowered_full = full["shunt"]["_l3f_lineshunt_l_from"]
     @test lowered_full["G_1_2"] == 1.0
     @test lowered_full["G_2_1"] == 2.0
     @test lowered_full["G_1_1"] == 3.0
+    @test any(f -> f.code == "W.L3F.LINE_SHUNT_ASYMMETRIC", full_findings)
 
-    PowerOptLab._l3f_lower_line_shunts!(PowerOptLab.L3FFinding[], triangular)
+    triangular_findings = PowerOptLab.L3FFinding[]
+    PowerOptLab._l3f_lower_line_shunts!(triangular_findings, triangular)
     lowered_triangular = triangular["shunt"]["_l3f_lineshunt_l_from"]
     @test lowered_triangular["G_1_2"] == 1.0
     @test lowered_triangular["G_2_1"] == 1.0
+    @test !any(f -> f.code == "W.L3F.LINE_SHUNT_ASYMMETRIC", triangular_findings)
 
     invalid = deepcopy(coded)
     invalid["linecode"]["shunted"]["G_from_2_2"] = 1e-4

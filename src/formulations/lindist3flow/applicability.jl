@@ -676,9 +676,14 @@ function _l3f_validate_lines!(findings, net)
             end
         end
         lcid = get(line, "linecode", nothing)
-        # Use the same single source selected by BMOPFTools for the series
-        # matrix.  In particular, do not report or lower linecode shunts when
-        # an inline absolute matrix is the active source.
+        if _l3f_has_inline_z(line) && lcid isa AbstractString
+            _l3f_error!(findings, "E.L3F.LINE_IMPEDANCE_SOURCE", :line, id,
+                "line declares both an inline series-impedance matrix and " *
+                "linecode '$lcid'; BMOPF requires exactly one impedance source")
+        end
+        # After recording the integrity error above, keep deterministic inline
+        # precedence for downstream diagnostics. Never merge an inline source
+        # with coefficients from the referenced linecode.
         coefficient_source = if _l3f_has_inline_z(line)
             line
         elseif lcid isa AbstractString && haskey(linecodes, lcid)

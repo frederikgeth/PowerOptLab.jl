@@ -593,6 +593,11 @@ function _l3f_build_model(net, topology, reference, report, optimizer, options;
                 p, q, 1.0, psh_parent, qsh_parent)
             child_p, child_q = _l3f_total_endpoint_power(
                 p, q, -1.0, psh_child, qsh_child)
+            # Stamp both physical ends even without a pi shunt. In exact AC a
+            # shunt-free series current gives |S_from|²/w_from = |S_to|²/w_to.
+            # Lossless L3F reuses one S while allowing w to drop, so the two
+            # inferred currents can differ. Requiring both is a deliberate
+            # conservative endpoint contract, not exact BMOPFTools parity.
             _l3f_add_power_circle!(model, constraints, :line_apparent_power,
                 (edge.id, parent_side, phi), parent_p, parent_q, smax)
             _l3f_add_power_circle!(model, constraints, :line_apparent_power,
@@ -895,26 +900,16 @@ function l3f_reference_from_powerflow(net; options::L3FOptions=L3FOptions(),
                                       dispatch=nothing,
                                       nonlinear_optimizer=Ipopt.Optimizer,
                                       solver_options=())
-    # This helper *produces* the explicit reference state.  Preparation still
-    # needs a usable provisional reference for topology/data checks, so an
-    # explicit-policy caller is validated with source propagation here; the
-    # returned state can then be passed back with the original options.
-    # The helper is itself the provenance-producing operation.  Preparation
-    # therefore must not require neutral-reduction provenance before the PF,
-    # including for an already-reduced case and for
+    # This helper produces the explicit reference and its provenance.
+    # Preparation must not require neutral-reduction provenance before the PF,
+    # including for an already-reduced case or for
     # `reference_policy=:source_propagated`.  An explicit policy also needs a
     # provisional source-propagated policy because the helper has no reference
     # argument until it returns its PF state.
     prepare_policy = options.reference_policy == :explicit ?
         :source_propagated : options.reference_policy
-    prepare_options = L3FOptions(current_limit_policy=options.current_limit_policy,
-                                 validate_nonlinear=options.validate_nonlinear,
-                                 reference_policy=prepare_policy,
-                                 kron_reduce=options.kron_reduce,
-                                 require_neutral_provenance=false,
-                                 unsupported=options.unsupported,
-                                 objective=options.objective,
-                                 per_unit=options.per_unit, s_base=options.s_base)
+    prepare_options = _l3f_with_options(options;
+        reference_policy=prepare_policy, require_neutral_provenance=false)
     prepared = _l3f_prepare(net; options=prepare_options)
     is_l3f_applicable(prepared.applicability) ||
         throw(L3FInapplicableError(prepared.applicability))

@@ -195,6 +195,15 @@ function _l3f_lower_line_shunts!(findings, net)
                 Float64(value) * scale
             end for i in 1:n, j in 1:n]
             G, B = matrix("G_"), matrix("B_")
+            symmetric = all(isapprox(G[i, j], G[j, i]; atol=1e-12, rtol=1e-10) &&
+                            isapprox(B[i, j], B[j, i]; atol=1e-12, rtol=1e-10)
+                            for i in 1:n, j in 1:n)
+            symmetric || _l3f_warning!(findings,
+                "W.L3F.LINE_SHUNT_ASYMMETRIC", :line, lid,
+                "$side-side line shunt admittance is asymmetric; it is preserved " *
+                "to match BMOPF's direct-key semantics, but a passive reciprocal " *
+                "line admittance is expected to be symmetric";
+                evidence=Dict("side" => side))
             # Keep every reconstructed entry.  This preserves a deliberately
             # full (possibly asymmetric) input matrix, while a symmetric full
             # matrix is still represented once per matrix position and is not
@@ -412,17 +421,6 @@ function _l3f_project_taps!(findings, net)
             "feasible for that setting rather than optimal over the range";
             evidence=Dict("tap_min" => lo, "tap_max" => hi, "fixed" => fixed))
     end
-end
-
-"""
-Legacy helper retained for source compatibility.
-
-Unimplemented BMOPF voltage limits are now applicability errors under every
-policy, so this helper deliberately does not mutate the network. Constraints
-must not be silently relaxed by `unsupported=:approximate`.
-"""
-function _l3f_project_bus_limits!(findings, net)
-    nothing
 end
 
 """

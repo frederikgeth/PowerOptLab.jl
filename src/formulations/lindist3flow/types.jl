@@ -58,6 +58,13 @@ function L3FOptions(;
         require_neutral_provenance, unsupported, objective, per_unit, Float64(s_base))
 end
 
+"""Copy an option set while overriding selected fields by keyword."""
+function _l3f_with_options(options::L3FOptions; kwargs...)
+    names = fieldnames(L3FOptions)
+    values = NamedTuple{names}(Tuple(getfield(options, name) for name in names))
+    L3FOptions(; merge(values, (; kwargs...))...)
+end
+
 """A stable, structured applicability diagnostic emitted by the L3F compiler."""
 struct L3FFinding
     code::String
