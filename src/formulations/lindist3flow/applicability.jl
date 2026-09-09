@@ -47,7 +47,11 @@ end
 
 function _l3f_connection_incidence(configuration::String, nterminal::Int, nchannel::Int)
     cfg = uppercase(configuration)
-    if cfg in ("WYE", "SINGLE_PHASE")
+    if cfg == "SINGLE_PHASE" && nterminal == 2 && nchannel == 1
+        # A line-to-line single-phase element, including a 240 V load across
+        # the two retained legs of a split-phase section.
+        return reshape([1.0, -1.0], 1, 2)
+    elseif cfg in ("WYE", "SINGLE_PHASE")
         nterminal == nchannel || throw(DimensionMismatch(
             "$cfg requires one retained terminal per power channel"))
         return Matrix{Float64}(I, nterminal, nterminal)
@@ -97,7 +101,7 @@ function _l3f_transformers(net)
 end
 
 function _l3f_transformer_neff(subtype::String, data)
-    if subtype == "single_phase"
+    if subtype in ("single_phase", "center_tap")
         Float64(data["v_nom_from"]) / Float64(data["v_nom_to"]) *
             Float64(get(data, "tap", 1.0))
     elseif subtype == "single_phase_autotransformer"
@@ -159,6 +163,13 @@ function _l3f_transformer_map(subtype::String, data, parent_is_from::Bool)
     if subtype in ("single_phase", "single_phase_autotransformer")
         n = _l3f_transformer_neff(subtype, data)
         return reshape([parent_is_from ? inv(n) : n], 1, 1)
+    elseif subtype == "center_tap"
+        parent_is_from || throw(ArgumentError(
+            "a center_tap transformer must be oriented from its HV winding to its split-phase winding"))
+        n = _l3f_transformer_neff(subtype, data)
+        # The eliminated centre tap is ideal ground. Winding 3 is dotted at
+        # that centre tap, hence the second retained terminal is anti-phase.
+        return reshape([inv(n), -inv(n)], 2, 1)
     elseif subtype == "open_delta_regulator"
         A = regulator_gain_matrix("OPEN_DELTA", get(data, "tap_ratio", [1.0, 1.0]);
             connection=String(get(data, "connection", "")),
@@ -208,33 +219,41 @@ end
 function _l3f_validate_transformers!(findings, net)
     buses = get(net, "bus", Dict())
     for (subtype, id, data) in _l3f_transformers(net)
-        subtype in ("single_phase", "single_phase_autotransformer",
+        subtype in ("single_phase", "center_tap", "single_phase_autotransformer",
                     "open_delta_regulator", _L3F_DELTA_SUBTYPES...) || begin
             _l3f_error!(findings, "E.L3F.TRANSFORMER_UNSUPPORTED", :transformer, id,
-                "only fixed ideal single_phase, single_phase_autotransformer, " *
+                "only fixed ideal single_phase, center_tap, single_phase_autotransformer, " *
                 "wye_delta, delta_wye, and open_delta_regulator devices are supported")
             continue
         end
         bf, bt = String(get(data, "bus_from", "")), String(get(data, "bus_to", ""))
         mf, mt = string.(get(data, "terminal_map_from", String[])),
                  string.(get(data, "terminal_map_to", String[]))
+        arity_aligned = subtype == "center_tap" ?
+            (length(mf) == 1 && length(mt) == 2) : length(mf) == length(mt)
         valid = haskey(buses, bf) && haskey(buses, bt) && !isempty(mf) &&
-            length(mf) == length(mt) && allunique(mf) && allunique(mt) &&
+            arity_aligned && allunique(mf) && allunique(mt) &&
             all(in(string.(get(buses[bf], "terminal_names", String[]))), mf) &&
             all(in(string.(get(buses[bt], "terminal_names", String[]))), mt)
         valid || _l3f_error!(findings, "E.L3F.TERMINAL_MAP_INVALID", :transformer, id,
-            "transformer terminal maps must be aligned retained conductors on declared buses")
+            subtype == "center_tap" ?
+                "a Kron-reduced center_tap requires one retained HV terminal and two retained LV legs" :
+                "transformer terminal maps must be aligned retained conductors on declared buses")
         expected_arity = subtype == "open_delta_regulator" ||
                          subtype in _L3F_DELTA_SUBTYPES ? 3 : 1
-        length(mf) == expected_arity || _l3f_error!(findings,
+        arity_ok = subtype == "center_tap" ? (length(mf) == 1 && length(mt) == 2) :
+                   length(mf) == expected_arity
+        arity_ok || _l3f_error!(findings,
             "E.L3F.DEVICE_ARITY", :transformer, id,
             subtype == "open_delta_regulator" ?
                 "a Kron-reduced open-delta regulator requires three retained phase terminals" :
+            subtype == "center_tap" ?
+                "a Kron-reduced center_tap requires one retained HV terminal and two retained anti-phase LV legs" :
             subtype in _L3F_DELTA_SUBTYPES ?
                 "a Kron-reduced $subtype bank requires three retained phase terminals " *
                 "on each side; the wye star point is the eliminated conductor" :
                 "single-phase transformer/regulator support requires one retained power channel")
-        lo_key, hi_key = subtype == "single_phase" ? ("tap_min", "tap_max") :
+        lo_key, hi_key = subtype in ("single_phase", "center_tap") ? ("tap_min", "tap_max") :
                                                     ("tap_ratio_min", "tap_ratio_max")
         if haskey(data, lo_key) || haskey(data, hi_key)
             raw_lo, raw_hi = get(data, lo_key, NaN), get(data, hi_key, NaN)
@@ -276,7 +295,9 @@ function _l3f_validate_transformers!(findings, net)
             positive(x) = x isa Real && isfinite(x) && x > 0
             # Per-conductor, except for an open-delta bank whose two entries
             # are its two units rather than its three conductors.
-            expected = subtype == "open_delta_regulator" ? 2 : length(mf)
+            expected = subtype == "open_delta_regulator" ? 2 :
+                       subtype == "center_tap" ? (key == "i_max_to" ? 2 : 1) :
+                       length(mf)
             valid_limit = if key == "s_rating"
                 positive(value)
             else
@@ -716,10 +737,10 @@ function _l3f_validate_lines!(findings, net)
 end
 
 """
-Two-port devices as `(family, subtype, id, bus_from, map_from, bus_to, map_to)`,
-in a deterministic order. Both `line` and every supported `transformer` subtype
-carry the same aligned conductor maps, so radiality, parallelism, and
-orientation are all decided on the terminal graph rather than the bus graph.
+Branch devices as `(family, subtype, id, bus_from, map_from, bus_to, map_to)`,
+in a deterministic order. Ordinary devices carry aligned conductor maps. A
+Kron-reduced `center_tap` is the one rectangular exception: its single primary
+terminal couples to both retained secondary legs.
 """
 function _l3f_branches(net)
     out = Tuple{Symbol,String,String,String,Vector{String},String,Vector{String}}[]
@@ -729,7 +750,10 @@ function _l3f_branches(net)
         haskey(buses, a) && haskey(buses, b) || return
         ma = string.(get(data, "terminal_map_from", String[]))
         mb = string.(get(data, "terminal_map_to", String[]))
-        length(ma) == length(mb) && !isempty(ma) || return
+        aligned = length(ma) == length(mb)
+        center_tap = family == :transformer && subtype == "center_tap" &&
+                     length(ma) == 1 && length(mb) == 2
+        (aligned || center_tap) && !isempty(ma) || return
         push!(out, (family, subtype, id, a, ma, b, mb))
     end
     for (id, line) in get(net, "line", Dict())
@@ -741,6 +765,13 @@ function _l3f_branches(net)
     sort!(out; by=x -> (x[1], x[2], x[3]))
 end
 
+"""Terminal-graph incidences contributed by one branch device."""
+function _l3f_branch_terminal_pairs(subtype::String, mf, mt)
+    subtype == "center_tap" && length(mf) == 1 && length(mt) == 2 &&
+        return [(mf[1], mt[1]), (mf[1], mt[2])]
+    collect(zip(mf, mt))
+end
+
 _l3f_branch_label(family, subtype, id) =
     family == :line ? "line/$id" : "transformer/$subtype/$id"
 
@@ -750,25 +781,27 @@ _l3f_branch_label(family, subtype, id) =
 Orient every two-port device away from its island's unique voltage source.
 
 Radiality is a **per-conductor** property: the graph whose nodes are
-`(bus, terminal)` pairs and whose edges are the aligned conductor pairs of each
-device must be a forest. A three-unit single-phase regulator bank on one bus
-pair is therefore radial — the units occupy disjoint conductors — even though
-the bus graph shows three parallel edges. Islands and source assignment stay at
-bus granularity, which is the conservative choice for a single-source model.
+`(bus, terminal)` pairs and whose edges are the conductor incidences of each
+device must be a forest. Ordinary two-ports contribute aligned pairs; a center
+tap contributes the two-edge star primary→leg1 and primary→leg2. A three-unit
+single-phase regulator bank on one bus pair is therefore radial — the units
+occupy disjoint conductors — even though the bus graph shows three parallel
+edges. Islands and source assignment stay at bus granularity.
 """
 function _l3f_topology!(findings, net)
     buses = sort!(String.(collect(keys(get(net, "bus", Dict())))))
     branches = _l3f_branches(net)
 
-    # Terminal graph: nodes are (bus, terminal), edges are aligned conductors.
+    # Terminal graph: nodes are (bus, terminal). A center tap contributes a
+    # two-edge star from its primary conductor to its two secondary legs.
     terminal_adjacency = Dict{Tuple{String,String},Vector{Tuple{Tuple{String,String},Int}}}()
     terminal_pairs = Dict{Tuple{Tuple{String,String},Tuple{String,String}},Vector{String}}()
     bus_adjacency = Dict(bus => Tuple{String,Int}[] for bus in buses)
     for (e, (family, subtype, id, bf, mf, bt, mt)) in enumerate(branches)
         label = _l3f_branch_label(family, subtype, id)
         push!(bus_adjacency[bf], (bt, e)); push!(bus_adjacency[bt], (bf, e))
-        for k in eachindex(mf)
-            u, v = (bf, mf[k]), (bt, mt[k])
+        for (tf, tt) in _l3f_branch_terminal_pairs(subtype, mf, mt)
+            u, v = (bf, tf), (bt, tt)
             push!(get!(terminal_adjacency, u, valtype(terminal_adjacency)()), (v, e))
             push!(get!(terminal_adjacency, v, valtype(terminal_adjacency)()), (u, e))
             key = u <= v ? (u, v) : (v, u)
@@ -863,6 +896,23 @@ function _l3f_topology!(findings, net)
         end
     end
     topology, roots, islands
+end
+
+"""A rectangular center-tap map is defined only with the HV winding upstream."""
+function _l3f_validate_center_tap_orientation!(findings, net, topology)
+    for edge in topology
+        edge.family == :transformer && edge.subtype == "center_tap" || continue
+        edge.reversed || continue
+        transformer = net["transformer"]["center_tap"][edge.id]
+        _l3f_error!(findings, "E.L3F.CENTER_TAP_ORIENTATION_UNSUPPORTED",
+            :transformer, edge.id,
+            "the split-phase winding faces the source at bus '$(edge.parent)'; " *
+            "the one-to-two center-tap voltage map is defined with its HV/from " *
+            "winding upstream. Reverse bus_from/bus_to and the corresponding " *
+            "nominal voltages/terminal maps";
+            evidence=Dict("bus_from" => String(transformer["bus_from"]),
+                          "bus_to" => String(transformer["bus_to"])))
+    end
 end
 
 """
@@ -961,6 +1011,7 @@ function _l3f_prepare(input; options::L3FOptions=L3FOptions(), reference=nothing
     _l3f_validate_objective!(findings, net, options)
     topology, roots, islands = _l3f_topology!(findings, net)
     _l3f_validate_delta_orientation!(findings, net, topology, options)
+    _l3f_validate_center_tap_orientation!(findings, net, topology)
     report = L3FApplicabilityReport(
         any(f -> f.severity == :error, findings) ? :inapplicable : :applicable,
         findings, roots, islands, reduced, lowered)

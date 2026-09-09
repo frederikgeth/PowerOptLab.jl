@@ -21,6 +21,7 @@ coordinates. Supported top-level component families are shown below.
 | `generator` | channel P/Q boxes, S/I ratings, linear `cost` | W, var, VA, A, currency/kWh |
 | `shunt` | fixed full G/B matrix | S |
 | `transformer/single_phase` | fixed ideal ratio | V/V |
+| `transformer/center_tap` | fixed coupled 1→2 split-phase ratio; HV side upstream | V, VA, A |
 | `transformer/single_phase_autotransformer` | fixed ideal ANSI A/B ratio | – |
 | `transformer/wye_delta`, `transformer/delta_wye` | fixed ideal three-phase bank, three retained conductors per side | V, VA, A |
 | `transformer/open_delta_regulator` | fixed ideal two-unit bank, ABBC/BCAC/CABA | –, VA, A |
@@ -28,6 +29,8 @@ coordinates. Supported top-level component families are shown below.
 Ratings follow BMOPF's declared shapes: `s_rating` is a scalar nameplate, while
 `i_max_from`/`i_max_to` are per-conductor arrays — two entries for an open-delta
 bank, one for a single-conductor device, where a bare scalar is also accepted.
+After neutral reduction a center tap has one `i_max_from` entry and two
+`i_max_to` entries; its scalar `s_rating` belongs to the aggregate HV coil.
 For Yd/Dy banks, `s_rating` is total bank VA and is enforced only on the three
 wye coils, at `s_rating/3`; the delta terminals do not receive a duplicate
 nameplate cone.
@@ -39,8 +42,8 @@ full exclusion list is on the [formulation overview](lindist3flow.md).
 
 `L3FOptions(unsupported=:lower)` widens the *input* vocabulary without changing
 any equation on this page: switches, capacitors, line shunts, and justified
-single-phase transformer leakage and no-load admittance are rewritten into the
-components above. These are canonical L3F lowerings, not exact AC
+single-phase/center-tap transformer leakage and no-load admittance are rewritten
+into the components above. These are canonical L3F lowerings, not exact AC
 equivalences.
 `unsupported=:approximate` additionally substitutes load laws and taps, which
 does change the problem. Both are described under
@@ -254,6 +257,27 @@ s_t^{parent}=H(T_t,\bar v_i)s_t.
 For `single_phase`, ``T_t`` is the inverse of ``N=(V^{nom}_{from}/V^{nom}_{to})
 \cdot\texttt{tap}``, matching BMOPFTools' ``N = N_0\cdot\texttt{tap}``.
 
+For a Kron-reduced `center_tap`, `v_nom_to` is the per-leg voltage and the
+retained maps have one HV terminal and two LV hot legs. With the centre tap
+merged into ideal ground,
+
+```math
+T_{ct}=\begin{bmatrix}1/N\\-1/N\end{bmatrix},\qquad
+N=(V^{nom}_{from}/V^{nom}_{to})\cdot\texttt{tap}.
+```
+
+The sign is the series-aiding winding polarity: the two terminal reference
+phasors are 180 degrees apart. The existing power map gives
+``H(T_{ct},\bar v)=[1\;1]``, hence
+
+```math
+s^{parent}_{ct}=s_1+s_2.
+```
+
+This is a coupled three-winding device, not two independent transformers. Its
+fixed map is currently defined only with the declared HV/from winding upstream;
+power may still reverse through the resulting source-oriented branch.
+
 For `single_phase_autotransformer`, BMOPFTools' `_autotransformer_neff` gives
 ``n_{eff}=a`` for ANSI type A and ``n_{eff}=1/a`` for type B under
 ``V_{from}=n_{eff}V_{to}``; ``T_t=n_{eff}^{-1}``. This is the self-consistent
@@ -412,6 +436,37 @@ while a current rating is stamped only on a side that declares it:
            w_{e\phi},I^{max}_{te\phi}).
 ```
 
+**Center-tap transformers.** Let ``s_1,s_2`` be the two child-leg powers and
+``s_\Sigma=s_1+s_2`` the aggregate HV-coil power. BMOPFTools' scalar nameplate
+is imposed once on that coil,
+
+```math
+\mathcal S(\Re s_\Sigma,\Im s_\Sigma;S^{rating}_{ct}).
+```
+
+The retained primary and leg-current bounds are live-voltage rotated SOCs,
+
+```math
+\mathcal I(\Re s_\Sigma,\Im s_\Sigma;w_h,I^{max}_{from}),
+\qquad
+\mathcal I(\Re s_k,\Im s_k;w_k,I^{max}_{to,k}),\quad k=1,2.
+```
+
+Under `unsupported=:lower`, the three-winding star leakage becomes one
+from-side series arm carrying ``s_\Sigma`` and two identical to-side arms
+carrying ``s_1,s_2``. Consequently the explicit line/ideal-transformer network
+stamps exactly the lossless LinDistFlow equations
+
+```math
+w_k={w_h\over N^2}
+-2\left({r_hP_\Sigma+x_hQ_\Sigma\over N^2}
+       +r_\ell P_k+x_\ell Q_k\right),\qquad k=1,2.
+```
+
+The shared primary term is the retained coupling between the legs. The no-load
+admittance is materialized once across winding 2 (LV leg 1), following the
+BMOPFTools/OpenDSS convention; it is not duplicated on leg 2.
+
 **Yd/Dy banks.** BMOPF's scalar ``S^{rating}_{bank}`` is a total-bank
 nameplate. It is divided equally across the three wye coils and is not copied
 onto the delta terminals:
@@ -492,13 +547,14 @@ extractor also attaches fixed or discrete metadata rather than new electrical
 solutions:
 
 - `reference_angle` is ``\arg\bar v`` and is not optimized;
-- `parent`, `child`, aligned terminal maps, and `reversed_from_input` describe
+- `parent`, `child`, terminal maps, and `reversed_from_input` describe
   the source-oriented topology;
 - `effective_ratio_from_to` is recomputed from transformer input data.
 
 For a line, published `p` and `q` are the lossless series-flow variables. For a
 transformer, they are the child-side variables ``s_t`` used by the fixed power
-map. Neither is converted back to input `from → to` orientation, and the affine
+map; a center tap therefore returns two entries in `terminal_map_child` order.
+Neither is converted back to input `from → to` orientation, and the affine
 endpoint totals used inside rating cones are not published separately. Loads,
 shunts, currents, complex voltage phasors, losses, and residual corrections are
 not synthesized during extraction.

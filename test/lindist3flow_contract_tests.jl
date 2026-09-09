@@ -153,6 +153,148 @@ end
                    "E.L3F.ADJUSTABLE_TAP_UNSUPPORTED")
 end
 
+@testset "LinDist3Flow lateral transformers below a three-phase trunk" begin
+    # A phase-b transformer feeds a one-phase lateral after an unbalanced
+    # three-phase section.  This is deliberately narrower than the three-unit
+    # bank in the IEEE 13-bus regression: it pins the 3φ -> 1φ transition,
+    # conductor-specific power balance, fixed turns ratio, and SI/pu agreement.
+    net = Dict{String,Any}(
+        "bus" => Dict(
+            "source" => Dict{String,Any}("terminal_names" => ["a", "b", "c"]),
+            "trunk" => Dict{String,Any}("terminal_names" => ["a", "b", "c"]),
+            "lv" => Dict{String,Any}("terminal_names" => ["x"])),
+        "linecode" => Dict("trunk" => Dict{String,Any}(
+            "R_series_1_1" => 0.02, "X_series_1_1" => 0.01,
+            "R_series_2_2" => 0.02, "X_series_2_2" => 0.01,
+            "R_series_3_3" => 0.02, "X_series_3_3" => 0.01)),
+        "line" => Dict("trunk" => Dict{String,Any}(
+            "bus_from" => "source", "bus_to" => "trunk",
+            "terminal_map_from" => ["a", "b", "c"],
+            "terminal_map_to" => ["a", "b", "c"], "linecode" => "trunk")),
+        "voltage_source" => Dict("source" => Dict{String,Any}(
+            "bus" => "source", "terminal_map" => ["a", "b", "c"],
+            "configuration" => "WYE", "v_magnitude" => fill(2300.0, 3),
+            "v_angle" => [0.0, -2pi / 3, 2pi / 3])),
+        "transformer" => Dict("single_phase" => Dict("phase_b" => Dict{String,Any}(
+            "bus_from" => "trunk", "bus_to" => "lv",
+            "terminal_map_from" => ["b"], "terminal_map_to" => ["x"],
+            "v_nom_from" => 2300.0, "v_nom_to" => 230.0, "s_rating" => 20_000.0))),
+        "load" => Dict(
+            "unbalanced_trunk" => Dict{String,Any}(
+                "bus" => "trunk", "terminal_map" => ["a", "b", "c"],
+                "configuration" => "WYE", "model" => "constant_power",
+                "p_nom" => [1_000.0, 2_000.0, 3_000.0],
+                "q_nom" => [100.0, 200.0, 300.0]),
+            "lateral" => Dict{String,Any}(
+                "bus" => "lv", "terminal_map" => ["x"],
+                "configuration" => "SINGLE_PHASE", "model" => "constant_power",
+                "p_nom" => [4_000.0], "q_nom" => [500.0])))
+
+    si = solve_l3f_opf(net, Clarabel.Optimizer;
+        options=L3FOptions(validate_nonlinear=false, objective=:feasibility,
+                           per_unit=false),
+        solver_options=_l3f_clarabel())
+    pu = solve_l3f_opf(net, Clarabel.Optimizer;
+        options=_L3F_FEASIBLE, solver_options=_l3f_clarabel())
+    @test si.solve.optimal && pu.solve.optimal
+    @test si.sources["source"]["pg"] ≈ [1_000.0, 6_000.0, 3_000.0] atol=1e-4
+    @test si.sources["source"]["qg"] ≈ [100.0, 700.0, 300.0] atol=1e-4
+    @test si.transformers["phase_b"]["p"] ≈ [4_000.0] atol=1e-4
+    @test si.transformers["phase_b"]["q"] ≈ [500.0] atol=1e-4
+    @test si.buses["lv"]["x"]["vm"] ≈
+        si.buses["trunk"]["b"]["vm"] / 10.0 rtol=1e-9
+    @test pu.sources["source"]["pg"] ≈ si.sources["source"]["pg"] rtol=1e-9
+    @test pu.buses["lv"]["x"]["vm"] ≈ si.buses["lv"]["x"]["vm"] rtol=1e-9
+
+    # A BMOPF center-tap transformer is not two independent single-phase
+    # transformers: its one primary drives two oppositely oriented secondary
+    # half-windings. Exercise that rectangular map with unequal leg loads below
+    # the same 3φ trunk.
+    split = deepcopy(net)
+    split["bus"]["lv"]["terminal_names"] = ["x1", "x2"]
+    split["transformer"] = Dict("center_tap" => Dict("split_phase" => Dict{String,Any}(
+        "bus_from" => "trunk", "bus_to" => "lv",
+        "terminal_map_from" => ["b"], "terminal_map_to" => ["x1", "x2"],
+        "v_nom_from" => 2300.0, "v_nom_to" => 115.0, "s_rating" => 20_000.0)))
+    split["load"] = Dict(
+        "unbalanced_trunk" => deepcopy(net["load"]["unbalanced_trunk"]),
+        "leg_1" => Dict{String,Any}(
+            "bus" => "lv", "terminal_map" => ["x1"],
+            "configuration" => "SINGLE_PHASE", "model" => "constant_power",
+            "p_nom" => [4_000.0], "q_nom" => [500.0]),
+        "leg_2" => Dict{String,Any}(
+            "bus" => "lv", "terminal_map" => ["x2"],
+            "configuration" => "SINGLE_PHASE", "model" => "constant_power",
+            "p_nom" => [1_500.0], "q_nom" => [100.0]))
+    split_si = solve_l3f_opf(split, Clarabel.Optimizer;
+        options=L3FOptions(validate_nonlinear=false, objective=:feasibility,
+                           per_unit=false), solver_options=_l3f_clarabel())
+    split_pu = solve_l3f_opf(split, Clarabel.Optimizer;
+        options=_L3F_FEASIBLE, solver_options=_l3f_clarabel())
+    @test split_si.solve.optimal && split_pu.solve.optimal
+    @test split_si.transformers["split_phase"]["p"] ≈ [4_000.0, 1_500.0] atol=1e-4
+    @test split_si.transformers["split_phase"]["q"] ≈ [500.0, 100.0] atol=1e-4
+    @test split_si.sources["source"]["pg"] ≈ [1_000.0, 7_500.0, 3_000.0] atol=1e-4
+    @test split_si.buses["lv"]["x1"]["vm"] ≈
+        split_si.buses["trunk"]["b"]["vm"] / 20.0 rtol=1e-9
+    @test split_si.buses["lv"]["x2"]["vm"] ≈
+        split_si.buses["lv"]["x1"]["vm"] rtol=1e-9
+    @test mod(split_si.buses["lv"]["x1"]["reference_angle"] -
+              split_si.buses["lv"]["x2"]["reference_angle"], 2pi) ≈ pi atol=1e-12
+    @test split_pu.transformers["split_phase"]["p"] ≈
+        split_si.transformers["split_phase"]["p"] rtol=1e-9
+    @test split_pu.buses["lv"]["x1"]["vm"] ≈
+        split_si.buses["lv"]["x1"]["vm"] rtol=1e-9
+
+    # A 240 V leg-to-leg channel uses the same fixed 180-degree reference and
+    # splits its terminal power equally between the two hot legs.
+    across = deepcopy(split)
+    across["load"]["across_legs"] = Dict{String,Any}(
+        "bus" => "lv", "terminal_map" => ["x1", "x2"],
+        "configuration" => "SINGLE_PHASE", "model" => "constant_power",
+        "p_nom" => [2_300.0], "q_nom" => [200.0])
+    across_result = solve_l3f_opf(across, Clarabel.Optimizer;
+        options=_L3F_FEASIBLE, solver_options=_l3f_clarabel())
+    @test across_result.solve.optimal
+    @test across_result.transformers["split_phase"]["p"] ≈
+        [5_150.0, 2_650.0] atol=1e-4
+    @test across_result.transformers["split_phase"]["q"] ≈
+        [600.0, 200.0] atol=1e-4
+
+    # The scalar nameplate constrains aggregate primary VA. Current ratings
+    # bind the aggregate primary and each retained secondary leg separately.
+    rated = deepcopy(split)
+    merge!(rated["transformer"]["center_tap"]["split_phase"], Dict{String,Any}(
+        "i_max_from" => [10.0], "i_max_to" => [100.0, 100.0]))
+    rated_build = build_l3f_opf(rated, Clarabel.Optimizer;
+        options=_L3F_FEASIBLE)
+    @test length(rated_build.constraints[:transformer_apparent_power]) == 1
+    @test length(rated_build.constraints[:transformer_current]) == 3
+    tight_nameplate = deepcopy(rated)
+    tight_nameplate["transformer"]["center_tap"]["split_phase"]["s_rating"] = 5_000.0
+    @test !solve_l3f_opf(tight_nameplate, Clarabel.Optimizer;
+        options=_L3F_FEASIBLE, solver_options=_l3f_clarabel()).solve.optimal
+    tight_primary_current = deepcopy(rated)
+    tight_primary_current["transformer"]["center_tap"]["split_phase"]["i_max_from"] = [2.0]
+    @test !solve_l3f_opf(tight_primary_current, Clarabel.Optimizer;
+        options=_L3F_FEASIBLE, solver_options=_l3f_clarabel()).solve.optimal
+    tight_leg_current = deepcopy(rated)
+    tight_leg_current["transformer"]["center_tap"]["split_phase"]["i_max_to"] = [20.0, 100.0]
+    @test !solve_l3f_opf(tight_leg_current, Clarabel.Optimizer;
+        options=_L3F_FEASIBLE, solver_options=_l3f_clarabel()).solve.optimal
+
+    # Reverse traversal is underdetermined as a one-to-two voltage map and is
+    # therefore a typed applicability error, independent of power-flow sign.
+    reversed = deepcopy(split)
+    reversed["voltage_source"]["source"]["bus"] = "lv"
+    reversed["voltage_source"]["source"]["terminal_map"] = ["x1", "x2"]
+    reversed["voltage_source"]["source"]["configuration"] = "WYE"
+    reversed["voltage_source"]["source"]["v_magnitude"] = [115.0, 115.0]
+    reversed["voltage_source"]["source"]["v_angle"] = [0.0, pi]
+    @test _l3f_has(check_l3f_applicability(reversed),
+                   "E.L3F.CENTER_TAP_ORIENTATION_UNSUPPORTED")
+end
+
 @testset "LinDist3Flow reversed branch orientation" begin
     # BMOPF `bus_from`/`bus_to` need not point away from the source. The model
     # reorients, and the published flow is parent->child, flagged as reversed.
@@ -661,9 +803,7 @@ end
         record!(check_l3f_applicability(net))
     end
     let net = _l3f_two_bus()
-        # center_tap still has no supported voltage map; wye_delta and delta_wye
-        # do, so they are no longer examples of an unsupported subtype.
-        net["transformer"] = Dict("center_tap" => Dict("t" => Dict{String,Any}(
+        net["transformer"] = Dict("n_winding" => Dict("t" => Dict{String,Any}(
             "bus_from" => "source", "bus_to" => "load",
             "terminal_map_from" => ["a"], "terminal_map_to" => ["a"])))
         record!(check_l3f_applicability(net))
@@ -711,6 +851,7 @@ end
 
     expected = Set([
         "E.L3F.ADJUSTABLE_TAP_UNSUPPORTED", "E.L3F.BUS_UNKNOWN",
+        "E.L3F.CENTER_TAP_ORIENTATION_UNSUPPORTED",
         "E.L3F.COMPONENT_UNSUPPORTED", "E.L3F.CONNECTION_UNSUPPORTED",
         "E.L3F.CONTROL_PROFILE_UNSUPPORTED", "E.L3F.DC_SUBSYSTEM_UNSUPPORTED",
         "E.L3F.DEVICE_ARITY", "E.L3F.DEVICE_DATA_INVALID",
@@ -747,6 +888,7 @@ end
     covered = union(emitted, Set([
         "E.L3F.MULTIPLE_SOURCES", "E.L3F.SOURCE_MISSING",
         "E.L3F.TRANSFORMER_NONIDEAL_UNSUPPORTED", "E.L3F.KRON_REDUCTION_FAILED",
+        "E.L3F.CENTER_TAP_ORIENTATION_UNSUPPORTED",
     ]))
     @test setdiff(expected, covered) == Set{String}()
     # Anything emitted here that the inventory does not name is a new code.

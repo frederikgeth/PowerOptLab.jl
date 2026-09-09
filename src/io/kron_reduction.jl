@@ -457,14 +457,35 @@ function _kr_transformers!(net, neutrals, audit)
             for (tm,bus) in maps
                 nt = get(neutrals,String(bus),nothing)
                 nt === nothing && continue
-                nt in string.(tm) && throw(ArgumentError("transformer '$id' subtype '$subtype_s' carries an explicit neutral; no BMOPF-runtime-valid reduced subtype is available"))
+                if nt in string.(tm) && !(subtype_s in ("single_phase", "center_tap"))
+                    throw(ArgumentError("transformer '$id' subtype '$subtype_s' carries an explicit neutral; no supported reduced representation is available"))
+                end
             end
             if String(subtype) == "n_winding"
                 ws = get(tx, "windings", Any[])
                 ws isa AbstractVector || throw(ArgumentError("transformer '$id' windings must be an array"))
             else
-                _kr_strip_map!(tx,"terminal_map_from",get(tx,"bus_from",""),neutrals,"transformer '$id' from";audit)
-                _kr_strip_map!(tx,"terminal_map_to",get(tx,"bus_to",""),neutrals,"transformer '$id' to";audit)
+                for (side, map_key, bus_key, rn_key, xn_key) in (
+                        ("from", "terminal_map_from", "bus_from", "r_neutral_from", "x_neutral_from"),
+                        ("to", "terminal_map_to", "bus_to", "r_neutral_to", "x_neutral_to"))
+                    tm = string.(get(tx, map_key, String[]))
+                    bus = String(get(tx, bus_key, ""))
+                    nt = get(neutrals, bus, nothing)
+                    removed = nt !== nothing && nt in tm
+                    _kr_strip_map!(tx, map_key, bus, neutrals,
+                        "transformer '$id' $side"; audit)
+                    if removed
+                        for key in (rn_key, xn_key)
+                            haskey(tx, key) || continue
+                            value = tx[key]
+                            delete!(tx, key)
+                            push!(audit, Dict{String,Any}(
+                                "component"=>"transformer/$(subtype_s)/$(id)",
+                                "dropped_grounding"=>key, "value"=>value,
+                                "reason"=>"transformer neutral is merged with implicit ideal ground"))
+                        end
+                    end
+                end
             end
         end
     end

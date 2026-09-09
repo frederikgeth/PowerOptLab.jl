@@ -239,12 +239,15 @@ function _l3f_lower_line_shunts!(findings, net)
 end
 
 """
-A non-ideal single-phase transformer becomes an ideal one plus explicit series
-and shunt elements. This is a canonical L3F lowering: it preserves the
-single-phase topology and the fixed-angle/lossless approximation, but it is not
-an exact AC two-port. Connection-aware Yd/Dy and multi-phase transformer
-leakage/no-load lowering is deliberately not attempted; those components remain
-unsupported rather than being represented by false diagonal phase lines.
+A non-ideal single-phase or center-tap transformer becomes an ideal one plus
+explicit series and shunt elements. For a center tap, one primary leakage arm
+carries aggregate power and two identical secondary arms carry the individual
+leg powers. This is the coupled three-winding star equivalent: the common
+primary arm, not two independent transformers, retains the leg coupling.
+
+This is a canonical L3F lowering: it preserves the fixed-angle/lossless
+approximation, but it is not an exact AC multi-port. Connection-aware Yd/Dy and
+autotransformer leakage/no-load lowering is deliberately not attempted.
 """
 function _l3f_lower_transformer_impedance!(findings, net)
     tables = get(net, "transformer", Dict())
@@ -258,12 +261,11 @@ function _l3f_lower_transformer_impedance!(findings, net)
         for (tid_raw, transformer) in sort!(collect(table); by=first)
             tid = String(tid_raw)
             transformer isa AbstractDict || continue
-            # A diagonal phase-line decomposition is justified only for a
-            # single phase-to-ground transformer winding.  In particular,
-            # autotransformer, Yd/Dy, and open-delta leakage lives in coupled
-            # coil coordinates and cannot be replaced by independent phase
-            # lines without losing the connection and shared-winding physics.
-            subtype == "single_phase" || continue
+            # A center tap is a three-winding star: its one from-side arm is
+            # common to both legs, while the two identical to-side star arms
+            # are diagonal after the ideal 1->2 core map. Autotransformer,
+            # Yd/Dy, and open-delta leakage cannot be decomposed this way.
+            subtype in ("single_phase", "center_tap") || continue
             for (side, bus_key, map_key, r_key, x_key) in (
                     ("from", "bus_from", "terminal_map_from", "r_series_from", "x_series_from"),
                     ("to", "bus_to", "terminal_map_to", "r_series_to", "x_series_to"))
@@ -291,15 +293,16 @@ function _l3f_lower_transformer_impedance!(findings, net)
             end
             g, b, present = _l3f_scalar_impedance(transformer, "g_no_load", "b_no_load")
             present || continue
-            # BMOPFTools places the ordinary single-phase exciting branch
-            # across winding 2 (the to-side coil), at its total coil
-            # admittance.  There is no per-phase splitting for this subtype.
+            # BMOPFTools places the exciting branch across winding 2: the
+            # ordinary transformer's to-side coil, or center-tap LV leg 1.
+            # It is one total admittance and is never duplicated over both legs.
             bus = String(get(transformer, "bus_to", ""))
             haskey(buses, bus) || continue
             tm = string.(get(transformer, "terminal_map_to", String[]))
             id = _l3f_derived("noload", tid)
             shunt = Dict{String,Any}("bus" => bus, "terminal_map" => copy(tm))
-            for k in eachindex(tm)
+            shunt_positions = subtype == "center_tap" ? (1,) : eachindex(tm)
+            for k in shunt_positions
                 iszero(g) || (shunt["G_$(k)_$(k)"] = g)
                 iszero(b) || (shunt["B_$(k)_$(k)"] = b)
             end
@@ -307,7 +310,7 @@ function _l3f_lower_transformer_impedance!(findings, net)
             delete!(transformer, "g_no_load"); delete!(transformer, "b_no_load")
             _l3f_info!(findings, "L.L3F.TRANSFORMER_NO_LOAD_LOWERED", :transformer, tid,
                 "no-load admittance $(g) + j$(b) S represented in the " *
-                "shunt '$id' across the to-side coil";
+                "shunt '$id' across winding 2";
                 evidence=Dict("shunt" => id, "g" => g, "b" => b))
         end
     end
@@ -397,7 +400,7 @@ visible in the report.
 """
 function _l3f_project_taps!(findings, net)
     for (subtype, tid, transformer) in _l3f_transformers(net)
-        value_key, lo_key, hi_key = subtype == "single_phase" ?
+        value_key, lo_key, hi_key = subtype in ("single_phase", "center_tap") ?
             ("tap", "tap_min", "tap_max") :
             ("tap_ratio", "tap_ratio_min", "tap_ratio_max")
         haskey(transformer, lo_key) || haskey(transformer, hi_key) || continue

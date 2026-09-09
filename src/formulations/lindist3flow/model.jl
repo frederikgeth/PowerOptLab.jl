@@ -53,7 +53,7 @@ function _l3f_source_reference(net, topology)
                 data = net["transformer"][edge.subtype][edge.id]
                 _l3f_transformer_oriented_map(edge, data)
             end
-            for k in eachindex(edge.parent_map)
+            for k in eachindex(edge.child_map)
                 key = (edge.child, edge.child_map[k])
                 value = sum(transform[k, j] * voltage[(edge.parent, edge.parent_map[j])]
                             for j in eachindex(edge.parent_map))
@@ -395,11 +395,17 @@ function _l3f_build_model(net, topology, reference, report, optimizer, options;
 
     p_line = Dict{Tuple{Symbol,String,Int},JuMP.VariableRef}()
     q_line = Dict{Tuple{Symbol,String,Int},JuMP.VariableRef}()
-    for edge in topology, k in eachindex(edge.parent_map)
-        p_line[(edge.family, edge.id, k)] = @variable(model,
-            base_name=_l3f_name("l3f_p_branch", edge.family, edge.id, k))
-        q_line[(edge.family, edge.id, k)] = @variable(model,
-            base_name=_l3f_name("l3f_q_branch", edge.family, edge.id, k))
+    for edge in topology
+        # Transformer variables are child-winding power channels. This equals
+        # the parent arity for every square map and becomes two channels for a
+        # Kron-reduced center tap.
+        nflow = edge.family == :transformer ? length(edge.child_map) : length(edge.parent_map)
+        for k in 1:nflow
+            p_line[(edge.family, edge.id, k)] = @variable(model,
+                base_name=_l3f_name("l3f_p_branch", edge.family, edge.id, k))
+            q_line[(edge.family, edge.id, k)] = @variable(model,
+                base_name=_l3f_name("l3f_q_branch", edge.family, edge.id, k))
+        end
     end
     variables[:p_line] = p_line; variables[:q_line] = q_line
 
@@ -462,7 +468,7 @@ function _l3f_build_model(net, topology, reference, report, optimizer, options;
             child_q = [q_line[(edge.family, edge.id, k)] for k in eachindex(edge.child_map)]
             parent_power = [_l3f_mapped_terminal_power(H, child_p, child_q, k)
                             for k in eachindex(edge.parent_map)]
-            for phi in eachindex(edge.parent_map)
+            for phi in eachindex(edge.child_map)
                 winding = winding_voltage_coefficients(view(transform, phi, :), vbar_parent)
                 rhs = JuMP.AffExpr(winding.constant)
                 for psi in eachindex(edge.parent_map)
@@ -474,7 +480,29 @@ function _l3f_build_model(net, topology, reference, report, optimizer, options;
                         w[(edge.child, edge.child_map[phi])] == rhs))
             end
             parent_is_from = !edge.reversed
-            if edge.subtype == "open_delta_regulator"
+            if edge.subtype == "center_tap"
+                # The two child channels are the two physical LV legs. Their
+                # lossless parent map is the single aggregate primary power.
+                # BMOPFTools applies the scalar nameplate to that whole HV coil.
+                parent_p, parent_q = only(parent_power)
+                _l3f_add_power_circle!(model, constraints,
+                    :transformer_apparent_power,
+                    (edge.subtype, edge.id, "from", 1), parent_p, parent_q,
+                    get(transformer, "s_rating", nothing))
+                _l3f_add_current_cone!(model, constraints, :transformer_current,
+                    (edge.subtype, edge.id, "from", 1), parent_p, parent_q,
+                    w[(edge.parent, only(edge.parent_map))],
+                    _l3f_scalar_or_indexed(transformer, "i_max_from", 1))
+                for phi in eachindex(edge.child_map)
+                    child_ep, child_eq = _l3f_total_endpoint_power(
+                        child_p[phi], child_q[phi], -1.0,
+                        JuMP.AffExpr(0.0), JuMP.AffExpr(0.0))
+                    _l3f_add_current_cone!(model, constraints, :transformer_current,
+                        (edge.subtype, edge.id, "to", phi), child_ep, child_eq,
+                        w[(edge.child, edge.child_map[phi])],
+                        _l3f_scalar_or_indexed(transformer, "i_max_to", phi))
+                end
+            elseif edge.subtype == "open_delta_regulator"
                 _l3f_open_delta_limits!(model, constraints, edge, transformer,
                     child_p, child_q, parent_power, reference, w)
             elseif edge.subtype in _L3F_DELTA_SUBTYPES
@@ -811,8 +839,8 @@ function _l3f_extract(build::L3FBuild, outcome::SolveOutcome)
             "reversed_from_input" => edge.reversed,
             "terminal_map_parent" => edge.parent_map,
             "terminal_map_child" => edge.child_map,
-            "p" => [value(build.variables[:p_line][(edge.family, edge.id, k)]) * power_scale() for k in eachindex(edge.parent_map)],
-            "q" => [value(build.variables[:q_line][(edge.family, edge.id, k)]) * power_scale() for k in eachindex(edge.parent_map)],
+            "p" => [value(build.variables[:p_line][(edge.family, edge.id, k)]) * power_scale() for k in eachindex(edge.child_map)],
+            "q" => [value(build.variables[:q_line][(edge.family, edge.id, k)]) * power_scale() for k in eachindex(edge.child_map)],
         )
         if edge.family == :line
             lines[edge.id] = output

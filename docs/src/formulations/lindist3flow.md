@@ -38,7 +38,7 @@ lines without shunts under the default `unsupported=:reject` policy; `:lower`
 adds the documented endpoint-shunt representation. It also supports
 grounded-wye, single-phase and delta constant-power,
 constant-impedance, and pure ZP ZIP loads, constant-power generators, fixed bus
-shunts, ideal fixed-ratio single-phase
+shunts, ideal fixed-ratio single-phase and coupled center-tap split-phase
 transformers, ideal Yd/Dy banks, and ANSI A/B autotransformer regulators, retained phase-to-ground
 voltage-magnitude bounds, linear per-channel energy costs, and reverse power
 flow. Apparent-power bounds are native second-order cones. Ampacity bounds use
@@ -46,6 +46,8 @@ the live squared terminal or affine winding voltage and are native rotated
 second-order cones.
 Fixed ideal three-phase `open_delta_regulator` banks are supported on three
 retained phase terminals, including AB/CB and its two cyclic permutations.
+Kron-reduced center taps use one upstream HV terminal and two anti-phase LV
+legs; unequal 120/230 V leg loads and 240/460 V leg-to-leg loads are supported.
 
 Radiality is checked **per conductor**, not per bus: the graph whose nodes are
 `(bus, terminal)` pairs must be a forest. A three-unit single-phase regulator
@@ -163,6 +165,41 @@ Fixed regulator and transformer settings preserve affine physics. Adjustable
 tap intervals are rejected: there are no integer taps, McCormick envelopes, or
 continuous voltage-ratio relaxations. Nonzero transformer leakage and no-load
 admittance must be represented as separate supported network elements.
+
+## Center-tap split-phase transformers
+
+After neutral reduction, a BMOPF `center_tap` has one retained HV terminal and
+two retained LV legs. With `v_nom_to` interpreted as the per-leg voltage and
+``N=(V^{nom}_{from}/V^{nom}_{to})\,tap``, its fixed map is
+
+```math
+\begin{bmatrix}v_1\\v_2\end{bmatrix}
+=\begin{bmatrix}1/N\\-1/N\end{bmatrix}v_h,
+\qquad s_h=s_1+s_2.
+```
+
+Thus the secondary reference angles differ by 180 degrees, while unequal leg
+loads retain separate power variables. A single-phase load spanning both hot
+legs uses their line-to-line voltage, so ordinary 120/240 V and 230/460 V
+sections are covered without voltage-angle decision variables.
+
+With `unsupported=:lower`, nonzero star-arm leakage is materialized as one
+primary line carrying aggregate power and two secondary lines carrying the leg
+powers. Eliminating the internal ideal-core voltage gives
+
+```math
+w_k={w_h\over N^2}
+-2\left({r_hP_\Sigma+x_hQ_\Sigma\over N^2}
+       +r_\ell P_k+x_\ell Q_k\right),\quad k=1,2.
+```
+
+The shared primary term is the coupled three-winding effect; replacing the
+device with two independent transformers would lose it. The exciting
+admittance is an explicit shunt across LV leg 1, matching the BMOPFTools and
+OpenDSS winding-2 convention. The scalar nameplate and primary ampacity apply
+to aggregate HV power; secondary ampacities apply per retained leg through
+native live-voltage rotated SOCs. The HV/from winding must face the network
+source, although optimized power may flow in either direction.
 
 ## Delta-wye and wye-delta banks
 
@@ -458,11 +495,12 @@ closure or omitted-series-loss approximation.
   halves separately, so moving each onto its own bus preserves the canonical π
   data.
   Linecode entries are per unit length and scale with `length`.
-- **Single-phase transformer leakage and no-load admittance → series line and
-  shunt.** A phase-to-ground winding leakage is lowered in its own coordinates,
-  and no-load admittance is placed across the to-side coil. Connection-aware
-  Yd/Dy, autotransformer, and other coupled winding semantics remain
-  unsupported; they are not replaced by diagonal phase lines.
+- **Single-phase and center-tap transformer leakage/no-load admittance → series
+  lines and shunt.** A center tap is lowered as its three-winding star: one
+  common primary arm and two identical secondary arms, retaining the shared
+  primary voltage drop. Its no-load admittance is placed once across LV leg 1.
+  Connection-aware Yd/Dy and autotransformer leakage remain unsupported; they
+  are not replaced by false diagonal phase lines.
 
 The lowering is auditable through `_l3f_` internal elements, but it does not
 turn the canonical approximation into an exact transformer or AC network model.
@@ -496,12 +534,8 @@ turn the canonical approximation into an exact transformer or AC network model.
 Projection must not invent physics. These stay errors at every policy level,
 because there is no defensible substitution:
 
-- **`center_tap` and `n_winding` transformers.** Each needs a real voltage map;
-  treating one as a per-conductor ratio would destroy the phase shift and the
-  zero-sequence blocking. These remain a missing feature — the maps are fixed
-  matrices of exactly the form ``T`` already takes — rather than an
-  impossibility. (`wye_delta` and `delta_wye` were in this list and are now
-  [implemented](#Delta-wye-and-wye-delta-banks).)
+- **`n_winding` transformers.** A generic multi-winding device needs an explicit
+  winding connection map and rating semantics; these are not inferred.
 - **Meshed islands, multiple or missing sources.** Choosing a spanning tree or
   a slack would change which problem is being solved.
 - **IBR component models.** Replacing a control law with a free P/Q box would
@@ -538,6 +572,7 @@ each code below has a reachable case.
 | `W.L3F.LINE_SHUNT_ASYMMETRIC` | W | A lowered line-shunt matrix is asymmetric; it is preserved, but is not the reciprocal passive-line form normally expected. |
 | `E.L3F.SHUNT_INVALID` | E | A shunt admittance is non-finite or declares an entry outside its terminal-map arity. |
 | `E.L3F.TRANSFORMER_UNSUPPORTED` | E | A transformer subtype outside the supported set. |
+| `E.L3F.CENTER_TAP_ORIENTATION_UNSUPPORTED` | E | A center tap's split-phase side faces the source; the rectangular map requires its HV/from winding upstream. |
 | `E.L3F.TRANSFORMER_RATIO_INVALID` | E | A ratio is missing, non-positive, non-finite, or the wrong arity. |
 | `E.L3F.TRANSFORMER_NONIDEAL_UNSUPPORTED` | E | Nonzero leakage or no-load admittance on a device modelled as ideal. |
 | `E.L3F.DELTA_ORIENTATION_UNSUPPORTED` | E | A Yd/Dy bank has its wye winding facing the source, leaving the delta terminals undetermined in their common component. |
@@ -563,8 +598,8 @@ each code below has a reachable case.
 | `L.L3F.SWITCH_OPEN_REMOVED` | I | Open switch removed; any subnetwork it alone energized is now a separate island. |
 | `L.L3F.CAPACITOR_LOWERED` | I | Fixed capacitor represented in the canonical L3F model as a shunt. |
 | `L.L3F.LINE_SHUNT_LOWERED` | I | A declared π half moved onto its own bus as a shunt. |
-| `L.L3F.TRANSFORMER_LEAKAGE_LOWERED` | I | Single-phase winding leakage represented in the canonical L3F model as a series line through an internal bus. |
-| `L.L3F.TRANSFORMER_NO_LOAD_LOWERED` | I | Single-phase no-load admittance represented in the canonical L3F model as a shunt across the to-side coil. |
+| `L.L3F.TRANSFORMER_LEAKAGE_LOWERED` | I | Single-phase or center-tap star-arm leakage represented as series lines through internal buses. |
+| `L.L3F.TRANSFORMER_NO_LOAD_LOWERED` | I | Single-phase or center-tap no-load admittance represented once across winding 2. |
 | `A.L3F.LOAD_LAW_PROJECTED` | W | A constant-current, ZIP-with-current, or exponential law projected onto its ZP tangent at `v_nom`. |
 | `A.L3F.ADJUSTABLE_TAP_PROJECTED` | W | A tap interval collapsed to one fixed setting; the optimizer no longer selects the tap. |
 
@@ -589,7 +624,8 @@ retain the units stated below.
     For lines, `p` and `q` are the lossless series-flow variables and are
     positive from `"parent"` toward `"child"`, away from the island's source —
     **not** necessarily BMOPF's `bus_from → bus_to`. Transformer `p` and `q`
-    are the corresponding child-side variables used by its fixed power map.
+    are the corresponding child-side variables used by its fixed power map; a
+    center tap returns its two leg powers in `terminal_map_child` order.
     When `"reversed_from_input"` is true the orientation is opposite to the
     input declaration. Endpoint totals used by rating cones, including local
     shunts, are affine model expressions and are not separately returned.

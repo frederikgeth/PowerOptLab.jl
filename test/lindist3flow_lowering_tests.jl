@@ -420,6 +420,80 @@ end
                        "E.L3F.TRANSFORMER_NONIDEAL_UNSUPPORTED")
 end
 
+@testset "LinDist3Flow canonical lowering: coupled center tap" begin
+    function center_tap_case(; extra=Dict{String,Any}())
+        Dict{String,Any}(
+            "bus" => Dict(
+                "hv" => Dict{String,Any}("terminal_names" => ["h"]),
+                "lv" => Dict{String,Any}("terminal_names" => ["x1", "x2"])),
+            "voltage_source" => Dict("source" => Dict{String,Any}(
+                "bus" => "hv", "terminal_map" => ["h"],
+                "configuration" => "SINGLE_PHASE",
+                "v_magnitude" => [2400.0], "v_angle" => [0.0])),
+            "transformer" => Dict("center_tap" => Dict("ct" => merge(Dict{String,Any}(
+                "bus_from" => "hv", "bus_to" => "lv",
+                "terminal_map_from" => ["h"],
+                "terminal_map_to" => ["x1", "x2"],
+                "v_nom_from" => 2400.0, "v_nom_to" => 120.0,
+                "s_rating" => 25_000.0), extra))),
+            "load" => Dict(
+                "leg1" => Dict{String,Any}(
+                    "bus" => "lv", "terminal_map" => ["x1"],
+                    "configuration" => "SINGLE_PHASE", "model" => "constant_power",
+                    "p_nom" => [6_000.0], "q_nom" => [1_000.0]),
+                "leg2" => Dict{String,Any}(
+                    "bus" => "lv", "terminal_map" => ["x2"],
+                    "configuration" => "SINGLE_PHASE", "model" => "constant_power",
+                    "p_nom" => [2_000.0], "q_nom" => [250.0])))
+    end
+
+    leaky = center_tap_case(extra=Dict{String,Any}(
+        "r_series_from" => 0.4, "x_series_from" => 0.8,
+        "r_series_to" => 0.002, "x_series_to" => 0.004,
+        "g_no_load" => 2.0e-5, "b_no_load" => -5.0e-5))
+    strict = check_l3f_applicability(leaky)
+    @test _l3f_low_has(strict, "E.L3F.TRANSFORMER_NONIDEAL_UNSUPPORTED")
+
+    report = check_l3f_applicability(leaky;
+        options=L3FOptions(unsupported=:lower))
+    @test is_l3f_applicable(report)
+    @test count(==("L.L3F.TRANSFORMER_LEAKAGE_LOWERED"),
+                _l3f_low_codes(report)) == 2
+    @test _l3f_low_has(report, "L.L3F.TRANSFORMER_NO_LOAD_LOWERED")
+
+    build = build_l3f_opf(leaky, Clarabel.Optimizer;
+        options=_l3f_low_opts(unsupported=:lower))
+    shunt = build.network["shunt"]["_l3f_noload_ct"]
+    @test shunt["terminal_map"] == ["x1", "x2"]
+    @test shunt["G_1_1"] == 2.0e-5
+    @test shunt["B_1_1"] == -5.0e-5
+    @test !haskey(shunt, "G_2_2") && !haskey(shunt, "B_2_2")
+
+    result = _l3f_low_solve(leaky; unsupported=:lower)
+    @test result.solve.optimal
+    @test haskey(result.buses, "_l3f_xfmr_ct_from")
+    @test haskey(result.buses, "_l3f_xfmr_ct_to")
+    @test haskey(result.lines, "_l3f_leakage_ct_from")
+    @test haskey(result.lines, "_l3f_leakage_ct_to")
+
+    # The primary star arm carries the aggregate of both legs. The two
+    # secondary arms then carry their individual powers. These equalities pin
+    # the coupled three-winding LinDistFlow construction directly.
+    primary = result.lines["_l3f_leakage_ct_from"]
+    secondary = result.lines["_l3f_leakage_ct_to"]
+    wh = result.buses["hv"]["h"]["w"]
+    wc = result.buses["_l3f_xfmr_ct_from"]["h"]["w"]
+    @test wc ≈ wh - 2 * (0.4 * primary["p"][1] + 0.8 * primary["q"][1]) atol=1e-4
+    for k in 1:2
+        wint = result.buses["_l3f_xfmr_ct_to"]["x$k"]["w"]
+        wout = result.buses["lv"]["x$k"]["w"]
+        @test wint ≈ wc / 20.0^2 atol=1e-6
+        @test wout ≈ wint - 2 * (0.002 * secondary["p"][k] +
+                                0.004 * secondary["q"][k]) atol=1e-5
+    end
+    @test result.buses["lv"]["x1"]["vm"] < result.buses["lv"]["x2"]["vm"]
+end
+
 @testset "LinDist3Flow projection: load laws" begin
     # The ZP tangent matches a voltage-exponent law in value and slope at v_nom.
     # Exponent 0 and 2 coincide with native classes; 1 is the half-to-Z, half-to-P
@@ -571,14 +645,11 @@ end
 end
 
 @testset "LinDist3Flow lowering leaves genuine obstacles alone" begin
-    # Projection must never invent physics. A transformer subtype with no
-    # supported voltage map, a meshed island, and a DC subsystem stay errors at
-    # every policy level, because there is no defensible substitution. (Yd/Dy
-    # banks left this list once their maps were written; center_tap has not.)
+    # Projection must never invent physics. A meshed island, DC subsystem, and
+    # active IBR stay errors at every policy level because there is no
+    # defensible substitution. Center taps left this list once their coupled
+    # one-to-two map and canonical three-winding-star lowering were added.
     for (name, mutate!) in (
-        "center_tap" => net -> (delete!(net["line"], "l2"); net["transformer"] = Dict("center_tap" => Dict(
-            "t" => Dict{String,Any}("bus_from" => "m", "bus_to" => "l",
-                "terminal_map_from" => ["a"], "terminal_map_to" => ["a"])))),
         "meshed" => net -> (net["line"]["l3"] = Dict{String,Any}(
                 "bus_from" => "l", "bus_to" => "s", "terminal_map_from" => ["a"],
                 "terminal_map_to" => ["a"], "linecode" => "lc")),

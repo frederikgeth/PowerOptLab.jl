@@ -17,7 +17,7 @@ working coordinates, with system power base `s_base`.
 | `reference_policy` | `:auto`, `:explicit`, `:source_propagated` | Which linearization point to use. `:auto` prefers a supplied `reference` and otherwise propagates the source phasors; `:explicit` requires a supplied `reference`; `:source_propagated` always uses the propagated flat profile and ignores a supplied `reference`. |
 | `kron_reduce` | `Bool` (`true`) | Kron-reduce an explicit-neutral input on a copy. When `false`, an explicit neutral is an error. |
 | `require_neutral_provenance` | `Bool` (`false`) | Require recorded `_meta["kron_reduction"]` provenance, or an explicit reference, before building. |
-| `unsupported` | `:reject` (default), `:lower`, `:approximate` | How to treat data outside the supported vocabulary. `:reject` reports it and refuses. `:lower` applies canonical L3F-preserving rewrites (switches, capacitors, line shunts, and justified single-phase transformer elements), reported as `L.L3F.*` at severity `:info`. `:approximate` additionally applies experimental lossy projections (constant-current and exponential load laws, adjustable taps, or delta gauge choices), reported as `A.L3F.*` at severity `:warning`; unsupported voltage bounds remain errors. |
+| `unsupported` | `:reject` (default), `:lower`, `:approximate` | How to treat data outside the supported vocabulary. `:reject` reports it and refuses. `:lower` applies canonical L3F-preserving rewrites (switches, capacitors, line shunts, and justified single-phase/center-tap transformer elements), reported as `L.L3F.*` at severity `:info`. `:approximate` additionally applies experimental lossy projections (constant-current and exponential load laws, adjustable taps, or delta gauge choices), reported as `A.L3F.*` at severity `:warning`; unsupported voltage bounds remain errors. |
 | `objective` | `:cost`, `:feasibility`, `:source_import` | Linear per-channel energy cost, a zero objective, or total source active injection. |
 | `per_unit` | `Bool` (`true`) | Optimization coordinates only. Input and results are SI either way. |
 | `s_base` | `Real` (`1e6`) | System VA base for the per-unit working copy. |
@@ -164,9 +164,10 @@ end
 """
     L3FOrientedLine
 
-One two-port device oriented away from its island's source, as published in
-`L3FBuild.topology`. `parent_map`/`child_map` are the aligned conductor maps in
-that orientation, and `reversed` records whether it is opposite to the input's
+One branch device oriented away from its island's source, as published in
+`L3FBuild.topology`. Ordinary two-ports have aligned `parent_map`/`child_map`;
+a Kron-reduced `center_tap` has one primary entry and two anti-phase secondary
+entries. `reversed` records whether the orientation is opposite to the input's
 `bus_from`/`bus_to`.
 """
 struct L3FOrientedLine
