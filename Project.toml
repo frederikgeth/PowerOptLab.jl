@@ -1,56 +1,58 @@
 name = "PowerOptLab"
 uuid = "eb8cafbb-1592-46c9-95ea-03a10def68a3"
-authors = ["Frederik Geth <frederik.geth@gmail.com>"]
 version = "0.1.0"
+authors = ["Frederik Geth <frederik.geth@gmail.com>"]
 
 [deps]
-JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
-JSONSchema = "7d188eb4-7ad8-530c-ae41-71a32a6d4692"
-TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 BMOPFTools = "5f9a3b62-8f63-4a39-b67b-af9b51e6a7c3"
+Clarabel = "61c947e1-3e6d-4ee4-985a-eec8c727bd6e"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 DiffOpt = "930fe3bc-9c6b-11ea-2d94-6184641e85e7"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 Ipopt = "b6b21f68-93f8-5de0-b562-5493be1d77c9"
+JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
+JSONSchema = "7d188eb4-7ad8-530c-ae41-71a32a6d4692"
 JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 SHA = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
-
-[sources]
-BMOPFTools = {url = "https://github.com/frederikgeth/BMOPFTools.jl", rev = "72e6cec22a66cf376c37ec4d64aef350b9f1100d"}
+TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 
 [weakdeps]
 PiecewiseLinearOpt = "0f51c51e-adfa-5141-8a04-d40246b8977c"
+
+[sources]
+BMOPFTools = {rev = "72e6cec22a66cf376c37ec4d64aef350b9f1100d", url = "https://github.com/frederikgeth/BMOPFTools.jl"}
 
 [extensions]
 PowerOptLabPiecewiseLinearOptExt = "PiecewiseLinearOpt"
 
 [compat]
-JSON3 = "1.14"
-JSONSchema = "1.5"
-PiecewiseLinearOpt = "0.4"
 Aqua = "0.8"
 BMOPFTools = "=0.1.0"
+Clarabel = "0.11.1"
 Dates = "1"
 DiffOpt = "0.6"
 ForwardDiff = "1"
 Ipopt = "1"
+JSON3 = "1.14"
+JSONSchema = "1.5"
 JuMP = "1"
 LinearAlgebra = "1"
-SHA = "0.7"
 OpenDSSDirect = "0.9.9"
+PiecewiseLinearOpt = "0.4"
 Random = "1"
+SHA = "0.7"
 SparseArrays = "1"
-Test = "1"
 TOML = "1"
+Test = "1"
 julia = "1.10"
 
 [extras]
-PiecewiseLinearOpt = "0f51c51e-adfa-5141-8a04-d40246b8977c"
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
 OpenDSSDirect = "a8b11937-1041-50f2-9818-136bb7a8fb06"
+PiecewiseLinearOpt = "0f51c51e-adfa-5141-8a04-d40246b8977c"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]

@@ -1,6 +1,7 @@
 using Test
 using JuMP
 using Ipopt
+using Clarabel
 using PowerOptLab
 
 function _l3f_case(; generator=false, explicit_neutral=false)
@@ -57,6 +58,30 @@ function _l3f_case(; generator=false, explicit_neutral=false)
     net
 end
 
+function _l3f_regulator_case(; adjustable=false)
+    regulator = Dict{String,Any}(
+        "bus_from" => "source", "bus_to" => "load",
+        "terminal_map_from" => ["a"], "terminal_map_to" => ["a"],
+        "tap_ratio" => 1.05, "regulator_type" => "B", "s_rating" => 1e6)
+    adjustable && merge!(regulator,
+        Dict{String,Any}("tap_ratio_min" => 0.9, "tap_ratio_max" => 1.1))
+    Dict{String,Any}(
+        "bus" => Dict(
+            "source" => Dict{String,Any}("terminal_names" => ["a"]),
+            "load" => Dict{String,Any}("terminal_names" => ["a"],
+                "v_min" => [180.0], "v_max" => [250.0])),
+        "voltage_source" => Dict("source" => Dict{String,Any}(
+            "bus" => "source", "terminal_map" => ["a"],
+            "configuration" => "SINGLE_PHASE",
+            "v_magnitude" => [230.0], "v_angle" => [0.0])),
+        "transformer" => Dict("single_phase_autotransformer" =>
+            Dict("reg" => regulator)),
+        "load" => Dict("load" => Dict{String,Any}(
+            "bus" => "load", "terminal_map" => ["a"],
+            "configuration" => "SINGLE_PHASE", "model" => "constant_power",
+            "p_nom" => [10_000.0], "q_nom" => [2_000.0])))
+end
+
 @testset "LinDist3Flow coefficient oracles" begin
     vp, vq = 230cis(0.2), 218cis(-1.7)
     c = cross_voltage_coefficients(vp, vq)
@@ -77,10 +102,6 @@ end
     line = line_drop_coefficients(reshape([0.2 + 0.1im], 1, 1), [230 + 0im])
     @test line.active == reshape([0.4], 1, 1)
     @test line.reactive == reshape([0.2], 1, 1)
-    polygon = regular_polygon_coefficients(12)
-    @test size(polygon.normals) == (12, 2)
-    @test polygon.radius_scale ≈ cos(pi / 12)
-    @test_throws ArgumentError regular_polygon_coefficients(2)
 end
 
 @testset "LinDist3Flow applicability and Kron boundary" begin
@@ -96,7 +117,7 @@ end
     @test any(f -> f.code == "E.L3F.EXPLICIT_NEUTRAL_UNSUPPORTED", report.findings)
 
     unsupported = _l3f_case()
-    unsupported["shunt"] = Dict("s" => Dict{String,Any}())
+    unsupported["capacitor"] = Dict("s" => Dict{String,Any}())
     report = check_l3f_applicability(unsupported)
     @test any(f -> f.code == "E.L3F.COMPONENT_UNSUPPORTED", report.findings)
 
@@ -135,4 +156,58 @@ end
     @test reverse.solve.optimal
     @test reverse.lines["line"]["p"] ≈ [-5_000.0] atol=1e-4
     @test reverse.buses["load"]["a"]["w"] ≈ 54_500.0 atol=1e-3
+
+    shunted = _l3f_case()
+    shunted["shunt"] = Dict("g" => Dict{String,Any}(
+        "bus" => "load", "terminal_map" => ["a"], "G_1_1" => 0.01))
+    shunt_result = solve_l3f_opf(shunted, Ipopt.Optimizer; options,
+        solver_options=("print_level" => 0,))
+    @test shunt_result.solve.optimal
+    @test shunt_result.buses["load"]["a"]["w"] ≈ 48_500 / 1.004 atol=1e-3
+end
+
+@testset "LinDist3Flow fixed regulator and exact SOC bounds" begin
+    options = L3FOptions(validate_nonlinear=false, objective=:feasibility)
+    regulator = solve_l3f_opf(_l3f_regulator_case(), Clarabel.Optimizer; options,
+        solver_options=("verbose" => false,))
+    @test regulator.solve.optimal
+    @test regulator.buses["load"]["a"]["vm"] ≈ 230 / 1.05 atol=1e-5
+    @test regulator.transformers["reg"]["p"] ≈ [10_000.0] atol=1e-4
+
+    report = check_l3f_applicability(_l3f_regulator_case(adjustable=true))
+    @test any(f -> f.code == "E.L3F.ADJUSTABLE_TAP_UNSUPPORTED", report.findings)
+
+    bounded = _l3f_case(generator=true)
+    gen = bounded["generator"]["pv"]
+    gen["p_min"] = [0.0]; gen["p_max"] = [15_000.0]
+    gen["s_max"] = [8_000.0]
+    result = solve_l3f_opf(bounded, Clarabel.Optimizer;
+        options=L3FOptions(validate_nonlinear=false, objective=:cost),
+        solver_options=("verbose" => false,))
+    @test result.solve.optimal
+    @test result.generators["pv"]["pg"] ≈ [8_000.0] atol=1e-3
+    build = build_l3f_opf(bounded, Clarabel.Optimizer;
+        options=L3FOptions(validate_nonlinear=false))
+    @test l3f_model_class(build) == :SOCP
+end
+
+@testset "LinDist3Flow delta constant-power allocation" begin
+    v = 230.0
+    net = Dict{String,Any}(
+        "bus" => Dict("b" => Dict{String,Any}("terminal_names" => ["a", "b", "c"])),
+        "voltage_source" => Dict("s" => Dict{String,Any}(
+            "bus" => "b", "terminal_map" => ["a", "b", "c"],
+            "configuration" => "WYE", "v_magnitude" => fill(v, 3),
+            "v_angle" => [0.0, -2pi / 3, 2pi / 3])),
+        "load" => Dict("d" => Dict{String,Any}(
+            "bus" => "b", "terminal_map" => ["a", "b", "c"],
+            "configuration" => "DELTA", "model" => "constant_power",
+            "p_nom" => [10_000.0, 12_000.0, 8_000.0],
+            "q_nom" => [2_000.0, -1_000.0, 3_000.0])))
+    result = solve_l3f_opf(net, Clarabel.Optimizer;
+        options=L3FOptions(validate_nonlinear=false, objective=:feasibility),
+        solver_options=("verbose" => false,))
+    @test result.solve.optimal
+    @test sum(result.sources["s"]["pg"]) ≈ 30_000.0 atol=1e-5
+    @test sum(result.sources["s"]["qg"]) ≈ 4_000.0 atol=1e-5
 end

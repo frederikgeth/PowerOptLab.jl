@@ -85,17 +85,3 @@ function line_drop_coefficients(Z::AbstractMatrix{<:Number},
     end
     LineDropCoefficients(M, N)
 end
-
-"""
-    regular_polygon_coefficients(K; inner=true)
-
-Return equally spaced unit normals and the radius multiplier for a regular
-polygon approximation of a circle. `inner=true` uses `cos(pi/K)`, so every
-polygon point lies inside the requested circle.
-"""
-function regular_polygon_coefficients(K::Integer; inner::Bool=true)
-    K >= 3 || throw(ArgumentError("K must be at least 3"))
-    theta = 2pi .* (0:Int(K)-1) ./ Int(K)
-    normals = hcat(cos.(theta), sin.(theta))
-    RegularPolygonCoefficients(normals, inner ? cos(pi / Int(K)) : 1.0)
-end

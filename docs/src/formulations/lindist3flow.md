@@ -8,7 +8,7 @@ reused at the boundaries: parsing and nonlinear replay; PowerOptLab's
 
 ```julia
 options = L3FOptions(validate_nonlinear=true)
-result = solve_l3f_opf(network, Ipopt.Optimizer; options)
+result = solve_l3f_opf(network, Clarabel.Optimizer; options)
 ```
 
 An explicit-neutral input is reduced on a deep copy by default. Pass
@@ -19,12 +19,14 @@ with stable codes; it is never silently dropped.
 
 ## Implemented slice
 
-Version `0.1-prototype` builds a continuous affine LP for radial AC islands with
+Version `0.1-prototype` builds a continuous affine LP or SOCP for radial AC islands with
 exactly one fixed-voltage source per island. It supports neutral-reduced series
-lines without shunts, grounded-wye or single-phase constant-power loads,
-grounded-wye or single-phase generators with per-terminal P/Q boxes, retained
-phase-to-ground voltage-magnitude bounds, linear per-phase energy costs, and
-reverse power flow.
+lines without line shunts, grounded-wye, single-phase and delta constant-power
+loads and generators, fixed bus shunts, ideal fixed-ratio single-phase
+transformers and ANSI A/B autotransformer regulators, retained phase-to-ground
+voltage-magnitude bounds, linear per-channel energy costs, and reverse power
+flow. Apparent-power bounds are native second-order cones. Ampacity bounds use
+the declared fixed reference voltage and are also native second-order cones.
 
 For an oriented line, the model uses terminal powers ``p,q`` and squared voltage
 magnitudes ``w``:
@@ -43,20 +45,26 @@ are validated before model construction. Angles are coefficient data, not
 decision variables.
 
 `cross_voltage_coefficients`, `winding_voltage_coefficients`,
-`connection_power_map`, `line_drop_coefficients`, and
-`regular_polygon_coefficients` are pure coefficient oracles. The connection map
+`connection_power_map`, and `line_drop_coefficients` are pure coefficient
+oracles. The connection map
 implements ``H=\operatorname{diag}(\bar v)D^T
-\operatorname{diag}(D\bar v)^{-1}``, allowing later delta and transformer work
-to share independently tested algebra without admitting those devices yet.
+\operatorname{diag}(D\bar v)^{-1}`` for phase-to-phase and delta
+constant-power devices.
+
+Fixed regulator and transformer settings preserve affine physics. Adjustable
+tap intervals are rejected: there are no integer taps, McCormick envelopes, or
+continuous voltage-ratio relaxations. Nonzero transformer leakage and no-load
+admittance must be represented as separate supported network elements.
 
 ## Deliberate exclusions
 
 The first implementation rejects meshed islands, multiple or missing sources,
-line shunts and ratings, transformers, switches, shunts/capacitors, delta
-devices, IBRs, DC subsystems, non-constant-power loads, time-series controls,
-and sequence or phase-to-phase limits. Series losses are omitted. Options for
-fixed loss correction and droop intentionally fail until their equations and
-validity checks are implemented.
+line shunts, nonideal or adjustable transformers/regulators, switches,
+controllable capacitors, IBR component models, DC subsystems,
+non-constant-power loads, time-series controls, and sequence-voltage limits.
+Series losses are omitted. The formulation contains no ZIP or exponential-load
+approximation, Taylor series, artificial physics slack, integer variable,
+non-SOC cone, or polyhedral approximation of a cone.
 
 When nonlinear validation is enabled, `solve_l3f_opf` fixes the optimized
 generator dispatch in the reduced snapshot and calls BMOPFTools power flow. The
@@ -69,9 +77,9 @@ physical limits were satisfied.
 report = check_l3f_applicability(network)
 is_l3f_applicable(report) || foreach(println, report.findings)
 
-build = build_l3f_opf(network, Ipopt.Optimizer;
+build = build_l3f_opf(network, Clarabel.Optimizer;
     options=L3FOptions(validate_nonlinear=false))
-@assert l3f_model_class(build) == :LP
+@assert l3f_model_class(build) in (:LP, :QP, :SOCP)
 optimize!(build.model)
 ```
 
@@ -91,14 +99,12 @@ CrossVoltageCoefficients
 AffineScalarCoefficients
 ConnectionPowerMap
 LineDropCoefficients
-RegularPolygonCoefficients
 L3FBuild
 L3FResult
 cross_voltage_coefficients
 winding_voltage_coefficients
 connection_power_map
 line_drop_coefficients
-regular_polygon_coefficients
 check_l3f_applicability
 build_l3f_opf
 l3f_model_class

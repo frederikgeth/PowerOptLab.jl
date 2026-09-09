@@ -82,6 +82,7 @@ handled via the engine's `opf_bases(ctx)` accessor.
 module PowerOptLab
 
 using BMOPFTools
+using Clarabel
 using Dates
 using DiffOpt
 using ForwardDiff
@@ -167,11 +168,11 @@ export AlgebraicFormulation, hinge_expression, selector_value, selector_expressi
        selector_contract, symmetric_clip_value, symmetric_clip_expression
 export L3FOptions, L3FFinding, L3FApplicabilityReport, L3FInapplicableError,
        L3FReferenceState, CrossVoltageCoefficients, AffineScalarCoefficients,
-       ConnectionPowerMap, LineDropCoefficients, RegularPolygonCoefficients,
+       ConnectionPowerMap, LineDropCoefficients,
        L3FBuild, L3FResult, is_l3f_applicable,
        cross_voltage_coefficients, evaluate_cross_voltage,
        winding_voltage_coefficients, evaluate_affine, connection_power_map,
-       line_drop_coefficients, regular_polygon_coefficients,
+       line_drop_coefficients,
        check_l3f_applicability, build_l3f_opf, solve_l3f_opf,
        validate_l3f_solution, l3f_model_class
 export VoltVarWattIntent, VoltVarWattEncoding, lower_positive_policy,

@@ -1,61 +1,34 @@
 """
     L3FOptions(; kwargs...)
 
-Options for the staged LinDist3Flow BMOPF prototype. Version 0.1 deliberately
-supports the minimal radial, constant-power, grounded-wye slice. Unsupported
+Options for the staged LinDist3Flow BMOPF formulation. It deliberately supports
+only affine physics with exact linear or second-order-cone bounds. Unsupported
 physics is reported by [`check_l3f_applicability`](@ref), never silently
 dropped.
 """
 struct L3FOptions
-    polygon_sides::Int
     current_limit_policy::Symbol
-    current_load_policy::Symbol
-    exponential_load_policy::Symbol
-    droop_policy::Symbol
-    include_fixed_losses::Bool
     validate_nonlinear::Bool
     reference_policy::Symbol
-    trust_region_voltage::Union{Nothing,Float64}
-    trust_region_control::Union{Nothing,Float64}
     kron_reduce::Bool
     require_neutral_provenance::Bool
     objective::Symbol
 end
 
 function L3FOptions(;
-        polygon_sides::Integer=24,
         current_limit_policy::Symbol=:reference_current,
-        current_load_policy::Symbol=:local_tangent,
-        exponential_load_policy::Symbol=:local_tangent,
-        droop_policy::Symbol=:reject,
-        include_fixed_losses::Bool=false,
         validate_nonlinear::Bool=true,
         reference_policy::Symbol=:auto,
-        trust_region_voltage=nothing,
-        trust_region_control=nothing,
         kron_reduce::Bool=true,
         require_neutral_provenance::Bool=false,
         objective::Symbol=:cost)
-    polygon_sides >= 3 || throw(ArgumentError("polygon_sides must be at least 3"))
     current_limit_policy == :reference_current ||
         throw(ArgumentError("only current_limit_policy=:reference_current is defined"))
-    current_load_policy in (:local_tangent, :band_chord, :local_taylor) ||
-        throw(ArgumentError("unknown current-load approximation policy"))
-    exponential_load_policy in (:local_tangent, :band_chord, :local_taylor) ||
-        throw(ArgumentError("unknown exponential-load approximation policy"))
-    droop_policy == :reject ||
-        throw(ArgumentError("the prototype only supports droop_policy=:reject"))
     reference_policy in (:auto, :explicit, :source_propagated) ||
         throw(ArgumentError("unknown reference_policy"))
     objective in (:cost, :feasibility, :source_import) ||
         throw(ArgumentError("objective must be :cost, :feasibility, or :source_import"))
-    tv = isnothing(trust_region_voltage) ? nothing : Float64(trust_region_voltage)
-    tc = isnothing(trust_region_control) ? nothing : Float64(trust_region_control)
-    tv === nothing || tv > 0 || throw(ArgumentError("trust_region_voltage must be positive"))
-    tc === nothing || tc > 0 || throw(ArgumentError("trust_region_control must be positive"))
-    L3FOptions(Int(polygon_sides), current_limit_policy, current_load_policy,
-        exponential_load_policy, droop_policy, include_fixed_losses,
-        validate_nonlinear, reference_policy, tv, tc, kron_reduce,
+    L3FOptions(current_limit_policy, validate_nonlinear, reference_policy, kron_reduce,
         require_neutral_provenance, objective)
 end
 
@@ -138,14 +111,11 @@ struct LineDropCoefficients
     reactive::Matrix{Float64}
 end
 
-"""Normals and inradius multiplier for a regular inner polygon."""
-struct RegularPolygonCoefficients
-    normals::Matrix{Float64}
-    radius_scale::Float64
-end
 
 struct L3FOrientedLine
     id::String
+    family::Symbol
+    subtype::String
     parent::String
     child::String
     parent_map::Vector{String}
@@ -179,6 +149,7 @@ optimal feasible solve under PowerOptLab's standard result contract.
 struct L3FResult <: AbstractSolveResult
     buses::Dict{String,Any}
     lines::Dict{String,Any}
+    transformers::Dict{String,Any}
     generators::Dict{String,Any}
     sources::Dict{String,Any}
     objective::Float64

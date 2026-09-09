@@ -1,5 +1,5 @@
 const _L3F_UNSUPPORTED_FAMILIES = (
-    "switch", "shunt", "capacitor", "ibr", "transformer",
+    "switch", "capacitor", "ibr",
     "dc_bus", "dc_line", "dc_load", "dc_source", "dc_converter",
 )
 
@@ -18,6 +18,130 @@ function _l3f_input(input)
         return deepcopy(Dict{String,Any}(string(k) => v for (k, v) in input))
     end
     throw(ArgumentError("L3F input must be a BMOPF dictionary or JSON string"))
+end
+
+function _l3f_shunt_matrix(data, n::Int)
+    value(prefix, i, j) = if haskey(data, "$(prefix)$(i)_$(j)")
+        Float64(data["$(prefix)$(i)_$(j)"])
+    elseif haskey(data, "$(prefix)$(j)_$(i)")
+        Float64(data["$(prefix)$(j)_$(i)"])
+    else
+        0.0
+    end
+    [value("G_", i, j) + im * value("B_", i, j) for i in 1:n, j in 1:n]
+end
+
+function _l3f_connection_incidence(configuration::String, nterminal::Int, nchannel::Int)
+    cfg = uppercase(configuration)
+    if cfg in ("WYE", "SINGLE_PHASE")
+        nterminal == nchannel || throw(DimensionMismatch(
+            "$cfg requires one retained terminal per power channel"))
+        return Matrix{Float64}(I, nterminal, nterminal)
+    elseif cfg == "DELTA"
+        if nterminal == 2 && nchannel == 1
+            return reshape([1.0, -1.0], 1, 2)
+        elseif nterminal == 3 && nchannel == 3
+            return [1.0 -1.0 0.0; 0.0 1.0 -1.0; -1.0 0.0 1.0]
+        end
+        throw(DimensionMismatch("DELTA requires two terminals/one channel or three terminals/three channels"))
+    end
+    throw(ArgumentError("unsupported connection configuration '$configuration'"))
+end
+
+function _l3f_validate_shunts!(findings, net)
+    buses = get(net, "bus", Dict())
+    for (id, data) in get(net, "shunt", Dict())
+        busid = String(get(data, "bus", "")); bus = get(buses, busid, nothing)
+        tm = string.(get(data, "terminal_map", String[]))
+        valid = bus isa AbstractDict && !isempty(tm) && allunique(tm) &&
+            all(in(string.(get(bus, "terminal_names", String[]))), tm)
+        valid || _l3f_error!(findings, "E.L3F.TERMINAL_MAP_INVALID", :shunt, id,
+            "fixed shunt terminal_map must contain declared retained bus terminals")
+        try
+            Y = _l3f_shunt_matrix(data, length(tm))
+            all(isfinite, real.(Y)) && all(isfinite, imag.(Y)) ||
+                throw(ArgumentError("shunt admittance must be finite"))
+        catch err
+            _l3f_error!(findings, "E.L3F.SHUNT_INVALID", :shunt, id, sprint(showerror, err))
+        end
+        haskey(data, "time_series") && _l3f_error!(findings,
+            "E.L3F.TIME_SERIES_UNSUPPORTED", :shunt, id,
+            "LinDist3Flow accepts fixed shunt admittance only")
+    end
+end
+
+function _l3f_transformers(net)
+    out = Tuple{String,String,AbstractDict}[]
+    for (subtype, table) in get(net, "transformer", Dict())
+        table isa AbstractDict || continue
+        for (id, data) in table
+            data isa AbstractDict || continue
+            push!(out, (String(subtype), String(id), data))
+        end
+    end
+    out
+end
+
+function _l3f_transformer_neff(subtype::String, data)
+    if subtype == "single_phase"
+        Float64(data["v_nom_from"]) / Float64(data["v_nom_to"]) *
+            Float64(get(data, "tap", 1.0))
+    elseif subtype == "single_phase_autotransformer"
+        tap = Float64(get(data, "tap_ratio", 1.0))
+        uppercase(String(get(data, "regulator_type", "B"))) == "A" ? inv(tap) : tap
+    else
+        throw(ArgumentError("unsupported transformer subtype '$subtype'"))
+    end
+end
+
+function _l3f_validate_transformers!(findings, net)
+    buses = get(net, "bus", Dict())
+    for (subtype, id, data) in _l3f_transformers(net)
+        subtype in ("single_phase", "single_phase_autotransformer") || begin
+            _l3f_error!(findings, "E.L3F.TRANSFORMER_UNSUPPORTED", :transformer, id,
+                "only fixed ideal single_phase and single_phase_autotransformer devices are supported")
+            continue
+        end
+        bf, bt = String(get(data, "bus_from", "")), String(get(data, "bus_to", ""))
+        mf, mt = string.(get(data, "terminal_map_from", String[])),
+                 string.(get(data, "terminal_map_to", String[]))
+        valid = haskey(buses, bf) && haskey(buses, bt) && !isempty(mf) &&
+            length(mf) == length(mt) && allunique(mf) && allunique(mt) &&
+            all(in(string.(get(buses[bf], "terminal_names", String[]))), mf) &&
+            all(in(string.(get(buses[bt], "terminal_names", String[]))), mt)
+        valid || _l3f_error!(findings, "E.L3F.TERMINAL_MAP_INVALID", :transformer, id,
+            "transformer terminal maps must be aligned retained conductors on declared buses")
+        length(mf) == 1 || _l3f_error!(findings, "E.L3F.DEVICE_ARITY", :transformer, id,
+            "single-phase transformer/regulator support requires one retained power channel")
+        lo_key, hi_key = subtype == "single_phase" ? ("tap_min", "tap_max") :
+                                                    ("tap_ratio_min", "tap_ratio_max")
+        if haskey(data, lo_key) || haskey(data, hi_key)
+            lo, hi = Float64(get(data, lo_key, NaN)), Float64(get(data, hi_key, NaN))
+            (!isfinite(lo) || !isfinite(hi) || lo != hi) && _l3f_error!(findings,
+                "E.L3F.ADJUSTABLE_TAP_UNSUPPORTED", :transformer, id,
+                "LinDist3Flow accepts fixed regulator settings only; adjustable tap intervals are excluded")
+        end
+        try
+            neff = _l3f_transformer_neff(subtype, data)
+            isfinite(neff) && neff > 0 || throw(ArgumentError("effective ratio must be positive and finite"))
+        catch err
+            _l3f_error!(findings, "E.L3F.TRANSFORMER_RATIO_INVALID", :transformer, id,
+                        sprint(showerror, err))
+        end
+        for key in ("r_series_from", "x_series_from", "r_series_to", "x_series_to",
+                    "g_no_load", "b_no_load")
+            abs(Float64(get(data, key, 0.0))) <= 1e-12 || _l3f_error!(findings,
+                "E.L3F.TRANSFORMER_NONIDEAL_UNSUPPORTED", :transformer, id,
+                "fixed-ratio support is ideal; nonzero '$key' must be represented separately")
+        end
+        for key in ("s_rating", "i_max_from", "i_max_to")
+            haskey(data, key) || continue
+            value = data[key]
+            value isa Real && isfinite(value) && value > 0 || _l3f_error!(findings,
+                "E.L3F.LIMIT_INVALID", :transformer, id,
+                "$key must be a positive finite scalar")
+        end
+    end
 end
 
 function _l3f_neutral_labels(net)
@@ -199,8 +323,12 @@ function _l3f_validate_components!(findings, net)
             _l3f_error!(findings, "E.L3F.REFERENCE_ZERO_WINDING", :voltage_source, sid,
                         "source reference magnitudes must be finite and nonzero")
         for field in ("i_max", "s_max")
-            haskey(source, field) && _l3f_error!(findings, "E.L3F.LIMIT_UNSUPPORTED",
-                :voltage_source, sid, "source '$field' is not assessed in this implementation slice")
+            haskey(source, field) || continue
+            value = source[field]
+            value isa AbstractVector && length(value) == length(tm) &&
+                all(x -> x isa Real && isfinite(x) && x > 0, value) ||
+                _l3f_error!(findings, "E.L3F.LIMIT_INVALID", :voltage_source, sid,
+                            "$field must contain one positive finite rating per terminal")
         end
     end
 
@@ -212,9 +340,9 @@ function _l3f_validate_components!(findings, net)
                         "load references unknown bus '$busid'"); continue
         end
         cfg = uppercase(String(get(load, "configuration", "WYE")))
-        cfg in ("WYE", "SINGLE_PHASE") || _l3f_error!(findings,
+        cfg in ("WYE", "SINGLE_PHASE", "DELTA") || _l3f_error!(findings,
             "E.L3F.CONNECTION_UNSUPPORTED", :load, lid,
-            "only grounded-wye/single-phase constant-power loads are supported")
+            "only grounded-wye, single-phase, and delta constant-power loads are supported")
         lowercase(String(get(load, "model", "constant_power"))) == "constant_power" ||
             _l3f_error!(findings, "E.L3F.LOAD_MODEL_UNSUPPORTED", :load, lid,
                         "only model=constant_power is supported in the minimal slice")
@@ -224,10 +352,11 @@ function _l3f_validate_components!(findings, net)
             "E.L3F.TERMINAL_MAP_INVALID", :load, lid,
             "load terminal_map must contain distinct declared phase terminals")
         p = get(load, "p_nom", Any[]); q = get(load, "q_nom", Any[])
-        length(p) == length(q) == length(tm) || _l3f_error!(findings,
+        length(p) == length(q) || _l3f_error!(findings,
             "E.L3F.DEVICE_ARITY", :load, lid,
-            "p_nom and q_nom must have one value per retained phase terminal")
+            "p_nom and q_nom must have equal channel counts")
         try
+            _l3f_connection_incidence(cfg, length(tm), length(p))
             values = vcat(Float64.(p), Float64.(q))
             all(isfinite, values) || throw(ArgumentError("nominal powers must be finite"))
         catch err
@@ -244,19 +373,25 @@ function _l3f_validate_components!(findings, net)
                         "generator references unknown bus '$busid'"); continue
         end
         cfg = uppercase(String(get(gen, "configuration", "WYE")))
-        cfg in ("WYE", "SINGLE_PHASE") || _l3f_error!(findings,
+        cfg in ("WYE", "SINGLE_PHASE", "DELTA") || _l3f_error!(findings,
             "E.L3F.CONNECTION_UNSUPPORTED", :generator, gid,
-            "only grounded-wye/single-phase generators are supported")
+            "only grounded-wye, single-phase, and delta generators are supported")
         tm = string.(get(gen, "terminal_map", String[]))
         bt = string.(get(bus, "terminal_names", String[]))
         !isempty(tm) && allunique(tm) && all(in(bt), tm) || _l3f_error!(findings,
             "E.L3F.TERMINAL_MAP_INVALID", :generator, gid,
             "generator terminal_map must contain distinct declared phase terminals")
+        nch = length(get(gen, "p_min", Any[]))
+        try
+            _l3f_connection_incidence(cfg, length(tm), nch)
+        catch err
+            _l3f_error!(findings, "E.L3F.DEVICE_ARITY", :generator, gid, sprint(showerror, err))
+        end
         for field in ("p_min", "p_max", "q_min", "q_max")
             value = get(gen, field, nothing)
-            value isa AbstractVector && length(value) == length(tm) ||
+            value isa AbstractVector && length(value) == nch ||
                 _l3f_error!(findings, "E.L3F.DEVICE_ARITY", :generator, gid,
-                            "$field is required and must have one value per retained phase terminal")
+                            "$field is required and must have one value per physical power channel")
         end
         try
             pmin, pmax = Float64.(gen["p_min"]), Float64.(gen["p_max"])
@@ -270,8 +405,12 @@ function _l3f_validate_components!(findings, net)
                         sprint(showerror, err))
         end
         for field in ("i_max", "s_max")
-            haskey(gen, field) && _l3f_error!(findings, "E.L3F.LIMIT_UNSUPPORTED",
-                :generator, gid, "generator '$field' is not assessed in this implementation slice")
+            haskey(gen, field) || continue
+            value = gen[field]
+            value isa AbstractVector && length(value) == nch &&
+                all(x -> x isa Real && isfinite(x) && x > 0, value) ||
+                _l3f_error!(findings, "E.L3F.LIMIT_INVALID", :generator, gid,
+                            "$field must contain one positive finite rating per physical channel")
         end
     end
 end
@@ -310,24 +449,38 @@ function _l3f_validate_lines!(findings, net)
                         "line shunts require the Phase 3 affine shunt kernel")
         end
         for field in ("i_max", "s_max")
-            any(data -> haskey(data, field), sources) && _l3f_error!(findings,
-                "E.L3F.LIMIT_UNSUPPORTED", :line, id,
-                "line '$field' is not assessed in this implementation slice")
+            data = haskey(line, field) ? line :
+                   (lcid isa AbstractString && haskey(linecodes, lcid) &&
+                    haskey(linecodes[lcid], field) ? linecodes[lcid] : nothing)
+            data === nothing && continue
+            value = data[field]
+            value isa AbstractVector && length(value) == length(mf) &&
+                all(x -> x isa Real && isfinite(x) && x > 0, value) ||
+                _l3f_error!(findings, "E.L3F.LIMIT_INVALID", :line, id,
+                            "$field must contain one positive finite rating per conductor")
         end
     end
 end
 
 function _l3f_topology!(findings, net)
     buses = sort!(String.(collect(keys(get(net, "bus", Dict())))))
-    adjacency = Dict(bus => Tuple{String,String}[] for bus in buses)
+    adjacency = Dict(bus => Tuple{String,String,Symbol,String}[] for bus in buses)
     pair_ids = Dict{Tuple{String,String},Vector{String}}()
     for (id_raw, line) in get(net, "line", Dict())
         id = String(id_raw)
         a, b = String(get(line, "bus_from", "")), String(get(line, "bus_to", ""))
         haskey(adjacency, a) && haskey(adjacency, b) || continue
-        push!(adjacency[a], (b, id)); push!(adjacency[b], (a, id))
+        push!(adjacency[a], (b, id, :line, "")); push!(adjacency[b], (a, id, :line, ""))
         pair = a < b ? (a, b) : (b, a)
-        push!(get!(pair_ids, pair, String[]), id)
+        push!(get!(pair_ids, pair, String[]), "line/$id")
+    end
+    for (subtype, id, transformer) in _l3f_transformers(net)
+        a, b = String(get(transformer, "bus_from", "")), String(get(transformer, "bus_to", ""))
+        haskey(adjacency, a) && haskey(adjacency, b) || continue
+        push!(adjacency[a], (b, id, :transformer, subtype))
+        push!(adjacency[b], (a, id, :transformer, subtype))
+        pair = a < b ? (a, b) : (b, a)
+        push!(get!(pair_ids, pair, String[]), "transformer/$subtype/$id")
     end
     for (pair, ids) in pair_ids
         length(ids) <= 1 || _l3f_error!(findings, "E.L3F.TOPOLOGY_NOT_RADIAL",
@@ -342,7 +495,7 @@ function _l3f_topology!(findings, net)
         queue = [start]; delete!(unseen, start); component = String[]
         while !isempty(queue)
             node = popfirst!(queue); push!(component, node)
-            for (neighbor, _) in adjacency[node]
+            for (neighbor, _, _, _) in adjacency[node]
                 neighbor in unseen || continue
                 delete!(unseen, neighbor); push!(queue, neighbor)
             end
@@ -367,7 +520,8 @@ function _l3f_topology!(findings, net)
             continue
         end
         root = first(first(sources)); push!(roots, root)
-        edge_ids = Set(id for bus in island for (_, id) in adjacency[bus])
+        edge_ids = Set((family, subtype, id) for bus in island
+                       for (_, id, family, subtype) in adjacency[bus])
         if length(edge_ids) != length(island) - 1
             _l3f_error!(findings, "E.L3F.TOPOLOGY_NOT_RADIAL", :network, nothing,
                 "island rooted at '$root' has $(length(island)) buses and $(length(edge_ids)) lines")
@@ -376,14 +530,15 @@ function _l3f_topology!(findings, net)
         visited = Set([root]); queue = [root]
         while !isempty(queue)
             parent = popfirst!(queue)
-            for (child, id) in sort(adjacency[parent]; by=last)
+            for (child, id, family, subtype) in sort(adjacency[parent]; by=x -> (x[3], x[2]))
                 child in visited && continue
                 push!(visited, child); push!(queue, child)
-                line = lines[id]
-                original = String(get(line, "bus_from", "")) == parent
-                pm = string.(get(line, original ? "terminal_map_from" : "terminal_map_to", String[]))
-                cm = string.(get(line, original ? "terminal_map_to" : "terminal_map_from", String[]))
-                push!(topology, L3FOrientedLine(id, parent, child, pm, cm, !original))
+                data = family == :line ? lines[id] : net["transformer"][subtype][id]
+                original = String(get(data, "bus_from", "")) == parent
+                pm = string.(get(data, original ? "terminal_map_from" : "terminal_map_to", String[]))
+                cm = string.(get(data, original ? "terminal_map_to" : "terminal_map_from", String[]))
+                push!(topology, L3FOrientedLine(id, family, subtype,
+                    parent, child, pm, cm, !original))
             end
         end
     end
@@ -413,13 +568,12 @@ function _l3f_prepare(input; options::L3FOptions=L3FOptions(), reference=nothing
         _l3f_error!(findings, "E.L3F.NEUTRAL_REDUCTION_UNDECLARED", :network, nothing,
             "neutral-reduction provenance or an explicit reference is required by options")
     end
-    options.include_fixed_losses && _l3f_error!(findings,
-        "E.L3F.FIXED_LOSSES_UNSUPPORTED", :network, nothing,
-        "fixed loss correction is reserved for the refinement phase")
     options.reference_policy == :explicit && reference === nothing && _l3f_error!(findings,
         "E.L3F.REFERENCE_MISSING", :network, nothing,
         "reference_policy=:explicit requires a reference argument")
     _l3f_validate_components!(findings, net)
+    _l3f_validate_shunts!(findings, net)
+    _l3f_validate_transformers!(findings, net)
     _l3f_validate_lines!(findings, net)
     topology, roots, islands = _l3f_topology!(findings, net)
     report = L3FApplicabilityReport(
