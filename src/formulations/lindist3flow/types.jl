@@ -2,7 +2,9 @@
     L3FOptions(; kwargs...)
 
 Options for the staged LinDist3Flow BMOPF formulation. It deliberately supports
-only affine physics with exact linear or second-order-cone bounds. Unsupported
+only affine physics with linear and native second-order-cone bounds. The
+canonical network remains a fixed-angle, lossless LinDist3Flow approximation;
+it is not an exact AC model. Unsupported
 physics is reported by [`check_l3f_applicability`](@ref), never silently
 dropped. BMOPF input and results are always SI; `per_unit=true` (the default)
 uses BMOPFTools' public classic-base preparation for the independent model's
@@ -10,12 +12,12 @@ working coordinates, with system power base `s_base`.
 
 | Field | Values | Meaning |
 |:------|:-------|:--------|
-| `current_limit_policy` | `:reference_current` | How an ampacity becomes a power bound. Only the fixed-reference policy `‖(p,q)‖₂ ≤ Iᵐᵃˣ\\|ū\\|` is defined. |
+| `current_limit_policy` | `:voltage_product` | Ampacity is the native rotated-SOC bound `p²+q² ≤ w Iᵐᵃˣ²`, using the live squared terminal or winding voltage. |
 | `validate_nonlinear` | `Bool` (`true`) | Replay the optimized dispatch through BMOPFTools' nonlinear power flow and report the voltage difference. |
 | `reference_policy` | `:auto`, `:explicit`, `:source_propagated` | Which linearization point to use. `:auto` prefers a supplied `reference` and otherwise propagates the source phasors; `:explicit` requires a supplied `reference`; `:source_propagated` always uses the propagated flat profile and ignores a supplied `reference`. |
 | `kron_reduce` | `Bool` (`true`) | Kron-reduce an explicit-neutral input on a copy. When `false`, an explicit neutral is an error. |
 | `require_neutral_provenance` | `Bool` (`false`) | Require recorded `_meta["kron_reduction"]` provenance, or an explicit reference, before building. |
-| `unsupported` | `:reject` (default), `:lower`, `:approximate` | How to treat data outside the supported vocabulary. `:reject` reports it and refuses. `:lower` applies only exact re-representations (switches, capacitors, line shunts, transformer leakage and no-load admittance), reported as `L.L3F.*` at severity `:info`. `:approximate` additionally applies lossy projections (constant-current and exponential load laws, adjustable taps, unassessed bus limits), reported as `A.L3F.*` at severity `:warning`. |
+| `unsupported` | `:reject` (default), `:lower`, `:approximate` | How to treat data outside the supported vocabulary. `:reject` reports it and refuses. `:lower` applies canonical L3F-preserving rewrites (switches, capacitors, line shunts, and justified single-phase transformer elements), reported as `L.L3F.*` at severity `:info`. `:approximate` additionally applies experimental lossy projections (constant-current and exponential load laws, adjustable taps, or delta gauge choices), reported as `A.L3F.*` at severity `:warning`; unsupported voltage bounds remain errors. |
 | `objective` | `:cost`, `:feasibility`, `:source_import` | Linear per-channel energy cost, a zero objective, or total source active injection. |
 | `per_unit` | `Bool` (`true`) | Optimization coordinates only. Input and results are SI either way. |
 | `s_base` | `Real` (`1e6`) | System VA base for the per-unit working copy. |
@@ -33,7 +35,7 @@ struct L3FOptions
 end
 
 function L3FOptions(;
-        current_limit_policy::Symbol=:reference_current,
+        current_limit_policy::Symbol=:voltage_product,
         validate_nonlinear::Bool=true,
         reference_policy::Symbol=:auto,
         kron_reduce::Bool=true,
@@ -42,8 +44,8 @@ function L3FOptions(;
         objective::Symbol=:cost,
         per_unit::Bool=true,
         s_base::Real=1e6)
-    current_limit_policy == :reference_current ||
-        throw(ArgumentError("only current_limit_policy=:reference_current is defined"))
+    current_limit_policy == :voltage_product ||
+        throw(ArgumentError("only current_limit_policy=:voltage_product is defined"))
     reference_policy in (:auto, :explicit, :source_propagated) ||
         throw(ArgumentError("unknown reference_policy"))
     unsupported in (:reject, :lower, :approximate) ||

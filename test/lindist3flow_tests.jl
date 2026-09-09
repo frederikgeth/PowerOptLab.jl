@@ -368,7 +368,7 @@ end
     @test l3f_model_class(build) == :SOCP
     @test length(get(build.constraints, :transformer_voltage_ratio, Dict())) == 3
     @test length(get(build.constraints, :transformer_winding_apparent_power, Dict())) == 4
-    @test length(get(build.constraints, :transformer_reference_current, Dict())) == 4
+    @test length(get(build.constraints, :transformer_current, Dict())) == 4
 
     result = solve_l3f_opf(net, Clarabel.Optimizer; options,
         solver_options=("verbose" => false,))

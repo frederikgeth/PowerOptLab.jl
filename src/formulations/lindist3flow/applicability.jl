@@ -31,8 +31,9 @@ function _l3f_shunt_matrix(data, n::Int)
     for key in keys(data)
         m = match(r"^([GB])_(\d+)_(\d+)$", String(key))
         m === nothing && continue
-        max(parse(Int, m.captures[2]), parse(Int, m.captures[3])) <= n || throw(
-            DimensionMismatch("shunt admittance key '$key' exceeds terminal-map arity $n"))
+        i, j = parse(Int, m.captures[2]), parse(Int, m.captures[3])
+        min(i, j) >= 1 && max(i, j) <= n || throw(
+            DimensionMismatch("shunt admittance key '$key' falls outside terminal indices 1:$n"))
     end
     value(prefix, i, j) = if haskey(data, "$(prefix)$(i)_$(j)")
         Float64(data["$(prefix)$(i)_$(j)"])
@@ -146,7 +147,8 @@ than by inverting a forward map, because a delta winding's map is singular: the
 delta incidence has rank 2, so the transform cannot be inverted and the
 orientation genuinely matters.
 
-With the delta winding upstream the map is ``T = D/g`` and is exact — the
+With the delta winding upstream the map is ``T = D/g`` as an ideal connection
+map — the
 downstream wye voltages are fully determined, and their zero-sequence component
 is zero, which is the correct behaviour of an ideal bank with no zero-sequence
 impedance. With the wye winding upstream, the delta terminals are determined
@@ -259,7 +261,8 @@ function _l3f_validate_transformers!(findings, net)
                         sprint(showerror, err))
         end
         for key in ("r_series_from", "x_series_from", "r_series_to", "x_series_to",
-                    "g_no_load", "b_no_load")
+                    "g_no_load", "b_no_load", "r_neutral_from", "x_neutral_from",
+                    "r_neutral_to", "x_neutral_to")
             abs(Float64(get(data, key, 0.0))) <= 1e-12 || _l3f_error!(findings,
                 "E.L3F.TRANSFORMER_NONIDEAL_UNSUPPORTED", :transformer, id,
                 "fixed-ratio support is ideal; nonzero '$key' must be represented separately")
@@ -323,6 +326,14 @@ function _l3f_has_matrix_key(data, prefixes)
     any(key -> any(prefix -> startswith(String(key), prefix), prefixes), keys(data))
 end
 
+# BMOPFTools selects an inline series-coefficient source from these canonical
+# markers, not from an arbitrary sparse R/X entry.  A malformed inline matrix
+# may still be reported by `_l3f_pattern_matrix`, but it must not silently
+# displace a valid referenced linecode merely because it contains e.g.
+# `R_series_2_2`.
+_l3f_has_inline_z(data) = haskey(data, "R_series_1_1") ||
+                          haskey(data, "X_series_1_1")
+
 function _l3f_pattern_matrix(data::AbstractDict, real_prefix::String,
                              imag_prefix::String, n::Int, label::String)
     n > 0 || throw(ArgumentError("$label has no conductors"))
@@ -332,8 +343,9 @@ function _l3f_pattern_matrix(data::AbstractDict, real_prefix::String,
         m = match(pattern, String(key))
         m === nothing && continue
         seen = true
-        max(parse(Int, m.captures[2]), parse(Int, m.captures[3])) <= n ||
-            throw(DimensionMismatch("$label matrix key '$key' exceeds terminal-map arity $n"))
+        i, j = parse(Int, m.captures[2]), parse(Int, m.captures[3])
+        min(i, j) >= 1 && max(i, j) <= n ||
+            throw(DimensionMismatch("$label matrix key '$key' falls outside terminal indices 1:$n"))
     end
     seen || throw(ArgumentError("$label has no series impedance matrix"))
     value(prefix, i, j) = if haskey(data, "$(prefix)$(i)_$(j)")
@@ -353,10 +365,11 @@ function _l3f_pattern_matrix(data::AbstractDict, real_prefix::String,
 end
 
 function _l3f_series_matrix(net, line, n::Int, id::String)
-    inline = _l3f_has_matrix_key(line, ("R_series_", "X_series_"))
+    inline = _l3f_has_inline_z(line)
     if inline
-        haskey(line, "linecode") && throw(ArgumentError(
-            "line '$id' defines both inline impedance and a linecode"))
+        # BMOPFTools uses the inline absolute matrix as the active coefficient
+        # source when both representations happen to be present.  Keep that
+        # deterministic precedence here as well; the linecode is not merged.
         return _l3f_pattern_matrix(line, "R_series_", "X_series_", n, "line '$id'")
     end
     lcid = get(line, "linecode", nothing)
@@ -428,8 +441,14 @@ function _l3f_validate_components!(findings, net)
                                           "bus has no terminal_names")
         allunique(terminals) || _l3f_error!(findings, "E.L3F.TERMINAL_MAP_INVALID", :bus, bid,
                                             "bus terminal_names are not unique")
-        for key in ("vpp_min", "vpp_max", "vpos_min", "vpos_max", "vneg_max",
-                    "vzero_max", "vm_unbalance_max")
+        # Only phase-to-ground v_min/v_max are stamped by the L3F model.  All
+        # other BMOPF voltage-bound flavours must remain visible as errors;
+        # dropping them under `unsupported=:approximate` would silently relax
+        # an engineering constraint.
+        for key in ("vpn_min", "vpn_max", "vn_max",
+                    "vpp_min", "vpp_max", "vpos_min", "vpos_max",
+                    "vuf_max", "vneg_max", "vzero_max", "vm_unbalance_max",
+                    "va_diff_min", "va_diff_max")
             haskey(bus, key) || continue
             _l3f_error!(findings, "E.L3F.LIMIT_UNSUPPORTED", :bus, bid,
                 "bus limit '$key' is not assessed by the minimal L3F implementation")
@@ -656,13 +675,26 @@ function _l3f_validate_lines!(findings, net)
                             sprint(showerror, err))
             end
         end
-        sources = Any[line]
         lcid = get(line, "linecode", nothing)
-        lcid isa AbstractString && haskey(linecodes, lcid) && push!(sources, linecodes[lcid])
-        if any(data -> _l3f_has_matrix_key(data,
-                    ("G_from_", "B_from_", "G_to_", "B_to_")), sources)
+        # Use the same single source selected by BMOPFTools for the series
+        # matrix.  In particular, do not report or lower linecode shunts when
+        # an inline absolute matrix is the active source.
+        coefficient_source = if _l3f_has_inline_z(line)
+            line
+        elseif lcid isa AbstractString && haskey(linecodes, lcid)
+            linecodes[lcid]
+        else
+            nothing
+        end
+        if coefficient_source isa AbstractDict && _l3f_has_matrix_key(coefficient_source,
+                    ("G_from_", "B_from_", "G_to_", "B_to_"))
             _l3f_error!(findings, "E.L3F.LINE_SHUNT_UNSUPPORTED", :line, id,
                         "line shunts require the Phase 3 affine shunt kernel")
+        end
+        for field in ("va_diff_min", "va_diff_max")
+            haskey(line, field) || continue
+            _l3f_error!(findings, "E.L3F.LIMIT_UNSUPPORTED", :line, id,
+                "line bound '$field' is not assessed by the minimal L3F implementation")
         end
         for field in ("i_max", "s_max")
             data = haskey(line, field) ? line :
@@ -834,7 +866,8 @@ Gate Yd/Dy banks on which winding faces the source.
 The delta incidence has rank 2, so `D v_delta = g v_wye` determines the wye
 voltages from the delta ones but not the reverse: a delta winding neither
 imposes nor carries a zero-sequence terminal voltage. With the delta winding
-upstream the map is exact. With the wye winding upstream the delta bus's common
+upstream the ideal connection map is directly determined. With the wye winding
+upstream the delta bus's common
 voltage is genuinely undetermined by the transformer, and only a gauge can close
 it — so that orientation is an error unless `unsupported=:approximate` accepts
 the zero-zero-sequence assumption.

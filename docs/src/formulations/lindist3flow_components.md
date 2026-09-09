@@ -28,14 +28,20 @@ coordinates. Supported top-level component families are shown below.
 Ratings follow BMOPF's declared shapes: `s_rating` is a scalar nameplate, while
 `i_max_from`/`i_max_to` are per-conductor arrays — two entries for an open-delta
 bank, one for a single-conductor device, where a bare scalar is also accepted.
+For Yd/Dy banks, `s_rating` is total bank VA and is enforced only on the three
+wye coils, at `s_rating/3`; the delta terminals do not receive a duplicate
+nameplate cone.
 
 Line shunts, series losses, variable taps, and every component not listed here
-are rejected by [`check_l3f_applicability`](@ref); they are not silently
-omitted. The full exclusion list is on the [formulation overview](lindist3flow.md).
+are rejected by [`check_l3f_applicability`](@ref) unless an explicitly
+documented canonical lowering is selected; they are not silently omitted. The
+full exclusion list is on the [formulation overview](lindist3flow.md).
 
 `L3FOptions(unsupported=:lower)` widens the *input* vocabulary without changing
-any equation on this page: switches, capacitors, line shunts, and transformer
-leakage and no-load admittance are rewritten into the components above, exactly.
+any equation on this page: switches, capacitors, line shunts, and justified
+single-phase transformer leakage and no-load admittance are rewritten into the
+components above. These are canonical L3F lowerings, not exact AC
+equivalences.
 `unsupported=:approximate` additionally substitutes load laws and taps, which
 does change the problem. Both are described under
 [widening the admissible input](lindist3flow.md#Widening-the-admissible-input).
@@ -96,7 +102,7 @@ This is the first-order Taylor expansion of
 ``\sqrt{w_\phi w_\psi}\,e^{j(\bar\theta_\phi-\bar\theta_\psi)}`` in the
 squared-magnitude coordinates, evaluated about ``\bar w``. It is exact at the
 reference point, and exact for every ``w`` when ``\phi=\psi`` — which is why a
-grounded-wye device incurs no closure error at all. For a real incidence row
+grounded-wye device incurs no cross-phase closure error. For a real incidence row
 ``d_k``, define
 
 ```math
@@ -114,7 +120,7 @@ H(D,\bar v)=\operatorname{diag}(\bar v)D^{\mathsf T}
 
 Thus terminal complex power is ``s^{term}=Hs^{ch}``. Both real and imaginary
 parts are stamped as real affine expressions. `SINGLE_PHASE`/`WYE` use identity
-rows after Kron reduction, so ``H=I`` and the split is exact; `DELTA` uses the
+rows after Kron reduction, so ``H=I`` and the channel split is exact; `DELTA` uses the
 phase-pair incidence rows, and freezing ``H`` at ``\bar v`` is then a second
 approximation alongside the cross-voltage closure.
 
@@ -292,12 +298,23 @@ The implementation stamps the real and imaginary parts separately.
 
 ### Voltage and box bounds
 
-A device rating is enforced once per conductor. Because a supported transformer
-is ideal and lossless, its from- and to-side terminal powers coincide, so
-`i_max_from` and `i_max_to` both constrain the same branch variable through
-their own side's reference voltage. For an open-delta bank the two sides differ
-and are constrained separately; the shared phase, which carries both units'
-current, is deliberately unrated, matching BMOPF's two-element declaration.
+A rating is enforced at the physical endpoint where BMOPF declares it. Lines
+and lowered closed switches receive from- and to-end constraints. At an
+endpoint with a pi or exciting shunt, the constrained power is the total
+terminal power
+
+```math
+(p^{end},q^{end})=(\sigma p^{series}+p^{sh},
+                    \sigma q^{series}+q^{sh}),
+\qquad \sigma=+1\text{ at from},\ -1\text{ at to}.
+```
+
+Thus line pi-shunt current and a transformer's to-side magnetising current are
+inside the corresponding rating cone even though canonical lowering represents
+those shunts as standalone elements. Connection-aware Yd/Dy and open-delta
+banks use side-specific terminal-power expressions; the shared phase of an
+open-delta bank, which carries both units' current, is deliberately unrated,
+matching BMOPF's two-element declaration.
 
 Retained bus limits impose
 
@@ -310,24 +327,36 @@ Generator and source channel boxes impose their declared ``p_min/p_max`` and
 
 ### Native second-order-cone bounds
 
-Every apparent-power rating is represented exactly as
+Every apparent-power rating is represented by the native SOC
 
 ```math
 \left\|\begin{bmatrix}p\\q\end{bmatrix}\right\|_2\le S^{max}.
 ```
 
-With the fixed-reference current policy, a channel current rating is
+Every current rating is represented by the native rotated SOC equivalent of
 
 ```math
-\left\|\begin{bmatrix}p\\q\end{bmatrix}\right\|_2
-\le I^{max}|\bar u|,
+(p^{end})^2+(q^{end})^2\le w^{end}(I^{max})^2.
 ```
 
-where ``\bar u=D\bar v`` for a connected device and ``\bar u=\bar v_\phi``
-for a line/source terminal. This is an explicit reference-based approximation,
-not an outer linearization of the cone.
+Here ``w^{end}`` is the live squared phase-ground terminal voltage. For a
+connected generator channel it is instead the affine fixed-angle closure of
+``|Dv|^2``. The implementation stamps
+``[w^{end},(I^{max})^2/2,p^{end},q^{end}]`` in the rotated second-order cone;
+there is no quadratic non-convexity and no outer linearisation.
 
-For an open-delta unit whose coil spans terminals ``a,b`` but whose terminal
+For a Yd/Dy bank, the total nameplate is distributed across its three wye
+coils before the SOC is stamped:
+
+```math
+\left\|\begin{bmatrix}p_{Y,k}\\q_{Y,k}\end{bmatrix}\right\|_2
+\le S^{max}_{bank}/3,
+\qquad k=1,2,3.
+```
+
+The delta-side terminal limits retain BMOPFTools' bushing-current semantics
+when explicitly declared. For an open-delta unit whose coil spans terminals
+``a,b`` but whose terminal
 power variable is at terminal ``a``, its winding nameplate is converted by the
 fixed reference ratio:
 

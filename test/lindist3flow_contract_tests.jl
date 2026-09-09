@@ -226,6 +226,21 @@ end
     @test reference.nonlinear_status in (:OPTIMAL, :LOCALLY_SOLVED)
     @test length(reference.source_hash) == 64
 
+    # The helper itself creates the explicit/provenance-bearing state, so its
+    # preparation phase must not reject an already-reduced input that lacks
+    # `_meta["kron_reduction"]` merely because this option is enabled.
+    explicit_required = l3f_reference_from_powerflow(net;
+        options=L3FOptions(reference_policy=:explicit,
+                           require_neutral_provenance=true),
+        solver_options=_l3f_ipopt())
+    @test explicit_required.provenance == :power_flow
+    explicit_build = solve_l3f_opf(net, Clarabel.Optimizer;
+        options=L3FOptions(validate_nonlinear=false, reference_policy=:explicit,
+                           require_neutral_provenance=true),
+        reference=explicit_required, solver_options=_l3f_clarabel())
+    @test explicit_build.solve.optimal
+    @test explicit_build.formulation["reference_provenance"] == "power_flow"
+
     # The source is fixed data and is restored exactly; the load bus carries the
     # real drop, which the flat profile by construction does not.
     @test reference.voltage[("source", "a")] ≈ 230.0 + 0im
@@ -336,7 +351,7 @@ end
 end
 
 @testset "LinDist3Flow rating constraints bind" begin
-    # Apparent-power and reference-current ratings are native second-order cones
+    # Apparent-power and live-voltage current ratings are native second-order cones
     # on every rated element. Each is checked by making it the binding limit.
     demand = hypot(10_000.0, 2_000.0)
 
@@ -378,7 +393,7 @@ end
             solver_options=_l3f_clarabel()).solve.optimal
     end
 
-    # Generator apparent-power and reference-current circles.
+    # Generator apparent-power and live-voltage current cones.
     net = _l3f_two_bus()
     net["generator"] = Dict("pv" => Dict{String,Any}(
         "bus" => "load", "terminal_map" => ["a"], "configuration" => "SINGLE_PHASE",
@@ -394,7 +409,15 @@ end
     result = solve_l3f_opf(current_capped, Clarabel.Optimizer;
         options=L3FOptions(validate_nonlinear=false, objective=:cost),
         solver_options=_l3f_clarabel())
-    @test result.generators["pv"]["pg"] ≈ [2_300.0] atol=1e-2
+    result_si = solve_l3f_opf(current_capped, Clarabel.Optimizer;
+        options=L3FOptions(validate_nonlinear=false, objective=:cost,
+                           per_unit=false),
+        solver_options=_l3f_clarabel())
+    # The current cone uses the solved terminal voltage, not the 230 V
+    # reference; voltage drop therefore lowers the available real power.
+    live_radius = 10.0 * sqrt(result.buses["load"]["a"]["w"])
+    @test result.generators["pv"]["pg"] ≈ [live_radius] atol=1e-2
+    @test result_si.generators["pv"]["pg"] ≈ result.generators["pv"]["pg"] atol=1e-2
 
     # BMOPF types transformer current limits as `number[]`; both shapes are
     # accepted on a single-conductor device and mean the same thing.
@@ -405,7 +428,9 @@ end
     @test is_l3f_applicable(check_l3f_applicability(bank))
     build = build_l3f_opf(bank, Clarabel.Optimizer;
         options=L3FOptions(validate_nonlinear=false))
-    @test length(build.constraints[:transformer_from_reference_current]) == 2
+    @test length(build.constraints[:transformer_current]) == 2
+    @test all(JuMP.constraint_object(c).set isa JuMP.MOI.RotatedSecondOrderCone
+              for c in values(build.constraints[:transformer_current]))
     @test !_l3f_has(check_l3f_applicability(bank), "E.L3F.LIMIT_INVALID")
     # A per-conductor vector that does not match the device arity is still invalid.
     units["reg_c"]["i_max_from"] = [20.0, 20.0]
@@ -689,10 +714,11 @@ end
     # lindist3flow_lowering_tests.jl, which owns that policy surface.
     lowering = Set([
         "E.L3F.CAPACITOR_INVALID", "L.L3F.SWITCH_LOWERED",
+        "E.L3F.LINE_SHUNT_INVALID",
         "L.L3F.SWITCH_OPEN_REMOVED", "L.L3F.CAPACITOR_LOWERED",
         "L.L3F.LINE_SHUNT_LOWERED", "L.L3F.TRANSFORMER_LEAKAGE_LOWERED",
         "L.L3F.TRANSFORMER_NO_LOAD_LOWERED", "A.L3F.LOAD_LAW_PROJECTED",
-        "A.L3F.ADJUSTABLE_TAP_PROJECTED", "A.L3F.BUS_LIMIT_DROPPED",
+        "A.L3F.ADJUSTABLE_TAP_PROJECTED",
     ])
     # Yd/Dy orientation codes; reachable cases live in
     # lindist3flow_delta_transformer_tests.jl.

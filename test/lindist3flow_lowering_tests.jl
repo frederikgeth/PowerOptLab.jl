@@ -8,10 +8,9 @@ using PowerOptLab
 # `L3FOptions(unsupported=...)` widens the admissible input without widening the
 # formulation. The tests below separate the two claims it makes:
 #
-#   :lower        the rewrite is EXACT. Each case is solved twice — once from the
-#                 richer component, once from a hand-written equivalent built
-#                 only from supported components — and the two must agree to
-#                 solver tolerance. That is the whole content of "exact".
+#   :lower        the rewrite preserves the canonical L3F component data. Each
+#                 case may be compared with a hand-written supported equivalent,
+#                 but neither side is an exact AC model.
 #   :approximate  the rewrite is a projection. The tests pin what is preserved
 #                 (tangency at nominal voltage, total ZIP fractions) and what is
 #                 not, rather than asserting an accuracy the construction cannot
@@ -58,7 +57,7 @@ function _l3f_low_case(; bridge::Bool=true)
             "p_nom" => [10_000.0], "q_nom" => [2_000.0])))
 end
 
-"""Assert two solved networks describe the same physics at every terminal."""
+"""Assert two canonical L3F networks agree at every terminal."""
 function _l3f_low_agree(a, b; rtol=1e-8)
     for bus in intersect(keys(a.buses), keys(b.buses))
         for terminal in keys(a.buses[bus])
@@ -90,7 +89,7 @@ end
     @test lowered.lowered
     @test _l3f_low_has(lowered, "L.L3F.SWITCH_LOWERED")
 
-    # An exact rewrite is :info, never :warning — it makes no accuracy claim.
+    # A canonical lowering is :info, never :warning — it makes no AC accuracy claim.
     @test _l3f_low_finding(lowered, "L.L3F.SWITCH_LOWERED").severity == :info
     @test all(f -> f.severity != :error, lowered.findings)
 
@@ -103,12 +102,12 @@ end
     @test_throws ArgumentError L3FOptions(unsupported=:whatever)
 end
 
-@testset "LinDist3Flow exact lowering: switches" begin
+@testset "LinDist3Flow canonical lowering: switches" begin
     switched = _l3f_low_case(bridge=false)
     switched["switch"] = Dict("sw" => Dict{String,Any}(
         "bus_from" => "m", "bus_to" => "l",
         "terminal_map_from" => ["a"], "terminal_map_to" => ["a"],
-        "open_switch" => false))
+        "open_switch" => false, "s_max" => [100_000.0], "i_max" => [500.0]))
     # The hand-written equivalent: a branch with no series impedance.
     manual = _l3f_low_case(bridge=false)
     manual["line"]["sw"] = Dict{String,Any}(
@@ -120,6 +119,14 @@ end
     # A closed ideal switch imposes equal squared voltage on both sides.
     result = _l3f_low_solve(switched; unsupported=:lower)
     @test result.buses["m"]["a"]["w"] ≈ result.buses["l"]["a"]["w"] rtol=1e-10
+    prepared = PowerOptLab._l3f_prepare(switched;
+        options=L3FOptions(validate_nonlinear=false, unsupported=:lower))
+    @test prepared.network["line"]["_l3f_switch_sw"]["s_max"] == [100_000.0]
+    @test prepared.network["line"]["_l3f_switch_sw"]["i_max"] == [500.0]
+    switch_build = build_l3f_opf(switched, Clarabel.Optimizer;
+        options=L3FOptions(validate_nonlinear=false, unsupported=:lower))
+    @test length(switch_build.constraints[:line_apparent_power]) == 2
+    @test length(switch_build.constraints[:line_current]) == 2
 
     # An open switch carries no current, so its far side is a separate island
     # and is reported as such rather than being quietly energized.
@@ -131,7 +138,7 @@ end
     @test !is_l3f_applicable(report)
 end
 
-@testset "LinDist3Flow exact lowering: capacitors" begin
+@testset "LinDist3Flow canonical lowering: capacitors" begin
     for (configuration, terminals, q_rated, v_nom) in (
             ("SINGLE_PHASE", ["a"], [5_000.0], 230.0),
             ("WYE", ["a","b","c"], [5_000.0, 4_000.0, 6_000.0], 230.0),
@@ -189,14 +196,24 @@ end
         options=L3FOptions(unsupported=:lower)), "E.L3F.CAPACITOR_INVALID")
 end
 
-@testset "LinDist3Flow exact lowering: line shunts" begin
+@testset "LinDist3Flow canonical lowering: line shunts" begin
+    # Inline series coefficients select the inline absolute shunt source even
+    # when a linecode is also referenced; the two sources are never merged.
     shunted = _l3f_low_case()
     merge!(shunted["line"]["l2"], Dict{String,Any}(
+        "R_series_1_1" => 0.2, "X_series_1_1" => 0.1,
         "G_from_1_1" => 2e-4, "B_from_1_1" => 3e-4,
         "G_to_1_1" => 1e-4, "B_to_1_1" => 5e-4))
+    shunted["linecode"]["lc2"] = Dict{String,Any}(
+        "R_series_1_1" => 0.2, "X_series_1_1" => 0.1,
+        "G_from_1_1" => 9.0)
+    shunted["line"]["l2"]["linecode"] = "lc2"
 
     # Hand-written pi equivalent: each declared half on its own bus.
     manual = _l3f_low_case()
+    delete!(manual["line"]["l2"], "linecode")
+    merge!(manual["line"]["l2"], Dict{String,Any}(
+        "R_series_1_1" => 0.2, "X_series_1_1" => 0.1))
     manual["shunt"] = Dict(
         "from" => Dict{String,Any}("bus" => "m", "terminal_map" => ["a"],
             "G_1_1" => 2e-4, "B_1_1" => 3e-4),
@@ -208,6 +225,22 @@ end
         options=L3FOptions(unsupported=:lower)), "L.L3F.LINE_SHUNT_LOWERED")
     # Still rejected under the default policy.
     @test _l3f_low_has(check_l3f_applicability(shunted), "E.L3F.LINE_SHUNT_UNSUPPORTED")
+
+    # The referenced linecode shunt is inactive because inline Z selected the
+    # line's own coefficient source.
+    prepared = PowerOptLab._l3f_prepare(shunted;
+        options=L3FOptions(validate_nonlinear=false, unsupported=:lower))
+    @test prepared.network["shunt"]["_l3f_lineshunt_l2_from"]["G_1_1"] == 2e-4
+    rated_inline = deepcopy(shunted)
+    rated_inline["line"]["l2"]["i_max"] = [100.0]
+    rated_report = check_l3f_applicability(rated_inline;
+        options=L3FOptions(unsupported=:lower))
+    @test is_l3f_applicable(rated_report)
+    rated_build = build_l3f_opf(rated_inline, Clarabel.Optimizer;
+        options=L3FOptions(validate_nonlinear=false, unsupported=:lower))
+    @test length(rated_build.constraints[:line_current]) == 2
+    @test all(JuMP.constraint_object(c).set isa JuMP.MOI.RotatedSecondOrderCone
+              for c in values(rated_build.constraints[:line_current]))
 
     # A linecode carries per-unit-length shunt, so it scales with `length`.
     coded = _l3f_low_case()
@@ -222,9 +255,68 @@ end
     scaled["shunt"] = Dict("s" => Dict{String,Any}(
         "bus" => "m", "terminal_map" => ["a"], "B_1_1" => 3e-4))
     _l3f_low_agree(_l3f_low_solve(coded; unsupported=:lower), _l3f_low_solve(scaled))
+    inherited_rated = deepcopy(coded)
+    inherited_rated["linecode"]["shunted"]["i_max"] = [100.0]
+    inherited_report = check_l3f_applicability(inherited_rated;
+        options=L3FOptions(unsupported=:lower))
+    @test is_l3f_applicable(inherited_report)
+
+    # A from-end pi shunt must be inside the line rating even when the series
+    # path carries zero power. This distinguishes endpoint total power from a
+    # cone stamped on the series-flow variable alone.
+    endpoint_rated = _l3f_low_case()
+    empty!(endpoint_rated["load"])
+    merge!(endpoint_rated["line"]["l2"], Dict{String,Any}(
+        "R_series_1_1" => 0.2, "X_series_1_1" => 0.1,
+        "B_from_1_1" => 1.0e-2, "s_max" => [100.0]))
+    @test !_l3f_low_solve(endpoint_rated; unsupported=:lower).solve.optimal
+    endpoint_rated["line"]["l2"]["s_max"] = [1_000.0]
+    @test _l3f_low_solve(endpoint_rated; unsupported=:lower).solve.optimal
+    delete!(endpoint_rated["line"]["l2"], "s_max")
+    endpoint_rated["line"]["l2"]["i_max"] = [0.1]
+    @test !_l3f_low_solve(endpoint_rated; unsupported=:lower).solve.optimal
+    @test !_l3f_low_solve(endpoint_rated; unsupported=:lower,
+                          per_unit=false).solve.optimal
+    endpoint_rated["line"]["l2"]["i_max"] = [5.0]
+    @test _l3f_low_solve(endpoint_rated; unsupported=:lower).solve.optimal
+    @test _l3f_low_solve(endpoint_rated; unsupported=:lower,
+                         per_unit=false).solve.optimal
+
+    # A fully stored matrix preserves both orientations, while a triangular
+    # source is mirrored during reconstruction. Direct entries win when both
+    # orientations are deliberately present.
+    full = Dict{String,Any}(
+        "bus" => Dict("a" => Dict("terminal_names" => ["a", "b"]),
+                      "b" => Dict("terminal_names" => ["a", "b"])),
+        "line" => Dict("l" => Dict{String,Any}(
+            "bus_from" => "a", "bus_to" => "b",
+            "terminal_map_from" => ["a", "b"],
+            "terminal_map_to" => ["a", "b"],
+            "R_series_1_1" => 0.2, "X_series_1_1" => 0.1,
+            "R_series_2_2" => 0.2, "X_series_2_2" => 0.1,
+            "G_from_1_2" => 1.0, "G_from_2_1" => 2.0,
+            "G_from_1_1" => 3.0)),
+        "linecode" => Dict{String,Any}(), "shunt" => Dict{String,Any}())
+    triangular = deepcopy(full)
+    delete!(triangular["line"]["l"], "G_from_2_1")
+    PowerOptLab._l3f_lower_line_shunts!(PowerOptLab.L3FFinding[], full)
+    lowered_full = full["shunt"]["_l3f_lineshunt_l_from"]
+    @test lowered_full["G_1_2"] == 1.0
+    @test lowered_full["G_2_1"] == 2.0
+    @test lowered_full["G_1_1"] == 3.0
+
+    PowerOptLab._l3f_lower_line_shunts!(PowerOptLab.L3FFinding[], triangular)
+    lowered_triangular = triangular["shunt"]["_l3f_lineshunt_l_from"]
+    @test lowered_triangular["G_1_2"] == 1.0
+    @test lowered_triangular["G_2_1"] == 1.0
+
+    invalid = deepcopy(coded)
+    invalid["linecode"]["shunted"]["G_from_2_2"] = 1e-4
+    report = check_l3f_applicability(invalid; options=L3FOptions(unsupported=:lower))
+    @test _l3f_low_has(report, "E.L3F.LINE_SHUNT_INVALID")
 end
 
-@testset "LinDist3Flow exact lowering: transformer impedance" begin
+@testset "LinDist3Flow canonical lowering: transformer impedance" begin
     function transformer_case(; extra=Dict{String,Any}())
         net = _l3f_low_case(bridge=false)
         net["transformer"] = Dict("single_phase" => Dict("t" => merge(Dict{String,Any}(
@@ -283,6 +375,23 @@ end
     @test !ideal.lowered
     @test !any(f -> startswith(f.code, "L.L3F."), ideal.findings)
 
+    neutral = transformer_case(extra=Dict{String,Any}("r_neutral_from" => 0.1))
+    @test _l3f_low_has(check_l3f_applicability(neutral;
+        options=L3FOptions(unsupported=:lower)),
+        "E.L3F.TRANSFORMER_NONIDEAL_UNSUPPORTED")
+    rated_no_load = transformer_case(extra=Dict{String,Any}(
+        "g_no_load" => 1.0e-4, "i_max_to" => [100.0]))
+    rated_no_load_report = check_l3f_applicability(rated_no_load;
+        options=L3FOptions(unsupported=:lower))
+    @test is_l3f_applicable(rated_no_load_report)
+    rated_no_load_build = build_l3f_opf(rated_no_load, Clarabel.Optimizer;
+        options=L3FOptions(validate_nonlinear=false, unsupported=:lower))
+    @test length(rated_no_load_build.constraints[:transformer_current]) == 1
+    to_current = only(values(rated_no_load_build.constraints[:transformer_current]))
+    to_current_function = JuMP.constraint_object(to_current).func
+    to_voltage = rated_no_load_build.variables[:w][("l", "a")]
+    @test !iszero(JuMP.coefficient(to_current_function[3], to_voltage))
+
     # And under :reject the leakage is still refused rather than dropped.
     @test _l3f_low_has(check_l3f_applicability(leaky),
                        "E.L3F.TRANSFORMER_NONIDEAL_UNSUPPORTED")
@@ -290,7 +399,7 @@ end
 
 @testset "LinDist3Flow projection: load laws" begin
     # The ZP tangent matches a voltage-exponent law in value and slope at v_nom.
-    # Exponent 0 and 2 are reproduced exactly; 1 is the half-to-Z, half-to-P
+    # Exponent 0 and 2 coincide with native classes; 1 is the half-to-Z, half-to-P
     # split of a constant-current term.
     v_nom = 230.0
     for (gamma, expected_z, expected_p) in ((0.0, 0.0, 1.0), (1.0, 0.5, 0.5),
@@ -303,7 +412,7 @@ end
         finding = _l3f_low_finding(report, "A.L3F.LOAD_LAW_PROJECTED")
         @test finding.severity == :warning
 
-        # Tangency: at exactly nominal voltage the two laws agree, and their
+        # Tangency: at nominal voltage the two laws agree, and their
         # first derivatives in (V/v_nom) agree.
         f_true(u) = u^gamma
         f_zp(u) = expected_p + expected_z * u^2
@@ -346,7 +455,7 @@ end
                    _l3f_low_solve(half))
 end
 
-@testset "LinDist3Flow projection: taps and dropped limits" begin
+@testset "LinDist3Flow projection: taps and bound rejection" begin
     net = _l3f_low_case(bridge=false)
     net["transformer"] = Dict("single_phase_autotransformer" => Dict(
         "r" => Dict{String,Any}(
@@ -381,16 +490,38 @@ end
     @test _l3f_low_finding(mid_report,
         "A.L3F.ADJUSTABLE_TAP_PROJECTED").evidence["fixed"] == [1.025]
 
-    # Bus limits the formulation does not assess are dropped, and the finding
-    # says the solved problem is a relaxation.
-    limited = _l3f_low_case()
-    limited["bus"]["l"]["vpp_min"] = 200.0
-    limited["bus"]["l"]["vneg_max"] = 0.02
-    @test _l3f_low_has(check_l3f_applicability(limited), "E.L3F.LIMIT_UNSUPPORTED")
-    dropped = check_l3f_applicability(limited; options=L3FOptions(unsupported=:approximate))
-    @test is_l3f_applicable(dropped)
-    evidence = _l3f_low_finding(dropped, "A.L3F.BUS_LIMIT_DROPPED").evidence
-    @test sort(evidence["limits"]) == ["vneg_max", "vpp_min"]
+    # Bus limits the formulation does not assess remain errors under every
+    # policy; approximate mode never silently relaxes an engineering bound.
+    bus_limits = Dict{String,Any}(
+        "vpn_min" => [200.0], "vpn_max" => [250.0],
+        "vn_max" => 250.0,
+        "vpp_min" => [200.0], "vpp_max" => [450.0],
+        "vpos_min" => 0.9, "vpos_max" => 1.1,
+        "vuf_max" => 0.02, "vneg_max" => 0.02,
+        "vzero_max" => 0.02, "va_diff_min" => -0.1,
+        "va_diff_max" => 0.1)
+    for (field, value) in bus_limits, policy in (:reject, :lower, :approximate)
+        limited = _l3f_low_case()
+        limited["bus"]["l"][field] = value
+        report = check_l3f_applicability(limited;
+            options=L3FOptions(unsupported=policy))
+        @test !is_l3f_applicable(report)
+        @test any(f -> f.code == "E.L3F.LIMIT_UNSUPPORTED" &&
+                       occursin(field, f.message), report.findings)
+        @test !any(f -> startswith(f.code, "A.L3F.BUS_"), report.findings)
+    end
+    for field in ("va_diff_min", "va_diff_max"), policy in (:reject, :lower, :approximate)
+        limited = _l3f_low_case()
+        limited["line"]["l2"][field] = field == "va_diff_min" ? -0.1 : 0.1
+        report = check_l3f_applicability(limited;
+            options=L3FOptions(unsupported=policy))
+        @test !is_l3f_applicable(report)
+        @test any(f -> f.code == "E.L3F.LIMIT_UNSUPPORTED" &&
+                       occursin(field, f.message), report.findings)
+    end
+    nominal = _l3f_low_case()
+    nominal["bus"]["l"]["va_nom"] = [0.0]
+    @test !_l3f_low_has(check_l3f_applicability(nominal), "E.L3F.LIMIT_UNSUPPORTED")
 end
 
 @testset "LinDist3Flow projection is flagged in the replay" begin
@@ -401,7 +532,7 @@ end
     result = solve_l3f_opf(exact, Ipopt.Optimizer;
         options=L3FOptions(unsupported=:lower, objective=:feasibility),
         solver_options=("print_level" => 0,))
-    # An exact lowering leaves the replay meaningful: same physics both sides.
+    # A canonical lowering leaves the replay meaningful for the supported model.
     @test result.validation["replayed_network"] == "as_supplied"
 
     projected = _l3f_low_case()

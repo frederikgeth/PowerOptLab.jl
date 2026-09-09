@@ -183,16 +183,11 @@ function _l3f_register_constraint!(constraints, family::Symbol, key, constraint)
     constraint
 end
 
-"""
-Reference-current radius for a per-conductor limit that BMOPF types as
-`number[]` but that also reaches us as a bare scalar on single-conductor
-devices. Returns `nothing` when the field is absent.
-"""
-function _l3f_scalar_or_indexed(data, field::String, k::Int, voltage::Real)
+"""Read a scalar or per-conductor rating, returning `nothing` when absent."""
+function _l3f_scalar_or_indexed(data, field::String, k::Int)
     haskey(data, field) || return nothing
     raw = data[field]
-    value = raw isa AbstractVector ? Float64(raw[length(raw) == 1 ? 1 : k]) : Float64(raw)
-    value * voltage
+    raw isa AbstractVector ? Float64(raw[length(raw) == 1 ? 1 : k]) : Float64(raw)
 end
 
 function _l3f_rating(component, fallback, field::String, k::Int)
@@ -204,6 +199,68 @@ function _l3f_add_power_circle!(model, constraints, family, key, p, q, radius)
     radius === nothing && return
     _l3f_register_constraint!(constraints, family, key,
         @constraint(model, [Float64(radius), p, q] in JuMP.SecondOrderCone()))
+end
+
+"""
+Stamp ``p^2+q^2 ≤ w I_max^2`` as a native rotated SOC.
+
+`voltage_squared` may be a bus `w` variable or an affine fixed-angle winding-
+voltage closure. The cone itself is not outer-linearized.
+"""
+function _l3f_add_current_cone!(model, constraints, family, key,
+                                p, q, voltage_squared, rating)
+    rating === nothing && return
+    imax = Float64(rating)
+    _l3f_register_constraint!(constraints, family, key,
+        @constraint(model,
+            [voltage_squared, imax^2 / 2, p, q] in JuMP.RotatedSecondOrderCone()))
+end
+
+"""Affine fixed-angle approximation of one physical channel's `|D*v|²`."""
+function _l3f_winding_voltage_squared(D, k::Int, vbar, bus::String, tm, w)
+    winding = winding_voltage_coefficients(view(D, k, :), vbar)
+    out = JuMP.AffExpr(winding.constant)
+    for terminal in eachindex(tm)
+        JuMP.add_to_expression!(out, winding.coefficients[terminal],
+                                w[(bus, tm[terminal])])
+    end
+    out
+end
+
+"""Power of a synthetic shunt introduced by canonical component lowering."""
+function _l3f_derived_shunt_power(net, kind::String, id::String, side,
+                                  bus::String, tm, reference, w, k::Int)
+    shunt_id = side === nothing ? _l3f_derived(kind, id) :
+                                  _l3f_derived(kind, id, side)
+    shunt = get(get(net, "shunt", Dict()), shunt_id, nothing)
+    shunt isa AbstractDict || return (JuMP.AffExpr(0.0), JuMP.AffExpr(0.0))
+    shunt_tm = string.(get(shunt, "terminal_map", String[]))
+    shunt_bus = String(get(shunt, "bus", ""))
+    shunt_bus == bus && shunt_tm == tm || throw(ArgumentError(
+        "derived shunt '$shunt_id' no longer matches its $kind endpoint"))
+    _l3f_shunt_power(shunt, bus, tm, reference, w, k)
+end
+
+"""Return `sign*Sseries + Sshunt` as affine real/reactive expressions."""
+function _l3f_total_endpoint_power(p, q, sign::Real, ps, qs)
+    pt, qt = JuMP.AffExpr(0.0), JuMP.AffExpr(0.0)
+    JuMP.add_to_expression!(pt, sign, p)
+    JuMP.add_to_expression!(qt, sign, q)
+    JuMP.add_to_expression!(pt, ps)
+    JuMP.add_to_expression!(qt, qs)
+    pt, qt
+end
+
+"""Per-coil WYE rating for a Yd/Dy bank in the active coordinates."""
+function _l3f_ywye_rating(transformer, subtype::String, n_ph::Int)
+    # BMOPFTools stores the scalar nameplate on the from-side base for
+    # compatibility, and preserves both side-base values privately after
+    # per-unit preparation.  The WYE coil is from-side for Yd and to-side for
+    # Dy; use that side's value before taking the total-bank per-coil share.
+    key = subtype == "wye_delta" ? "_s_rating_from_pu" : "_s_rating_to_pu"
+    value = haskey(transformer, key) ? transformer[key] :
+            get(transformer, "s_rating", nothing)
+    value === nothing ? nothing : Float64(value) / n_ph
 end
 
 function _l3f_shunt_power(data, bus::String, tm, reference, w, phi::Int)
@@ -246,12 +303,7 @@ function _l3f_load_channel_power(load, D, vbar, bus::String, tm, w, k::Int)
     model == "constant_power" && return (JuMP.AffExpr(p_nom), JuMP.AffExpr(q_nom))
 
     v_nom = _l3f_channel_value(load, "v_nom", k, NaN)
-    winding = winding_voltage_coefficients(view(D, k, :), vbar)
-    w_winding = JuMP.AffExpr(winding.constant)
-    for terminal in eachindex(tm)
-        JuMP.add_to_expression!(w_winding, winding.coefficients[terminal],
-                                w[(bus, tm[terminal])])
-    end
+    w_winding = _l3f_winding_voltage_squared(D, k, vbar, bus, tm, w)
 
     if model == "constant_impedance"
         p_coeffs, q_coeffs = (1.0, 0.0, 0.0), (1.0, 0.0, 0.0)
@@ -278,7 +330,7 @@ function _l3f_mapped_terminal_power(H::ConnectionPowerMap, p, q, terminal::Int)
 end
 
 function _l3f_open_delta_limits!(model, constraints, edge, transformer,
-                                 child_p, child_q, parent_power, reference)
+                                 child_p, child_q, parent_power, reference, w)
     pairs = _L3F_OPEN_DELTA_PAIRS[uppercase(String(transformer["connection"]))]
     shared = only(intersect(collect(pairs[1]), collect(pairs[2])))
     original_from_is_parent = !edge.reversed
@@ -288,6 +340,7 @@ function _l3f_open_delta_limits!(model, constraints, edge, transformer,
             (:parent, parent_power[other][1], parent_power[other][2], edge.parent, edge.parent_map),
             (:child, child_p[other], child_q[other], edge.child, edge.child_map))
             original_side = (side == :parent) == original_from_is_parent ? "from" : "to"
+            wterminal = w[(bus, tm[other])]
             vterminal = abs(reference.voltage[(bus, tm[other])])
             winding_voltage = abs(reference.voltage[(bus, tm[pair[1]])] -
                                   reference.voltage[(bus, tm[pair[2]])])
@@ -299,10 +352,11 @@ function _l3f_open_delta_limits!(model, constraints, edge, transformer,
             end
             ikey = original_side == "from" ? "i_max_from" : "i_max_to"
             if haskey(transformer, ikey)
-                radius = Float64(transformer[ikey][j]) * vterminal
-                _l3f_add_power_circle!(model, constraints,
-                    :transformer_reference_current,
-                    (edge.subtype, edge.id, original_side, j), p, q, radius)
+                rating = _l3f_scalar_or_indexed(transformer, ikey, j)
+                _l3f_add_current_cone!(model, constraints,
+                    :transformer_current,
+                    (edge.subtype, edge.id, original_side, j),
+                    p, q, wterminal, rating)
             end
         end
     end
@@ -356,7 +410,6 @@ function _l3f_build_model(net, topology, reference, report, optimizer, options;
         nch = length(gen["p_min"])
         D = _l3f_connection_incidence(String(gen["configuration"]), length(tm), nch)
         vbar = ComplexF64[reference.voltage[(String(gen["bus"]), t)] for t in tm]
-        ubar = D * vbar
         for k in 1:nch
             p = @variable(model, base_name=_l3f_name("l3f_pg", gid, k))
             q = @variable(model, base_name=_l3f_name("l3f_qg", gid, k))
@@ -367,9 +420,10 @@ function _l3f_build_model(net, topology, reference, report, optimizer, options;
             imax = _l3f_rating(gen, nothing, "i_max", k)
             _l3f_add_power_circle!(model, constraints, :generator_apparent_power,
                 (gid, k), p, q, smax)
-            _l3f_add_power_circle!(model, constraints, :generator_reference_current,
-                (gid, k), p, q,
-                imax === nothing ? nothing : imax * abs(ubar[k]))
+            w_channel = _l3f_winding_voltage_squared(D, k, vbar,
+                String(gen["bus"]), tm, w)
+            _l3f_add_current_cone!(model, constraints, :generator_current,
+                (gid, k), p, q, w_channel, imax)
         end
     end
     variables[:p_generator] = p_generator; variables[:q_generator] = q_generator
@@ -391,9 +445,8 @@ function _l3f_build_model(net, topology, reference, report, optimizer, options;
             imax = _l3f_rating(source, nothing, "i_max", k)
             _l3f_add_power_circle!(model, constraints, :source_apparent_power,
                 (sid, k), p, q, smax)
-            _l3f_add_power_circle!(model, constraints, :source_reference_current,
-                (sid, k), p, q,
-                imax === nothing ? nothing : imax * abs(reference.voltage[key]))
+            _l3f_add_current_cone!(model, constraints, :source_current,
+                (sid, k), p, q, w[key], imax)
         end
     end
     variables[:p_source] = p_source; variables[:q_source] = q_source
@@ -420,33 +473,91 @@ function _l3f_build_model(net, topology, reference, report, optimizer, options;
                     (edge.subtype, edge.id, phi), @constraint(model,
                         w[(edge.child, edge.child_map[phi])] == rhs))
             end
+            parent_is_from = !edge.reversed
             if edge.subtype == "open_delta_regulator"
                 _l3f_open_delta_limits!(model, constraints, edge, transformer,
-                    child_p, child_q, parent_power, reference)
-            else
-                # Ratings bind the winding they are declared on. For a diagonal
-                # map the two sides carry identical terminal power and the
-                # distinction is vacuous, but a Yd/Dy map is not diagonal, so
-                # each limit must reach its own side's expression.
-                parent_is_from = !edge.reversed
+                    child_p, child_q, parent_power, reference, w)
+            elseif edge.subtype in _L3F_DELTA_SUBTYPES
+                # BMOPF's Yd/Dy `s_rating` is the total bank VA.  Its thermal
+                # boundary is applied to the three WYE coils, each at the
+                # equal per-coil share S_rating / n_ph.  Delta terminal powers
+                # are not coil powers and must not receive a second copy of
+                # this constraint.
+                n_ph = length(edge.parent_map)
+                wye_is_from = edge.subtype == "wye_delta"
+                wye_is_parent = wye_is_from == parent_is_from
+                wye_p, wye_q = wye_is_parent ?
+                    ([parent_power[k][1] for k in eachindex(parent_power)],
+                     [parent_power[k][2] for k in eachindex(parent_power)]) :
+                    (child_p, child_q)
+                s_coil = _l3f_ywye_rating(transformer, edge.subtype, n_ph)
+                for phi in 1:n_ph
+                    _l3f_add_power_circle!(model, constraints,
+                        :transformer_apparent_power,
+                        (edge.subtype, edge.id, :wye, phi),
+                        wye_p[phi], wye_q[phi], s_coil)
+                end
+                # Current limits remain side-specific.  BMOPFTools defines the
+                # delta-side limit on the bushing/terminal current (not the
+                # internal coil arm), so use the corresponding terminal-power
+                # expression and phase-ground reference voltage here.
                 for phi in eachindex(edge.parent_map)
-                    side_power(from::Bool) = (from == parent_is_from) ?
-                        parent_power[phi] : (child_p[phi], child_q[phi])
-                    from_p, from_q = side_power(true)
-                    to_p, to_q = side_power(false)
+                    parent_p, parent_q = parent_power[phi]
+                    child_ep, child_eq = _l3f_total_endpoint_power(
+                        child_p[phi], child_q[phi], -1.0,
+                        JuMP.AffExpr(0.0), JuMP.AffExpr(0.0))
+                    from_p, from_q = parent_is_from ?
+                        (parent_p, parent_q) : (child_ep, child_eq)
+                    to_p, to_q = parent_is_from ?
+                        (child_ep, child_eq) : (parent_p, parent_q)
+                    from_bus = String(transformer["bus_from"])
+                    to_bus = String(transformer["bus_to"])
+                    from_tm = string.(transformer["terminal_map_from"])
+                    to_tm = string.(transformer["terminal_map_to"])
+                    _l3f_add_current_cone!(model, constraints, :transformer_current,
+                        (edge.subtype, edge.id, "from", phi), from_p, from_q,
+                        w[(from_bus, from_tm[phi])],
+                        _l3f_scalar_or_indexed(transformer, "i_max_from", phi))
+                    _l3f_add_current_cone!(model, constraints, :transformer_current,
+                        (edge.subtype, edge.id, "to", phi), to_p, to_q,
+                        w[(to_bus, to_tm[phi])],
+                        _l3f_scalar_or_indexed(transformer, "i_max_to", phi))
+                end
+            else
+                # Reconstruct power entering each physical endpoint. The
+                # to-side expression includes a lowered exciting shunt, when
+                # present, so its terminal ratings retain BMOPF semantics.
+                for phi in eachindex(edge.parent_map)
+                    parent_p, parent_q = parent_power[phi]
+                    child_ep, child_eq = _l3f_total_endpoint_power(
+                        child_p[phi], child_q[phi], -1.0,
+                        JuMP.AffExpr(0.0), JuMP.AffExpr(0.0))
+                    from_p, from_q = parent_is_from ?
+                        (parent_p, parent_q) : (child_ep, child_eq)
+                    to_series_p, to_series_q = parent_is_from ?
+                        (child_ep, child_eq) : (parent_p, parent_q)
+                    from_bus = String(transformer["bus_from"])
+                    to_bus = String(transformer["bus_to"])
+                    from_tm = string.(transformer["terminal_map_from"])
+                    to_tm = string.(transformer["terminal_map_to"])
+                    ps_to, qs_to = _l3f_derived_shunt_power(net, "noload", edge.id,
+                        nothing, to_bus, to_tm, reference, w, phi)
+                    to_p, to_q = _l3f_total_endpoint_power(
+                        to_series_p, to_series_q, 1.0, ps_to, qs_to)
                     _l3f_add_power_circle!(model, constraints, :transformer_apparent_power,
-                        (edge.subtype, edge.id, phi), from_p, from_q,
+                        (edge.subtype, edge.id, "from", phi), from_p, from_q,
                         get(transformer, "s_rating", nothing))
-                    from_vm = abs(reference.voltage[(String(transformer["bus_from"]),
-                                                      string.(transformer["terminal_map_from"])[phi])])
-                    to_vm = abs(reference.voltage[(String(transformer["bus_to"]),
-                                                    string.(transformer["terminal_map_to"])[phi])])
-                    _l3f_add_power_circle!(model, constraints, :transformer_from_reference_current,
-                        (edge.subtype, edge.id, phi), from_p, from_q,
-                        _l3f_scalar_or_indexed(transformer, "i_max_from", phi, from_vm))
-                    _l3f_add_power_circle!(model, constraints, :transformer_to_reference_current,
-                        (edge.subtype, edge.id, phi), to_p, to_q,
-                        _l3f_scalar_or_indexed(transformer, "i_max_to", phi, to_vm))
+                    _l3f_add_power_circle!(model, constraints, :transformer_apparent_power,
+                        (edge.subtype, edge.id, "to", phi), to_p, to_q,
+                        get(transformer, "s_rating", nothing))
+                    _l3f_add_current_cone!(model, constraints, :transformer_current,
+                        (edge.subtype, edge.id, "from", phi), from_p, from_q,
+                        w[(from_bus, from_tm[phi])],
+                        _l3f_scalar_or_indexed(transformer, "i_max_from", phi))
+                    _l3f_add_current_cone!(model, constraints, :transformer_current,
+                        (edge.subtype, edge.id, "to", phi), to_p, to_q,
+                        w[(to_bus, to_tm[phi])],
+                        _l3f_scalar_or_indexed(transformer, "i_max_to", phi))
                 end
             end
             continue
@@ -471,11 +582,27 @@ function _l3f_build_model(net, topology, reference, report, optimizer, options;
             p, q = p_line[(edge.family, edge.id, phi)], q_line[(edge.family, edge.id, phi)]
             smax = _l3f_rating(line, fallback, "s_max", phi)
             imax = _l3f_rating(line, fallback, "i_max", phi)
+            parent_side, child_side = edge.reversed ? ("to", "from") : ("from", "to")
+            psh_parent, qsh_parent = _l3f_derived_shunt_power(net, "lineshunt",
+                edge.id, parent_side, edge.parent, edge.parent_map,
+                reference, w, phi)
+            psh_child, qsh_child = _l3f_derived_shunt_power(net, "lineshunt",
+                edge.id, child_side, edge.child, edge.child_map,
+                reference, w, phi)
+            parent_p, parent_q = _l3f_total_endpoint_power(
+                p, q, 1.0, psh_parent, qsh_parent)
+            child_p, child_q = _l3f_total_endpoint_power(
+                p, q, -1.0, psh_child, qsh_child)
             _l3f_add_power_circle!(model, constraints, :line_apparent_power,
-                (edge.id, phi), p, q, smax)
-            _l3f_add_power_circle!(model, constraints, :line_reference_current,
-                (edge.id, phi), p, q, imax === nothing ? nothing :
-                    imax * abs(reference.voltage[(edge.parent, edge.parent_map[phi])]))
+                (edge.id, parent_side, phi), parent_p, parent_q, smax)
+            _l3f_add_power_circle!(model, constraints, :line_apparent_power,
+                (edge.id, child_side, phi), child_p, child_q, smax)
+            _l3f_add_current_cone!(model, constraints, :line_current,
+                (edge.id, parent_side, phi), parent_p, parent_q,
+                w[(edge.parent, edge.parent_map[phi])], imax)
+            _l3f_add_current_cone!(model, constraints, :line_current,
+                (edge.id, child_side, phi), child_p, child_q,
+                w[(edge.child, edge.child_map[phi])], imax)
         end
     end
 
@@ -643,7 +770,8 @@ function l3f_model_class(build::L3FBuild)
         objective_type <: JuMP.VariableRef || objective_type <: Real || return :unsupported
     conic = false
     for (function_type, set_type) in JuMP.list_of_constraint_types(build.model)
-        if set_type <: JuMP.MOI.SecondOrderCone
+        if set_type <: JuMP.MOI.SecondOrderCone ||
+           set_type <: JuMP.MOI.RotatedSecondOrderCone
             conic = true
         elseif !(function_type <: JuMP.GenericAffExpr ||
                  function_type <: JuMP.VariableRef)
@@ -767,7 +895,27 @@ function l3f_reference_from_powerflow(net; options::L3FOptions=L3FOptions(),
                                       dispatch=nothing,
                                       nonlinear_optimizer=Ipopt.Optimizer,
                                       solver_options=())
-    prepared = _l3f_prepare(net; options)
+    # This helper *produces* the explicit reference state.  Preparation still
+    # needs a usable provisional reference for topology/data checks, so an
+    # explicit-policy caller is validated with source propagation here; the
+    # returned state can then be passed back with the original options.
+    # The helper is itself the provenance-producing operation.  Preparation
+    # therefore must not require neutral-reduction provenance before the PF,
+    # including for an already-reduced case and for
+    # `reference_policy=:source_propagated`.  An explicit policy also needs a
+    # provisional source-propagated policy because the helper has no reference
+    # argument until it returns its PF state.
+    prepare_policy = options.reference_policy == :explicit ?
+        :source_propagated : options.reference_policy
+    prepare_options = L3FOptions(current_limit_policy=options.current_limit_policy,
+                                 validate_nonlinear=options.validate_nonlinear,
+                                 reference_policy=prepare_policy,
+                                 kron_reduce=options.kron_reduce,
+                                 require_neutral_provenance=false,
+                                 unsupported=options.unsupported,
+                                 objective=options.objective,
+                                 per_unit=options.per_unit, s_base=options.s_base)
+    prepared = _l3f_prepare(net; options=prepare_options)
     is_l3f_applicable(prepared.applicability) ||
         throw(L3FInapplicableError(prepared.applicability))
     working = deepcopy(prepared.network)

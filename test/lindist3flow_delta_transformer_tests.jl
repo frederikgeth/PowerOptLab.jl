@@ -19,7 +19,8 @@ using PowerOptLab
 # `D` has rank 2, and that is the whole story of this component. The relation
 # determines the wye voltages from the delta ones but not the reverse: a delta
 # winding neither imposes nor carries a zero-sequence terminal voltage. So the
-# bank is exact with the delta winding upstream, and needs a gauge — an
+# bank's ideal connection map is directly determined with the delta winding
+# upstream, and needs a gauge — an
 # assumption, offered only under `unsupported=:approximate` — with the wye
 # winding upstream.
 
@@ -128,7 +129,7 @@ end
     for subtype in ("delta_wye", "wye_delta")
         net = _l3f_dy_case(subtype; source_on_delta=true, line=true)
         report = check_l3f_applicability(net)
-        @test is_l3f_applicable(report)            # exact at the default policy
+        @test is_l3f_applicable(report)            # supported at the default policy
         @test !_l3f_dy_has(report, "E.L3F.DELTA_ORIENTATION_UNSUPPORTED")
 
         result = _l3f_dy_solve(net)
@@ -205,16 +206,17 @@ end
     @test _l3f_dy_has(check_l3f_applicability(invalid),
                       "E.L3F.TRANSFORMER_RATIO_INVALID")
 
-    # Leakage is still refused by default and lowered exactly under :lower,
-    # exactly as for every other subtype.
+    # Leakage is still refused by default. Coupled Yd/Dy leakage is not lowered
+    # by diagonal phase lines under :lower.
     leaky = _l3f_dy_case("delta_wye"; extra=Dict{String,Any}(
         "r_series_from" => 0.5, "x_series_from" => 1.5))
     @test _l3f_dy_has(check_l3f_applicability(leaky),
                       "E.L3F.TRANSFORMER_NONIDEAL_UNSUPPORTED")
     lowered = check_l3f_applicability(leaky; options=L3FOptions(unsupported=:lower))
-    @test is_l3f_applicable(lowered)
-    @test _l3f_dy_has(lowered, "L.L3F.TRANSFORMER_LEAKAGE_LOWERED")
-    @test _l3f_dy_solve(leaky; unsupported=:lower).solve.optimal
+    @test !is_l3f_applicable(lowered)
+    @test !_l3f_dy_has(lowered, "L.L3F.TRANSFORMER_LEAKAGE_LOWERED")
+    @test _l3f_dy_has(lowered, "E.L3F.TRANSFORMER_NONIDEAL_UNSUPPORTED")
+    @test_throws L3FInapplicableError _l3f_dy_solve(leaky; unsupported=:lower)
 
     # A rating binds the winding it is declared on. The two sides of a Yd bank
     # carry different terminal power, so a from-side limit must reach the
@@ -236,6 +238,20 @@ end
     ample_to = _l3f_dy_case("delta_wye";
         extra=Dict{String,Any}("i_max_to" => fill(1_000.0, 3)))
     @test _l3f_dy_solve(ample_to).solve.optimal
+
+    # `s_rating` is total bank VA, not a per-terminal limit.  The largest
+    # declared wye phase is sqrt(45^2 + 15^2) kVA, so 120 kVA total
+    # (40 kVA/coil) is infeasible while 150 kVA total (50 kVA/coil) is ample.
+    # Exercise both orientations and both coordinate modes to catch accidental
+    # duplication on the delta side or use of the wrong private PU base field.
+    for subtype in ("delta_wye", "wye_delta"), pu in (false, true)
+        tight = _l3f_dy_case(subtype; source_on_delta=true,
+            extra=Dict{String,Any}("s_rating" => 120_000.0))
+        ample = _l3f_dy_case(subtype; source_on_delta=true,
+            extra=Dict{String,Any}("s_rating" => 150_000.0))
+        @test !_l3f_dy_solve(tight; per_unit=pu).solve.optimal
+        @test _l3f_dy_solve(ample; per_unit=pu).solve.optimal
+    end
 end
 
 @testset "LinDist3Flow Yd/Dy against OpenDSS" begin
@@ -335,7 +351,7 @@ end
         errors = [abs(result.buses[bus][t]["vm"] - abs(dss_v["$bus.$k"])) / _L3F_DY_VPN_LV
                   for bus in ("y", "end") for (k, t) in enumerate(("a","b","c"))]
         @test length(errors) == 6
-        @test maximum(errors[1:3]) < 1e-7      # the bank itself is exact
+        @test maximum(errors[1:3]) < 1e-7      # the ideal map is directly imposed
         @test 1e-5 < maximum(errors) < 0.004   # the line carries the omitted losses
     else
         @test_skip "Requires OpenDSSDirect"

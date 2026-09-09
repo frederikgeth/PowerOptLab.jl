@@ -52,8 +52,8 @@ devices sharing a conductor between the same buses remain non-radial.
 
 ### Where the line equation comes from
 
-A series branch obeys ``v_j = v_i - Z i`` exactly. Forming the outer product and
-keeping its diagonal,
+The underlying AC series branch obeys ``v_j = v_i - Z i``. LinDist3Flow forms
+the outer product and keeps its diagonal,
 
 ```math
 \operatorname{diag}(v_jv_j^H)=\operatorname{diag}(v_iv_i^H)
@@ -105,8 +105,9 @@ implements ``H=\operatorname{diag}(\bar v)D^T
 \operatorname{diag}(D\bar v)^{-1}`` for phase-to-phase and delta
 devices. For each voltage-dependent load channel, the physical winding voltage
 is represented by the same fixed-angle affine closure,
-``\widehat{|Dv|^2}=c_D+a_D^T w``. Pure ZP laws are therefore exact affine
-functions of that closure:
+``\widehat{|Dv|^2}=c_D+a_D^T w``. Pure ZP laws are therefore affine functions
+of the chosen closure (exact as functions of that approximation, not an exact
+AC load-flow law):
 
 ```math
 p=p_{nom}\left(\alpha^P+\alpha^Z\widehat{|Dv|^2}/v_{nom}^2\right),\qquad
@@ -137,8 +138,10 @@ and it is worth being exact about where the error enters.
 3. **Omitted series losses.** The nodal balance carries the same ``p+jq`` into
    the child and out of the parent.
 
-Claims that the formulation contains "no approximation" apply only to the
-algebra downstream of these three, not to the physics.
+The canonical formulation is therefore never an exact AC physics model. A
+phase-to-ground wye channel is the special case where the cross-phase closure
+and channel split introduce no additional error; the line loss and fixed-angle
+assumptions still apply to the surrounding network.
 
 !!! note "Closed-delta channel powers are not uniquely determined"
     A closed delta's map ``H`` has rank 2: channel powers of the form
@@ -177,7 +180,7 @@ behaves. The relation fixes the wye voltages given the delta ones, but not the
 reverse: a delta winding neither imposes nor carries a zero-sequence terminal
 voltage.
 
-- **Delta winding upstream** — ``T=D/g``, exact. The downstream wye voltages
+- **Delta winding upstream** — ``T=D/g`` as an ideal connection map. The downstream wye voltages
   are fully determined, and their zero-sequence component is zero, which is the
   correct behaviour of an ideal bank whose zero-sequence impedance is zero.
   This is the ordinary substation and service-transformer arrangement, and it
@@ -192,18 +195,18 @@ voltage.
   coupling this formulation has already discarded.
 
 Because the map is not diagonal, the two sides of the bank carry different
-terminal power, so `s_rating` and `i_max_from`/`i_max_to` are each applied to
-the winding they are declared on rather than to whichever side the traversal
-happened to reach. (For a diagonal map the distinction is vacuous, which is why
-it went unnoticed for the single-phase subtypes.)
+terminal power. `i_max_from` and `i_max_to` are therefore applied to their
+declared physical endpoints through live-voltage rotated SOCs rather than to
+whichever side the traversal happened to reach. Yd/Dy `s_rating` retains its
+BMOPF total-bank interpretation and is split across the three wye coils.
 
 ### Angles are coefficients, and the vector group is a real choice
 
 The formulation has **no angle variables** — only ``w=|v|^2`` and device powers.
 Reference phasors ``\bar v`` are fixed data, computed once by propagating the
 source through the topology, and a Yd/Dy map contributes its ±30° to them. So
-the bank's phase shift is represented exactly and is published as
-`reference_angle`, but it is coefficient data, not a solved quantity.
+the bank's phase shift is encoded in the fixed coefficients and published as
+`reference_angle`; it is reference data, not a solved quantity.
 
 ``\bar v`` enters only through **same-bus** ratios and conjugate products —
 ``\Gamma_{\phi\psi}=\bar v_\phi/\bar v_\psi``, the closure's
@@ -260,8 +263,8 @@ The optimizer currently stamps only `open_delta_regulator`, because that is the
 only three-phase regulator-bank component in the BMOPF schema. Its voltage law
 uses the fixed matrix ``A^{-1}``, and its terminal-power law uses the same
 fixed-reference complex power transformation as other multi-terminal devices.
-Two-winding apparent-power and reference-current ratings become native SOC
-constraints; note that the shared (common) phase of an open-delta bank carries
+Two-winding apparent-power ratings become native SOCs and current ratings use
+live-voltage rotated SOCs; note that the shared (common) phase of an open-delta bank carries
 both units' current and is deliberately unrated, matching the two-element
 `i_max_from`/`i_max_to` shape BMOPF declares for the subtype. Closed-delta and three-unit WYE banks remain coefficient oracles
 until BMOPF provides an unambiguous component representation; PowerOptLab does
@@ -412,7 +415,7 @@ which one you are in.
 
 | | What it is | Example | Accuracy cost |
 |---|---|---|---|
-| **Lowering** | outside the component vocabulary, inside the mathematical class | transformer leakage | **none** |
+| **Canonical lowering** | outside the component vocabulary, inside the L3F component class | switch or single-phase transformer impedance | preserves the L3F approximation |
 | **Missing feature** | expressible in the existing closure, simply not written yet | `vpp` / sequence limits | none, once implemented |
 | **Projection** | genuinely destroys information | adjustable tap | real, and not quantifiable from inside |
 
@@ -421,20 +424,18 @@ The policy is a ladder:
 | `unsupported` | Behaviour |
 |---|---|
 | `:reject` (default) | Nothing is rewritten. Unsupported data is an error, as the formulation's contract promises. |
-| `:lower` | Exact re-representations only, reported as `L.L3F.*` at severity `:info`. **The solved model is the same physics.** |
-| `:approximate` | Also the lossy projections, reported as `A.L3F.*` at severity `:warning`. **The solved model is a different problem.** |
+| `:lower` | Canonical L3F-preserving lowerings only, reported as `L.L3F.*` at severity `:info`. The surrounding model remains a fixed-angle, lossless approximation. |
+| `:approximate` | Also experimental projections, reported as `A.L3F.*` at severity `:warning`. The projected model is a different problem. |
 
 Every rewrite appears in the applicability report, and
 `result.formulation["unsupported_policy"]` and `["lowered"]` record what was in
 force, so a result can always be traced to what was actually solved.
 
-### Exact lowerings
+### Canonical lowerings
 
-Each of these replaces a component with supported components that reproduce the
-same two-port or shunt behaviour. There is no approximation, and the regression
-suite proves it by solving each case twice — once from the richer component,
-once from a hand-written equivalent — and requiring agreement to solver
-tolerance.
+Each of these replaces a component with supported components while preserving
+the canonical L3F data and equations. This does not remove the fixed-angle
+closure or omitted-series-loss approximation.
 
 - **Closed switch → zero-impedance line.** A closed ideal switch is a branch
   with no series drop. An open switch is removed; if that leaves a subnetwork
@@ -444,37 +445,35 @@ tolerance.
   admittance matrix of the same three coils. BMOPF capacitors carry no switching
   state, so nothing is assumed.
 - **Line shunt → terminal shunts.** BMOPF already declares the from- and to-side
-  halves separately, so moving each onto its own bus restates the same π model.
+  halves separately, so moving each onto its own bus preserves the canonical π
+  data.
   Linecode entries are per unit length and scale with `length`.
-- **Transformer leakage and no-load admittance → series line and shunt.** A
-  winding leakage is a series impedance in the coil's own coordinates and the
-  no-load admittance is a shunt across the winding-2 coil. Introducing one
-  internal bus per non-zero winding and stamping ordinary line and shunt
-  elements reproduces the two-port exactly. The internal buses and branches
-  appear in the result under `_l3f_` names, which is what makes the rewrite
-  auditable rather than hidden.
+- **Single-phase transformer leakage and no-load admittance → series line and
+  shunt.** A phase-to-ground winding leakage is lowered in its own coordinates,
+  and no-load admittance is placed across the to-side coil. Connection-aware
+  Yd/Dy, autotransformer, and other coupled winding semantics remain
+  unsupported; they are not replaced by diagonal phase lines.
 
-That last one is the substantive one: it turns "ideal transformers only" into
-"any transformer of a supported connection", at no cost in fidelity.
+The lowering is auditable through `_l3f_` internal elements, but it does not
+turn the canonical approximation into an exact transformer or AC network model.
 
 ### Projections
 
-- **Constant-current, ZIP with a current fraction, and exponential loads → ZP.**
+- **Experimental constant-current, ZIP with a current fraction, and exponential
+  loads → ZP.**
   A term ``(V/V_{nom})^\gamma`` is matched in value and first derivative at
   ``V=V_{nom}`` by ``\alpha_P+\alpha_Z(V/V_{nom})^2`` with
-  ``\alpha_Z=\gamma/2``, ``\alpha_P=1-\gamma/2``. Exact for ``\gamma=0`` and
-  ``\gamma=2``; for ``\gamma=1`` it is the familiar half-to-Z, half-to-P split
-  of a constant-current term. The error is second order in the voltage deviation
-  from nominal.
+  ``\alpha_Z=\gamma/2``, ``\alpha_P=1-\gamma/2``. This is exact only for the
+  endpoint exponent classes within the projection; for ``\gamma=1`` it is the
+  familiar half-to-Z, half-to-P split of a constant-current term. For other
+  exponents it is a tangent projection, reported with an experimental warning.
 - **Adjustable tap → fixed tap.** The declared operating tap when it lies inside
   the interval, otherwise the midpoint. This removes a decision variable: the
   answer is feasible *for that setting*, not optimal over the range.
-- **Unassessed bus limits are dropped.** `vpp_*`, `vpos_*`, `vneg_max`,
-  `vzero_max` and `vm_unbalance_max` are removed with a warning. The solved
-  problem is a **relaxation** and its solution may violate them. These are the
-  "missing feature" row of the table above rather than a true impossibility —
-  each is affine in ``w`` through the same cross-voltage closure the model
-  already forms, so implementing them properly is the right eventual fix.
+- **Unassessed voltage and angle limits are never dropped.** Bus `vpn_*`,
+  `vn_max`, sequence/unbalance limits, phase-to-phase limits, and line
+  `va_diff_*` remain applicability errors under every policy until they are
+  stamped explicitly.
 
 !!! warning "The replay does not measure the projection error"
     Under `:approximate` the snapshot the nonlinear replay runs on is the
@@ -504,8 +503,8 @@ because there is no defensible substitution:
 Every rejection is a typed [`L3FFinding`](@ref) with a stable code. Errors make
 the report inapplicable and cause [`build_l3f_opf`](@ref) to raise
 [`L3FInapplicableError`](@ref); warnings and `:info` findings never block a
-build. The prefix carries the severity: `E.` error, `W.` warning, `L.` an exact
-lowering (`:info`), `A.` a lossy projection (`:warning`). A test enforces that
+build. The prefix carries the severity: `E.` error, `W.` warning, `L.` a canonical
+lowering (`:info`), `A.` an experimental projection (`:warning`). A test enforces that
 each code below has a reachable case.
 
 | Code | Severity | Meaning |
@@ -518,14 +517,15 @@ each code below has a reachable case.
 | `E.L3F.DEVICE_DATA_INVALID` | E | Device data is non-finite or violates its own ordering (`p_min > p_max`, and similar). |
 | `E.L3F.VOLTAGE_BOUND_INVALID` | E | A bus `v_min`/`v_max` is non-finite, negative, mis-sized, or inverted. |
 | `E.L3F.LIMIT_INVALID` | E | A rating is non-positive, non-finite, or the wrong shape for its device. |
-| `E.L3F.LIMIT_UNSUPPORTED` | E | A bus declares a sequence or phase-to-phase limit the formulation does not assess. |
+| `E.L3F.LIMIT_UNSUPPORTED` | E | A bus or line declares a phase-to-neutral, neutral, phase-to-phase, sequence/unbalance, or angle limit the formulation does not assess. |
 | `E.L3F.CONNECTION_UNSUPPORTED` | E | A device configuration outside `WYE`/`SINGLE_PHASE`/`DELTA` (sources: wye only). |
 | `E.L3F.LOAD_MODEL_UNSUPPORTED` | E | A load model other than constant power, constant impedance, or ZIP. |
 | `E.L3F.ZIP_CURRENT_UNSUPPORTED` | E | A ZIP load with a nonzero current fraction; not affine in squared voltage. |
-| `E.L3F.LINE_MATRIX_INVALID` | E | A line has no impedance source, both inline and linecode data, or a malformed matrix. |
+| `E.L3F.LINE_MATRIX_INVALID` | E | A line has no impedance source or a malformed series matrix. Inline markers take precedence over a referenced linecode. |
 | `E.L3F.LINE_SHUNT_UNSUPPORTED` | E | A line or linecode declares shunt admittance. |
+| `E.L3F.LINE_SHUNT_INVALID` | E | A selected line-shunt matrix declares an entry outside its terminal-map arity. |
 | `E.L3F.SHUNT_INVALID` | E | A shunt admittance is non-finite or declares an entry outside its terminal-map arity. |
-| `E.L3F.TRANSFORMER_UNSUPPORTED` | E | A transformer subtype outside the supported three. |
+| `E.L3F.TRANSFORMER_UNSUPPORTED` | E | A transformer subtype outside the supported set. |
 | `E.L3F.TRANSFORMER_RATIO_INVALID` | E | A ratio is missing, non-positive, non-finite, or the wrong arity. |
 | `E.L3F.TRANSFORMER_NONIDEAL_UNSUPPORTED` | E | Nonzero leakage or no-load admittance on a device modelled as ideal. |
 | `E.L3F.DELTA_ORIENTATION_UNSUPPORTED` | E | A Yd/Dy bank has its wye winding facing the source, leaving the delta terminals undetermined in their common component. |
@@ -547,15 +547,14 @@ each code below has a reachable case.
 | `E.L3F.DC_SUBSYSTEM_UNSUPPORTED` | E | Any DC subsystem table. |
 | `E.L3F.CAPACITOR_INVALID` | E | A capacitor could not be lowered: non-positive `v_nom`, non-finite `q_rated`, or a connection the incidence map does not cover. |
 | `W.L3F.COST_MISSING` | W | `objective=:cost` but a dispatchable unit declares no `cost`; it is priced at zero and the optimum may be non-unique. |
-| `L.L3F.SWITCH_LOWERED` | I | Closed switch represented exactly as a zero-impedance line. |
+| `L.L3F.SWITCH_LOWERED` | I | Closed switch represented in the canonical L3F model as a zero-impedance line. |
 | `L.L3F.SWITCH_OPEN_REMOVED` | I | Open switch removed; any subnetwork it alone energized is now a separate island. |
-| `L.L3F.CAPACITOR_LOWERED` | I | Fixed capacitor represented exactly as a shunt. |
+| `L.L3F.CAPACITOR_LOWERED` | I | Fixed capacitor represented in the canonical L3F model as a shunt. |
 | `L.L3F.LINE_SHUNT_LOWERED` | I | A declared π half moved onto its own bus as a shunt. |
-| `L.L3F.TRANSFORMER_LEAKAGE_LOWERED` | I | Winding leakage represented exactly as a series line through an internal bus. |
-| `L.L3F.TRANSFORMER_NO_LOAD_LOWERED` | I | No-load admittance represented exactly as a shunt across the to-side coil. |
+| `L.L3F.TRANSFORMER_LEAKAGE_LOWERED` | I | Single-phase winding leakage represented in the canonical L3F model as a series line through an internal bus. |
+| `L.L3F.TRANSFORMER_NO_LOAD_LOWERED` | I | Single-phase no-load admittance represented in the canonical L3F model as a shunt across the to-side coil. |
 | `A.L3F.LOAD_LAW_PROJECTED` | W | A constant-current, ZIP-with-current, or exponential law projected onto its ZP tangent at `v_nom`. |
 | `A.L3F.ADJUSTABLE_TAP_PROJECTED` | W | A tap interval collapsed to one fixed setting; the optimizer no longer selects the tap. |
-| `A.L3F.BUS_LIMIT_DROPPED` | W | A bus limit the formulation does not assess was removed; the solved problem is a relaxation. |
 
 ## Result contract
 
@@ -594,15 +593,16 @@ is always `"unassessed"`.
 ## Deliberate exclusions
 
 The first implementation rejects meshed islands, multiple or missing sources,
-line shunts, nonideal or adjustable transformers/regulators, switches,
+nonideal or adjustable transformers/regulators outside the justified
+single-phase lowering, switches and line shunts unless `:lower` is selected,
 controllable capacitors, IBR component models, DC subsystems, constant-current
 loads, ZIP loads with a nonzero current fraction, exponential loads, time-series
 controls, and sequence-voltage limits. Series losses are omitted.
 
-Within the affine coordinates the model is exact: there is no artificial physics
-slack, no integer variable, no non-SOC cone, and no polyhedral outer
-approximation of a cone. The coordinates themselves rest on the three
-approximations above.
+Within the affine coordinates there is no additional relaxation: there is no
+artificial physics slack, no integer variable, no non-SOC cone, and no
+polyhedral outer approximation of a cone. The coordinates themselves still
+rest on the three canonical approximations above.
 
 When nonlinear validation is enabled, `solve_l3f_opf` fixes the optimized
 generator dispatch in the reduced snapshot and calls BMOPFTools power flow. The

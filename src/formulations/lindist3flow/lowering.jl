@@ -1,17 +1,18 @@
 # Widening the admissible input without widening the formulation.
 #
 # The model itself only knows about a small vocabulary: series lines, fixed
-# shunts, ideal fixed-ratio transformers, and P/Z loads. Much of what BMOPF can
-# express sits outside that vocabulary while remaining inside the same
-# mathematical class, and can be rewritten into it *exactly*. A smaller set
-# genuinely cannot, and can only be projected onto it at a cost.
+# shunts, ideal fixed-ratio transformers, and P/Z loads. A lowering is canonical
+# only when it stays within the same LinDist3Flow approximation (fixed phase
+# angles and omitted series losses). It is never an exact AC re-representation.
+# A smaller set genuinely cannot be represented and can only be projected onto
+# it at a cost.
 #
 # `L3FOptions(unsupported=...)` selects how far to go:
 #
 #   :reject       nothing is rewritten (the default; what the formulation
 #                 promises when it says a component is unsupported)
-#   :lower        exact re-representations only, reported as `L.L3F.*` at
-#                 severity :info — the solved model is the same physics
+#   :lower        canonical re-representations only, reported as `L.L3F.*` at
+#                 severity :info — the same L3F approximation is retained
 #   :approximate  also the lossy projections, reported as `A.L3F.*` at severity
 #                 :warning — the solved model is a different problem
 #
@@ -48,14 +49,15 @@ function _l3f_diagonal_series(r::Real, x::Real, n::Int)
 end
 
 # ---------------------------------------------------------------------------
-# Exact re-representations
+# Canonical L3F re-representations
 # ---------------------------------------------------------------------------
 
 """
 Closed switches become zero-impedance lines; open switches are removed.
 
-Both are exact. A closed ideal switch is a branch with no series drop, which the
-line kernel already represents, and an open switch carries no current at all. If
+Both preserve the canonical L3F approximation. A closed ideal switch is a
+branch with no series drop, which the line kernel already represents, and an open
+switch carries no current at all. If
 removing an open switch leaves a subnetwork with no source, the island check
 reports that in the usual way rather than this pass guessing at intent.
 """
@@ -81,9 +83,11 @@ function _l3f_lower_switches!(findings, net)
             "terminal_map_to" => string.(get(switch, "terminal_map_to", String[])))
         merge!(line, _l3f_diagonal_series(0.0, 0.0, length(mf)))
         haskey(switch, "i_max") && (line["i_max"] = copy(switch["i_max"]))
+        haskey(switch, "s_max") && (line["s_max"] = copy(switch["s_max"]))
         lines[id] = line
         _l3f_info!(findings, "L.L3F.SWITCH_LOWERED", :switch, sid,
-            "closed switch represented exactly as the zero-impedance line '$id'";
+            "closed switch represented in the canonical L3F model as the " *
+            "zero-impedance line '$id'";
             evidence=Dict("line" => id))
     end
     delete!(net, "switch")
@@ -93,9 +97,9 @@ end
 Fixed capacitor banks become fixed shunt susceptance.
 
 `B = q_rated / v_nom^2` per coil. For a delta bank the coil admittances are
-referred to the terminals by ``D^{T}\\operatorname{diag}(b)D``, which is exactly
-the terminal admittance matrix of the same three coils. BMOPF capacitors carry
-no switching state, so this is an exact restatement, not a projection.
+referred to the terminals by ``D^{T}\\operatorname{diag}(b)D``. BMOPF capacitors
+carry no switching state, so this preserves the canonical L3F component model;
+it does not make the surrounding LinDist3Flow equations exact AC physics.
 """
 function _l3f_lower_capacitors!(findings, net)
     capacitors = get(net, "capacitor", nothing)
@@ -123,7 +127,8 @@ function _l3f_lower_capacitors!(findings, net)
             end
             shunts[id] = shunt
             _l3f_info!(findings, "L.L3F.CAPACITOR_LOWERED", :capacitor, cid,
-                "fixed capacitor represented exactly as the shunt '$id' with " *
+                "fixed capacitor represented in the canonical L3F model as the " *
+                "shunt '$id' with " *
                 "B = q_rated / v_nom^2";
                 evidence=Dict("shunt" => id))
         catch err
@@ -138,8 +143,7 @@ end
 Inline line shunt admittance becomes a fixed shunt at each end.
 
 BMOPF already splits a line's shunt into declared from- and to-side halves, so
-moving each half onto its own bus is a restatement of the same pi model rather
-than a lumping approximation. Linecode entries are per unit length and are
+moving each half onto its own bus preserves the canonical pi data. Linecode entries are per unit length and are
 scaled by the line's `length`, matching the series path.
 """
 function _l3f_lower_line_shunts!(findings, net)
@@ -149,27 +153,55 @@ function _l3f_lower_line_shunts!(findings, net)
     for (lid_raw, line) in sort!(collect(lines); by=first)
         lid = String(lid_raw)
         line isa AbstractDict || continue
-        sources = Tuple{Any,Float64}[(line, 1.0)]
+        # BMOPFTools selects one complete coefficient source.  Inline series
+        # matrices select inline shunts as well; do not merge them with a
+        # referenced linecode.  A linecode supplies both kinds of coefficients
+        # and is scaled by the line length.
+        inline = _l3f_has_inline_z(line)
         lcid = get(line, "linecode", nothing)
-        if lcid isa AbstractString && haskey(linecodes, lcid)
-            push!(sources, (linecodes[lcid], Float64(get(line, "length", 1.0))))
+        source = if inline
+            (line, 1.0)
+        elseif lcid isa AbstractString && haskey(linecodes, lcid)
+            (linecodes[lcid], Float64(get(line, "length", 1.0)))
+        else
+            nothing
         end
         for (side, bus_key, map_key) in (("from", "bus_from", "terminal_map_from"),
                                          ("to", "bus_to", "terminal_map_to"))
             tm = string.(get(line, map_key, String[]))
             isempty(tm) && continue
-            entries = Dict{Tuple{Int,Int},ComplexF64}()
-            for (data, scale) in sources, key in keys(data)
-                m = match(Regex("^([GB])_$(side)_(\\d+)_(\\d+)\$"), String(key))
+            source === nothing && continue
+            data, scale = source
+            n = length(tm)
+            bad_keys = String[]
+            for key in keys(data)
+                m = match(Regex("^[GB]_$(side)_(\\d+)_(\\d+)\$"), String(key))
                 m === nothing && continue
-                i, j = parse(Int, m.captures[2]), parse(Int, m.captures[3])
-                max(i, j) <= length(tm) || continue
-                value = Float64(data[key]) * scale
-                pair = i <= j ? (i, j) : (j, i)
-                current = get(entries, pair, ComplexF64(0))
-                entries[pair] = m.captures[1] == "G" ?
-                    current + value : current + im * value
+                i, j = parse(Int, m.captures[1]), parse(Int, m.captures[2])
+                min(i, j) >= 1 && max(i, j) <= n ||
+                    push!(bad_keys, String(key))
             end
+            isempty(bad_keys) || _l3f_error!(findings, "E.L3F.LINE_SHUNT_INVALID",
+                :line, lid, "line shunt key(s) $(join(sort(bad_keys), ", ")) " *
+                "fall outside terminal indices 1:$n")
+            # Match BMOPFTools' full-vs-upper-triangular matrix semantics:
+            # when both orientations are present, the direct key wins, rather
+            # than summing the symmetric off-diagonal twice.
+            matrix(prefix) = [begin
+                key = "$(prefix)$(side)_$(i)_$(j)"
+                reverse_key = "$(prefix)$(side)_$(j)_$(i)"
+                value = haskey(data, key) ? data[key] :
+                        (haskey(data, reverse_key) ? data[reverse_key] : 0.0)
+                Float64(value) * scale
+            end for i in 1:n, j in 1:n]
+            G, B = matrix("G_"), matrix("B_")
+            # Keep every reconstructed entry.  This preserves a deliberately
+            # full (possibly asymmetric) input matrix, while a symmetric full
+            # matrix is still represented once per matrix position and is not
+            # accidentally doubled by the lowering.
+            entries = Dict{Tuple{Int,Int},ComplexF64}((i, j) =>
+                ComplexF64(G[i, j], B[i, j]) for i in 1:n, j in 1:n)
+            filter!(pair_value -> !iszero(pair_value[2]), entries)
             isempty(entries) && continue
             id = _l3f_derived("lineshunt", lid, side)
             shunt = Dict{String,Any}("bus" => String(line[bus_key]), "terminal_map" => tm)
@@ -198,15 +230,12 @@ function _l3f_lower_line_shunts!(findings, net)
 end
 
 """
-A non-ideal transformer becomes an ideal one plus explicit series and shunt
-elements.
-
-Winding leakage is a series impedance in the coil's own coordinates and the
-no-load admittance is a shunt across the winding-2 coil, so introducing an
-internal bus per non-zero winding and stamping those as ordinary line and shunt
-elements reproduces the same two-port exactly. Nothing is dropped and no
-accuracy is lost — the formulation simply had no vocabulary for a component
-carrying its own impedance.
+A non-ideal single-phase transformer becomes an ideal one plus explicit series
+and shunt elements. This is a canonical L3F lowering: it preserves the
+single-phase topology and the fixed-angle/lossless approximation, but it is not
+an exact AC two-port. Connection-aware Yd/Dy and multi-phase transformer
+leakage/no-load lowering is deliberately not attempted; those components remain
+unsupported rather than being represented by false diagonal phase lines.
 """
 function _l3f_lower_transformer_impedance!(findings, net)
     tables = get(net, "transformer", Dict())
@@ -220,6 +249,12 @@ function _l3f_lower_transformer_impedance!(findings, net)
         for (tid_raw, transformer) in sort!(collect(table); by=first)
             tid = String(tid_raw)
             transformer isa AbstractDict || continue
+            # A diagonal phase-line decomposition is justified only for a
+            # single phase-to-ground transformer winding.  In particular,
+            # autotransformer, Yd/Dy, and open-delta leakage lives in coupled
+            # coil coordinates and cannot be replaced by independent phase
+            # lines without losing the connection and shared-winding physics.
+            subtype == "single_phase" || continue
             for (side, bus_key, map_key, r_key, x_key) in (
                     ("from", "bus_from", "terminal_map_from", "r_series_from", "x_series_from"),
                     ("to", "bus_to", "terminal_map_to", "r_series_to", "x_series_to"))
@@ -240,14 +275,16 @@ function _l3f_lower_transformer_impedance!(findings, net)
                 delete!(transformer, r_key); delete!(transformer, x_key)
                 _l3f_info!(findings, "L.L3F.TRANSFORMER_LEAKAGE_LOWERED",
                     :transformer, tid,
-                    "$side-winding leakage $(r) + j$(x) ohm represented exactly as " *
-                    "the series line '$line_id' through the internal bus '$internal'";
+                "$side-winding leakage $(r) + j$(x) ohm represented in the " *
+                    "series line '$line_id' through the internal bus '$internal'";
                     evidence=Dict("line" => line_id, "bus" => internal,
                                   "side" => side, "r" => r, "x" => x))
             end
             g, b, present = _l3f_scalar_impedance(transformer, "g_no_load", "b_no_load")
             present || continue
-            # The no-load shunt is stamped across the winding-2 (to-side) coil.
+            # BMOPFTools places the ordinary single-phase exciting branch
+            # across winding 2 (the to-side coil), at its total coil
+            # admittance.  There is no per-phase splitting for this subtype.
             bus = String(get(transformer, "bus_to", ""))
             haskey(buses, bus) || continue
             tm = string.(get(transformer, "terminal_map_to", String[]))
@@ -260,7 +297,7 @@ function _l3f_lower_transformer_impedance!(findings, net)
             shunts[id] = shunt
             delete!(transformer, "g_no_load"); delete!(transformer, "b_no_load")
             _l3f_info!(findings, "L.L3F.TRANSFORMER_NO_LOAD_LOWERED", :transformer, tid,
-                "no-load admittance $(g) + j$(b) S represented exactly as the " *
+                "no-load admittance $(g) + j$(b) S represented in the " *
                 "shunt '$id' across the to-side coil";
                 evidence=Dict("shunt" => id, "g" => g, "b" => b))
         end
@@ -276,10 +313,11 @@ Tangent ZP fractions for a voltage exponent.
 
 A term ``(V/V_{nom})^\\gamma`` is matched in value and first derivative at
 ``V=V_{nom}`` by ``\\alpha_P+\\alpha_Z(V/V_{nom})^2`` with
-``\\alpha_Z=\\gamma/2`` and ``\\alpha_P=1-\\gamma/2``. The construction is exact
-for ``\\gamma=0`` (constant power) and ``\\gamma=2`` (constant impedance), and
-for ``\\gamma=1`` it is the familiar half-to-Z, half-to-P split of a
-constant-current term.
+``\\alpha_Z=\\gamma/2`` and ``\\alpha_P=1-\\gamma/2``. The endpoint classes
+``\\gamma=0`` (constant power) and ``\\gamma=2`` (constant impedance) coincide
+with the native model classes; for ``\\gamma=1`` it is the familiar half-to-Z,
+half-to-P split of a constant-current term. Other exponents are experimental
+tangent projections.
 """
 _l3f_zp_tangent(gamma::Real) = (gamma / 2, 1 - gamma / 2)
 
@@ -320,7 +358,8 @@ function _l3f_project_load!(findings, load, lid)
             "beta_z" => first.(zq), "beta_p" => last.(zq), "beta_i" => zeros(nch)))
         _l3f_warning!(findings, "A.L3F.LOAD_LAW_PROJECTED", :load, lid,
             "exponential law with exponents $(gp) / $(gq) projected onto the ZP " *
-            "tangent at v_nom; exact for exponents 0 and 2, approximate otherwise";
+            "tangent at v_nom; endpoint classes coincide with native P/Z laws, " *
+            "and other exponents are experimental";
             evidence=Dict("model" => "exponential", "gamma_p" => gp, "gamma_q" => gq))
         return
     end
@@ -342,7 +381,7 @@ end
 """
 Collapse an adjustable tap interval onto a single fixed setting.
 
-Unlike the exact rewrites above this removes a decision the caller asked for.
+Unlike the canonical lowerings above this removes a decision the caller asked for.
 The declared operating tap is kept when it lies inside the interval, otherwise
 the midpoint is used, and the discarded interval is recorded so the loss is
 visible in the report.
@@ -376,28 +415,14 @@ function _l3f_project_taps!(findings, net)
 end
 
 """
-Drop bus limits the formulation does not assess.
+Legacy helper retained for source compatibility.
 
-A phase-to-phase or sequence-voltage limit is representable through the same
-cross-voltage closure the model already forms, so this is a gap rather than an
-impossibility. Until those constraints exist, `:approximate` drops them and says
-so — the solved problem is a relaxation, and its solution may violate them.
+Unimplemented BMOPF voltage limits are now applicability errors under every
+policy, so this helper deliberately does not mutate the network. Constraints
+must not be silently relaxed by `unsupported=:approximate`.
 """
 function _l3f_project_bus_limits!(findings, net)
-    for (bid, bus) in sort!(collect(get(net, "bus", Dict())); by=first)
-        bus isa AbstractDict || continue
-        dropped = String[]
-        for key in ("vpp_min", "vpp_max", "vpos_min", "vpos_max", "vneg_max",
-                    "vzero_max", "vm_unbalance_max")
-            haskey(bus, key) || continue
-            push!(dropped, key); delete!(bus, key)
-        end
-        isempty(dropped) && continue
-        _l3f_warning!(findings, "A.L3F.BUS_LIMIT_DROPPED", :bus, bid,
-            "bus limit(s) $(join(dropped, ", ")) dropped; the solved problem is a " *
-            "relaxation and its solution may violate them";
-            evidence=Dict("limits" => dropped))
-    end
+    nothing
 end
 
 """
@@ -418,7 +443,9 @@ function _l3f_lower!(findings, net, options::L3FOptions)
             load isa AbstractDict && _l3f_project_load!(findings, load, String(lid))
         end
         _l3f_project_taps!(findings, net)
-        _l3f_project_bus_limits!(findings, net)
+        # Unsupported bus/line voltage bounds are applicability errors, never
+        # experimental relaxations.  Keep them in the private copy so the
+        # validator can report every offending field.
     end
     length(findings) > before
 end
