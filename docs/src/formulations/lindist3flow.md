@@ -21,8 +21,9 @@ with stable codes; it is never silently dropped.
 
 Version `0.1-prototype` builds a continuous affine LP or SOCP for radial AC islands with
 exactly one fixed-voltage source per island. It supports neutral-reduced series
-lines without line shunts, grounded-wye, single-phase and delta constant-power
-loads and generators, fixed bus shunts, ideal fixed-ratio single-phase
+lines without line shunts, grounded-wye, single-phase and delta constant-power,
+constant-impedance, and pure ZP ZIP loads, constant-power generators, fixed bus
+shunts, ideal fixed-ratio single-phase
 transformers and ANSI A/B autotransformer regulators, retained phase-to-ground
 voltage-magnitude bounds, linear per-channel energy costs, and reverse power
 flow. Apparent-power bounds are native second-order cones. Ampacity bounds use
@@ -49,7 +50,19 @@ decision variables.
 oracles. The connection map
 implements ``H=\operatorname{diag}(\bar v)D^T
 \operatorname{diag}(D\bar v)^{-1}`` for phase-to-phase and delta
-constant-power devices.
+devices. For each voltage-dependent load channel, the physical winding voltage
+is represented by the same fixed-angle affine closure,
+``\widehat{|Dv|^2}=c_D+a_D^T w``. Pure ZP laws are therefore exact affine
+functions of that closure:
+
+```math
+p=p_{nom}\left(\alpha^P+\alpha^Z\widehat{|Dv|^2}/v_{nom}^2\right),\qquad
+q=q_{nom}\left(\beta^P+\beta^Z\widehat{|Dv|^2}/v_{nom}^2\right).
+```
+
+Scalar or per-channel BMOPF coefficients and `v_nom` values are accepted.
+Fitted ZIP coefficients are used verbatim and are not normalized. A coefficient
+family with no fields defaults to constant power, following BMOPFTools semantics.
 
 Fixed regulator and transformer settings preserve affine physics. Adjustable
 tap intervals are rejected: there are no integer taps, McCormick envelopes, or
@@ -60,11 +73,12 @@ admittance must be represented as separate supported network elements.
 
 The first implementation rejects meshed islands, multiple or missing sources,
 line shunts, nonideal or adjustable transformers/regulators, switches,
-controllable capacitors, IBR component models, DC subsystems,
-non-constant-power loads, time-series controls, and sequence-voltage limits.
-Series losses are omitted. The formulation contains no ZIP or exponential-load
-approximation, Taylor series, artificial physics slack, integer variable,
-non-SOC cone, or polyhedral approximation of a cone.
+controllable capacitors, IBR component models, DC subsystems, constant-current
+loads, ZIP loads with a nonzero current fraction, exponential loads, time-series
+controls, and sequence-voltage limits. Series losses are omitted. Pure ZP is
+affine without approximation; the formulation contains no Taylor series,
+artificial physics slack, integer variable, non-SOC cone, or polyhedral
+approximation of a cone.
 
 When nonlinear validation is enabled, `solve_l3f_opf` fixes the optimized
 generator dispatch in the reduced snapshot and calls BMOPFTools power flow. The

@@ -159,6 +159,47 @@ function _l3f_shunt_power(data, bus::String, tm, reference, w, phi::Int)
     p, q
 end
 
+function _l3f_channel_value(data, field::String, k::Int, default::Float64)
+    raw = get(data, field, nothing)
+    raw === nothing && return default
+    raw isa AbstractVector ? Float64(length(raw) == 1 ? raw[1] : raw[k]) : Float64(raw)
+end
+
+function _l3f_zip_coefficients(load, family::Symbol, k::Int)
+    fields = family == :p ? ("alpha_z", "alpha_i", "alpha_p") :
+                            ("beta_z", "beta_i", "beta_p")
+    all(field -> !haskey(load, field), fields) && return (0.0, 0.0, 1.0)
+    (_l3f_channel_value(load, fields[1], k, 0.0),
+     _l3f_channel_value(load, fields[2], k, 0.0),
+     _l3f_channel_value(load, fields[3], k, 0.0))
+end
+
+function _l3f_load_channel_power(load, D, vbar, bus::String, tm, w, k::Int)
+    model = lowercase(String(get(load, "model", "constant_power")))
+    p_nom, q_nom = Float64(load["p_nom"][k]), Float64(load["q_nom"][k])
+    model == "constant_power" && return (JuMP.AffExpr(p_nom), JuMP.AffExpr(q_nom))
+
+    v_nom = _l3f_channel_value(load, "v_nom", k, NaN)
+    winding = winding_voltage_coefficients(view(D, k, :), vbar)
+    w_winding = JuMP.AffExpr(winding.constant)
+    for terminal in eachindex(tm)
+        JuMP.add_to_expression!(w_winding, winding.coefficients[terminal],
+                                w[(bus, tm[terminal])])
+    end
+
+    if model == "constant_impedance"
+        p_coeffs, q_coeffs = (1.0, 0.0, 0.0), (1.0, 0.0, 0.0)
+    else
+        p_coeffs = _l3f_zip_coefficients(load, :p, k)
+        q_coeffs = _l3f_zip_coefficients(load, :q, k)
+    end
+    p = JuMP.AffExpr(p_nom * p_coeffs[3])
+    q = JuMP.AffExpr(q_nom * q_coeffs[3])
+    JuMP.add_to_expression!(p, p_nom * p_coeffs[1] / v_nom^2, w_winding)
+    JuMP.add_to_expression!(q, q_nom * q_coeffs[1] / v_nom^2, w_winding)
+    p, q
+end
+
 function _l3f_cost_coefficient(component, k::Int, kind::String, id::String)
     cost = get(component, "cost", nothing)
     cost === nothing && return 0.0
@@ -311,18 +352,31 @@ function _l3f_build_model(net, topology, reference, report, optimizer, options)
         JuMP.add_to_expression!(balance_p[(edge.child, edge.child_map[k])], 1.0, p_line[(edge.family, edge.id, k)])
         JuMP.add_to_expression!(balance_q[(edge.child, edge.child_map[k])], 1.0, q_line[(edge.family, edge.id, k)])
     end
-    for (lid, load) in get(net, "load", Dict())
+    load_power = Dict{Tuple{String,Int},Tuple{JuMP.AffExpr,JuMP.AffExpr}}()
+    for (lid_raw, load) in get(net, "load", Dict())
+        lid = String(lid_raw)
         bus = String(load["bus"]); tm = string.(load["terminal_map"])
         p = Float64.(load["p_nom"]); q = Float64.(load["q_nom"])
         D = _l3f_connection_incidence(String(load["configuration"]), length(tm), length(p))
         vbar = ComplexF64[reference.voltage[(bus, t)] for t in tm]
-        H = connection_power_map(D, vbar).matrix
-        terminal_power = H * complex.(p, q)
-        for k in eachindex(tm)
-            JuMP.add_to_expression!(balance_p[(bus, tm[k])], -real(terminal_power[k]))
-            JuMP.add_to_expression!(balance_q[(bus, tm[k])], -imag(terminal_power[k]))
+        H = connection_power_map(D, vbar)
+        for channel in eachindex(p)
+            load_power[(lid, channel)] = _l3f_load_channel_power(
+                load, D, vbar, bus, tm, w, channel)
+        end
+        for terminal in eachindex(tm), channel in eachindex(p)
+            pc, qc = load_power[(lid, channel)]
+            JuMP.add_to_expression!(balance_p[(bus, tm[terminal])],
+                -H.real_part[terminal, channel], pc)
+            JuMP.add_to_expression!(balance_p[(bus, tm[terminal])],
+                H.imag_part[terminal, channel], qc)
+            JuMP.add_to_expression!(balance_q[(bus, tm[terminal])],
+                -H.imag_part[terminal, channel], pc)
+            JuMP.add_to_expression!(balance_q[(bus, tm[terminal])],
+                -H.real_part[terminal, channel], qc)
         end
     end
+    variables[:load_power] = load_power
     shunt_power = Dict{Tuple{String,Int},Tuple{JuMP.AffExpr,JuMP.AffExpr}}()
     for (sid_raw, shunt) in get(net, "shunt", Dict())
         sid = String(sid_raw); bus = String(shunt["bus"]); tm = string.(shunt["terminal_map"])

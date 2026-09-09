@@ -136,6 +136,21 @@ end
     delete!(unbounded["generator"]["pv"], "q_max")
     report = check_l3f_applicability(unbounded)
     @test any(f -> f.code == "E.L3F.DEVICE_ARITY", report.findings)
+
+    zip_i = _l3f_case()
+    merge!(zip_i["load"]["load"], Dict{String,Any}(
+        "model" => "zip", "v_nom" => [230.0],
+        "alpha_z" => [0.3], "alpha_i" => [0.1], "alpha_p" => [0.6],
+        "beta_z" => [0.4], "beta_i" => [0.0], "beta_p" => [0.6]))
+    report = check_l3f_applicability(zip_i)
+    @test any(f -> f.code == "E.L3F.ZIP_CURRENT_UNSUPPORTED", report.findings)
+
+    exponential = _l3f_case()
+    merge!(exponential["load"]["load"], Dict{String,Any}(
+        "model" => "exponential", "v_nom" => [230.0],
+        "gamma_p" => [2.0], "gamma_q" => [0.0]))
+    report = check_l3f_applicability(exponential)
+    @test any(f -> f.code == "E.L3F.LOAD_MODEL_UNSUPPORTED", report.findings)
 end
 
 @testset "LinDist3Flow radial LP" begin
@@ -164,6 +179,51 @@ end
         solver_options=("print_level" => 0,))
     @test shunt_result.solve.optimal
     @test shunt_result.buses["load"]["a"]["w"] ≈ 48_500 / 1.004 atol=1e-3
+end
+
+@testset "LinDist3Flow affine ZP load laws" begin
+    options = L3FOptions(validate_nonlinear=false, objective=:feasibility)
+    w0 = 230.0^2
+
+    zip = _l3f_case()
+    merge!(zip["load"]["load"], Dict{String,Any}(
+        "model" => "zip", "v_nom" => 230.0,
+        "alpha_z" => [0.4], "alpha_p" => [0.6],
+        "beta_z" => [0.25], "beta_p" => [0.75]))
+    result = solve_l3f_opf(zip, Ipopt.Optimizer; options,
+        solver_options=("print_level" => 0,))
+    load = zip["load"]["load"]
+    constant_drop = 0.4 * load["p_nom"][1] * 0.6 +
+                    0.2 * load["q_nom"][1] * 0.75
+    voltage_drop_coefficient = (0.4 * load["p_nom"][1] * 0.4 +
+                                0.2 * load["q_nom"][1] * 0.25) / w0
+    expected_w = (w0 - constant_drop) / (1 + voltage_drop_coefficient)
+    @test result.solve.optimal
+    @test result.buses["load"]["a"]["w"] ≈ expected_w atol=1e-4
+    @test result.lines["line"]["p"][1] ≈
+        load["p_nom"][1] * (0.6 + 0.4 * expected_w / w0) atol=1e-4
+    @test result.lines["line"]["q"][1] ≈
+        load["q_nom"][1] * (0.75 + 0.25 * expected_w / w0) atol=1e-4
+
+    impedance = _l3f_case()
+    merge!(impedance["load"]["load"], Dict{String,Any}(
+        "model" => "constant_impedance", "v_nom" => [230.0]))
+    z_result = solve_l3f_opf(impedance, Ipopt.Optimizer; options,
+        solver_options=("print_level" => 0,))
+    expected_z_w = w0 / (1 + (0.4 * 10_000.0 + 0.2 * 2_000.0) / w0)
+    @test z_result.solve.optimal
+    @test z_result.buses["load"]["a"]["w"] ≈ expected_z_w atol=1e-4
+    @test z_result.lines["line"]["p"][1] ≈ 10_000.0 * expected_z_w / w0 atol=1e-4
+
+    pure_p = _l3f_case()
+    merge!(pure_p["load"]["load"], Dict{String,Any}(
+        "model" => "zip", "v_nom" => [230.0],
+        "alpha_z" => [0.0], "alpha_i" => [0.0], "alpha_p" => [1.0],
+        "beta_z" => [0.0], "beta_i" => [0.0], "beta_p" => [1.0]))
+    p_result = solve_l3f_opf(pure_p, Ipopt.Optimizer; options,
+        solver_options=("print_level" => 0,))
+    @test p_result.lines["line"]["p"] ≈ [10_000.0] atol=1e-4
+    @test p_result.buses["load"]["a"]["w"] ≈ 48_500.0 atol=1e-3
 end
 
 @testset "LinDist3Flow fixed regulator and exact SOC bounds" begin
@@ -210,4 +270,18 @@ end
     @test result.solve.optimal
     @test sum(result.sources["s"]["pg"]) ≈ 30_000.0 atol=1e-5
     @test sum(result.sources["s"]["qg"]) ≈ 4_000.0 atol=1e-5
+
+    delta_zp = deepcopy(net)
+    merge!(delta_zp["load"]["d"], Dict{String,Any}(
+        "model" => "zip", "v_nom" => sqrt(3.0) * v,
+        "alpha_z" => 0.25, "alpha_p" => 0.5,
+        "beta_z" => [0.5], "beta_p" => [0.75]))
+    zp_result = solve_l3f_opf(delta_zp, Clarabel.Optimizer;
+        options=L3FOptions(validate_nonlinear=false, objective=:feasibility),
+        solver_options=("verbose" => false,))
+    @test zp_result.solve.optimal
+    # Coefficients are deliberately not normalized: the formulation must use
+    # fitted BMOPF ZIP fractions verbatim at the nominal line-line voltage.
+    @test sum(zp_result.sources["s"]["pg"]) ≈ 0.75 * 30_000.0 atol=1e-4
+    @test sum(zp_result.sources["s"]["qg"]) ≈ 1.25 * 4_000.0 atol=1e-4
 end

@@ -342,10 +342,11 @@ function _l3f_validate_components!(findings, net)
         cfg = uppercase(String(get(load, "configuration", "WYE")))
         cfg in ("WYE", "SINGLE_PHASE", "DELTA") || _l3f_error!(findings,
             "E.L3F.CONNECTION_UNSUPPORTED", :load, lid,
-            "only grounded-wye, single-phase, and delta constant-power loads are supported")
-        lowercase(String(get(load, "model", "constant_power"))) == "constant_power" ||
+            "only grounded-wye, single-phase, and delta loads are supported")
+        load_model = lowercase(String(get(load, "model", "constant_power")))
+        load_model in ("constant_power", "constant_impedance", "zip") ||
             _l3f_error!(findings, "E.L3F.LOAD_MODEL_UNSUPPORTED", :load, lid,
-                        "only model=constant_power is supported in the minimal slice")
+                        "only constant-power, constant-impedance, and pure ZP ZIP loads are supported")
         tm = string.(get(load, "terminal_map", String[]))
         bt = string.(get(bus, "terminal_names", String[]))
         !isempty(tm) && allunique(tm) && all(in(bt), tm) || _l3f_error!(findings,
@@ -356,9 +357,42 @@ function _l3f_validate_components!(findings, net)
             "E.L3F.DEVICE_ARITY", :load, lid,
             "p_nom and q_nom must have equal channel counts")
         try
-            _l3f_connection_incidence(cfg, length(tm), length(p))
+            nch = length(p)
+            _l3f_connection_incidence(cfg, length(tm), nch)
             values = vcat(Float64.(p), Float64.(q))
             all(isfinite, values) || throw(ArgumentError("nominal powers must be finite"))
+
+            if load_model in ("constant_impedance", "zip")
+                vnom_raw = get(load, "v_nom", nothing)
+                vnom_raw === nothing && throw(ArgumentError(
+                    "model=$load_model requires v_nom"))
+                vnom = vnom_raw isa AbstractVector ? Float64.(vnom_raw) : [Float64(vnom_raw)]
+                length(vnom) in (1, nch) || throw(ArgumentError(
+                    "v_nom must be scalar or have one entry per load channel"))
+                all(x -> isfinite(x) && x > 0.0, vnom) || throw(ArgumentError(
+                    "v_nom entries must be positive and finite"))
+            end
+
+            if load_model == "zip"
+                for field in ("alpha_z", "alpha_i", "alpha_p",
+                              "beta_z", "beta_i", "beta_p")
+                    raw = get(load, field, nothing)
+                    raw === nothing && continue
+                    coeff = raw isa AbstractVector ? Float64.(raw) : [Float64(raw)]
+                    length(coeff) in (1, nch) || throw(ArgumentError(
+                        "$field must be scalar or have one entry per load channel"))
+                    all(isfinite, coeff) || throw(ArgumentError(
+                        "$field entries must be finite"))
+                end
+                for field in ("alpha_i", "beta_i")
+                    raw = get(load, field, nothing)
+                    raw === nothing && continue
+                    coeff = raw isa AbstractVector ? Float64.(raw) : [Float64(raw)]
+                    any(!iszero, coeff) && _l3f_error!(findings,
+                        "E.L3F.ZIP_CURRENT_UNSUPPORTED", :load, lid,
+                        "$field must be identically zero; constant-current ZIP terms are not affine in squared voltage")
+                end
+            end
         catch err
             _l3f_error!(findings, "E.L3F.DEVICE_DATA_INVALID", :load, lid,
                         sprint(showerror, err))
