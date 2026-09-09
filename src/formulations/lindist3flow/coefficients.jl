@@ -44,6 +44,61 @@ end
 evaluate_affine(c::AffineScalarCoefficients, w::AbstractVector{<:Real}) =
     c.constant + dot(c.coefficients, w)
 
+const _L3F_OPEN_DELTA_PAIRS = Dict(
+    "ABBC" => ((1, 2), (2, 3)),
+    "BCAC" => ((2, 3), (1, 3)),
+    "CABA" => ((3, 1), (2, 1)),
+)
+
+"""
+    regulator_gain_matrix(configuration, tap_ratio;
+                          connection="ABBC", regulator_type="B")
+
+Return the real gain matrix ``A`` in ``v_from = A*v_to`` for a fixed ideal
+WYE, closed-delta, or open-delta step-voltage-regulator bank. The matrices
+follow Bazrafshan, Gatsis, and Zhu (PSCC 2018, Table I). `tap_ratio` contains
+three ratios for WYE/closed delta and two for open delta. Following the BMOPF
+regulator contract, ANSI type A uses the declared ratio directly and type B
+uses its reciprocal as the effective ratio.
+"""
+function regulator_gain_matrix(configuration, tap_ratio;
+                               connection="ABBC", regulator_type="B")
+    cfg = uppercase(replace(String(configuration), '-' => '_'))
+    ratio = tap_ratio isa AbstractVector ? Float64.(tap_ratio) : [Float64(tap_ratio)]
+    rt = uppercase(String(regulator_type))
+    rt in ("A", "B") || throw(ArgumentError("regulator_type must be A or B"))
+    all(x -> isfinite(x) && x > 0.0, ratio) ||
+        throw(ArgumentError("tap ratios must be positive and finite"))
+    effective = rt == "A" ? ratio : inv.(ratio)
+
+    if cfg == "WYE"
+        length(effective) == 3 || throw(DimensionMismatch(
+            "WYE regulator bank requires three tap ratios"))
+        return Matrix(Diagonal(effective))
+    elseif cfg in ("CLOSED_DELTA", "CLOSEDDELTA")
+        length(effective) == 3 || throw(DimensionMismatch(
+            "closed-delta regulator bank requires three tap ratios"))
+        rab, rbc, rca = effective
+        return [rab 1-rab 0.0; 0.0 rbc 1-rbc; 1-rca 0.0 rca]
+    elseif cfg in ("OPEN_DELTA", "OPENDELTA")
+        length(effective) == 2 || throw(DimensionMismatch(
+            "open-delta regulator bank requires two tap ratios"))
+        pairs = get(_L3F_OPEN_DELTA_PAIRS, uppercase(String(connection)), nothing)
+        pairs === nothing && throw(ArgumentError(
+            "open-delta connection must be ABBC, BCAC, or CABA"))
+        shared = only(intersect(collect(pairs[1]), collect(pairs[2])))
+        A = Matrix{Float64}(I, 3, 3)
+        for (r, pair) in zip(effective, pairs)
+            other = pair[1] == shared ? pair[2] : pair[1]
+            A[other, :] .= 0.0
+            A[other, other] = r
+            A[other, shared] = 1-r
+        end
+        return A
+    end
+    throw(ArgumentError("unsupported regulator configuration '$configuration'"))
+end
+
 """
     connection_power_map(D, vbar)
 

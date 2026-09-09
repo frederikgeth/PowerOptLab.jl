@@ -88,18 +88,37 @@ function _l3f_transformer_neff(subtype::String, data)
             Float64(get(data, "tap", 1.0))
     elseif subtype == "single_phase_autotransformer"
         tap = Float64(get(data, "tap_ratio", 1.0))
-        uppercase(String(get(data, "regulator_type", "B"))) == "A" ? inv(tap) : tap
+        uppercase(String(get(data, "regulator_type", "B"))) == "A" ? tap : inv(tap)
+    elseif subtype == "open_delta_regulator"
+        tap = Float64.(get(data, "tap_ratio", [1.0, 1.0]))
+        uppercase(String(get(data, "regulator_type", "B"))) == "A" ? tap : inv.(tap)
     else
         throw(ArgumentError("unsupported transformer subtype '$subtype'"))
     end
 end
 
+function _l3f_transformer_forward_map(subtype::String, data)
+    if subtype in ("single_phase", "single_phase_autotransformer")
+        return reshape([inv(_l3f_transformer_neff(subtype, data))], 1, 1)
+    elseif subtype == "open_delta_regulator"
+        A = regulator_gain_matrix("OPEN_DELTA", get(data, "tap_ratio", [1.0, 1.0]);
+            connection=String(get(data, "connection", "")),
+            regulator_type=String(get(data, "regulator_type", "B")))
+        return inv(A)
+    end
+    throw(ArgumentError("unsupported transformer subtype '$subtype'"))
+end
+
+_l3f_transformer_oriented_map(edge::L3FOrientedLine, data) =
+    edge.reversed ? inv(_l3f_transformer_forward_map(edge.subtype, data)) :
+                    _l3f_transformer_forward_map(edge.subtype, data)
+
 function _l3f_validate_transformers!(findings, net)
     buses = get(net, "bus", Dict())
     for (subtype, id, data) in _l3f_transformers(net)
-        subtype in ("single_phase", "single_phase_autotransformer") || begin
+        subtype in ("single_phase", "single_phase_autotransformer", "open_delta_regulator") || begin
             _l3f_error!(findings, "E.L3F.TRANSFORMER_UNSUPPORTED", :transformer, id,
-                "only fixed ideal single_phase and single_phase_autotransformer devices are supported")
+                "only fixed ideal single_phase, single_phase_autotransformer, and open_delta_regulator devices are supported")
             continue
         end
         bf, bt = String(get(data, "bus_from", "")), String(get(data, "bus_to", ""))
@@ -111,19 +130,33 @@ function _l3f_validate_transformers!(findings, net)
             all(in(string.(get(buses[bt], "terminal_names", String[]))), mt)
         valid || _l3f_error!(findings, "E.L3F.TERMINAL_MAP_INVALID", :transformer, id,
             "transformer terminal maps must be aligned retained conductors on declared buses")
-        length(mf) == 1 || _l3f_error!(findings, "E.L3F.DEVICE_ARITY", :transformer, id,
-            "single-phase transformer/regulator support requires one retained power channel")
+        expected_arity = subtype == "open_delta_regulator" ? 3 : 1
+        length(mf) == expected_arity || _l3f_error!(findings,
+            "E.L3F.DEVICE_ARITY", :transformer, id,
+            subtype == "open_delta_regulator" ?
+                "a Kron-reduced open-delta regulator requires three retained phase terminals" :
+                "single-phase transformer/regulator support requires one retained power channel")
         lo_key, hi_key = subtype == "single_phase" ? ("tap_min", "tap_max") :
                                                     ("tap_ratio_min", "tap_ratio_max")
         if haskey(data, lo_key) || haskey(data, hi_key)
-            lo, hi = Float64(get(data, lo_key, NaN)), Float64(get(data, hi_key, NaN))
-            (!isfinite(lo) || !isfinite(hi) || lo != hi) && _l3f_error!(findings,
+            raw_lo, raw_hi = get(data, lo_key, NaN), get(data, hi_key, NaN)
+            lo = raw_lo isa AbstractVector ? Float64.(raw_lo) : [Float64(raw_lo)]
+            hi = raw_hi isa AbstractVector ? Float64.(raw_hi) : [Float64(raw_hi)]
+            (!all(isfinite, lo) || !all(isfinite, hi) || length(lo) != length(hi) ||
+             any(lo .!= hi)) && _l3f_error!(findings,
                 "E.L3F.ADJUSTABLE_TAP_UNSUPPORTED", :transformer, id,
                 "LinDist3Flow accepts fixed regulator settings only; adjustable tap intervals are excluded")
         end
         try
             neff = _l3f_transformer_neff(subtype, data)
-            isfinite(neff) && neff > 0 || throw(ArgumentError("effective ratio must be positive and finite"))
+            neff_values = neff isa AbstractVector ? neff : [neff]
+            expected_ratio_count = subtype == "open_delta_regulator" ? 2 : 1
+            length(neff_values) == expected_ratio_count || throw(DimensionMismatch(
+                "expected $expected_ratio_count effective ratio(s)"))
+            all(x -> isfinite(x) && x > 0, neff_values) ||
+                throw(ArgumentError("effective ratio must be positive and finite"))
+            T = _l3f_transformer_forward_map(subtype, data)
+            all(isfinite, T) || throw(ArgumentError("voltage-gain matrix must be finite"))
         catch err
             _l3f_error!(findings, "E.L3F.TRANSFORMER_RATIO_INVALID", :transformer, id,
                         sprint(showerror, err))
@@ -137,9 +170,17 @@ function _l3f_validate_transformers!(findings, net)
         for key in ("s_rating", "i_max_from", "i_max_to")
             haskey(data, key) || continue
             value = data[key]
-            value isa Real && isfinite(value) && value > 0 || _l3f_error!(findings,
+            valid_limit = if subtype == "open_delta_regulator" && key != "s_rating"
+                value isa AbstractVector && length(value) == 2 &&
+                    all(x -> x isa Real && isfinite(x) && x > 0, value)
+            else
+                value isa Real && isfinite(value) && value > 0
+            end
+            valid_limit || _l3f_error!(findings,
                 "E.L3F.LIMIT_INVALID", :transformer, id,
-                "$key must be a positive finite scalar")
+                subtype == "open_delta_regulator" && key != "s_rating" ?
+                    "$key must contain two positive finite winding ratings" :
+                    "$key must be a positive finite scalar")
         end
     end
 end

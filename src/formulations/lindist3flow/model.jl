@@ -47,16 +47,16 @@ function _l3f_source_reference(net, topology)
         progressed = false
         for edge in copy(pending)
             all(haskey(voltage, (edge.parent, terminal)) for terminal in edge.parent_map) || continue
-            scale = if edge.family == :line
-                1.0
+            transform = if edge.family == :line
+                Matrix{Float64}(I, length(edge.parent_map), length(edge.parent_map))
             else
                 data = net["transformer"][edge.subtype][edge.id]
-                neff = _l3f_transformer_neff(edge.subtype, data)
-                edge.reversed ? neff : inv(neff)
+                _l3f_transformer_oriented_map(edge, data)
             end
             for k in eachindex(edge.parent_map)
                 key = (edge.child, edge.child_map[k])
-                value = scale * voltage[(edge.parent, edge.parent_map[k])]
+                value = sum(transform[k, j] * voltage[(edge.parent, edge.parent_map[j])]
+                            for j in eachindex(edge.parent_map))
                 if haskey(voltage, key) && !isapprox(voltage[key], value; atol=1e-10, rtol=1e-10)
                     throw(ArgumentError("conflicting propagated reference at $key"))
                 end
@@ -200,6 +200,48 @@ function _l3f_load_channel_power(load, D, vbar, bus::String, tm, w, k::Int)
     p, q
 end
 
+function _l3f_mapped_terminal_power(H::ConnectionPowerMap, p, q, terminal::Int)
+    pt, qt = JuMP.AffExpr(0.0), JuMP.AffExpr(0.0)
+    for channel in eachindex(p)
+        JuMP.add_to_expression!(pt, H.real_part[terminal, channel], p[channel])
+        JuMP.add_to_expression!(pt, -H.imag_part[terminal, channel], q[channel])
+        JuMP.add_to_expression!(qt, H.imag_part[terminal, channel], p[channel])
+        JuMP.add_to_expression!(qt, H.real_part[terminal, channel], q[channel])
+    end
+    pt, qt
+end
+
+function _l3f_open_delta_limits!(model, constraints, edge, transformer,
+                                 child_p, child_q, parent_power, reference)
+    pairs = _L3F_OPEN_DELTA_PAIRS[uppercase(String(transformer["connection"]))]
+    shared = only(intersect(collect(pairs[1]), collect(pairs[2])))
+    original_from_is_parent = !edge.reversed
+    for (j, pair) in enumerate(pairs)
+        other = pair[1] == shared ? pair[2] : pair[1]
+        for (side, p, q, bus, tm) in (
+            (:parent, parent_power[other][1], parent_power[other][2], edge.parent, edge.parent_map),
+            (:child, child_p[other], child_q[other], edge.child, edge.child_map))
+            original_side = (side == :parent) == original_from_is_parent ? "from" : "to"
+            vterminal = abs(reference.voltage[(bus, tm[other])])
+            winding_voltage = abs(reference.voltage[(bus, tm[pair[1]])] -
+                                  reference.voltage[(bus, tm[pair[2]])])
+            if haskey(transformer, "s_rating")
+                radius = Float64(transformer["s_rating"]) * vterminal / winding_voltage
+                _l3f_add_power_circle!(model, constraints,
+                    :transformer_winding_apparent_power,
+                    (edge.subtype, edge.id, original_side, j), p, q, radius)
+            end
+            ikey = original_side == "from" ? "i_max_from" : "i_max_to"
+            if haskey(transformer, ikey)
+                radius = Float64(transformer[ikey][j]) * vterminal
+                _l3f_add_power_circle!(model, constraints,
+                    :transformer_reference_current,
+                    (edge.subtype, edge.id, original_side, j), p, q, radius)
+            end
+        end
+    end
+end
+
 function _l3f_cost_coefficient(component, k::Int, kind::String, id::String)
     cost = get(component, "cost", nothing)
     cost === nothing && return 0.0
@@ -291,28 +333,45 @@ function _l3f_build_model(net, topology, reference, report, optimizer, options)
     for edge in topology
         if edge.family == :transformer
             transformer = net["transformer"][edge.subtype][edge.id]
-            neff = _l3f_transformer_neff(edge.subtype, transformer)
-            scale = edge.reversed ? neff : inv(neff)
+            transform = _l3f_transformer_oriented_map(edge, transformer)
+            vbar_parent = ComplexF64[reference.voltage[(edge.parent, terminal)]
+                                     for terminal in edge.parent_map]
+            H = connection_power_map(transform, vbar_parent)
+            child_p = [p_line[(edge.family, edge.id, k)] for k in eachindex(edge.child_map)]
+            child_q = [q_line[(edge.family, edge.id, k)] for k in eachindex(edge.child_map)]
+            parent_power = [_l3f_mapped_terminal_power(H, child_p, child_q, k)
+                            for k in eachindex(edge.parent_map)]
             for phi in eachindex(edge.parent_map)
+                winding = winding_voltage_coefficients(view(transform, phi, :), vbar_parent)
+                rhs = JuMP.AffExpr(winding.constant)
+                for psi in eachindex(edge.parent_map)
+                    JuMP.add_to_expression!(rhs, winding.coefficients[psi],
+                        w[(edge.parent, edge.parent_map[psi])])
+                end
                 _l3f_register_constraint!(constraints, :transformer_voltage_ratio,
                     (edge.subtype, edge.id, phi), @constraint(model,
-                        w[(edge.child, edge.child_map[phi])] ==
-                        scale^2 * w[(edge.parent, edge.parent_map[phi])]))
-                p = p_line[(edge.family, edge.id, phi)]
-                q = q_line[(edge.family, edge.id, phi)]
-                _l3f_add_power_circle!(model, constraints, :transformer_apparent_power,
-                    (edge.subtype, edge.id, phi), p, q,
-                    get(transformer, "s_rating", nothing))
-                from_vm = abs(reference.voltage[(String(transformer["bus_from"]),
-                                                  string.(transformer["terminal_map_from"])[phi])])
-                to_vm = abs(reference.voltage[(String(transformer["bus_to"]),
-                                                string.(transformer["terminal_map_to"])[phi])])
-                _l3f_add_power_circle!(model, constraints, :transformer_from_reference_current,
-                    (edge.subtype, edge.id, phi), p, q,
-                    haskey(transformer, "i_max_from") ? Float64(transformer["i_max_from"]) * from_vm : nothing)
-                _l3f_add_power_circle!(model, constraints, :transformer_to_reference_current,
-                    (edge.subtype, edge.id, phi), p, q,
-                    haskey(transformer, "i_max_to") ? Float64(transformer["i_max_to"]) * to_vm : nothing)
+                        w[(edge.child, edge.child_map[phi])] == rhs))
+            end
+            if edge.subtype == "open_delta_regulator"
+                _l3f_open_delta_limits!(model, constraints, edge, transformer,
+                    child_p, child_q, parent_power, reference)
+            else
+                for phi in eachindex(edge.parent_map)
+                    p, q = child_p[phi], child_q[phi]
+                    _l3f_add_power_circle!(model, constraints, :transformer_apparent_power,
+                        (edge.subtype, edge.id, phi), p, q,
+                        get(transformer, "s_rating", nothing))
+                    from_vm = abs(reference.voltage[(String(transformer["bus_from"]),
+                                                      string.(transformer["terminal_map_from"])[phi])])
+                    to_vm = abs(reference.voltage[(String(transformer["bus_to"]),
+                                                    string.(transformer["terminal_map_to"])[phi])])
+                    _l3f_add_power_circle!(model, constraints, :transformer_from_reference_current,
+                        (edge.subtype, edge.id, phi), p, q,
+                        haskey(transformer, "i_max_from") ? Float64(transformer["i_max_from"]) * from_vm : nothing)
+                    _l3f_add_power_circle!(model, constraints, :transformer_to_reference_current,
+                        (edge.subtype, edge.id, phi), p, q,
+                        haskey(transformer, "i_max_to") ? Float64(transformer["i_max_to"]) * to_vm : nothing)
+                end
             end
             continue
         end
@@ -346,11 +405,34 @@ function _l3f_build_model(net, topology, reference, report, optimizer, options)
 
     balance_p = Dict(key => JuMP.AffExpr(0.0) for key in keys(w))
     balance_q = Dict(key => JuMP.AffExpr(0.0) for key in keys(w))
-    for edge in topology, k in eachindex(edge.parent_map)
-        JuMP.add_to_expression!(balance_p[(edge.parent, edge.parent_map[k])], -1.0, p_line[(edge.family, edge.id, k)])
-        JuMP.add_to_expression!(balance_q[(edge.parent, edge.parent_map[k])], -1.0, q_line[(edge.family, edge.id, k)])
-        JuMP.add_to_expression!(balance_p[(edge.child, edge.child_map[k])], 1.0, p_line[(edge.family, edge.id, k)])
-        JuMP.add_to_expression!(balance_q[(edge.child, edge.child_map[k])], 1.0, q_line[(edge.family, edge.id, k)])
+    for edge in topology
+        p = [p_line[(edge.family, edge.id, k)] for k in eachindex(edge.child_map)]
+        q = [q_line[(edge.family, edge.id, k)] for k in eachindex(edge.child_map)]
+        if edge.family == :transformer
+            transformer = net["transformer"][edge.subtype][edge.id]
+            transform = _l3f_transformer_oriented_map(edge, transformer)
+            vbar = ComplexF64[reference.voltage[(edge.parent, terminal)]
+                              for terminal in edge.parent_map]
+            H = connection_power_map(transform, vbar)
+            for terminal in eachindex(edge.parent_map)
+                pt, qt = _l3f_mapped_terminal_power(H, p, q, terminal)
+                JuMP.add_to_expression!(balance_p[(edge.parent, edge.parent_map[terminal])], -pt)
+                JuMP.add_to_expression!(balance_q[(edge.parent, edge.parent_map[terminal])], -qt)
+            end
+        else
+            for terminal in eachindex(edge.parent_map)
+                JuMP.add_to_expression!(balance_p[(edge.parent, edge.parent_map[terminal])],
+                                        -1.0, p[terminal])
+                JuMP.add_to_expression!(balance_q[(edge.parent, edge.parent_map[terminal])],
+                                        -1.0, q[terminal])
+            end
+        end
+        for terminal in eachindex(edge.child_map)
+            JuMP.add_to_expression!(balance_p[(edge.child, edge.child_map[terminal])],
+                                    1.0, p[terminal])
+            JuMP.add_to_expression!(balance_q[(edge.child, edge.child_map[terminal])],
+                                    1.0, q[terminal])
+        end
     end
     load_power = Dict{Tuple{String,Int},Tuple{JuMP.AffExpr,JuMP.AffExpr}}()
     for (lid_raw, load) in get(net, "load", Dict())

@@ -1,4 +1,5 @@
 using Test
+using LinearAlgebra
 using JuMP
 using Ipopt
 using Clarabel
@@ -82,6 +83,42 @@ function _l3f_regulator_case(; adjustable=false)
             "p_nom" => [10_000.0], "q_nom" => [2_000.0])))
 end
 
+function _l3f_open_delta_case(; connection="ABBC", tap_ratio=[0.9, 0.95],
+                              reverse_flow=false, bounded=false)
+    v = 2400.0
+    regulator = Dict{String,Any}(
+        "bus_from" => "source", "bus_to" => "regulated",
+        "terminal_map_from" => ["a", "b", "c"],
+        "terminal_map_to" => ["a", "b", "c"],
+        "connection" => connection, "tap_ratio" => tap_ratio,
+        "regulator_type" => "B")
+    bounded && merge!(regulator, Dict{String,Any}(
+        "s_rating" => 500_000.0,
+        "i_max_from" => [500.0, 500.0], "i_max_to" => [500.0, 500.0]))
+    net = Dict{String,Any}(
+        "bus" => Dict(
+            "source" => Dict{String,Any}("terminal_names" => ["a", "b", "c"]),
+            "regulated" => Dict{String,Any}("terminal_names" => ["a", "b", "c"])),
+        "voltage_source" => Dict("source" => Dict{String,Any}(
+            "bus" => "source", "terminal_map" => ["a", "b", "c"],
+            "configuration" => "WYE", "v_magnitude" => fill(v, 3),
+            "v_angle" => [0.0, -2pi / 3, 2pi / 3])),
+        "transformer" => Dict("open_delta_regulator" => Dict("reg" => regulator)),
+        "load" => Dict("load" => Dict{String,Any}(
+            "bus" => "regulated", "terminal_map" => ["a", "b", "c"],
+            "configuration" => "WYE", "model" => "constant_power",
+            "p_nom" => [100_000.0, 80_000.0, 120_000.0],
+            "q_nom" => [20_000.0, -5_000.0, 30_000.0])))
+    if reverse_flow
+        net["generator"] = Dict("pv" => Dict{String,Any}(
+            "bus" => "regulated", "terminal_map" => ["a", "b", "c"],
+            "configuration" => "WYE",
+            "p_min" => fill(150_000.0, 3), "p_max" => fill(150_000.0, 3),
+            "q_min" => zeros(3), "q_max" => zeros(3)))
+    end
+    net
+end
+
 @testset "LinDist3Flow coefficient oracles" begin
     vp, vq = 230cis(0.2), 218cis(-1.7)
     c = cross_voltage_coefficients(vp, vq)
@@ -102,6 +139,20 @@ end
     line = line_drop_coefficients(reshape([0.2 + 0.1im], 1, 1), [230 + 0im])
     @test line.active == reshape([0.4], 1, 1)
     @test line.reactive == reshape([0.2], 1, 1)
+
+    # Bazrafshan, Gatsis & Zhu, PSCC 2018, Table I: v_from = A*v_to.
+    @test regulator_gain_matrix("wye", [0.9, 0.95, 1.0]; regulator_type="A") ≈
+        Diagonal([0.9, 0.95, 1.0])
+    @test regulator_gain_matrix("closed-delta", [0.9, 0.95, 1.05]; regulator_type="A") ≈
+        [0.9 0.1 0.0; 0.0 0.95 0.05; -0.05 0.0 1.05]
+    @test regulator_gain_matrix("open-delta", [0.9, 0.95]; connection="ABBC", regulator_type="A") ≈
+        [0.9 0.1 0.0; 0.0 1.0 0.0; 0.0 0.05 0.95]
+    @test regulator_gain_matrix("open-delta", [0.9, 0.95]; connection="BCAC", regulator_type="A") ≈
+        [0.95 0.0 0.05; 0.0 0.9 0.1; 0.0 0.0 1.0]
+    @test regulator_gain_matrix("open-delta", [0.9, 0.95]; connection="CABA", regulator_type="A") ≈
+        [1.0 0.0 0.0; 0.05 0.95 0.0; 0.1 0.0 0.9]
+    @test regulator_gain_matrix("wye", [2.0, 4.0, 5.0]; regulator_type="B") ≈
+        Diagonal([0.5, 0.25, 0.2])
 end
 
 @testset "LinDist3Flow applicability and Kron boundary" begin
@@ -231,7 +282,7 @@ end
     regulator = solve_l3f_opf(_l3f_regulator_case(), Clarabel.Optimizer; options,
         solver_options=("verbose" => false,))
     @test regulator.solve.optimal
-    @test regulator.buses["load"]["a"]["vm"] ≈ 230 / 1.05 atol=1e-5
+    @test regulator.buses["load"]["a"]["vm"] ≈ 230 * 1.05 atol=1e-5
     @test regulator.transformers["reg"]["p"] ≈ [10_000.0] atol=1e-4
 
     report = check_l3f_applicability(_l3f_regulator_case(adjustable=true))
@@ -249,6 +300,41 @@ end
     build = build_l3f_opf(bounded, Clarabel.Optimizer;
         options=L3FOptions(validate_nonlinear=false))
     @test l3f_model_class(build) == :SOCP
+end
+
+
+@testset "LinDist3Flow fixed open-delta regulator bank" begin
+    options = L3FOptions(validate_nonlinear=false, objective=:feasibility)
+    net = _l3f_open_delta_case(bounded=true)
+    build = build_l3f_opf(net, Clarabel.Optimizer; options)
+    @test l3f_model_class(build) == :SOCP
+    @test length(get(build.constraints, :transformer_voltage_ratio, Dict())) == 3
+    @test length(get(build.constraints, :transformer_winding_apparent_power, Dict())) == 4
+    @test length(get(build.constraints, :transformer_reference_current, Dict())) == 4
+
+    result = solve_l3f_opf(net, Clarabel.Optimizer; options,
+        solver_options=("verbose" => false,))
+    @test result.solve.optimal
+    source_v = 2400.0 .* cis.([0.0, -2pi / 3, 2pi / 3])
+    A = regulator_gain_matrix("open-delta", [0.9, 0.95];
+                              connection="ABBC", regulator_type="B")
+    expected_v = A \ source_v
+    for (k, terminal) in enumerate(("a", "b", "c"))
+        @test result.buses["regulated"][terminal]["vm"] ≈ abs(expected_v[k]) atol=1e-6
+    end
+    @test sum(result.sources["source"]["pg"]) ≈ 300_000.0 atol=1e-4
+    @test sum(result.sources["source"]["qg"]) ≈ 45_000.0 atol=1e-4
+
+    reverse = solve_l3f_opf(_l3f_open_delta_case(reverse_flow=true),
+        Clarabel.Optimizer; options, solver_options=("verbose" => false,))
+    @test reverse.solve.optimal
+    @test sum(reverse.sources["source"]["pg"]) ≈ -150_000.0 atol=1e-4
+
+    free_tap = _l3f_open_delta_case()
+    free_tap["transformer"]["open_delta_regulator"]["reg"]["tap_ratio_min"] = [0.9, 0.9]
+    free_tap["transformer"]["open_delta_regulator"]["reg"]["tap_ratio_max"] = [1.1, 1.1]
+    report = check_l3f_applicability(free_tap)
+    @test any(f -> f.code == "E.L3F.ADJUSTABLE_TAP_UNSUPPORTED", report.findings)
 end
 
 @testset "LinDist3Flow delta constant-power allocation" begin

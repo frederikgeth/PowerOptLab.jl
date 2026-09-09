@@ -28,6 +28,8 @@ transformers and ANSI A/B autotransformer regulators, retained phase-to-ground
 voltage-magnitude bounds, linear per-channel energy costs, and reverse power
 flow. Apparent-power bounds are native second-order cones. Ampacity bounds use
 the declared fixed reference voltage and are also native second-order cones.
+Fixed ideal three-phase `open_delta_regulator` banks are supported on three
+retained phase terminals, including AB/CB and its two cyclic permutations.
 
 For an oriented line, the model uses terminal powers ``p,q`` and squared voltage
 magnitudes ``w``:
@@ -68,6 +70,60 @@ Fixed regulator and transformer settings preserve affine physics. Adjustable
 tap intervals are rejected: there are no integer taps, McCormick envelopes, or
 continuous voltage-ratio relaxations. Nonzero transformer leakage and no-load
 admittance must be represented as separate supported network elements.
+
+## Fixed regulator banks
+
+`regulator_gain_matrix` implements the WYE, closed-delta, and open-delta gain
+matrices from Table I of Bazrafshan, Gatsis, and Zhu, with the convention
+``v_{from}=A v_{to}``. Under the BMOPF convention, ANSI type A uses the
+declared `tap_ratio` directly and type B uses its reciprocal. This pure
+coefficient oracle covers all
+three published bank configurations and is tested against their tabulated
+matrices.
+
+The optimizer currently stamps only `open_delta_regulator`, because that is the
+only three-phase regulator-bank component in the BMOPF schema. Its voltage law
+uses the fixed matrix ``A^{-1}``, and its terminal-power law uses the same
+fixed-reference complex power transformation as other multi-terminal devices.
+Two-winding apparent-power and reference-current ratings become native SOC
+constraints. Closed-delta and three-unit WYE banks remain coefficient oracles
+until BMOPF provides an unambiguous component representation; PowerOptLab does
+not invent private JSON subtypes.
+
+## Literature and OpenDSS evidence
+
+The larger regression independently transcribes the IEEE 37 topology and the
+four impedance matrices used by [Bazrafshan, Gatsis, and Zhu
+(PSCC 2018)](https://arxiv.org/abs/1901.04566). It applies the repository's
+documented half-adjacent delta-to-grounded-wye conversion, removes line shunts,
+uses the published fixed effective open-delta ratios `[0.9062, 0.9062]`
+(stored as their reciprocals in a BMOPF Type-B component), and builds the
+result as a 37-bus, 35-line BMOPF dictionary. The fixture is cross-checked
+against the maintained [DSS-Extensions IEEE 37
+deck](https://github.com/dss-extensions/electricdss-tst/tree/master/Version8/Distrib/IEEETestCases/37Bus).
+The pinned source commits are recorded beside the test data transcription.
+
+The tests separate three claims:
+
+- Table I regulator matrices and fixed-ratio voltage/power transformations are
+  exact algebraic oracles.
+- The transformed feeder total, ``0.9828+j0.4804`` pu on a 2.5 MVA base, is a
+  published data oracle. The public `MultiphaseVRs` workbook plus its conversion
+  function yields phase totals ``[0.3636,0.2732,0.3460] +
+  j[0.1774,0.1342,0.1688]`` pu, not the different per-phase split printed in
+  the paper; the regression records the reproducible repository result rather
+  than concealing that discrepancy.
+- A nonlinear OpenDSS replay uses the same ideal regulator-secondary phasors,
+  constant-power grounded-wye loads, series impedances, and zero line shunts.
+  It checks all 108 downstream phase-voltage magnitudes against LinDist3Flow.
+  OpenDSS's discrete `RegControl` and finite transformer impedance are excluded
+  deliberately so this is a test of the continuous fixed-regulator contract.
+
+Table III's import values (including the reported open-delta nonlinear value
+1.0351 pu) are not equality assertions here. That OPF includes series losses,
+variable tap selection, and a different transformer representation, whereas
+this formulation is lossless and accepts fixed taps. Treating those objectives
+as interchangeable would be a misleading test.
 
 ## Deliberate exclusions
 
@@ -119,6 +175,7 @@ cross_voltage_coefficients
 winding_voltage_coefficients
 connection_power_map
 line_drop_coefficients
+regulator_gain_matrix
 check_l3f_applicability
 build_l3f_opf
 l3f_model_class
