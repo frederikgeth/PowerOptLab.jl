@@ -113,6 +113,12 @@ include("formulations/selectors.jl")
 include("formulations/error_tools.jl")
 include("formulations/experiments.jl")
 
+# Independent linearized multiphase OPF for neutral-reduced BMOPF networks.
+include("formulations/lindist3flow/types.jl")
+include("formulations/lindist3flow/coefficients.jl")
+include("formulations/lindist3flow/applicability.jl")
+include("formulations/lindist3flow/model.jl")
+
 # Component models — new network elements stamped via model_hook! / solution_hook!
 include("components/devices.jl")
 include("components/generalized_generator.jl")
@@ -159,6 +165,15 @@ export PWLFunction, SoftplusFormulation, LocalC2Formulation, ComplementarityGrap
        resistive_equilibria, resistive_control_case, controlled_inverter_case
 export AlgebraicFormulation, hinge_expression, selector_value, selector_expression,
        selector_contract, symmetric_clip_value, symmetric_clip_expression
+export L3FOptions, L3FFinding, L3FApplicabilityReport, L3FInapplicableError,
+       L3FReferenceState, CrossVoltageCoefficients, AffineScalarCoefficients,
+       ConnectionPowerMap, LineDropCoefficients, RegularPolygonCoefficients,
+       L3FBuild, L3FResult, is_l3f_applicable,
+       cross_voltage_coefficients, evaluate_cross_voltage,
+       winding_voltage_coefficients, evaluate_affine, connection_power_map,
+       line_drop_coefficients, regular_polygon_coefficients,
+       check_l3f_applicability, build_l3f_opf, solve_l3f_opf,
+       validate_l3f_solution, l3f_model_class
 export VoltVarWattIntent, VoltVarWattEncoding, lower_positive_policy,
        formulate_control_curve!, lowering_statistics
 export hull_gap_bound

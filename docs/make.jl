@@ -51,6 +51,7 @@ makedocs(
         ],
         "Function formulations" => [
             "Overview" => "formulations/index.md",
+            "LinDist3Flow BMOPF prototype" => "formulations/lindist3flow.md",
             "Control intent, compilation and solvers" => "formulations/compilation.md",
             "Bounds and relation-aware lowering" => "formulations/bounds_and_relations.md",
             "Tolerances and whole-model solver choice" => "formulations/tolerances_and_solvers.md",
