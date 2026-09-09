@@ -239,31 +239,37 @@ end
 end
 
 @testset "LinDist3Flow Yd/Dy against OpenDSS" begin
-    net = _l3f_dy_case("delta_wye"; source_on_delta=true, line=true)
-    result = _l3f_dy_solve(net)
-    @test result.solve.optimal
-
-    if isdefined(Main, :OpenDSSDirect)
+    # The oracle must implement the SAME vector group, or it is measuring the
+    # convention rather than the formulation. BMOPFTools pairs delta coil k with
+    # wye phase k; OpenDSS's default delta node order `d.1.2.3` pairs them
+    # differently, so the delta winding is written `d.2.3.1` here. See the
+    # vector-group testset below for what the default order does instead.
+    function opendss_wye_voltages(vm, va, delta_nodes; line=false)
         dss(cmd) = OpenDSSDirect.dss(cmd)
         dss("Clear")
         dss("New Circuit.l3fdy bus1=dummy basekv=11 phases=3")
         dss("Edit Vsource.source enabled=no")
         for phase in 1:3
-            angle = rad2deg([0.0, -2pi/3, 2pi/3][phase])
             dss("New Vsource.v$phase phases=1 bus1=d.$phase.0 " *
-                "basekv=$(_L3F_DY_VPN_HV / 1000) pu=1 angle=$angle mvasc3=1e9 mvasc1=1e9")
+                "basekv=$(vm[phase] / 1000) pu=1 angle=$(rad2deg(va[phase])) " *
+                "mvasc3=1e9 mvasc1=1e9")
         end
         dss("New Transformer.t phases=3 windings=2 XHL=0.000001 %loadloss=0 " *
-            "%noloadloss=0 buses=[d.1.2.3 y.1.2.3.0] conns=[delta wye] " *
+            "%noloadloss=0 buses=[$delta_nodes y.1.2.3.0] conns=[delta wye] " *
             "kvs=[11 0.4] kvas=[500 500]")
-        R = [0.05 0.01 0.01; 0.01 0.05 0.01; 0.01 0.01 0.05]
-        X = [0.02 0.005 0.005; 0.005 0.02 0.005; 0.005 0.005 0.02]
-        rows(M) = join((join(M[i, 1:i], " ") for i in 1:3), " | ")
-        dss("New LineCode.lc nphases=3 units=km rmatrix=[$(rows(R))] " *
-            "xmatrix=[$(rows(X))] cmatrix=[0 | 0 0 | 0 0 0]")
-        dss("New Line.l1 phases=3 bus1=y.1.2.3 bus2=end.1.2.3 linecode=lc length=1 units=km")
+        load_bus = "y"
+        if line
+            R = [0.05 0.01 0.01; 0.01 0.05 0.01; 0.01 0.01 0.05]
+            X = [0.02 0.005 0.005; 0.005 0.02 0.005; 0.005 0.005 0.02]
+            rows(M) = join((join(M[i, 1:i], " ") for i in 1:3), " | ")
+            dss("New LineCode.lc nphases=3 units=km rmatrix=[$(rows(R))] " *
+                "xmatrix=[$(rows(X))] cmatrix=[0 | 0 0 | 0 0 0]")
+            dss("New Line.l1 phases=3 bus1=y.1.2.3 bus2=end.1.2.3 linecode=lc " *
+                "length=1 units=km")
+            load_bus = "end"
+        end
         for phase in 1:3
-            dss("New Load.d$phase bus1=end.$phase.0 phases=1 conn=wye model=1 " *
+            dss("New Load.d$phase bus1=$load_bus.$phase.0 phases=1 conn=wye model=1 " *
                 "kv=$(_L3F_DY_VPN_LV / 1000) kw=$(_L3F_DY_P[phase] / 1000) " *
                 "kvar=$(_L3F_DY_Q[phase] / 1000) vminpu=0")
         end
@@ -273,33 +279,101 @@ end
         @test OpenDSSDirect.Solution.Converged()
         names = lowercase.(OpenDSSDirect.Circuit.AllNodeNames())
         volts = ComplexF64.(OpenDSSDirect.Circuit.AllBusVolts())
-        dss_v = Dict(n => v for (n, v) in zip(names, volts))
+        Dict(n => v for (n, v) in zip(names, volts))
+    end
 
-        errors = Float64[]
-        for bus in ("y", "end"), (phase, terminal) in enumerate(("a","b","c"))
-            key = "$bus.$phase"
-            push!(errors, abs(result.buses[bus][terminal]["vm"] - abs(dss_v[key])) /
-                          _L3F_DY_VPN_LV)
+    if isdefined(Main, :OpenDSSDirect)
+        balanced_vm, balanced_va = fill(_L3F_DY_VPN_HV, 3), [0.0, -2pi/3, 2pi/3]
+        # Deliberately unbalanced in both magnitude and angle: this is the case
+        # that can tell two vector groups apart, and the one a balanced test
+        # would silently pass under either.
+        unbalanced_vm = [1.06, 0.94, 1.00] .* _L3F_DY_VPN_HV
+        unbalanced_va = [0.0, -2.05, 2.2]
+
+        for (tag, vm, va) in (("balanced", balanced_vm, balanced_va),
+                              ("unbalanced", unbalanced_vm, unbalanced_va))
+            net = _l3f_dy_case("delta_wye"; source_on_delta=true)
+            net["voltage_source"]["v"]["v_magnitude"] = collect(vm)
+            net["voltage_source"]["v"]["v_angle"] = collect(va)
+            result = _l3f_dy_solve(net)
+            @test result.solve.optimal
+            dss_v = opendss_wye_voltages(vm, va, "d.2.3.1")
+            # Magnitudes agreeing under an UNBALANCED reference is the real
+            # content: it says the two decks pair the same delta coil with the
+            # same wye phase. An ideal bank feeding its own bus carries no
+            # linearization error, so this is an identity up to solver tolerance.
+            for (phase, terminal) in enumerate(("a","b","c"))
+                @test result.buses["y"][terminal]["vm"] ≈ abs(dss_v["y.$phase"]) rtol=1e-7
+            end
+            # What remains is a uniform rotation (180 degrees here: the two decks
+            # traverse the same coil in opposite senses). Uniform is the property
+            # that matters -- a per-phase difference would mean a different
+            # pairing, which the magnitudes above would already have caught.
+            offsets = [rad2deg(result.buses["y"][t]["reference_angle"]) -
+                       rad2deg(angle(dss_v["y.$k"])) for (k, t) in enumerate(("a","b","c"))]
+            @test all(o -> abs(rem(o - offsets[1], 360, RoundNearest)) < 1e-6, offsets)
         end
-        @test length(errors) == 6
-        @test maximum(errors) < 0.004
-        # The transformer terminal itself is matched to solver tolerance: the
-        # ideal ratio carries no linearization error.
-        @test maximum(errors[1:3]) < 1e-6
 
-        # OpenDSS's default delta-wye is the opposite vector group to
-        # BMOPFTools': BMOPFTools pairs delta coil k with wye phase k, giving a
-        # leading wye, and OpenDSS lags. The difference is a uniform rotation of
-        # the whole downstream subtree, which this formulation cannot observe —
-        # every coefficient depends only on angle differences within a bus. That
-        # is why the magnitudes above agree despite the offset.
-        offsets = [rad2deg(result.buses["y"][t]["reference_angle"]) -
-                   rad2deg(angle(dss_v["y.$k"])) for (k, t) in enumerate(("a","b","c"))]
-        @test all(o -> abs(rem(o - offsets[1], 360, RoundNearest)) < 1e-6, offsets)
-        @test abs(rem(offsets[1], 360, RoundNearest)) ≈ 60.0 atol=1e-6
+        # OpenDSS's DEFAULT delta node order is a different vector group, and a
+        # balanced comparison cannot see it while an unbalanced one can.
+        let net = _l3f_dy_case("delta_wye"; source_on_delta=true)
+            net["voltage_source"]["v"]["v_magnitude"] = collect(unbalanced_vm)
+            net["voltage_source"]["v"]["v_angle"] = collect(unbalanced_va)
+            result = _l3f_dy_solve(net)
+            matched = opendss_wye_voltages(unbalanced_vm, unbalanced_va, "d.2.3.1")
+            default = opendss_wye_voltages(unbalanced_vm, unbalanced_va, "d.1.2.3")
+            rel(d) = maximum(abs(result.buses["y"][t]["vm"] - abs(d["y.$k"]))
+                             for (k, t) in enumerate(("a","b","c"))) / _L3F_DY_VPN_LV
+            @test rel(matched) < 1e-7
+            @test rel(default) > 0.05        # about 11%, and not linearization error
+        end
+
+        # With a line downstream the linearization error appears, and only then.
+        net = _l3f_dy_case("delta_wye"; source_on_delta=true, line=true)
+        result = _l3f_dy_solve(net)
+        dss_v = opendss_wye_voltages(balanced_vm, balanced_va, "d.2.3.1"; line=true)
+        errors = [abs(result.buses[bus][t]["vm"] - abs(dss_v["$bus.$k"])) / _L3F_DY_VPN_LV
+                  for bus in ("y", "end") for (k, t) in enumerate(("a","b","c"))]
+        @test length(errors) == 6
+        @test maximum(errors[1:3]) < 1e-7      # the bank itself is exact
+        @test 1e-5 < maximum(errors) < 0.004   # the line carries the omitted losses
     else
         @test_skip "Requires OpenDSSDirect"
     end
+end
+
+@testset "LinDist3Flow Yd/Dy vector group is a real choice" begin
+    # BMOPFTools pairs delta coil k with wye phase k. Writing the delta winding
+    # in OpenDSS's default node order pairs them differently, and the difference
+    # is NOT a modelling detail that washes out:
+    #
+    #   balanced reference    the two groups differ by a uniform 60 degree
+    #                         rotation, which this formulation cannot observe
+    #   unbalanced reference  they differ by a cyclic relabelling of which delta
+    #                         pair drives which wye phase, so the magnitudes
+    #                         themselves move
+    #
+    # A balanced-only comparison therefore passes under either convention. This
+    # pins the distinction so that a future "fix" to match OpenDSS's default
+    # cannot quietly change the physics.
+    V = _L3F_DY_VPN_HV
+    D_next = _L3F_DY_D                                     # coil k spans (k, k+1)
+    D_prev = [1.0 0.0 -1.0; -1.0 1.0 0.0; 0.0 -1.0 1.0]    # coil k spans (k, k-1)
+
+    balanced = ComplexF64[V, V * cis(-2pi/3), V * cis(2pi/3)]
+    a, b = D_next * balanced, D_prev * balanced
+    @test abs.(a) ≈ abs.(b)                                # indistinguishable
+    offsets = rad2deg.(angle.(a) .- angle.(b))
+    @test all(o -> abs(rem(o - offsets[1], 360, RoundNearest)) < 1e-9, offsets)
+    @test abs(rem(offsets[1], 360, RoundNearest)) ≈ 60.0 atol=1e-9
+
+    unbalanced = ComplexF64[1.06V, 0.94V * cis(-2.05), V * cis(2.2)]
+    a, b = D_next * unbalanced, D_prev * unbalanced
+    @test !isapprox(abs.(a), abs.(b); rtol=1e-3)           # now distinguishable
+    # The other group is the same magnitudes on different phases: coil k of one
+    # is the negated coil k-1 of the other.
+    @test abs.(b) ≈ circshift(abs.(a), 1)
+    @test maximum(abs.(abs.(a) .- abs.(b))) / V > 0.05     # ~11% here, not noise
 end
 
 @testset "LinDist3Flow Yd/Dy reference rotation invariance" begin

@@ -197,16 +197,42 @@ the winding they are declared on rather than to whichever side the traversal
 happened to reach. (For a diagonal map the distinction is vacuous, which is why
 it went unnoticed for the single-phase subtypes.)
 
-!!! note "Vector group: BMOPFTools leads where OpenDSS lags"
+### Angles are coefficients, and the vector group is a real choice
+
+The formulation has **no angle variables** — only ``w=|v|^2`` and device powers.
+Reference phasors ``\bar v`` are fixed data, computed once by propagating the
+source through the topology, and a Yd/Dy map contributes its ±30° to them. So
+the bank's phase shift is represented exactly and is published as
+`reference_angle`, but it is coefficient data, not a solved quantity.
+
+``\bar v`` enters only through **same-bus** ratios and conjugate products —
+``\Gamma_{\phi\psi}=\bar v_\phi/\bar v_\psi``, the closure's
+``\bar v_\phi\bar v_\psi^*``, and
+``H=\operatorname{diag}(\bar v)D^{\mathsf T}\operatorname{diag}(D\bar v)^{-1}``,
+where the leading rotation cancels the one from the inverse. Every one is
+invariant under ``\bar v\to e^{j\theta}\bar v`` at that bus, so **rotating
+each bus's reference independently changes nothing** (verified to 3e-16). A
+constant phase shift therefore cannot affect a solution here, and an
+angle-difference constraint between buses is inexpressible.
+
+That invariance is what makes the ±30° harmless — but it is *not* a licence to
+treat vector groups as interchangeable:
+
+!!! warning "A balanced comparison cannot see the vector group"
     BMOPFTools pairs delta coil ``k`` with wye phase ``k``
-    (``v_{\Delta,k}-v_{\Delta,k+1}=n_{eff}v_{Y,k}``), which puts the wye side
-    **30° ahead**. OpenDSS's default three-phase delta-wye lags instead, so a
-    side-by-side comparison shows a uniform 60° offset on every downstream bus.
-    It does not change any solved quantity here: every coefficient in the
-    formulation — ``\Gamma``, the cross-voltage closure, and ``H`` — depends
-    only on angle *differences within a bus*, so a uniform rotation of a whole
-    downstream subtree is unobservable. The regression asserts both the offset
-    and the invariance.
+    (``v_{\Delta,k}-v_{\Delta,k+1}=n_{eff}v_{Y,k}``). Writing the delta winding
+    in OpenDSS's **default** node order (`buses=[d.1.2.3 …]`) pairs them
+    differently. Under a **balanced** reference the two differ by a uniform 60°
+    rotation and are indistinguishable in every solved quantity. Under an
+    **unbalanced** reference they are not: the pairing is a cyclic relabelling
+    of which delta pair drives which wye phase, so the magnitudes themselves
+    move — about 11 % in the case the regression pins.
+
+    To reproduce BMOPFTools' group in OpenDSS, write the delta winding as
+    `buses=[d.2.3.1 …]`. The regression cross-checks against that deck with an
+    unbalanced source, where magnitudes agree to solver tolerance, and separately
+    pins the default order as materially different so the distinction cannot be
+    "fixed" away later.
 
 ## Fixed regulator banks
 
