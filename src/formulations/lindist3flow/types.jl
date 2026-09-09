@@ -7,6 +7,17 @@ physics is reported by [`check_l3f_applicability`](@ref), never silently
 dropped. BMOPF input and results are always SI; `per_unit=true` (the default)
 uses BMOPFTools' public classic-base preparation for the independent model's
 working coordinates, with system power base `s_base`.
+
+| Field | Values | Meaning |
+|:------|:-------|:--------|
+| `current_limit_policy` | `:reference_current` | How an ampacity becomes a power bound. Only the fixed-reference policy `‖(p,q)‖₂ ≤ Iᵐᵃˣ\\|ū\\|` is defined. |
+| `validate_nonlinear` | `Bool` (`true`) | Replay the optimized dispatch through BMOPFTools' nonlinear power flow and report the voltage difference. |
+| `reference_policy` | `:auto`, `:explicit`, `:source_propagated` | Which linearization point to use. `:auto` prefers a supplied `reference` and otherwise propagates the source phasors; `:explicit` requires a supplied `reference`; `:source_propagated` always uses the propagated flat profile and ignores a supplied `reference`. |
+| `kron_reduce` | `Bool` (`true`) | Kron-reduce an explicit-neutral input on a copy. When `false`, an explicit neutral is an error. |
+| `require_neutral_provenance` | `Bool` (`false`) | Require recorded `_meta["kron_reduction"]` provenance, or an explicit reference, before building. |
+| `objective` | `:cost`, `:feasibility`, `:source_import` | Linear per-channel energy cost, a zero objective, or total source active injection. |
+| `per_unit` | `Bool` (`true`) | Optimization coordinates only. Input and results are SI either way. |
+| `s_base` | `Real` (`1e6`) | System VA base for the per-unit working copy. |
 """
 struct L3FOptions
     current_limit_policy::Symbol
@@ -68,7 +79,16 @@ struct L3FApplicabilityReport
     kron_reduced::Bool
 end
 
+"""`true` when the report carries no findings at all, warnings included. This is
+strictly stronger than [`is_l3f_applicable`](@ref), which tolerates warnings."""
 Base.isempty(r::L3FApplicabilityReport) = isempty(r.findings)
+
+"""
+    is_l3f_applicable(report) -> Bool
+
+Whether [`build_l3f_opf`](@ref) will accept the network. `false` exactly when
+the report contains at least one `:error` finding; warnings never block a build.
+"""
 is_l3f_applicable(r::L3FApplicabilityReport) = r.status == :applicable
 
 """Raised by `build_l3f_opf` when the applicability report contains an error."""
@@ -120,6 +140,14 @@ struct LineDropCoefficients
 end
 
 
+"""
+    L3FOrientedLine
+
+One two-port device oriented away from its island's source, as published in
+`L3FBuild.topology`. `parent_map`/`child_map` are the aligned conductor maps in
+that orientation, and `reversed` records whether it is opposite to the input's
+`bus_from`/`bus_to`.
+"""
 struct L3FOrientedLine
     id::String
     family::Symbol

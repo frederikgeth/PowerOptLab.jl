@@ -96,10 +96,43 @@ function _l3f_validate_reference(reference::L3FReferenceState, net)
     reference
 end
 
-function _l3f_reference(net, topology, reference)
-    result = reference === nothing ? _l3f_source_reference(net, topology) :
-             _l3f_explicit_reference(reference)
+function _l3f_reference(net, topology, reference, policy::Symbol=:auto)
+    # `:source_propagated` names the flat propagated profile specifically, so it
+    # must not be silently overridden by a caller-supplied reference; `:auto`
+    # prefers an explicit reference when one is given. `:explicit` requires one,
+    # which `_l3f_prepare` has already enforced.
+    use_explicit = reference !== nothing && policy != :source_propagated
+    result = use_explicit ? _l3f_explicit_reference(reference) :
+             _l3f_source_reference(net, topology)
     _l3f_validate_reference(result, net)
+end
+
+"""
+Restate every voltage-source rating in working coordinates from its SI value.
+
+BMOPFTools' classic per-unit preparation scales a source's `v_magnitude`,
+`p_min`/`p_max`/`q_min`/`q_max` and `cost`, but at the pinned revision it leaves
+`s_max` and `i_max` in SI. Stamping those raw values against per-unit variables
+would silently widen a source nameplate by a factor of `s_base`, so the rating
+would never bind in the default coordinates while binding correctly under
+`per_unit=false`.
+
+Deriving the working value from the caller's SI network on every build — rather
+than patching whatever the working copy happens to hold — keeps this correct and
+idempotent if upstream later scales these fields itself.
+"""
+function _l3f_rescale_source_ratings!(working, physical, bases, options::L3FOptions)
+    for (sid, source) in get(working, "voltage_source", Dict())
+        source isa AbstractDict || continue
+        original = get(get(physical, "voltage_source", Dict()), sid, nothing)
+        original isa AbstractDict || continue
+        bus = String(get(source, "bus", ""))
+        haskey(source, "s_max") && haskey(original, "s_max") &&
+            (source["s_max"] = Float64.(original["s_max"]) ./ options.s_base)
+        haskey(source, "i_max") && haskey(original, "i_max") &&
+            (source["i_max"] = Float64.(original["i_max"]) ./ get(bases.i_base, bus, 1.0))
+    end
+    working
 end
 
 function _l3f_working_coordinates(net, reference::L3FReferenceState,
@@ -113,6 +146,7 @@ function _l3f_working_coordinates(net, reference::L3FReferenceState,
         per_unit=true, s_base=options.s_base, model=JuMP.Model(), kcl_guard=false)
     working = BMOPFTools.opf_network(context)
     bases = BMOPFTools.opf_bases(context)
+    _l3f_rescale_source_ratings!(working, net, bases, options)
     voltage = Dict{Tuple{String,String},ComplexF64}(
         key => value / bases.v_base[key[1]] for (key, value) in reference.voltage)
     working_reference = L3FReferenceState(
@@ -129,7 +163,7 @@ function _l3f_report_error(report::L3FApplicabilityReport, code, message)
                            report.islands, report.kron_reduced)
 end
 
-function _l3f_add_bounds!(variable, data, index::Int, n::Int,
+function _l3f_add_bounds!(variable, data, index::Int,
                           lower_key::String, upper_key::String)
     lower = get(data, lower_key, nothing)
     upper = get(data, upper_key, nothing)
@@ -147,6 +181,18 @@ _l3f_name(parts...) = join(replace.(string.(parts), r"[^A-Za-z0-9_]" => "_"), "_
 function _l3f_register_constraint!(constraints, family::Symbol, key, constraint)
     get!(constraints, family, Dict{Any,Any}())[key] = constraint
     constraint
+end
+
+"""
+Reference-current radius for a per-conductor limit that BMOPF types as
+`number[]` but that also reaches us as a bare scalar on single-conductor
+devices. Returns `nothing` when the field is absent.
+"""
+function _l3f_scalar_or_indexed(data, field::String, k::Int, voltage::Real)
+    haskey(data, field) || return nothing
+    raw = data[field]
+    value = raw isa AbstractVector ? Float64(raw[length(raw) == 1 ? 1 : k]) : Float64(raw)
+    value * voltage
 end
 
 function _l3f_rating(component, fallback, field::String, k::Int)
@@ -314,8 +360,8 @@ function _l3f_build_model(net, topology, reference, report, optimizer, options;
         for k in 1:nch
             p = @variable(model, base_name=_l3f_name("l3f_pg", gid, k))
             q = @variable(model, base_name=_l3f_name("l3f_qg", gid, k))
-            _l3f_add_bounds!(p, gen, k, length(tm), "p_min", "p_max")
-            _l3f_add_bounds!(q, gen, k, length(tm), "q_min", "q_max")
+            _l3f_add_bounds!(p, gen, k, "p_min", "p_max")
+            _l3f_add_bounds!(q, gen, k, "q_min", "q_max")
             p_generator[(gid, k)] = p; q_generator[(gid, k)] = q
             smax = _l3f_rating(gen, nothing, "s_max", k)
             imax = _l3f_rating(gen, nothing, "i_max", k)
@@ -335,8 +381,8 @@ function _l3f_build_model(net, topology, reference, report, optimizer, options;
         for k in eachindex(tm)
             p = @variable(model, base_name=_l3f_name("l3f_p_source", sid, k))
             q = @variable(model, base_name=_l3f_name("l3f_q_source", sid, k))
-            _l3f_add_bounds!(p, source, k, length(tm), "p_min", "p_max")
-            _l3f_add_bounds!(q, source, k, length(tm), "q_min", "q_max")
+            _l3f_add_bounds!(p, source, k, "p_min", "p_max")
+            _l3f_add_bounds!(q, source, k, "q_min", "q_max")
             p_source[(sid, k)] = p; q_source[(sid, k)] = q
             key = (String(source["bus"]), tm[k])
             _l3f_register_constraint!(constraints, :source_voltage, (sid, tm[k]),
@@ -389,10 +435,10 @@ function _l3f_build_model(net, topology, reference, report, optimizer, options;
                                                     string.(transformer["terminal_map_to"])[phi])])
                     _l3f_add_power_circle!(model, constraints, :transformer_from_reference_current,
                         (edge.subtype, edge.id, phi), p, q,
-                        haskey(transformer, "i_max_from") ? Float64(transformer["i_max_from"]) * from_vm : nothing)
+                        _l3f_scalar_or_indexed(transformer, "i_max_from", phi, from_vm))
                     _l3f_add_power_circle!(model, constraints, :transformer_to_reference_current,
                         (edge.subtype, edge.id, phi), p, q,
-                        haskey(transformer, "i_max_to") ? Float64(transformer["i_max_to"]) * to_vm : nothing)
+                        _l3f_scalar_or_indexed(transformer, "i_max_to", phi, to_vm))
                 end
             end
             continue
@@ -565,7 +611,8 @@ function build_l3f_opf(net, optimizer=Clarabel.Optimizer;
     is_l3f_applicable(prepared.applicability) ||
         throw(L3FInapplicableError(prepared.applicability))
     physical_reference = try
-        _l3f_reference(prepared.network, prepared.topology, reference)
+        _l3f_reference(prepared.network, prepared.topology, reference,
+                       options.reference_policy)
     catch err
         throw(L3FInapplicableError(_l3f_report_error(prepared.applicability,
             "E.L3F.REFERENCE_MISSING", sprint(showerror, err))))
@@ -675,16 +722,25 @@ function _l3f_fix_dispatch!(net, result::L3FResult)
 end
 
 """
-    validate_l3f_solution(net, result; nonlinear_optimizer=Ipopt.Optimizer)
+    validate_l3f_solution(result; nonlinear_optimizer=Ipopt.Optimizer,
+                          voltage_tolerance=nothing)
 
-Reapply L3F generator dispatch to the Kron-reduced BMOPF snapshot and run the
-nonlinear BMOPFTools power flow. The returned dictionary reports voltage error
-and explicitly leaves full physical-limit certification unassessed.
+Reapply the L3F generator dispatch to `result.network` — the SI, Kron-reduced
+snapshot the model was built from — and run BMOPFTools' nonlinear power flow.
+
+`status` is `"replayed"` when the nonlinear solve converged, `"failed"` when it
+did not, and `"not_run"` when the L3F solve was not optimal. **It is a statement
+about the replay, not about accuracy**: the linearization omits series losses,
+so a converged replay always differs from the linear solution by some margin.
+Supply `voltage_tolerance` (in volts) to have that margin judged; the result
+then carries `within_tolerance`. Physical limits are never certified here.
 """
-function validate_l3f_solution(net, result::L3FResult;
-                               nonlinear_optimizer=Ipopt.Optimizer)
+function validate_l3f_solution(result::L3FResult;
+                               nonlinear_optimizer=Ipopt.Optimizer,
+                               voltage_tolerance=nothing)
     result.solve.optimal || return Dict{String,Any}(
-        "status" => "not_run", "reason" => "L3F solve was not optimal")
+        "status" => "not_run", "reason" => "L3F solve was not optimal",
+        "physical_limits" => "unassessed")
     working = _l3f_fix_dispatch!(deepcopy(result.network), result)
     try
         pf = BMOPFTools.solve_pf(working; optimizer=nonlinear_optimizer)
@@ -702,14 +758,22 @@ function validate_l3f_solution(net, result::L3FResult;
                 end
             end
         end
-        Dict{String,Any}(
-            "status" => solved ? "passed" : "failed",
+        maximum_error = isempty(errors) ? NaN : maximum(errors)
+        out = Dict{String,Any}(
+            "status" => solved ? "replayed" : "failed",
             "nonlinear_solve_status" => termination,
-            "maximum_voltage_magnitude_error" => isempty(errors) ? NaN : maximum(errors),
+            "maximum_voltage_magnitude_error" => maximum_error,
             "rms_voltage_magnitude_error" => isempty(errors) ? NaN : sqrt(sum(abs2, errors) / length(errors)),
+            "compared_terminals" => length(errors),
             "physical_limits" => "unassessed",
             "claim" => "nonlinear replay comparison, not a physical-feasibility certificate",
         )
+        if voltage_tolerance !== nothing
+            out["voltage_tolerance"] = Float64(voltage_tolerance)
+            out["within_tolerance"] = solved && isfinite(maximum_error) &&
+                maximum_error <= Float64(voltage_tolerance)
+        end
+        out
     catch err
         Dict{String,Any}(
             "status" => "failed",
@@ -730,7 +794,8 @@ reference provenance, stable semantic outputs, and optional nonlinear replay.
 """
 function solve_l3f_opf(net, optimizer=Clarabel.Optimizer;
                        options::L3FOptions=L3FOptions(), reference=nothing,
-                       nonlinear_optimizer=Ipopt.Optimizer, solver_options=())
+                       nonlinear_optimizer=Ipopt.Optimizer, solver_options=(),
+                       voltage_tolerance=nothing)
     build = build_l3f_opf(net, optimizer; options, reference)
     _set_solver_options!(build.model, solver_options)
     JuMP.optimize!(build.model)
@@ -747,15 +812,19 @@ function solve_l3f_opf(net, optimizer=Clarabel.Optimizer;
             "s_base" => options.s_base,
             "result_units" => "SI",
             "series_losses" => "omitted",
+            "reference_provenance" => String(build.reference.provenance),
+            "reference_hash" => build.reference.source_hash,
             "voltage_angles" => "fixed reference coefficients; not decision variables",
         ), build.reference, build.applicability,
         Dict{String,Any}("status" => "not_requested"),
         build.network, status)
     if options.validate_nonlinear
-        validation = validate_l3f_solution(build.network, result; nonlinear_optimizer)
+        validation = validate_l3f_solution(result; nonlinear_optimizer, voltage_tolerance)
+        reference = L3FReferenceState(result.reference.voltage, result.reference.provenance,
+            result.reference.source_hash, Symbol(validation["status"]))
         result = L3FResult(result.buses, result.lines, result.transformers, result.generators,
             result.sources, result.objective, result.formulation,
-            result.reference, result.applicability, validation,
+            reference, result.applicability, validation,
             result.network, result.solve)
     end
     result

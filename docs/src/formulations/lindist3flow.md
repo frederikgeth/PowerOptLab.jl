@@ -44,21 +44,59 @@ the declared fixed reference voltage and are also native second-order cones.
 Fixed ideal three-phase `open_delta_regulator` banks are supported on three
 retained phase terminals, including AB/CB and its two cyclic permutations.
 
-For an oriented line, the model uses terminal powers ``p,q`` and squared voltage
-magnitudes ``w``:
+Radiality is checked **per conductor**, not per bus: the graph whose nodes are
+`(bus, terminal)` pairs must be a forest. A three-unit single-phase regulator
+bank on one bus pair — the wye-bank topology of the IEEE 13, 34 and 123 feeders
+— is therefore admissible, because its units occupy disjoint conductors. Two
+devices sharing a conductor between the same buses remain non-radial.
+
+### Where the line equation comes from
+
+A series branch obeys ``v_j = v_i - Z i`` exactly. Forming the outer product and
+keeping its diagonal,
+
+```math
+\operatorname{diag}(v_jv_j^H)=\operatorname{diag}(v_iv_i^H)
+-2\operatorname{diag}\!\big(\Re(Ziv_i^H)\big)
++\operatorname{diag}(Zii^HZ^H).
+```
+
+LinDist3Flow drops the last term — the loss term, second order in current — and
+substitutes ``i_\psi^*=s_\psi/v_{i\psi}`` with the *reference* phasors in the
+voltage ratio. Writing ``\Gamma_{\phi\psi}=\bar v_\phi/\bar v_\psi``, the
+result is affine in ``w=|v|^2`` and the branch powers:
 
 ```math
 w_j = w_i - M p_{ij} - N q_{ij},\qquad
 M = 2\Re(\overline Z \odot \Gamma),\quad
-N = -2\Im(\overline Z \odot \Gamma),\quad
-\Gamma_{\phi\psi}=\bar v_\phi/\bar v_\psi.
+N = -2\Im(\overline Z \odot \Gamma).
 ```
 
-The source phasors are propagated through the radial topology to form the fixed
-coefficient reference. An explicit `L3FReferenceState` or phasor dictionary may
-instead be supplied. Source values, missing or zero phasors, and topology maps
+``p,q`` are sending-end branch powers. Because the dropped term is exactly what
+distinguishes the two ends, the same variable serves as the receiving-end power
+and the nodal balance is lossless. On IEEE 37 the omitted losses are about
+**1.95 % of feeder load** (see [accuracy](#Accuracy-and-when-it-degrades)).
+
+### The linearization point
+
+The default reference is the **flat, no-load profile**: the source phasors are
+propagated outward through the radial topology, applying each transformer or
+regulator ratio but **no line drop**. Every bus therefore sits at its nominal
+magnitude with the source's angles, which is the classical LinDist3Flow
+linearization point.
+
+A better reference makes the closure tighter. Pass an explicit
+`L3FReferenceState` or a phasor dictionary — for instance one taken from a
+converged nonlinear power flow — as the `reference` argument.
+`reference_policy` decides how the two interact: `:auto` prefers a supplied
+reference, `:explicit` demands one, and `:source_propagated` always uses the
+propagated profile. Source values, missing or zero phasors, and topology maps
 are validated before model construction. Angles are coefficient data, not
 decision variables.
+
+The reference actually used is published as
+`result.formulation["reference_provenance"]` and a content hash under
+`reference_hash`, so a result can be traced to the point it was linearized at.
 
 `cross_voltage_coefficients`, `winding_voltage_coefficients`,
 `connection_power_map`, and `line_drop_coefficients` are pure coefficient
@@ -79,6 +117,35 @@ Scalar or per-channel BMOPF coefficients and `v_nom` values are accepted.
 Fitted ZIP coefficients are used verbatim and are not normalized. A coefficient
 family with no fields defaults to constant power, following BMOPFTools semantics.
 
+### The three approximations, stated plainly
+
+The formulation is affine in ``w`` by construction, but it is a *linearization*
+and it is worth being exact about where the error enters.
+
+1. **Fixed-angle cross-voltage closure.** ``\widehat{v_\phi v_\psi^*}`` is the
+   first-order Taylor expansion of ``\sqrt{w_\phi w_\psi}\,e^{j\Delta\bar\theta}``
+   in ``(w_\phi,w_\psi)`` about the reference. It is exact at the reference
+   point and exact for all ``w`` when ``\phi=\psi`` — so a **grounded-wye**
+   device, whose incidence matrix is the identity, incurs no error here at all.
+   A **delta** device does.
+2. **Frozen channel-to-terminal split.** ``H`` is built from reference phasors,
+   so the allocation of a device's channel powers across its terminals does not
+   move with voltage. The *total* complex power is conserved exactly for any
+   reference — ``\sum_\phi(Hs)_\phi=\sum_k s_k`` identically — but the
+   per-phase split drifts. Again exact for wye, approximate for delta and for
+   the open-delta regulator bank.
+3. **Omitted series losses.** The nodal balance carries the same ``p+jq`` into
+   the child and out of the parent.
+
+Claims that the formulation contains "no approximation" apply only to the
+algebra downstream of these three, not to the physics.
+
+!!! note "Closed-delta channel powers are not uniquely determined"
+    A closed delta's map ``H`` has rank 2: channel powers of the form
+    ``s=c\,(D\bar v)`` are a circulating component the terminals cannot see.
+    The published `pg`/`qg` for a three-channel delta device are therefore fixed
+    only up to that component, even though its terminal injection is unique.
+
 Fixed regulator and transformer settings preserve affine physics. Adjustable
 tap intervals are rejected: there are no integer taps, McCormick envelopes, or
 continuous voltage-ratio relaxations. Nonzero transformer leakage and no-load
@@ -87,19 +154,33 @@ admittance must be represented as separate supported network elements.
 ## Fixed regulator banks
 
 `regulator_gain_matrix` implements the WYE, closed-delta, and open-delta gain
-matrices from Table I of Bazrafshan, Gatsis, and Zhu, with the convention
-``v_{from}=A v_{to}``. Under the BMOPF convention, ANSI type A uses the
-declared `tap_ratio` directly and type B uses its reciprocal. This pure
-coefficient oracle covers all
-three published bank configurations and is tested against their tabulated
-matrices.
+matrices from Table I of Bazrafshan, Gatsis, and Zhu, in that paper's own
+convention ``v_n = A_{nm} v_m`` with ``n`` the source side — that is,
+``v_{from}=A v_{to}``. ANSI type A uses the declared `tap_ratio` directly and
+type B uses its reciprocal.
+
+!!! note "The BMOPF regulator spec table has the ANSI mapping backwards"
+    BMOPFTools' executable `_autotransformer_neff` gives ``n_{eff}=1/a`` for
+    type B and ``n_{eff}=a`` for type A under ``V_{from}=n_{eff}V_{to}``, which
+    is the self-consistent reading of `tap_ratio` as a regulated/source ratio.
+    The prose table in the BMOPF regulator specification states the reciprocal
+    pairing and should be corrected upstream. PowerOptLab follows the
+    implementation.
+
+The matrices are tested by the physical relation each bank must produce — that a
+wye unit scales its own phase-to-ground voltage, that each closed-delta row is
+an affine combination, and that an open-delta unit scales exactly its own
+line-to-line voltage while leaving the common phase as the gauge — rather than
+by restating the implementation's entries.
 
 The optimizer currently stamps only `open_delta_regulator`, because that is the
 only three-phase regulator-bank component in the BMOPF schema. Its voltage law
 uses the fixed matrix ``A^{-1}``, and its terminal-power law uses the same
 fixed-reference complex power transformation as other multi-terminal devices.
 Two-winding apparent-power and reference-current ratings become native SOC
-constraints. Closed-delta and three-unit WYE banks remain coefficient oracles
+constraints; note that the shared (common) phase of an open-delta bank carries
+both units' current and is deliberately unrated, matching the two-element
+`i_max_from`/`i_max_to` shape BMOPF declares for the subtype. Closed-delta and three-unit WYE banks remain coefficient oracles
 until BMOPF provides an unambiguous component representation; PowerOptLab does
 not invent private JSON subtypes.
 
@@ -138,21 +219,139 @@ variable tap selection, and a different transformer representation, whereas
 this formulation is lossless and accepts fixed taps. Treating those objectives
 as interchangeable would be a misleading test.
 
+## Accuracy and when it degrades
+
+The two error sources with a measurable size are the omitted losses and the
+fixed-angle closure. On the IEEE 37 regression:
+
+| Quantity | Value |
+|---|---|
+| Omitted series losses | 48.0 kW, **1.95 %** of feeder load |
+| Max phase-voltage error vs OpenDSS (108 terminals) | **≈1.2 %** of nominal |
+| RMS phase-voltage error vs OpenDSS | **≈0.6 %** of nominal |
+
+These sit inside the published LinDist3Flow envelopes. Sankur, Dobbe, Stewart,
+Callaway and Arnold ([arXiv:1606.04492](https://arxiv.org/abs/1606.04492))
+report under 1 % maximum relative voltage error on modified IEEE 13 and 37
+feeders and an OPF objective within 0.2 % of the nonlinear optimum; Table I of
+[arXiv:2210.08550](https://arxiv.org/abs/2210.08550) reports 0.007–0.01 pu
+maximum deviation from a Z-bus power flow on IEEE 13, 0.008–0.02 pu on IEEE 123,
+and 0.008–0.06 pu on the IEEE 8500-node feeder. The regression brackets its
+OpenDSS comparison on **both** sides, so a change that makes the comparison
+vacuous fails as loudly as one that makes it inaccurate.
+
+Accuracy degrades where the underlying assumptions weaken:
+
+- **High R/X and heavy loading.** The dropped loss term grows with ``|i|^2``, so
+  long, heavily loaded feeders lose accuracy fastest — and always in the same
+  direction: source import is understated.
+- **Large voltage deviation from the reference.** The closure is a first-order
+  expansion about ``\bar v``. Supplying a power-flow reference instead of the
+  flat profile is the direct remedy.
+- **Strong unbalance.** The fixed-angle assumption freezes the inter-phase angle
+  differences at their reference values; delta devices and the open-delta bank
+  additionally freeze their channel-to-terminal split.
+
+Because losses are omitted, `objective=:cost` and `:source_import` systematically
+understate the true cost of serving a load. Treat them as comparative rather
+than absolute.
+
+## Diagnostic codes
+
+Every rejection is a typed [`L3FFinding`](@ref) with a stable code. Errors make
+the report inapplicable and cause [`build_l3f_opf`](@ref) to raise
+[`L3FInapplicableError`](@ref); warnings never block a build. A test enforces
+that each code below has a reachable case.
+
+| Code | Severity | Meaning |
+|---|:--:|---|
+| `E.L3F.EMPTY_NETWORK` | E | The network declares no buses. |
+| `E.L3F.BUS_INVALID` | E | A bus entry is not an object. |
+| `E.L3F.BUS_UNKNOWN` | E | A device references an undeclared bus. |
+| `E.L3F.TERMINAL_MAP_INVALID` | E | A terminal map is empty, duplicated, or names a conductor the bus does not declare. |
+| `E.L3F.DEVICE_ARITY` | E | Channel counts and terminal maps disagree, or a required per-channel vector is missing. |
+| `E.L3F.DEVICE_DATA_INVALID` | E | Device data is non-finite or violates its own ordering (`p_min > p_max`, and similar). |
+| `E.L3F.VOLTAGE_BOUND_INVALID` | E | A bus `v_min`/`v_max` is non-finite, negative, mis-sized, or inverted. |
+| `E.L3F.LIMIT_INVALID` | E | A rating is non-positive, non-finite, or the wrong shape for its device. |
+| `E.L3F.LIMIT_UNSUPPORTED` | E | A bus declares a sequence or phase-to-phase limit the formulation does not assess. |
+| `E.L3F.CONNECTION_UNSUPPORTED` | E | A device configuration outside `WYE`/`SINGLE_PHASE`/`DELTA` (sources: wye only). |
+| `E.L3F.LOAD_MODEL_UNSUPPORTED` | E | A load model other than constant power, constant impedance, or ZIP. |
+| `E.L3F.ZIP_CURRENT_UNSUPPORTED` | E | A ZIP load with a nonzero current fraction; not affine in squared voltage. |
+| `E.L3F.LINE_MATRIX_INVALID` | E | A line has no impedance source, both inline and linecode data, or a malformed matrix. |
+| `E.L3F.LINE_SHUNT_UNSUPPORTED` | E | A line or linecode declares shunt admittance. |
+| `E.L3F.SHUNT_INVALID` | E | A shunt admittance is non-finite or declares an entry outside its terminal-map arity. |
+| `E.L3F.TRANSFORMER_UNSUPPORTED` | E | A transformer subtype outside the supported three. |
+| `E.L3F.TRANSFORMER_RATIO_INVALID` | E | A ratio is missing, non-positive, non-finite, or the wrong arity. |
+| `E.L3F.TRANSFORMER_NONIDEAL_UNSUPPORTED` | E | Nonzero leakage or no-load admittance on a device modelled as ideal. |
+| `E.L3F.ADJUSTABLE_TAP_UNSUPPORTED` | E | A tap interval with `min < max`; taps are fixed data here. |
+| `E.L3F.TOPOLOGY_NOT_RADIAL` | E | Two devices share a conductor between the same buses, or a conductor component contains a cycle. |
+| `E.L3F.SOURCE_MISSING` | E | An energized island has no voltage source. |
+| `E.L3F.MULTIPLE_SOURCES` | E | An energized island has more than one. |
+| `E.L3F.REFERENCE_MISSING` | E | A reference is required but absent, incomplete, or a source does not cover its root bus. |
+| `E.L3F.REFERENCE_ZERO_WINDING` | E | A reference phasor or winding voltage is zero, so a coefficient is undefined. |
+| `E.L3F.EXPLICIT_NEUTRAL_UNSUPPORTED` | E | An explicit neutral with `kron_reduce=false`. |
+| `E.L3F.GROUNDED_TERMINAL_RETAINED` | E | A perfectly grounded terminal survived reduction; `kron_reduce_bmopf` eliminates only conductors declared as neutrals. |
+| `E.L3F.KRON_REDUCTION_FAILED` | E | The reduction itself raised. |
+| `E.L3F.NEUTRAL_REDUCTION_UNDECLARED` | E | `require_neutral_provenance` is set but no provenance or explicit reference was supplied. |
+| `E.L3F.TIME_SERIES_UNSUPPORTED` | E | A component references a time series; resolve to a snapshot first. |
+| `E.L3F.CONTROL_PROFILE_UNSUPPORTED` | E | Top-level control-profile or time-series tables must be resolved first. |
+| `E.L3F.SWITCH_UNSUPPORTED` | E | Switches are outside the slice. |
+| `E.L3F.COMPONENT_UNSUPPORTED` | E | Capacitors, IBR component models, and other unsupported families. |
+| `E.L3F.DC_SUBSYSTEM_UNSUPPORTED` | E | Any DC subsystem table. |
+| `W.L3F.COST_MISSING` | W | `objective=:cost` but a dispatchable unit declares no `cost`; it is priced at zero and the optimum may be non-unique. |
+
+## Result contract
+
+[`solve_l3f_opf`](@ref) returns an [`L3FResult`](@ref). Every numeric field is
+SI regardless of `per_unit`, and is `NaN` when the solve was not optimal.
+
+| Path | Contents |
+|---|---|
+| `buses[bus][terminal]` | `"w"` (V²), `"vm"` (V), `"reference_angle"` (rad, coefficient data — not a solved angle) |
+| `lines[id]`, `transformers[id]` | `"p"`, `"q"` (W, var), `"parent"`, `"child"`, `"terminal_map_parent"`, `"terminal_map_child"`, `"reversed_from_input"` |
+| `transformers[id]` also | `"subtype"`, `"effective_ratio_from_to"` |
+| `generators[id]`, `sources[id]` | `"pg"`, `"qg"` (W, var), `"terminal_map"` |
+| `objective` | currency/h for `:cost`, W for `:source_import`, `0.0` for `:feasibility` |
+| `formulation` | `"name"`, `"version"`, `"problem_class"`, `"per_unit"`, `"s_base"`, `"working_units"`, `"result_units"`, `"series_losses"`, `"voltage_angles"`, `"reference_provenance"`, `"reference_hash"` |
+| `validation` | see below |
+
+!!! warning "Branch flows are oriented parent → child"
+    `lines[id]["p"]` is positive when power flows from `"parent"` toward
+    `"child"`, which is the direction away from the island's source — **not**
+    necessarily BMOPF's `bus_from → bus_to`. When `"reversed_from_input"` is
+    `true` the sign is opposite to the input orientation, and the entries are
+    indexed by `"terminal_map_parent"` rather than `terminal_map_from`.
+
+`validation["status"]` is `"replayed"`, `"failed"`, or `"not_run"`. It reports
+whether the nonlinear replay *ran*, never whether the linear answer was accurate
+— the omitted losses guarantee some difference. Pass `voltage_tolerance` to
+[`solve_l3f_opf`](@ref) or [`validate_l3f_solution`](@ref) to have the margin
+judged; the result then also carries `"within_tolerance"`. `"physical_limits"`
+is always `"unassessed"`.
+
 ## Deliberate exclusions
 
 The first implementation rejects meshed islands, multiple or missing sources,
 line shunts, nonideal or adjustable transformers/regulators, switches,
 controllable capacitors, IBR component models, DC subsystems, constant-current
 loads, ZIP loads with a nonzero current fraction, exponential loads, time-series
-controls, and sequence-voltage limits. Series losses are omitted. Pure ZP is
-affine without approximation; the formulation contains no Taylor series,
-artificial physics slack, integer variable, non-SOC cone, or polyhedral
-approximation of a cone.
+controls, and sequence-voltage limits. Series losses are omitted.
+
+Within the affine coordinates the model is exact: there is no artificial physics
+slack, no integer variable, no non-SOC cone, and no polyhedral outer
+approximation of a cone. The coordinates themselves rest on the three
+approximations above.
 
 When nonlinear validation is enabled, `solve_l3f_opf` fixes the optimized
 generator dispatch in the reduced snapshot and calls BMOPFTools power flow. The
 reported voltage error is a replay comparison, not a certificate that excluded
 physical limits were satisfied.
+
+One upstream gap is compensated here rather than worked around: BMOPFTools'
+per-unit preparation at the pinned revision scales a voltage source's bounds and
+cost but leaves `s_max` and `i_max` in SI. PowerOptLab restates both from the
+caller's SI network on every build, so a source nameplate binds identically
+under `per_unit=true` and `per_unit=false`.
 
 ## Staged use
 
@@ -184,8 +383,11 @@ ConnectionPowerMap
 LineDropCoefficients
 L3FBuild
 L3FResult
+is_l3f_applicable
 cross_voltage_coefficients
+evaluate_cross_voltage
 winding_voltage_coefficients
+evaluate_affine
 connection_power_map
 line_drop_coefficients
 regulator_gain_matrix

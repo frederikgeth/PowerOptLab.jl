@@ -24,6 +24,10 @@ coordinates. Supported top-level component families are shown below.
 | `transformer/single_phase_autotransformer` | fixed ideal ANSI A/B ratio | – |
 | `transformer/open_delta_regulator` | fixed ideal two-unit bank, ABBC/BCAC/CABA | –, VA, A |
 
+Ratings follow BMOPF's declared shapes: `s_rating` is a scalar nameplate, while
+`i_max_from`/`i_max_to` are per-conductor arrays — two entries for an open-delta
+bank, one for a single-conductor device, where a bare scalar is also accepted.
+
 Line shunts, series losses, variable taps, and every component not listed here
 are rejected by [`check_l3f_applicability`](@ref); they are not silently
 omitted. The full exclusion list is on the [formulation overview](lindist3flow.md).
@@ -43,6 +47,14 @@ In per-unit coordinates, voltage magnitudes divide by ``V_{b,i}``, powers by
 ``Y_{b,i}``. Costs are transformed so the physical objective is invariant.
 `per_unit=false` uses unit bases. In both cases the caller's dictionary,
 reference state, result voltages, result powers, and nonlinear replay are SI.
+
+!!! note "Voltage-source ratings are restated locally"
+    BMOPFTools' preparation at the pinned revision scales a source's
+    `v_magnitude`, active/reactive bounds and `cost`, but leaves `s_max` and
+    `i_max` in SI. PowerOptLab recomputes both from the caller's SI network on
+    every build, so a source nameplate binds identically in either coordinate
+    mode. Without that, a rating would be silently ``S_b`` times too loose in the
+    default per-unit coordinates. A regression test pins both modes together.
 
 ## 2. Common input symbols
 
@@ -72,8 +84,12 @@ c_{\phi\psi}=\bar v_\phi\bar v_\psi^*
 -a_{\phi\psi}|\bar v_\phi|^2-b_{\phi\psi}|\bar v_\psi|^2.
 ```
 
-It is exact at the reference point. This is a fixed-coefficient affine closure,
-not a Taylor-series component model. For a real incidence row ``d_k``, define
+This is the first-order Taylor expansion of
+``\sqrt{w_\phi w_\psi}\,e^{j(\bar\theta_\phi-\bar\theta_\psi)}`` in the
+squared-magnitude coordinates, evaluated about ``\bar w``. It is exact at the
+reference point, and exact for every ``w`` when ``\phi=\psi`` — which is why a
+grounded-wye device incurs no closure error at all. For a real incidence row
+``d_k``, define
 
 ```math
 \widehat{|d_kv|^2}=\sum_{\phi,\psi}d_{k\phi}d_{k\psi}
@@ -90,7 +106,24 @@ H(D,\bar v)=\operatorname{diag}(\bar v)D^{\mathsf T}
 
 Thus terminal complex power is ``s^{term}=Hs^{ch}``. Both real and imaginary
 parts are stamped as real affine expressions. `SINGLE_PHASE`/`WYE` use identity
-rows after Kron reduction; `DELTA` uses the relevant phase-pair incidence rows.
+rows after Kron reduction, so ``H=I`` and the split is exact; `DELTA` uses the
+phase-pair incidence rows, and freezing ``H`` at ``\bar v`` is then a second
+approximation alongside the cross-voltage closure.
+
+Two invariants hold for **any** reference and are worth relying on:
+
+```math
+\sum_\phi (Hs)_\phi=\sum_k s_k,
+\qquad
+\operatorname{rank}H=\operatorname{rank}D .
+```
+
+Total complex power is therefore never distorted by the choice of reference —
+only its distribution across terminals is. The rank identity means a closed
+three-channel delta (``\operatorname{rank}D=2``) has a one-complex-dimensional
+family of channel powers ``s=c\,\bar u`` with identical terminal injection, so
+its published per-channel dispatch is determined only up to that circulating
+component.
 
 ## 3. Variables
 
@@ -100,7 +133,7 @@ variables.
 | Variable | Domain | Meaning |
 |:--------:|:------:|---------|
 | ``w_{i\phi}\ge0`` | real | squared phase-to-ground voltage magnitude |
-| ``p_{\ell\phi},q_{\ell\phi}`` | real | lossless receiving-end branch terminal power |
+| ``p_{\ell\phi},q_{\ell\phi}`` | real | sending-end branch terminal power; identical to the receiving end under the lossless balance |
 | ``p^g_{dk},q^g_{dk}`` | real | generator channel injection |
 | ``p^s_{dk},q^s_{dk}`` | real | voltage-source terminal injection |
 
@@ -204,12 +237,16 @@ power is
 s_t^{parent}=H(T_t,\bar v_i)s_t.
 ```
 
-For `single_phase`, ``T_t`` is the inverse fixed nominal/tap ratio. For
-`single_phase_autotransformer`, the executable BMOPFTools convention at the
-pinned dependency revision is ANSI A: declared `tap_ratio` directly, ANSI B:
-its reciprocal, followed by inversion to obtain ``T_t``. PowerOptLab follows
-that executable convention. The prose/schema convention in BMOPFTools should
-be reconciled upstream if it states the opposite.
+For `single_phase`, ``T_t`` is the inverse of ``N=(V^{nom}_{from}/V^{nom}_{to})
+\cdot\texttt{tap}``, matching BMOPFTools' ``N = N_0\cdot\texttt{tap}``.
+
+For `single_phase_autotransformer`, BMOPFTools' `_autotransformer_neff` gives
+``n_{eff}=a`` for ANSI type A and ``n_{eff}=1/a`` for type B under
+``V_{from}=n_{eff}V_{to}``; ``T_t=n_{eff}^{-1}``. This is the self-consistent
+reading of `tap_ratio` as a regulated/source ratio: a type-B unit with
+``a=1.05`` raises the regulated side by 5 %. The prose table in BMOPF's
+regulator specification states the reciprocal pairing and is the side that needs
+correcting upstream.
 
 For `open_delta_regulator`, ``v_{from}=Av_{to}`` and ``T=A^{-1}``. With effective
 ratios ``r_1,r_2`` and ABBC connection,
@@ -238,6 +275,13 @@ The implementation stamps the real and imaginary parts separately.
 ## 5. Inequality constraints
 
 ### Voltage and box bounds
+
+A device rating is enforced once per conductor. Because a supported transformer
+is ideal and lossless, its from- and to-side terminal powers coincide, so
+`i_max_from` and `i_max_to` both constrain the same branch variable through
+their own side's reference voltage. For an open-delta bank the two sides differ
+and are constrained separately; the shared phase, which carries both units'
+current, is deliberately unrated, matching BMOPF's two-element declaration.
 
 Retained bus limits impose
 
@@ -283,10 +327,16 @@ no SOC is replaced by a polyhedral outer approximation.
 ## 6. Objective and implementation
 
 `objective=:cost` minimizes the sum of per-channel linear energy-cost
-coefficients times generator and source active power. `:source_import` minimizes
-total source active injection, and `:feasibility` uses a zero objective. The
-reported objective is in the physical SI interpretation in both coordinate
-modes.
+coefficients times generator and source active power, following BMOPF's
+``\sum_g\sum_k (c^g_k/1000)\,p^g_k`` in currency/h. `:source_import` minimizes
+total source active injection in W, and `:feasibility` uses a zero objective.
+The reported objective is in the physical SI interpretation in both coordinate
+modes: BMOPFTools scales `cost` by ``S_b`` when it builds the per-unit working
+copy, which exactly cancels the ``1/S_b`` on the power variable.
+
+Because series losses are omitted, both priced objectives understate the true
+cost of serving a load — on IEEE 37 by about 1.95 % of feeder load. They are
+sound for comparing dispatches under one formulation, not as absolute costs.
 
 The build sequence is:
 

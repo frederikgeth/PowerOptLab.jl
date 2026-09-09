@@ -187,6 +187,14 @@ end
     @test imag.(phase_load) ./ 2.5e6 ≈ [0.1774, 0.1342, 0.1688] atol=5e-5
     @test sum(phase_load) / 2.5e6 ≈ 0.9828 + 0.4804im atol=5e-5
 
+    # Without the bank, the source sits at the regulator secondary directly, so
+    # the two fixtures must agree everywhere downstream of it.
+    unregulated = _l3f_ieee37_case(include_regulator=false)
+    @test is_l3f_applicable(check_l3f_applicability(unregulated;
+        options=L3FOptions(kron_reduce=false)))
+    @test !haskey(unregulated, "transformer")
+    @test length(unregulated["bus"]) == 36
+
     net = _l3f_ieee37_case()
     report = check_l3f_applicability(net; options=L3FOptions(kron_reduce=false))
     @test is_l3f_applicable(report)
@@ -197,8 +205,29 @@ end
                            objective=:feasibility),
         solver_options=("print_level" => 0,))
     @test result.solve.optimal
+    # The lossless balance makes source import equal load exactly. This is a
+    # bookkeeping identity of the formulation, not evidence about the feeder, so
+    # it is asserted as such and the physical gap is quantified below.
     @test sum(result.sources["source"]["pg"]) ≈ real(sum(phase_load)) atol=1e-3
     @test sum(result.sources["source"]["qg"]) ≈ imag(sum(phase_load)) atol=1e-3
+
+    # Series losses the formulation omits, recovered from its own solution as
+    # I' Z I with I = conj(S / V) at each branch's parent terminals. This is the
+    # size of the error the lossless balance introduces, and it is the reason
+    # Table III's nonlinear import values are not equality-asserted anywhere.
+    losses = 0.0
+    for (id, _, _, code, len) in _L3F_IEEE37_LINES
+        Z = _L3F_IEEE37_Z_PER_KFT[code] .* len
+        branch = result.lines[id]
+        parent = branch["parent"]
+        V = ComplexF64[sqrt(result.buses[parent][t]["w"]) *
+                       cis(result.buses[parent][t]["reference_angle"])
+                       for t in branch["terminal_map_parent"]]
+        I = conj.(ComplexF64.(branch["p"], branch["q"]) ./ V)
+        losses += real(I' * Z * I)
+    end
+    @test losses / real(sum(phase_load)) ≈ 0.0195 atol=2e-3
+    @test 40_000 < losses < 56_000
 
     # OpenDSS is used as a nonlinear feeder oracle downstream of the regulator.
     # Supplying the exact ideal-regulator secondary phasors avoids introducing
@@ -220,9 +249,71 @@ end
                           (4800 / sqrt(3)))
         end
         @test length(errors) == 108
-        @test maximum(errors) < 0.012
-        @test sqrt(sum(abs2, errors) / length(errors)) < 0.006
+        # Bracketed on both sides. The upper bounds sit inside the published
+        # LinDist3Flow accuracy envelopes — Sankur et al. (2016) report under 1%
+        # maximum relative voltage error on modified IEEE 13/37 feeders, and
+        # Table I of arXiv:2210.08550 reports 0.007-0.02 pu maximum deviation
+        # from a Z-bus power flow on IEEE 13/123. The lower bounds fail loudly if
+        # a future change makes the comparison vacuous rather than accurate.
+        @test 0.002 < maximum(errors) < 0.012
+        @test 0.001 < sqrt(sum(abs2, errors) / length(errors)) < 0.006
     else
         @test_skip "Requires OpenDSSDirect"
     end
+end
+
+@testset "LinDist3Flow Table I regulator gain matrices" begin
+    # Bazrafshan, Gatsis & Zhu (arXiv:1901.04566), Table I, in the paper's own
+    # convention v_n = A_nm v_m with n the source (from) side. These assertions
+    # are structural rather than a restatement of the implementation: each bank
+    # is pinned by the physical relation it must produce.
+    ratios = [0.94, 0.97, 1.03]
+    v = 2400.0 .* ComplexF64[1, cis(-2pi / 3), cis(2pi / 3)]
+
+    # WYE: three independent single-phase units, one per phase-to-ground voltage.
+    wye = regulator_gain_matrix("wye", ratios; regulator_type="A")
+    @test wye ≈ Diagonal(ratios)
+    @test (wye * v) ./ v ≈ ratios
+
+    # CLOSED DELTA: each unit spans a phase pair; the bank is a full cycle.
+    closed = regulator_gain_matrix("closed-delta", ratios; regulator_type="A")
+    @test closed ≈ [ratios[1] 1-ratios[1] 0.0
+                    0.0 ratios[2] 1-ratios[2]
+                    1-ratios[3] 0.0 ratios[3]]
+    # Every row is an affine combination, so a uniform shift passes through and
+    # unity taps are the identity.
+    @test sum(closed; dims=2) ≈ ones(3, 1)
+    @test regulator_gain_matrix("closed-delta", ones(3); regulator_type="A") ≈ I
+
+    # OPEN DELTA: two units on two phase pairs sharing a common phase, which is
+    # the gauge. The defining property is that each regulated line-to-line
+    # voltage scales by exactly its own ratio.
+    for (connection, pairs) in ("ABBC" => ((1, 2), (2, 3)),
+                                "BCAC" => ((2, 3), (1, 3)),
+                                "CABA" => ((3, 1), (2, 1)))
+        open = regulator_gain_matrix("open-delta", ratios[1:2];
+                                     connection=connection, regulator_type="A")
+        shared = only(intersect(collect(pairs[1]), collect(pairs[2])))
+        from = open * v
+        for (r, pair) in zip(ratios[1:2], pairs)
+            @test (from[pair[1]] - from[pair[2]]) ≈ r * (v[pair[1]] - v[pair[2]])
+        end
+        # The common phase is untouched, which is what fixes the gauge.
+        @test from[shared] ≈ v[shared]
+        @test regulator_gain_matrix("open-delta", ones(2);
+                                    connection=connection, regulator_type="A") ≈ I
+    end
+
+    # ANSI type B is the reciprocal connection: BMOPFTools' executable
+    # convention is n_eff = 1/a for type B and n_eff = a for type A, under
+    # V_from = n_eff * V_to. (The BMOPF regulator spec table states this the
+    # other way round; the implementation is the one that is self-consistent.)
+    @test regulator_gain_matrix("wye", ratios; regulator_type="B") ≈
+        Diagonal(inv.(ratios))
+    @test_throws ArgumentError regulator_gain_matrix("wye", ratios; regulator_type="C")
+    @test_throws ArgumentError regulator_gain_matrix("star", ratios)
+    @test_throws ArgumentError regulator_gain_matrix("open-delta", ratios[1:2];
+        connection="ABCA")
+    @test_throws DimensionMismatch regulator_gain_matrix("wye", ratios[1:2])
+    @test_throws ArgumentError regulator_gain_matrix("wye", [0.9, 0.0, 1.0])
 end

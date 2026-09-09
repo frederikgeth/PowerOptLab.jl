@@ -15,6 +15,15 @@ function cross_voltage_coefficients(vbar_phi::Number, vbar_psi::Number)
     CrossVoltageCoefficients(c, a, b)
 end
 
+"""
+    evaluate_cross_voltage(c, w_phi, w_psi)
+
+Evaluate the closure of [`cross_voltage_coefficients`](@ref) at squared
+magnitudes `w_phi`, `w_psi`. At the reference point it reproduces
+`vbar_phi * conj(vbar_psi)` exactly; away from it, it is the first-order Taylor
+expansion of `sqrt(w_phi*w_psi)*exp(im*dtheta)` with the angle difference held
+at its reference value.
+"""
 evaluate_cross_voltage(c::CrossVoltageCoefficients, w_phi::Real, w_psi::Real) =
     c.constant + c.coefficient_phi * w_phi + c.coefficient_psi * w_psi
 
@@ -41,6 +50,13 @@ function winding_voltage_coefficients(d::AbstractVector{<:Real},
     AffineScalarCoefficients(constant, coefficients)
 end
 
+"""
+    evaluate_affine(c, w)
+
+Evaluate the real affine scalar `c.constant + c.coefficients' * w`, the form
+produced by [`winding_voltage_coefficients`](@ref) for a squared winding
+voltage. `w` is indexed by the terminals the incidence row spans.
+"""
 evaluate_affine(c::AffineScalarCoefficients, w::AbstractVector{<:Real}) =
     c.constant + dot(c.coefficients, w)
 

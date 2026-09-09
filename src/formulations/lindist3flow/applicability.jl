@@ -21,6 +21,15 @@ function _l3f_input(input)
 end
 
 function _l3f_shunt_matrix(data, n::Int)
+    # Every declared entry must lie inside the terminal-map arity. Silently
+    # truncating an out-of-range entry would drop physics the caller declared,
+    # which the applicability contract forbids.
+    for key in keys(data)
+        m = match(r"^([GB])_(\d+)_(\d+)$", String(key))
+        m === nothing && continue
+        max(parse(Int, m.captures[2]), parse(Int, m.captures[3])) <= n || throw(
+            DimensionMismatch("shunt admittance key '$key' exceeds terminal-map arity $n"))
+    end
     value(prefix, i, j) = if haskey(data, "$(prefix)$(i)_$(j)")
         Float64(data["$(prefix)$(i)_$(j)"])
     elseif haskey(data, "$(prefix)$(j)_$(i)")
@@ -167,20 +176,26 @@ function _l3f_validate_transformers!(findings, net)
                 "E.L3F.TRANSFORMER_NONIDEAL_UNSUPPORTED", :transformer, id,
                 "fixed-ratio support is ideal; nonzero '$key' must be represented separately")
         end
+        # BMOPF types `i_max_from`/`i_max_to` as `number[]` (per conductor) and
+        # `s_rating` as a scalar nameplate. Accept a bare scalar for the
+        # single-conductor subtypes too, since that shape reaches the wild.
         for key in ("s_rating", "i_max_from", "i_max_to")
             haskey(data, key) || continue
             value = data[key]
-            valid_limit = if subtype == "open_delta_regulator" && key != "s_rating"
-                value isa AbstractVector && length(value) == 2 &&
-                    all(x -> x isa Real && isfinite(x) && x > 0, value)
+            positive(x) = x isa Real && isfinite(x) && x > 0
+            valid_limit = if key == "s_rating"
+                positive(value)
             else
-                value isa Real && isfinite(value) && value > 0
+                expected = subtype == "open_delta_regulator" ? 2 : 1
+                (value isa AbstractVector && length(value) == expected &&
+                 all(positive, value)) || (expected == 1 && positive(value))
             end
             valid_limit || _l3f_error!(findings,
                 "E.L3F.LIMIT_INVALID", :transformer, id,
-                subtype == "open_delta_regulator" && key != "s_rating" ?
+                key == "s_rating" ? "$key must be a positive finite scalar" :
+                subtype == "open_delta_regulator" ?
                     "$key must contain two positive finite winding ratings" :
-                    "$key must be a positive finite scalar")
+                    "$key must be a positive finite scalar or one-element vector")
         end
     end
 end
@@ -202,8 +217,13 @@ end
 
 function _l3f_has_explicit_neutral(net)
     labels = _l3f_neutral_labels(net)
-    any(bus isa AbstractDict && any(t -> string(t) in labels || lowercase(string(t)) == "n",
-                                   get(bus, "terminal_names", String[]))
+    # A perfectly grounded terminal is an explicit return conductor whatever it
+    # is named. Matching only on the label set would skip Kron reduction and
+    # then surface as a confusing zero-reference-phasor error instead.
+    any(bus isa AbstractDict &&
+        (any(t -> string(t) in labels || lowercase(string(t)) == "n",
+             get(bus, "terminal_names", String[])) ||
+         !isempty(get(bus, "perfectly_grounded_terminals", String[])))
         for bus in values(get(net, "bus", Dict())))
 end
 
@@ -490,6 +510,35 @@ function _l3f_validate_components!(findings, net)
     end
 end
 
+_l3f_is_dispatchable(component) = begin
+    lo = Float64.(get(component, "p_min", Float64[]))
+    hi = Float64.(get(component, "p_max", Float64[]))
+    length(lo) == length(hi) && any(hi .> lo)
+end
+
+"""
+Objective-dependent data checks.
+
+BMOPF requires `cost` on a generator. Defaulting a missing vector to zero
+   leaves the objective flat in that unit's dispatch direction.
+"""
+function _l3f_validate_objective!(findings, net, options::L3FOptions)
+    options.objective == :cost || return
+    for (family, symbol) in (("generator", :generator), ("voltage_source", :voltage_source))
+        for (id, component) in get(net, family, Dict())
+            component isa AbstractDict || continue
+            cost = get(component, "cost", nothing)
+            if cost === nothing
+                (family == "voltage_source" || _l3f_is_dispatchable(component)) &&
+                    _l3f_warning!(findings, "W.L3F.COST_MISSING", symbol, id,
+                        "objective=:cost but no 'cost' vector is declared; this " *
+                        "unit is priced at zero and the optimum may be non-unique")
+                continue
+            end
+        end
+    end
+end
+
 function _l3f_validate_lines!(findings, net)
     buses = get(net, "bus", Dict())
     linecodes = get(net, "linecode", Dict())
@@ -537,30 +586,95 @@ function _l3f_validate_lines!(findings, net)
     end
 end
 
-function _l3f_topology!(findings, net)
-    buses = sort!(String.(collect(keys(get(net, "bus", Dict())))))
-    adjacency = Dict(bus => Tuple{String,String,Symbol,String}[] for bus in buses)
-    pair_ids = Dict{Tuple{String,String},Vector{String}}()
-    for (id_raw, line) in get(net, "line", Dict())
-        id = String(id_raw)
-        a, b = String(get(line, "bus_from", "")), String(get(line, "bus_to", ""))
-        haskey(adjacency, a) && haskey(adjacency, b) || continue
-        push!(adjacency[a], (b, id, :line, "")); push!(adjacency[b], (a, id, :line, ""))
-        pair = a < b ? (a, b) : (b, a)
-        push!(get!(pair_ids, pair, String[]), "line/$id")
+"""
+Two-port devices as `(family, subtype, id, bus_from, map_from, bus_to, map_to)`,
+in a deterministic order. Both `line` and every supported `transformer` subtype
+carry the same aligned conductor maps, so radiality, parallelism, and
+orientation are all decided on the terminal graph rather than the bus graph.
+"""
+function _l3f_branches(net)
+    out = Tuple{Symbol,String,String,String,Vector{String},String,Vector{String}}[]
+    buses = get(net, "bus", Dict())
+    add(family, subtype, id, data) = begin
+        a, b = String(get(data, "bus_from", "")), String(get(data, "bus_to", ""))
+        haskey(buses, a) && haskey(buses, b) || return
+        ma = string.(get(data, "terminal_map_from", String[]))
+        mb = string.(get(data, "terminal_map_to", String[]))
+        length(ma) == length(mb) && !isempty(ma) || return
+        push!(out, (family, subtype, id, a, ma, b, mb))
+    end
+    for (id, line) in get(net, "line", Dict())
+        line isa AbstractDict && add(:line, "", String(id), line)
     end
     for (subtype, id, transformer) in _l3f_transformers(net)
-        a, b = String(get(transformer, "bus_from", "")), String(get(transformer, "bus_to", ""))
-        haskey(adjacency, a) && haskey(adjacency, b) || continue
-        push!(adjacency[a], (b, id, :transformer, subtype))
-        push!(adjacency[b], (a, id, :transformer, subtype))
-        pair = a < b ? (a, b) : (b, a)
-        push!(get!(pair_ids, pair, String[]), "transformer/$subtype/$id")
+        add(:transformer, subtype, id, transformer)
     end
-    for (pair, ids) in pair_ids
-        length(ids) <= 1 || _l3f_error!(findings, "E.L3F.TOPOLOGY_NOT_RADIAL",
-            :network, nothing, "parallel energized lines connect $(pair[1]) and $(pair[2])";
-            evidence=Dict("lines" => ids))
+    sort!(out; by=x -> (x[1], x[2], x[3]))
+end
+
+_l3f_branch_label(family, subtype, id) =
+    family == :line ? "line/$id" : "transformer/$subtype/$id"
+
+"""
+    _l3f_topology!(findings, net)
+
+Orient every two-port device away from its island's unique voltage source.
+
+Radiality is a **per-conductor** property: the graph whose nodes are
+`(bus, terminal)` pairs and whose edges are the aligned conductor pairs of each
+device must be a forest. A three-unit single-phase regulator bank on one bus
+pair is therefore radial — the units occupy disjoint conductors — even though
+the bus graph shows three parallel edges. Islands and source assignment stay at
+bus granularity, which is the conservative choice for a single-source model.
+"""
+function _l3f_topology!(findings, net)
+    buses = sort!(String.(collect(keys(get(net, "bus", Dict())))))
+    branches = _l3f_branches(net)
+
+    # Terminal graph: nodes are (bus, terminal), edges are aligned conductors.
+    terminal_adjacency = Dict{Tuple{String,String},Vector{Tuple{Tuple{String,String},Int}}}()
+    terminal_pairs = Dict{Tuple{Tuple{String,String},Tuple{String,String}},Vector{String}}()
+    bus_adjacency = Dict(bus => Tuple{String,Int}[] for bus in buses)
+    for (e, (family, subtype, id, bf, mf, bt, mt)) in enumerate(branches)
+        label = _l3f_branch_label(family, subtype, id)
+        push!(bus_adjacency[bf], (bt, e)); push!(bus_adjacency[bt], (bf, e))
+        for k in eachindex(mf)
+            u, v = (bf, mf[k]), (bt, mt[k])
+            push!(get!(terminal_adjacency, u, valtype(terminal_adjacency)()), (v, e))
+            push!(get!(terminal_adjacency, v, valtype(terminal_adjacency)()), (u, e))
+            key = u <= v ? (u, v) : (v, u)
+            push!(get!(terminal_pairs, key, String[]), label)
+        end
+    end
+    for (key, labels) in sort!(collect(terminal_pairs); by=first)
+        length(labels) <= 1 || _l3f_error!(findings, "E.L3F.TOPOLOGY_NOT_RADIAL",
+            :network, nothing,
+            "parallel conductors connect $(key[1][1]).$(key[1][2]) and " *
+            "$(key[2][1]).$(key[2][2])";
+            evidence=Dict("branches" => sort(labels)))
+    end
+
+    # Per-conductor radiality: every terminal component must be a tree.
+    terminal_nodes = sort!(collect(keys(terminal_adjacency)))
+    unseen_terminals = Set(terminal_nodes)
+    while !isempty(unseen_terminals)
+        start = minimum(unseen_terminals)
+        queue = [start]; delete!(unseen_terminals, start)
+        nodes = 0; incidences = 0
+        while !isempty(queue)
+            node = popfirst!(queue); nodes += 1
+            incidences += length(terminal_adjacency[node])
+            for (neighbor, _) in terminal_adjacency[node]
+                neighbor in unseen_terminals || continue
+                delete!(unseen_terminals, neighbor); push!(queue, neighbor)
+            end
+        end
+        edges = incidences ÷ 2
+        edges <= nodes - 1 || _l3f_error!(findings, "E.L3F.TOPOLOGY_NOT_RADIAL",
+            :network, nothing,
+            "conductor component containing $(start[1]).$(start[2]) has $nodes " *
+            "terminals and $edges conductors, so it is not radial";
+            evidence=Dict("terminals" => nodes, "conductors" => edges))
     end
 
     islands = Vector{Vector{String}}()
@@ -570,7 +684,7 @@ function _l3f_topology!(findings, net)
         queue = [start]; delete!(unseen, start); component = String[]
         while !isempty(queue)
             node = popfirst!(queue); push!(component, node)
-            for (neighbor, _, _, _) in adjacency[node]
+            for (neighbor, _) in bus_adjacency[node]
                 neighbor in unseen || continue
                 delete!(unseen, neighbor); push!(queue, neighbor)
             end
@@ -584,7 +698,8 @@ function _l3f_topology!(findings, net)
     end
     roots = String[]
     topology = L3FOrientedLine[]
-    lines = get(net, "line", Dict())
+    any(f -> f.code == "E.L3F.TOPOLOGY_NOT_RADIAL", findings) &&
+        return topology, roots, islands
     for island in islands
         members = Set(island)
         sources = [(bus, sid) for (bus, ids) in source_buses if bus in members for sid in ids]
@@ -595,26 +710,27 @@ function _l3f_topology!(findings, net)
             continue
         end
         root = first(first(sources)); push!(roots, root)
-        edge_ids = Set((family, subtype, id) for bus in island
-                       for (_, id, family, subtype) in adjacency[bus])
-        if length(edge_ids) != length(island) - 1
-            _l3f_error!(findings, "E.L3F.TOPOLOGY_NOT_RADIAL", :network, nothing,
-                "island rooted at '$root' has $(length(island)) buses and $(length(edge_ids)) lines")
-            continue
-        end
-        visited = Set([root]); queue = [root]
+        # Breadth-first over conductors: a device is oriented by the first of its
+        # conductors that is traversed. In a forest every conductor of a device
+        # agrees, because a disagreeing conductor would close a cycle.
+        oriented = Dict{Int,Bool}()
+        visited = Set((root, terminal)
+                      for terminal in string.(get(net["bus"][root], "terminal_names", String[])))
+        queue = sort!(collect(visited))
         while !isempty(queue)
-            parent = popfirst!(queue)
-            for (child, id, family, subtype) in sort(adjacency[parent]; by=x -> (x[3], x[2]))
-                child in visited && continue
-                push!(visited, child); push!(queue, child)
-                data = family == :line ? lines[id] : net["transformer"][subtype][id]
-                original = String(get(data, "bus_from", "")) == parent
-                pm = string.(get(data, original ? "terminal_map_from" : "terminal_map_to", String[]))
-                cm = string.(get(data, original ? "terminal_map_to" : "terminal_map_from", String[]))
-                push!(topology, L3FOrientedLine(id, family, subtype,
-                    parent, child, pm, cm, !original))
+            node = popfirst!(queue)
+            for (neighbor, e) in sort(get(terminal_adjacency, node, []); by=x -> (x[1], x[2]))
+                neighbor in visited && continue
+                push!(visited, neighbor); push!(queue, neighbor)
+                get!(oriented, e, branches[e][4] == node[1])
             end
+        end
+        for e in sort!(collect(keys(oriented)))
+            family, subtype, id, bf, mf, bt, mt = branches[e]
+            original = oriented[e]
+            push!(topology, L3FOrientedLine(id, family, subtype,
+                original ? bf : bt, original ? bt : bf,
+                original ? mf : mt, original ? mt : mf, !original))
         end
     end
     topology, roots, islands
@@ -638,6 +754,22 @@ function _l3f_prepare(input; options::L3FOptions=L3FOptions(), reference=nothing
                 "explicit neutrals must be Kron-reduced before L3F model construction")
         end
     end
+    # `kron_reduce_bmopf` eliminates the conductors it recognises as neutrals.
+    # A perfectly grounded terminal under any other label survives, and the model
+    # would then meet it as a zero reference phasor — a true but unhelpful
+    # diagnostic. Name the actual obstacle instead.
+    for (bid, bus) in get(net, "bus", Dict())
+        bus isa AbstractDict || continue
+        retained = intersect(string.(get(bus, "perfectly_grounded_terminals", String[])),
+                             string.(get(bus, "terminal_names", String[])))
+        isempty(retained) && continue
+        _l3f_error!(findings, "E.L3F.GROUNDED_TERMINAL_RETAINED", :bus, bid,
+            "terminal(s) $(join(sort(retained), ", ")) are perfectly grounded but " *
+            "still retained; LinDist3Flow models retained conductors only. Eliminate " *
+            "them first — `kron_reduce_bmopf` removes conductors declared as neutrals " *
+            "via `terminal_conventions` or `neutral_terminal`";
+            evidence=Dict("terminals" => sort(retained)))
+    end
     if options.require_neutral_provenance &&
        !haskey(get(net, "_meta", Dict()), "kron_reduction") && reference === nothing
         _l3f_error!(findings, "E.L3F.NEUTRAL_REDUCTION_UNDECLARED", :network, nothing,
@@ -650,6 +782,7 @@ function _l3f_prepare(input; options::L3FOptions=L3FOptions(), reference=nothing
     _l3f_validate_shunts!(findings, net)
     _l3f_validate_transformers!(findings, net)
     _l3f_validate_lines!(findings, net)
+    _l3f_validate_objective!(findings, net, options)
     topology, roots, islands = _l3f_topology!(findings, net)
     report = L3FApplicabilityReport(
         any(f -> f.severity == :error, findings) ? :inapplicable : :applicable,
