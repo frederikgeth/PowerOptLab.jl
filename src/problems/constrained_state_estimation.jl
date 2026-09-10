@@ -135,6 +135,8 @@ connection-aware exact constant-power, constant-current, and ZIP devices.
 Line telemetry is compiled from the same passive primitives.
 """
 struct SEStructure{Ti<:Integer}
+    preflight::SEPreflightReport
+    nominal_state::Vector{Float64}
     nodes::Vector{TerminalID}
     node_index::Dict{TerminalID,Ti}
     passive_pattern::SparseMatrixCSC{ComplexF64,Ti}
@@ -376,7 +378,8 @@ to the later rank diagnostics rather than silently grounded.
 function compile_state_estimator(net::Dict{String,Any}, measurements::AbstractVector=Measurement[];
                                  neutral::Union{String,Nothing}="n",
                                  zero_injection=String[], exact_devices=Any[])
-    ybus = ybus_passive(net)
+    report, ybus = _se_preflight(net, measurements; neutral, zero_injection, exact_devices)
+    report.supported || throw(SEUnsupportedNetwork(report))
     nodes = TerminalID.(ybus.nodes)
     node_index = Dict{TerminalID,Int}(TerminalID(k) => Int(v) for (k, v) in ybus.index)
     fixed = _source_phasors(net, node_index)
@@ -420,7 +423,11 @@ function compile_state_estimator(net::Dict{String,Any}, measurements::AbstractVe
     unique!(constraint_nodes)
     sort!(constraint_nodes)
 
-    SEStructure(nodes, node_index, sparse(ybus.Y), specs, constraint_nodes, devices,
+    # A load-free electrical initialisation respects transformer ratios and
+    # phase shifts. It is not an estimated operating state or extra information.
+    rows = vcat(free_indices, n .+ free_indices)
+    nominal_state = isempty(rows) ? Float64[] : Vector{Float64}(qr(M[rows, :]) \ (-fixed_current[rows]))
+    SEStructure(report, nominal_state, nodes, node_index, sparse(ybus.Y), specs, constraint_nodes, devices,
                 free_state_map, Dict(nodes[i] => v for (i, v) in fixed),
                 E, M, copy(transpose(E)), copy(transpose(M)), fixed_voltage, fixed_current)
 end
@@ -964,12 +971,11 @@ function solve_compiled_state_estimator(s::SEStructure, p::SEParameters,
     e = _se_trial_evaluation(s, p, x)
     e === nothing && return ConstrainedStateEstimationResult(:invalid_initial_domain, x,
         _se_invalid_evaluation(s, p), 0, 0, 0, 0, NamedTuple[])
-    # A uniform nominal-voltage scale gives the rectangular state a physically
-    # meaningful trust-region norm even when an initial imaginary component is 0.
-    nominal = maximum(abs.(p.fixed_voltages[isfinite.(real.(p.fixed_voltages))]); init=1.0)
+    # Local voltage levels keep transformer-separated buses comparable in the
+    # trust-region norm, including initially zero imaginary/neutral components.
     # `scale` is the diagonal D in ||D*s|| ≤ Δ, hence it has inverse-voltage
     # units.  A unit scaled step is one nominal-voltage state increment.
-    scale = 1.0 ./ max.(abs.(x), max(nominal, 1.0))
+    scale = _se_voltage_scale(s, p, x)
     radius = Float64(initial_radius)
     μ = Float64(penalty)
     history = [_se_history_entry(0, radius, _se_merit(e, μ), e; penalty=μ)]
@@ -1243,8 +1249,7 @@ function solve_sparse_state_estimator(s::SEStructure, p::SEParameters,
     e = _se_trial_evaluation(s, p, x)
     e === nothing && return SparseConstrainedStateEstimationResult(:invalid_initial_domain, x,
         _se_invalid_evaluation(s, p), 0, 0, 0, 0, Float64[], NamedTuple[])
-    nominal = maximum(abs.(p.fixed_voltages[isfinite.(real.(p.fixed_voltages))]); init=1.0)
-    scale = 1.0 ./ max.(abs.(x), max(nominal, 1.0))
+    scale = _se_voltage_scale(s, p, x)
     radius = Float64(initial_radius); μ = Float64(penalty)
     history = [_se_history_entry(0, radius, _se_merit(e, μ), e; penalty=μ)]
     λ = zeros(Float64, length(e.constraints))
@@ -1568,4 +1573,45 @@ function solve_time_series_state_estimator(s::SEStructure,
         restore!()
     end
     TimeSeriesStateEstimationResult(:converged, snapshots, length(snapshots))
+end
+
+"""
+    initial_state_estimator(structure, parameters)
+
+Return the load-free voltage state using current source phasors and compiled
+finite admittances. This respects fixed transformer ratios and phase shifts.
+It is an initial guess, not telemetry or a state estimate. Reference-deficient
+networks may have arbitrary null-space components; callers should supply a
+physical warm start when that matters. Throws if there is no nonzero reference.
+"""
+function initial_state_estimator(s::SEStructure, p::SEParameters)
+    _validate_parameters(s,p)
+    n = length(s.nodes)
+    free = findall(i -> !haskey(s.reference_map,s.nodes[i]), 1:n)
+    _, _, ir, ii = _se_parts(s,p,zeros(2length(free)))
+    isempty(free) && return Float64[]
+    rows = vcat(free,n .+ free)
+    # Reuse the compiled guess for unchanged source phasors; updated boundaries
+    # need a new sparse solve, but measurement updates do not.
+    x = all(p.fixed_voltages[s.node_index[node]] == value for (node,value) in s.reference_map) ?
+        copy(s.nominal_state) :
+        Vector{Float64}(qr(s.current_state_jacobian[rows,:]) \ (-vcat(ir[free],ii[free])))
+    all(isfinite,x) && norm(x,Inf) > 0 || throw(ArgumentError("No nonzero load-free initial state; supply a physical initial state explicitly."))
+    x
+end
+
+function _se_voltage_scale(s,p,x)
+    nf = length(s.free_state_map)
+    # Use local load-free voltage levels. Neutral components inherit the local
+    # phase magnitude; no neutral is grounded by this numerical scaling.
+    levels = Dict{String,Float64}()
+    for ((bus,_),k) in s.free_state_map
+        levels[bus] = max(get(levels,bus,1.0), hypot(s.nominal_state[k],s.nominal_state[nf+k]))
+    end
+    scale = ones(Float64,2nf)
+    for ((bus,_),k) in s.free_state_map
+        v = max(get(levels,bus,1.0),hypot(x[k],x[nf+k]),1.0)
+        scale[k] = scale[nf+k] = 1/v
+    end
+    scale
 end

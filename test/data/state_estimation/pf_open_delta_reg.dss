@@ -1,0 +1,55 @@
+! Open-delta step voltage regulator power-flow comparison case.
+! (BMOPF subtype: open_delta_regulator, connection ABBC, ANSI Type B)
+!
+! Topology: src ──[open-delta regulator bank]── reg
+!   reg1 across phases A-B (src.1.2 → reg.1.2), tap 1.05
+!   reg2 across phases B-C (src.2.3 → reg.2.3), tap 1.025
+!
+! OpenDSS has no monolithic open-delta regulator object — open-delta regulation
+! is built from TWO single-phase transformers wired line-to-line, which is
+! exactly what the BMOPF monolithic open_delta_regulator represents internally.
+! Each unit is a 1:1 (L-L) two-winding transformer with the secondary turns
+! scaled by Tap (Type B boost). Only two of the three line-to-line voltages are
+! regulated; the third floats (open-delta physics).
+!
+! 2.4 kV L-N source (4.157 kV L-L). %r=0.5 per winding, xhl=1.0. Per-phase
+! wye loads anchor the common-mode reference deterministically.
+
+Clear
+
+! Base frequency locked to 50 Hz (BMOPF's modelling frequency).  The OpenDSS
+! default (60 Hz, or whatever a Windows GUI session persisted) would otherwise
+! rescale every reactance.  See docs/src/validation.md.
+Set DefaultBaseFreq=50
+
+New Circuit.pf_open_delta_reg basekv=4.1569 pu=1.0 angle=0 phases=3 bus1=src model=ideal
+
+! Regulator 1: phases A-B, secondary tap 1.05.
+New Transformer.reg1 phases=1 windings=2
+~ wdg=1 bus=src.1.2 conn=delta kv=4.1569 %r=0.5 kva=500
+~ wdg=2 bus=reg.1.2 conn=delta kv=4.1569 %r=0.5 kva=500 tap=1.05
+~ xhl=1.0
+
+! Regulator 2: phases B-C, secondary tap 1.025.
+New Transformer.reg2 phases=1 windings=2
+~ wdg=1 bus=src.2.3 conn=delta kv=4.1569 %r=0.5 kva=500
+~ wdg=2 bus=reg.2.3 conn=delta kv=4.1569 %r=0.5 kva=500 tap=1.025
+~ xhl=1.0
+
+! Balanced per-phase wye loads (anchor the floating common mode).
+New Load.lda bus1=reg.1.0 kv=2.4 kw=20 kvar=0 phases=1 model=1 Vminpu=0 Vmaxpu=2
+New Load.ldb bus1=reg.2.0 kv=2.4 kw=20 kvar=0 phases=1 model=1 Vminpu=0 Vmaxpu=2
+New Load.ldc bus1=reg.3.0 kv=2.4 kw=20 kvar=0 phases=1 model=1 Vminpu=0 Vmaxpu=2
+
+! Finite 1 kOhm phase-earth shunts establish the common-mode reference.
+New Reactor.ref1 phases=1 bus1=reg.1.0 R=1000 X=0
+New Reactor.ref2 phases=1 bus1=reg.2.0 R=1000 X=0
+New Reactor.ref3 phases=1 bus1=reg.3.0 R=1000 X=0
+
+Set VoltageBases=[4.1569]
+CalcVoltageBases
+! Tolerance 1e-8 (<< the voltage-comparison tolerance) removes OpenDSS-side
+! convergence slop; MaxIterations raised so the tighter target is reached.
+Set Tolerance=1e-8
+Set MaxIterations=100
+Solve

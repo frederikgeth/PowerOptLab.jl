@@ -1,0 +1,50 @@
+! Single-phase WYE-WYE transformer power-flow comparison case.
+! (BMOPF subtype: single_phase)
+!
+! Topology: hv ──[1-ph YY xfmr, 11 kV / 0.24 kV]── lv
+!   hv.1/4  = HV phase and neutral (source side)
+!   lv.1/4  = LV phase and neutral (load side)
+!
+! Realistic winding impedances and no-load losses are used so that the
+! cross-validation proves the BMOPF series-impedance (Γ-model) and shunt
+! no-load branch are live in the OPF, not just parsed.
+!
+! %r=1.0  per winding  → total series R referred to HV ≈ 2%·Z_base_HV
+! xhl=4.0              → leakage reactance between windings, %
+! %noloadloss=0.3      → core/iron loss as % of rated kVA
+! %imag=1.5            → magnetising current as % of rated current
+
+Clear
+
+! Base frequency locked to 50 Hz (BMOPF's modelling frequency).  The OpenDSS
+! default (60 Hz, or whatever a Windows GUI session persisted) would otherwise
+! rescale every reactance.  See docs/src/validation.md.
+Set DefaultBaseFreq=50
+
+New Circuit.pf_1ph_xfmr basekv=11.0 pu=1.0 angle=0 phases=1 bus1=hv.1.0 model=ideal
+
+! HV neutral earthed at source.
+New Reactor.grnd_hv bus1=hv.4 bus2=hv.0 R=0.001 X=0 phases=1
+
+! 2-winding WYE-WYE single-phase transformer with realistic losses.
+New Transformer.t1 phases=1 windings=2
+~ wdg=1 bus=hv.1.4 conn=wye kv=11.0  %r=1.0 kva=50
+~ wdg=2 bus=lv.1.4 conn=wye kv=0.240 %r=1.0 kva=50
+~ xhl=4.0
+~ %noloadloss=0.3
+~ %imag=1.5
+
+! LV neutral earthed.
+New Reactor.grnd_lv bus1=lv.4 bus2=lv.0 R=0.001 X=0 phases=1
+
+! Vminpu=0 Vmaxpu=2: disable ODS voltage-dependent load switching so model=1
+! behaves as strict constant P+Q at all voltages, matching BMOPF.
+New Load.ld1 bus1=lv.1.4 kv=0.240 kw=30 kvar=10 phases=1 model=1 Vminpu=0 Vmaxpu=2
+
+Set VoltageBases=[11.0, 0.240]
+CalcVoltageBases
+! Tolerance 1e-8 (<< the voltage-comparison tolerance) removes OpenDSS-side
+! convergence slop; MaxIterations raised so the tighter target is reached.
+Set Tolerance=1e-8
+Set MaxIterations=100
+Solve

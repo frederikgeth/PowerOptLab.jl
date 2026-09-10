@@ -22,6 +22,122 @@ required.
     processing, topology hypotheses, transformer branch telemetry, and sparse
     rank/covariance backends remain future work.
 
+## Electrical support preflight and initialization
+
+Call `state_estimator_preflight(net, measurements; zero_injection, exact_devices)`
+before compiling to inspect the snapshot interpretation. The same report is
+retained as `structure.preflight`; compilation throws `SEUnsupportedNetwork`
+with its report if any error is present. `supported` means representable by this
+voltage-only model. It does **not** certify observability, a correct network
+calibration, or convergence.
+
+```julia
+report = state_estimator_preflight(net, measurements)
+report.findings                 # severity, code, element, explanation
+report.elements                 # passive elements, aliases, fixed taps
+report.omitted                  # injections, controls, operating bounds
+report.sources                  # prescribed phasors
+report.grounded_terminals       # declared perfect grounds
+report.measurements             # locations and voltage references
+report.exact_equations          # requested zero injections and devices
+
+s = compile_state_estimator(net, measurements)
+p = SEParameters(s, measurements)
+x0 = initial_state_estimator(s, p)
+result = solve_sparse_state_estimator(s, p, x0)
+```
+
+The initializer solves the free-conductor, load-free current equations with
+sparse QR using the current source phasors. Transformer ratios and phase shifts
+therefore enter the initial guess. This is a numerical starting point, not a
+load-flow operating point, a prior, or an extra measurement. A source-free or
+reference-deficient network may require a physical warm start; floating modes
+are not repaired by initialization. Trust-region voltage scaling uses local
+load-free bus levels (with a 1 V floor), so a low-voltage secondary does not
+inherit the primary's voltage scale. Neutral components inherit their bus's
+phase scale without being grounded.
+
+| Electrical feature | Contract |
+|---|---|
+| Finite lines, shunts and capacitors | Valid finite primitives and declared terminal maps required |
+| Closed ideal switches / negligible-impedance line aliases | Imported as node aliases; open switches remain open |
+| Single-phase, center-tap, wye–delta, delta–wye transformers | Finite leakage, valid winding maps and positive fixed ratios |
+| Single-phase and open-delta regulators | Finite leakage and known fixed taps; no automatic control or tap estimation |
+| General n-winding transformers | Finite primitive, positive winding voltages, WYE/DELTA connections, equal nonzero phase counts and a/b/c/n names required; not covered by the component oracle matrix |
+| Ideal or degenerate transformers | Rejected; auxiliary current states and exact winding relations require a future augmented formulation |
+| Loads, generators and inverters in network data | Not automatically imported as injections; listed in `omitted` |
+| Operating limits and controls | Inventoried but not imposed on the estimated state |
+
+Do not insert an arbitrary small transformer impedance to bypass rejection.
+Use physical leakage data or an appropriate augmented formulation. The guard
+matches the pinned BMOPFTools exporter: ordinary transformer leakage components
+all at or below `1e-6` ohm are classified as ideal, and series-line norm at or
+below `1e-4` ohm follows its alias rule. These are exporter thresholds, not
+physical accuracy guarantees. Primitive warnings become preflight errors,
+rather than allowing a skipped or shunt-only substitute to pass silently.
+
+For n-winding data, fixed ratios are encoded in the winding `v_nom` values;
+separate tap fields are rejected because the exporter does not apply them.
+
+Recompile after changing taps, topology, impedances or terminal maps.
+`SEParameters` updates measurements, source phasors and supported exact-device
+parameters; it cannot change compiled transformer ratios. A forecast remains an
+uncertain measurement with an appropriate covariance, rather than an exact
+zero-injection constraint. A successful preflight does not turn nominal load
+data into pseudomeasurements.
+
+## Transformer and regulator validation
+
+`test/state_estimation_network_tests.jl` exercises both compiled solvers on
+single-phase (including a 1.03 primary tap), wye–delta, delta–wye and center-tap transformers, single-phase and
+open-delta fixed regulators, and **SE-IEEE13-finite**. The component fixtures and
+OpenDSS decks are versioned under `test/`; their provenance and modifications
+are recorded alongside the decks.
+
+SE-IEEE13-finite is a deliberately modified IEEE 13-node network: finite winding
+resistance of 0.5% per winding, regulator XHL of 1%, transformer XHL of 2%, fixed
+unequal phase taps, constant-power loads, omitted line shunts, and a source at
+bus 650. It includes mixed phases, delta loads, mutual line coupling and a
+4.16 kV / 480 V voltage transition. It is **not** a reproduction of the original
+IEEE operating case. The open-delta component includes physical 1 kΩ
+phase-to-earth shunts to establish its common-mode reference in both models.
+
+OpenDSS supplies conductor voltages. Injection readings are constructed from
+specified load currents and those voltages, independently of the estimator's
+Ybus evaluator. Actual OpenDSS source-terminal voltages are used as the fixed
+boundary, avoiding an artificial disagreement from source impedance. Tests use
+redundant rectangular-voltage and active/reactive injection readings, exact
+zero-injection equations, and reproducible Gaussian perturbations. Both solvers
+start from the load-free initializer. They must converge uniquely, satisfy the
+exact equations, agree with each other, and yield finite selected covariance.
+
+Voltage-component errors are divided by the corresponding oracle phasor
+magnitude (100 V floor), rather than by an imaginary component near zero. The
+regression bounds are 0.2% for clean data and 0.6% for the noisy realization.
+Voltage standard deviations are 0.2% of that phasor scale; power standard
+deviations are 1% of apparent injection (10 W/var floor). Noise is one standard
+deviation with seed 349. The estimator stationarity tolerance is `1e-6` in its
+residual-equivalent norm; exact-current constraints retain the default solver
+tolerance. JuMP objective agreement is checked at `atol=rtol=1e-5`, and fitted
+state components agree within 0.01 V. These tolerances are regression acceptance
+criteria, not confidence bounds.
+
+A separate JuMP/Ipopt WLS formulation differentiates scalar measurement
+equations independently and checks the fitted state and objective. This is an
+independent optimization check, **not** an independent admittance model: it
+shares the compiled electrical matrices. OpenDSS provides the separate
+physical-model comparison. Noisy fits need not interpolate every reading.
+
+This is a regression matrix, not a Monte Carlo uncertainty-calibration study
+or a proof of coverage for general distribution networks. It uses generous
+redundant instrumentation; sparse field telemetry, correlated load forecasts,
+bad data, unknown taps, switching hypotheses, automatic regulator controls,
+ideal transformers and large-feeder runtime/memory scaling need separate
+validation. Transformer branch telemetry is still outside this API.
+
+Run the complete reproducible matrix with `julia --project -e 'using Pkg;
+Pkg.test()'`; OpenDSSDirect is a declared test dependency.
+
 ## Modelling decisions
 
 ### Three kinds of information
