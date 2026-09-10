@@ -53,8 +53,9 @@ end
 Numerical choices kept separate from `VoltVarWattIntent`. Assign an explicit
 formulation to every present curve. `extrema_epsilon` is the physical voltage
 width of the established algebraic phase extrema/guard in the full smooth policy.
-Graph formulations can be used for individual bounded curve ports; complete IBR
-policy lowering currently accepts smooth formulations only.
+Graph formulations can be used for individual bounded curve ports. This frontend
+configures smooth policy replay; select the complete exact MPCC graph separately
+with `SequenceController(policy; encoding=ComplementarityGraph())`.
 """
 struct VoltVarWattEncoding
     volt_watt::Union{Nothing,AbstractPWLFormulation}
@@ -71,8 +72,9 @@ end
 Lower semantic volt-var/watt intent to the existing smooth IBR policy without
 building a JuMP model. Reuse the result when building many snapshots. The result
 fits `SequenceController` and its exact/smooth evaluators and staged builder.
-Non-smooth graph encodings throw `UnsupportedFormulation` here: support for an
-individual PWL graph does not imply support for the whole AC controller.
+Non-smooth graph encodings throw `UnsupportedFormulation` here. For a complete
+exact MPCC controller, wrap the returned policy in
+`SequenceController(policy; encoding=ComplementarityGraph())`.
 """
 function lower_positive_policy(intent::VoltVarWattIntent,encoding::VoltVarWattEncoding)
     for role in (:volt_watt,:volt_var)

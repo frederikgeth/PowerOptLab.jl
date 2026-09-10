@@ -307,9 +307,19 @@ charge ``q_b``:
 `result.dv_mid` reports ``|N|``; `result.v_mid_mean` and
 `result.q_mid_balance` report the signed mean shift and balancing action.
 `dv_mid_max` and `v_mid_mean_max` can bound the two distinct quantities. The
-instantaneous phase reference seen by each half-bridge is formed from
-``U_x+N+\bar N``. Fundamental ripple and mean mismatch therefore affect voltage
-feasibility as well as capacitor stress; neither is merely a reporting variable.
+instantaneous phase reference seen by each half-bridge is
+
+```math
+w_x(t)=u_x(t)+n_\omega(t)+\bar N+\alpha d(t),\qquad
+\alpha=\frac{C_u-C_l}{2(C_u+C_l)}.
+```
+
+The last term is the first-order midpoint response to the 2ω bus ripple. With
+no neutral excitation or balancing action, equal series charge gives
+``v_u=C_l v_{dc}/(C_u+C_l)`` and ``v_l=C_u v_{dc}/(C_u+C_l)``. Therefore the
+midpoint measured from half the total bus moves by ``\alpha d(t)`` as well as
+its mean offset. This term is linear in ripple and vanishes for equal banks;
+it is retained in the sampled hull, dense audit, and both PWM audits.
 
 The balancing variable is a steady-state charge-authority abstraction, not a
 controller state. The model does not represent leakage, ESR-induced mean drift,
@@ -332,7 +342,7 @@ must fit inside a fraction ``m=m_{max}`` of the ideal two-level rail:
   ``\sum I_x=0``;
 - `:FOUR_LEG`: those pairwise inequalities plus every phase-to-neutral voltage
   fit the full rail, while ``|I_n|\le I_{n,max}``;
-- `:SPLIT_DC`: every ``u_x+n+\bar n`` fits half the rail.
+- `:SPLIT_DC`: every ``u_x+n_\omega+\bar N+\alpha d`` fits half the rail.
 
 For a balanced sinusoid with no ripple, these recover the familiar RMS limits
 
@@ -477,8 +487,16 @@ remain inside ``[-1/2,1/2]``. The manual `i_sw` parameter is retained as a
 quadrature residual for dead time, device commutation, unresolved output-current
 ripple, or spectral content outside the enabled ideal carrier calculations.
 
-This procedure is locally self-consistent and conservative at the returned
-operating point, but it is not a proof of the globally optimal switched system.
+A PWM result is publishable only when the outer iteration converges, the DC and
+AC audits are finite, and both dense switching-hull and carrier modulation
+margins pass within `1e-6*max(v_dc,1)` V. Use
+`solve_status(result).publishable`; `result.inner_solve` alone describes the NLP.
+`pwm_status` records convergence or the failure reason. Failed results mask the
+operating point while retaining carrier diagnostics. An exhausted iteration
+budget is `:ITERATION_LIMIT`, even when its last NLP was `LOCALLY_SOLVED`.
+
+A publishable closure is locally self-consistent within the stated current
+and voltage tolerances; it is not a proof of the globally optimal switched system.
 It assumes ideal complementary switches, no dead time, sinusoidal current frozen
 within each switching period, and a shared triangular carrier. The optional
 finite source branch below relaxes the final open-source assumption.
@@ -505,9 +523,23 @@ and solves the DC-node KCL
 so that ``\hat I_{bridge,h}+\hat I_{C,h}+\hat I_{s,h}=0`` for every retained
 harmonic. Omitting `pwm_dc_source_r` and leaving `pwm_dc_source_l=0` recovers
 the open-source limit exactly. `pwm_dc_harmonics` controls the finite-network
-bandwidth; any unretained bridge-current energy is assigned conservatively to
-the capacitor for thermal reserve closure, while voltage and source-current
-diagnostics contain the retained series only.
+bandwidth. The omitted sampled-waveform energy is multiplied by an upper bound
+on capacitor-current gain over **all omitted integer carrier harmonics**. For
+``L_s>0``, writing ``t=\Omega^2L_sC_{eq}`` and ``\rho=R_s^2C_{eq}/L_s`` gives
+
+```math
+|H_C|^2=\frac{t^2+\rho t}{t^2+(\rho-2)t+1},\qquad
+ t_* = \frac{1+\sqrt{1+2\rho}}2.
+```
+
+The maximum occurs at the first omitted harmonic, one of the two integer
+harmonics bracketing ``t_*``, or the infinite-frequency limit of one. The
+thermal tail uses this maximum, so an omitted source resonance cannot be
+hidden by reducing the cutoff. An undamped resonant omitted harmonic makes the
+audit nonfinite and non-publishable. A purely resistive source needs a gain
+bound of only one. This bounds the **sampled, frozen-carrier** model; carrier
+sampling error still requires refinement. Voltage and source-current diagnostics
+contain the retained series only and are not tail bounds.
 
 For a split link, ``C_{eq}=C_uC_l/(C_u+C_l)`` and the same series charge crosses
 both half-banks. The rail-resolved ripple therefore obeys
@@ -531,7 +563,8 @@ capacitance. The audit reports
 \rho_{dc}=\min_h\frac{|Y_{C,h}+Y_{s,h}|}{|Y_{C,h}|+|Y_{s,h}|}.
 ```
 
-`pwm_dc_network_margin` near zero means a retained carrier harmonic lies close
+`pwm_dc_network_margin` near zero means a retained harmonic or an omitted-tail
+gain candidate lies close
 to that undamped singularity and the result should not be published. This is a
 screening metric, not a stability margin: real batteries, DC/DC stages, cables,
 busbars, capacitors, and control loops have frequency-dependent impedance,

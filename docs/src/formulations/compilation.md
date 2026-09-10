@@ -79,18 +79,20 @@ The implemented routes are:
 | `evaluate_exact(controller, measurement, request, ratings)` | Numeric replay of the canonical curves and established controller semantics | No optimization; a same-state reference, not a network equilibrium solve |
 | `evaluate_smooth(...)` | Numeric replay using the policy's chosen approximations | No optimization; intended to match the stamped smooth controller |
 | Full smooth IBR policy | `SequenceController` → `ControlledDevice` → staged device/controller equations → KCL → nonlinear program | Ipopt, or another compatible NLP optimizer such as MadNLP; convergence is case-dependent |
+| Full complementarity IBR policy | Exact controller graph plus nonlinear plant and KCL | Compatible MPCC optimizer, e.g. CCOpt with MathOptComplements bridges; independent current-replay audit in the snapshot solver |
 | Smooth curve port | An output variable and a smooth equality, with explicit voltage bounds | Ipopt or MadNLP in this tutorial |
 | `ExactPWLGraph` curve port | PiecewiseLinearOpt segment-selection graph with discrete structure | HiGHS for the otherwise affine example; nonlinear AC coupling would require a suitable MINLP approach |
 | `PWLConvexHull` curve port | Convex combinations of all bounded graph vertices, without adjacency | LP in this example; HiGHS solves the relaxation |
 | `ComplementarityGraph` curve port | Nonnegative hinge pairs with a difference equation and `MOI.Complements` | MathOptComplements bridges → CCOpt's MOI/NLPModelsJuMP interface → MPCC relaxation/homotopy with MadNLP |
 
-**Full IBR policy lowering currently accepts smooth curve representations only.**
-Passing a MIP, hull or complementarity encoding to `lower_positive_policy` raises
-`UnsupportedFormulation`. Those representations are available through
-`formulate_control_curve!` at an already sensed voltage. That operation does not
-encode phase extrema, conflict resolution, P/Q conversion, hardware capability
-or the network. Extending their use to a full AC controller requires explicit
-formulations for that surrounding logic and a compatible solver.
+Full controllers support `SequenceController(policy; encoding=:smooth)` and
+`SequenceController(policy; encoding=ComplementarityGraph())`. The latter lowers
+the surrounding extrema, clips, norms and capability logic as well as the curves;
+see [complete controller encodings and CCOpt](controllers.md#Smooth-and-complementarity-controller-encodings).
+`lower_positive_policy` still configures the policy's smooth replay from
+`VoltVarWattEncoding`; the controller-level switch selects its exact MPCC graph.
+MIP and convex-hull routes remain bounded curve-port formulations and are not
+complete AC controller encodings.
 
 ### How the smooth equations and derivatives reach the solver
 

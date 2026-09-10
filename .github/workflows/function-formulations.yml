@@ -34,6 +34,10 @@ jobs:
         env:
           POL_FORMULATION_RESULTS: ${{ runner.temp }}/pwl-results-control-lowering.toml
         run: julia --project="${{ runner.temp }}/pwl-env" scripts/formulations/control_lowering_optional.jl
+      - name: Compare full smooth and complementarity inverter controllers
+        env:
+          POL_FORMULATION_RESULTS: ${{ runner.temp }}/pwl-results-controller-encodings.toml
+        run: julia --project="${{ runner.temp }}/pwl-env" scripts/formulations/inverter_controller_comparison.jl
       - uses: actions/upload-artifact@v4
         if: always()
         with:

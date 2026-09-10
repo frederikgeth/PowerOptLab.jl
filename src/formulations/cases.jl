@@ -87,7 +87,9 @@ Each network is copied. Configuration supports `s_base` and `selection_objective
 (`:loss` or `:zero`). Supply additional model changes through a custom case.
 
 Candidate metrics contain physical POC voltage/current phasors and a same-voltage
-exact/smooth controller target gap **before plant capability backoff**. They are
+exact/encoded numeric controller target gap **before plant capability backoff**.
+For complementarity this numeric-reference gap is zero by construction, not a
+stamped-equation certificate; normalized complementarity error is also recorded. They are
 diagnostics even when the solver does not succeed; they do not certify equilibrium
 or hardware feasibility. Optional `metrics(ctx, handles, device, request)` supplies
 additional named/dictionary data under `custom`. Optimizers belong to the method.
@@ -117,11 +119,14 @@ function controlled_inverter_case(network,device_builder,request;id="controlled_
             measurement = InverterControlMeasurement(voltage)
             ratings = InverterControlRatings(device.device,device.controller.current_target)
             exact = evaluate_exact(device.controller,measurement,req,ratings)
-            smooth = evaluate_smooth(device.controller,measurement,req,ratings)
+            is_mpcc = device.controller.encoding isa ComplementarityGraph
+            numeric = is_mpcc ? exact : evaluate_smooth(device.controller,measurement,req,ratings)
             (phase_voltage_V=voltage,phase_current_A=current,
              requested_active_power_W=value(h.p_request)*h.sb,
              requested_reactive_power_var=value(h.q_request)*h.sb,
-             pre_capability_target_gap_A=maximum(abs,exact.phase_current.-smooth.phase_current),
+             pre_capability_target_gap_A=maximum(abs,exact.phase_current.-numeric.phase_current),
+             controller_encoding=is_mpcc ? :complementarity : :smooth,
+             complementarity_error=is_mpcc ? _controller_complementarity_error(_opf_model(ctx)) : NaN,
              custom=metrics === nothing ? NamedTuple() : metrics(ctx,handles[],device,req))
         end
         return (model=_opf_model(ctx),metrics=candidate_metrics)

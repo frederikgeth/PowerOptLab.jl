@@ -78,7 +78,7 @@ adjustment intended to equalise the answers.
 ```julia
 function study(network, device)
     r = solve_advanced_inverter(network, device)
-    @assert r.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+    @assert solve_status(r).publishable
     return (
         topology=r.topology,
         status=r.termination_status,
@@ -123,7 +123,7 @@ sequence_limited = AdvancedInverter(; id="four-leg-sequence-limited",
     i_negative_max=0.5, common...)
 
 r_sequence = solve_advanced_inverter(unbalanced, sequence_limited)
-@assert r_sequence.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+@assert solve_status(r_sequence).publishable
 @show r_sequence.p_poc r_sequence.i_zero r_sequence.i_negative
 ```
 

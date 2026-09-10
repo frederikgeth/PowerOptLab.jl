@@ -603,3 +603,13 @@ converter-terminal total and sequence powers, `current_scale`, `power_scale`,
 margin, curtailment, and the exact/smooth residual. Compare controls first with
 fixed hardware, then perform outer sweeps over `i_max`, `c_dc`, and capacitor
 ripple-current rating.
+
+## Selecting the numerical encoding
+
+Existing controllers use `encoding=:smooth` by default. To stamp the complete
+exact complementarity controller, construct
+`SequenceController(policy; encoding=ComplementarityGraph())` and use it in the
+same `ControlledDevice`. Curve smoothing settings remain available for the
+independent `evaluate_smooth` reference. See the [formulation guide](../formulations/controllers.md#Smooth-and-complementarity-controller-encodings)
+for CCOpt bridge setup, solver scope, zero-current degeneracies, and the additional
+exact-replay publication checks.
