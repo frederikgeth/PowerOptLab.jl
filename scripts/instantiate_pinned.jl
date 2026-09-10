@@ -8,25 +8,15 @@ using TOML
 
 root = dirname(@__DIR__)
 project_paths = [joinpath(root, "Project.toml"), joinpath(root, "docs", "Project.toml")]
-names = ["BMOPFTools", "FormulationLab"]
-projects = TOML.parsefile.(project_paths)
+sources = [TOML.parsefile(path)["sources"]["BMOPFTools"] for path in project_paths]
+sources[1] == sources[2] || error("Root and docs BMOPFTools source pins differ")
+source = first(sources)
+occursin(r"^[0-9a-f]{40}$", source["rev"]) || error("BMOPFTools must use a full commit SHA")
 Base.active_project() in project_paths || error("Run with --project=. or --project=docs")
-specs = Pkg.PackageSpec[]
-for name in names
-    sources = [project["sources"][name] for project in projects]
-    sources[1] == sources[2] || error("Root and docs $name source pins differ")
-    source = first(sources)
-    occursin(r"^[0-9a-f]{40}$", source["rev"]) || error("$name must use a full commit SHA")
-    push!(specs, Pkg.PackageSpec(name=name, url=source["url"], rev=source["rev"]))
-end
 
-# Resolve both unregistered packages together, including on Julia 1.10.
-Pkg.add(specs)
+Pkg.add(Pkg.PackageSpec(name="BMOPFTools", url=source["url"], rev=source["rev"]))
 Pkg.instantiate()
-for name in names
-    source = projects[1]["sources"][name]
-    info = only(info for info in values(Pkg.dependencies()) if info.name == name)
-    info.is_tracking_repo && info.git_revision == source["rev"] ||
-        error("Resolved $name does not match the requested source commit")
-    println(name, " ", info.git_revision, " at ", info.source)
-end
+info = only(info for info in values(Pkg.dependencies()) if info.name == "BMOPFTools")
+info.is_tracking_repo && info.git_revision == source["rev"] ||
+    error("Resolved BMOPFTools does not match the requested source commit")
+println("BMOPFTools ", info.git_revision, " at ", info.source)
