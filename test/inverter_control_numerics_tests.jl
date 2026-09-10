@@ -16,6 +16,11 @@ function _controller_numerics_case(net, device, request; s_base=1e6, start_facto
     # These checks require strict LOCALLY_SOLVED termination. Do not let the
     # default acceptable-level heuristic stop at a looser tolerance first.
     set_optimizer_attribute(model, "acceptable_iter", 0)
+    # The base sweep spans very different variable and constraint scales.
+    # Prefer numerical stability over sparse fill-in from the first solve:
+    # https://coin-or.github.io/Ipopt/OPTIONS.html#OPT_mumps_pivtol
+    set_optimizer_attribute(model, "linear_solver", "mumps")
+    set_optimizer_attribute(model, "mumps_pivtol", 1e-2)
     set_optimizer_attribute(model, "max_iter", 500)
     for v in all_variables(model)
         start = start_value(v)
