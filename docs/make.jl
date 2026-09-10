@@ -51,8 +51,6 @@ makedocs(
         ],
         "Function formulations" => [
             "Overview" => "formulations/index.md",
-            "LinDist3Flow BMOPF prototype" => "formulations/lindist3flow.md",
-            "LinDist3Flow component model" => "formulations/lindist3flow_components.md",
             "Control intent, compilation and solvers" => "formulations/compilation.md",
             "Bounds and relation-aware lowering" => "formulations/bounds_and_relations.md",
             "Tolerances and whole-model solver choice" => "formulations/tolerances_and_solvers.md",
@@ -63,6 +61,10 @@ makedocs(
             "Implement a smoothing family" => "formulations/extensions.md",
             "Formulation API" => "formulations/api.md",
             "References and related software" => "formulations/references.md",
+        ],
+        "LinDist3Flow" => [
+            "Formulation and usage" => "formulations/lindist3flow.md",
+            "Component models" => "formulations/lindist3flow_components.md",
         ],
         "Component models" => [
             "Storage & EVs"     => "components/devices.md",

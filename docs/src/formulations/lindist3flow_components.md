@@ -395,6 +395,18 @@ For compactness define the two native cone templates
 \quad\Longleftrightarrow\quad p^2+q^2\le wI^2.
 ```
 
+The builder stamps the algebraically identical, numerically conditioned form
+
+```math
+[I w/\bar V,\ I\bar V/2,\ p,\ q]\in\mathcal Q_4^r,
+```
+
+where ``\bar V>0`` is the magnitude of the fixed voltage reference for that
+terminal or winding channel. The reciprocal scaling of the first two rotated-
+cone axes cancels exactly, so ``\bar V`` does not alter the feasible set. It
+keeps raw-SI cone coordinates on the apparent-power scale and is unnecessary
+but harmless in per unit.
+
 The model uses the following complete set of conic bounds.
 
 **Generators.** For every channel ``k`` with declared ratings,

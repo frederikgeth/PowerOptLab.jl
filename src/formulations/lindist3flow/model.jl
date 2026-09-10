@@ -274,15 +274,22 @@ end
 Stamp ``p^2+q^2 ≤ w I_max^2`` as a native rotated SOC.
 
 `voltage_squared` may be a bus `w` variable or an affine fixed-angle winding-
-voltage closure. The cone itself is not outer-linearized.
+voltage closure. `reference_voltage` rescales the two nonnegative cone axes
+reciprocally, so it changes neither the feasible set nor the exact current
+limit while keeping SI coefficients near the power-flow scale. The cone itself
+is not outer-linearized.
 """
 function _l3f_add_current_cone!(model, constraints, family, key,
-                                p, q, voltage_squared, rating)
+                                p, q, voltage_squared, rating, reference_voltage)
     rating === nothing && return
     imax = Float64(rating)
+    vref = Float64(reference_voltage)
+    isfinite(vref) && vref > 0 || throw(ArgumentError(
+        "current-limit voltage scale must be finite and positive"))
     _l3f_register_constraint!(constraints, family, key,
         @constraint(model,
-            [voltage_squared, imax^2 / 2, p, q] in JuMP.RotatedSecondOrderCone()))
+            [imax / vref * voltage_squared, imax * vref / 2, p, q]
+            in JuMP.RotatedSecondOrderCone()))
 end
 
 """Affine fixed-angle approximation of one physical channel's `|D*v|²`."""
@@ -425,7 +432,7 @@ function _l3f_open_delta_limits!(model, constraints, edge, transformer,
                 _l3f_add_current_cone!(model, constraints,
                     :transformer_current,
                     (edge.subtype, edge.id, original_side, j),
-                    p, q, wterminal, rating)
+                    p, q, wterminal, rating, vterminal)
             end
         end
     end
@@ -520,8 +527,9 @@ function _l3f_build_model(net, topology, reference, report, optimizer, options;
                 (gid, k), p, q, smax)
             w_channel = _l3f_winding_voltage_squared(D, k, vbar,
                 String(gen["bus"]), tm, w)
+            v_channel = abs(sum(D[k, j] * vbar[j] for j in eachindex(vbar)))
             _l3f_add_current_cone!(model, constraints, :generator_current,
-                (gid, k), p, q, w_channel, imax)
+                (gid, k), p, q, w_channel, imax, v_channel)
         end
     end
     variables[:p_generator] = p_generator; variables[:q_generator] = q_generator
@@ -546,7 +554,7 @@ function _l3f_build_model(net, topology, reference, report, optimizer, options;
             _l3f_add_power_circle!(model, constraints, :source_apparent_power,
                 (sid, k), p, q, smax)
             _l3f_add_current_cone!(model, constraints, :source_current,
-                (sid, k), p, q, w[key], imax)
+                (sid, k), p, q, w[key], imax, abs(reference.voltage[key]))
         end
     end
     variables[:p_source] = p_source; variables[:q_source] = q_source
@@ -583,13 +591,12 @@ function _l3f_build_model(net, topology, reference, report, optimizer, options;
                     :transformer_apparent_power,
                     (edge.subtype, edge.id, "from", 1), parent_p, parent_q,
                     get(transformer, "s_rating", nothing))
+                from_bus, from_tm = _l3f_physical_endpoint(transformer, "from")
                 _l3f_add_current_cone!(model, constraints, :transformer_current,
                     (edge.subtype, edge.id, "from", 1), parent_p, parent_q,
-                    begin
-                        bus, tm = _l3f_physical_endpoint(transformer, "from")
-                        w[(bus, only(tm))]
-                    end,
-                    _l3f_scalar_or_indexed(transformer, "i_max_from", 1))
+                    w[(from_bus, only(from_tm))],
+                    _l3f_scalar_or_indexed(transformer, "i_max_from", 1),
+                    abs(reference.voltage[(from_bus, only(from_tm))]))
                 to_bus, to_tm = _l3f_physical_endpoint(transformer, "to")
                 for phi in eachindex(edge.child_map)
                     child_ep, child_eq = _l3f_total_endpoint_power(
@@ -598,7 +605,8 @@ function _l3f_build_model(net, topology, reference, report, optimizer, options;
                     _l3f_add_current_cone!(model, constraints, :transformer_current,
                         (edge.subtype, edge.id, "to", phi), child_ep, child_eq,
                         w[(to_bus, to_tm[phi])],
-                        _l3f_scalar_or_indexed(transformer, "i_max_to", phi))
+                        _l3f_scalar_or_indexed(transformer, "i_max_to", phi),
+                        abs(reference.voltage[(to_bus, to_tm[phi])]))
                 end
             elseif edge.subtype == "open_delta_regulator"
                 _l3f_open_delta_limits!(model, constraints, edge, transformer,
@@ -641,11 +649,13 @@ function _l3f_build_model(net, topology, reference, report, optimizer, options;
                     _l3f_add_current_cone!(model, constraints, :transformer_current,
                         (edge.subtype, edge.id, "from", phi), from_p, from_q,
                         w[(from_bus, from_tm[phi])],
-                        _l3f_scalar_or_indexed(transformer, "i_max_from", phi))
+                        _l3f_scalar_or_indexed(transformer, "i_max_from", phi),
+                        abs(reference.voltage[(from_bus, from_tm[phi])]))
                     _l3f_add_current_cone!(model, constraints, :transformer_current,
                         (edge.subtype, edge.id, "to", phi), to_p, to_q,
                         w[(to_bus, to_tm[phi])],
-                        _l3f_scalar_or_indexed(transformer, "i_max_to", phi))
+                        _l3f_scalar_or_indexed(transformer, "i_max_to", phi),
+                        abs(reference.voltage[(to_bus, to_tm[phi])]))
                 end
             elseif edge.subtype == "grounded_wye_wye"
                 # Local grounded YY declares a total three-phase bank rating;
@@ -669,11 +679,13 @@ function _l3f_build_model(net, topology, reference, report, optimizer, options;
                     _l3f_add_current_cone!(model, constraints, :transformer_current,
                         (edge.subtype, edge.id, "from", phi), from_p, from_q,
                         w[(from_bus, from_tm[phi])],
-                        _l3f_scalar_or_indexed(transformer, "i_max_from", phi))
+                        _l3f_scalar_or_indexed(transformer, "i_max_from", phi),
+                        abs(reference.voltage[(from_bus, from_tm[phi])]))
                     _l3f_add_current_cone!(model, constraints, :transformer_current,
                         (edge.subtype, edge.id, "to", phi), to_p, to_q,
                         w[(to_bus, to_tm[phi])],
-                        _l3f_scalar_or_indexed(transformer, "i_max_to", phi))
+                        _l3f_scalar_or_indexed(transformer, "i_max_to", phi),
+                        abs(reference.voltage[(to_bus, to_tm[phi])]))
                 end
             elseif edge.subtype == "single_phase_autotransformer"
                 # BMOPFTools defines the nameplate on bare through power. Its
@@ -704,11 +716,13 @@ function _l3f_build_model(net, topology, reference, report, optimizer, options;
                         (edge.subtype, edge.id, "from", phi),
                         from_terminal_p, from_terminal_q,
                         w[(from_bus, from_tm[phi])],
-                        _l3f_scalar_or_indexed(transformer, "i_max_from", phi))
+                        _l3f_scalar_or_indexed(transformer, "i_max_from", phi),
+                        abs(reference.voltage[(from_bus, from_tm[phi])]))
                     _l3f_add_current_cone!(model, constraints, :transformer_current,
                         (edge.subtype, edge.id, "to", phi), to_p, to_q,
                         w[(to_bus, to_tm[phi])],
-                        _l3f_scalar_or_indexed(transformer, "i_max_to", phi))
+                        _l3f_scalar_or_indexed(transformer, "i_max_to", phi),
+                        abs(reference.voltage[(to_bus, to_tm[phi])]))
                 end
             else
                 # Reconstruct power entering each physical endpoint. The
@@ -738,11 +752,13 @@ function _l3f_build_model(net, topology, reference, report, optimizer, options;
                     _l3f_add_current_cone!(model, constraints, :transformer_current,
                         (edge.subtype, edge.id, "from", phi), from_p, from_q,
                         w[(from_bus, from_tm[phi])],
-                        _l3f_scalar_or_indexed(transformer, "i_max_from", phi))
+                        _l3f_scalar_or_indexed(transformer, "i_max_from", phi),
+                        abs(reference.voltage[(from_bus, from_tm[phi])]))
                     _l3f_add_current_cone!(model, constraints, :transformer_current,
                         (edge.subtype, edge.id, "to", phi), to_p, to_q,
                         w[(to_bus, to_tm[phi])],
-                        _l3f_scalar_or_indexed(transformer, "i_max_to", phi))
+                        _l3f_scalar_or_indexed(transformer, "i_max_to", phi),
+                        abs(reference.voltage[(to_bus, to_tm[phi])]))
                 end
             end
             continue
@@ -789,10 +805,12 @@ function _l3f_build_model(net, topology, reference, report, optimizer, options;
                 (edge.id, child_side, phi), child_p, child_q, smax)
             _l3f_add_current_cone!(model, constraints, :line_current,
                 (edge.id, parent_side, phi), parent_p, parent_q,
-                w[(edge.parent, edge.parent_map[phi])], imax)
+                w[(edge.parent, edge.parent_map[phi])], imax,
+                abs(reference.voltage[(edge.parent, edge.parent_map[phi])]))
             _l3f_add_current_cone!(model, constraints, :line_current,
                 (edge.id, child_side, phi), child_p, child_q,
-                w[(edge.child, edge.child_map[phi])], imax)
+                w[(edge.child, edge.child_map[phi])], imax,
+                abs(reference.voltage[(edge.child, edge.child_map[phi])]))
         end
     end
 

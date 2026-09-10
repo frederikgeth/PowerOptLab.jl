@@ -565,11 +565,24 @@ end
         options=L3FOptions(validate_nonlinear=false, objective=:cost,
                            per_unit=false),
         solver_options=_l3f_clarabel())
+    @test result.solve.optimal
+    @test result_si.solve.optimal
     # The current cone uses the solved terminal voltage, not the 230 V
     # reference; voltage drop therefore lowers the available real power.
     live_radius = 10.0 * sqrt(result.buses["load"]["a"]["w"])
     @test result.generators["pv"]["pg"] ≈ [live_radius] atol=1e-2
     @test result_si.generators["pv"]["pg"] ≈ result.generators["pv"]["pg"] atol=1e-2
+    # The SI cone is the exact same inequality, reciprocally scaled about the
+    # 230 V reference so Clarabel does not see axes spanning several orders of
+    # magnitude: [I*w/Vref, I*Vref/2, p, q] ∈ Qr.
+    current_build_si = build_l3f_opf(current_capped, Clarabel.Optimizer;
+        options=L3FOptions(validate_nonlinear=false, objective=:cost,
+                           per_unit=false))
+    current_cone_si = JuMP.constraint_object(
+        current_build_si.constraints[:generator_current][("pv", 1)]).func
+    @test JuMP.coefficient(current_cone_si[1],
+        current_build_si.variables[:w][("load", "a")]) ≈ 10.0 / 230.0
+    @test JuMP.constant(current_cone_si[2]) ≈ 10.0 * 230.0 / 2
 
     # BMOPF types transformer current limits as `number[]`; both shapes are
     # accepted on a single-conductor device and mean the same thing.
