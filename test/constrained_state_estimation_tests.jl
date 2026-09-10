@@ -789,3 +789,16 @@ end
 end
 
 include("compiled_se_review_tests.jl")
+
+@testset "Compiled SE: merit reduction at the numerical feasibility floor" begin
+    # A feasible roundoff fluctuation must not outweigh a real improvement.
+    before = SEEvaluation(ComplexF64[], ComplexF64[], ComplexF64[], Float64[], [1.0], Float64[], [1e-10])
+    after = SEEvaluation(ComplexF64[], ComplexF64[], ComplexF64[], Float64[], [1.0-1e-12], Float64[], [2e-10])
+    @test PowerOptLab._se_merit_reduction(before, after, 10., 1e-8) > 0
+    infeasible = SEEvaluation(ComplexF64[], ComplexF64[], ComplexF64[], Float64[], copy(after.residual), Float64[], [2e-8])
+    @test PowerOptLab._se_merit_reduction(before, infeasible, 10., 1e-8) < 0
+    # An unchanged, large residual must not erase improvement in another row.
+    large = SEEvaluation(ComplexF64[], ComplexF64[], ComplexF64[], Float64[], [1e8,1.0], Float64[], Float64[])
+    improved = SEEvaluation(ComplexF64[], ComplexF64[], ComplexF64[], Float64[], [1e8,0.0], Float64[], Float64[])
+    @test PowerOptLab._se_merit_reduction(large, improved, 10., 1e-8) == 0.5
+end

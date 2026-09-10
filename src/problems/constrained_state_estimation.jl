@@ -794,7 +794,17 @@ function _se_rank_nullspace(A::AbstractMatrix{<:Real}; rtol::Real=sqrt(eps(Float
     rank, collect(F.V[:, rank+1:end])
 end
 
-_se_merit(e::SEEvaluation, μ) = 0.5 * sum(abs2, e.residual) + μ * norm(e.constraints)
+# Once equations meet the requested numerical tolerance, roundoff in Y*V
+# must not compete with the final objective improvement. The same deadband is
+# used in predicted/actual reductions; convergence still checks norm(c) itself.
+_se_violation(c, ctol) = max(norm(c) - ctol, 0.0)
+_se_merit(e::SEEvaluation, μ, ctol=0.0) =
+    0.5 * sum(abs2, e.residual) + μ * _se_violation(e.constraints, ctol)
+function _se_merit_reduction(e::SEEvaluation, trial::SEEvaluation, μ, ctol)
+    # Difference of squares without subtracting two nearly equal objectives.
+    objective = 0.5 * dot(e.residual - trial.residual, e.residual + trial.residual)
+    objective + μ * (_se_violation(e.constraints, ctol) - _se_violation(trial.constraints, ctol))
+end
 
 # A characteristic magnitude, in amperes, for the terms summed into an exact
 # KCL equation.  The constraint residual is a difference of `Y*V` products, so
@@ -978,7 +988,7 @@ function solve_compiled_state_estimator(s::SEStructure, p::SEParameters,
     scale = _se_voltage_scale(s, p, x)
     radius = Float64(initial_radius)
     μ = Float64(penalty)
-    history = [_se_history_entry(0, radius, _se_merit(e, μ), e; penalty=μ)]
+    history = [_se_history_entry(0, radius, _se_merit(e, μ, ctol), e; penalty=μ)]
     rejected = 0
     iterations = 0
 
@@ -1018,12 +1028,12 @@ function solve_compiled_state_estimator(s::SEStructure, p::SEParameters,
             t .= Z * q
         end
         step = n + t
-        model_r = r + H * step
         model_c = c + C * step
         # Ensure predicted feasibility improvement dominates any objective cost.
         # This is a model-based penalty update, not a feasibility certificate.
-        feasibility_gain = norm(c) - norm(model_c)
-        objective_gain = 0.5 * (sum(abs2, r) - sum(abs2, model_r))
+        feasibility_gain = _se_violation(c, ctol) - _se_violation(model_c, ctol)
+        model_change = H * step
+        objective_gain = -dot(r, model_change) - 0.5 * sum(abs2, model_change)
         if feasibility_gain > max(ctol * 0.01, eps(Float64) * norm(c))
             μ = max(μ, 2 * max(0.0, -objective_gain) / feasibility_gain + 1.0)
         end
@@ -1048,7 +1058,7 @@ function solve_compiled_state_estimator(s::SEStructure, p::SEParameters,
         accepted = false
         ρ = -Inf
         if trial !== nothing
-            actual = _se_merit(e, μ) - _se_merit(trial, μ)
+            actual = _se_merit_reduction(e, trial, μ, ctol)
             ρ = actual / predicted
             accepted = isfinite(ρ) && ρ >= acceptance_threshold
         end
@@ -1060,7 +1070,7 @@ function solve_compiled_state_estimator(s::SEStructure, p::SEParameters,
             soc = _se_soc_step(C, defect, scale, 0.5 * reduced_radius; rank_rtol)
             if norm(scale .* (step + soc)) <= radius * (1 + 1e-12)
                 soc_trial = _se_trial_evaluation(s, p, x + step + soc)
-                actual = soc_trial === nothing ? -Inf : _se_merit(e, μ) - _se_merit(soc_trial, μ)
+                actual = soc_trial === nothing ? -Inf : _se_merit_reduction(e, soc_trial, μ, ctol)
                 ρsoc = actual / predicted
                 if isfinite(ρsoc) && ρsoc >= acceptance_threshold
                     step .+= soc
@@ -1076,7 +1086,7 @@ function solve_compiled_state_estimator(s::SEStructure, p::SEParameters,
             e = trial
             rejected = 0
             radius = ρ > 0.75 ? min(2radius, Float64(max_radius)) : radius
-            push!(history, _se_history_entry(iteration, radius, _se_merit(e, μ), e; penalty=μ))
+            push!(history, _se_history_entry(iteration, radius, _se_merit(e, μ, ctol), e; penalty=μ))
 
             # Tangent-space first-order stationarity and exact-equation
             # feasibility are separate conditions; satisfying only one is not
@@ -1251,7 +1261,7 @@ function solve_sparse_state_estimator(s::SEStructure, p::SEParameters,
         _se_invalid_evaluation(s, p), 0, 0, 0, 0, Float64[], NamedTuple[])
     scale = _se_voltage_scale(s, p, x)
     radius = Float64(initial_radius); μ = Float64(penalty)
-    history = [_se_history_entry(0, radius, _se_merit(e, μ), e; penalty=μ)]
+    history = [_se_history_entry(0, radius, _se_merit(e, μ, ctol), e; penalty=μ)]
     λ = zeros(Float64, length(e.constraints))
     rejected = 0
     iterations = 0
@@ -1301,12 +1311,12 @@ function solve_sparse_state_estimator(s::SEStructure, p::SEParameters,
         end
         scaled_norm = norm(scale .* step)
         scaled_norm > radius && scaled_norm > 0 && (step .*= radius / scaled_norm)
-        model_r = r + H * step
         model_c = c + C * step
         # Ensure predicted feasibility improvement dominates any objective cost.
         # This is a model-based penalty update, not a feasibility certificate.
-        feasibility_gain = norm(c) - norm(model_c)
-        objective_gain = 0.5 * (sum(abs2, r) - sum(abs2, model_r))
+        feasibility_gain = _se_violation(c, ctol) - _se_violation(model_c, ctol)
+        model_change = H * step
+        objective_gain = -dot(r, model_change) - 0.5 * sum(abs2, model_change)
         if feasibility_gain > max(ctol * 0.01, eps(Float64) * norm(c))
             μ = max(μ, 2 * max(0.0, -objective_gain) / feasibility_gain + 1.0)
         end
@@ -1324,13 +1334,13 @@ function solve_sparse_state_estimator(s::SEStructure, p::SEParameters,
         end
         accepted = false; ρ = -Inf
         if trial !== nothing
-            ρ = (_se_merit(e, μ) - _se_merit(trial, μ)) / predicted
+            ρ = _se_merit_reduction(e, trial, μ, ctol) / predicted
             accepted = isfinite(ρ) && ρ >= acceptance_threshold
         end
         if accepted
             x .+= step; e = trial; λ = λtrial; rejected = 0
             radius = ρ > 0.75 ? min(2radius, Float64(max_radius)) : radius
-            push!(history, _se_history_entry(iteration, radius, _se_merit(e, μ), e; penalty=μ))
+            push!(history, _se_history_entry(iteration, radius, _se_merit(e, μ, ctol), e; penalty=μ))
         else
             radius *= 0.25; rejected += 1
             radius < min_radius && break

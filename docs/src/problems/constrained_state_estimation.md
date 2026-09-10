@@ -249,6 +249,13 @@ with non-negligible residuals; it is not a formal second-order certificate.
 
 `penalty` is the initial merit weight. Both solvers increase it when a step's
 predicted objective cost would overwhelm its predicted feasibility improvement.
+The merit penalty uses `max(norm(c) - ctol, 0)`, where `ctol` is the same
+absolute/relative feasibility threshold used for convergence. Predicted and
+actual reductions use this identical numerical deadband: roundoff in an
+already feasible KCL equation cannot veto a final objective improvement.
+Convergence still requires both feasibility and stationarity; a small step or
+merit change alone is insufficient. Objective reductions use difference-of-squares
+identities to reduce cancellation near a nonzero-residual optimum.
 The history records the changing penalty and separates measurement from prior
 objectives, so merit values can be interpreted with their associated weight.
 The dense solver uses SVD least-squares steps for rank-deficient systems; the

@@ -165,8 +165,11 @@ if isdefined(Main,:OpenDSSDirect)
                 for (node,k) in s.free_state_map;truth[k]=real(v[node]);truth[nf+k]=imag(v[node]);end
                 voltage_levels = max.(hypot.(truth[1:nf],truth[nf+1:end]),100.)
                 state_levels = vcat(voltage_levels,voltage_levels)
-                rng=MersenneTwister(349)
-                for noisy in (false,true)
+                # Seed 4 reproduces the sparse merit-roundoff stall on macOS;
+                # Linux CI exposed the same failure with clean/seed-349 data.
+                for noise_seed in (name == "SE-IEEE13-finite" ? (0,349,4) : (0,349))
+                    noisy = noise_seed != 0
+                    rng = MersenneTwister(noise_seed)
                     p.measurement_values .= [m.value for m in ms]
                     noisy && (p.measurement_values .+= p.covariance_values .* randn(rng,length(ms)))
                     results=[solver(s,p,x0;max_iterations=250,initial_radius=.5,optimality_tolerance=1e-6) for solver in (solve_compiled_state_estimator,solve_sparse_state_estimator)]
@@ -179,7 +182,7 @@ if isdefined(Main,:OpenDSSDirect)
                         covariance=selected_state_covariance(s,p,result.state,[1])
                         @test covariance[1,1]>=0 && isfinite(covariance[1,1])
                     end
-                    @info "SE oracle metrics" name noisy voltage_error=maximum(abs.(results[1].state-truth)) relative_voltage_error=maximum(abs.(results[1].state-truth)./state_levels) objective=.5sum(abs2,results[1].evaluation.residual)
+                    @info "SE oracle metrics" name noisy noise_seed voltage_error=maximum(abs.(results[1].state-truth)) relative_voltage_error=maximum(abs.(results[1].state-truth)./state_levels) objective=.5sum(abs2,results[1].evaluation.residual)
                     jx,jobj=_se_jump_reference(s,p,x0)
                     @test .5sum(abs2,results[1].evaluation.residual) ≈ jobj atol=1e-5 rtol=1e-5
                     @test maximum(abs.(jx-results[1].state)) < .01
