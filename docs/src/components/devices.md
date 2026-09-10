@@ -32,15 +32,20 @@ E_{t+1} = E_t + \left(\eta^{\text{c}}\, p^{\text{c}}_t - \frac{p^{\text{d}}_t}{\
 \qquad E^{\min} \le E_{t+1} \le E^{\max}.
 ```
 
-Round-trip loss (``\eta < 1``) makes simultaneous charging and discharging
-suboptimal, so the split stays physical without an explicit complementarity
-constraint.
+Efficiencies do **not** guarantee exclusive charging/discharging. Bidirectional
+PE devices now default to `operation=:relaxed`, imposing
+`(p_charge/p_charge_max)*(p_discharge/p_discharge_max) <= 1e-8`.
+This is a finite smooth NLP relaxation with reported mode residuals, not exact
+physical exclusion. `operation=:complementarity` uses a native MPCC pair with
+an external solver such as CCOpt. `:independent` explicitly restores the outer
+relaxation for research comparisons. Zero-rated directions are fixed to zero.
+See [the counterexample and solver tutorial](../ev/modes.md).
 
-This is an economic, not algebraic, exclusion: at unit efficiency or under
-unusual negative-price objectives the split can be degenerate. Studies that need
-an explicit operating-mode guarantee should add a complementarity/disjunctive
-mode formulation rather than interpreting both nonnegative variables as a
-certified physical mode.
+Optional `s_max`, `i_max` and `neutral_current_max` add aggregate apparent-power,
+phase-current and neutral-current limits. Multi-phase PE ports require `i_max`.
+`phase_policy=:equal_power` imposes equal P and Q on each phase; `:independent`
+explicitly permits redistribution within the conductor limits. Disconnected
+ports fix **every** conductor-current component, not just aggregate power.
 
 The solve validates finite nonnegative power limits, ordered energy bounds,
 efficiencies in `(0, 1]`, terminal existence in every snapshot, and an EV
@@ -93,3 +98,16 @@ vehicle discharge into expensive periods subject to its departure requirement.
 
 See the API reference for the full field list of [`StorageDevice`](@ref) and
 [`EVDevice`](@ref).
+
+
+## Dedicated vehicle, equipment and session objects
+
+Use [`EV`](@ref), [`EVSE`](@ref) and [`ChargingSession`](@ref) for fixed AC outlet
+assignments, capability/permission intersections, occupancy conflicts, and
+optional state-dependent charging acceptance. Start with the
+[scientific EV guide](../ev/index.md), its executable tutorials and annotated
+[literature evidence](../ev/literature.md).
+
+PE results expose `energy_wh` alongside the compatible Wh-valued `soc`, phase
+currents/powers and independent physical residuals in `diagnostics`. Inspect
+those and the normalized solve status before interpreting a schedule.

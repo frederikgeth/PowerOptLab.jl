@@ -36,6 +36,14 @@ inter-temporal state of charge. Powers are SI watts, energies SI watt-hours.
 - `cyclic=true` — require the terminal state of charge to equal `energy_init`.
 - `energy_final=nothing` — if set, pin the terminal energy to this value (Wh),
   overriding `cyclic`.
+- `s_max=nothing`, `i_max=nothing`, `neutral_current_max=nothing` — optional
+  aggregate VA, per-phase A and neutral A limits. Multi-phase devices require
+  `i_max`; legacy single-phase devices may retain a power-only abstraction.
+- `phase_policy=:equal_power` — equal P and Q on each phase; `:independent`
+  explicitly permits phase redistribution within the conductor limits.
+- `operation=:relaxed`, `complementarity_tolerance=1e-8` — normalized product
+  bound on bidirectional operation. `:complementarity` requires an MPCC solver;
+  `:independent` is an explicitly unphysical outer relaxation in general.
 """
 Base.@kwdef struct StorageDevice <: AbstractDevice
     id::String
@@ -44,6 +52,13 @@ Base.@kwdef struct StorageDevice <: AbstractDevice
     neutral::Union{String,Nothing} = "n"
     p_charge_max::Float64
     p_discharge_max::Float64
+    # AC capability and numerical operating-mode policy.
+    s_max::Union{Float64,Nothing} = nothing
+    i_max::Union{Float64,Nothing} = nothing
+    neutral_current_max::Union{Float64,Nothing} = nothing
+    phase_policy::Symbol = :equal_power
+    operation::Symbol = :relaxed
+    complementarity_tolerance::Float64 = 1e-8
     q_min::Float64 = 0.0
     q_max::Float64 = 0.0
     energy_max::Float64
@@ -75,7 +90,13 @@ for bidirectional (V2G) charging; the default `0.0` gives unidirectional (V1G).
 - `departure_period=nothing` — period index by whose end `departure_energy` must
   be met; `nothing` ⇒ the end of the horizon.
 - `phase_terminals`, `neutral`, `energy_min`, `q_min`, `q_max`,
-  `eff_charge`, `eff_discharge` — as [`StorageDevice`](@ref).
+  `eff_charge`, `eff_discharge`, `s_max`, `i_max`, `neutral_current_max`,
+  `phase_policy`, `operation`, `complementarity_tolerance` — as [`StorageDevice`](@ref).
+- `energy_final=nothing` — optional equality on the horizon-end stored energy.
+
+For equipment capability intersections and assignment validation, use
+[`ChargingSession`](@ref), [`EV`](@ref), and [`EVSE`](@ref). The legacy availability
+mask remains independent of its energy deadline; it does not represent trips.
 """
 Base.@kwdef struct EVDevice <: AbstractDevice
     id::String
@@ -84,6 +105,13 @@ Base.@kwdef struct EVDevice <: AbstractDevice
     neutral::Union{String,Nothing} = "n"
     p_charge_max::Float64
     p_discharge_max::Float64 = 0.0
+    # AC capability and numerical operating-mode policy.
+    s_max::Union{Float64,Nothing} = nothing
+    i_max::Union{Float64,Nothing} = nothing
+    neutral_current_max::Union{Float64,Nothing} = nothing
+    phase_policy::Symbol = :equal_power
+    operation::Symbol = :relaxed
+    complementarity_tolerance::Float64 = 1e-8
     q_min::Float64 = 0.0
     q_max::Float64 = 0.0
     energy_max::Float64
@@ -94,6 +122,7 @@ Base.@kwdef struct EVDevice <: AbstractDevice
     available::Vector{Bool}
     departure_energy::Float64
     departure_period::Union{Int,Nothing} = nothing
+    energy_final::Union{Float64,Nothing} = nothing
 end
 
 # Uniform view over the fields the port-stamping and SOC-linking code needs, so
@@ -156,6 +185,21 @@ function _validate_storage_values(d)
         "device '$(d.id)' eff_charge must lie in (0, 1]"))
     0 < d.eff_discharge <= 1 || throw(ArgumentError(
         "device '$(d.id)' eff_discharge must lie in (0, 1]"))
+    for field in (:s_max, :i_max, :neutral_current_max)
+        value = getfield(d, field)
+        value === nothing || (isfinite(value) && value > 0) || throw(ArgumentError(
+            "device '$(d.id)' $field must be finite and positive when supplied"))
+    end
+    d.phase_policy in (:equal_power, :independent) || throw(ArgumentError(
+        "phase_policy must be :equal_power or :independent"))
+    length(d.phase_terminals) == 1 || d.i_max !== nothing || throw(ArgumentError(
+        "multi-phase device '$(d.id)' requires i_max (aggregate power does not bound conductor currents)"))
+    d.neutral !== nothing || d.neutral_current_max === nothing || throw(ArgumentError(
+        "neutral_current_max requires a neutral terminal"))
+    d.operation in (:relaxed, :complementarity, :independent) || throw(ArgumentError(
+        "operation must be :relaxed, :complementarity, or :independent"))
+    isfinite(d.complementarity_tolerance) && d.complementarity_tolerance > 0 ||
+        throw(ArgumentError("complementarity_tolerance must be finite and positive; use :complementarity for exact exclusion"))
     return nothing
 end
 
@@ -182,6 +226,10 @@ function validate_device(d::EVDevice, nets; periods::Integer=length(nets))
     isfinite(d.departure_energy) && d.energy_min <= d.departure_energy <= d.energy_max ||
         throw(ArgumentError(
             "EV '$(d.id)' departure_energy must be finite and within its energy bounds"))
+    if d.energy_final !== nothing
+        isfinite(d.energy_final) && d.energy_min <= d.energy_final <= d.energy_max ||
+            throw(ArgumentError("EV '$(d.id)' energy_final must lie within energy bounds"))
+    end
     dp = d.departure_period === nothing ? periods : d.departure_period
     1 <= dp <= periods || throw(ArgumentError(
         "EV '$(d.id)': departure_period=$(d.departure_period) out of range 1:$periods"))
@@ -205,6 +253,12 @@ struct PortHandle
     pd            # discharge power variable (≥ 0)
     p             # net AC injection expression = pd − pc (discharge positive)
     q             # net AC reactive injection expression
+    currents      # vector of (real, imaginary) phase currents in model units
+    phase_p
+    phase_q
+    sb::Float64
+    ib::Float64
+    active::Bool
 end
 
 # s_base for a context (VA), or 1.0 for an SI solve.
@@ -239,6 +293,11 @@ function _stamp_port!(ctx, dev; active::Bool=true)
     phases = _dev_phases(dev)
     neutral = _dev_neutral(dev)
     id  = _dev_id(dev)
+    bases = _opf_bases(ctx)
+    ib = bases === nothing ? 1.0 : bases.i_base[bus]
+    currents = Tuple{JuMP.VariableRef,JuMP.VariableRef}[]
+    phase_p = JuMP.QuadExpr[]
+    phase_q = JuMP.QuadExpr[]
 
     # Per-phase current injections summed into the aggregate device power.
     P = zero(JuMP.QuadExpr)
@@ -247,34 +306,80 @@ function _stamp_port!(ctx, dev; active::Bool=true)
         cr = JuMP.@variable(m, base_name = "cr_$(id)_$(ph)")
         ci = JuMP.@variable(m, base_name = "ci_$(id)_$(ph)")
         dvr, dvi = _dv(ctx, bus, ph, neutral)
-        P += JuMP.@expression(m, dvr*cr + dvi*ci)      # injected into network
-        Q += JuMP.@expression(m, dvi*cr - dvr*ci)
+        push!(currents, (cr, ci))
+        push!(phase_p, JuMP.@expression(m, dvr*cr + dvi*ci))
+        push!(phase_q, JuMP.@expression(m, dvi*cr - dvr*ci))
+        P += phase_p[end]
+        Q += phase_q[end]
+        if !active
+            JuMP.fix(cr, 0.0; force=true)
+            JuMP.fix(ci, 0.0; force=true)
+        elseif dev.i_max !== nothing
+            JuMP.@constraint(m, (cr*ib/dev.i_max)^2 + (ci*ib/dev.i_max)^2 <= 1.0)
+        end
         BMOPFTools.add_terminal_injection!(ctx, bus, ph, cr, ci)
         if neutral !== nothing
             BMOPFTools.add_terminal_injection!(ctx, bus, neutral, -cr, -ci)
         end
     end
 
-    # Charge/discharge power split (per-unit). Round-trip loss (eff < 1) makes
-    # simultaneous pc,pd > 0 suboptimal, so the split stays physical without a
-    # complementarity constraint.
+    # Efficiencies do not guarantee exclusive modes. A normalized product
+    # relaxation is explicit; exact exclusion uses native MOI complementarity.
     pc = JuMP.@variable(m, base_name = "pc_$(id)", lower_bound = 0.0)
     pd = JuMP.@variable(m, base_name = "pd_$(id)", lower_bound = 0.0)
     if active
-        JuMP.@constraint(m, pc <= _dev_pcmax(dev) / sb)
-        JuMP.@constraint(m, pd <= _dev_pdmax(dev) / sb)
+        if _dev_pcmax(dev) == 0
+            JuMP.fix(pc, 0.0; force=true)
+        else
+            JuMP.@constraint(m, pc <= _dev_pcmax(dev) / sb)
+        end
+        if _dev_pdmax(dev) == 0
+            JuMP.fix(pd, 0.0; force=true)
+        else
+            JuMP.@constraint(m, pd <= _dev_pdmax(dev) / sb)
+        end
         JuMP.@constraint(m, P == pd - pc)
         JuMP.@constraint(m, Q >= _dev_qmin(dev) / sb)
         JuMP.@constraint(m, Q <= _dev_qmax(dev) / sb)
+        if dev.s_max !== nothing
+            JuMP.@constraint(m, (P*sb/dev.s_max)^2 + (Q*sb/dev.s_max)^2 <= 1.0)
+        end
+        if dev.neutral_current_max !== nothing
+            nr = sum(c[1] for c in currents)
+            ni = sum(c[2] for c in currents)
+            JuMP.@constraint(m, (nr*ib/dev.neutral_current_max)^2 + (ni*ib/dev.neutral_current_max)^2 <= 1.0)
+        end
+        if dev.phase_policy == :equal_power
+            for k in 2:length(phases)
+                JuMP.@constraint(m, phase_p[k] == phase_p[1])
+                JuMP.@constraint(m, phase_q[k] == phase_q[1])
+            end
+        end
+        if dev.p_charge_max > 0 && dev.p_discharge_max > 0
+            a = JuMP.@expression(m, pc * sb / dev.p_charge_max)
+            b = JuMP.@expression(m, pd * sb / dev.p_discharge_max)
+            if dev.operation == :relaxed
+                JuMP.@constraint(m, a * b <= dev.complementarity_tolerance)
+            elseif dev.operation == :complementarity
+                # MathOptComplements requires variable pairs on this path.
+                # Explicit normalized variables also decouple the MPCC scale
+                # from the network power base in both SI and per-unit solves.
+                ac = JuMP.@variable(m, lower_bound=0.0, base_name="mode_charge_$(id)")
+                bd = JuMP.@variable(m, lower_bound=0.0, base_name="mode_discharge_$(id)")
+                JuMP.@constraint(m, ac == a)
+                JuMP.@constraint(m, bd == b)
+                JuMP.@constraint(m, [ac, bd] in JuMP.MOI.Complements(2))
+            end
+        end
     else
         # Unplugged: no exchange with the grid this period.
-        JuMP.@constraint(m, pc == 0.0)
-        JuMP.@constraint(m, pd == 0.0)
+        JuMP.fix(pc, 0.0; force=true)
+        JuMP.fix(pd, 0.0; force=true)
         JuMP.@constraint(m, P == 0.0)
         JuMP.@constraint(m, Q == 0.0)
     end
 
-    return PortHandle(pc, pd, P, Q)
+    return PortHandle(pc, pd, P, Q, currents, phase_p, phase_q, sb, ib, active)
 end
 
 stamp_device!(ctx, device::Union{StorageDevice,EVDevice}; period::Integer=1,

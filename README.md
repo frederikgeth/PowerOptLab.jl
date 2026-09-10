@@ -44,7 +44,7 @@ specific estimation, control, or verification experiment via `model_hook!` /
 | Capability | Entry point | Reuses |
 |---|---|---|
 | **Storage / battery** devices with state of charge | [`StorageDevice`](src/components/devices.jl) | `model_hook!` current injection + KCL |
-| **EV charging** (V1G / V2G) with availability & departure energy | [`EVDevice`](src/components/devices.jl) | storage device + per-period masking |
+| **EV charging** (V1G / V2G), equipment and fixed sessions | [`EVDevice`](src/components/devices.jl), [`EV` / `EVSE` / `ChargingSession`](src/components/evse.jl) | AC capability, energy, acceptance envelopes and explicit mode formulations |
 | **Advanced inverter** (internal-node IBR prototype) | [`AdvancedInverter`](src/components/advanced_inverter.jl) | internal node + filter / EMF / losses / ripple |
 | **IVQ battery** (current–voltage–charge model) | [`IVQBattery`](src/components/ivq_battery.jl) | battery chemistry + advanced inverter |
 
@@ -90,7 +90,12 @@ ev = EVDevice(id="ev1", bus="bus1", p_charge_max=20e3,        # V1G (charge only
 res = solve_multiperiod_opf(nets, [ev]; dt_h=1.0)
 ```
 
-Set `p_discharge_max > 0` for bidirectional (V2G) charging.
+Set `p_discharge_max > 0` for bidirectional (V2G) charging. The default
+`operation=:relaxed` bounds normalized simultaneous operation; exact mathematical
+exclusion uses `:complementarity` with CCOpt. Efficiencies alone do not guarantee
+exclusive modes. Use `EV`, `EVSE` and `ChargingSession` for equipment capability
+intersections, fixed outlet assignments and optional acceptance curves. See the
+[scientific EV guide and tutorials](docs/src/ev/index.md).
 
 ### State estimation from noisy measurements
 

@@ -1,0 +1,66 @@
+bmopftools_revision = "72e6cec22a66cf376c37ec4d64aef350b9f1100d"
+julia_version = "1.12.6"
+
+[packages]
+CCOpt = "0.1.0"
+JuMP = "1.30.1"
+MadNLP = "0.10.1"
+MathOptComplements = "0.1.1"
+MathOptInterface = "1.53.0"
+NLPModelsJuMP = "0.13.6"
+
+[[runs]]
+case = "full_battery"
+per_unit = true
+raw_candidate_charge_w = 1.1604699640785692
+raw_candidate_discharge_w = 0.9399806709058843
+raw_candidate_energy_balance_wh = -2.4926727348884015e-12
+raw_candidate_mode_minimum = 9.399806709058843e-5
+stationarity_certificate = "not_independently_assessed"
+strict_solver_success = false
+termination_status = "ALMOST_LOCALLY_SOLVED"
+[[runs]]
+case = "full_battery"
+per_unit = false
+raw_candidate_charge_w = 1.1604699641110503
+raw_candidate_discharge_w = 0.9399806709324514
+raw_candidate_energy_balance_wh = -2.7784441414269168e-12
+raw_candidate_mode_minimum = 9.399806709324515e-5
+stationarity_certificate = "not_independently_assessed"
+strict_solver_success = false
+termination_status = "ALMOST_LOCALLY_SOLVED"
+[[runs]]
+case = "replenished_cycle"
+charge_w = [10000.009958886112, -7.137409382620865e-5]
+discharge_w = [-8.243372845037253e-5, 8100.008091318462]
+energy_wh = [20000.0, 29000.009054590537, 20000.0]
+mode_minimum = [-8.243372845037254e-9, -7.137409382620865e-9]
+per_unit = true
+stationarity_certificate = "not_independently_assessed"
+strict_solver_success = true
+termination_status = "LOCALLY_SOLVED"
+[[runs]]
+acceptance_violation_w = [0.010491293638551724]
+case = "nonconcave_acceptance"
+charge_w = [3600.0083930349106]
+energy_wh = [10000.0, 13600.008393034912]
+nlp_tolerance = 1.0e-7
+per_unit = true
+stationarity_certificate = "not_independently_assessed"
+strict_solver_success = true
+termination_status = "LOCALLY_SOLVED"
+
+[solver_options]
+max_iter = 1000
+"relaxation_update.sigma_min" = 1.0e-12
+tol = 1.0e-8
+
+[source_sha256]
+"Project.toml" = "e5d18b2e772fbdda86d3c3a27e7fda76cbaee28f97be8b9b0c4b558ec8d43011"
+"examples/ev_charging.jl" = "25eee354792314edb37fa9780409bfb64311670579a8bfeba5aef6abd91e0030"
+"scripts/ev/ccopt.jl" = "5708b19cf8e77309158917eb85f90987565a074318737baff7045fa97b7f24a2"
+"src/components/devices.jl" = "295ee2aed266b01165ccc0c1ea0238e7d22ed41d4a0fb5f77420d2d1792fe793"
+"src/components/evse.jl" = "dfafe56bccafa827a7c80088a57a20cc25493c389f811a6db4a80fce8333d047"
+"src/interfaces.jl" = "396e9124b6c0acd46c556d05574eab9a67735b70b1fa081139e4e33a560cef38"
+"src/problems/multiperiod.jl" = "b811d97bb221eead33acbc43d60cd1a1c13e4c366ec559c60b247693a00b0495"
+"test/fixtures.jl" = "37b3d2d01330aa9f25097911e7d81acfeec190a87c5e61083893e372aec11e9f"
