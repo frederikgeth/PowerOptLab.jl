@@ -645,7 +645,8 @@ end
     # pseudo-inverse would silently report confidence that does not exist.
     p = SEParameters(s, ms)
     @test observability_diagnostics(s, p, x).unobservable_dimension == 2
-    @test_throws ArgumentError selected_state_covariance(s, p, x, [1])
+    @test selected_state_covariance(s, p, x, [1]) ≈ fill(0.01, 1, 1)
+    @test_throws ArgumentError selected_state_covariance(s, p, x, [2])
 
     # A prior restores rank -- and the covariance says where the answer came
     # from: the measured bus keeps its meter's sigma, the unmeasured bus
@@ -708,7 +709,7 @@ end
     conds = Float64[]
     for imag_a in (60.0, 20.0, 5.0, 1.0, 1e-2, 1e-4)
         x, s, p = cm_setup(imag_a * cis(-0.451))
-        sv = svdvals(residual_jacobian(s, p, x))
+        sv = svdvals(collect(Float64, residual_jacobian(s, p, x)))
         push!(conds, maximum(sv) / minimum(sv))
     end
     @test all(c -> 4.0 < c < 6.0, conds)          # converges to about 5.6
@@ -723,13 +724,13 @@ end
     # sensitivities are exactly collinear even though the load is not at unity PF.
     aligned_current = 40.0 * cis(-angle(z))
     x, s, p = cm_setup(aligned_current, z)
-    @test minimum(svdvals(residual_jacobian(s, p, x))) < 1e-10
+    @test minimum(svdvals(collect(Float64, residual_jacobian(s, p, x)))) < 1e-10
     @test observability_diagnostics(s, p, x).unobservable_dimension == 1
 
     # Conversely, source-referenced unity PF is not the degeneracy for a line
     # with reactance: the impedance rotates the current-magnitude sensitivity.
     x, s, p = cm_setup(40.0 + 0.0im, z)
-    @test minimum(svdvals(residual_jacobian(s, p, x))) > 1.0
+    @test minimum(svdvals(collect(Float64, residual_jacobian(s, p, x)))) > 1.0
     @test observability_diagnostics(s, p, x).unobservable_dimension == 0
 end
 
@@ -742,7 +743,7 @@ end
     conds = Float64[]
     for phi in (-0.6, -0.3, -0.1, -0.03, -0.01, -0.003)
         x, s, p = cm_setup(40.0 * cis(phi))
-        sv = svdvals(residual_jacobian(s, p, x))
+        sv = svdvals(collect(Float64, residual_jacobian(s, p, x)))
         push!(conds, maximum(sv) / minimum(sv))
         @test observability_diagnostics(s, p, x).unobservable_dimension == 0
     end
@@ -753,11 +754,11 @@ end
 
     # Exactly at unity power factor the rows are parallel: rank 1 of 2, at 40 A.
     x, s, p = cm_setup(40.0 + 0.0im)
-    sv = svdvals(residual_jacobian(s, p, x))
+    sv = svdvals(collect(Float64, residual_jacobian(s, p, x)))
     @test minimum(sv) < 1e-10
     d = observability_diagnostics(s, p, x)
     @test d.unobservable_dimension == 1
-    @test_throws ArgumentError selected_state_covariance(s, p, x, [1])
+    @test_throws ArgumentError selected_state_covariance(s, p, x, [2])
 
     # A rectangular voltage pair is completely insensitive to the power factor.
     for phi in (-0.6, -0.01, 0.0)
@@ -765,7 +766,7 @@ end
         ms = [Measurement(kind=:vr, bus="b", reference=nothing, value=real(V), sigma=0.01),
               Measurement(kind=:vi, bus="b", reference=nothing, value=imag(V), sigma=0.01)]
         sr = compile_state_estimator(cm_net(), ms)
-        sv = svdvals(residual_jacobian(sr, SEParameters(sr, ms), [real(V), imag(V)]))
+        sv = svdvals(collect(Float64, residual_jacobian(sr, SEParameters(sr, ms), [real(V), imag(V)])))
         @test maximum(sv) / minimum(sv) ≈ 1.0 rtol=1e-9
     end
 end
@@ -785,4 +786,19 @@ end
     @test issorted(sds)
     @test sds[1] < 1e-4                     # 0.6 rad power factor: tight
     @test sds[end] > 1e-2                   # 0.003 rad: two orders worse
+end
+
+include("compiled_se_review_tests.jl")
+
+@testset "Compiled SE: merit reduction at the numerical feasibility floor" begin
+    # A feasible roundoff fluctuation must not outweigh a real improvement.
+    before = SEEvaluation(ComplexF64[], ComplexF64[], ComplexF64[], Float64[], [1.0], Float64[], [1e-10])
+    after = SEEvaluation(ComplexF64[], ComplexF64[], ComplexF64[], Float64[], [1.0-1e-12], Float64[], [2e-10])
+    @test PowerOptLab._se_merit_reduction(before, after, 10., 1e-8) > 0
+    infeasible = SEEvaluation(ComplexF64[], ComplexF64[], ComplexF64[], Float64[], copy(after.residual), Float64[], [2e-8])
+    @test PowerOptLab._se_merit_reduction(before, infeasible, 10., 1e-8) < 0
+    # An unchanged, large residual must not erase improvement in another row.
+    large = SEEvaluation(ComplexF64[], ComplexF64[], ComplexF64[], Float64[], [1e8,1.0], Float64[], Float64[])
+    improved = SEEvaluation(ComplexF64[], ComplexF64[], ComplexF64[], Float64[], [1e8,0.0], Float64[], Float64[])
+    @test PowerOptLab._se_merit_reduction(large, improved, 10., 1e-8) == 0.5
 end

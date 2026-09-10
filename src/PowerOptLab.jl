@@ -91,6 +91,7 @@ using Ipopt
 import JSON3
 import JSONSchema
 using LinearAlgebra
+using Logging
 using Random
 using SHA
 using SparseArrays
@@ -139,6 +140,7 @@ include("components/ivq_battery.jl")
 include("problems/multiperiod.jl")
 include("problems/generator_opf.jl")
 include("problems/state_estimation.jl")
+include("problems/state_estimation_support.jl")
 include("problems/constrained_state_estimation.jl")
 include("problems/parameter_estimation.jl")
 include("problems/inverse_carson.jl")
@@ -219,6 +221,8 @@ export TerminalID, ExactInjectionSpecification, NoExactInjection,
        ConstrainedStateEstimationResult, solve_compiled_state_estimator,
        ContinuationStateEstimationResult, solve_with_continuation,
        SparseConstrainedStateEstimationResult, solve_sparse_state_estimator,
+       SEPreflightFinding, SEPreflightReport, SEUnsupportedNetwork, state_estimator_preflight,
+       initial_state_estimator,
        SEObservability, observability_diagnostics, unobservable_directions,
        selected_state_covariance, derived_covariance,
        StatePrior, set_state_prior!, TimeSeriesStateEstimationResult,

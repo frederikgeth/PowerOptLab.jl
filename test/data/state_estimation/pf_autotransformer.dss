@@ -1,0 +1,49 @@
+! Single-phase step voltage regulator power-flow comparison case.
+! (BMOPF subtype: single_phase_autotransformer, ANSI Type B, fixed tap)
+!
+! Topology: src ──[1-ph regulator, 2.4 kV, 500 kVA, tap=1.05]── reg
+!   src.1/4 = source phase + neutral
+!   reg.1/4 = regulated phase + neutral
+!
+! A fixed-tap step voltage regulator is modelled in OpenDSS as a low-impedance
+! two-winding transformer with the secondary turns scaled by Tap. A Type B
+! regulator at tap ratio a=1.05 boosts the secondary by a (V_reg = a·V_src at
+! no load), which matches the BMOPF single_phase_autotransformer with
+! tap_ratio=1.05, regulator_type=B (n_eff = 1/a).
+!
+! %r=0.5 per winding, xhl=1.0  → realistic regulator series impedance so the
+! cross-validation exercises the series-drop path, not just the ideal ratio.
+
+Clear
+
+! Base frequency locked to 50 Hz (BMOPF's modelling frequency).  The OpenDSS
+! default (60 Hz, or whatever a Windows GUI session persisted) would otherwise
+! rescale every reactance.  See docs/src/validation.md.
+Set DefaultBaseFreq=50
+
+New Circuit.pf_autotransformer basekv=2.4 pu=1.0 angle=0 phases=1 bus1=src.1.0 model=ideal
+
+! Source neutral earthed.
+New Reactor.g_src bus1=src.4 bus2=src.0 R=0.001 X=0 phases=1
+
+! Regulator as a 1:1 two-winding transformer with secondary tap = 1.05.
+New Transformer.reg phases=1 windings=2
+~ wdg=1 bus=src.1.4 conn=wye kv=2.4 %r=0.5 kva=500
+~ wdg=2 bus=reg.1.4 conn=wye kv=2.4 %r=0.5 kva=500 tap=1.05
+~ xhl=1.0
+
+! Regulated-side neutral earthed.
+New Reactor.g_reg bus1=reg.4 bus2=reg.0 R=0.001 X=0 phases=1
+
+! Constant P+Q load (Vminpu=0 Vmaxpu=2 disables ODS voltage-dependent switching).
+! Loaded to ~82% of the 500 kVA rating so the series drop (~1% on the regulated
+! bus) is meaningfully exercised — at light load the case only tests the tap ratio.
+New Load.ld bus1=reg.1.4 kv=2.4 kw=400 kvar=100 phases=1 model=1 Vminpu=0 Vmaxpu=2
+
+Set VoltageBases=[2.4]
+CalcVoltageBases
+! Tolerance 1e-8 (<< the voltage-comparison tolerance) removes OpenDSS-side
+! convergence slop; MaxIterations raised so the tighter target is reached.
+Set Tolerance=1e-8
+Set MaxIterations=100
+Solve

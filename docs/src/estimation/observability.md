@@ -14,7 +14,7 @@ Both estimators report **local numerical observability**: the rank of the
 measurement Jacobian at the returned point.
 
 For the [constrained estimator](../problems/constrained_state_estimation.md)
-the test is on the *feasible tangent space*. With ``C x = 0`` linearising the
+the test is on the *feasible tangent space*. With ``C\,\delta x = 0`` describing tangent perturbations of the
 exact equations and ``Z`` a basis for ``\ker C``, the relevant matrix is
 ``HZ``, not ``H``:
 
@@ -203,12 +203,14 @@ per-row whitened residuals:  -24.97,  -0.90,  0.00,  0.00,  +24.98
 
 This is the concrete argument for local redundancy, and it is also why
 [bad-data processing is the top roadmap item](state_of_the_art.md#Roadmap).
-Turning per-row residuals into a test needs the residual **sensitivity** matrix
-``S = I - H(H^\top W H)^{-1}H^\top W`` and the residual **covariance**
-``\Omega = S R`` (with ``R = W^{-1}`` the measurement covariance); the
-normalised residual is ``r^N_i = r_i/\sqrt{\Omega_{ii}}``. A critical
-measurement has ``\Omega_{ii} = 0``, which is the formal statement of the row
-of zeros above. Neither estimator computes either matrix today.
+For measurement-only whitened residuals in the linearised constrained model,
+set ``A=HZ``. Their residual covariance is ``\Omega_w=I-AA^\dagger``;
+normalised residuals are ``r_i/\sqrt{(\Omega_w)_{ii}}``. This uses the
+already whitened Jacobian; do not apply inverse-variance weights a second time.
+In unwhitened coordinates, transform back with the measurement covariance
+factor. Priors and temporal reuse need a separate statistical derivation.
+A critical measurement has zero linearised residual variance. Neither
+estimator currently implements this bad-data test.
 
 !!! warning "Redundancy must be local"
     Global redundancy does not protect a locally critical measurement. A
@@ -219,15 +221,15 @@ of zeros above. Neither estimator computes either matrix today.
 
 The standard distribution practice is to fill gaps with pseudo-measurements —
 load allocation from billing data, forecasts, nominal profiles. In this
-codebase that is a [`StatePrior`](@ref): an ordinary whitened residual row, not
-a constraint.
+codebase uncertain P/Q forecasts use `Measurement` residuals; rectangular
+voltage beliefs use [`StatePrior`](@ref). Neither is an exact constraint.
 
 It restores rank. The question is what the answer then means, and the
 covariance answers it:
 
 | prior σ | observable | sd(``V_{re,b}``) | sd(``V_{re,c}``) |
 |---:|---:|---:|---:|
-| — (no prior) | 2 / 4 | *covariance refused* | *refused* |
+| — (no prior) | 2 / 4 | 0.1000 V | *refused* |
 | 1.0 V | 4 / 4 | 0.1000 V | **1.0000 V** |
 | 10.0 V | 4 / 4 | 0.1000 V | **10.0000 V** |
 | 100.0 V | 4 / 4 | 0.1000 V | **100.0000 V** |
@@ -244,15 +246,18 @@ measured and which were asserted.
 ### The estimator refuses to invent a covariance
 
 ```julia
-selected_state_covariance(s, p, x, [1])
+selected_state_covariance(s, p, x, [2]) # unmeasured bus
 # ArgumentError: requested covariance is not finite:
-#   2 tangent directions are unobservable
+# quantity 1 depends on an unobservable tangent direction
 ```
 
-An unobservable direction has infinite variance. Returning a finite matrix
-anyway — as a pseudo-inverse silently would — reports confidence that does not
-exist. Both [`selected_state_covariance`](@ref) and
-[`derived_covariance`](@ref) throw instead.
+An unobservable state direction is not identified by this local model.
+A requested quantity has finite first-order covariance only if its Jacobian
+annihilates every unobservable direction. The covariance routines now check
+this condition and reject quantities that fail it. A measured voltage component
+can therefore retain finite covariance while an unrelated bus is unobserved.
+A zero variance from a zero derived gradient is only a first-order result, not
+a claim that nonlinear uncertainty vanishes.
 
 `derived_covariance` also answers the question users actually ask, which is
 rarely about rectangular components. Given ``\partial|V|/\partial x``:
@@ -264,12 +269,12 @@ rarely about rectangular components. Given ``\partial|V|/\partial x``:
 
 ## Four-wire observability and gauge freedoms
 
-Distribution estimation has a reference problem that transmission does not.
-Transmission fixes one angle. A four-wire feeder additionally needs a
-*potential* reference for the neutral system, and if nothing bonds it to
-earth, the neutral voltages are determined only up to a common shift. That is
-a **gauge freedom**: a genuine unobservable direction, not a measurement gap,
-and no amount of extra telemetry on phase-to-neutral quantities removes it.
+A four-wire feeder can have a potential-reference freedom in addition to the
+usual phasor-angle reference. A common voltage shift is a **gauge freedom**
+only when it preserves the complete source, grounding, device, and measurement
+model. Relative telemetry cannot remove a symmetry that leaves all its voltage
+differences unchanged. Fixed phase-to-earth source phasors can break that
+symmetry; an ungrounded neutral alone is not proof of a gauge freedom.
 
 Because the constrained estimator keeps ungrounded neutrals as explicit
 states, the freedom shows up in the diagnostic instead of being assumed away
@@ -287,9 +292,9 @@ directions they identify is exactly why it can rise while observability falls.
 !!! warning "Evaluate at a meaningful operating point"
     A local diagnostic depends on where it is evaluated. The same well-posed
     set on the bonded network reports rank 8 at a power-flow point and
-    **rank 4 at a flat start**, because a flat profile is itself degenerate —
-    every line carries zero current, so every injection row loses its
-    sensitivity. Evaluate at a solved state, not at the initial guess, or you
+    **rank 4 at a flat start**, because that particular flat profile and measurement set are degenerate.
+    Zero current alone does not imply zero injection sensitivity: at nonzero
+    voltage, ``dS=V\overline{dI}`` can remain nonzero when ``I=0``. Evaluate at a solved state, not at the initial guess, or you
     will diagnose the start rather than the measurement set.
 
 ## Numerical versus topological observability

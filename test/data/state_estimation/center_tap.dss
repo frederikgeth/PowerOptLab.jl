@@ -1,0 +1,11 @@
+! SE split-phase benchmark; authored for PowerOptLab, CC BY 4.0.
+Clear
+New Circuit.se_ct phases=1 bus1=hv.1.0 basekv=2.4 pu=1 angle=0
+New Transformer.ct phases=1 windings=3 xhl=2 xht=2 xlt=2
+~ wdg=1 bus=hv.1.0 conn=wye kv=2.4 kva=25 %r=0.5
+~ wdg=2 bus=lv.1.0 conn=wye kv=0.12 kva=25 %r=0.5
+~ wdg=3 bus=lv.0.2 conn=wye kv=0.12 kva=25 %r=0.5
+New Load.a phases=1 bus1=lv.1.0 conn=wye kv=0.12 kw=6 kvar=1 model=1 vminpu=0 vmaxpu=2
+New Load.b phases=1 bus1=lv.2.0 conn=wye kv=0.12 kw=2 kvar=0.25 model=1 vminpu=0 vmaxpu=2
+Set maxiterations=200 tolerance=1e-11 controlmode=off
+Solve

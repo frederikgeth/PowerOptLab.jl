@@ -34,13 +34,13 @@ covariance, or a time series.
 
 ## The differences that actually decide it
 
-### Exact information has nowhere to go in WLS
+### Exact information and the available APIs
 
-The WLS statement has exactly one channel for information: a residual with a
-σ. If a quantity is known exactly, the only way to express it is a very small
-σ — which is not the same statement. It makes the problem ill-conditioned
-rather than constrained, and it lets a conflicting measurement trade against a
-physical law that should not be negotiable.
+Weighted least squares specifies an objective, not whether constraints are
+allowed. Equality-constrained WLS is classical, and both implementations impose
+hard zero injections. The API distinction here is support for explicit exact
+nonlinear device equations in the compiled estimator. Treating an uncertain
+reading as a very small-variance residual is different from imposing an equality.
 
 The constrained formulation keeps three categories apart, and the separation
 is the point:
@@ -103,7 +103,7 @@ Neither estimator's success status is a uniqueness claim.
 * WLS: trust `primal_status == "FEASIBLE_POINT"`, then read
   `observability.observable`. Voltages are `NaN` when the solve did not
   converge — an unconverged iterate is not published as an estimate.
-* Constrained: trust `:converged_unique` and `:converged_underobserved`; the
+* Constrained: read `:converged_unique` and `:converged_underobserved` as first-order termination; the
   latter is feasible but not identified. `:converged_unique` reports that the
   reduced Jacobian has full rank **at the returned point**. Two different
   points can both earn it — see
@@ -128,5 +128,5 @@ other's output.
 * Both observability diagnostics use dense SVDs and are sized for small and
   medium cases. The sparse solver's *step* is sparse; its rank diagnostic runs
   only on exit paths, and is dense.
-* Jacobian assembly in the compiled estimator is still dense. See
+* Jacobian assembly is sparse, but rank/covariance decompositions remain dense. See
   [the roadmap](state_of_the_art.md#Roadmap).

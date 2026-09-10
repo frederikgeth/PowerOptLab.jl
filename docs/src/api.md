@@ -69,6 +69,11 @@ ConstantCurrentDevice
 ZIPDevice
 ExactDeviceEquation
 BranchMeasurement
+SEPreflightFinding
+SEPreflightReport
+SEUnsupportedNetwork
+state_estimator_preflight
+initial_state_estimator
 SEStructure
 SEParameters
 SEEvaluation

@@ -13,6 +13,14 @@ function _controller_numerics_case(net, device, request; s_base=1e6, start_facto
     PowerOptLab.enforce_kcl!(ctx)
     model = PowerOptLab._opf_model(ctx)
     set_optimizer_attribute(model, "tol", 1e-8)
+    # These checks require strict LOCALLY_SOLVED termination. Do not let the
+    # default acceptable-level heuristic stop at a looser tolerance first.
+    set_optimizer_attribute(model, "acceptable_iter", 0)
+    # The base sweep spans very different variable and constraint scales.
+    # Prefer numerical stability over sparse fill-in from the first solve:
+    # https://coin-or.github.io/Ipopt/OPTIONS.html#OPT_mumps_pivtol
+    set_optimizer_attribute(model, "linear_solver", "mumps")
+    set_optimizer_attribute(model, "mumps_pivtol", 1e-2)
     set_optimizer_attribute(model, "max_iter", 500)
     for v in all_variables(model)
         start = start_value(v)
@@ -81,6 +89,9 @@ end
             @testset "$name base=$base start=$start" begin
                 model,r,h,ctx = _controller_numerics_case(net,device,request;
                     s_base=base,start_factor=start)
+                if !r.solve.publishable
+                    @info "Controller numerics solve failed" name base start termination=termination_status(model) primal=primal_status(model) raw=raw_status(model)
+                end
                 @test r.solve.publishable
                 if r.solve.publishable
                     @test maximum(values(primal_feasibility_report(model; atol=0.)); init=0.) <= 1e-7
