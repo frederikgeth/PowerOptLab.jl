@@ -95,7 +95,9 @@ zero. The next column reports the actual receiving-end voltage/current angle:
 | **0** | **0** | **0** | ``\infty`` | undefined |
 
 At exactly unity power factor *on this resistive feeder* the set is rank 1 of 2 while carrying 40 A, and
-`selected_state_covariance` refuses to return a covariance. Unity and
+`selected_state_covariance` refuses covariance of the unobservable imaginary
+voltage direction; first-order covariance of the identifiable real component
+can still be returned. Unity and
 near-unity power factor is not exotic — resistive load, and PV inverters
 operating at unity — so this degeneracy is reachable in ordinary operation.
 
@@ -131,8 +133,8 @@ evaluate_state_estimator(s, SEParameters(s, [imeas]; current_epsilon=1e-3), xfla
 | `current_epsilon` (A) | predicted ``\|I\|`` | ``\|H\|`` | solver status |
 |---|---:|---:|---|
 | `0.0` | 0.0000 | *DomainError* | `:undefined_derivative` |
-| `1e-3` | 0.0010 | 0.0 | `:converged_underobserved` |
-| `1.0` | 1.0000 | 0.0 | `:converged_underobserved` |
+| `1e-3` | 0.0010 | 0.0 | `:stationary_not_minimum` |
+| `1.0` | 1.0000 | 0.0 | `:stationary_not_minimum` |
 
 Three things to read off this:
 
@@ -146,11 +148,11 @@ Three things to read off this:
   `magnitude_epsilon` is the separate volts-valued knob for ``|V|``, because one
   scalar cannot carry both units.
 * **But the smoothed row is information-free at zero current**: its gradient
-  there is exactly zero, so ``\|H\| = 0`` and the honest verdict is
-  `:converged_underobserved`. Smoothing buys differentiability, not
+  there is exactly zero, so ``\|H\| = 0`` and the point need not minimise the objective. For a positive reading exceeding
+  the smoothed prediction, negative curvature produces `:stationary_not_minimum`. Smoothing buys differentiability, not
   information. It does not invent a measurement that the operating point
-  cannot support, and the status says so rather than returning a confident
-  wrong answer.
+  cannot support. The solver rejects detected negative curvature instead of treating
+  first-order stationarity as a successful fit.
 
 The practical remedy is to start somewhere with current in the lines — a
 power-flow solution, the previous snapshot, or a nominal-load point — and to
@@ -237,8 +239,8 @@ model, so that is where it had to be repaired.
    than relying on an undefined current-magnitude derivative.
 3. **Use `current_epsilon` deliberately**, sized below the ammeter's
    resolution, and read the returned status: an `ε`-smoothed row at zero
-   current carries no information, and `:converged_underobserved` is telling
-   you so.
+   current has zero first-order sensitivity. `:stationary_not_minimum` means
+   the solver detected negative curvature, not merely missing information.
 4. **Prefer `:ire`/`:iim` over `:imag`** whenever the instrument supplies a
    phasor. The magnitude discards exactly the information that resolves the
    ambiguity.

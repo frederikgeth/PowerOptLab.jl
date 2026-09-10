@@ -35,7 +35,8 @@ using PowerOptLab
 structure = compile_state_estimator(net, measurements;
     neutral="n", zero_injection=[("b2", "1")])
 parameters = SEParameters(structure, measurements)
-x0 = zeros(2length(structure.free_state_map))
+# Choose a physically meaningful state: power flow or a preceding snapshot.
+x0 = initial_voltage_state
 result = solve_sparse_state_estimator(structure, parameters, x0)
 ```
 
@@ -156,7 +157,8 @@ dense = solve_compiled_state_estimator(structure, parameters, x0)
 sparse = solve_sparse_state_estimator(structure, parameters, x0)
 ```
 
-Trust only `:converged_unique` or `:converged_underobserved`. The latter is
+These first-order success statuses are `:converged_unique` and
+`:converged_underobserved`; they are not minimum or global uniqueness certificates. The latter is
 feasible but non-unique; restoration failure, invalid device domain,
 trust-region stall, and numerical failure are not published estimates.
 
@@ -193,8 +195,9 @@ indices = [1, length(structure.free_state_map) + 1]
 Σ_g = derived_covariance(structure, parameters, sparse.state, J_g)
 ```
 
-The routines throw if tangent directions are unobservable, rather than returning
-a fictitious finite covariance from a pseudoinverse.
+The routines throw if the requested quantity depends on an unobservable
+tangent direction. Identifiable quantities can retain finite first-order
+covariance even when other state directions remain unobserved.
 
 ### Pitfall: treating covariance as complete physical uncertainty
 

@@ -76,20 +76,33 @@ into-the-line convention at the requested `side`.
 using PowerOptLab
 using BMOPFTools: parse_bmopf
 
-# `net` is a BMOPF network.  It may retain ungrounded neutral conductors.
+# Minimal runnable feeder, with all quantities in SI units.
+net = parse_bmopf("""
+{"bus":{"src":{"terminal_names":["1"]},
+        "b1":{"terminal_names":["1"]},"b2":{"terminal_names":["1"]}},
+ "voltage_source":{"s":{"bus":"src","terminal_map":["1"],
+     "v_magnitude":[230.0],"v_angle":[0.0]}},
+ "linecode":{"lc":{"R_series_1_1":0.1}},
+ "line":{"l1":{"bus_from":"src","bus_to":"b1","terminal_map_from":["1"],
+     "terminal_map_to":["1"],"linecode":"lc","length":1.0},
+         "l2":{"bus_from":"b1","bus_to":"b2","terminal_map_from":["1"],
+     "terminal_map_to":["1"],"linecode":"lc","length":1.0}}}
+"""; from_string=true)
 measurements = [
     Measurement(kind=:vr, bus="b1", terminal="1", reference=nothing,
                 value=230.0, sigma=1.0),
     Measurement(kind=:vi, bus="b1", terminal="1", reference=nothing,
                 value=0.0, sigma=1.0),
-    Measurement(kind=:vmag, bus="b1", terminal="2", value=230.0, sigma=1.0),
+    Measurement(kind=:vmag, bus="b2", terminal="1", reference=nothing,
+                value=230.0, sigma=1.0),
 ]
 
 structure = compile_state_estimator(net, measurements;
                                     neutral="n",
                                     zero_injection=[("b2", "1")])
 parameters = SEParameters(structure, measurements)
-x0 = zeros(2length(structure.free_state_map))
+nf = length(structure.free_state_map)
+x0 = vcat(fill(230.0, nf), zeros(nf)) # nonzero magnitude start
 
 # Dense: transparent small-system reference solver.
 dense = solve_compiled_state_estimator(structure, parameters, x0)
@@ -98,18 +111,34 @@ dense = solve_compiled_state_estimator(structure, parameters, x0)
 sparse = solve_sparse_state_estimator(structure, parameters, x0)
 ```
 
-Trust an estimate only for `:converged_unique` or
-`:converged_underobserved`.  The latter is feasible but non-unique.  Other
+Successful first-order termination is reported as `:converged_unique` or
+`:converged_underobserved`.  The latter has locally unobserved directions. Neither status certifies a global
+solution or a strict local minimum.  Other
 statuses distinguish, among other conditions, constraint restoration failure,
-invalid device domain, trust-region stall, `:undefined_derivative` (a `:vmag`
+`invalid_initial_domain`, trust-region stall, `:undefined_derivative` (a `:vmag`
 or `:imag` row sitting exactly at zero, where the magnitude derivative does not
-exist), and numerical failure.
+exist), and numerical failure. A numerical reduced-Lagrangian curvature check rejects
+negative curvature with `:stationary_not_minimum`; `:curvature_check_failed`
+means a nearby domain/derivative evaluation prevented the check. These are
+non-publishable statuses. The check is performed at nonlinear stationary points
+with non-negligible residuals; it is not a formal second-order certificate.
 
 !!! warning "`:converged_unique` is a LOCAL statement"
     It reports that the reduced Jacobian ``HZ`` has full rank **at the returned
     point**.  It is not a global uniqueness certificate.  Two distinct states
     can each earn it while fitting the same data exactly — see
     [current-magnitude measurements](../estimation/current_magnitude.md).
+
+### Step acceptance and convergence
+
+`penalty` is the initial merit weight. Both solvers increase it when a step's
+predicted objective cost would overwhelm its predicted feasibility improvement.
+The history records the changing penalty and separates measurement from prior
+objectives, so merit values can be interpreted with their associated weight.
+The dense solver uses SVD least-squares steps for rank-deficient systems; the
+sparse system uses a negative primal diagonal so eliminating the residual block
+adds positive damping to the reduced least-squares operator. These safeguards
+do not constitute a general global-convergence or infeasibility certificate.
 
 ### Convergence tolerances are scale relative
 
@@ -139,11 +168,12 @@ All values are SI and every scalar has an independent standard deviation
 
 Magnitude derivatives are undefined at zero.  Set
 `SEParameters(...; magnitude_epsilon=...)` only when smoothing below the
-instrument's meaningful resolution is appropriate.  It applies to `:vmag` and
-to branch `:imag` alike.  Note that a smoothed magnitude row evaluated at
+instrument's meaningful resolution is appropriate. It applies to `:vmag`;
+branch `:imag` uses `current_epsilon` in amperes.  Note that a smoothed magnitude row evaluated at
 exactly zero is *differentiable but information-free* — its gradient there is
-zero — so the honest outcome is `:converged_underobserved`, not a confident
-estimate.  See [current-magnitude measurements](../estimation/current_magnitude.md).
+zero — so zero gradient is not evidence of minimisation. If the requested magnitude
+is larger than the smoothed prediction, the point can be a local maximum and
+the solver reports `:stationary_not_minimum`.  See [current-magnitude measurements](../estimation/current_magnitude.md).
 
 ### Line telemetry
 
@@ -177,7 +207,7 @@ model wye/single-phase devices; phase-phase connections model delta devices.
 
 ```julia
 load = ExactDeviceEquation(ConstantPowerDevice(
-    [TerminalConnection(("b1", "1"), ("b1", "n"))],
+    [TerminalConnection(("b1", "1"), nothing)] # earth return in this one-wire example,
     ComplexF64[4_000 + 1_000im],
 ))
 
@@ -187,6 +217,11 @@ parameters = SEParameters(structure, measurements; exact_devices=[load],
 result = solve_with_continuation(structure, parameters, x0;
                                  alphas=[0.0, 0.5, 1.0])
 ```
+
+The constant-current term is a fixed complex phasor; it does not rotate with
+the terminal voltage to preserve power factor. `ZIPDevice` implements the
+explicit law `conj(S/V) + I + YV`, rather than every conventional ZIP-load
+parameterisation.
 
 Available models are [`ConstantPowerDevice`](@ref),
 [`ConstantCurrentDevice`](@ref), and [`ZIPDevice`](@ref).  Constant-power
@@ -203,7 +238,9 @@ only on request.
 
 Use [`selected_state_covariance`](@ref) or [`derived_covariance`](@ref) for
 requested covariance blocks/derived quantities.  They throw when the tangent
-space is rank deficient rather than returning a fictitious finite covariance.
+requested quantity depends on an unobservable tangent direction. A locally
+identifiable quantity can have finite first-order covariance even when other
+state directions remain unobserved. This does not establish global identifiability.
 
 The sparse result exposes `constraint_multipliers` in the same order as
 `evaluation.constraints`.  Large, physically scaled multipliers are a useful
@@ -242,12 +279,57 @@ filtered posterior.
 ## Current limitations
 
 - Diagonal measurement covariance only; no correlated whitening yet.
-- Line telemetry only; transformer, source-phasor, neutral-current, and angle
+- Line telemetry only; transformer, uncertain source-phasor, and angle
   measurement models are pending.
 - No robust bad-data test, automated bad-constraint ranking, topology-error
   hypothesis search, or full filter globalisation.
-- Sparse rank/uncertainty methods and cached symbolic factorisations are not yet
+- Jacobians use sparse triplets and cached transposed operators for row access.
+  Sparse rank/uncertainty methods and cached symbolic factorisations are not yet
   production-scale implementations.
 
 See [`SEStructure`](@ref), [`SEParameters`](@ref), and the solver/result types
 in the API reference for the full callable interface.
+
+## Validation and computational scope
+
+Run the focused suite with
+`julia --project=. -e 'using Test, PowerOptLab; include("test/constrained_state_estimation_tests.jl")'`.
+It includes loaded four-wire finite-difference checks with complex and mutual
+impedance, both line ends, an independent analytic noisy reactive-power optimum,
+conflicting exact constraints, square rank deficiency, negative-curvature
+rejection, identifiable covariance, and seeded Monte Carlo variance of a linear
+estimate. These checks complement the existing power-flow recovery tests;
+they do not establish robustness on operational feeders or nonlinear coverage.
+
+Run `julia --project=. scripts/benchmark_compiled_state_estimation.jl` to
+reproduce sparse-chain allocation and timing measurements. With Julia 1.12.6,
+12 BLAS threads, and compilation excluded, the September 2026 check gave:
+
+| States | Residual evaluation allocated | Residual Jacobian allocated |
+|---:|---:|---:|
+| 100 | 28 kB | 115 kB |
+| 400 | 105 kB | 457 kB |
+| 1,600 | 420 kB | 1,969 kB |
+
+The previous implementation allocated about 21 MB and 91 MB respectively at
+1,600 states. Sparse assembly removes that quadratic allocation in this case.
+The complete sparse solve still performs dense rank/null-space diagnostics: an
+already exact 1,600-state warm start allocated about 196 MB. No real-time or
+large-feeder performance claim follows from these synthetic measurements.
+
+Remaining validation priorities are independent unbalanced feeder oracles,
+nonlinear Monte Carlo coverage, bad-data and model-error experiments, and
+end-to-end feeder/time-series benchmarks. Remaining implementation priorities
+include correlated whitening, robust and leverage-adjusted bad-data processing,
+reference-aware branch power and transformer telemetry, multistart, symbolic
+factorisation reuse, reusable numerical workspaces, and sparse rank/covariance.
+
+### Compatibility notes
+
+`residual_jacobian` and `constraint_jacobian` now return `SparseMatrixCSC`.
+Use `collect(Float64, H)` when calling a dense-only routine such as `svdvals`.
+Covariance calls may now succeed for identifiable quantities on a partially
+observed state. Failure to reach feasibility at the iteration limit is
+`:constraint_not_satisfied`, not a claim that the mathematical problem is
+infeasible. Invalid initial device domains and detected negative curvature have
+explicit non-publishable statuses described above.

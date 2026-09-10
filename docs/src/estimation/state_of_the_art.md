@@ -36,7 +36,7 @@ same effect from the engine's KCL rather than from a weighted row.
 and Holten (1985) showed that solving the augmented system instead of forming
 ``H^\top W H`` greatly improves numerical stability on ill-conditioned
 networks, at some extra storage. `solve_sparse_state_estimator` uses exactly
-this: it factors the blocked ``[I\;H\;0;\;H^\top\;\gamma I\;C^\top;\;0\;C\;0]``
+this: it factors the blocked ``[I\;H\;0;\;H^\top\;-\gamma I\;C^\top;\;0\;C\;0]``
 system with sparse QR and never forms ``H^\top H``.
 
 **Bad data needs the residual covariance, not the raw residual.** Monticelli
@@ -73,7 +73,7 @@ both estimators assume a diagonal covariance.
 | Four-wire / floating neutral | ❌ | ✅ | |
 | Branch telemetry | ❌ | ✅ | lines only; no transformers |
 | Local observability | ✅ | ✅ | dense SVD, both |
-| State covariance | ❌ | ✅ | refuses rank-deficient rather than inventing |
+| State covariance | ❌ | ✅ | checks identifiability of each requested quantity |
 | Time series / priors | ❌ | ✅ | |
 | Hachtel sparse step | ❌ | ✅ | |
 | χ² detection | ❌ | ❌ | |
@@ -98,18 +98,14 @@ estimator already has the pieces — `_derived_covariance` builds
 without new linear algebra. Constraint multipliers are exposed today as
 *leads* only, and the documentation is careful to say so.
 
-### 2. Genuinely sparse Jacobian assembly
+### 2. Sparse execution beyond Jacobian assembly
 
-`residual_jacobian` and `constraint_jacobian` return **dense** matrices, and
-build them with `Vector(E[i, :])` per row and `M[i, :]` slices of a CSC matrix
-(which scan every column). At 1600 states the residual Jacobian is already a
-10 MB dense array. The sparse *step* is sparse; the assembly around it is not,
-so `solve_sparse_state_estimator` does not yet scale to a real feeder. This is
-a contained, well-understood refactor: assemble triplets directly.
-
-The dense SVD rank diagnostic used to run every iteration and dominated the
-solve; it now runs only on exit paths, but it is still ``O(n^3)`` and should
-become a sparse rank-revealing factorisation before large cases are attempted.
+Jacobian assembly now uses sparse triplets and cached transposed network
+operators. Residual-only evaluation avoids dense device derivative arrays.
+The remaining bottlenecks are dense SVD rank/null-space and covariance work,
+allocation of temporary sparse rows, and rebuilding the augmented QR
+factorisation. Symbolic-factorisation reuse, reusable workspaces, and sparse
+rank/uncertainty backends still need implementation and feeder benchmarks.
 
 ### 3. Robust and non-Gaussian estimation
 
@@ -151,8 +147,9 @@ combinatorial step this codebase does not take.
 
 ### 7. Transformer and source telemetry
 
-`BranchMeasurement` covers lines via `line_yprim`. Transformers, switches,
-neutral currents and source phasors are not modelled. Note also that
+`BranchMeasurement` covers lines via `line_yprim`. Transformer and switch telemetry and uncertain source phasors are not
+modelled. Line current readings can target any represented conductor,
+including a neutral. Note also that
 `:pflow`/`:qflow` are referenced to **earth** at the measured conductor, with
 no per-measurement `reference`, unlike node `Measurement`s — a real meter
 reports phase-to-neutral power, so on a four-wire line with a displaced
