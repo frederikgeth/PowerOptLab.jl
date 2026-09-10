@@ -97,6 +97,9 @@ API. `hook_factory(t)` returns the `model_hook!` for snapshot `t`. The builder
 centralizes the shared optimizer, solver options, time index, and common unit
 settings; callers add linking constraints/objectives and then enforce KCL. Pass
 an existing `model` when shared variables/operators must be created first.
+`configure! = identity` receives the model before optimizer attachment when this
+builder creates it. With an existing model, the caller owns optimizer attachment.
+`optimizer=nothing` leaves a newly created model unattached.
 """
 function build_multi_context(nets::AbstractVector;
                              model=nothing,
@@ -106,12 +109,19 @@ function build_multi_context(nets::AbstractVector;
                              optimizer=Ipopt.Optimizer,
                              verbose::Bool=false,
                              solver_options=(),
-                             context_options::NamedTuple=NamedTuple())
+                             context_options::NamedTuple=NamedTuple(),
+                             configure!::Function=identity)
     periods = length(nets)
     periods >= 1 || throw(ArgumentError("need at least one snapshot"))
     isfinite(s_base) && s_base > 0 || throw(ArgumentError(
         "s_base must be finite and > 0"))
-    model = model === nothing ? JuMP.Model(optimizer) : model
+    if model === nothing
+        model = JuMP.Model()
+        configure!(model)  # bridges must be installed before optimizer attachment
+        optimizer === nothing || JuMP.set_optimizer(model, optimizer)
+    else
+        configure!(model)
+    end
     verbose || JuMP.set_silent(model)
     _set_solver_options!(model, solver_options)
     contexts = [build_opf_model(nets[t]; model=model, t_index=t,

@@ -38,10 +38,10 @@ end
     @test_throws ArgumentError solve_multiperiod_opf(nets, [impossible])
 end
 
-@testset "EV charging: V2G discharge into an expensive peak" begin
-    # Plugged in the whole horizon, bidirectional. A cheap period then an
-    # expensive one; with a modest departure target the EV can arbitrage by
-    # discharging into the peak, unlike the V1G case.
+@testset "EV charging: V2G can spend initial energy at a peak" begin
+    # Plugged in the whole horizon, bidirectional. The low departure target
+    # permits spending initial inventory at the peak. This tests V2G capability,
+    # not a replenished arbitrage cycle (see evse_tests.jl for that distinction).
     prices = [0.05, 0.25]
     nets = [single_bus_net(; src_cost=p, pload=10000.0) for p in prices]
     ev = EVDevice(id="ev2", bus="bus1",

@@ -36,6 +36,8 @@ const _HAS_ODS = true
     include("selector_primitive_tests.jl")
     include("multiperiod_tests.jl")
     include("ev_tests.jl")
+    include("evse_tests.jl")
+    include("ev_workplace_tests.jl")
     include("state_estimation_tests.jl")
     include("constrained_state_estimation_tests.jl")
     include("state_estimation_network_tests.jl")

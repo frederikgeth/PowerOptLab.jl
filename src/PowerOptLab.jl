@@ -125,6 +125,7 @@ include("formulations/lindist3flow/model.jl")
 
 # Component models — new network elements stamped via model_hook! / solution_hook!
 include("components/devices.jl")
+include("components/evse.jl")
 include("components/generalized_generator.jl")
 include("components/generator_data.jl")
 include("components/advanced_inverter.jl")
@@ -194,7 +195,7 @@ export device_id, validate_device, stamp_device!, link_device!, extract_device
 export measurement_kind, measurement_value, measurement_sigma, measurement_prediction
 
 # Devices
-export StorageDevice, EVDevice
+export StorageDevice, EVDevice, EV, EVSE, ChargingSession
 export GeneralizedGenerator, SourceGenerator, GeneratorVoltageLaw, GeneratorControl,
        GeneratorCapability, GeneratorSequenceLimits, GeneratorResult,
        generator_sequence_impedance, build_generator_model, solve_generator_opf,

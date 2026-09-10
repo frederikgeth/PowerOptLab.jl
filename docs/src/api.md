@@ -39,10 +39,9 @@ measurement_prediction
 
 ## Devices
 
-```@docs
-StorageDevice
-EVDevice
-```
+Storage and charging types are documented in the [EV and storage API](ev/api.md):
+[`StorageDevice`](@ref), [`EVDevice`](@ref), [`EV`](@ref), [`EVSE`](@ref), and
+[`ChargingSession`](@ref).
 
 ## Multi-period OPF
 

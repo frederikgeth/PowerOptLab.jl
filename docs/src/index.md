@@ -30,7 +30,7 @@ New network elements, stamped via `model_hook!` / `solution_hook!`.
 | Capability | Entry point | Maturity |
 |---|---|---|
 | [Storage / battery](components/devices.md) with state of charge | [`StorageDevice`](@ref) | promotion candidate |
-| [EV charging](components/devices.md) (V1G / V2G) with availability & departure energy | [`EVDevice`](@ref) | promotion candidate |
+| [EV charging](ev/index.md) (V1G / V2G) with availability & departure energy | [`EVDevice`](@ref), [`ChargingSession`](@ref) | promotion candidate |
 | [Advanced inverter](ibr/index.md) (circuit-aware IBR) | [`AdvancedInverter`](@ref) | experimental |
 | [Phase-aware inverter controls](components/inverter_controls.md) (local three-leg laws) | [`SequenceController`](@ref) | research prototype |
 | [IVQ battery](components/ivq_battery.md) (current–voltage–charge model) | [`IVQBattery`](@ref) | prototype |

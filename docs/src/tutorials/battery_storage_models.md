@@ -49,9 +49,12 @@ schedule = solve_multiperiod_opf(nets, [pe]; dt_h=1.0)
 ```
 
 An energy terminal target can replace `cyclic=true`; `q_min`/`q_max` permit AC
-reactive support (unity power factor is the default). Fixed losses normally make
-simultaneous charge/discharge suboptimal without a binary complementarity model,
-but inspect dispatch under unusual objectives or negative prices.
+reactive support (zero aggregate Q is the default). Losses do not guarantee
+exclusive charging/discharging. PE devices default to an explicitly approximate
+normalized product constraint (`operation=:relaxed`); use
+`:complementarity` with CCOpt for exact mathematical exclusion, or explicitly
+`:independent` to study the outer relaxation. See the
+[negative-price counterexample](../ev/modes.md).
 
 PE assumes its AC power limits remain valid across the usable energy window.
 Cell voltage, current, internal resistance, and load-dependent efficiency are
