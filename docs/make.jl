@@ -62,6 +62,10 @@ makedocs(
             "Formulation API" => "formulations/api.md",
             "References and related software" => "formulations/references.md",
         ],
+        "LinDist3Flow" => [
+            "Formulation and usage" => "formulations/lindist3flow.md",
+            "Component models" => "formulations/lindist3flow_components.md",
+        ],
         "Component models" => [
             "Storage & EVs"     => "components/devices.md",
             "IVQ battery"       => "components/ivq_battery.md",

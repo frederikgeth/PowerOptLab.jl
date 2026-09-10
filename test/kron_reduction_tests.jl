@@ -33,6 +33,59 @@ end
     @test o["shunt"]["kron_grounded_cap_c"]["B_1_1"] ≈ 1e-3
 end
 
+@testset "Kron reduction produces retained center-tap winding maps" begin
+    net = Dict{String,Any}(
+        "terminal_conventions" => Dict{String,Any}(
+            "phase" => ["h", "x1", "x2"], "neutral" => ["n"]),
+        "bus" => Dict(
+            "hv" => Dict{String,Any}(
+                "terminal_names" => ["h", "n"],
+                "perfectly_grounded_terminals" => ["n"]),
+            "lv" => Dict{String,Any}(
+                "terminal_names" => ["x1", "n", "x2"],
+                "perfectly_grounded_terminals" => ["n"])),
+        "transformer" => Dict("center_tap" => Dict("ct" => Dict{String,Any}(
+            "bus_from" => "hv", "bus_to" => "lv",
+            "terminal_map_from" => ["h", "n"],
+            "terminal_map_to" => ["x1", "n", "x2"],
+            "v_nom_from" => 2400.0, "v_nom_to" => 120.0,
+            "s_rating" => 25_000.0,
+            "i_max_from" => [12.0, 12.0],
+            "i_max_to" => [100.0, 30.0, 90.0],
+            "r_neutral_from" => 0.1, "x_neutral_from" => 0.2,
+            "r_neutral_to" => 0.3, "x_neutral_to" => 0.4))),
+        "voltage_source" => Dict("source" => Dict{String,Any}(
+            "bus" => "hv", "terminal_map" => ["h", "n"],
+            "configuration" => "SINGLE_PHASE",
+            "v_magnitude" => [2400.0, 0.0], "v_angle" => [0.0, 0.0])),
+        "load" => Dict(
+            "leg1" => Dict{String,Any}(
+                "bus" => "lv", "terminal_map" => ["x1", "n"],
+                "configuration" => "SINGLE_PHASE",
+                "p_nom" => [4_000.0], "q_nom" => [500.0]),
+            "leg2" => Dict{String,Any}(
+                "bus" => "lv", "terminal_map" => ["x2", "n"],
+                "configuration" => "SINGLE_PHASE",
+                "p_nom" => [1_500.0], "q_nom" => [100.0])))
+
+    out = PowerOptLab.kron_reduce_bmopf(net)
+    ct = out["transformer"]["center_tap"]["ct"]
+    @test ct["terminal_map_from"] == ["h"]
+    @test ct["terminal_map_to"] == ["x1", "x2"]
+    @test ct["i_max_from"] == [12.0]
+    @test ct["i_max_to"] == [100.0, 90.0]
+    for key in ("r_neutral_from", "x_neutral_from",
+                "r_neutral_to", "x_neutral_to")
+        @test !haskey(ct, key)
+    end
+    @test out["voltage_source"]["source"]["terminal_map"] == ["h"]
+    @test out["load"]["leg1"]["terminal_map"] == ["x1"]
+    @test out["load"]["leg2"]["terminal_map"] == ["x2"]
+    changes = out["extras"]["kron_reduction"]["changes"]
+    @test count(x -> haskey(x, "dropped_grounding"), changes) == 4
+    @test PowerOptLab.kron_reduce_bmopf(out) == out
+end
+
 @testset "BMOPF explicit-neutral Kron reduction" begin
     net = _kr_fixture()
     for i in 1:3, j in 1:3
@@ -105,10 +158,26 @@ end
     @test change["reason"] == "mixed neutral shunt projected onto implicit ground"
 end
 
-@testset "BMOPF Kron reduction refuses active neutral legs" begin
+@testset "BMOPF Kron reduction audits restricted IBR neutral elimination" begin
     n = Dict{String,Any}("bus"=>Dict("b"=>Dict{String,Any}("terminal_names"=>["a","r"],"neutral_terminal"=>"r")),
         "ibr"=>Dict("i"=>Dict{String,Any}("bus"=>"b","terminal_map"=>["a","r"],"topology"=>"FOUR_LEG")))
-    @test_throws ArgumentError PowerOptLab.kron_reduce_bmopf(n)
+    out = PowerOptLab.kron_reduce_bmopf(n)
+    @test out["ibr"]["i"]["terminal_map"] == ["a"]
+    # The reduction is recorded in this reducer's own provenance, not by
+    # stamping a downstream formulation's private key onto the component.
+    @test !any(startswith(String(k), "_l3f_") for k in keys(out["ibr"]["i"]))
+    changes = out["_meta"]["kron_reduction"]["changes"]
+    entry = only(c for c in changes
+                 if c isa AbstractDict && get(c, "component", "") == "ibr/i")
+    @test entry["reduced_neutral_leg"] == "FOUR_LEG"
+    @test occursin("neutral-conductor limit", entry["reason"])
+
+    limited = deepcopy(n)
+    limited["ibr"]["i"]["i_max"] = [10.0, 5.0]
+    @test_throws ArgumentError PowerOptLab.kron_reduce_bmopf(limited)
+    controlled = deepcopy(n)
+    controlled["ibr"]["i"]["neutral_current_control"] = "fixed"
+    @test_throws ArgumentError PowerOptLab.kron_reduce_bmopf(controlled)
 end
 
 @testset "Kron removes a neutral-only switch using both bus roles" begin
