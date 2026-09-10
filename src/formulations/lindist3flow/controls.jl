@@ -125,11 +125,16 @@ function _l3f_permissive_restricted_controls!(findings, net)
                 end
             end
         end
+        # Name the fields that survived alongside those that did not: the
+        # useful question after a permissive drop is what the solved device
+        # still enforces, which a constant flag cannot answer.
+        retained = sort!([field for field in String.(keys(raw))
+                          if !startswith(field, "_")])
         isempty(dropped) || _l3f_warning!(findings,
             "A.L3F.IBR_FIELDS_DROPPED", :ibr, iid,
             "unsupported IBR fields were dropped under unsupported=:permissive",
             evidence=Dict("original_fields" => dropped,
-                          "retained_power_injection" => true))
+                          "retained_fields" => retained))
     end
 
     if profiles isa AbstractDict
@@ -161,7 +166,7 @@ function _l3f_lower_restricted_controls!(findings, net)
                 "cost", "control_profile", "dc_link_coupled", "p_dc_min", "p_dc_max",
                 "aggregate_p_min", "aggregate_p_max", "aggregate_q_min",
                 "aggregate_q_max", "aggregate_s_max", "v_target", "fixed_pf",
-                "grid_forming", "_l3f_neutral_reduced"))
+                "grid_forming"))
             unknown = setdiff(Set(String.(keys(raw))), supported)
             isempty(unknown) || throw(ArgumentError(
                 "unsupported IBR fields: $(join(sort!(collect(unknown)), ", "))"))

@@ -5,59 +5,8 @@ using Ipopt
 using Clarabel
 using PowerOptLab
 
-function _l3f_case(; generator=false, explicit_neutral=false)
-    terminals = explicit_neutral ? ["a", "n"] : ["a"]
-    source_vm = explicit_neutral ? [230.0, 0.0] : [230.0]
-    source_va = zeros(length(source_vm))
-    load_map = copy(terminals)
-    load_p = [10_000.0]
-    load_q = [2_000.0]
-    lc = Dict{String,Any}(
-        "R_series_1_1" => 0.2,
-        "X_series_1_1" => 0.1,
-    )
-    if explicit_neutral
-        merge!(lc, Dict{String,Any}(
-            "R_series_1_2" => 0.02, "X_series_1_2" => 0.01,
-            "R_series_2_2" => 0.1, "X_series_2_2" => 0.05,
-        ))
-    end
-    net = Dict{String,Any}(
-        "terminal_conventions" => Dict{String,Any}(
-            "phase" => ["a"], "neutral" => explicit_neutral ? ["n"] : String[]),
-        "bus" => Dict(
-            "source" => Dict{String,Any}(
-                "terminal_names" => copy(terminals),
-                "perfectly_grounded_terminals" => explicit_neutral ? ["n"] : String[]),
-            "load" => Dict{String,Any}(
-                "terminal_names" => copy(terminals),
-                "perfectly_grounded_terminals" => explicit_neutral ? ["n"] : String[],
-                "v_min" => explicit_neutral ? [180.0, 0.0] : [180.0],
-                "v_max" => explicit_neutral ? [250.0, 0.0] : [250.0])),
-        "linecode" => Dict("lc" => lc),
-        "line" => Dict("line" => Dict{String,Any}(
-            "bus_from" => "source", "bus_to" => "load",
-            "terminal_map_from" => copy(terminals),
-            "terminal_map_to" => copy(terminals), "linecode" => "lc")),
-        "voltage_source" => Dict("source" => Dict{String,Any}(
-            "bus" => "source", "terminal_map" => copy(terminals),
-            "configuration" => "SINGLE_PHASE",
-            "v_magnitude" => source_vm, "v_angle" => source_va,
-            "cost" => [1.0])),
-        "load" => Dict("load" => Dict{String,Any}(
-            "bus" => "load", "terminal_map" => load_map,
-            "configuration" => "SINGLE_PHASE", "model" => "constant_power",
-            "p_nom" => load_p, "q_nom" => load_q)),
-    )
-    if generator
-        net["generator"] = Dict("pv" => Dict{String,Any}(
-            "bus" => "load", "terminal_map" => ["a"],
-            "configuration" => "SINGLE_PHASE",
-            "p_min" => [15_000.0], "p_max" => [15_000.0],
-            "q_min" => [0.0], "q_max" => [0.0], "cost" => [0.0]))
-    end
-    net
-end
+include("lindist3flow_fixtures.jl")
+
 
 function _l3f_regulator_case(; adjustable=false)
     regulator = Dict{String,Any}(

@@ -491,6 +491,20 @@ Accuracy degrades where the underlying assumptions weaken:
 and rankings apply only to the stated surrogate; with general costs they are
 neither guaranteed bounds nor guaranteed rankings for the nonlinear AC problem.
 
+!!! note "A line ampacity can bind here and not in BMOPFTools"
+    A shunt-free line carries one series current, and in exact AC
+    ``|S_{from}|/\sqrt{w_{from}}`` and ``|S_{to}|/\sqrt{w_{to}}`` agree,
+    because the end powers differ by exactly the losses. The lossless model
+    reuses one ``S`` while the end voltages still differ, so those two inferred
+    currents no longer agree and a cone is stamped at **both** ends — which
+    takes the tighter, low-voltage one. BMOPFTools stamps only the from-side
+    cone in that case, so an `i_max` falling between the two inferred values is
+    infeasible here and feasible there. The spread is the loss error: roughly
+    8 % on a short, heavily loaded 0.4 Ω feeder, and about 1 % at IEEE 37
+    loadings. This is a deliberate conservative endpoint contract, not an AC
+    ampacity certificate; the [component model](lindist3flow_components.md)
+    states the constraint exactly.
+
 ### A better reference is not automatically a better answer
 
 [`l3f_reference_from_powerflow`](@ref) matches the selected local closures at a

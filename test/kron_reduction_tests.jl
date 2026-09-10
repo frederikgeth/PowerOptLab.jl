@@ -163,7 +163,14 @@ end
         "ibr"=>Dict("i"=>Dict{String,Any}("bus"=>"b","terminal_map"=>["a","r"],"topology"=>"FOUR_LEG")))
     out = PowerOptLab.kron_reduce_bmopf(n)
     @test out["ibr"]["i"]["terminal_map"] == ["a"]
-    @test out["ibr"]["i"]["_l3f_neutral_reduced"] === true
+    # The reduction is recorded in this reducer's own provenance, not by
+    # stamping a downstream formulation's private key onto the component.
+    @test !any(startswith(String(k), "_l3f_") for k in keys(out["ibr"]["i"]))
+    changes = out["_meta"]["kron_reduction"]["changes"]
+    entry = only(c for c in changes
+                 if c isa AbstractDict && get(c, "component", "") == "ibr/i")
+    @test entry["reduced_neutral_leg"] == "FOUR_LEG"
+    @test occursin("neutral-conductor limit", entry["reason"])
 
     limited = deepcopy(n)
     limited["ibr"]["i"]["i_max"] = [10.0, 5.0]

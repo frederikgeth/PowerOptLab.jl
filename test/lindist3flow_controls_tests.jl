@@ -1,26 +1,9 @@
-function _l3f_controls_case(; generator=Dict{String,Any}(), ibr=Dict{String,Any}())
-    net = Dict{String,Any}(
-        "terminal_conventions" => Dict("phase" => ["a"], "neutral" => String[]),
-        "bus" => Dict(
-            "source" => Dict{String,Any}("terminal_names" => ["a"]),
-            "load" => Dict{String,Any}("terminal_names" => ["a"],
-                "v_min" => [180.0], "v_max" => [260.0])),
-        "linecode" => Dict("lc" => Dict{String,Any}(
-            "R_series_1_1" => 0.2, "X_series_1_1" => 0.1)),
-        "line" => Dict("line" => Dict{String,Any}(
-            "bus_from" => "source", "bus_to" => "load",
-            "terminal_map_from" => ["a"], "terminal_map_to" => ["a"],
-            "linecode" => "lc")),
-        "voltage_source" => Dict("source" => Dict{String,Any}(
-            "bus" => "source", "terminal_map" => ["a"], "configuration" => "WYE",
-            "v_magnitude" => [230.0], "v_angle" => [0.0], "cost" => [1.0])),
-        "load" => Dict("load" => Dict{String,Any}(
-            "bus" => "load", "terminal_map" => ["a"], "configuration" => "WYE",
-            "model" => "constant_power", "p_nom" => [10_000.0], "q_nom" => [2_000.0])))
-    isempty(generator) || (net["generator"] = Dict("g" => generator))
-    isempty(ibr) || (net["ibr"] = Dict("pv" => ibr))
-    net
-end
+using Test
+using JuMP
+using Clarabel
+using PowerOptLab
+
+include("lindist3flow_fixtures.jl")
 
 function _l3f_controls_solve(net; per_unit=false, objective=:source_import)
     solve_l3f_opf(net, Clarabel.Optimizer; options=L3FOptions(
@@ -54,7 +37,6 @@ end
                 "power_factor" => Dict("pf" => -0.8))),
             "ibr" => Dict("pv" => Dict{String,Any}(
                 "bus" => "b", "terminal_map" => ["a", "b", "c"],
-                "_l3f_neutral_reduced" => true,
                 "topology" => "FOUR_LEG", "p_min" => fill(0.0, 3),
                 "p_max" => fill(10.0, 3), "q_min" => fill(-10.0, 3),
                 "q_max" => fill(10.0, 3), "s_max" => fill(12.0, 3),

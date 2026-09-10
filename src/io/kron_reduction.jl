@@ -633,7 +633,15 @@ function kron_reduce_bmopf(input; as_json::Bool=false, neutral_terminals=nothing
                 any(haskey(c, key) for key in ("neutral_i_max", "i_neutral_max",
                                                "neutral_current_control")) &&
                     throw(ArgumentError("IBR '$id' declares explicit neutral-current physics that Kron reduction cannot preserve"))
-                c["_l3f_neutral_reduced"] = true
+                # Record what was done in this reducer's own provenance rather
+                # than stamping a downstream formulation's private key onto a
+                # component dict: `kron_reduce_bmopf` is general-purpose, and
+                # every consumer sees whatever it writes.
+                push!(audit, Dict{String,Any}(
+                    "component"=>"ibr/$(id)",
+                    "reduced_neutral_leg"=>uppercase(string(get(c,"topology",""))),
+                    "reason"=>"active neutral-leg topology reduced; the IBR " *
+                              "declared no neutral-conductor limit to preserve"))
             end
             # Switches have two buses, so resolve both neutral roles before
             # considering a neutral-only closure.  `bus` is not a switch

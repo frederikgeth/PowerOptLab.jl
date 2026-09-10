@@ -1,3 +1,10 @@
+using Test
+using JuMP
+using Clarabel
+using PowerOptLab
+
+include("lindist3flow_fixtures.jl")
+
 @testset "LinDist3Flow permissive preprocessing" begin
     solve_perm(net; pu=false) = solve_l3f_opf(net, Clarabel.Optimizer;
         options=L3FOptions(unsupported=:permissive, objective=:feasibility,
