@@ -64,7 +64,6 @@ makedocs(
         ],
         "LinDist3Flow" => [
             "Formulation and usage" => "formulations/lindist3flow.md",
-            "Component models" => "formulations/lindist3flow_components.md",
         ],
         "Electric vehicle charging" => [
             "Models and object responsibilities" => "ev/index.md",

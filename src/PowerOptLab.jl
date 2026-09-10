@@ -115,13 +115,9 @@ include("formulations/selectors.jl")
 include("formulations/error_tools.jl")
 include("formulations/experiments.jl")
 
-# Independent linearized multiphase OPF for neutral-reduced BMOPF networks.
-include("formulations/lindist3flow/types.jl")
-include("formulations/lindist3flow/coefficients.jl")
-include("formulations/lindist3flow/lowering.jl")
-include("formulations/lindist3flow/controls.jl")
-include("formulations/lindist3flow/applicability.jl")
-include("formulations/lindist3flow/model.jl")
+# FormulationLab owns the LinDist3Flow implementation. This adapter retains
+# PowerOptLab study entry points and supplies its optional nonlinear replay.
+include("formulations/formulationlab.jl")
 
 # Component models — new network elements stamped via model_hook! / solution_hook!
 include("components/devices.jl")

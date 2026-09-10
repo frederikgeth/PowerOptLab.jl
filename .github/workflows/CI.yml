@@ -29,8 +29,8 @@ jobs:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
       - uses: julia-actions/cache@v3
-      # BMOPFTools is not registered yet. Pin the tested source rather than
-      # resolving whichever commit happens to be at the head of main.
+      # BMOPFTools and FormulationLab are unregistered. Install the tested
+      # immutable commits declared in Project.toml.
       - name: Instantiate tested dependencies
         run: julia --project=. scripts/instantiate_pinned.jl
       - uses: julia-actions/julia-buildpkg@latest
