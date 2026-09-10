@@ -158,10 +158,19 @@ end
     @test change["reason"] == "mixed neutral shunt projected onto implicit ground"
 end
 
-@testset "BMOPF Kron reduction refuses active neutral legs" begin
+@testset "BMOPF Kron reduction audits restricted IBR neutral elimination" begin
     n = Dict{String,Any}("bus"=>Dict("b"=>Dict{String,Any}("terminal_names"=>["a","r"],"neutral_terminal"=>"r")),
         "ibr"=>Dict("i"=>Dict{String,Any}("bus"=>"b","terminal_map"=>["a","r"],"topology"=>"FOUR_LEG")))
-    @test_throws ArgumentError PowerOptLab.kron_reduce_bmopf(n)
+    out = PowerOptLab.kron_reduce_bmopf(n)
+    @test out["ibr"]["i"]["terminal_map"] == ["a"]
+    @test out["ibr"]["i"]["_l3f_neutral_reduced"] === true
+
+    limited = deepcopy(n)
+    limited["ibr"]["i"]["i_max"] = [10.0, 5.0]
+    @test_throws ArgumentError PowerOptLab.kron_reduce_bmopf(limited)
+    controlled = deepcopy(n)
+    controlled["ibr"]["i"]["neutral_current_control"] = "fixed"
+    @test_throws ArgumentError PowerOptLab.kron_reduce_bmopf(controlled)
 end
 
 @testset "Kron removes a neutral-only switch using both bus roles" begin

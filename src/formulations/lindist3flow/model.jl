@@ -135,6 +135,33 @@ function _l3f_rescale_source_ratings!(working, physical, bases, options::L3FOpti
     working
 end
 
+"""Restate lowered transformer ratings from SI at their physical endpoints."""
+function _l3f_rescale_transformer_ratings!(working, physical, bases,
+                                           options::L3FOptions)
+    for (subtype, table) in get(working, "transformer", Dict())
+        table isa AbstractDict || continue
+        physical_table = get(get(physical, "transformer", Dict()), subtype, Dict())
+        for (tid, transformer) in table
+            transformer isa AbstractDict || continue
+            original = get(physical_table, tid, nothing)
+            original isa AbstractDict || continue
+            haskey(original, "s_rating") &&
+                (transformer["s_rating"] = Float64(original["s_rating"]) / options.s_base)
+            for side in ("from", "to")
+                key = "i_max_$side"
+                haskey(original, key) || continue
+                bus = String(get(original, "_l3f_physical_bus_$side",
+                                 get(original, "bus_$side", "")))
+                scale = get(bases.i_base, bus, 1.0)
+                raw = original[key]
+                transformer[key] = raw isa AbstractVector ? Float64.(raw) ./ scale :
+                                   Float64(raw) / scale
+            end
+        end
+    end
+    working
+end
+
 function _l3f_working_coordinates(net, reference::L3FReferenceState,
                                   options::L3FOptions)
     options.per_unit || return deepcopy(net), reference, nothing
@@ -142,11 +169,47 @@ function _l3f_working_coordinates(net, reference::L3FReferenceState,
     # Reuse BMOPFTools' public coordinate-preparation contract, but none of its
     # nonlinear component builders.  The returned network is a private working
     # copy and the caller's BMOPF dictionary remains in SI.
-    context = BMOPFTools.initialize_opf_model(net;
+    init_net = deepcopy(net)
+    local_banks = Dict{String,Dict{String,Any}}()
+    tx = get(init_net, "transformer", Dict())
+    native = get!(tx, "single_phase", Dict{String,Any}())
+    for subtype in _L3F_LOCAL_BANK_SUBTYPES
+        table = pop!(tx, subtype, nothing)
+        table isa AbstractDict || continue
+        local_banks[subtype] = Dict{String,Any}()
+        for (id, data) in table
+            synthetic = _l3f_derived("localbank", subtype, id)
+            haskey(native, synthetic) && throw(ArgumentError(
+                "local transformer scaling id collision '$synthetic'"))
+            scaled = deepcopy(data)
+            # The native scaling pass needs nominal fields for its temporary
+            # YY carrier. Closed-delta ratios are dimensionless and the local
+            # map discards these placeholders after scaling.
+            get!(scaled, "v_nom_from", 1.0)
+            get!(scaled, "v_nom_to", 1.0)
+            native[synthetic] = scaled
+            local_banks[subtype][synthetic] = String(id)
+        end
+    end
+    context = BMOPFTools.initialize_opf_model(init_net;
         per_unit=true, s_base=options.s_base, model=JuMP.Model(), kcl_guard=false)
     working = BMOPFTools.opf_network(context)
     bases = BMOPFTools.opf_bases(context)
+    wtx = get(working, "transformer", Dict())
+    wnative = get!(wtx, "single_phase", Dict{String,Any}())
+    for (subtype, ids) in local_banks
+        table = get!(wtx, subtype, Dict{String,Any}())
+        for (synthetic, original) in ids
+            restored = pop!(wnative, synthetic)
+            original_data = net["transformer"][subtype][original]
+            haskey(original_data, "v_nom_from") || delete!(restored, "v_nom_from")
+            haskey(original_data, "v_nom_to") || delete!(restored, "v_nom_to")
+            table[original] = restored
+        end
+    end
     _l3f_rescale_source_ratings!(working, net, bases, options)
+    _l3f_rescale_transformer_ratings!(working, net, bases, options)
+    _l3f_rescale_restricted_controls!(working, net, bases, options)
     voltage = Dict{Tuple{String,String},ComplexF64}(
         key => value / bases.v_base[key[1]] for (key, value) in reference.voltage)
     working_reference = L3FReferenceState(
@@ -177,6 +240,12 @@ function _l3f_add_bounds!(variable, data, index::Int,
 end
 
 _l3f_name(parts...) = join(replace.(string.(parts), r"[^A-Za-z0-9_]" => "_"), "__")
+
+_l3f_physical_endpoint(transformer, side::String) = (
+    String(get(transformer, "_l3f_physical_bus_$side",
+               get(transformer, "bus_$side", ""))),
+    string.(get(transformer, "_l3f_physical_terminal_map_$side",
+                get(transformer, "terminal_map_$side", String[]))))
 
 function _l3f_register_constraint!(constraints, family::Symbol, key, constraint)
     get!(constraints, family, Dict{Any,Any}())[key] = constraint
@@ -393,6 +462,29 @@ function _l3f_build_model(net, topology, reference, report, optimizer, options;
     end
     variables[:w] = w
 
+    # Phase-to-phase limits use the same fixed-angle affine winding-voltage
+    # closure as delta loads and transformer coils. Pair order is terminal
+    # positions (i,j) with i<j, matching BMOPFTools' bus schema.
+    for (busid_raw, bus) in sort!(collect(get(net, "bus", Dict())); by=first)
+        busid = String(busid_raw); tm = string.(bus["terminal_names"])
+        pair = 0
+        vbar = ComplexF64[reference.voltage[(busid, terminal)] for terminal in tm]
+        for i in 1:length(tm)-1, j in i+1:length(tm)
+            pair += 1
+            D = zeros(1, length(tm)); D[1, i] = 1.0; D[1, j] = -1.0
+            v2 = _l3f_winding_voltage_squared(D, 1, vbar, busid, tm, w)
+            if haskey(bus, "vpp_min")
+                _l3f_register_constraint!(constraints, :bus_vpp_lower,
+                    (busid, pair), @constraint(model, v2 >= Float64(bus["vpp_min"][pair])^2))
+            end
+            if haskey(bus, "vpp_max")
+                upper = Float64(bus["vpp_max"][pair])
+                isfinite(upper) && _l3f_register_constraint!(constraints, :bus_vpp_upper,
+                    (busid, pair), @constraint(model, v2 <= upper^2))
+            end
+        end
+    end
+
     p_line = Dict{Tuple{Symbol,String,Int},JuMP.VariableRef}()
     q_line = Dict{Tuple{Symbol,String,Int},JuMP.VariableRef}()
     for edge in topology
@@ -433,6 +525,8 @@ function _l3f_build_model(net, topology, reference, report, optimizer, options;
         end
     end
     variables[:p_generator] = p_generator; variables[:q_generator] = q_generator
+    _l3f_stamp_restricted_controls!(model, constraints, net, reference, w,
+                                    p_generator, q_generator)
 
     p_source = Dict{Tuple{String,Int},JuMP.VariableRef}()
     q_source = Dict{Tuple{String,Int},JuMP.VariableRef}()
@@ -491,15 +585,19 @@ function _l3f_build_model(net, topology, reference, report, optimizer, options;
                     get(transformer, "s_rating", nothing))
                 _l3f_add_current_cone!(model, constraints, :transformer_current,
                     (edge.subtype, edge.id, "from", 1), parent_p, parent_q,
-                    w[(edge.parent, only(edge.parent_map))],
+                    begin
+                        bus, tm = _l3f_physical_endpoint(transformer, "from")
+                        w[(bus, only(tm))]
+                    end,
                     _l3f_scalar_or_indexed(transformer, "i_max_from", 1))
+                to_bus, to_tm = _l3f_physical_endpoint(transformer, "to")
                 for phi in eachindex(edge.child_map)
                     child_ep, child_eq = _l3f_total_endpoint_power(
                         child_p[phi], child_q[phi], -1.0,
                         JuMP.AffExpr(0.0), JuMP.AffExpr(0.0))
                     _l3f_add_current_cone!(model, constraints, :transformer_current,
                         (edge.subtype, edge.id, "to", phi), child_ep, child_eq,
-                        w[(edge.child, edge.child_map[phi])],
+                        w[(to_bus, to_tm[phi])],
                         _l3f_scalar_or_indexed(transformer, "i_max_to", phi))
                 end
             elseif edge.subtype == "open_delta_regulator"
@@ -538,12 +636,73 @@ function _l3f_build_model(net, topology, reference, report, optimizer, options;
                         (parent_p, parent_q) : (child_ep, child_eq)
                     to_p, to_q = parent_is_from ?
                         (child_ep, child_eq) : (parent_p, parent_q)
-                    from_bus = String(transformer["bus_from"])
-                    to_bus = String(transformer["bus_to"])
-                    from_tm = string.(transformer["terminal_map_from"])
-                    to_tm = string.(transformer["terminal_map_to"])
+                    from_bus, from_tm = _l3f_physical_endpoint(transformer, "from")
+                    to_bus, to_tm = _l3f_physical_endpoint(transformer, "to")
                     _l3f_add_current_cone!(model, constraints, :transformer_current,
                         (edge.subtype, edge.id, "from", phi), from_p, from_q,
+                        w[(from_bus, from_tm[phi])],
+                        _l3f_scalar_or_indexed(transformer, "i_max_from", phi))
+                    _l3f_add_current_cone!(model, constraints, :transformer_current,
+                        (edge.subtype, edge.id, "to", phi), to_p, to_q,
+                        w[(to_bus, to_tm[phi])],
+                        _l3f_scalar_or_indexed(transformer, "i_max_to", phi))
+                end
+            elseif edge.subtype == "grounded_wye_wye"
+                # Local grounded YY declares a total three-phase bank rating;
+                # each independent phase coil receives one equal share.
+                for phi in eachindex(edge.parent_map)
+                    parent_p, parent_q = parent_power[phi]
+                    child_ep, child_eq = _l3f_total_endpoint_power(
+                        child_p[phi], child_q[phi], -1.0,
+                        JuMP.AffExpr(0.0), JuMP.AffExpr(0.0))
+                    from_p, from_q = parent_is_from ?
+                        (parent_p, parent_q) : (child_ep, child_eq)
+                    to_p, to_q = parent_is_from ?
+                        (child_ep, child_eq) : (parent_p, parent_q)
+                    from_bus, from_tm = _l3f_physical_endpoint(transformer, "from")
+                    to_bus, to_tm = _l3f_physical_endpoint(transformer, "to")
+                    rating = haskey(transformer, "s_rating") ?
+                        Float64(transformer["s_rating"]) / length(edge.parent_map) : nothing
+                    _l3f_add_power_circle!(model, constraints,
+                        :transformer_apparent_power,
+                        (edge.subtype, edge.id, :coil, phi), from_p, from_q, rating)
+                    _l3f_add_current_cone!(model, constraints, :transformer_current,
+                        (edge.subtype, edge.id, "from", phi), from_p, from_q,
+                        w[(from_bus, from_tm[phi])],
+                        _l3f_scalar_or_indexed(transformer, "i_max_from", phi))
+                    _l3f_add_current_cone!(model, constraints, :transformer_current,
+                        (edge.subtype, edge.id, "to", phi), to_p, to_q,
+                        w[(to_bus, to_tm[phi])],
+                        _l3f_scalar_or_indexed(transformer, "i_max_to", phi))
+                end
+            elseif edge.subtype == "single_phase_autotransformer"
+                # BMOPFTools defines the nameplate on bare through power. Its
+                # from-current rating alone includes the exciting current,
+                # whose branch is physically connected before the referred
+                # leakage impedance.
+                for phi in eachindex(edge.parent_map)
+                    parent_p, parent_q = parent_power[phi]
+                    child_ep, child_eq = _l3f_total_endpoint_power(
+                        child_p[phi], child_q[phi], -1.0,
+                        JuMP.AffExpr(0.0), JuMP.AffExpr(0.0))
+                    from_series_p, from_series_q = parent_is_from ?
+                        (parent_p, parent_q) : (child_ep, child_eq)
+                    to_p, to_q = parent_is_from ?
+                        (child_ep, child_eq) : (parent_p, parent_q)
+                    from_bus, from_tm = _l3f_physical_endpoint(transformer, "from")
+                    to_bus, to_tm = _l3f_physical_endpoint(transformer, "to")
+                    ps, qs = _l3f_derived_shunt_power(net, "noload", edge.id,
+                        "from", from_bus, from_tm, reference, w, phi)
+                    from_terminal_p, from_terminal_q = _l3f_total_endpoint_power(
+                        from_series_p, from_series_q, 1.0, ps, qs)
+                    _l3f_add_power_circle!(model, constraints,
+                        :transformer_apparent_power,
+                        (edge.subtype, edge.id, "from", phi),
+                        from_series_p, from_series_q,
+                        get(transformer, "s_rating", nothing))
+                    _l3f_add_current_cone!(model, constraints, :transformer_current,
+                        (edge.subtype, edge.id, "from", phi),
+                        from_terminal_p, from_terminal_q,
                         w[(from_bus, from_tm[phi])],
                         _l3f_scalar_or_indexed(transformer, "i_max_from", phi))
                     _l3f_add_current_cone!(model, constraints, :transformer_current,
@@ -564,10 +723,8 @@ function _l3f_build_model(net, topology, reference, report, optimizer, options;
                         (parent_p, parent_q) : (child_ep, child_eq)
                     to_series_p, to_series_q = parent_is_from ?
                         (child_ep, child_eq) : (parent_p, parent_q)
-                    from_bus = String(transformer["bus_from"])
-                    to_bus = String(transformer["bus_to"])
-                    from_tm = string.(transformer["terminal_map_from"])
-                    to_tm = string.(transformer["terminal_map_to"])
+                    from_bus, from_tm = _l3f_physical_endpoint(transformer, "from")
+                    to_bus, to_tm = _l3f_physical_endpoint(transformer, "to")
                     ps_to, qs_to = _l3f_derived_shunt_power(net, "noload", edge.id,
                         nothing, to_bus, to_tm, reference, w, phi)
                     to_p, to_q = _l3f_total_endpoint_power(
@@ -1008,7 +1165,8 @@ Supply `voltage_tolerance` (in volts) to have that margin judged; the result
 then carries `within_tolerance`. Physical limits are never certified here.
 
 `replayed_network` is `"as_supplied"` normally and `"projected"` when
-`unsupported=:approximate` substituted a load law, tap, or limit. In that case
+`unsupported=:approximate` or `:permissive` substituted physics or removed a
+constraint. In that case
 both the linear model and the replay describe the *substituted* network, so the
 reported error measures the linearization but not the projection.
 """
@@ -1018,9 +1176,13 @@ function validate_l3f_solution(result::L3FResult;
     result.solve.optimal || return Dict{String,Any}(
         "status" => "not_run", "reason" => "L3F solve was not optimal",
         "physical_limits" => "unassessed")
+    unavailable = _l3f_restricted_replay_reason(result.network)
+    unavailable === nothing || return Dict{String,Any}(
+        "status" => "unavailable", "reason" => unavailable,
+        "physical_limits" => "unassessed")
 
     working = _l3f_fix_dispatch!(deepcopy(result.network), result)
-    # Under `unsupported=:approximate` the snapshot is the projected network, so
+    # Under a projecting policy the snapshot is the projected network, so
     # the replay measures the linearization error but NOT the projection error:
     # both sides are solving the same substituted physics. The flag says which.
     replayed_network = any(f -> startswith(f.code, "A.L3F."),
@@ -1086,6 +1248,7 @@ function solve_l3f_opf(net, optimizer=Clarabel.Optimizer;
     outcome = _solve_outcome(build.model)
     status = SolveStatus(outcome)
     buses, lines, transformers, generators, sources = _l3f_extract(build, outcome)
+    _l3f_trace_restricted_controls!(generators, build.network)
     result = L3FResult(buses, lines, transformers, generators, sources,
         _l3f_physical_objective(build, outcome),
         Dict{String,Any}(
@@ -1097,6 +1260,14 @@ function solve_l3f_opf(net, optimizer=Clarabel.Optimizer;
             "result_units" => "SI",
             "series_losses" => "omitted",
             "unsupported_policy" => String(options.unsupported),
+            "network_semantics" => any(f -> startswith(f.code, "A.L3F."),
+                build.applicability.findings) ? "projected" : "as_supplied",
+            "physical_feasibility_certified" => false,
+            "projections" => [Dict{String,Any}(
+                "code" => f.code, "component" => String(f.component),
+                "id" => f.id, "message" => f.message,
+                "evidence" => deepcopy(f.evidence))
+                for f in build.applicability.findings if startswith(f.code, "A.L3F.")],
             "lowered" => build.applicability.lowered,
             "reference_provenance" => String(build.reference.provenance),
             "reference_hash" => build.reference.source_hash,
@@ -1105,7 +1276,10 @@ function solve_l3f_opf(net, optimizer=Clarabel.Optimizer;
         Dict{String,Any}("status" => "not_requested"),
         build.network, status)
     if options.validate_nonlinear
-        validation = validate_l3f_solution(result; nonlinear_optimizer, voltage_tolerance)
+        unavailable = _l3f_restricted_replay_reason(result.network)
+        validation = unavailable === nothing ?
+            validate_l3f_solution(result; nonlinear_optimizer, voltage_tolerance) :
+            Dict{String,Any}("status" => "unavailable", "reason" => unavailable)
         reference = L3FReferenceState(result.reference.voltage, result.reference.provenance,
             result.reference.source_hash, Symbol(validation["status"]))
         result = L3FResult(result.buses, result.lines, result.transformers, result.generators,

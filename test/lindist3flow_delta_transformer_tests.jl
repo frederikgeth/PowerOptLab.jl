@@ -159,8 +159,9 @@ end
     for subtype in ("delta_wye", "wye_delta")
         net = _l3f_dy_case(subtype; source_on_delta=false)
 
-        # With the wye winding upstream the delta terminals are undetermined in
-        # their common component, so :reject and :lower both refuse.
+        # With the wye winding upstream the delta terminals need a common-mode
+        # gauge and upstream wye zero sequence must be projected out of the coil
+        # relation, so :reject and :lower both refuse.
         for policy in (:reject, :lower)
             report = check_l3f_applicability(net; options=L3FOptions(unsupported=policy))
             @test !is_l3f_applicable(report)
@@ -169,7 +170,7 @@ end
         @test_throws L3FInapplicableError build_l3f_opf(net, Clarabel.Optimizer;
             options=L3FOptions(validate_nonlinear=false))
 
-        # :approximate accepts the zero-zero-sequence gauge, as a warning.
+        # :approximate accepts both projections and records them as a warning.
         report = check_l3f_applicability(net; options=L3FOptions(unsupported=:approximate))
         @test is_l3f_applicable(report)
         gauge = only(f for f in report.findings
@@ -177,6 +178,28 @@ end
         @test gauge.severity == :warning
         @test gauge.evidence["delta_bus"] == "d"
         @test gauge.evidence["wye_bus"] == "y"
+
+        # The pseudo-inverse also projects upstream wye zero sequence. Record
+        # the discarded component from the reference actually selected by the
+        # policy; :source_propagated must ignore a supplied reference argument.
+        unbalanced = deepcopy(net)
+        source = unbalanced["voltage_source"]["v"]
+        base = Float64(source["v_magnitude"][1])
+        source["v_magnitude"] = [base, base, 0.9base]
+        projected_report = check_l3f_applicability(unbalanced;
+            options=L3FOptions(unsupported=:approximate,
+                               reference_policy=:source_propagated),
+            reference=Dict{Tuple{String,String},ComplexF64}())
+        projected = only(f for f in projected_report.findings
+                         if f.code == "A.L3F.DELTA_ZERO_SEQUENCE_GAUGE")
+        v_y = ComplexF64[source["v_magnitude"][k] * cis(source["v_angle"][k])
+                         for k in 1:3]
+        @test projected.evidence["discarded_wye_zero_sequence"] ≈ sum(v_y) / 3
+        data = unbalanced["transformer"][subtype]["t"]
+        D = PowerOptLab._l3f_connection_incidence("DELTA", 3, 3)
+        g, _ = PowerOptLab._l3f_delta_transformer_gain(subtype, data)
+        T = PowerOptLab._l3f_delta_gauge_map(D, g)
+        @test norm(D * T * v_y - g * v_y) ≈ sqrt(3) * abs(g * sum(v_y) / 3)
 
         result = _l3f_dy_solve(net; unsupported=:approximate)
         @test result.solve.optimal
@@ -206,17 +229,17 @@ end
     @test _l3f_dy_has(check_l3f_applicability(invalid),
                       "E.L3F.TRANSFORMER_RATIO_INVALID")
 
-    # Leakage is still refused by default. Coupled Yd/Dy leakage is not lowered
-    # by diagonal phase lines under :lower.
+    # Leakage is refused by default and connection-aware, wye-referred under
+    # :lower. It must never become three fictitious delta-terminal impedances.
     leaky = _l3f_dy_case("delta_wye"; extra=Dict{String,Any}(
         "r_series_from" => 0.5, "x_series_from" => 1.5))
     @test _l3f_dy_has(check_l3f_applicability(leaky),
                       "E.L3F.TRANSFORMER_NONIDEAL_UNSUPPORTED")
     lowered = check_l3f_applicability(leaky; options=L3FOptions(unsupported=:lower))
-    @test !is_l3f_applicable(lowered)
-    @test !_l3f_dy_has(lowered, "L.L3F.TRANSFORMER_LEAKAGE_LOWERED")
-    @test _l3f_dy_has(lowered, "E.L3F.TRANSFORMER_NONIDEAL_UNSUPPORTED")
-    @test_throws L3FInapplicableError _l3f_dy_solve(leaky; unsupported=:lower)
+    @test is_l3f_applicable(lowered)
+    @test _l3f_dy_has(lowered, "L.L3F.TRANSFORMER_LEAKAGE_LOWERED")
+    @test !_l3f_dy_has(lowered, "E.L3F.TRANSFORMER_NONIDEAL_UNSUPPORTED")
+    @test _l3f_dy_solve(leaky; unsupported=:lower).solve.optimal
 
     # A rating binds the winding it is declared on. The two sides of a Yd bank
     # carry different terminal power, so a from-side limit must reach the
@@ -410,5 +433,167 @@ end
     @test turned.solve.optimal
     for bus in keys(base.buses), terminal in keys(base.buses[bus])
         @test base.buses[bus][terminal]["w"] ≈ turned.buses[bus][terminal]["w"] rtol=1e-9
+    end
+end
+
+@testset "LinDist3Flow connection-aware fixed-bank extensions" begin
+    opts(pu; policy=:lower) = L3FOptions(; unsupported=policy, per_unit=pu,
+                                          objective=:feasibility)
+    solve(net, pu; policy=:lower) = solve_l3f_opf(net, Clarabel.Optimizer;
+        options=opts(pu; policy), solver_options=("verbose" => false,))
+
+    for pu in (false, true), subtype in ("wye_delta", "delta_wye"), tap in (0.9, 1.1)
+        net = _l3f_dy_case(subtype)
+        tx = net["transformer"][subtype]["t"]
+        tx["tap"] = tap
+        zw, zd = 0.003 + 0.002im, 1.3 + 0.9im
+        yd = subtype == "wye_delta"
+        tx["r_series_from"], tx["x_series_from"] = reim(yd ? zw : zd)
+        tx["r_series_to"], tx["x_series_to"] = reim(yd ? zd : zw)
+        n0 = tx["v_nom_from"] / tx["v_nom_to"]
+        g0 = yd ? sqrt(3) / n0 : sqrt(3) * n0
+        g = yd ? g0 / tap : g0 * tap
+        zsc = (yd ? tap^2 : 1.0) * (zw + 3 / g0^2 * zd)
+        result = solve(net, pu)
+        @test result.solve.optimal
+        for (k, terminal) in enumerate(("a", "b", "c"))
+            expected = 3 * _L3F_DY_VPN_HV^2 / g^2 -
+                       2 * (real(zsc) * _L3F_DY_P[k] + imag(zsc) * _L3F_DY_Q[k])
+            @test result.buses["y"][terminal]["w"] ≈ expected rtol=2e-7
+        end
+    end
+
+    for pu in (false, true), kind in
+            ("grounded_wye_wye", "delta_delta", "closed_delta_regulator")
+        net = _l3f_dy_case("delta_wye")
+        tx = deepcopy(net["transformer"]["delta_wye"]["t"])
+        net["transformer"] = Dict(kind => Dict("t" => tx))
+        tx["v_nom_from"] = 230.0; tx["v_nom_to"] = 115.0
+        kind in ("delta_delta", "closed_delta_regulator") &&
+            delete!(tx, "s_rating")
+        if kind == "closed_delta_regulator"
+            tx["tap_ratio"] = [1.02, 0.99, 1.04]
+            tx["regulator_type"] = "B"
+            delete!(tx, "v_nom_from"); delete!(tx, "v_nom_to")
+        end
+        net["voltage_source"]["v"]["v_magnitude"] = [200.0, 220.0, 240.0]
+        net["load"]["l"]["p_nom"] = zeros(3)
+        net["load"]["l"]["q_nom"] = zeros(3)
+        vs = [200.0, 220.0, 240.0] .* cis.([0.0, -2pi/3, 2pi/3])
+        expected = if kind == "grounded_wye_wye"
+            vs / 2
+        elseif kind == "delta_delta"
+            (vs .- sum(vs) / 3) / 2
+        else
+            A = regulator_gain_matrix("CLOSED_DELTA", tx["tap_ratio"];
+                                      regulator_type="B")
+            A \ vs
+        end
+        result = solve(net, pu; policy=kind == "delta_delta" ? :approximate : :lower)
+        @test result.solve.optimal
+        for (k, terminal) in enumerate(("a", "b", "c"))
+            @test result.buses["y"][terminal]["w"] ≈ abs2(expected[k]) rtol=2e-7
+        end
+    end
+
+    for kind in ("delta_delta", "closed_delta_regulator")
+        net = _l3f_dy_case("delta_wye")
+        tx = deepcopy(net["transformer"]["delta_wye"]["t"])
+        net["transformer"] = Dict(kind => Dict("t" => tx))
+        kind == "closed_delta_regulator" && begin
+            tx["tap_ratio"] = ones(3)
+            delete!(tx, "v_nom_from"); delete!(tx, "v_nom_to")
+        end
+        report = check_l3f_applicability(net;
+            options=L3FOptions(unsupported=:approximate))
+        @test !is_l3f_applicable(report)
+        @test any(f -> f.code == "E.L3F.LOCAL_BANK_RATING_UNSUPPORTED",
+                  report.findings)
+    end
+
+    raw_core = _l3f_dy_case("delta_wye")
+    raw_core["transformer"]["delta_wye"]["t"]["no_load_shunt"] =
+        Dict("winding" => 2, "g" => 0.01, "b" => -0.02)
+    raw_report = check_l3f_applicability(raw_core;
+        options=L3FOptions(unsupported=:lower))
+    @test !is_l3f_applicable(raw_report)
+    @test any(f -> f.code == "E.L3F.TRANSFORMER_NONIDEAL_UNSUPPORTED",
+              raw_report.findings)
+    materialized = _l3f_dy_case("delta_wye")
+    tx = pop!(materialized["transformer"]["delta_wye"], "t")
+    materialized["transformer"] = Dict("delta_delta" => Dict("t" => tx))
+    materialized["_meta"] = Dict("explicit_transformer_core_shunts" => Dict(
+        "delta_delta/t" => Dict("subtype" => "delta_delta",
+            "transformer_id" => "t", "shunt_id" => "core", "source" => Dict())))
+    meta_report = check_l3f_applicability(materialized;
+        options=L3FOptions(unsupported=:approximate))
+    @test any(f -> f.code == "E.L3F.TRANSFORMER_NONIDEAL_UNSUPPORTED",
+              meta_report.findings)
+
+    # Tap projection must precede leakage referral: an out-of-range declared
+    # tap and the selected fixed midpoint produce identical physical voltage.
+    for pu in (false, true), subtype in ("wye_delta", "delta_wye")
+        projected = _l3f_dy_case(subtype)
+        tx = projected["transformer"][subtype]["t"]
+        tx["tap"] = 1.4; tx["tap_min"] = 0.9; tx["tap_max"] = 1.1
+        tx["r_series_from"] = 0.02; tx["x_series_from"] = 0.01
+        tx["r_series_to"] = 0.03; tx["x_series_to"] = 0.015
+        fixed = deepcopy(projected)
+        ftx = fixed["transformer"][subtype]["t"]
+        ftx["tap"] = 1.0; delete!(ftx, "tap_min"); delete!(ftx, "tap_max")
+        rp = solve(projected, pu; policy=:approximate)
+        rf = solve(fixed, pu; policy=:lower)
+        @test rp.solve.optimal && rf.solve.optimal
+        @test [rp.buses["y"][t]["w"] for t in ("a", "b", "c")] ≈
+              [rf.buses["y"][t]["w"] for t in ("a", "b", "c")] rtol=1e-9
+    end
+end
+
+@testset "LinDist3Flow phase-pair and grounded-neutral voltage bounds" begin
+    opts(pu; policy=:lower) = L3FOptions(; unsupported=policy, per_unit=pu,
+                                          objective=:feasibility)
+    solve(net, pu; policy=:lower) = solve_l3f_opf(net, Clarabel.Optimizer;
+        options=opts(pu; policy), solver_options=("verbose" => false,))
+
+    for pu in (false, true)
+        net = _l3f_dy_case("wye_delta"; source_on_delta=false)
+        delete!(net, "transformer"); delete!(net["bus"], "d")
+        net["load"]["l"]["bus"] = "y"
+        net["voltage_source"]["v"]["v_magnitude"] = [200.0, 220.0, 240.0]
+        expected = sqrt.([200^2 + 220^2 + 200*220,
+                          200^2 + 240^2 + 200*240,
+                          220^2 + 240^2 + 220*240])
+        net["bus"]["y"]["vpp_min"] = expected .- 0.1
+        net["bus"]["y"]["vpp_max"] = expected .+ 0.1
+        @test solve(net, pu).solve.optimal
+        for k in 1:3
+            bad = deepcopy(net)
+            bad["bus"]["y"]["vpp_max"][k] = expected[k] - 0.1
+            @test !solve(bad, pu).solve.optimal
+        end
+        permuted = deepcopy(net)
+        permuted["bus"]["y"]["terminal_names"] = ["c", "a", "b"]
+        permuted["bus"]["y"]["vpp_min"] = (expected .- 0.1)[[2, 3, 1]]
+        permuted["bus"]["y"]["vpp_max"] = (expected .+ 0.1)[[2, 3, 1]]
+        @test solve(permuted, pu).solve.optimal
+
+        invalid = deepcopy(net)
+        invalid["bus"]["y"]["vpp_max"] = [expected[1], expected[2]]
+        report = check_l3f_applicability(invalid; options=opts(pu))
+        @test !is_l3f_applicable(report)
+        @test any(f -> f.code == "E.L3F.VOLTAGE_BOUND_INVALID", report.findings)
+    end
+
+    for pu in (false, true)
+        net = _l3f_case(; explicit_neutral=true)
+        # Existing vector phase bounds intersect a scalar phase-neutral alias
+        # only because the recorded neutral is perfectly grounded and removed.
+        net["bus"]["load"]["v_min"] = [210.0]
+        net["bus"]["load"]["v_max"] = [250.0]
+        net["bus"]["load"]["vpn_min"] = 220.0
+        net["bus"]["load"]["vpn_max"] = 240.0
+        @test solve(net, pu).solve.optimal
+        net["bus"]["load"]["vpn_min"] = 230.0
+        @test !solve(net, pu).solve.optimal
     end
 end

@@ -288,8 +288,19 @@ function _kr_adapt_bus_bounds!(b, id, oldnames, nt, audit)
                     b[gkey] = [side == "min" ? max(g, Float64(x)) : min(g, Float64(x)) for x in nv]
                 end
             elseif gv !== nothing
-                g = gv isa AbstractVector ? throw(ArgumentError("bus '$id' $nkey is scalar but $gkey is vector")) : Float64(gv)
-                b[gkey] = side == "min" ? max(g, Float64(nv)) : min(g, Float64(nv))
+                if gv isa AbstractVector
+                    phase_n = length(oldnames) - 1
+                    length(gv) == length(oldnames) &&
+                        (gv = [gv[i] for i in eachindex(oldnames) if i != p])
+                    length(gv) == phase_n || throw(ArgumentError(
+                        "bus '$id' $gkey has $(length(gv)) entries; expected $phase_n phase entries"))
+                    n = Float64(nv)
+                    b[gkey] = [side == "min" ? max(Float64(x), n) : min(Float64(x), n)
+                               for x in gv]
+                else
+                    g = Float64(gv)
+                    b[gkey] = side == "min" ? max(g, Float64(nv)) : min(g, Float64(nv))
+                end
             else
                 b[gkey] = deepcopy(nv)
             end
@@ -454,10 +465,18 @@ function _kr_transformers!(net, neutrals, audit)
                 [(get(tx,"terminal_map_from",String[]), get(tx,"bus_from", "")),
                  (get(tx,"terminal_map_to",String[]), get(tx,"bus_to", ""))]
             end
-            for (tm,bus) in maps
+            for (map_index, (tm,bus)) in enumerate(maps)
                 nt = get(neutrals,String(bus),nothing)
                 nt === nothing && continue
-                if nt in string.(tm) && !(subtype_s in ("single_phase", "center_tap"))
+                if nt in string.(tm) &&
+                   ((subtype_s == "wye_delta" && map_index != 1) ||
+                    (subtype_s == "delta_wye" && map_index != 2) ||
+                    subtype_s == "delta_delta")
+                    throw(ArgumentError("transformer '$id' subtype '$subtype_s' declares a neutral on a delta winding"))
+                end
+                if nt in string.(tm) && !(subtype_s in ("single_phase", "center_tap",
+                        "single_phase_autotransformer", "wye_delta", "delta_wye",
+                        "grounded_wye_wye"))
                     throw(ArgumentError("transformer '$id' subtype '$subtype_s' carries an explicit neutral; no supported reduced representation is available"))
                 end
             end
@@ -473,7 +492,8 @@ function _kr_transformers!(net, neutrals, audit)
                     nt = get(neutrals, bus, nothing)
                     removed = nt !== nothing && nt in tm
                     _kr_strip_map!(tx, map_key, bus, neutrals,
-                        "transformer '$id' $side"; audit)
+                        "transformer '$id' $side"; audit,
+                        vector_fields=Set(("i_max_$side", "s_max_$side")))
                     if removed
                         for key in (rn_key, xn_key)
                             haskey(tx, key) || continue
@@ -606,7 +626,14 @@ function kron_reduce_bmopf(input; as_json::Bool=false, neutral_terminals=nothing
             _kr_preflight_ts!(c, "$family '$id'")
             if family == "ibr" && uppercase(string(get(c,"topology",""))) in ("FOUR_LEG", "SINGLE_PHASE") &&
                any(get(neutrals,String(get(c,"bus","")),nothing) == t for t in string.(get(c,"terminal_map",String[])))
-                throw(ArgumentError("IBR '$id' uses an active neutral-leg topology; Kron reduction would remove its neutral-current physics"))
+                tm_ibr = string.(get(c, "terminal_map", String[]))
+                imax = get(c, "i_max", nothing)
+                (imax isa AbstractVector && length(imax) == length(tm_ibr)) &&
+                    throw(ArgumentError("IBR '$id' declares a neutral-conductor current limit that Kron reduction cannot preserve"))
+                any(haskey(c, key) for key in ("neutral_i_max", "i_neutral_max",
+                                               "neutral_current_control")) &&
+                    throw(ArgumentError("IBR '$id' declares explicit neutral-current physics that Kron reduction cannot preserve"))
+                c["_l3f_neutral_reduced"] = true
             end
             # Switches have two buses, so resolve both neutral roles before
             # considering a neutral-only closure.  `bus` is not a switch

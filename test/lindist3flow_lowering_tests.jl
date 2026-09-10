@@ -415,6 +415,42 @@ end
     to_voltage = rated_no_load_build.variables[:w][("l", "a")]
     @test !iszero(JuMP.coefficient(to_current_function[3], to_voltage))
 
+    # Leakage must not move a winding current limit to the synthetic internal
+    # endpoint. Pin the cone's live-voltage coordinate directly.
+    endpoint = transformer_case(extra=Dict{String,Any}(
+        "v_nom_from" => 230.0, "v_nom_to" => 230.0,
+        "r_series_to" => 0.2, "x_series_to" => 0.1,
+        "i_max_to" => [45.0]))
+    for per_unit in (false, true)
+        build = build_l3f_opf(endpoint, Clarabel.Optimizer;
+            options=L3FOptions(unsupported=:lower, per_unit=per_unit))
+        cone = JuMP.constraint_object(build.constraints[:transformer_current][
+            ("single_phase", "t", "to", 1)]).func
+        external_w = build.variables[:w][("l", "a")]
+        internal_w = build.variables[:w][("_l3f_xfmr_t_to", "a")]
+        @test JuMP.coefficient(cone[1], external_w) == 1.0
+        @test iszero(JuMP.coefficient(cone[1], internal_w))
+    end
+
+    # The exciting shunt remains at the original winding-2 bus. Its endpoint
+    # current expression follows BMOPFTools' terminal-current convention even
+    # when a to-side leakage line lies between that bus and the ideal core.
+    shunt_endpoint = transformer_case(extra=Dict{String,Any}(
+        "v_nom_from" => 230.0, "v_nom_to" => 230.0,
+        "r_series_to" => 0.2, "x_series_to" => 0.1,
+        "g_no_load" => 0.02, "i_max_to" => [47.5]))
+    for per_unit in (false, true)
+        build = build_l3f_opf(shunt_endpoint, Clarabel.Optimizer;
+            options=L3FOptions(unsupported=:lower, per_unit=per_unit))
+        JuMP.set_silent(build.model); JuMP.optimize!(build.model)
+        @test JuMP.is_solved_and_feasible(build.model)
+        cone = JuMP.constraint_object(build.constraints[:transformer_current][
+            ("single_phase", "t", "to", 1)]).func
+        scale = per_unit ? build.options.s_base : 1.0
+        @test JuMP.value(cone[3]) * scale ≈ -4_000.0 atol=1e-3
+        @test JuMP.value(cone[4]) * scale ≈ -800.0 atol=1e-3
+    end
+
     # And under :reject the leakage is still refused rather than dropped.
     @test _l3f_low_has(check_l3f_applicability(leaky),
                        "E.L3F.TRANSFORMER_NONIDEAL_UNSUPPORTED")
@@ -492,6 +528,23 @@ end
                                 0.004 * secondary["q"][k]) atol=1e-5
     end
     @test result.buses["lv"]["x1"]["vm"] < result.buses["lv"]["x2"]["vm"]
+
+    rated = deepcopy(leaky)
+    tx = rated["transformer"]["center_tap"]["ct"]
+    tx["i_max_from"], tx["i_max_to"] = [10.0], [100.0, 100.0]
+    for per_unit in (false, true)
+        b = build_l3f_opf(rated, Clarabel.Optimizer;
+            options=L3FOptions(unsupported=:lower, per_unit=per_unit))
+        for (side, phi, physical, internal) in (
+                ("from", 1, ("hv", "h"), ("_l3f_xfmr_ct_from", "h")),
+                ("to", 1, ("lv", "x1"), ("_l3f_xfmr_ct_to", "x1")),
+                ("to", 2, ("lv", "x2"), ("_l3f_xfmr_ct_to", "x2")))
+            cone = JuMP.constraint_object(b.constraints[:transformer_current][
+                ("center_tap", "ct", side, phi)]).func
+            @test JuMP.coefficient(cone[1], b.variables[:w][physical]) == 1.0
+            @test iszero(JuMP.coefficient(cone[1], b.variables[:w][internal]))
+        end
+    end
 end
 
 @testset "LinDist3Flow projection: load laws" begin
@@ -520,6 +573,22 @@ end
         end
     end
 
+    # At the fixed source voltage, arbitrary finite exponential tangents retain
+    # nominal P and Q in the actual solved balance, including gamma outside the
+    # common [0,2] range and in both coordinate systems.
+    for gamma in (-1.0, 0.0, 1.0, 1.4, 2.0, 4.0), per_unit in (false, true)
+        at_source = _l3f_low_case()
+        empty!(at_source["line"]); empty!(at_source["linecode"])
+        delete!(at_source["bus"], "m"); delete!(at_source["bus"], "l")
+        load = at_source["load"]["d"]
+        merge!(load, Dict{String,Any}("bus" => "s", "model" => "exponential",
+            "v_nom" => [230.0], "gamma_p" => gamma, "gamma_q" => 2 - gamma))
+        result = _l3f_low_solve(at_source; unsupported=:approximate, per_unit)
+        @test result.solve.optimal
+        @test result.sources["v"]["pg"][1] ≈ 10_000.0 atol=1e-3
+        @test result.sources["v"]["qg"][1] ≈ 2_000.0 atol=1e-3
+    end
+
     # A ZIP current fraction is split evenly and the total fractions survive.
     net = _l3f_low_case()
     merge!(net["load"]["d"], Dict{String,Any}("model" => "zip", "v_nom" => [v_nom],
@@ -539,6 +608,20 @@ end
         "beta_z" => [0.3], "beta_i" => [0.0], "beta_p" => [0.7]))
     _l3f_low_agree(_l3f_low_solve(net; unsupported=:approximate),
                    _l3f_low_solve(projected))
+
+    # Omitted P and Q coefficient families each retain their independent
+    # constant-power default. Projecting alpha_i must not erase q_nom, and the
+    # symmetric beta_i case must not erase p_nom.
+    for active_current in (true, false), per_unit in (false, true)
+        missing = _l3f_low_case()
+        merge!(missing["load"]["d"], Dict{String,Any}(
+            "model" => "zip", "v_nom" => [v_nom],
+            (active_current ? "alpha_i" : "beta_i") => [1.0]))
+        result = _l3f_low_solve(missing; unsupported=:approximate, per_unit)
+        @test result.solve.optimal
+        @test result.sources["v"][active_current ? "qg" : "pg"][1] ≈
+              (active_current ? 2_000.0 : 10_000.0) atol=1e-3
+    end
 
     # A constant-current load becomes the 0.5/0.5 tangent.
     current = _l3f_low_case()
@@ -587,12 +670,38 @@ end
     @test _l3f_low_finding(mid_report,
         "A.L3F.ADJUSTABLE_TAP_PROJECTED").evidence["fixed"] == [1.025]
 
+    for (lo, hi) in ((1.1, 0.9), ("bad", 1.1), (-0.9, 1.1))
+        invalid = deepcopy(net)
+        tx = invalid["transformer"]["single_phase_autotransformer"]["r"]
+        tx["tap_ratio_min"], tx["tap_ratio_max"] = lo, hi
+        report = check_l3f_applicability(invalid;
+            options=L3FOptions(unsupported=:approximate))
+        @test !is_l3f_applicable(report)
+        @test _l3f_low_has(report, "E.L3F.TAP_INTERVAL_INVALID")
+    end
+    fixed_conflict = deepcopy(net)
+    tx = fixed_conflict["transformer"]["single_phase_autotransformer"]["r"]
+    tx["tap_ratio"], tx["tap_ratio_min"], tx["tap_ratio_max"] = 1.05, 1.0, 1.0
+    for policy in (:reject, :lower, :approximate)
+        @test _l3f_low_has(check_l3f_applicability(fixed_conflict;
+            options=L3FOptions(unsupported=policy)), "E.L3F.TAP_INTERVAL_INVALID")
+    end
+    fixed_only = deepcopy(net)
+    tx = fixed_only["transformer"]["single_phase_autotransformer"]["r"]
+    delete!(tx, "tap_ratio")
+    tx["tap_ratio_min"] = tx["tap_ratio_max"] = 1.05
+    fixed_only_report = check_l3f_applicability(fixed_only)
+    @test is_l3f_applicable(fixed_only_report)
+    fixed_declared = deepcopy(fixed_only)
+    tx2 = fixed_declared["transformer"]["single_phase_autotransformer"]["r"]
+    tx2["tap_ratio"] = 1.05
+    _l3f_low_agree(_l3f_low_solve(fixed_only), _l3f_low_solve(fixed_declared))
+
     # Bus limits the formulation does not assess remain errors under every
     # policy; approximate mode never silently relaxes an engineering bound.
     bus_limits = Dict{String,Any}(
         "vpn_min" => [200.0], "vpn_max" => [250.0],
         "vn_max" => 250.0,
-        "vpp_min" => [200.0], "vpp_max" => [450.0],
         "vpos_min" => 0.9, "vpos_max" => 1.1,
         "vuf_max" => 0.02, "vneg_max" => 0.02,
         "vzero_max" => 0.02, "va_diff_min" => -0.1,
@@ -627,7 +736,8 @@ end
         "bus" => "l", "terminal_map" => ["a"], "configuration" => "SINGLE_PHASE",
         "q_rated" => [3_000.0], "v_nom" => 230.0))
     result = solve_l3f_opf(exact, Ipopt.Optimizer;
-        options=L3FOptions(unsupported=:lower, objective=:feasibility),
+        options=L3FOptions(unsupported=:lower, objective=:feasibility,
+                           validate_nonlinear=true),
         solver_options=("print_level" => 0,))
     # A canonical lowering leaves the replay meaningful for the supported model.
     @test result.validation["replayed_network"] == "as_supplied"
@@ -636,7 +746,8 @@ end
     merge!(projected["load"]["d"], Dict{String,Any}(
         "model" => "constant_current", "v_nom" => [230.0]))
     approximate = solve_l3f_opf(projected, Ipopt.Optimizer;
-        options=L3FOptions(unsupported=:approximate, objective=:feasibility),
+        options=L3FOptions(unsupported=:approximate, objective=:feasibility,
+                           validate_nonlinear=true),
         solver_options=("print_level" => 0,))
     # Here both the model and the replay describe the substituted load, so the
     # reported error does not include the projection error. The flag says so.

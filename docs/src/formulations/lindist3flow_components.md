@@ -14,17 +14,18 @@ coordinates. Supported top-level component families are shown below.
 
 | Component | Supported BMOPF data | SI input units |
 |-----------|----------------------|:--------------:|
-| `bus` | retained phase terminals; `v_min`, `v_max` | V |
+| `bus` | retained phase terminals; `v_min`, `v_max`, pair-ordered `vpp_min`, `vpp_max`; grounded-reduction `vpn_*` aliases | V |
 | `voltage_source` | fixed `v_magnitude`, `v_angle`; P/Q/S/I bounds; linear `cost` | V, rad, W, var, VA, A, currency/kWh |
 | `line` / `linecode` | full series R/X matrix; S/I ratings | Ω, VA, A |
 | `load` | `SINGLE_PHASE`, `WYE`, `DELTA`; constant P, constant Z, or ZIP with zero I fractions | W, var, V |
-| `generator` | channel P/Q boxes, S/I ratings, linear `cost` | W, var, VA, A, currency/kWh |
+| `generator` / restricted `ibr` | channel P/Q boxes, S/I ratings, signed fixed PF, aggregate P/Q/S bounds, fixed-P/free-Q voltage target, linear `cost` | W, var, VA, A, V, currency/kWh |
 | `shunt` | fixed full G/B matrix | S |
 | `transformer/single_phase` | fixed ideal ratio | V/V |
 | `transformer/center_tap` | fixed coupled 1→2 split-phase ratio; HV side upstream | V, VA, A |
-| `transformer/single_phase_autotransformer` | fixed ideal ANSI A/B ratio | – |
-| `transformer/wye_delta`, `transformer/delta_wye` | fixed ideal three-phase bank, three retained conductors per side | V, VA, A |
+| `transformer/single_phase_autotransformer` | fixed ANSI A/B ratio; connection-aware leakage and from-side exciting branch under `:lower` | Ω, S, VA, A |
+| `transformer/wye_delta`, `transformer/delta_wye` | fixed three-phase bank, three retained conductors per side; wye-referred leakage and external winding-2 shunt under `:lower` | V, Ω, S, VA, A |
 | `transformer/open_delta_regulator` | fixed ideal two-unit bank, ABBC/BCAC/CABA | –, VA, A |
+| L3F-local `grounded_wye_wye`, `delta_delta`, `closed_delta_regulator` | fixed ideal three-phase maps; `delta_delta` is experimental | V, A |
 
 Ratings follow BMOPF's declared shapes: `s_rating` is a scalar nameplate, while
 `i_max_from`/`i_max_to` are per-conductor arrays — two entries for an open-delta
@@ -41,13 +42,18 @@ documented canonical lowering is selected; they are not silently omitted. The
 full exclusion list is on the [formulation overview](lindist3flow.md).
 
 `L3FOptions(unsupported=:lower)` widens the *input* vocabulary without changing
-any equation on this page: switches, capacitors, line shunts, and justified
-single-phase/center-tap transformer leakage and no-load admittance are rewritten
-into the components above. These are canonical L3F lowerings, not exact AC
-equivalences.
-`unsupported=:approximate` additionally substitutes load laws and taps, which
+the one-shot S-W model class: switches, capacitors, line shunts, supported
+connection-aware transformer equivalents, and restricted fixed-control IBRs
+are rewritten into the components above. These are canonical L3F lowerings,
+not exact AC equivalences.
+`unsupported=:approximate` additionally substitutes load laws and taps, and
+admits the explicitly reported delta-delta common-mode projection, which
 does change the problem. Both are described under
 [widening the admissible input](lindist3flow.md#Widening-the-admissible-input).
+`unsupported=:permissive` further removes well-formed operational constraints
+that lack an S-W representation. Each removal is recorded with its original
+value, and the result marks the solved network semantics as projected; this
+does not certify feasibility for the supplied nonlinear network.
 
 `L3FOptions(per_unit=true, s_base=S_b)` is the default. BMOPFTools' public
 classic scaling preparation supplies the working copy and bases
@@ -216,6 +222,14 @@ Nonzero ``\alpha_I`` or ``\beta_I`` is rejected because it would require a
 non-affine magnitude law or another approximation. Terminal absorption is
 ``H(D_d,\bar v_i)(p^d+jq^d)``.
 
+Under `unsupported=:approximate`, each current fraction is replaced by its
+nominal-voltage tangent, half Z and half P. An exponential term with any finite
+``\gamma`` becomes ``\alpha_Z=\gamma/2`` and
+``\alpha_P=1-\gamma/2`` (independently for P and Q). Coefficients are retained
+verbatim without normalization or clamping, so values outside the usual
+exponent range can produce negative Z or P coefficients. The replacement
+matches value and slope at nominal voltage; it is not a global load-law claim.
+
 ### Generators
 
 Each generator channel injects ``p^g_k+jq^g_k``. Its terminal injection is
@@ -288,11 +302,24 @@ correcting upstream.
 
 For `wye_delta` and `delta_wye` the coil relation is
 ``D\boldsymbol v_\Delta=g\boldsymbol v_Y`` with
-``g=\sqrt3\,V^{nom}_\Delta/V^{nom}_Y``. Since ``\operatorname{rank}D=2`` the
+nominal ``g_0=\sqrt3\,V^{nom}_\Delta/V^{nom}_Y``. The native from-winding tap
+gives ``g=g_0/tap`` for Yd and ``g=g_0tap`` for Dy. Since ``\operatorname{rank}D=2`` the
 map exists only with the delta winding upstream, where ``T_t=D/g``; the reverse
 orientation is closed by the zero-zero-sequence gauge ``T_t=g\,D^{+}`` under
-`unsupported=:approximate`. See
+`unsupported=:approximate`. This pseudo-inverse also projects the upstream wye
+voltage through ``DD^+=I-\mathbf1\mathbf1^T/3``; it is therefore an upstream
+zero-sequence projection as well as a downstream gauge choice. See
 [delta-wye and wye-delta banks](lindist3flow.md#Delta-wye-and-wye-delta-banks).
+
+The local `grounded_wye_wye` map is diagonal. The local `delta_delta` map
+projects away upstream common mode and chooses zero downstream common mode, so
+it is available only under `:approximate`; its neutral and zero-sequence
+current-path consistency is not certified. `closed_delta_regulator` uses the
+three-unit matrix returned by `regulator_gain_matrix("CLOSED_DELTA", ...)`.
+These local subtypes are ideal-only. `delta_delta` and `closed_delta_regulator`
+reject `s_rating` because no coil/unit nameplate convention is declared;
+side-terminal `i_max` remains available. Nonlinear replay is unavailable for
+these local-only subtype names.
 
 For `open_delta_regulator`, ``v_{from}=Av_{to}`` and ``T=A^{-1}``. With effective
 ratios ``r_1,r_2`` and ABBC connection,
@@ -302,8 +329,12 @@ A=\begin{bmatrix}r_1&1-r_1&0\\0&1&0\\0&1-r_2&r_2\end{bmatrix}.
 ```
 
 BCAC and CABA are cyclic permutations. The WYE and closed-delta matrices from
-Bazrafshan, Gatsis, and Zhu are available through `regulator_gain_matrix`, but
-are not stamped as invented BMOPF component subtypes.
+Bazrafshan, Gatsis, and Zhu are also reachable directly through
+`regulator_gain_matrix`, and back the `closed_delta_regulator`,
+`grounded_wye_wye` and `delta_delta` banks. Those three subtype names are
+**L3F-local**: BMOPF does not define them, so a network using one is not
+schema-valid and cannot be replayed through the nonlinear power flow. See
+[L3F-local bank subtypes](lindist3flow.md#L3F-local-bank-subtypes).
 
 ### Nodal power balance
 
@@ -413,12 +444,13 @@ series branch,
 The lossless model instead reuses one series ``S`` while allowing the endpoint
 voltages to differ, so ``|S|/\sqrt{w_{parent}}`` and
 ``|S|/\sqrt{w_{child}}`` need not agree. Requiring both current cones takes the
-tighter endpoint-derived value. This is deliberate conservatism and differs
+tighter endpoint-derived value within the LinDist3Flow surrogate. This does not
+certify AC ampacity and differs
 from BMOPFTools' nonlinear branch builder, which omits its separate to-side
 current cone on a shunt-free line. Both ``S^{max}`` cones are also retained at
 all lines and lowered switches for one uniform endpoint contract.
 
-**Ordinary single-phase transformers and single-phase autotransformers.** Let
+**Ordinary single-phase transformers.** Let
 ``s^{end}_{te\phi}`` be power entering the transformer at original endpoint
 ``e\in\{from,to\}``: the oriented parent expression is ``Hs_t``, the child
 expression is ``-s_t``, and any lowered exciting shunt is added at the original
@@ -436,6 +468,19 @@ while a current rating is stamped only on a side that declares it:
            w_{e\phi},I^{max}_{te\phi}).
 ```
 
+**Single-phase autotransformers.** The scalar `s_rating` bounds bare
+from-side through power only, matching BMOPFTools' autotransformer advantage
+contract. The exciting branch is at the original from terminal. Its power is
+added for `i_max_from`, while `i_max_to` bounds bare output series current.
+Thus the nameplate excludes exciting power even though input ampacity includes
+the exciting current.
+
+Leakage lowering preserves the original physical endpoint bus and terminal map
+for these cones; a synthetic internal-bus voltage is never substituted for the
+declared endpoint voltage. The exciting shunt remains on the original external
+winding-2 bus and is included in the ordinary transformer's endpoint-current
+expression.
+
 **Center-tap transformers.** Let ``s_1,s_2`` be the two child-leg powers and
 ``s_\Sigma=s_1+s_2`` the aggregate HV-coil power. BMOPFTools' scalar nameplate
 is imposed once on that coil,
@@ -451,6 +496,10 @@ The retained primary and leg-current bounds are live-voltage rotated SOCs,
 \qquad
 \mathcal I(\Re s_k,\Im s_k;w_k,I^{max}_{to,k}),\quad k=1,2.
 ```
+
+The center-tap `i_max_to` convention bounds the bare leg-winding currents, so
+its exciting-shunt current is not added to either leg cone. The live voltages
+are still those at the original external LV endpoints after leakage lowering.
 
 Under `unsupported=:lower`, the three-winding star leakage becomes one
 from-side series arm carrying ``s_\Sigma`` and two identical to-side arms
@@ -519,9 +568,11 @@ The reported objective is in the physical SI interpretation in both coordinate
 modes: BMOPFTools scales `cost` by ``S_b`` when it builds the per-unit working
 copy, which exactly cancels the ``1/S_b`` on the power variable.
 
-Because series losses are omitted, both priced objectives understate the true
-cost of serving a load — on IEEE 37 by about 1.95 % of feeder load. They are
-sound for comparing dispatches under one formulation, not as absolute costs.
+Both priced objectives omit the effect of series losses; on IEEE 37 the omitted
+source import is about 1.95 % of feeder load. Their values and rankings apply
+only to the stated surrogate. With general cost coefficients they are neither
+absolute AC costs nor guaranteed bounds or rankings for the nonlinear AC
+problem.
 
 ### Result extraction
 

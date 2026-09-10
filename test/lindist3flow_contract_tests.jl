@@ -381,17 +381,14 @@ end
     @test reference.nonlinear_status in (:OPTIMAL, :LOCALLY_SOLVED)
     @test length(reference.source_hash) == 64
 
-    # The helper itself creates the explicit/provenance-bearing state, so its
-    # preparation phase must not reject an already-reduced input that lacks
-    # `_meta["kron_reduction"]` merely because this option is enabled.
+    # The helper can create an explicit reference independently of whether a
+    # caller elects to require neutral-reduction provenance on a later build.
     explicit_required = l3f_reference_from_powerflow(net;
-        options=L3FOptions(reference_policy=:explicit,
-                           require_neutral_provenance=true),
+        options=L3FOptions(reference_policy=:explicit),
         solver_options=_l3f_ipopt())
     @test explicit_required.provenance == :power_flow
     explicit_build = solve_l3f_opf(net, Clarabel.Optimizer;
-        options=L3FOptions(validate_nonlinear=false, reference_policy=:explicit,
-                           require_neutral_provenance=true),
+        options=L3FOptions(validate_nonlinear=false, reference_policy=:explicit),
         reference=explicit_required, solver_options=_l3f_clarabel())
     @test explicit_build.solve.optimal
     @test explicit_build.formulation["reference_provenance"] == "power_flow"
@@ -595,7 +592,8 @@ end
 @testset "LinDist3Flow nonlinear replay contract" begin
     net = _l3f_two_bus()
     result = solve_l3f_opf(net, Ipopt.Optimizer;
-        options=L3FOptions(objective=:feasibility), solver_options=_l3f_ipopt())
+        options=L3FOptions(objective=:feasibility, validate_nonlinear=true),
+        solver_options=_l3f_ipopt())
     validation = result.validation
     # `status` describes the replay, not the accuracy: the linearization omits
     # series losses, so a converged replay still differs from the linear answer.
@@ -611,11 +609,11 @@ end
 
     # An explicit tolerance is what turns the replay into a judgement.
     loose = solve_l3f_opf(net, Ipopt.Optimizer;
-        options=L3FOptions(objective=:feasibility), solver_options=_l3f_ipopt(),
+        options=L3FOptions(objective=:feasibility, validate_nonlinear=true), solver_options=_l3f_ipopt(),
         voltage_tolerance=5.0)
     @test loose.validation["within_tolerance"] == true
     tight = solve_l3f_opf(net, Ipopt.Optimizer;
-        options=L3FOptions(objective=:feasibility), solver_options=_l3f_ipopt(),
+        options=L3FOptions(objective=:feasibility, validate_nonlinear=true), solver_options=_l3f_ipopt(),
         voltage_tolerance=1e-6)
     @test tight.validation["within_tolerance"] == false
     @test tight.validation["voltage_tolerance"] == 1e-6
@@ -625,7 +623,8 @@ end
     infeasible = _l3f_two_bus()
     infeasible["bus"]["load"]["v_min"] = [259.0]
     skipped = solve_l3f_opf(infeasible, Ipopt.Optimizer;
-        options=L3FOptions(objective=:feasibility), solver_options=_l3f_ipopt())
+        options=L3FOptions(objective=:feasibility, validate_nonlinear=true),
+        solver_options=_l3f_ipopt())
     @test !skipped.solve.optimal
     @test skipped.validation["status"] == "not_run"
     @test isnan(skipped.objective)
@@ -635,6 +634,19 @@ end
     standalone = validate_l3f_solution(result; voltage_tolerance=5.0)
     @test standalone["status"] == "replayed"
     @test standalone["within_tolerance"] == true
+end
+
+@testset "LinDist3Flow default is a one-shot affine/SOC solve" begin
+    build = build_l3f_opf(_l3f_two_bus(), Clarabel.Optimizer)
+    @test all(JuMP.start_value(variable) === nothing
+              for variable in JuMP.all_variables(build.model))
+    @test JuMP.objective_function_type(build.model) <: JuMP.GenericAffExpr
+    @test l3f_model_class(build) in (:LP, :SOCP)
+    result = solve_l3f_opf(_l3f_two_bus(), Clarabel.Optimizer;
+        solver_options=_l3f_clarabel())
+    @test result.solve.optimal
+    @test result.validation["status"] == "not_requested"
+    @test result.reference.provenance == :source_propagated
 end
 
 @testset "LinDist3Flow islands and source assignment" begin
@@ -669,6 +681,91 @@ end
         "bus" => "load", "terminal_map" => ["a"], "configuration" => "SINGLE_PHASE",
         "v_magnitude" => [230.0], "v_angle" => [0.0])
     @test _l3f_has(check_l3f_applicability(doubled), "E.L3F.MULTIPLE_SOURCES")
+
+    # Bus-level connectivity is insufficient: every retained conductor must be
+    # reachable from a source terminal, even when an explicit phasor is supplied.
+    isolated = _l3f_two_bus()
+    isolated["bus"]["load"]["terminal_names"] = ["a", "b"]
+    explicit = Dict(("source", "a") => 230.0 + 0im,
+                    ("load", "a") => 225.0 + 0im,
+                    ("load", "b") => 225.0cis(-2pi / 3))
+    isolated_report = check_l3f_applicability(isolated; reference=explicit)
+    @test !is_l3f_applicable(isolated_report)
+    @test _l3f_has(isolated_report, "E.L3F.CONDUCTOR_UNREACHABLE")
+end
+
+@testset "LinDist3Flow neutral grounding survives reduction" begin
+    # A winding grounded through a nonzero impedance is not a solidly grounded
+    # one. Kron reduction deletes `r_neutral_*`/`x_neutral_*` before the
+    # transformer ideality check can see them, so without an explicit
+    # provenance check the same device would be accepted when supplied with an
+    # explicit neutral and rejected when supplied already reduced. The verdict
+    # must depend on the device, not on which form it arrived in.
+    explicit(rn) = Dict{String,Any}(
+        "terminal_conventions" => Dict("phase" => ["a"], "neutral" => ["n"]),
+        "bus" => Dict(
+            "hv" => Dict{String,Any}("terminal_names" => ["a", "n"],
+                "perfectly_grounded_terminals" => ["n"]),
+            "lv" => Dict{String,Any}("terminal_names" => ["a", "n"],
+                "perfectly_grounded_terminals" => ["n"])),
+        "transformer" => Dict("single_phase" => Dict("t" => merge(Dict{String,Any}(
+            "bus_from" => "hv", "bus_to" => "lv",
+            "terminal_map_from" => ["a", "n"], "terminal_map_to" => ["a", "n"],
+            "v_nom_from" => 11_000.0, "v_nom_to" => 230.0, "s_rating" => 1.0e5), rn))),
+        "voltage_source" => Dict("v" => Dict{String,Any}(
+            "bus" => "hv", "terminal_map" => ["a", "n"], "configuration" => "WYE",
+            "v_magnitude" => [11_000.0, 0.0], "v_angle" => [0.0, 0.0])),
+        "load" => Dict("l" => Dict{String,Any}(
+            "bus" => "lv", "terminal_map" => ["a"], "configuration" => "SINGLE_PHASE",
+            "model" => "constant_power", "p_nom" => [1.0e4], "q_nom" => [2.0e3])))
+    reduced(rn) = Dict{String,Any}(
+        "bus" => Dict("hv" => Dict{String,Any}("terminal_names" => ["a"]),
+                      "lv" => Dict{String,Any}("terminal_names" => ["a"])),
+        "transformer" => Dict("single_phase" => Dict("t" => merge(Dict{String,Any}(
+            "bus_from" => "hv", "bus_to" => "lv",
+            "terminal_map_from" => ["a"], "terminal_map_to" => ["a"],
+            "v_nom_from" => 11_000.0, "v_nom_to" => 230.0, "s_rating" => 1.0e5), rn))),
+        "voltage_source" => Dict("v" => Dict{String,Any}(
+            "bus" => "hv", "terminal_map" => ["a"], "configuration" => "SINGLE_PHASE",
+            "v_magnitude" => [11_000.0], "v_angle" => [0.0])),
+        "load" => Dict("l" => Dict{String,Any}(
+            "bus" => "lv", "terminal_map" => ["a"], "configuration" => "SINGLE_PHASE",
+            "model" => "constant_power", "p_nom" => [1.0e4], "q_nom" => [2.0e3])))
+
+    impedance = Dict{String,Any}("r_neutral_to" => 5.0, "x_neutral_to" => 2.0)
+    solid = Dict{String,Any}("r_neutral_to" => 0.0, "x_neutral_to" => 0.0)
+
+    for policy in (:reject, :lower, :approximate)
+        options = L3FOptions(unsupported=policy)
+        for build in (explicit, reduced)
+            report = check_l3f_applicability(build(impedance); options=options)
+            @test !is_l3f_applicable(report)
+            @test _l3f_has(report, "E.L3F.TRANSFORMER_NONIDEAL_UNSUPPORTED")
+        end
+        # A solidly grounded neutral really is ideal; it must not be flagged.
+        for build in (explicit, reduced)
+            @test is_l3f_applicable(check_l3f_applicability(build(solid); options=options))
+            @test is_l3f_applicable(check_l3f_applicability(
+                build(Dict{String,Any}()); options=options))
+        end
+    end
+
+    # `:permissive` is the mode that accepts the idealization, and it records
+    # the discarded value rather than dropping it silently.
+    permissive = L3FOptions(unsupported=:permissive)
+    for build in (explicit, reduced)
+        report = check_l3f_applicability(build(impedance); options=permissive)
+        @test is_l3f_applicable(report)
+        idealized = [f for f in report.findings
+                     if f.code == "A.L3F.PERMISSIVE_TRANSFORMER_IDEALIZED"]
+        # One per discarded field, each carrying the value it discarded.
+        @test length(idealized) == 2
+        @test all(f -> f.severity == :warning, idealized)
+        @test Set(f.evidence["field"] for f in idealized) ==
+              Set(["r_neutral_to", "x_neutral_to"])
+        @test Set(Float64(f.evidence["original_value"]) for f in idealized) ==
+              Set([5.0, 2.0])
+    end
 end
 
 @testset "LinDist3Flow neutral provenance and Kron boundary" begin
@@ -710,9 +807,19 @@ end
     declared = deepcopy(reduced)
     declared["_meta"] = Dict{String,Any}("kron_reduction" => Dict{String,Any}("applied" => true))
     @test is_l3f_applicable(check_l3f_applicability(declared; options=strict))
-    # An explicit reference is the alternative way to discharge the requirement.
-    @test is_l3f_applicable(check_l3f_applicability(reduced; options=strict,
+    # A phasor reference says nothing about how an explicit neutral was removed.
+    @test !is_l3f_applicable(check_l3f_applicability(reduced; options=strict,
         reference=Dict(("source", "a") => 230.0 + 0im, ("load", "a") => 230.0 + 0im)))
+
+    forced = deepcopy(named)
+    delete!(forced["bus"]["s"], "perfectly_grounded_terminals")
+    strict_forced = check_l3f_applicability(forced;
+        options=L3FOptions(unsupported=:lower))
+    @test _l3f_has(strict_forced, "E.L3F.NEUTRAL_GROUNDING_PROJECTION")
+    approximate_forced = check_l3f_applicability(forced;
+        options=L3FOptions(unsupported=:approximate))
+    @test is_l3f_applicable(approximate_forced)
+    @test _l3f_has(approximate_forced, "A.L3F.NEUTRAL_GROUNDING_PROJECTED")
 end
 
 @testset "LinDist3Flow diagnostic code inventory" begin
@@ -848,10 +955,21 @@ end
                Dict{String,Any}("tap_ratio_min" => 0.9, "tap_ratio_max" => 1.1))
         record!(check_l3f_applicability(bank))
     end
+    let bank = _l3f_wye_bank()
+        tx = bank["transformer"]["single_phase_autotransformer"]["reg_a"]
+        tx["tap_ratio_min"], tx["tap_ratio_max"] = 1.1, 0.9
+        record!(check_l3f_applicability(bank;
+            options=L3FOptions(unsupported=:approximate)))
+    end
+    let net = _l3f_two_bus()
+        net["_meta"] = Dict{String,Any}("kron_reduction" => Dict{String,Any}(
+            "forced_ground_buses" => ["load"], "changes" => Any[]))
+        record!(check_l3f_applicability(net))
+    end
 
     expected = Set([
         "E.L3F.ADJUSTABLE_TAP_UNSUPPORTED", "E.L3F.BUS_UNKNOWN",
-        "E.L3F.CENTER_TAP_ORIENTATION_UNSUPPORTED",
+        "E.L3F.CENTER_TAP_ORIENTATION_UNSUPPORTED", "E.L3F.CONDUCTOR_UNREACHABLE",
         "E.L3F.COMPONENT_UNSUPPORTED", "E.L3F.CONNECTION_UNSUPPORTED",
         "E.L3F.CONTROL_PROFILE_UNSUPPORTED", "E.L3F.DC_SUBSYSTEM_UNSUPPORTED",
         "E.L3F.DEVICE_ARITY", "E.L3F.DEVICE_DATA_INVALID",
@@ -861,13 +979,15 @@ end
         "E.L3F.LINE_IMPEDANCE_SOURCE", "E.L3F.LINE_MATRIX_INVALID",
         "E.L3F.LINE_SHUNT_UNSUPPORTED",
         "E.L3F.LOAD_MODEL_UNSUPPORTED", "E.L3F.MULTIPLE_SOURCES",
-        "E.L3F.NEUTRAL_REDUCTION_UNDECLARED", "E.L3F.REFERENCE_MISSING",
+        "E.L3F.NEUTRAL_REDUCTION_UNDECLARED", "E.L3F.NEUTRAL_GROUNDING_PROJECTION",
+        "E.L3F.NEUTRAL_LIMIT_DISCARDED", "E.L3F.REFERENCE_MISSING",
         "E.L3F.REFERENCE_ZERO_WINDING", "E.L3F.SHUNT_INVALID",
         "E.L3F.SOURCE_MISSING", "E.L3F.SWITCH_UNSUPPORTED",
         "E.L3F.TERMINAL_MAP_INVALID", "E.L3F.TIME_SERIES_UNSUPPORTED",
         "E.L3F.TOPOLOGY_NOT_RADIAL", "E.L3F.TRANSFORMER_NONIDEAL_UNSUPPORTED",
         "E.L3F.TRANSFORMER_RATIO_INVALID", "E.L3F.TRANSFORMER_UNSUPPORTED",
-        "E.L3F.VOLTAGE_BOUND_INVALID", "E.L3F.ZIP_CURRENT_UNSUPPORTED",
+        "E.L3F.TAP_INTERVAL_INVALID", "E.L3F.VOLTAGE_BOUND_INVALID",
+        "E.L3F.ZIP_CURRENT_UNSUPPORTED",
         "W.L3F.COST_MISSING",
     ])
     # Codes that only the lowering pass can emit; reachable cases live in
@@ -878,22 +998,29 @@ end
         "L.L3F.SWITCH_OPEN_REMOVED", "L.L3F.CAPACITOR_LOWERED",
         "L.L3F.LINE_SHUNT_LOWERED", "L.L3F.TRANSFORMER_LEAKAGE_LOWERED",
         "L.L3F.TRANSFORMER_NO_LOAD_LOWERED", "A.L3F.LOAD_LAW_PROJECTED",
-        "A.L3F.ADJUSTABLE_TAP_PROJECTED",
+        "A.L3F.ADJUSTABLE_TAP_PROJECTED", "A.L3F.NEUTRAL_GROUNDING_PROJECTED",
     ])
     # Yd/Dy orientation codes; reachable cases live in
     # lindist3flow_delta_transformer_tests.jl.
     delta = Set(["E.L3F.DELTA_ORIENTATION_UNSUPPORTED",
-                 "A.L3F.DELTA_ZERO_SEQUENCE_GAUGE"])
+                 "A.L3F.DELTA_ZERO_SEQUENCE_GAUGE",
+                 "E.L3F.DELTA_DELTA_REQUIRES_APPROXIMATION",
+                 "A.L3F.DELTA_DELTA_ZERO_SEQUENCE_PROJECTED",
+                 "E.L3F.LOCAL_BANK_RATING_UNSUPPORTED"])
+    controls = Set(["E.L3F.IBR_INVALID", "E.L3F.IBR_UNSUPPORTED",
+                    "E.L3F.GENERATOR_CONTROL_INVALID",
+                    "L.L3F.IBR_TO_GENERATOR"])
     # Codes whose reachable case lives in a dedicated testset above.
     covered = union(emitted, Set([
         "E.L3F.MULTIPLE_SOURCES", "E.L3F.SOURCE_MISSING",
         "E.L3F.TRANSFORMER_NONIDEAL_UNSUPPORTED", "E.L3F.KRON_REDUCTION_FAILED",
         "E.L3F.CENTER_TAP_ORIENTATION_UNSUPPORTED",
+        "E.L3F.NEUTRAL_LIMIT_DISCARDED",
     ]))
     @test setdiff(expected, covered) == Set{String}()
     # Anything emitted here that the inventory does not name is a new code.
     @test setdiff(emitted,
-        union(expected, lowering, delta,
+        union(expected, lowering, delta, controls,
               Set(["E.L3F.KRON_REDUCTION_FAILED"]))) == Set{String}()
 end
 

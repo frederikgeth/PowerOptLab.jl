@@ -1,6 +1,8 @@
 # Yd / Dy banks. Their voltage map is singular, so which winding faces the
 # source is part of the model rather than a bookkeeping detail.
 const _L3F_DELTA_SUBTYPES = ("wye_delta", "delta_wye")
+const _L3F_LOCAL_BANK_SUBTYPES =
+    ("grounded_wye_wye", "delta_delta", "closed_delta_regulator")
 
 const _L3F_UNSUPPORTED_FAMILIES = (
     "switch", "capacitor", "ibr",
@@ -100,20 +102,53 @@ function _l3f_transformers(net)
     out
 end
 
+function _l3f_fixed_setting(data, key::String, lo_key::String, hi_key::String, default)
+    haskey(data, key) && return data[key]
+    if haskey(data, lo_key) && haskey(data, hi_key)
+        lo, hi = data[lo_key], data[hi_key]
+        Float64.(lo isa AbstractVector ? lo : [lo]) ==
+            Float64.(hi isa AbstractVector ? hi : [hi]) && return lo
+    end
+    default
+end
+
 function _l3f_transformer_neff(subtype::String, data)
     if subtype in ("single_phase", "center_tap")
+        tap = Float64(_l3f_fixed_setting(data, "tap", "tap_min", "tap_max", 1.0))
         Float64(data["v_nom_from"]) / Float64(data["v_nom_to"]) *
-            Float64(get(data, "tap", 1.0))
+            tap
     elseif subtype == "single_phase_autotransformer"
-        tap = Float64(get(data, "tap_ratio", 1.0))
+        tap = if haskey(data, "tap_ratio")
+            Float64(data["tap_ratio"])
+        elseif haskey(data, "tap_ratio_min") && haskey(data, "tap_ratio_max") &&
+               Float64(data["tap_ratio_min"]) == Float64(data["tap_ratio_max"])
+            Float64(data["tap_ratio_min"])
+        else
+            1.0
+        end
         uppercase(String(get(data, "regulator_type", "B"))) == "A" ? tap : inv(tap)
     elseif subtype == "open_delta_regulator"
-        tap = Float64.(get(data, "tap_ratio", [1.0, 1.0]))
+        tap = if haskey(data, "tap_ratio")
+            Float64.(data["tap_ratio"])
+        elseif haskey(data, "tap_ratio_min") && haskey(data, "tap_ratio_max") &&
+               Float64.(data["tap_ratio_min"]) == Float64.(data["tap_ratio_max"])
+            Float64.(data["tap_ratio_min"])
+        else
+            [1.0, 1.0]
+        end
         uppercase(String(get(data, "regulator_type", "B"))) == "A" ? tap : inv.(tap)
     elseif subtype in _L3F_DELTA_SUBTYPES
         # Both v_nom are phase-to-neutral equivalents, so this is the nominal
         # from/to ratio; the sqrt(3) of the delta coil lives in the gain, not here.
-        Float64(data["v_nom_from"]) / Float64(data["v_nom_to"])
+        Float64(data["v_nom_from"]) / Float64(data["v_nom_to"]) *
+            Float64(get(data, "tap", 1.0))
+    elseif subtype in ("grounded_wye_wye", "delta_delta")
+        tap = Float64(_l3f_fixed_setting(data, "tap", "tap_min", "tap_max", 1.0))
+        Float64(data["v_nom_from"]) / Float64(data["v_nom_to"]) * tap
+    elseif subtype == "closed_delta_regulator"
+        tap = Float64.(_l3f_fixed_setting(data, "tap_ratio",
+            "tap_ratio_min", "tap_ratio_max", [1.0, 1.0, 1.0]))
+        tap
     else
         throw(ArgumentError("unsupported transformer subtype '$subtype'"))
     end
@@ -129,13 +164,22 @@ star point.
 This is BMOPFTools' executable convention. Its `wye_delta` uses
 ``n_{eff}=\\sqrt3/N`` and its `delta_wye` uses ``n_{eff}=N\\sqrt3``, both with
 ``N = v^{nom}_{from}/v^{nom}_{to}`` and both `v_nom` given as phase-to-neutral
-equivalents. The two collapse to the same statement,
-``g=\\sqrt3\\,v^{nom}_{delta}/v^{nom}_{wye}``: the delta coil spans a
+equivalents. At nominal tap,
+``g_0=\\sqrt3\\,v^{nom}_{delta}/v^{nom}_{wye}``; the native from-winding tap
+gives ``g=g_0/tap`` for Yd and ``g=g_0 tap`` for Dy. The delta coil spans a
 line-to-line voltage while its nominal is quoted phase-to-neutral, and the
 ``\\sqrt3`` is exactly that difference.
 """
 function _l3f_delta_transformer_gain(subtype::String, data)
-    ratio = Float64(data["v_nom_from"]) / Float64(data["v_nom_to"])
+    tap = if haskey(data, "tap")
+        Float64(data["tap"])
+    elseif haskey(data, "tap_min") && haskey(data, "tap_max") &&
+           Float64(data["tap_min"]) == Float64(data["tap_max"])
+        Float64(data["tap_min"])
+    else
+        1.0
+    end
+    ratio = Float64(data["v_nom_from"]) / Float64(data["v_nom_to"]) * tap
     isfinite(ratio) && ratio > 0 ||
         throw(ArgumentError("v_nom_from / v_nom_to must be positive and finite"))
     subtype == "wye_delta" ? (sqrt(3.0) / ratio, false) : (sqrt(3.0) * ratio, true)
@@ -171,7 +215,15 @@ function _l3f_transformer_map(subtype::String, data, parent_is_from::Bool)
         # that centre tap, hence the second retained terminal is anti-phase.
         return reshape([inv(n), -inv(n)], 2, 1)
     elseif subtype == "open_delta_regulator"
-        A = regulator_gain_matrix("OPEN_DELTA", get(data, "tap_ratio", [1.0, 1.0]);
+        tap = if haskey(data, "tap_ratio")
+            data["tap_ratio"]
+        elseif haskey(data, "tap_ratio_min") && haskey(data, "tap_ratio_max") &&
+               Float64.(data["tap_ratio_min"]) == Float64.(data["tap_ratio_max"])
+            data["tap_ratio_min"]
+        else
+            [1.0, 1.0]
+        end
+        A = regulator_gain_matrix("OPEN_DELTA", tap;
             connection=String(get(data, "connection", "")),
             regulator_type=String(get(data, "regulator_type", "B")))
         return parent_is_from ? inv(A) : A
@@ -179,6 +231,22 @@ function _l3f_transformer_map(subtype::String, data, parent_is_from::Bool)
         g, delta_is_from = _l3f_delta_transformer_gain(subtype, data)
         D = _l3f_connection_incidence("DELTA", 3, 3)
         return parent_is_from == delta_is_from ? D ./ g : _l3f_delta_gauge_map(D, g)
+    elseif subtype == "grounded_wye_wye"
+        n = _l3f_transformer_neff(subtype, data)
+        T = Matrix{Float64}(I, 3, 3) ./ n
+        return parent_is_from ? T : inv(T)
+    elseif subtype == "delta_delta"
+        n = _l3f_transformer_neff(subtype, data)
+        C = Matrix{Float64}(I, 3, 3) .- fill(1 / 3, 3, 3)
+        # Both directions require a zero-sequence projection/gauge because a
+        # delta bank has no phase-to-ground reference on either winding.
+        return parent_is_from ? C ./ n : n .* C
+    elseif subtype == "closed_delta_regulator"
+        tap = _l3f_fixed_setting(data, "tap_ratio", "tap_ratio_min",
+                                 "tap_ratio_max", [1.0, 1.0, 1.0])
+        A = regulator_gain_matrix("CLOSED_DELTA", tap;
+            regulator_type=String(get(data, "regulator_type", "B")))
+        return parent_is_from ? inv(A) : A
     end
     throw(ArgumentError("unsupported transformer subtype '$subtype'"))
 end
@@ -220,10 +288,12 @@ function _l3f_validate_transformers!(findings, net)
     buses = get(net, "bus", Dict())
     for (subtype, id, data) in _l3f_transformers(net)
         subtype in ("single_phase", "center_tap", "single_phase_autotransformer",
-                    "open_delta_regulator", _L3F_DELTA_SUBTYPES...) || begin
+                    "open_delta_regulator", _L3F_DELTA_SUBTYPES...,
+                    _L3F_LOCAL_BANK_SUBTYPES...) || begin
             _l3f_error!(findings, "E.L3F.TRANSFORMER_UNSUPPORTED", :transformer, id,
                 "only fixed ideal single_phase, center_tap, single_phase_autotransformer, " *
-                "wye_delta, delta_wye, and open_delta_regulator devices are supported")
+                "wye_delta, delta_wye, grounded_wye_wye, delta_delta, and fixed " *
+                "open/closed-delta regulator devices are supported")
             continue
         end
         bf, bt = String(get(data, "bus_from", "")), String(get(data, "bus_to", ""))
@@ -240,7 +310,8 @@ function _l3f_validate_transformers!(findings, net)
                 "a Kron-reduced center_tap requires one retained HV terminal and two retained LV legs" :
                 "transformer terminal maps must be aligned retained conductors on declared buses")
         expected_arity = subtype == "open_delta_regulator" ||
-                         subtype in _L3F_DELTA_SUBTYPES ? 3 : 1
+                         subtype in _L3F_DELTA_SUBTYPES ||
+                         subtype in _L3F_LOCAL_BANK_SUBTYPES ? 3 : 1
         arity_ok = subtype == "center_tap" ? (length(mf) == 1 && length(mt) == 2) :
                    length(mf) == expected_arity
         arity_ok || _l3f_error!(findings,
@@ -253,21 +324,44 @@ function _l3f_validate_transformers!(findings, net)
                 "a Kron-reduced $subtype bank requires three retained phase terminals " *
                 "on each side; the wye star point is the eliminated conductor" :
                 "single-phase transformer/regulator support requires one retained power channel")
-        lo_key, hi_key = subtype in ("single_phase", "center_tap") ? ("tap_min", "tap_max") :
-                                                    ("tap_ratio_min", "tap_ratio_max")
+        lo_key, hi_key = subtype in ("single_phase", "center_tap", _L3F_DELTA_SUBTYPES...,
+                                     "grounded_wye_wye", "delta_delta") ?
+                         ("tap_min", "tap_max") : ("tap_ratio_min", "tap_ratio_max")
         if haskey(data, lo_key) || haskey(data, hi_key)
-            raw_lo, raw_hi = get(data, lo_key, NaN), get(data, hi_key, NaN)
-            lo = raw_lo isa AbstractVector ? Float64.(raw_lo) : [Float64(raw_lo)]
-            hi = raw_hi isa AbstractVector ? Float64.(raw_hi) : [Float64(raw_hi)]
-            (!all(isfinite, lo) || !all(isfinite, hi) || length(lo) != length(hi) ||
-             any(lo .!= hi)) && _l3f_error!(findings,
-                "E.L3F.ADJUSTABLE_TAP_UNSUPPORTED", :transformer, id,
-                "LinDist3Flow accepts fixed regulator settings only; adjustable tap intervals are excluded")
+            try
+                vector(x) = x isa AbstractVector ? Float64.(x) : [Float64(x)]
+                lo, hi = vector(get(data, lo_key, NaN)), vector(get(data, hi_key, NaN))
+                expected = subtype == "open_delta_regulator" ? 2 :
+                           subtype == "closed_delta_regulator" ? 3 : 1
+                valid = length(lo) == expected && length(hi) == expected &&
+                        all(isfinite, lo) && all(isfinite, hi) &&
+                        all(lo .> 0) && all(hi .> 0) && all(lo .<= hi)
+                valid || _l3f_error!(findings, "E.L3F.TAP_INTERVAL_INVALID",
+                    :transformer, id,
+                    "tap interval must contain $expected positive finite lower/upper " *
+                    "value(s) with minimum no greater than maximum")
+                value_key = subtype in ("single_phase", "center_tap", _L3F_DELTA_SUBTYPES...,
+                                        "grounded_wye_wye", "delta_delta") ?
+                            "tap" : "tap_ratio"
+                declared = haskey(data, value_key) ? vector(data[value_key]) : Float64[]
+                valid && all(lo .== hi) && !isempty(declared) &&
+                    (length(declared) != length(lo) || any(declared .!= lo)) &&
+                    _l3f_error!(findings, "E.L3F.TAP_INTERVAL_INVALID",
+                        :transformer, id,
+                        "declared tap $(declared) contradicts the fixed interval $(lo)")
+                valid && any(lo .!= hi) && _l3f_error!(findings,
+                    "E.L3F.ADJUSTABLE_TAP_UNSUPPORTED", :transformer, id,
+                    "LinDist3Flow accepts fixed regulator settings only; adjustable tap intervals are excluded")
+            catch err
+                _l3f_error!(findings, "E.L3F.TAP_INTERVAL_INVALID", :transformer, id,
+                    "tap interval entries must be numeric: $(sprint(showerror, err))")
+            end
         end
         try
             neff = _l3f_transformer_neff(subtype, data)
             neff_values = neff isa AbstractVector ? neff : [neff]
-            expected_ratio_count = subtype == "open_delta_regulator" ? 2 : 1
+            expected_ratio_count = subtype == "open_delta_regulator" ? 2 :
+                                   subtype == "closed_delta_regulator" ? 3 : 1
             subtype in _L3F_DELTA_SUBTYPES && _l3f_delta_transformer_gain(subtype, data)
             length(neff_values) == expected_ratio_count || throw(DimensionMismatch(
                 "expected $expected_ratio_count effective ratio(s)"))
@@ -279,18 +373,35 @@ function _l3f_validate_transformers!(findings, net)
             _l3f_error!(findings, "E.L3F.TRANSFORMER_RATIO_INVALID", :transformer, id,
                         sprint(showerror, err))
         end
+        haskey(data, "no_load_shunt") && _l3f_error!(findings,
+            "E.L3F.TRANSFORMER_NONIDEAL_UNSUPPORTED", :transformer, id,
+            "raw nested no_load_shunt must be normalized by the BMOPF parser " *
+            "before L3F compilation; dictionary input is not interpreted silently")
         for key in ("r_series_from", "x_series_from", "r_series_to", "x_series_to",
                     "g_no_load", "b_no_load", "r_neutral_from", "x_neutral_from",
                     "r_neutral_to", "x_neutral_to")
-            abs(Float64(get(data, key, 0.0))) <= 1e-12 || _l3f_error!(findings,
-                "E.L3F.TRANSFORMER_NONIDEAL_UNSUPPORTED", :transformer, id,
-                "fixed-ratio support is ideal; nonzero '$key' must be represented separately")
+            value = get(data, key, 0.0)
+            if !(value isa Real && !(value isa Bool) && isfinite(value))
+                _l3f_error!(findings, "E.L3F.TRANSFORMER_NONIDEAL_UNSUPPORTED",
+                    :transformer, id, "$key must be finite numeric data")
+            elseif abs(Float64(value)) > 1e-12
+                _l3f_error!(findings,
+                    "E.L3F.TRANSFORMER_NONIDEAL_UNSUPPORTED", :transformer, id,
+                    "fixed-ratio support is ideal; nonzero '$key' must be represented separately")
+            end
         end
         # BMOPF types `i_max_from`/`i_max_to` as `number[]` (per conductor) and
         # `s_rating` as a scalar nameplate. Accept a bare scalar for the
         # single-conductor subtypes too, since that shape reaches the wild.
         for key in ("s_rating", "i_max_from", "i_max_to")
             haskey(data, key) || continue
+            if subtype in ("delta_delta", "closed_delta_regulator") && key == "s_rating"
+                _l3f_error!(findings, "E.L3F.LOCAL_BANK_RATING_UNSUPPORTED",
+                    :transformer, id,
+                    "$subtype s_rating has no declared coil/unit interpretation in " *
+                    "the L3F-local contract; use side terminal i_max limits")
+                continue
+            end
             value = data[key]
             positive(x) = x isa Real && isfinite(x) && x > 0
             # Per-conductor, except for an open-delta bank whose two entries
@@ -462,12 +573,11 @@ function _l3f_validate_components!(findings, net)
                                           "bus has no terminal_names")
         allunique(terminals) || _l3f_error!(findings, "E.L3F.TERMINAL_MAP_INVALID", :bus, bid,
                                             "bus terminal_names are not unique")
-        # Only phase-to-ground v_min/v_max are stamped by the L3F model.  All
-        # other BMOPF voltage-bound flavours must remain visible as errors;
-        # dropping them under `unsupported=:approximate` would silently relax
-        # an engineering constraint.
+        # Phase-to-ground and phase-to-phase magnitudes are stamped. Other
+        # voltage-bound flavours remain visible as errors; dropping them would
+        # silently relax an engineering constraint.
         for key in ("vpn_min", "vpn_max", "vn_max",
-                    "vpp_min", "vpp_max", "vpos_min", "vpos_max",
+                    "vpos_min", "vpos_max",
                     "vuf_max", "vneg_max", "vzero_max", "vm_unbalance_max",
                     "va_diff_min", "va_diff_max")
             haskey(bus, key) || continue
@@ -482,6 +592,24 @@ function _l3f_validate_components!(findings, net)
                 hi === nothing || (isfinite(hi) && hi >= 0) || throw(ArgumentError("invalid v_max"))
                 lo !== nothing && hi !== nothing && lo > hi &&
                     throw(ArgumentError("v_min exceeds v_max at terminal $(terminals[k])"))
+            end
+            npair = length(terminals) * (length(terminals) - 1) ÷ 2
+            for key in ("vpp_min", "vpp_max")
+                raw = get(bus, key, nothing)
+                raw === nothing && continue
+                raw isa AbstractVector && length(raw) == npair ||
+                    throw(DimensionMismatch("$key must have one entry per unordered " *
+                                            "terminal pair ($npair entries)"))
+                values = Float64.(raw)
+                valid_value = key == "vpp_max" ?
+                    (x -> !isnan(x) && x >= 0) : (x -> isfinite(x) && x >= 0)
+                all(valid_value, values) || throw(ArgumentError(
+                    "$key entries must be nonnegative" *
+                    (key == "vpp_min" ? " and finite" : "")))
+            end
+            if haskey(bus, "vpp_min") && haskey(bus, "vpp_max")
+                any(Float64.(bus["vpp_min"]) .> Float64.(bus["vpp_max"])) &&
+                    throw(ArgumentError("vpp_min exceeds vpp_max"))
             end
         catch err
             _l3f_error!(findings, "E.L3F.VOLTAGE_BOUND_INVALID", :bus, bid,
@@ -876,8 +1004,13 @@ function _l3f_topology!(findings, net)
         # conductors that is traversed. In a forest every conductor of a device
         # agrees, because a disagreeing conductor would close a cycle.
         oriented = Dict{Int,Bool}()
+        # Reachability starts at conductors actually fixed by the island's one
+        # source. Merely sharing the source bus does not energize an undeclared
+        # conductor.
+        source_id = only(last.(sources))
+        source = net["voltage_source"][source_id]
         visited = Set((root, terminal)
-                      for terminal in string.(get(net["bus"][root], "terminal_names", String[])))
+                      for terminal in string.(get(source, "terminal_map", String[])))
         queue = sort!(collect(visited))
         while !isempty(queue)
             node = popfirst!(queue)
@@ -886,6 +1019,27 @@ function _l3f_topology!(findings, net)
                 push!(visited, neighbor); push!(queue, neighbor)
                 get!(oriented, e, branches[e][4] == node[1])
             end
+        end
+        missing_terminals = sort!([(bus, terminal) for bus in island
+            for terminal in string.(get(net["bus"][bus], "terminal_names", String[]))
+            if !((bus, terminal) in visited)])
+        isempty(missing_terminals) || _l3f_error!(findings,
+            "E.L3F.CONDUCTOR_UNREACHABLE", :network, nothing,
+            "retained bus terminal(s) are not connected to voltage source " *
+            "'$source_id'; explicit reference values do not establish electrical connectivity";
+            evidence=Dict("source" => source_id, "terminals" => missing_terminals))
+        for (e, (family, subtype, id, bf, mf, bt, mt)) in enumerate(branches)
+            bf in members || continue
+            pairs = _l3f_branch_terminal_pairs(subtype, mf, mt)
+            missing = [(bf, tf, bt, tt) for (tf, tt) in pairs
+                       if !((bf, tf) in visited && (bt, tt) in visited)]
+            (haskey(oriented, e) && isempty(missing)) || _l3f_error!(findings,
+                "E.L3F.CONDUCTOR_UNREACHABLE", family, id,
+                "branch is not uniquely reached outward from a terminal of voltage " *
+                "source '$source_id'; an explicit reference cannot establish an " *
+                "electrical orientation";
+                evidence=Dict("source" => source_id, "conductors" => missing,
+                              "oriented" => haskey(oriented, e)))
         end
         for e in sort!(collect(keys(oriented)))
             family, subtype, id, bf, mf, bt, mt = branches[e]
@@ -922,12 +1076,13 @@ The delta incidence has rank 2, so `D v_delta = g v_wye` determines the wye
 voltages from the delta ones but not the reverse: a delta winding neither
 imposes nor carries a zero-sequence terminal voltage. With the delta winding
 upstream the ideal connection map is directly determined. With the wye winding
-upstream the delta bus's common
-voltage is genuinely undetermined by the transformer, and only a gauge can close
-it — so that orientation is an error unless `unsupported=:approximate` accepts
-the zero-zero-sequence assumption.
+upstream the delta bus's common voltage is genuinely undetermined and the coil
+relation is compatible only with the range of ``D``. The pseudo-inverse closes
+the downstream gauge and projects out upstream wye zero sequence, so the
+orientation is an error unless `unsupported=:approximate` accepts both.
 """
-function _l3f_validate_delta_orientation!(findings, net, topology, options::L3FOptions)
+function _l3f_validate_delta_orientation!(findings, net, topology,
+                                          options::L3FOptions, reference=nothing)
     for edge in topology
         edge.family == :transformer || continue
         edge.subtype in _L3F_DELTA_SUBTYPES || continue
@@ -939,14 +1094,28 @@ function _l3f_validate_delta_orientation!(findings, net, topology, options::L3FO
         end
         delta_parent === true && continue
         wye_bus, delta_bus = edge.parent, edge.child
-        if options.unsupported == :approximate
+        if options.unsupported in (:approximate, :permissive)
+            discarded = nothing
+            if reference !== nothing
+                try
+                    state = _l3f_explicit_reference(reference)
+                    values = ComplexF64[state.voltage[(wye_bus, terminal)]
+                                       for terminal in edge.parent_map]
+                    discarded = sum(values) / length(values)
+                catch
+                    # Reference completeness/shape is validated by the model
+                    # builder; keep applicability diagnostics composable here.
+                end
+            end
             _l3f_warning!(findings, "A.L3F.DELTA_ZERO_SEQUENCE_GAUGE", :transformer,
                 edge.id,
                 "the wye winding faces the source, so the delta terminals at bus " *
-                "'$delta_bus' are determined only up to a common offset; the " *
-                "zero-sequence voltage there is assumed zero. A different ground " *
-                "reference at that bus would give a different answer";
-                evidence=Dict("wye_bus" => wye_bus, "delta_bus" => delta_bus))
+                "'$delta_bus' are determined only up to a common offset. The " *
+                "pseudo-inverse assumes zero delta-bus zero-sequence voltage and " *
+                "also projects out the upstream wye zero-sequence component before " *
+                "enforcing the coil relation";
+                evidence=Dict("wye_bus" => wye_bus, "delta_bus" => delta_bus,
+                              "discarded_wye_zero_sequence" => discarded))
         else
             _l3f_error!(findings, "E.L3F.DELTA_ORIENTATION_UNSUPPORTED", :transformer,
                 edge.id,
@@ -961,9 +1130,172 @@ function _l3f_validate_delta_orientation!(findings, net, topology, options::L3FO
     end
 end
 
+function _l3f_kron_provenance(net)
+    meta = get(net, "_meta", Dict())
+    haskey(meta, "kron_reduction") && return meta["kron_reduction"]
+    get(get(net, "extras", Dict()), "kron_reduction", nothing)
+end
+
+"""Gate model-changing neutral projections recorded by Kron reduction."""
+function _l3f_validate_kron_policy!(findings, net, options::L3FOptions)
+    provenance = _l3f_kron_provenance(net)
+    provenance isa AbstractDict || return
+    changes = get(provenance, "changes", Any[])
+    lost_limits = [change for change in changes
+                   if change isa AbstractDict && haskey(change, "dropped_constraint")]
+    # `vn_max` at a terminal already fixed to ideal ground is redundant. Other
+    # dropped bounds are engineering limits that this formulation does not enforce.
+    forced = String.(get(provenance, "forced_ground_buses", String[]))
+    lost_bounds = [change for change in changes
+                   if change isa AbstractDict && haskey(change, "dropped_bound") &&
+                      !(String(get(change, "dropped_bound", "")) == "vn_max" &&
+                        !(String(get(change, "bus", "")) in forced))]
+    lost = vcat(lost_limits, lost_bounds)
+    if !isempty(lost)
+        if options.unsupported == :permissive
+            _l3f_warning!(findings, "A.L3F.PERMISSIVE_NEUTRAL_LIMIT_DROPPED",
+                :network, nothing,
+                "neutral reduction discarded engineering limits unavailable in S-W";
+                evidence=Dict("original_changes" => deepcopy(lost)))
+        else
+            _l3f_error!(findings, "E.L3F.NEUTRAL_LIMIT_DISCARDED",
+                :network, nothing,
+                "neutral reduction discarded engineering limit(s) that the reduced " *
+                "LinDist3Flow model cannot enforce";
+                evidence=Dict("changes" => lost))
+        end
+    end
+
+    grounding = [change for change in changes
+                 if change isa AbstractDict && haskey(change, "dropped_grounding")]
+
+    # A winding grounded through a nonzero impedance is not a solidly grounded
+    # one — the zero-sequence behaviour differs — so reduction merging it into
+    # ideal ground must reach the same verdict as the identical field declared
+    # on an already-reduced input. Two things conspire to hide it otherwise:
+    # reduction deletes `r_neutral_*`/`x_neutral_*` before
+    # `_l3f_validate_transformers!` can see them, and `forced_ground_buses` is
+    # empty whenever the neutral was already declared perfectly grounded, so the
+    # early return below would discard the evidence entirely.
+    ideal_grounding(change) = begin
+        value = get(change, "value", 0.0)
+        value isa Real && isfinite(value) && iszero(Float64(value))
+    end
+    for change in grounding
+        ideal_grounding(change) && continue
+        component = String(get(change, "component", ""))
+        tid = isempty(component) ? nothing : String(last(split(component, '/')))
+        field = String(get(change, "dropped_grounding", "neutral grounding"))
+        evidence = Dict{String,Any}("field" => field, "component" => component,
+            "original_value" => deepcopy(get(change, "value", nothing)))
+        if options.unsupported == :permissive
+            _l3f_warning!(findings, "A.L3F.PERMISSIVE_TRANSFORMER_IDEALIZED",
+                :transformer, tid,
+                "neutral reduction merged '$field' into ideal ground"; evidence)
+        else
+            _l3f_error!(findings, "E.L3F.TRANSFORMER_NONIDEAL_UNSUPPORTED",
+                :transformer, tid,
+                "neutral reduction would merge a nonzero '$field' into ideal " *
+                "ground; an impedance-grounded winding is not a solidly grounded " *
+                "one. Represent it as a separate supported element, or accept the " *
+                "idealization with L3FOptions(unsupported=:permissive)"; evidence)
+        end
+    end
+
+    # A finite neutral grounding element is redundant when the same terminal
+    # was already declared perfectly grounded. `forced_ground_buses` is the
+    # provenance field that distinguishes an imposed grounding assumption.
+    isempty(forced) && return
+    evidence = Dict{String,Any}("forced_ground_buses" => forced,
+                                "grounding_changes" => grounding)
+    if options.unsupported in (:approximate, :permissive)
+        _l3f_warning!(findings, "A.L3F.NEUTRAL_GROUNDING_PROJECTED", :network,
+            nothing,
+            "explicit neutral elimination imposes ideal grounding not established " *
+            "by the input; results apply to that projected network"; evidence)
+    else
+        _l3f_error!(findings, "E.L3F.NEUTRAL_GROUNDING_PROJECTION", :network,
+            nothing,
+            "explicit neutral elimination would impose ideal grounding. Use " *
+            "unsupported=:approximate to solve and report that projected network";
+            evidence)
+    end
+end
+
+"""Canonicalize phase-neutral bounds after proven ideal-neutral elimination."""
+function _l3f_apply_vpn_aliases!(findings, net; permissive::Bool=false)
+    provenance = _l3f_kron_provenance(net)
+    neutral_buses = provenance isa AbstractDict ?
+        Set(String.(keys(get(provenance, "neutral_buses", Dict())))) : Set{String}()
+    forced = provenance isa AbstractDict ?
+        Set(String.(get(provenance, "forced_ground_buses", String[]))) : Set{String}()
+    for (bid_raw, bus) in get(net, "bus", Dict())
+        bid = String(bid_raw); bus isa AbstractDict || continue
+        any(haskey(bus, key) for key in ("vpn_min", "vpn_max")) || continue
+        if !(bid in neutral_buses) || bid in forced
+            permissive && continue
+            _l3f_error!(findings, "E.L3F.VPN_ALIAS_UNJUSTIFIED", :bus, bid,
+                "vpn bounds can alias phase-to-ground bounds only after a neutral " *
+                "at this bus was proven perfectly grounded and eliminated")
+            continue
+        end
+        n = length(get(bus, "terminal_names", String[]))
+        try
+            for side in ("min", "max")
+                vk, nk = "v_$side", "vpn_$side"
+                haskey(bus, nk) || continue
+                raw = bus[nk]
+                nv = raw isa AbstractVector ? Float64.(raw) : fill(Float64(raw), n)
+                length(nv) == n || throw(DimensionMismatch(
+                    "$nk must contain one value per retained phase ($n entries)"))
+                all(x -> isfinite(x) && x >= 0, nv) || throw(ArgumentError(
+                    "$nk entries must be nonnegative and finite"))
+                gvraw = get(bus, vk, nothing)
+                gv = gvraw === nothing ? nothing :
+                     (gvraw isa AbstractVector ? Float64.(gvraw) : fill(Float64(gvraw), n))
+                gv === nothing || length(gv) == n || throw(DimensionMismatch(
+                    "$vk must contain one value per retained phase ($n entries)"))
+                gv === nothing || all(x -> isfinite(x) && x >= 0, gv) ||
+                    throw(ArgumentError("$vk entries must be nonnegative and finite"))
+                bus[vk] = gv === nothing ? nv :
+                    [side == "min" ? max(gv[k], nv[k]) : min(gv[k], nv[k]) for k in 1:n]
+                delete!(bus, nk)
+            end
+            haskey(bus, "v_min") && haskey(bus, "v_max") &&
+                any(Float64.(bus["v_min"]) .> Float64.(bus["v_max"])) &&
+                throw(ArgumentError("vpn/v intersection is contradictory"))
+            _l3f_info!(findings, "L.L3F.VPN_GROUNDED_ALIAS", :bus, bid,
+                "phase-neutral bounds equal phase-to-ground bounds because the " *
+                "recorded neutral is perfectly grounded and eliminated")
+        catch err
+            _l3f_error!(findings, "E.L3F.VOLTAGE_BOUND_INVALID", :bus, bid,
+                sprint(showerror, err))
+        end
+    end
+end
+
 function _l3f_prepare(input; options::L3FOptions=L3FOptions(), reference=nothing)
     net = _l3f_input(input)
     findings = L3FFinding[]
+    options.unsupported == :permissive &&
+        _l3f_permissive_restricted_controls!(findings, net)
+    options.unsupported == :permissive &&
+        _l3f_permissive_pre_kron_limits!(findings, net)
+    options.unsupported == :permissive &&
+        _l3f_permissive_pre_kron_metadata!(findings, net)
+    core_records = get(get(net, "_meta", Dict()),
+                       "explicit_transformer_core_shunts", Dict())
+    entries = core_records isa AbstractDict ? values(core_records) : core_records
+    for entry in entries
+        entry isa AbstractDict || continue
+        subtype = String(get(entry, "subtype", ""))
+        subtype in _L3F_LOCAL_BANK_SUBTYPES || continue
+        options.unsupported == :permissive && continue
+        _l3f_error!(findings, "E.L3F.TRANSFORMER_NONIDEAL_UNSUPPORTED",
+            :transformer, get(entry, "transformer_id", nothing),
+            "a parser-materialized no-load shunt is not accepted for local bank " *
+            "subtype '$subtype'; its coil connection cannot be inferred")
+    end
     reduced = false
     if _l3f_has_explicit_neutral(net)
         if options.kron_reduce
@@ -979,6 +1311,9 @@ function _l3f_prepare(input; options::L3FOptions=L3FOptions(), reference=nothing
                 "explicit neutrals must be Kron-reduced before L3F model construction")
         end
     end
+    _l3f_validate_kron_policy!(findings, net, options)
+    _l3f_apply_vpn_aliases!(findings, net;
+                            permissive=options.unsupported == :permissive)
     # `kron_reduce_bmopf` eliminates the conductors it recognises as neutrals.
     # A perfectly grounded terminal under any other label survives, and the model
     # would then meet it as a zero reference phasor — a true but unhelpful
@@ -995,22 +1330,52 @@ function _l3f_prepare(input; options::L3FOptions=L3FOptions(), reference=nothing
             "via `terminal_conventions` or `neutral_terminal`";
             evidence=Dict("terminals" => sort(retained)))
     end
-    if options.require_neutral_provenance &&
-       !haskey(get(net, "_meta", Dict()), "kron_reduction") && reference === nothing
-        _l3f_error!(findings, "E.L3F.NEUTRAL_REDUCTION_UNDECLARED", :network, nothing,
-            "neutral-reduction provenance or an explicit reference is required by options")
+    if options.require_neutral_provenance && _l3f_kron_provenance(net) === nothing
+        if options.unsupported == :permissive
+            _l3f_warning!(findings, "A.L3F.PERMISSIVE_NEUTRAL_PROVENANCE_WAIVED",
+                :network, nothing,
+                "required neutral-reduction provenance is absent and was waived")
+        else
+            _l3f_error!(findings, "E.L3F.NEUTRAL_REDUCTION_UNDECLARED", :network, nothing,
+                "neutral-reduction provenance is required by options; a phasor " *
+                "reference does not establish how a neutral was eliminated")
+        end
     end
     lowered = _l3f_lower!(findings, net, options)
+    lowered |= any(f -> startswith(f.code, "A.L3F.") || startswith(f.code, "L.L3F."),
+                   findings)
     options.reference_policy == :explicit && reference === nothing && _l3f_error!(findings,
         "E.L3F.REFERENCE_MISSING", :network, nothing,
         "reference_policy=:explicit requires a reference argument")
     _l3f_validate_components!(findings, net)
+    _l3f_validate_restricted_controls!(findings, net)
     _l3f_validate_shunts!(findings, net)
     _l3f_validate_transformers!(findings, net)
     _l3f_validate_lines!(findings, net)
+    for (tid, _) in get(get(net, "transformer", Dict()), "delta_delta", Dict())
+        if options.unsupported in (:approximate, :permissive)
+            _l3f_warning!(findings, "A.L3F.DELTA_DELTA_ZERO_SEQUENCE_PROJECTED",
+                :transformer, tid,
+                "delta-delta mapping discards the upstream common-mode contribution " *
+                "and selects a zero-common-mode downstream reference; line-to-line " *
+                "behavior is represented, but neutral and zero-sequence current-path " *
+                "consistency is not certified")
+        else
+            _l3f_error!(findings, "E.L3F.DELTA_DELTA_REQUIRES_APPROXIMATION",
+                :transformer, tid,
+                "delta-delta phase-to-ground voltage requires unsupported=:approximate " *
+                "to select zero common-mode gauges")
+        end
+    end
     _l3f_validate_objective!(findings, net, options)
     topology, roots, islands = _l3f_topology!(findings, net)
-    _l3f_validate_delta_orientation!(findings, net, topology, options)
+    actual_reference = try
+        _l3f_reference(net, topology, reference, options.reference_policy)
+    catch
+        nothing
+    end
+    _l3f_validate_delta_orientation!(findings, net, topology, options,
+                                     actual_reference)
     _l3f_validate_center_tap_orientation!(findings, net, topology)
     report = L3FApplicabilityReport(
         any(f -> f.severity == :error, findings) ? :inapplicable : :applicable,

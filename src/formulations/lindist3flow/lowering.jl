@@ -15,6 +15,8 @@
 #                 severity :info — the same L3F approximation is retained
 #   :approximate  also the lossy projections, reported as `A.L3F.*` at severity
 #                 :warning — the solved model is a different problem
+#   :permissive   also removes otherwise-valid operational constraints that
+#                 have no S-W representation, always with original-value evidence
 #
 # Every rewrite lands in the applicability report, so a result can always be
 # traced back to what was actually solved. Nothing here is silent.
@@ -246,8 +248,9 @@ leg powers. This is the coupled three-winding star equivalent: the common
 primary arm, not two independent transformers, retains the leg coupling.
 
 This is a canonical L3F lowering: it preserves the fixed-angle/lossless
-approximation, but it is not an exact AC multi-port. Connection-aware Yd/Dy and
-autotransformer leakage/no-load lowering is deliberately not attempted.
+approximation, but it is not an exact AC multi-port. Yd/Dy banks use a
+wye-referred short-circuit impedance, and autotransformers use their
+from-referred regulating-winding impedance and from-side exciting branch.
 """
 function _l3f_lower_transformer_impedance!(findings, net)
     tables = get(net, "transformer", Dict())
@@ -261,11 +264,190 @@ function _l3f_lower_transformer_impedance!(findings, net)
         for (tid_raw, transformer) in sort!(collect(table); by=first)
             tid = String(tid_raw)
             transformer isa AbstractDict || continue
+            loss_fields = ("r_series_from", "x_series_from", "r_series_to",
+                "x_series_to", "g_no_load", "b_no_load")
+            invalid_loss = false
+            for field in loss_fields
+                haskey(transformer, field) || continue
+                value = transformer[field]
+                if !(value isa Real && !(value isa Bool) && isfinite(value)) ||
+                   (startswith(field, "r_") || field == "g_no_load") && value < 0
+                    _l3f_error!(findings, "E.L3F.TRANSFORMER_NONIDEAL_UNSUPPORTED",
+                        :transformer, tid,
+                        "$field must be finite numeric data" *
+                        ((startswith(field, "r_") || field == "g_no_load") ?
+                         " and nonnegative" : ""))
+                    invalid_loss = true
+                end
+            end
+            invalid_loss && continue
+            if subtype == "single_phase_autotransformer"
+                fields = ("r_series_from", "x_series_from",
+                          "r_series_to", "x_series_to")
+                values = try
+                    Float64[get(transformer, key, 0.0) for key in
+                        (fields..., "g_no_load", "b_no_load")]
+                catch err
+                    _l3f_error!(findings, "E.L3F.TRANSFORMER_DATA_INVALID",
+                        :transformer, tid, sprint(showerror, err)); continue
+                end
+                all(isfinite, values) || begin
+                    _l3f_error!(findings, "E.L3F.TRANSFORMER_DATA_INVALID",
+                        :transformer, tid, "leakage and exciting parameters must be finite"); continue
+                end
+                has_series = any(abs(values[k]) > 1e-12 for k in 1:4)
+                has_shunt = hypot(values[5], values[6]) > 1e-12
+                has_series || has_shunt || continue
+                for side in ("from", "to")
+                    get!(transformer, "_l3f_physical_bus_$side",
+                         String(get(transformer, "bus_$side", "")))
+                    get!(transformer, "_l3f_physical_terminal_map_$side",
+                         string.(get(transformer, "terminal_map_$side", String[])))
+                end
+                if has_series
+                    n = _l3f_transformer_neff(subtype, transformer)
+                    z = complex(Float64(get(transformer, "r_series_from", 0.0)),
+                                Float64(get(transformer, "x_series_from", 0.0))) +
+                        n^2 * complex(Float64(get(transformer, "r_series_to", 0.0)),
+                                      Float64(get(transformer, "x_series_to", 0.0)))
+                    bus = String(transformer["bus_from"])
+                    tm = string.(transformer["terminal_map_from"])
+                    internal = _l3f_derived("xfmr", tid, "from")
+                    buses[internal] = Dict{String,Any}("terminal_names" => copy(tm))
+                    line_id = _l3f_derived("leakage", tid, "from")
+                    line = Dict{String,Any}(
+                        "bus_from" => bus, "bus_to" => internal,
+                        "terminal_map_from" => copy(tm), "terminal_map_to" => copy(tm))
+                    merge!(line, _l3f_diagonal_series(real(z), imag(z), length(tm)))
+                    lines[line_id] = line
+                    transformer["bus_from"] = internal
+                    foreach(key -> delete!(transformer, key), fields)
+                    _l3f_info!(findings, "L.L3F.TRANSFORMER_LEAKAGE_LOWERED",
+                        :transformer, tid,
+                        "autotransformer leakage referred to the physical from side " *
+                        "and represented by series line '$line_id'";
+                        evidence=Dict("line" => line_id, "side" => "from",
+                                      "r" => real(z), "x" => imag(z)))
+                end
+                if has_shunt
+                    bus = String(transformer["_l3f_physical_bus_from"])
+                    tm = string.(transformer["_l3f_physical_terminal_map_from"])
+                    id = _l3f_derived("noload", tid, "from")
+                    shunt = Dict{String,Any}("bus" => bus, "terminal_map" => copy(tm))
+                    ncoil = length(tm)
+                    for k in 1:ncoil
+                        shunt["G_$(k)_$(k)"] = Float64(get(transformer, "g_no_load", 0.0)) / ncoil
+                        shunt["B_$(k)_$(k)"] = Float64(get(transformer, "b_no_load", 0.0)) / ncoil
+                    end
+                    shunts[id] = shunt
+                    delete!(transformer, "g_no_load"); delete!(transformer, "b_no_load")
+                    _l3f_info!(findings, "L.L3F.TRANSFORMER_NO_LOAD_LOWERED",
+                        :transformer, tid,
+                        "autotransformer exciting admittance represented at its " *
+                        "external from terminal as shunt '$id'";
+                        evidence=Dict("shunt" => id, "bus" => bus))
+                end
+                continue
+            end
+            if subtype in _L3F_DELTA_SUBTYPES
+                fields = ("r_series_from", "x_series_from",
+                          "r_series_to", "x_series_to")
+                has_series = any(abs(Float64(get(transformer, key, 0.0))) > 1e-12
+                                 for key in fields)
+                has_shunt = hypot(Float64(get(transformer, "g_no_load", 0.0)),
+                                  Float64(get(transformer, "b_no_load", 0.0))) > 1e-12
+                has_series || has_shunt || continue
+                for side in ("from", "to")
+                    get!(transformer, "_l3f_physical_bus_$side",
+                         String(get(transformer, "bus_$side", "")))
+                    get!(transformer, "_l3f_physical_terminal_map_$side",
+                         string.(get(transformer, "terminal_map_$side", String[])))
+                end
+                if has_series
+                    wye_side = subtype == "wye_delta" ? "from" : "to"
+                    wye_bus_key, wye_map_key = "bus_$wye_side", "terminal_map_$wye_side"
+                    bus = String(transformer[wye_bus_key]); tm = string.(transformer[wye_map_key])
+                    internal = _l3f_derived("xfmr", tid, wye_side)
+                    buses[internal] = Dict{String,Any}("terminal_names" => copy(tm))
+                    N0 = Float64(transformer["v_nom_from"]) /
+                         Float64(transformer["v_nom_to"])
+                    g0 = subtype == "wye_delta" ? sqrt(3.0) / N0 : sqrt(3.0) * N0
+                    tap = if haskey(transformer, "tap")
+                        Float64(transformer["tap"])
+                    elseif haskey(transformer, "tap_min") && haskey(transformer, "tap_max") &&
+                           Float64(transformer["tap_min"]) == Float64(transformer["tap_max"])
+                        Float64(transformer["tap_min"])
+                    else
+                        1.0
+                    end
+                    Zw = subtype == "wye_delta" ?
+                        complex(Float64(get(transformer, "r_series_from", 0.0)),
+                                Float64(get(transformer, "x_series_from", 0.0))) :
+                        complex(Float64(get(transformer, "r_series_to", 0.0)),
+                                Float64(get(transformer, "x_series_to", 0.0)))
+                    Zd = subtype == "wye_delta" ?
+                        complex(Float64(get(transformer, "r_series_to", 0.0)),
+                                Float64(get(transformer, "x_series_to", 0.0))) :
+                        complex(Float64(get(transformer, "r_series_from", 0.0)),
+                                Float64(get(transformer, "x_series_from", 0.0)))
+                    zsc = (subtype == "wye_delta" ? tap^2 : 1.0) *
+                          (Zw + 3 / g0^2 * Zd)
+                    line_id = _l3f_derived("leakage", tid, wye_side)
+                    line = Dict{String,Any}(
+                        "bus_from" => (wye_side == "from" ? bus : internal),
+                        "bus_to" => (wye_side == "from" ? internal : bus),
+                        "terminal_map_from" => copy(tm), "terminal_map_to" => copy(tm))
+                    merge!(line, _l3f_diagonal_series(real(zsc), imag(zsc), length(tm)))
+                    lines[line_id] = line; transformer[wye_bus_key] = internal
+                    foreach(key -> delete!(transformer, key), fields)
+                    _l3f_info!(findings, "L.L3F.TRANSFORMER_LEAKAGE_LOWERED",
+                        :transformer, tid,
+                        "connection-aware Yd/Dy leakage referred to the wye winding " *
+                        "and represented by series line '$line_id'";
+                        evidence=Dict("line" => line_id, "side" => wye_side,
+                                      "r" => real(zsc), "x" => imag(zsc)))
+                end
+                if has_shunt
+                    bus = String(transformer["_l3f_physical_bus_to"])
+                    tm = string.(transformer["_l3f_physical_terminal_map_to"])
+                    n = length(tm); G = Float64(get(transformer, "g_no_load", 0.0)) / n
+                    B = Float64(get(transformer, "b_no_load", 0.0)) / n
+                    Y = subtype == "wye_delta" ? begin
+                        D = _l3f_connection_incidence("DELTA", n, n)
+                        transpose(D) * Diagonal(fill(complex(G, B), n)) * D
+                    end : Diagonal(fill(complex(G, B), n))
+                    id = _l3f_derived("noload", tid)
+                    shunt = Dict{String,Any}("bus" => bus, "terminal_map" => copy(tm))
+                    for i in 1:n, j in 1:n
+                        iszero(real(Y[i,j])) || (shunt["G_$(i)_$(j)"] = real(Y[i,j]))
+                        iszero(imag(Y[i,j])) || (shunt["B_$(i)_$(j)"] = imag(Y[i,j]))
+                    end
+                    shunts[id] = shunt
+                    delete!(transformer, "g_no_load"); delete!(transformer, "b_no_load")
+                    _l3f_info!(findings, "L.L3F.TRANSFORMER_NO_LOAD_LOWERED",
+                        :transformer, tid,
+                        "Yd/Dy winding-2 exciting admittance represented at its " *
+                        "external terminal bus as shunt '$id'";
+                        evidence=Dict("shunt" => id, "bus" => bus))
+                end
+                continue
+            end
             # A center tap is a three-winding star: its one from-side arm is
             # common to both legs, while the two identical to-side star arms
             # are diagonal after the ideal 1->2 core map. Autotransformer,
             # Yd/Dy, and open-delta leakage cannot be decomposed this way.
             subtype in ("single_phase", "center_tap") || continue
+            # Leakage lines introduce internal buses, but nameplate limits and
+            # the exciting branch are defined at the caller's physical winding
+            # endpoints. Preserve those identities before changing either side.
+            get!(transformer, "_l3f_physical_bus_from",
+                 String(get(transformer, "bus_from", "")))
+            get!(transformer, "_l3f_physical_bus_to",
+                 String(get(transformer, "bus_to", "")))
+            get!(transformer, "_l3f_physical_terminal_map_from",
+                 string.(get(transformer, "terminal_map_from", String[])))
+            get!(transformer, "_l3f_physical_terminal_map_to",
+                 string.(get(transformer, "terminal_map_to", String[])))
             for (side, bus_key, map_key, r_key, x_key) in (
                     ("from", "bus_from", "terminal_map_from", "r_series_from", "x_series_from"),
                     ("to", "bus_to", "terminal_map_to", "r_series_to", "x_series_to"))
@@ -296,9 +478,11 @@ function _l3f_lower_transformer_impedance!(findings, net)
             # BMOPFTools places the exciting branch across winding 2: the
             # ordinary transformer's to-side coil, or center-tap LV leg 1.
             # It is one total admittance and is never duplicated over both legs.
-            bus = String(get(transformer, "bus_to", ""))
+            bus = String(get(transformer, "_l3f_physical_bus_to",
+                             get(transformer, "bus_to", "")))
             haskey(buses, bus) || continue
-            tm = string.(get(transformer, "terminal_map_to", String[]))
+            tm = string.(get(transformer, "_l3f_physical_terminal_map_to",
+                             get(transformer, "terminal_map_to", String[])))
             id = _l3f_derived("noload", tid)
             shunt = Dict{String,Any}("bus" => bus, "terminal_map" => copy(tm))
             shunt_positions = subtype == "center_tap" ? (1,) : eachindex(tm)
@@ -377,10 +561,20 @@ function _l3f_project_load!(findings, load, lid)
     end
 
     # ZIP with a non-zero current fraction: reassign that fraction to Z and P.
-    ai, bi = channels("alpha_i", 0.0), channels("beta_i", 0.0)
+    # Each P/Q coefficient family defaults independently to constant power when
+    # the whole family is absent, matching `_l3f_zip_coefficients`. Resolving
+    # those defaults before merging prevents projection of one family from
+    # erasing an omitted nominal contribution in the other.
+    family(prefix) = begin
+        fields = ("$(prefix)_z", "$(prefix)_i", "$(prefix)_p")
+        all(field -> !haskey(load, field), fields) &&
+            return (zeros(nch), zeros(nch), ones(nch))
+        (channels(fields[1], 0.0), channels(fields[2], 0.0),
+         channels(fields[3], 0.0))
+    end
+    az, ai, ap = family("alpha")
+    bz, bi, bp = family("beta")
     all(iszero, ai) && all(iszero, bi) && return
-    az, ap = channels("alpha_z", 0.0), channels("alpha_p", 0.0)
-    bz, bp = channels("beta_z", 0.0), channels("beta_p", 0.0)
     merge!(load, Dict{String,Any}(
         "alpha_z" => az .+ ai ./ 2, "alpha_p" => ap .+ ai ./ 2, "alpha_i" => zeros(nch),
         "beta_z" => bz .+ bi ./ 2, "beta_p" => bp .+ bi ./ 2, "beta_i" => zeros(nch)))
@@ -400,16 +594,48 @@ visible in the report.
 """
 function _l3f_project_taps!(findings, net)
     for (subtype, tid, transformer) in _l3f_transformers(net)
-        value_key, lo_key, hi_key = subtype in ("single_phase", "center_tap") ?
+        value_key, lo_key, hi_key = subtype in ("single_phase", "center_tap", _L3F_DELTA_SUBTYPES...,
+                                                 "grounded_wye_wye", "delta_delta") ?
             ("tap", "tap_min", "tap_max") :
             ("tap_ratio", "tap_ratio_min", "tap_ratio_max")
         haskey(transformer, lo_key) || haskey(transformer, hi_key) || continue
         vector(x) = x isa AbstractVector ? Float64.(x) : [Float64(x)]
-        lo = vector(get(transformer, lo_key, NaN))
-        hi = vector(get(transformer, hi_key, NaN))
-        length(lo) == length(hi) && all(isfinite, lo) && all(isfinite, hi) || continue
-        all(lo .== hi) && continue
-        declared = haskey(transformer, value_key) ? vector(transformer[value_key]) : Float64[]
+        lo, hi = try
+            vector(get(transformer, lo_key, NaN)),
+            vector(get(transformer, hi_key, NaN))
+        catch err
+            _l3f_error!(findings, "E.L3F.TAP_INTERVAL_INVALID", :transformer, tid,
+                "tap interval entries must be numeric: $(sprint(showerror, err))")
+            continue
+        end
+        expected = subtype == "open_delta_regulator" ? 2 :
+                   subtype == "closed_delta_regulator" ? 3 : 1
+        valid = length(lo) == expected && length(hi) == expected &&
+                all(isfinite, lo) && all(isfinite, hi) &&
+                all(lo .> 0) && all(hi .> 0) && all(lo .<= hi)
+        if !valid
+            _l3f_error!(findings, "E.L3F.TAP_INTERVAL_INVALID", :transformer, tid,
+                "tap interval must contain $expected positive finite lower/upper " *
+                "value(s) with minimum no greater than maximum";
+                evidence=Dict("tap_min" => lo, "tap_max" => hi))
+            continue
+        end
+        declared = try
+            haskey(transformer, value_key) ? vector(transformer[value_key]) : Float64[]
+        catch err
+            _l3f_error!(findings, "E.L3F.TAP_INTERVAL_INVALID", :transformer, tid,
+                "declared tap entries must be numeric: $(sprint(showerror, err))")
+            continue
+        end
+        if all(lo .== hi)
+            if !isempty(declared) &&
+               (length(declared) != length(lo) || any(declared .!= lo))
+                _l3f_error!(findings, "E.L3F.TAP_INTERVAL_INVALID", :transformer, tid,
+                    "declared tap $(declared) contradicts the fixed interval $(lo)";
+                    evidence=Dict("tap" => declared, "fixed" => lo))
+            end
+            continue
+        end
         fixed = if length(declared) == length(lo) && all(lo .<= declared .<= hi)
             declared
         else
@@ -426,6 +652,248 @@ function _l3f_project_taps!(findings, net)
     end
 end
 
+function _l3f_permissive_numeric(value)
+    values = value isa AbstractVector ? value : [value]
+    !isempty(values) && all(x -> x isa Real && isfinite(x), values)
+end
+
+"""Drop only well-formed operational data outside the one-shot S-W vocabulary."""
+function _l3f_permissive_constraints!(findings, net)
+    for key in ("control_profile", "time_series")
+        table = get(net, key, nothing)
+        table isa AbstractDict && !isempty(table) || continue
+        if !_l3f_permissive_wellformed(table)
+            _l3f_error!(findings, "E.L3F.CONTROL_PROFILE_UNSUPPORTED", :network,
+                nothing, "top-level '$key' contains malformed or non-finite metadata")
+            continue
+        end
+        original = deepcopy(table)
+        empty!(table)
+        _l3f_warning!(findings, "A.L3F.PERMISSIVE_METADATA_DROPPED", :network,
+            nothing, "unused top-level '$key' metadata was dropped";
+            evidence=Dict("field" => key, "original_value" => original))
+    end
+    bus_fields = ("vpn_min", "vpn_max", "vpos_min", "vpos_max",
+        "vuf_max", "vneg_max", "vzero_max", "vm_unbalance_max",
+        "va_diff_min", "va_diff_max")
+    for (bid, bus) in get(net, "bus", Dict())
+        bus isa AbstractDict || continue
+        for (lo, hi) in (("vpn_min", "vpn_max"), ("vpos_min", "vpos_max"),
+                         ("va_diff_min", "va_diff_max"))
+            haskey(bus, lo) && haskey(bus, hi) || continue
+            lv, hv = bus[lo], bus[hi]
+            if _l3f_permissive_numeric(lv) && _l3f_permissive_numeric(hv)
+                lvs = lv isa AbstractVector ? Float64.(lv) : [Float64(lv)]
+                hvs = hv isa AbstractVector ? Float64.(hv) : [Float64(hv)]
+                (length(lvs) in (1, length(hvs)) || length(hvs) == 1) &&
+                    any(lvs .> hvs) && _l3f_error!(findings,
+                        "E.L3F.VOLTAGE_BOUND_INVALID", :bus, bid,
+                        "$lo exceeds $hi before permissive removal")
+            end
+        end
+        for field in bus_fields
+            haskey(bus, field) || continue
+            value = bus[field]
+            if !_l3f_permissive_numeric(value)
+                _l3f_error!(findings, "E.L3F.VOLTAGE_BOUND_INVALID", :bus, bid,
+                    "$field must contain finite numeric values before it can be dropped")
+                continue
+            end
+            !startswith(field, "va_diff") && any(Float64.(value isa AbstractVector ? value : [value]) .< 0) && begin
+                _l3f_error!(findings, "E.L3F.VOLTAGE_BOUND_INVALID", :bus, bid,
+                    "$field must be nonnegative before it can be dropped"); continue
+            end
+            delete!(bus, field)
+            _l3f_warning!(findings, "A.L3F.PERMISSIVE_VOLTAGE_LIMIT_DROPPED",
+                :bus, bid, "unsupported bus voltage constraint '$field' was dropped";
+                evidence=Dict("field" => field, "original_value" => deepcopy(value)))
+        end
+    end
+    for (lid, line) in get(net, "line", Dict())
+        line isa AbstractDict || continue
+        for field in ("va_diff_min", "va_diff_max")
+            haskey(line, field) || continue
+            value = line[field]
+            if !_l3f_permissive_numeric(value)
+                _l3f_error!(findings, "E.L3F.LIMIT_INVALID", :line, lid,
+                    "$field must contain finite numeric values before it can be dropped")
+                continue
+            end
+            delete!(line, field)
+            _l3f_warning!(findings, "A.L3F.PERMISSIVE_LINE_LIMIT_DROPPED",
+                :line, lid, "unsupported line angle constraint '$field' was dropped";
+                evidence=Dict("field" => field, "original_value" => deepcopy(value)))
+        end
+    end
+
+    local_tables = get(net, "transformer", Dict())
+    for subtype in _L3F_LOCAL_BANK_SUBTYPES
+        for (tid, tx) in get(local_tables, subtype, Dict())
+            tx isa AbstractDict || continue
+            for field in ("r_series_from", "x_series_from", "r_series_to",
+                          "x_series_to", "g_no_load", "b_no_load")
+                haskey(tx, field) || continue
+                value = tx[field]
+                if !(value isa Real && isfinite(value))
+                    _l3f_error!(findings, "E.L3F.TRANSFORMER_NONIDEAL_UNSUPPORTED",
+                        :transformer, tid,
+                        "$field must be finite numeric data before idealization")
+                    continue
+                end
+                delete!(tx, field)
+                iszero(Float64(value)) || _l3f_warning!(findings,
+                    "A.L3F.PERMISSIVE_TRANSFORMER_IDEALIZED", :transformer, tid,
+                    "local bank '$subtype' dropped nonideal field '$field'";
+                    evidence=Dict("subtype" => subtype, "field" => field,
+                                  "original_value" => deepcopy(value)))
+            end
+            if haskey(tx, "s_rating") && subtype in ("delta_delta", "closed_delta_regulator")
+                value = tx["s_rating"]
+                if !(value isa Real && isfinite(value) && value > 0)
+                    _l3f_error!(findings, "E.L3F.LIMIT_INVALID", :transformer, tid,
+                        "s_rating must be positive finite data before it can be dropped")
+                else
+                    delete!(tx, "s_rating")
+                    _l3f_warning!(findings,
+                        "A.L3F.PERMISSIVE_TRANSFORMER_LIMIT_DROPPED", :transformer, tid,
+                        "local bank '$subtype' dropped s_rating without a defined coil interpretation";
+                        evidence=Dict("subtype" => subtype, "field" => "s_rating",
+                                      "original_value" => value))
+                end
+            end
+            if haskey(tx, "no_load_shunt")
+                value = tx["no_load_shunt"]
+                winding = value isa AbstractDict ? get(value, "winding", 0) : 0
+                g = value isa AbstractDict ? get(value, "g", nothing) : nothing
+                b = value isa AbstractDict ? get(value, "b", nothing) : nothing
+                valid = value isa AbstractDict && winding isa Integer && !(winding isa Bool) &&
+                    Int(winding) in (1, 2, 3) && g isa Real && !(g isa Bool) &&
+                    isfinite(g) && g >= 0 && b isa Real && !(b isa Bool) && isfinite(b) &&
+                    !any(haskey(tx, key) for key in ("g_no_load", "b_no_load"))
+                if !valid
+                    _l3f_error!(findings, "E.L3F.TRANSFORMER_NONIDEAL_UNSUPPORTED",
+                        :transformer, tid, "no_load_shunt must be an object before idealization")
+                else
+                    delete!(tx, "no_load_shunt")
+                    _l3f_warning!(findings, "A.L3F.PERMISSIVE_TRANSFORMER_IDEALIZED",
+                        :transformer, tid, "local bank '$subtype' dropped nested no_load_shunt";
+                        evidence=Dict("subtype" => subtype, "field" => "no_load_shunt",
+                                      "original_value" => deepcopy(value)))
+                end
+            end
+        end
+    end
+
+    records = get(get(net, "_meta", Dict()), "explicit_transformer_core_shunts", Dict())
+    records isa AbstractDict || return net
+    shunts = get(net, "shunt", Dict())
+    for (record_id, record) in collect(records)
+        record isa AbstractDict || continue
+        subtype = String(get(record, "subtype", ""))
+        subtype in _L3F_LOCAL_BANK_SUBTYPES || continue
+        shunt_id = String(get(record, "shunt_id", ""))
+        haskey(shunts, shunt_id) || continue
+        original = deepcopy(shunts[shunt_id])
+        delete!(shunts, shunt_id); delete!(records, record_id)
+        _l3f_warning!(findings, "A.L3F.PERMISSIVE_TRANSFORMER_IDEALIZED",
+            :transformer, get(record, "transformer_id", nothing),
+            "parser-materialized local-bank core shunt '$shunt_id' was removed";
+            evidence=Dict("subtype" => subtype, "shunt_id" => shunt_id,
+                          "original_value" => original))
+    end
+    net
+end
+
+function _l3f_permissive_pre_kron_metadata!(findings, net)
+    tables = [(family, get(net, family, Dict())) for family in
+        ("bus", "line", "load", "generator", "voltage_source", "shunt",
+         "switch", "capacitor", "ibr")]
+    for (subtype, table) in get(net, "transformer", Dict())
+        push!(tables, ("transformer", table))
+    end
+    for (family, table) in tables, (id, component) in table
+        component isa AbstractDict && haskey(component, "time_series") || continue
+        value = component["time_series"]
+        if !(value isa AbstractDict || value isa AbstractString) ||
+           !_l3f_permissive_wellformed(value)
+            _l3f_error!(findings, "E.L3F.TIME_SERIES_UNSUPPORTED",
+                Symbol(family), id, "time_series metadata must be an object or profile id")
+            continue
+        end
+        delete!(component, "time_series")
+        _l3f_warning!(findings, "A.L3F.PERMISSIVE_METADATA_DROPPED",
+            Symbol(family), id,
+            "time_series metadata was dropped; declared static snapshot values are used";
+            evidence=Dict("field" => "time_series", "original_value" => deepcopy(value)))
+    end
+    net
+end
+
+"""Capture neutral-voltage limits before Kron erases their terminal."""
+function _l3f_permissive_pre_kron_limits!(findings, net)
+    for (bid, bus) in get(net, "bus", Dict())
+        bus isa AbstractDict && haskey(bus, "vn_max") || continue
+        value = bus["vn_max"]
+        if !_l3f_permissive_numeric(value) ||
+           any(Float64.(value isa AbstractVector ? value : [value]) .< 0)
+            _l3f_error!(findings, "E.L3F.VOLTAGE_BOUND_INVALID", :bus, bid,
+                "vn_max must contain nonnegative finite numeric values")
+            continue
+        end
+        delete!(bus, "vn_max")
+        _l3f_warning!(findings, "A.L3F.PERMISSIVE_VOLTAGE_LIMIT_DROPPED",
+            :bus, bid, "neutral-voltage constraint 'vn_max' was dropped before reduction";
+            evidence=Dict("field" => "vn_max", "original_value" => deepcopy(value)))
+    end
+    net
+end
+
+function _l3f_permissive_transformer_residuals!(findings, net)
+    supported = ("single_phase", "center_tap", "single_phase_autotransformer",
+        "open_delta_regulator", _L3F_DELTA_SUBTYPES..., _L3F_LOCAL_BANK_SUBTYPES...)
+    fields = ("r_series_from", "x_series_from", "r_series_to", "x_series_to",
+        "g_no_load", "b_no_load", "r_neutral_from", "x_neutral_from",
+        "r_neutral_to", "x_neutral_to")
+    for subtype in supported, (tid, tx) in get(get(net, "transformer", Dict()), subtype, Dict())
+        tx isa AbstractDict || continue
+        for field in fields
+            haskey(tx, field) || continue
+            value = tx[field]
+            value isa Real && isfinite(value) || begin
+                _l3f_error!(findings, "E.L3F.TRANSFORMER_NONIDEAL_UNSUPPORTED",
+                    :transformer, tid, "$field must be finite numeric data before idealization")
+                continue
+            end
+            delete!(tx, field)
+            iszero(value) || _l3f_warning!(findings,
+                "A.L3F.PERMISSIVE_TRANSFORMER_IDEALIZED", :transformer, tid,
+                "supported transformer '$subtype' dropped residual nonideal field '$field'";
+                evidence=Dict("subtype" => subtype, "field" => field,
+                              "original_value" => deepcopy(value)))
+        end
+        haskey(tx, "no_load_shunt") || continue
+        value = tx["no_load_shunt"]
+        winding = value isa AbstractDict ? get(value, "winding", 0) : 0
+        g = value isa AbstractDict ? get(value, "g", nothing) : nothing
+        b = value isa AbstractDict ? get(value, "b", nothing) : nothing
+        maxw = subtype == "center_tap" ? 3 : 2
+        valid = value isa AbstractDict && winding isa Integer && !(winding isa Bool) &&
+            Int(winding) in 1:maxw && g isa Real && !(g isa Bool) &&
+            isfinite(g) && g >= 0 && b isa Real && !(b isa Bool) && isfinite(b) &&
+            !any(haskey(tx, key) for key in ("g_no_load", "b_no_load"))
+        if valid
+            delete!(tx, "no_load_shunt")
+            _l3f_warning!(findings, "A.L3F.PERMISSIVE_TRANSFORMER_IDEALIZED",
+                :transformer, tid, "supported transformer '$subtype' dropped nested no_load_shunt";
+                evidence=Dict("subtype" => subtype, "field" => "no_load_shunt",
+                              "original_value" => deepcopy(value)))
+        else
+            _l3f_error!(findings, "E.L3F.TRANSFORMER_NONIDEAL_UNSUPPORTED",
+                :transformer, tid, "no_load_shunt is malformed and cannot be idealized")
+        end
+    end
+end
+
 """
     _l3f_lower!(findings, net, options) -> Bool
 
@@ -435,18 +903,34 @@ per rewrite. Returns whether anything changed. `net` is already a private copy.
 function _l3f_lower!(findings, net, options::L3FOptions)
     options.unsupported == :reject && return false
     before = length(findings)
+    _l3f_lower_restricted_controls!(findings, net)
+    if options.unsupported == :permissive
+        for (_, tid, tx) in _l3f_transformers(net)
+            haskey(tx, "no_load_shunt") || continue
+            any(haskey(tx, key) for key in ("g_no_load", "b_no_load")) || continue
+            _l3f_error!(findings, "E.L3F.TRANSFORMER_NONIDEAL_UNSUPPORTED",
+                :transformer, tid,
+                "nested no_load_shunt conflicts with scalar g_no_load/b_no_load")
+        end
+    end
+    options.unsupported == :permissive &&
+        _l3f_permissive_constraints!(findings, net)
     _l3f_lower_switches!(findings, net)
     _l3f_lower_capacitors!(findings, net)
     _l3f_lower_line_shunts!(findings, net)
+    # Leakage referral depends on the chosen fixed tap. Resolve an experimental
+    # adjustable interval before synthesizing its series impedance.
+    options.unsupported in (:approximate, :permissive) && _l3f_project_taps!(findings, net)
     _l3f_lower_transformer_impedance!(findings, net)
-    if options.unsupported == :approximate
+    options.unsupported == :permissive &&
+        _l3f_permissive_transformer_residuals!(findings, net)
+    if options.unsupported in (:approximate, :permissive)
         for (lid, load) in sort!(collect(get(net, "load", Dict())); by=first)
             load isa AbstractDict && _l3f_project_load!(findings, load, String(lid))
         end
-        _l3f_project_taps!(findings, net)
-        # Unsupported bus/line voltage bounds are applicability errors, never
-        # experimental relaxations.  Keep them in the private copy so the
-        # validator can report every offending field.
+        # In :approximate, unsupported bus/line bounds remain errors. The
+        # permissive preprocessor has already removed its explicitly listed
+        # operational bounds with structured warnings.
     end
     length(findings) > before
 end

@@ -13,11 +13,11 @@ working coordinates, with system power base `s_base`.
 | Field | Values | Meaning |
 |:------|:-------|:--------|
 | `current_limit_policy` | `:voltage_product` | Ampacity is the native rotated-SOC bound `p²+q² ≤ w Iᵐᵃˣ²`, using the live squared terminal or winding voltage. |
-| `validate_nonlinear` | `Bool` (`true`) | Replay the optimized dispatch through BMOPFTools' nonlinear power flow and report the voltage difference. |
+| `validate_nonlinear` | `Bool` (`false`) | Opt in to replaying the optimized dispatch through BMOPFTools' nonlinear power flow. Replay is diagnostic and is not required by the one-shot formulation. |
 | `reference_policy` | `:auto`, `:explicit`, `:source_propagated` | Which linearization point to use. `:auto` prefers a supplied `reference` and otherwise propagates the source phasors; `:explicit` requires a supplied `reference`; `:source_propagated` always uses the propagated flat profile and ignores a supplied `reference`. |
 | `kron_reduce` | `Bool` (`true`) | Kron-reduce an explicit-neutral input on a copy. When `false`, an explicit neutral is an error. |
-| `require_neutral_provenance` | `Bool` (`false`) | Require recorded `_meta["kron_reduction"]` provenance, or an explicit reference, before building. |
-| `unsupported` | `:reject` (default), `:lower`, `:approximate` | How to treat data outside the supported vocabulary. `:reject` reports it and refuses. `:lower` applies canonical L3F-preserving rewrites (switches, capacitors, line shunts, and justified single-phase/center-tap transformer elements), reported as `L.L3F.*` at severity `:info`. `:approximate` additionally applies experimental lossy projections (constant-current and exponential load laws, adjustable taps, or delta gauge choices), reported as `A.L3F.*` at severity `:warning`; unsupported voltage bounds remain errors. |
+| `require_neutral_provenance` | `Bool` (`false`) | Require recorded `_meta["kron_reduction"]` provenance before building. A phasor reference does not establish neutral-reduction validity. |
+| `unsupported` | `:reject` (default), `:lower`, `:approximate`, `:permissive` | `:lower` applies canonical rewrites; `:approximate` also applies documented model projections; `:permissive` additionally removes supported-but-unrepresentable operational constraints with structured warnings. Malformed data, ambiguous topology, and connectivity errors remain fatal. |
 | `objective` | `:cost`, `:feasibility`, `:source_import` | Linear per-channel energy cost, a zero objective, or total source active injection. |
 | `per_unit` | `Bool` (`true`) | Optimization coordinates only. Input and results are SI either way. |
 | `s_base` | `Real` (`1e6`) | System VA base for the per-unit working copy. |
@@ -36,7 +36,7 @@ end
 
 function L3FOptions(;
         current_limit_policy::Symbol=:voltage_product,
-        validate_nonlinear::Bool=true,
+        validate_nonlinear::Bool=false,
         reference_policy::Symbol=:auto,
         kron_reduce::Bool=true,
         require_neutral_provenance::Bool=false,
@@ -48,8 +48,8 @@ function L3FOptions(;
         throw(ArgumentError("only current_limit_policy=:voltage_product is defined"))
     reference_policy in (:auto, :explicit, :source_propagated) ||
         throw(ArgumentError("unknown reference_policy"))
-    unsupported in (:reject, :lower, :approximate) ||
-        throw(ArgumentError("unsupported must be :reject, :lower, or :approximate"))
+    unsupported in (:reject, :lower, :approximate, :permissive) ||
+        throw(ArgumentError("unsupported must be :reject, :lower, :approximate, or :permissive"))
     objective in (:cost, :feasibility, :source_import) ||
         throw(ArgumentError("objective must be :cost, :feasibility, or :source_import"))
     isfinite(s_base) && s_base > 0 ||
