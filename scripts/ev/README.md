@@ -56,7 +56,11 @@ in SI and per-unit coordinates. An analytically reduced Ipopt reference is
 labeled separately from the unreduced CCOpt experiments. Local observations
 are saved in `zero_reference_results.toml`; source fingerprints identify the
 tested code. See `docs/src/ev/ccopt_investigation.md` for the derivation and
-limitations. A small raw residual never overrides a rejected solver status.
+limitations. `publishable` reports solver-status success; `study_accepted` also
+requires the unchanged 0.01 W and 0.01 Wh budgets. Linux CI can report success at
+about 0.0335 W: that candidate is explicitly rejected by the study gate. CI tests
+this mismatch as well as the strict analytic reference. A small raw residual
+never overrides a rejected solver status.
 
 `test/ev_workplace_tests.jl` verifies the feeder tutorial's equipment-dependent
 cost, deadline bound, SI/per-unit agreement, and physical residuals.
