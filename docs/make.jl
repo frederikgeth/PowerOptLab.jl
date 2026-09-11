@@ -62,10 +62,6 @@ makedocs(
             "Formulation API" => "formulations/api.md",
             "References and related software" => "formulations/references.md",
         ],
-        "LinDist3Flow" => [
-            "Formulation and usage" => "formulations/lindist3flow.md",
-            "Component models" => "formulations/lindist3flow_components.md",
-        ],
         "Electric vehicle charging" => [
             "Models and object responsibilities" => "ev/index.md",
             "Equations and solvers" => "ev/model.md",
