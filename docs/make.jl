@@ -15,6 +15,7 @@ makedocs(
         "Research program" => [
             "Overview" => "research_program.md",
             "Post-OPF operability roadmap" => "problems/post_opf_operability_roadmap.md",
+            "BMOPF bound propagation design" => "problems/bmopf_bound_propagation.md",
         ],
         "Dynamic operating envelopes" => [
             "Start here: DOE in 15 minutes" => "tutorials/doe_getting_started.md",
@@ -116,6 +117,7 @@ makedocs(
             "HELM power flow" => "algorithms/helm.md",
         ],
         "Tutorials" => [
+            "Derive and fill BMOPF bounds" => "tutorials/bmopf_bounds.md",
             "Single-snapshot post-OPF operability study" => "tutorials/post_opf_operability_study.md",
             "Inverse Carson reconstruction" => "tutorials/inverse_carson_reconstruction.md",
             "Battery storage models" => "tutorials/battery_storage_models.md",

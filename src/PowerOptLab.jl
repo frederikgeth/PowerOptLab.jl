@@ -108,6 +108,14 @@ include("io/kron_reduction.jl")
 # BMOPFTools 0.1.0 does not yet expose publicly.
 include("upstream.jl")
 
+# Solver-independent BMOPF domain propagation and conservative JSON fill-in.
+include("bounds/arithmetic.jl")
+include("bounds/core.jl")
+include("bounds/network.jl")
+include("bounds/export.jl")
+export BoundScope, QuantityKey, BoundDomain, BoundEvidence, BoundReport
+export propagate_bounds, bound, coverage, explain_bound, bounds_sidecar, materialize_bounds
+
 # Experimental function semantics and alternative optimization representations.
 include("formulations/primitives.jl")
 include("formulations/jump.jl")

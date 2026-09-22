@@ -1,0 +1,314 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PowerOptLab bound propagation sidecar v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "version",
+    "scope",
+    "status",
+    "arithmetic",
+    "domains",
+    "evidence",
+    "coverage",
+    "conflicts",
+    "steps",
+    "relations",
+    "validation"
+  ],
+  "definitions": {
+    "key": {
+      "type": "object",
+      "required": [
+        "family",
+        "id",
+        "quantity",
+        "index",
+        "component"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "family": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "quantity": {
+          "type": "string"
+        },
+        "component": {
+          "type": "string"
+        },
+        "index": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "endpoint": {
+      "type": "object",
+      "required": [
+        "value",
+        "status",
+        "evidence"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "status": {
+          "enum": [
+            "declared",
+            "derived",
+            "unresolved"
+          ]
+        },
+        "evidence": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        }
+      }
+    }
+  },
+  "properties": {
+    "format": {
+      "const": "PowerOptLab.bounds"
+    },
+    "version": {
+      "const": 1
+    },
+    "scope": {
+      "type": "object",
+      "required": [
+        "snapshot",
+        "problem",
+        "fingerprint",
+        "adapter",
+        "objective_cutoff"
+      ],
+      "properties": {
+        "snapshot": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "problem": {
+          "const": "native_declared_limit_feasibility"
+        },
+        "fingerprint": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "adapter": {
+          "type": "string"
+        },
+        "objective_cutoff": {
+          "type": "null"
+        }
+      },
+      "additionalProperties": false
+    },
+    "status": {
+      "enum": [
+        "fixed_point",
+        "tolerance_stopped",
+        "budget_exhausted",
+        "conflict"
+      ]
+    },
+    "arithmetic": {
+      "const": "outward_binary64"
+    },
+    "domains": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "key",
+          "unit",
+          "lower",
+          "upper"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "$ref": "#/definitions/key"
+          },
+          "unit": {
+            "enum": [
+              "V",
+              "A",
+              "W",
+              "var",
+              "VA"
+            ]
+          },
+          "lower": {
+            "$ref": "#/definitions/endpoint"
+          },
+          "upper": {
+            "$ref": "#/definitions/endpoint"
+          }
+        }
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "key",
+          "endpoint",
+          "value",
+          "rule",
+          "parents",
+          "sources"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "key": {
+            "$ref": "#/definitions/key"
+          },
+          "endpoint": {
+            "enum": [
+              "lower",
+              "upper"
+            ]
+          },
+          "value": {
+            "type": "number"
+          },
+          "rule": {
+            "type": "string"
+          },
+          "parents": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "coverage": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "object",
+          "status",
+          "reason"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "supported",
+              "relaxed",
+              "unsupported",
+              "data",
+              "metadata"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "conflicts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "quantity",
+          "rule",
+          "existing",
+          "candidate",
+          "parents",
+          "sources"
+        ],
+        "properties": {
+          "quantity": {
+            "$ref": "#/definitions/key"
+          },
+          "rule": {
+            "type": "string"
+          },
+          "existing": {
+            "type": "array",
+            "items": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "candidate": {
+            "type": "array",
+            "items": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "parents": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "steps": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "relations": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "validation": {
+      "type": "object"
+    }
+  }
+}
