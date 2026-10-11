@@ -34,6 +34,11 @@ exists and what remains to be built.
 
 ## What's inside
 
+The [BMOPF bound propagation service](docs/src/tutorials/bmopf_bounds.md) derives
+solver-free physical bounds, explains their provenance, and fills equivalent
+missing JSON limits. The initial implementation reports partial device coverage;
+optimization-based tightening is a planned second stage.
+
 Contributions are organised by *what layer of the engine they extend* — see
 [Concepts](docs/src/concepts.md).
 

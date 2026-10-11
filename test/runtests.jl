@@ -26,6 +26,7 @@ using OpenDSSDirect
 const _HAS_ODS = true
 
 @testset "PowerOptLab" begin
+    include("bound_propagation_tests.jl")
     include("function_formulation_tests.jl")
     include("function_comparison_tests.jl")
     include("formulation_research_tests.jl")

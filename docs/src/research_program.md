@@ -111,6 +111,14 @@ branch, not a claim of the current prototype.
 
 ## Foundational track: solution validity and differentiability
 
+The [BMOPF bound propagation and tightening design](problems/bmopf_bound_propagation.md)
+proposes a complementary foundation: derive implied physical domains from the
+declared network, track unresolved quantities and provenance, and then strengthen
+selected domains using valid optimization relaxations. The first
+[solver-free propagation and fill-in service](tutorials/bmopf_bounds.md) is
+implemented with explicit partial device coverage; optimization-based tightening
+remains a planned second stage.
+
 The inference and intervention program depends on local nonlinear solves. A
 parallel foundational track should therefore add pseudo-arclength continuation,
 multiple-solution discovery, active-set transition tracking, KKT regularity and
