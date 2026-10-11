@@ -74,18 +74,42 @@ chapters.
 ## Executable study tutorials
 
 Run `julia --project=. scripts/run_study_tutorials.jl` after changing the
-[battery comparison](tutorials/battery_storage_models.md) or
-[constrained state-estimation study](tutorials/constrained_nlls_state_estimation.md).
-The runner executes each page's plain `julia` blocks in order in a fresh module,
-with the repository root as its working directory. CI runs the same checks on
-Julia 1.10 and current stable; missing pages, missing executable markers, runtime
-errors and failed assertions fail the check.
+battery comparison, constrained state estimation, three focused inverter
+studies, HELM comparison or post-OPF operability tutorial. The runner executes
+each page's plain `julia` blocks in order in a fresh module, with the repository
+root as its working directory. CI runs these checks on Julia 1.10 and current
+stable; missing pages, missing executable markers, runtime errors and failed
+assertions fail the check. The DOE tutorials have their own runner,
+`scripts/run_doe_tutorials.jl`.
 
 Keep setup data, expected results and scientific assertions together in the
 published page. Check physical balances, limits and inference claims as well as
 solver status. Label synthetic data, explain numerical acceptance budgets, and
 update the expected-result tables when a justified model change alters them.
-Do not maintain a separate copy of tutorial code for testing.
+Do not maintain a separate copy of tutorial code for testing. Mark schematic
+API guides clearly and link to a complete worked example.
+
+### Regenerate the battery and state-estimation figures
+
+The plots use solved data exported from the tutorial modules. Install the
+plotting dependency in a Python 3.12 environment, then run from the repository
+root:
+
+```sh
+python -m pip install -r scripts/requirements-study-figures.txt
+julia --project=. scripts/run_study_tutorials.jl --figure-data docs/build/study-figure-data
+python scripts/render_study_figures.py
+python scripts/render_study_figures.py --check
+```
+
+Commit the SVGs and plotting-data snapshot in `docs/src/assets/studies/` together
+with any renderer changes. Current-stable CI compares fresh solved quantities
+with that snapshot (absolute tolerances of 0.1 W, 0.0001 V or normalized
+residual, and 0.00001 SoC fraction for the corresponding arrays),
+checks renderer/input fingerprints and exercises Matplotlib. This avoids
+pixel comparisons that depend on platform rendering. The SVGs have no generation
+timestamp and can be used directly in a paper or presentation. Use
+`--preview-dir docs/build/study-figure-preview` to produce PNGs for visual review.
 
 ## Writing for power-engineering readers
 

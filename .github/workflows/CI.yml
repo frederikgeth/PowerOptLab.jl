@@ -38,6 +38,16 @@ jobs:
       - name: Execute DOE tutorial code and scientific assertions
         if: ${{ !cancelled() }}
         run: julia --project=. scripts/run_doe_tutorials.jl
-      - name: Execute battery and state-estimation study tutorials
+      - name: Execute study tutorials and export solved figure data
         if: ${{ !cancelled() }}
-        run: julia --project=. scripts/run_study_tutorials.jl
+        run: julia --project=. scripts/run_study_tutorials.jl --figure-data docs/build/study-figure-data
+      - uses: actions/setup-python@v5
+        if: ${{ !cancelled() && matrix.version == '1' }}
+        with:
+          python-version: '3.12'
+      - name: Install scientific plotting dependency
+        if: ${{ !cancelled() && matrix.version == '1' }}
+        run: python -m pip install -r scripts/requirements-study-figures.txt
+      - name: Check reproducible study figures
+        if: ${{ !cancelled() && matrix.version == '1' }}
+        run: python scripts/render_study_figures.py --check

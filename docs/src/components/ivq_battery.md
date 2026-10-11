@@ -1,4 +1,4 @@
-# Current–voltage (IVQ) battery
+# Current–voltage–charge (IVQ) battery
 
 > **Kind:** Component model · **Maturity:** prototype · **Direction:** forward · **Temporal:** single-snapshot + multi-period
 

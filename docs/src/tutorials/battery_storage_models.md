@@ -4,7 +4,7 @@
 
 When does a constant-efficiency battery model give a useful schedule, and when
 can cell voltage change the answer? This study compares power-energy (PE)
-storage with voltage-current-charge (IVQ) storage. It first matches their
+storage with current-voltage-charge (IVQ) storage. It first matches their
 lossless schedules, then introduces internal resistance, and finally examines
 state-dependent export limits.
 
@@ -16,7 +16,7 @@ security assessment or a calibrated cell study.
 ## Run this study
 
 Follow the installation steps in [Your first study](../getting_started.md).
-From the repository root, run both study tutorials and their assertions with:
+From the repository root, run the executable study tutorials and their assertions with:
 
 ```sh
 julia --project=. scripts/run_study_tutorials.jl
@@ -228,6 +228,12 @@ println("Resistive PE/IVQ: ", round.(ivqr.p_poc; digits=2),
 | Intermediate SoC | 0.22222 | 0.24087 |
 | Two-hour supply cost | 0.4000 | 0.4806 |
 
+![Battery power and charge trajectories for the lossless and resistive cycles](../assets/studies/battery-schedule.svg)
+
+*The lines are IVQ schedules; the power markers are their PE comparisons.
+Both models return to the initial state. Resistance reduces first-interval
+delivery because part of the absorbed energy becomes heat.*
+
 The calibrated efficiencies are approximately 0.9329 and 0.9280, with a product
 of 0.8657. Here, constant OCV, constant resistance, equal current magnitudes and
 lossless conversion make that product equal to delivered/absorbed cycle energy.
@@ -325,6 +331,13 @@ println("Linear/tabulated export limits: ", round.(export_limits; digits=2), " W
 | 0.10 | 360 W | 3.0 V minimum cell voltage |
 | 0.50 | 1800 W | 3.0 V minimum cell voltage |
 | 0.90 | 2000 W | 2 kVA inverter rating at Q = 0 |
+
+![AC export limit versus SoC, showing the cell-voltage and inverter limits](../assets/studies/battery-export-limit.svg)
+
+*The solid curve is the independent analytic limit; circles and crosses are
+the solved linear and tabulated cases. Below SoC ≈ 0.556, the 3.0 V cell
+minimum binds. Above it, the 2 kVA inverter rating binds at zero reactive power.
+The shaded regions identify those two limits.*
 
 These are instantaneous fixed-SoC limits, not promises of one-hour energy
 delivery. A chronological study must also respect charge depletion. PE has no

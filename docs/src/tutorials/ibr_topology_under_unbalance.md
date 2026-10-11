@@ -1,5 +1,13 @@
 # [Choosing an IBR topology under unbalance](@id ibr-topology-under-unbalance)
 
+<!-- study-executable -->
+
+The network and device data are synthetic. After [installing the pinned
+dependencies](../getting_started.md), paste the Julia blocks into a fresh
+session in order, or run `julia --project=. scripts/run_study_tutorials.jl`
+from the repository root. CI executes these published blocks on Julia 1.10
+and current stable.
+
 This tutorial compares the implemented three-phase converter categories on the
 same balanced and unbalanced four-wire grid. Its purpose is to show when
 `:THREE_LEG`, `:FOUR_LEG`, and `:SPLIT_DC` cease to be interchangeable.
@@ -96,6 +104,13 @@ unbalanced_results = study.(Ref(unbalanced), devices)
 
 foreach(println, balanced_results)
 foreach(println, unbalanced_results)
+
+@assert all(r.neutral_a < 0.001 && r.bus_ripple_v < 0.001 for r in balanced_results)
+@assert unbalanced_results[1].zero_a < 1e-6
+@assert unbalanced_results[1].neutral_a < 1e-6
+@assert all(1.0 < r.neutral_a < 40.0 for r in unbalanced_results[2:3])
+@assert all(abs(r.neutral_a - 3r.zero_a) < 1e-6 for r in unbalanced_results)
+@assert all(r.switching_headroom_v > 0 for r in vcat(balanced_results, unbalanced_results))
 ```
 
 Expected qualitative findings:
@@ -124,6 +139,8 @@ sequence_limited = AdvancedInverter(; id="four-leg-sequence-limited",
 
 r_sequence = solve_advanced_inverter(unbalanced, sequence_limited)
 @assert r_sequence.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+@assert r_sequence.i_negative <= 0.5 + 1e-4
+@assert r_sequence.i_neutral <= 40.0 + 1e-4
 @show r_sequence.p_poc r_sequence.i_zero r_sequence.i_negative
 ```
 

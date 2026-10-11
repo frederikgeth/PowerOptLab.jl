@@ -15,7 +15,10 @@ For an existing checkout, install the pinned dependencies from its root:
 julia --project=. scripts/instantiate_pinned.jl
 ```
 
-Then choose a study topic below.
+Then choose a study topic below. For a complete worked experiment, follow the
+[battery-model comparison](tutorials/battery_storage_models.md) or
+[four-wire state-estimation study](tutorials/constrained_nlls_state_estimation.md).
+Both include figures, expected results and executable checks.
 
 ## Study topics
 

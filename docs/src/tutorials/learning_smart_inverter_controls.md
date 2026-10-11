@@ -1,7 +1,11 @@
 # Learning and validating local smart-inverter controls
 
-This tutorial gives a reproducible workflow for learning a local inverter
-control law from data, then evaluating it with PowerOptLab. The target laws are
+This guide describes how to identify a local inverter control law from data
+and evaluate it with PowerOptLab. Its API fragments require your own network,
+IBR record and fitted parameters; they are not a sequential worked example.
+For complete network studies, start with the
+[topology comparison](ibr_topology_under_unbalance.md) and the
+[phase-aware control guide](../components/inverter_controls.md). The target laws are
 constant power factor, Volt-VAr, and Volt-Watt.
 
 The central rule is simple: a deployed controller is a **local policy**, not a
@@ -47,9 +51,9 @@ make a closed loop:
 local voltage → Volt-VAr / Volt-Watt curve → P/Q injection → feeder voltage → local voltage
 ```
 
-A profile normally contains one law. If `power_factor` and a droop are both
-present, fixed power factor takes precedence with a warning. Do not fit both and
-mistake the result for a hybrid controller.
+Volt-VAr and Volt-Watt can share a profile: one prescribes Q and the other
+caps P. If `power_factor` is present, it takes precedence and the droop curves
+are skipped with a warning. Choose the intended operating mode explicitly.
 
 ## Construct an identification data set
 
@@ -101,8 +105,13 @@ net["control_profile"] = Dict(
 net["ibr"]["pv17"]["control_profile"] = "learned_pv"
 ```
 
-The policy is an equality/control constraint, not a suggestion that the OPF may
-override. To test it in an active-power DOE, bind the point to its IBR:
+Volt-VAr prescribes a reactive-power equality. Volt-Watt imposes an
+active-power upper bound; the OPF may curtail further below that cap. The
+profile parameters are fixed for this replay. A feasible point satisfies the
+Volt-Watt ceiling, but does not establish which power a physical controller
+would choose below it. State the availability and dispatch assumptions when
+interpreting replay. To test the profile in an active-power DOE, bind the point
+to its IBR:
 
 ```julia
 cp = ConnectionPoint(id="customer_17", bus="lv17", ibr_id="pv17",
@@ -111,14 +120,18 @@ r = solve_operating_envelope(net, [cp]; direction=:export)
 ```
 
 The DOE changes active capacity only. It retains the IBR topology,
-apparent/current limits, and Volt-VAr/Volt-Watt equality; it does not invent a
-separately dispatchable Q source.
+apparent/current limits, Volt-VAr equality and Volt-Watt upper bound. It does
+not introduce a separately dispatchable Q source.
 
 ### Pitfall: units and signs
 
-`VA_FRACTION` scales a limit by rating; `VAR` and `W` are absolute. Volt-VAr
-limits are ordered `[q_absorb ≤ 0, q_inject ≥ 0]`. Check the fitted curve at a
-low-voltage point, a deadband point, and a high-voltage point before feeder runs.
+The pinned OPF implementation accepts `VA_FRACTION` only: Volt-VAr uses
+`q_ref="VAR_MAX"`, and Volt-Watt supports `p_ref="S_MAX"`, `"P_MAX"` or
+`"P_AVAILABLE"`. The scale is the selected per-phase power base. Although the
+data schema names absolute `VAR` and `W` variants, this solver warns and skips
+those droop curves. Use a supported profile and inspect the resolved model.
+Volt-VAr limits are ordered `[q_absorb ≤ 0, q_inject ≥ 0]`. Check the fitted
+curve at a low-voltage point, a deadband point, and a high-voltage point before feeder runs.
 
 ## Validate the closed loop
 

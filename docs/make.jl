@@ -17,11 +17,11 @@ makedocs(
             "Estimation methods" => "estimation/studies.md",
             "State estimation" => [
                 "State estimation overview" => "estimation/index.md",
+                "Worked state-estimation study" => "tutorials/constrained_nlls_state_estimation.md",
                 "Choosing a formulation" => "estimation/comparison.md",
                 "Likelihood, loss, and priors" => "estimation/maximum_likelihood.md",
                 "Legacy WLS model" => "problems/state_estimation.md",
                 "Constrained NLLS model" => "problems/constrained_state_estimation.md",
-                "State estimation tutorial" => "tutorials/constrained_nlls_state_estimation.md",
                 "Observability and under-observed estimates" => "estimation/observability.md",
                 "Current-magnitude measurements" => "estimation/current_magnitude.md",
                 "State estimation API" => "api/state_estimation.md",
@@ -33,7 +33,7 @@ makedocs(
             ],
             "Line reconstruction" => [
                 "Inverse Carson model" => "problems/inverse_carson.md",
-                "Line reconstruction tutorial" => "tutorials/inverse_carson_reconstruction.md",
+                "Line reconstruction workflow" => "tutorials/inverse_carson_reconstruction.md",
                 "Line reconstruction API" => "api/inverse_carson.md",
             ],
         ],
@@ -62,9 +62,9 @@ makedocs(
             ],
             "Battery storage" => [
                 "Battery storage overview" => "components/battery_storage.md",
+                "Comparing PE and IVQ" => "tutorials/battery_storage_models.md",
                 "Power-energy model" => "components/devices.md",
                 "Current-voltage-charge model" => "components/ivq_battery.md",
-                "Choosing PE versus IVQ" => "tutorials/battery_storage_models.md",
                 "Battery storage API" => "components/battery_storage_api.md",
             ],
             "Electric vehicles" => [
@@ -91,11 +91,11 @@ makedocs(
             "Closed-loop evidence diagnostics" => "ibr/closed_loop_evidence.md",
             "Phase-aware control modelling guide" => "components/inverter_controls.md",
             "Advanced inverter model guide" => "components/advanced_inverter.md",
-            "Advanced inverter tutorial" => "tutorials/advanced_inverter_modelling.md",
+            "Inverter model-selection guide" => "tutorials/advanced_inverter_modelling.md",
             "Topology under unbalance" => "tutorials/ibr_topology_under_unbalance.md",
             "DC source and split link" => "tutorials/ibr_dc_source_and_split_link.md",
             "Carrier harmonics and LCL" => "tutorials/ibr_ac_harmonics_lcl.md",
-            "Learning smart-inverter controls" => "tutorials/learning_smart_inverter_controls.md",
+            "Identifying smart-inverter controls" => "tutorials/learning_smart_inverter_controls.md",
             "Advanced inverter API" => "api/advanced_inverter.md",
             "Phase-aware control API" => "api/inverter_controls.md",
             "Bilevel PV and tap control" => [

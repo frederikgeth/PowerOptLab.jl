@@ -1,5 +1,13 @@
 # [Carrier harmonics through L and LCL filters](@id ibr-ac-harmonics-lcl)
 
+<!-- study-executable -->
+
+The network and device data are synthetic. After [installing the pinned
+dependencies](../getting_started.md), paste the Julia blocks into a fresh
+session in order, or run `julia --project=. scripts/run_study_tutorials.jl`
+from the repository root. CI executes these published blocks on Julia 1.10
+and current stable.
+
 This tutorial follows the ideal PWM pole-voltage error through the physical AC
 filter. It demonstrates why converter-side current, grid-side current, midpoint-
 capacitor current, and neutral current must be reported separately for an LCL
@@ -67,6 +75,11 @@ r_lcl = solve_advanced_inverter(network, lcl)
 @show r_series.i_ac_switching_rms r_series.i_grid_switching_rms
 @show r_lcl.i_ac_switching_rms r_lcl.i_grid_switching_rms
 @show r_lcl.i_filter_shunt_switching_rms
+@assert maximum(r_lcl.i_grid_switching_rms) < maximum(r_lcl.i_ac_switching_rms)
+@assert all(r_lcl.i_ac_switching_reserved .>= r_lcl.i_ac_switching_rms .- 1e-5)
+@assert all(r_lcl.i_grid_switching_reserved .>= r_lcl.i_grid_switching_rms .- 1e-5)
+@assert maximum(r_lcl.i_ac_total_rms) <= 45.0 + 0.01
+@assert maximum(r_lcl.i_grid_total_rms) <= 45.0 + 0.01
 ```
 
 Check the limiting case numerically:
@@ -116,6 +129,8 @@ r_with_ln = solve_advanced_inverter(network, with_neutral_l)
 
 @show r_no_ln.i_neutral_switching_rms r_with_ln.i_neutral_switching_rms
 @show r_no_ln.i_neutral_total_rms r_with_ln.i_neutral_total_rms
+@assert solve_status(r_no_ln).publishable && solve_status(r_with_ln).publishable
+@assert r_with_ln.i_neutral_switching_rms < r_no_ln.i_neutral_switching_rms
 ```
 
 The fourth-wire impedance participates in a shared return path, so it changes

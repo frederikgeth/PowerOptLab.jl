@@ -398,7 +398,7 @@ import_doe = solve_operating_envelope(net, [cp]; direction=:import)
 
 The active-power equality used by the DOE is added to the existing IBR model.
 Its per-phase topology, current limit, apparent-power circle, DC coupling and
-Volt-VAr/Volt-Watt equality are not replaced. There is intentionally no separate
+Volt-VAr equality and Volt-Watt active-power upper bound are retained. There is intentionally no separate
 Q-envelope decision.
 
 ## With and without a STATCOM

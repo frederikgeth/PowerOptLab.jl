@@ -327,6 +327,15 @@ end
 println("Voltage-only estimate: 2 unobserved directions; phase-neutral sigma = 0.2 V")
 ```
 
+![Neutral displacement and normalized measurement residuals for the full-data and voltage-only estimates](../assets/studies/state-estimation.svg)
+
+*The full-data fit uses the perturbed readings; its bars show predicted minus
+reported values divided by their stated standard deviations. The voltage-only
+fit uses clean readings and matches all six exactly, yet its plotted neutral
+is only one admissible estimate. It has no finite neutral-to-earth covariance.
+The blue component error bars show local ±1σ uncertainty for the full-data
+fit; the dotted residual lines mark ±1σ, not a bad-data threshold.*
+
 The phase-to-neutral covariance is ``0.04 I`` V², corresponding to the two
 0.2 V component standard deviations. The neutral-to-earth request raises an
 `ArgumentError` because that quantity depends on an unobserved direction.

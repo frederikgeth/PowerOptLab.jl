@@ -16,6 +16,11 @@ Continuation gives information along a specified loading path; sufficient
 fixed-point conditions establish existence or uniqueness only in the region
 covered by those conditions.
 
+The [HELM comparison](../tutorials/helm_vs_nonlinear_power_flow.md) and
+[operability study](../tutorials/post_opf_operability_study.md) start from a
+complete synthetic feeder and compare with an independent voltage-drop
+calculation. Their published code and assertions run in CI.
+
 ## Available methods
 
 - [**HELM power flow**](helm.md) — the Holomorphic Embedding Load-flow Method: a

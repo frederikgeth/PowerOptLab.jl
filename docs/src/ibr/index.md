@@ -24,7 +24,7 @@ solve entry point and results. For local laws, use the
 
 [Fleet and hardware studies](network_control_studies.md) and
 [closed-loop evidence diagnostics](closed_loop_evidence.md) document their
-network-level interfaces. The [learning tutorial](../tutorials/learning_smart_inverter_controls.md)
+network-level interfaces. The [control-identification guide](../tutorials/learning_smart_inverter_controls.md)
 examines policy fitting and replay; the
 [bilevel PV/tap guide](../problems/bilevel.md) and
 [API](../api/bilevel.md) cover a separate hierarchical-control proof of concept.
@@ -107,7 +107,10 @@ The focused tutorials turn the equations into comparative engineering studies:
   separates converter, grid, midpoint-capacitor, and neutral ripple and tests the
   reduced-filter limiting case.
 
-Each starts from a complete BMOPF network and includes publication checks. The
+Each starts from a complete BMOPF network and includes numerical assertions and
+publication checks. Run `julia --project=. scripts/run_study_tutorials.jl`
+from the repository root; CI executes these studies on Julia 1.10 and current
+stable. The
 general modelling tutorial remains the best entry point for choosing the correct
 abstraction; these three are designed to be run as research-study templates.
 

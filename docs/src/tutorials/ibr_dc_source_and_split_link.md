@@ -1,5 +1,13 @@
 # [DC-source impedance and split-link carrier stress](@id ibr-dc-source-and-split-link)
 
+<!-- study-executable -->
+
+The network and device data are synthetic. After [installing the pinned
+dependencies](../getting_started.md), paste the Julia blocks into a fresh
+session in order, or run `julia --project=. scripts/run_study_tutorials.jl`
+from the repository root. CI executes these published blocks on Julia 1.10
+and current stable.
+
 This tutorial shows how bridge switching current divides between the DC-link
 capacitor and a finite upstream source impedance. It then resolves the resulting
 voltage ripple across unequal upper and lower split-link banks.
@@ -34,6 +42,13 @@ network = parse_bmopf("""
 
 ## 2. Compare open, high-, and finite-impedance sources
 
+Hold AC delivery at 15 kW and Q at zero in every case. A synthetic quadratic
+converter-loss coefficient of 0.02 W/A² selects a low-current operating point;
+it is not measured hardware data. Source-impedance loss remains a separate
+system-boundary quantity. Use a 20 kVA power base and disable bound relaxation.
+The `1e-7` solver tolerance corresponds to a 0.002 W power scale on that base;
+the assertions below check the returned P/Q independently.
+
 ```julia
 function four_leg(; source_r=nothing, source_l=0.0, harmonics=64)
     AdvancedInverter(
@@ -42,13 +57,17 @@ function four_leg(; source_r=nothing, source_l=0.0, harmonics=64)
         topology=:FOUR_LEG,
         s_max=20e3, i_max=40.0, In_max=40.0,
         v_dc=700.0, c_dc=1.1e-3, i_cap_max=15.0,
-        r_filter=0.05, x_filter=0.15, m_max=0.96,
+        r_filter=0.05, x_filter=0.15, m_max=0.96, c_loss=0.02,
         f_sw=10e3, pwm_strategy=:CENTERED,
         pwm_fundamental_samples=72, pwm_carrier_samples=128,
         pwm_dc_harmonics=harmonics,
         pwm_dc_source_r=source_r, pwm_dc_source_l=source_l,
     )
 end
+
+operating_point = (objective=:min_loss, p_set=15e3, q_set=0.0, s_base=20e3,
+    solver_options=(tol=1e-7, acceptable_iter=0, max_iter=500, bound_relax_factor=0.0))
+solve_dc(device) = solve_advanced_inverter(network, device; operating_point...)
 
 cases = [
     "open" => four_leg(),
@@ -58,8 +77,10 @@ cases = [
 ]
 
 function dc_summary(label, device)
-    r = solve_advanced_inverter(network, device)
+    r = solve_dc(device)
     @assert r.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+    @assert abs(r.p_poc - 15000.0) < 0.1
+    @assert abs(r.q_poc) < 0.1
     return (
         case=label,
         bridge_a=r.i_dc_bridge_switching_rms,
@@ -74,10 +95,30 @@ end
 
 dc_results = [dc_summary(label, device) for (label, device) in cases]
 foreach(println, dc_results)
+
+@assert all(abs(r.bridge_a - dc_results[1].bridge_a) < 0.001 for r in dc_results)
+@assert abs(dc_results[1].capacitor_a - dc_results[2].capacitor_a) < 1e-5
+@assert abs(dc_results[1].ripple_rms_v - dc_results[2].ripple_rms_v) < 0.0002
+@assert dc_results[1].source_a == 0.0
+@assert dc_results[3].capacitor_a < dc_results[3].bridge_a
+@assert dc_results[4].capacitor_a > dc_results[4].bridge_a
+@assert all(r.network_margin > 0.5 && r.reserve_margin_a >= -1e-5 for r in dc_results)
 ```
 
+Expected RMS values for the fixed 15 kW operating point are:
+
+| Source model | Bridge current (A) | Capacitor current (A) | Source current (A) | Link ripple (V RMS) |
+|:--|--:|--:|--:|--:|
+| Open | 11.85 | 11.85 | 0.00 | 0.0708 |
+| High impedance | 11.85 | 11.85 | approximately 0 | 0.0707 |
+| Finite R | 11.85 | 10.38 | 5.73 | 0.0573 |
+| Finite R–L | 11.85 | 13.44 | 2.62 | 0.0836 |
+
 The high-impedance case should converge to the open-source capacitor current and
-voltage ripple. A low *resistive* source impedance diverts part of each retained
+voltage ripple. In this truncated example, their RMS voltages differ by
+about 0.0001 V: the open-source diagnostic and retained-harmonic reconstruction
+do not account for the spectral tail in the same way. A low *resistive* source
+impedance diverts part of each retained
 harmonic away from the capacitor. An inductive source can instead create
 circulating-current magnification near parallel antiresonance, so capacitor RMS
 may exceed bridge RMS even though harmonic KCL is exact. RMS magnitudes do not
@@ -87,7 +128,7 @@ before RMS aggregation.
 For a resistive source branch, verify the independent loss identity:
 
 ```julia
-r_finite = solve_advanced_inverter(network, four_leg(source_r=0.01))
+r_finite = solve_dc(four_leg(source_r=0.01))
 @assert isapprox(r_finite.p_dc_source_switching_loss,
     0.01*r_finite.i_dc_source_switching_rms^2; rtol=1e-8)
 ```
@@ -104,7 +145,7 @@ for thermal reserve closure.
 
 ```julia
 for h in (16, 32, 64)
-    r = solve_advanced_inverter(network,
+    r = solve_dc(
         four_leg(source_r=0.02, source_l=0.2e-6, harmonics=h))
     @assert r.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
     println((harmonics=h,
@@ -130,13 +171,13 @@ split = AdvancedInverter(
     s_max=20e3, i_max=40.0, In_max=40.0,
     v_dc=900.0, c_dc=3e-3,
     c_dc_upper=cu, c_dc_lower=cl, i_cap_max=25.0,
-    r_filter=0.05, x_filter=0.15, m_max=0.96,
+    r_filter=0.05, x_filter=0.15, m_max=0.96, c_loss=0.02,
     f_sw=12e3, pwm_strategy=:SPWM,
     pwm_fundamental_samples=72, pwm_carrier_samples=128,
     pwm_dc_harmonics=64, pwm_dc_source_r=0.05,
 )
 
-r_split = solve_advanced_inverter(network, split)
+r_split = solve_dc(split)
 @assert r_split.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
 ceq = cu*cl/(cu+cl)
 
