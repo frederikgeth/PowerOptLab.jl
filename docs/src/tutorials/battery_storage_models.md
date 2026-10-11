@@ -79,7 +79,8 @@ q_cell = 10.0                 # Ah per cell
 v0 = 3.6                      # V, constant OCV for the cycle comparisons
 p_rating = 2000.0             # W
 nominal_energy_wh = ns * np * v0 * q_cell
-options = (tol=1e-9, bound_relax_factor=0.0)
+ac_power_base = p_rating      # VA; keep the numerical base near the device rating
+options = (tol=1e-8, acceptable_iter=0, max_iter=500, bound_relax_factor=0.0)
 
 inverter = AdvancedInverter(id="bat", bus="poc",
     s_max=p_rating, i_max=10.0, v_dc=ns*v0)
@@ -116,6 +117,12 @@ objective prices active energy only, so a particular reactive dispatch need not
 be unique and is not compared. The later fixed-SoC studies explicitly impose
 zero reactive power.
 
+The AC power base is 2 kVA, matching the rating. This keeps the squared
+per-unit rating constraints near unity rather than mixing tiny power bounds
+with the voltage and state equations. `acceptable_iter=0` requires the declared
+convergence tolerances rather than an acceptable-tolerance exit; returned
+status and physical residuals are checked below.
+
 `bound_relax_factor=0` prevents Ipopt from relaxing the squared per-unit rating
 bounds. A small per-unit slack can otherwise correspond to an appreciable
 violation in VA. Independently of this solver setting, check the returned
@@ -150,9 +157,9 @@ without storage and 0.40 with storage, in the declared currency.
 
 ```julia
 pe_ideal = solve_multiperiod_opf(nets, [energy_model(1.0, 1.0)];
-    dt_h=dt_h, solver_options=options)
+    dt_h=dt_h, s_base=ac_power_base, solver_options=options)
 ivq_ideal = solve_multiperiod_ivq(nets, [pack(constant_cell(0.0))];
-    dt_h=dt_h, solver_options=options)
+    dt_h=dt_h, s_base=ac_power_base, solver_options=options)
 @assert solve_status(pe_ideal).publishable
 @assert solve_status(ivq_ideal).publishable
 
@@ -199,7 +206,7 @@ cost_ref = (2000.0 - discharge_ref)*dt_h*0.30/1000 +
            (2000.0 + p_rating)*dt_h*0.10/1000
 
 ivq_resistive = solve_multiperiod_ivq(nets, [pack(constant_cell(resistance))];
-    dt_h=dt_h, solver_options=options)
+    dt_h=dt_h, s_base=ac_power_base, solver_options=options)
 @assert solve_status(ivq_resistive).publishable
 ivqr = ivq_resistive.dispatch["bat"]
 @assert maximum(abs.(ivqr.p_poc - [discharge_ref, -p_rating])) < 0.1
@@ -211,7 +218,7 @@ eta_charge = v0/(v0 + resistance*current_ref)
 eta_discharge = (v0 - resistance*current_ref)/v0
 pe_calibrated = solve_multiperiod_opf(nets,
     [energy_model(eta_charge, eta_discharge)];
-    dt_h=dt_h, solver_options=options)
+    dt_h=dt_h, s_base=ac_power_base, solver_options=options)
 @assert solve_status(pe_calibrated).publishable
 per = pe_calibrated.dispatch["bat"]
 @assert maximum(abs.(per.p_net - ivqr.p_poc)) < 0.1
@@ -312,7 +319,7 @@ for soc in [0.1, 0.5, 0.9]
         ns*np*(ocv - resistance*cell_current_limit)*cell_current_limit)
     for chemistry in [linear_cell, table_cell]
         limit = solve_ivq_battery(nets[1], pack(chemistry; soc=soc);
-            objective=:max_export, q_set=0.0, solver_options=options)
+            objective=:max_export, q_set=0.0, s_base=ac_power_base, solver_options=options)
         @assert solve_status(limit).publishable
         @assert abs(limit.p_poc - expected) < 0.1
         @assert abs(limit.q_poc) < 0.1

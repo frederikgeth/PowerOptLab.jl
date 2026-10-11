@@ -90,3 +90,11 @@ Publishable status, P/Q accuracy, total-RMS ratings, reserve coverage and the
 zero-capacitor equivalence checks are retained. This fixes the numerical setup
 and the comparison's operating-point assumptions rather than accepting failed
 candidates. Julia 1.13's SHA 1.0 stdlib is also admitted by package compatibility.
+
+The next current-stable run stopped earlier in the battery tutorial with an
+`ALMOST_LOCALLY_SOLVED` exit. Its 2 kW devices were still using a 1 MVA AC base.
+The battery study now sets its AC base to the 2 kVA rating and disables
+acceptable-iteration exits. All existing power, energy, SoC, cell-law and
+publishability assertions remain. Fresh local figure inputs match the committed
+snapshot within its existing physical budgets. Figure CI now depends on a
+successful study export so missing inputs do not obscure a primary solve failure.

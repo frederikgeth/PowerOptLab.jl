@@ -39,15 +39,16 @@ jobs:
         if: ${{ !cancelled() }}
         run: julia --project=. scripts/run_doe_tutorials.jl
       - name: Execute study tutorials and export solved figure data
+        id: study_tutorials
         if: ${{ !cancelled() }}
         run: julia --project=. scripts/run_study_tutorials.jl --figure-data docs/build/study-figure-data
       - uses: actions/setup-python@v5
-        if: ${{ !cancelled() && matrix.version == '1' }}
+        if: ${{ !cancelled() && matrix.version == '1' && steps.study_tutorials.outcome == 'success' }}
         with:
           python-version: '3.12'
       - name: Install scientific plotting dependency
-        if: ${{ !cancelled() && matrix.version == '1' }}
+        if: ${{ !cancelled() && matrix.version == '1' && steps.study_tutorials.outcome == 'success' }}
         run: python -m pip install -r scripts/requirements-study-figures.txt
       - name: Check reproducible study figures
-        if: ${{ !cancelled() && matrix.version == '1' }}
+        if: ${{ !cancelled() && matrix.version == '1' && steps.study_tutorials.outcome == 'success' }}
         run: python scripts/render_study_figures.py --check
