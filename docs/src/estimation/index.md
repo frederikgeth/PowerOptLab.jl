@@ -26,11 +26,13 @@ same network and measurements.
 Both methods rely on the following assumptions. Errors in those assumptions
 can bias the estimate even when the numerical solver converges:
 
-* **Errors are independent, zero-mean, and Gaussian**, with a diagonal
-  covariance. Both estimators whiten by ``1/\sigma``; neither supports a
-  correlated covariance. A meter whose error is a calibration offset rather
-  than noise violates this, and no amount of redundancy repairs it. This is a
-  *likelihood* assumption, not a weighting convention — see
+* **Measurement weights are diagonal.** Both estimators scale residuals by
+  ``1/\sigma`` and do not support correlated measurement errors. Independent,
+  zero-mean Gaussian errors give the weighted least-squares objective its
+  maximum-likelihood interpretation. Least-squares fitting can also be used
+  under other error distributions, but the likelihood, covariance and residual
+  tests then need separate justification. A systematic meter offset requires
+  analysis of bias as well as random noise. See
   [likelihood, loss, and priors](maximum_likelihood.md).
 * **Topology and line parameters are exact.** Neither estimator hypothesises a
   different switch status or a different impedance. A topology error surfaces

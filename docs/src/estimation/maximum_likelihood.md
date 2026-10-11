@@ -44,7 +44,9 @@ When a Gaussian model *is* asserted, the weight ``1/\sigma_j^2`` is an inverse
 variance rather than a preference score.
 
 This is why the [shared assumptions](index.md#What-both-of-them-assume) put the
-error model first. Choosing `sigma` *is* choosing a likelihood.
+error model first. Under the Gaussian model, `sigma` specifies the likelihood variance. In a
+least-squares fit without that distributional assumption, it specifies the
+measurement weighting.
 
 ## What each distribution turns into
 

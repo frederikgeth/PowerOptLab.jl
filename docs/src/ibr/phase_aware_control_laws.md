@@ -603,8 +603,9 @@ For scalable Ipopt studies:
 The additional nonlinearities remain nonconvex, so Ipopt still finds a local
 equilibrium/optimum. Large-scale validation should include independent starts
 and explicit scaling sweeps in both device count and controller gain. The
-current wrappers perform one solve with fixed smoothing; continuation and
-exact-law network re-solves are not implemented in this cleanup.
+smooth controlled solvers use fixed smoothing parameters. Separate
+[exact-law network calculations](closed_loop_evidence.md) are available for
+single inverters and fleets, with convergence, cycling and plant-solve checks.
 
 ### Accuracy, sparsity and conditioning
 
@@ -704,8 +705,8 @@ measured or modelled switching-current component.
 
 Fleet construction, matched-case execution and hardware sweeps are implemented;
 see [Inverter-control study methodology](@ref ibr-control-study-methodology).
-The [verification guide](verification.md) documents the outstanding exact-law
-network oracle, while the numerical-policy discussion above explains the current
+The [verification guide](verification.md) describes exact-law network
+comparisons, while the numerical-policy discussion above explains the current
 start, scale and per-unit restrictions. Virtual-delta, closest-feasible projection
 and sequence-service-priority laws remain outside the implemented policy set.
 

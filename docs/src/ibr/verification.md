@@ -177,30 +177,33 @@ common-mode injections and hundreds of simulation/experimental operating
 conditions. Its published numeric archive would be the best next fixture for
 DPWM, THIPWM, and strategy-dependent neutral-inductor validation.
 
-## Outstanding oracle: the exact-law fixed point
+## Comparing exact-law and smooth-law equilibria
 
-The controller suite compares the exact and smooth laws **at the smooth model's
-own solved point**, reusing that solve's converter voltage and both filter-arm
-currents for the exact evaluation. That is the right test for the smoothing of
-the controller algebra, and it is not a test of the equilibrium.
+The `exact_smooth_current_residual` evaluates both control laws at the smooth
+model's solved operating point. It measures controller-algebra smoothing error
+at that point, rather than the difference between two network equilibria.
 
-A firmware controller does not evaluate its law at the smooth model's solution;
-it iterates against the network until its own command and the resulting voltage
-agree. The missing oracle is therefore a Picard/Gauss–Seidel iteration:
+A separate calculation is available through
+[`solve_inverter_control_network_fixed_point`](@ref) and
+[`solve_controlled_inverter_fleet_network_fixed_point`](@ref). Each iteration
+evaluates the exact local law, fixes the resulting converter- or grid-side
+current targets, and re-solves the physical plant and network. The fleet routine
+updates all selected targets in one network solve, retaining coupling between
+inverters. The default initial voltage comes from the smooth controlled solve;
+other initial voltages can be supplied.
 
-1. start from an uncontrolled power flow;
-2. evaluate [`evaluate_exact`](@ref) at the current POC phasors;
-3. impose the resulting phase currents on the plant and re-solve;
-4. repeat to a fixed point, recording the iteration count and any cycling; and
-5. report ``\|\Delta V\|_\infty`` and the phase-current difference against the
-   stamped smooth equilibrium for the same case.
+The routines return voltage and current residuals, convergence and cycling
+information, and the status of the final plant solve. The
+[closed-loop comparison guide](closed_loop_evidence.md) describes these results,
+network sensitivities and comparisons across initial states. Regression tests
+in `test/closed_loop_evidence_tests.jl` cover single-inverter and fleet cases,
+including curved characteristics, a floating neutral and failed plant solves.
 
-Until that exists, equilibrium-level agreement between the deployed law and the
-network surrogate is an assumption, not a tested property, and it should be
-stated as such in any paper using these results. The iteration is also the
-natural place to observe non-existence or non-uniqueness of the local-droop
-equilibrium, which has its own literature (Farivar, Chen, and Low; Zhu and Liu)
-and is not addressed anywhere in this package.
+These calculations compare quasi-static equilibria under the specified model.
+Convergence of the iteration does not establish dynamic stability or global
+uniqueness. Conversely, cycling or a failed plant solve does not establish that
+no equilibrium exists. Hardware and dynamic-model validation remain separate
+requirements.
 
 ## Recommended higher-fidelity test harness
 

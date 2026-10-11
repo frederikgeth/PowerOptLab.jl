@@ -411,16 +411,18 @@ supported inputs. Unit and regression tests establish the declared algebraic,
 physical-balance and result contracts; dataset-specific performance and sizing
 conclusions need their own recorded campaigns.
 
-Exact-versus-smooth residuals currently compare controller commands at the smooth
-model's returned operating point. The independent exact-law network fixed-point
-oracle remains unimplemented, so those residuals do not bound the difference
-between exact-law and smooth-law network equilibria. See the
-[verification guide](verification.md)
-for the required comparison.
+Exact-versus-smooth residuals compare controller commands at the smooth model's
+returned operating point. A separate exact-law equilibrium calculation is
+available for single inverters and fleets; see
+[closed-loop comparisons](closed_loop_evidence.md). Report its voltage/current
+residuals, convergence, cycling and plant-solve status alongside the differences
+from the smooth solution. It is a quasi-static comparison, not a test of dynamic
+stability.
 
-Coupled controller stamping requires per-unit coordinates. The
-[numerical-policy discussion](phase_aware_control_laws.md) records the unresolved
-magnitude-start and scale issues that limit extrapolation across widely different
-ratings and voltage levels. Hardware conclusions also require the matched
+Coupled controller modelling requires per-unit coordinates. The
+[numerical-policy discussion](phase_aware_control_laws.md) describes scaling
+choices and remaining plant-conditioning limitations. Use
+[`inverter_control_scaling_audit`](@ref) to record the initial values, scales and
+rating-relative smoothing widths used in a study. Hardware conclusions also require the matched
 higher-fidelity validation described above. Standards compliance and novelty
 claims require clause-specific evidence beyond these algebraic tests.
