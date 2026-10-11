@@ -74,3 +74,19 @@ not patch or silently replace the external test dependency.
 The five schematic tutorial guides remain explicitly labelled rather than being
 presented as runnable studies. See `documentation_tutorial_audit.md` for their
 coverage and the scientific inputs needed for subsequent worked examples.
+
+## Ubuntu CI follow-up
+
+The first Ubuntu runs on Julia 1.10.12 and 1.13.1 passed the full package and
+DOE suites but failed the AC-harmonics tutorial's raw-SI maximum-export solves.
+One failed during the L/LCL comparison and the other during the neutral-inductor
+comparison. These examples had succeeded on the local macOS environments;
+that was insufficient evidence of platform robustness.
+
+The tutorial now uses per-unit coordinates on a 20 kVA base and holds AC P/Q at
+15 kW / 0 var. A declared synthetic quadratic converter-loss coefficient selects
+a low-current point. Every filter and sampling refinement uses the same setup.
+Publishable status, P/Q accuracy, total-RMS ratings, reserve coverage and the
+zero-capacitor equivalence checks are retained. This fixes the numerical setup
+and the comparison's operating-point assumptions rather than accepting failed
+candidates. Julia 1.13's SHA 1.0 stdlib is also admitted by package compatibility.
