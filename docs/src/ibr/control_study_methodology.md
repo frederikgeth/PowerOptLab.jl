@@ -187,7 +187,7 @@ state is later introduced.
 
 The current public APIs are sufficient for most of the implementation:
 
-- `build_opf_model` / `enforce_kcl!` / `extract_result` provide the staged
+- `build_opf_model` / `optimize_opf!` / `extract_result` provide the staged
   lifecycle;
 - `OpfBuildSpec` and per-component `OpfDeviceBuilder`s can replace selected
   native `ibr` entries while retaining all other network devices;

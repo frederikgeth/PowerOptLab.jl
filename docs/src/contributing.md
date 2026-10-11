@@ -38,7 +38,7 @@ See [Storage & EVs](components/devices.md) as the reference example.
 A new *formulation* over the same physics. Put it in `src/problems/`.
 
 1. Build the network snapshot(s) via the staged API — `build_opf_model(add_objective=false)`,
-   then compose your own objective and constraints, `enforce_kcl!` per snapshot,
+   then compose your own objective and constraints, `optimize_opf!(ctxs...)` once,
    and `extract_result`.
 2. Return a bespoke result struct.
 3. Add a page under `docs/src/problems/` (badge line + worked example), register in

@@ -1,3 +1,24 @@
+@testset "Multi-period OPF: one finalized shared-model solve" begin
+    calls = Ref(0)
+    configure! = model -> JuMP.set_optimize_hook(model, function (m; kwargs...)
+        calls[] += 1
+        JuMP.optimize!(m; ignore_optimize_hook=true, kwargs...)
+    end)
+    nets = [single_bus_net(; src_cost=0.20, pload=50e3),
+            single_bus_net(; src_cost=0.05, pload=50e3)]
+    res = solve_multiperiod_opf(nets, StorageDevice[];
+        time_grid=TimeGrid([0.25, 0.75]), configure!)
+    @test calls[] == 1
+    @test solve_status(res).publishable
+    @test length(res.snapshots) == 2
+    @test all(s -> s["termination_status"] in ("LOCALLY_SOLVED", "OPTIMAL"), res.snapshots)
+    # The 50 kW load is supplied through 0.1 ohm, so source cost includes losses.
+    # Use the analytic high-voltage solution, independently of either builder.
+    voltage = (1000.0 + sqrt(1000.0^2 - 4 * 0.1 * 50e3)) / 2
+    source_power_kW = (1000.0 * 50e3 / voltage) / 1000
+    @test res.objective ≈ (0.25 * 0.20 + 0.75 * 0.05) * source_power_kW rtol=1e-6
+end
+
 @testset "Multi-period OPF: battery arbitrage" begin
     # Two periods: expensive slack import in period 1, cheap in period 2. A cyclic
     # battery must discharge into the expensive period and recharge in the cheap

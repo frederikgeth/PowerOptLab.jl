@@ -2002,7 +2002,7 @@ function _solve_advanced_inverter_once(net::Dict{String,Any}, inverter::Advanced
               "the result is not reproducible across platforms or solver " *
               "versions. Declare loss coefficients, or pin q_set."
     end
-    JuMP.optimize!(_opf_model(ctx))
+    BMOPFTools.optimize_opf!(ctx)
 
     outcome = _solve_outcome(_opf_model(ctx))
     status = string(outcome.termination_status)

@@ -9,7 +9,7 @@ state their local, scenario, or prototype limits explicitly.
 
 PowerOptLab builds on the BMOPFTools reference current–voltage OPF engine, using
 its public extension seams (`model_hook!` / `solution_hook!` and the staged
-`build_opf_model` / `enforce_kcl!` / `generation_cost` / `extract_result` API)
+`build_opf_model` / `optimize_opf!` / `generation_cost` / `extract_result` API)
 rather than forking the engine. Experimental devices and formulations reuse the
 engine's neutral-explicit physics, per-unit handling, and result extraction.
 Stable foundational work can later be proposed for the BMOPF spec.

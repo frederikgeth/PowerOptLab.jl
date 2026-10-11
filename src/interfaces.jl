@@ -95,7 +95,8 @@ _opf_transformer_tap(ctx, transformer) = BMOPFTools.opf_object(ctx,
 Build every network snapshot into one JuMP model through BMOPFTools' staged
 API. `hook_factory(t)` returns the `model_hook!` for snapshot `t`. The builder
 centralizes the shared optimizer, solver options, time index, and common unit
-settings; callers add linking constraints/objectives and then enforce KCL. Pass
+settings; callers add linking constraints/objectives and then call
+`BMOPFTools.optimize_opf!(multi.contexts...)` to finalize KCL and solve once. Pass
 an existing `model` when shared variables/operators must be created first.
 `configure! = identity` receives the model before optimizer attachment when this
 builder creates it. With an existing model, the caller owns optimizer attachment.

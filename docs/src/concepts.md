@@ -39,7 +39,7 @@ same way.
 | Kind | What it contributes | Seam it reuses | Source |
 |---|---|---|---|
 | **Component model** | a new network *element* (device physics) | `model_hook!` / `solution_hook!` | `src/components/` |
-| **Problem specification** | a new *objective + variable/constraint structure* over the whole network | staged `build_opf_model` / `enforce_kcl!` / `generation_cost` / `extract_result` | `src/problems/` |
+| **Problem specification** | a new *objective + variable/constraint structure* over the whole network | staged `build_opf_model` / `optimize_opf!` / `generation_cost` / `extract_result` | `src/problems/` |
 | **Bespoke algorithm** | a new *solution method* — how you solve, not what | custom solve loops around the staged API | `src/algorithms/` |
 
 - A **component model** answers *"what new thing can sit on the network?"* It is
