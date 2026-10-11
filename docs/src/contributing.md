@@ -71,6 +71,22 @@ rather than reproducing its docstring. The documentation build checks exported
 symbols and cross-references, and the [symbol index](symbol_index.md) spans all
 chapters.
 
+## Executable study tutorials
+
+Run `julia --project=. scripts/run_study_tutorials.jl` after changing the
+[battery comparison](tutorials/battery_storage_models.md) or
+[constrained state-estimation study](tutorials/constrained_nlls_state_estimation.md).
+The runner executes each page's plain `julia` blocks in order in a fresh module,
+with the repository root as its working directory. CI runs the same checks on
+Julia 1.10 and current stable; missing pages, missing executable markers, runtime
+errors and failed assertions fail the check.
+
+Keep setup data, expected results and scientific assertions together in the
+published page. Check physical balances, limits and inference claims as well as
+solver status. Label synthetic data, explain numerical acceptance budgets, and
+update the expected-result tables when a justified model change alters them.
+Do not maintain a separate copy of tutorial code for testing.
+
 ## Writing for power-engineering readers
 
 Start with the network problem, the assumptions and the quantities being

@@ -38,3 +38,6 @@ jobs:
       - name: Execute DOE tutorial code and scientific assertions
         if: ${{ !cancelled() }}
         run: julia --project=. scripts/run_doe_tutorials.jl
+      - name: Execute battery and state-estimation study tutorials
+        if: ${{ !cancelled() }}
+        run: julia --project=. scripts/run_study_tutorials.jl
