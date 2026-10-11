@@ -23,7 +23,9 @@ estimator, and inverse-Carson solver provide distinct forms of model evidence;
 the operating-envelope solver consumes explicitly supplied network scenarios;
 the bilevel and HELM work provide local sensitivity and solution diagnostics.
 There is not yet a joint model-hypothesis API, an active-probing optimizer, or a
-global robust-feasibility certificate. The [Research program](research_program.md)
+general robust-feasibility certificate across uncertain models and utilization
+sets. Native static operability has narrower sufficient fixed-point certificates
+with explicit applicability limits. The [Research program](research_program.md)
 keeps those proposed capabilities separate from the callable API.
 
 The source tree is organized by implementation layer. That engineering taxonomy
@@ -63,7 +65,8 @@ The three kinds above are the primary axis, but each capability also carries a f
 orthogonal attributes, surfaced as a badge line at the top of its page:
 
 - **Maturity** — *proof of concept* (demonstrates a narrow idea), *prototype*
-  (test-backed but experimental), *research prototype* (intended for declared
+  (test-backed but experimental), *experimental* (an evolving model/interface
+  with explicitly documented validation limits), *research prototype* (intended for declared
   studies rather than operational use), or *promotion candidate* (stable enough
   to propose for the BMOPF spec).
 - **Direction** — *forward* (given parameters, find an operating point:
@@ -79,9 +82,12 @@ orthogonal attributes, surfaced as a badge line at the top of its page:
 ## Interface conventions
 
 Everything is **SI at the interface** (watts, vars, watt-hours, volts); per-unit
-conditioning inside each solve is handled through the engine's
-`opf_bases(ctx)` accessor. Where it applies, `per_unit=true` and
-`per_unit=false` give identical results.
+conditioning inside engine-backed solves uses the engine's `opf_bases(ctx)`
+accessor. Solvers that support both `per_unit=true` and `per_unit=false` retain
+the same physical units at their interfaces. Numerical scaling, convergence and
+the local solution reached can differ. Coupled phase-aware inverter-control
+stamping currently requires per-unit coordinates; its parameters and results
+remain SI-valued. Check each solver's supported formulation.
 
 Cross-cutting code uses four shared contracts:
 

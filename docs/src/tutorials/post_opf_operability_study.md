@@ -252,5 +252,4 @@ This record makes the positive claim auditable without implying contingency
 coverage, global branch discovery, or dynamic voltage stability.
 
 See [Post-OPF operability](../problems/operability.md) for the full result
-contract and [the roadmap](../problems/post_opf_operability_roadmap.md) for the
-remaining certificate and study extensions.
+contract, equations, certificate interpretation and supported study scope.

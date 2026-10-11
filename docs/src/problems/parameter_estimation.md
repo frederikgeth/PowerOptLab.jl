@@ -4,38 +4,40 @@
 
 [`solve_parameter_estimation`](@ref) calibrates uncertain **network parameters**
 — line lengths and transformer/regulator tap ratios — from smart-meter data. It
-is the *shared-parameter dual* of [state estimation](state_estimation.md), and a
-multi-time-step extension of it:
+shares those parameters across multiple snapshots while estimating the network
+state in each snapshot. The current uncertain-line primitive connects one
+terminal per end with a fixed nominal R/X ratio. It does not estimate a full
+four-wire impedance matrix, mutual coupling, topology or conductor identities.
 
 | | fixes | estimates |
 |---|---|---|
-| **State estimation** | the parameters | the per-snapshot **state** |
-| **Parameter estimation** | nothing about the uncertain elements | the shared, time-invariant **parameters** |
+| **State estimation** | topology and network parameters | the per-snapshot **state** |
+| **Parameter estimation** | topology, terminal maps, nominal per-length R/X and all unselected parameters | selected shared **lengths/taps** and per-snapshot **states** |
 
-The formulation follows Vanin, Geth, Heidari & Van Hertem, *Distribution System
+The shared-parameter formulation is motivated by Vanin, Geth, Heidari & Van Hertem, *Distribution System
 State and Impedance Estimation Augmented with Carson's Equations*
-([arXiv:2506.04949](https://arxiv.org/abs/2506.04949)): a weighted
-measurement-residual objective over a time series, the multiconductor IVR
-(rectangular current–voltage) power flow as the physics, time-invariant impedances
-written as `nominal · length`, and the smart-meter data as noisy `(P, Q, |V|)`
-triples per user.
+([arXiv:2506.04949](https://arxiv.org/abs/2506.04949)). This prototype uses a
+weighted measurement-residual objective, rectangular current–voltage equations,
+impedances written as `nominal · length`, and noisy `(P, Q, |V|)` readings. It
+does not implement the paper's full multiconductor/Carson estimation problem.
 
 ## Why multiple time steps
 
-A single snapshot cannot separate a *long line* from a *heavy load*: both pull the
-downstream voltage down by the same amount. With `T` snapshots of **diverse
-loads** the shared parameters become over-determined — the one length (or tap)
-that explains *every* snapshot at once is pinned. Calibration therefore needs a
-time series; this is the essential difference from a one-shot state estimate.
+Load variation supplies additional equations for the same lengths and taps and
+can improve identifiability. It does not guarantee that the parameters are
+uniquely determined. Identifiability depends on which quantities are measured,
+meter placement, network structure, excitation and noise. A single snapshot may
+identify a parameter in a sufficiently instrumented small circuit; multiple
+snapshots may still leave equivalent parameter combinations.
 
 !!! note "Identifiability caveat"
     As Vanin et al. discuss, in realistic feeders (meters only at load buses,
     smart-meter noise) *individual* branch parameters generally cannot be
     recovered exactly — multiple equivalent solutions fit the data equally well.
-    What is recoverable, and what matters for downstream power-flow/OPF, is the
-    *cumulative* impedance along each path and a model that reproduces the measured
-    voltages. The small radial examples here are deliberately well-conditioned so
-    the estimates land close to the truth.
+    The returned local fit and a small residual do not establish unique parameter
+    recovery, identification of cumulative impedance, or accuracy under new
+    operating conditions. The small radial examples are illustrative. This API
+    does not return a parameter-identifiability or global-uniqueness certificate.
 
 ## Measurements
 
@@ -105,15 +107,18 @@ r.snapshots           # per-snapshot fitted state (SI)
 ```
 
 Add [`CalibTap`](@ref)s (naming transformers present in the nets) to the `taps`
-keyword to calibrate taps jointly. Both `per_unit=true` and `per_unit=false` give
-identical estimates. A `residual_rms` well above the known meter noise is the
-diagnostic that something structural is still wrong (a misidentified tap, a missing
-line, an unmetered load).
+keyword to calibrate taps jointly. Both `per_unit=true` and `per_unit=false`
+use SI inputs and return SI results; scaling and local convergence can affect
+the numerical fit. A `residual_rms` well above the expected voltage noise is a
+reason to investigate data, modeling assumptions and convergence, rather than a
+diagnosis of a particular structural error.
 
 ## Scope
 
 This is a **prototype**. It handles single-phase elements (one terminal per element
-end — add one [`CalibLine`](@ref) per phase for a multi-phase feeder). Estimating
+end). Separate [`CalibLine`](@ref)s model independent conductor branches; they do
+not reproduce a coupled multiconductor line or infer a shared physical length
+across those branches. Estimating
 the series-impedance *type* via Carson's equations (conductor geometry/material) as
 in Vanin et al., regularising toward GIS priors, and four-wire mutual coupling are
 natural extensions left for later.

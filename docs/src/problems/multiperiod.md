@@ -59,12 +59,17 @@ res = solve_multiperiod_opf(nets, [bat]; time_grid=grid)
 
 ## Multiple devices
 
-Pass any mix of [`StorageDevice`](@ref) and [`EVDevice`](@ref); each gets its own
+Pass a mix of [`StorageDevice`](@ref), [`EVDevice`](@ref) and
+[`ChargingSession`](@ref); each gets its own
 state-of-charge trajectory and constraints, all co-optimised in the same model:
 
 ```julia
 res = solve_multiperiod_opf(nets, [bat, ev1, ev2]; dt_h=0.5)
 ```
+
+For equipment-aware charging, pass `ChargingSession` objects. Their associated
+`EV` and `EVSE` describe vehicle and outlet capabilities; they are not standalone
+devices passed directly to this solver. See the [session guide](../ev/sessions.md).
 
 Per-period economics come from the snapshots themselves — a time-varying import
 price, differing loads, or any other per-snapshot data the BMOPFTools objective

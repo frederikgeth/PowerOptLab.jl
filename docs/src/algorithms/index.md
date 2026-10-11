@@ -30,8 +30,8 @@ engine's admittance-matrix primitives) in a custom loop.
 The next algorithms should support the [research program](../research_program.md),
 rather than form an unconnected catalogue:
 
-- **Continuation and branch discovery** — the staged design is maintained in the
-  [Post-OPF voltage operability roadmap](../problems/post_opf_operability_roadmap.md);
+- **Continuation and branch discovery** — the implemented path and margin
+  contracts are documented in [Post-OPF operability](../problems/operability.md);
   the current pseudo-arclength slice still needs refined singular-point
   handling, deflation, and systematic multistart to identify which nonlinear
   solution a sensitivity or decision uses.

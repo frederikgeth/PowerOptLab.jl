@@ -1,8 +1,26 @@
 # PowerOptLab.jl
 
 PowerOptLab is a research laboratory for **four-wire distribution-network
-decisions when the network state or model is uncertain**. Its organizing
-questions are:
+decisions when the network state or model is uncertain**.
+
+## Start here
+
+Follow [Your first PowerOptLab study](getting_started.md) to install from a
+checkout, build a complete network, schedule a battery, and check status and
+physical residuals. The guide uses synthetic data and the standard solver, and
+its Julia examples execute during documentation builds.
+
+For an existing checkout, install the pinned dependencies from its root:
+
+```sh
+julia --project=. scripts/instantiate_pinned.jl
+```
+
+Then choose a topic from the guide's next-study table or the capabilities below.
+
+## Research context
+
+The organizing questions are:
 
 1. What states and models are compatible with telemetry and metadata?
 2. What safe measurement or intervention would distinguish material
@@ -16,10 +34,11 @@ per-unit handling, and result extraction through public extension seams.
 
 The complete loop is not implemented yet. Current capabilities provide its
 foundations as separate, explicit research prototypes; the documentation does
-not treat proposed model-forensics, active-probing, or global-certification APIs
-as existing functionality. Start with [Concepts](concepts.md) for the modelling
-contracts, then read the [Research program](research_program.md) for the current
-boundary and priorities.
+not treat proposed joint model-forensics, active-probing, or general
+uncertainty-set certification APIs as existing functionality.
+[Concepts](concepts.md) explains the shared modeling
+contracts; the [Research program](research_program.md) distinguishes current
+capabilities from the intended integrated workflow.
 
 ## Capabilities
 
@@ -40,14 +59,16 @@ dedicated [inverter-based resources guide](ibr/index.md).
 
 ### Problem specifications
 
-New formulations over the same physics, via the staged `build_opf_model` /
-`enforce_kcl!` / `generation_cost` / `extract_result` API.
+Network-level questions built on the engine physics. Optimization wrappers use
+the staged OPF API; the compiled constrained estimator and static operability
+checker use their own residual and diagnostic workflows.
 
 | Capability | Entry point | Direction | Maturity |
 |---|---|---|---|
 | [Multi-period OPF](problems/multiperiod.md) co-optimising many snapshots | [`solve_multiperiod_opf`](@ref) | forward | promotion candidate |
 | [Legacy WLS state estimation](problems/state_estimation.md) | [`solve_state_estimation`](@ref) | inverse | prototype |
 | [Constrained NLLS state estimation](problems/constrained_state_estimation.md) | [`solve_sparse_state_estimator`](@ref) | inverse | prototype |
+| [Post-OPF operability](problems/operability.md) (native static snapshot diagnostics and sufficient certificates) | [`check_opf_operability`](@ref) | forward | research prototype |
 | [Parameter estimation](problems/parameter_estimation.md) (line lengths / taps) | [`solve_parameter_estimation`](@ref) | inverse | prototype |
 | [Inverse Carson reconstruction](problems/inverse_carson.md) (compatible overhead constructions) | [`solve_inverse_carson`](@ref) | inverse | prototype |
 | [Dynamic operating envelopes](tutorials/doe_getting_started.md) (active import/export capacity) | [`solve_operating_envelope`](@ref) | forward | research prototype |
@@ -55,31 +76,14 @@ New formulations over the same physics, via the staged `build_opf_model` /
 
 ### Bespoke algorithms
 
-Custom solution methods, currently including [HELM power
-flow](algorithms/helm.md). See [Bespoke algorithms](algorithms/index.md) for the
-method roadmap.
-
-## Installation
-
-BMOPFTools is not yet registered. Local tests and automated builds use commit
-`72e6cec22a66cf376c37ec4d64aef350b9f1100d`. From the PowerOptLab checkout,
-install the pinned source with the same setup script used by CI:
-
-```sh
-julia --project=. scripts/instantiate_pinned.jl
-```
-
-This replaces a previous local BMOPFTools development-path override for this
-project without changing the sibling checkout. Use `Pkg.develop` only when
-intentionally testing uncommitted upstream work.
-
-Everything is SI at the interface (watts, vars, watt-hours, volts); per-unit
-conditioning inside each solve is handled through the engine's
-`opf_bases(ctx)` accessor.
+Custom solution methods include [HELM power flow](algorithms/helm.md) and
+natural-parameter or pseudo-arclength static operability continuation. See
+[Bespoke algorithms](algorithms/index.md) for implemented methods and their
+scope.
 
 ## How it fits together
 
 See [Concepts](concepts.md) for how each capability layers over the BMOPFTools
 staged API, and [Contributing](contributing.md) for how to add your own and the
-promotion path back to the BMOPF spec. Each capability page carries a worked
-example.
+promotion path back to the BMOPF spec. The topic guides link equations, worked
+examples, API references and validation evidence.

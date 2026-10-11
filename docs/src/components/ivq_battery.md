@@ -217,8 +217,9 @@ Honest notes on the 2020 paper, and the choices made here:
 
 - **Data availability.** The bivariate `f_v(soc, i)` surface needs multi-C-rate
   data at matched SoC — a dead-end for a chemistry *library*. The OCV + `R`
-  decomposition recovers the same physics from data that actually exists, turning
-  "one chemistry" into "any chemistry with a published OCV curve".
+  decomposition uses OCV and resistance data in a simpler equivalent-circuit
+  approximation. It does not reproduce the empirical surface's rate dependence,
+  polarization or hysteresis; an OCV curve alone does not calibrate those effects.
 - **Optimiser vs. simulation.** The paper's spline smoothing factor is chosen
   visually, and cubic extrapolation can produce non-physical voltages (its
   Fig. 2). Harmless when *simulating*; a correctness bug when an *optimiser* can
@@ -230,8 +231,9 @@ Honest notes on the 2020 paper, and the choices made here:
   explicit internal AC node and current-dependent losses, repairs that.
 - **Non-convexity.** `p = v·i` with `v = f(soc)` is bilinear-nonconvex on top of
   the already-nonconvex rectangular power flow; only local optima. The PE-model
-  (`StorageDevice`) is the natural convex warm-start — a planned option for the
-  multi-period solve.
+  (`StorageDevice`) has a simpler affine energy balance, but its coupled AC
+  scheduling problem remains nonconvex. Automatic transfer of a PE dispatch into
+  an IVQ warm start is not implemented.
 - **Excluded.** Temperature and degradation (both affect OCV and especially `R`)
   are out of scope for v1; `R(soc)` leaves room to add a `T` dependence later.
 

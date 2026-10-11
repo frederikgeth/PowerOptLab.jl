@@ -11,10 +11,10 @@ makedocs(
     ),
     pages = [
         "Home"            => "index.md",
+        "Getting started" => "getting_started.md",
         "Concepts"        => "concepts.md",
         "Research program" => [
             "Overview" => "research_program.md",
-            "Post-OPF operability roadmap" => "problems/post_opf_operability_roadmap.md",
         ],
         "Dynamic operating envelopes" => [
             "Start here: DOE in 15 minutes" => "tutorials/doe_getting_started.md",
@@ -29,7 +29,6 @@ makedocs(
             "Advanced uncertainty laboratory" => "tutorials/doe_uncertainty_coverage.md",
             "Problem specification" => "problems/operating_envelope.md",
             "Literature evidence" => "problems/doe_literature_evidence.md",
-            "Development roadmap" => "problems/doe_development_roadmap.md",
             "Detailed scientific audit" => "problems/doe_quantification_review.md",
             "API reference" => "api/operating_envelope.md",
         ],

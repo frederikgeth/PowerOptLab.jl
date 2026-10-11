@@ -20,8 +20,9 @@ These are research prototypes for fundamental-frequency network studies.
 
 Start with the worked examples, then use the scientific model and API for your
 chosen connection and source law. The specification drafts describe proposed
-upstream conventions; consult their status before treating them as an existing
-data interface.
+upstream conventions. PowerOptLab already implements the experimental
+[local schema and JSON reader/writer](../specifications/generators/serialization.md);
+these records are not an adopted upstream data interface.
 
 For switching capability, converter losses, filter circuits or DC-link limits,
 see [Inverter-based resources](../ibr/index.md). A generalized voltage-source

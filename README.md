@@ -65,6 +65,9 @@ including [HELM power flow](docs/src/algorithms/helm.md).
 
 ## Examples
 
+Start with the [first-run guide](docs/src/getting_started.md) for installation,
+a complete network and an executed solve with status and physical checks.
+
 ### Battery arbitrage across two prices
 
 ```julia
@@ -131,9 +134,11 @@ r.tap["t1"]           # estimated tap multiplier τ
 r.residual_rms        # RMS voltage misfit (V); near the meter noise floor if the fit is good
 ```
 
-Diverse loads across multiple time steps are what make the shared parameters
-identifiable — a single snapshot cannot separate a long line from a heavy load.
-`per_unit=true` and `per_unit=false` give identical estimates.
+Load variation across snapshots can improve identification, but does not
+guarantee unique lengths or taps. The uncertain-line primitive is an independent
+single-terminal branch, with fixed nominal R/X; it does not estimate mutual
+coupling. SI and per-unit formulations return SI values, while numerical
+conditioning and the local fit can differ.
 
 ### Dynamic operating envelopes
 

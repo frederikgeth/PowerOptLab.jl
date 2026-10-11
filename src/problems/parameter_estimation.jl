@@ -1,46 +1,22 @@
 # Network parameter estimation (calibration).
 #
-# A THIRD problem specification over the same network physics — the shared-parameter
-# dual of state estimation, and a multi-time-step extension of it. State estimation
-# fixes the parameters and estimates the per-snapshot state; calibration fixes
-# nothing about the uncertain elements and estimates the shared, time-invariant
-# parameters (line lengths, transformer tap ratios) that best reproduce many
-# snapshots of smart-meter data at once.
+# Estimate selected line lengths and transformer taps shared across snapshots,
+# together with each snapshot's network state. Topology, nominal per-length R/X,
+# terminal maps and all unselected parameters remain fixed. The shared-parameter
+# construction is motivated by Vanin, Geth, Heidari & Van Hertem,
+# "Distribution System State and Impedance Estimation Augmented with Carson's
+# Equations" (arXiv:2506.04949); this prototype does not implement its full
+# multiconductor/Carson estimation problem.
 #
-# This mirrors the formulation of Vanin, Geth, Heidari & Van Hertem, "Distribution
-# System State and Impedance Estimation Augmented with Carson's Equations"
-# (arXiv:2506.04949): a weighted measurement-residual objective over a time series,
-# the multiconductor IVR (rectangular current–voltage) power flow as the physics,
-# time-invariant impedances written as nominal·length (their Eq. 12), and the
-# smart-meter measurement set as noisy (P, Q, |V|) triples per user (their Eqs.
-# 4–6). Identifiability needs multiple time steps: a single snapshot cannot
-# separate a long line from a heavy load, whereas diverse loads over T snapshots
-# over-determine the shared parameters.
+# Native transformer tap variables are coupled across snapshots. Uncertain lines
+# are omitted from input networks and stamped as independent single-terminal
+# branches with a shared length and fixed nominal R/X. There is no mutual-coupling
+# or common physical-length constraint between separate CalibLine objects.
 #
-# ── How the uncertain elements are stamped ──────────────────────────────────
-# The two element classes are handled DIFFERENTLY, because the BMOPFTools engine
-# exposes them differently:
-#
-#   * Transformer taps use the engine's NATIVE free-tap variable: a transformer
-#     carrying `tap_min`/`tap_max` gets a `:tap` decision variable that the engine
-#     threads through its (per-unit-correct, base-referred) winding constraints.
-#     We keep the transformer in every snapshot net and couple its tap variable
-#     equal across snapshots. Nothing is re-derived — the engine's transformer
-#     physics (leakage, losses, base referral) is reused unchanged.
-#
-#   * Line lengths have NO native free variable, so the uncertain lines are OMITTED
-#     from the physics nets and re-stamped here with a shared free length ℓ:
-#         V_f − V_t = (r₀+jx₀)·ℓ·I         (per-unit: r₀,x₀ scaled by z_base)
-#     This is the one genuine "replace Ohm's law" workaround (see the dev notes in
-#     BMOPFTools docs/src/dev/opf_engine.md and the open issue on a free line
-#     impedance/length variable).
-#
-# Both the ℓ·I product and the P/Q measurement projections are bilinear, so the
-# calibration is a smooth NLP (Ipopt), consistent with the rest of this package.
-#
-# Prototype scope: single-phase elements (one terminal per end — add one CalibLine
-# per phase for a multi-phase feeder). Per-unit and SI are both supported and give
-# identical results.
+# Bilinear length-current and power-measurement terms give a nonconvex NLP.
+# Multiple operating points can improve excitation but do not guarantee unique
+# parameter identification. SI and per-unit coordinates have the same physical
+# interface; numerical conditioning and local convergence can differ.
 
 """
     CalibLine(; id, bus_from, bus_to, r_per_length, x_per_length, ...)
@@ -53,7 +29,9 @@ model `Z = Zⁿᵒᵐ·ℓ` of Vanin et al.).
 
 The uncertain lines must be **omitted** from the physics nets — they are the
 unknowns, stamped by this function. Single-phase: it connects `(bus_from, terminal)`
-to `(bus_to, terminal)`; add one `CalibLine` per phase for a multi-phase line.
+to `(bus_to, terminal)`. Separate `CalibLine` objects model independent
+conductor branches; they do not reconstruct mutual coupling or share one
+physical line length.
 
 # Keywords
 - `id::String` — label for reporting.

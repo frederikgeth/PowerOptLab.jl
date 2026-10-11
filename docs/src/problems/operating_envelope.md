@@ -6,8 +6,7 @@ New readers should begin with [Dynamic operating envelopes in 15
 minutes](../tutorials/doe_getting_started.md), then return here for stable
 semantics and result-field definitions.
 
-For the stable-versus-planned implementation boundary, see the [DOE development
-roadmap](doe_development_roadmap.md). The claim hierarchy and detailed rationale
+The implemented scope and limitations are summarized below. The claim hierarchy and detailed rationale
 are in the [scientific audit](doe_quantification_review.md); source-by-source
 boundaries are in [DOE literature: evidence and
 interpretation](doe_literature_evidence.md).
@@ -28,6 +27,26 @@ dispatchable:
 
 All capacities returned by this API are positive watts. `direction=:export`
 means injection into the network and `direction=:import` means withdrawal.
+
+## Implemented scope
+
+| Axis | Implemented capability | Boundary |
+|:--|:--|:--|
+| Geometry | One-sided active-power import or export allocation per connection | No paired import/export band or coupled P–Q region |
+| Network | Nonlinear, unbalanced, neutral-explicit AC equations | Fundamental-frequency steady state and local nonlinear solves |
+| Utilization | Simultaneous bound, exact small-N corners, dropout faces, explicit points, scrambled Halton sampling and margin-directed adaptive search | Finite budgets; no general continuous nonlinear box certificate |
+| Uncertainty | Typed scenarios, Gaussian and box-conditioned draws, residual bootstrap and categorical materialization | Physical transforms and scenario-model validity remain caller responsibilities |
+| Control recourse | Issue, scenario, prescribed local-law and context stages for registered controls | Arbitrary free controls need registration; generator P/Q has no supported linked recourse handle |
+| Verification | Tri-state numerical evidence, fixed-control replay, candidate confirmation, multistart and analytic reference cases | General AC replay shares the formulation/solver family; analytic containment covers its declared idealized fixture |
+| Statistical evidence | Held-out coverage, leakage audits, paired comparisons, shift and probability-calibration diagnostics | Independence, exchangeability and stationarity are study assumptions |
+| Reproducibility | Study hashes, manifests, benchmark rows and executed synthetic tutorials | Dataset provenance, licensing and estimator-specific materialization are study inputs |
+
+One physical IBR may bind only one participant. Its terminal declarations must
+match the engine; legacy connection-point ports are single-phase. Numerical
+failures remain unresolved evidence rather than becoming physical violations.
+The [faithful replay guide](../tutorials/doe_faithful_replay.md) documents control
+provenance, and the [analytic reference cases](../tutorials/doe_analytic_reference.md)
+state the model under which their independent checks apply.
 
 ## Terminology
 

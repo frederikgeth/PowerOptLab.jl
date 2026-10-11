@@ -338,10 +338,10 @@ The committed `scripts/cases/doe_range_benchmark.jl` fixture is a complete
 example of this interface. It records its synthetic-data licence, method labels,
 seed provenance, scientific claim, and claim limitation in the study metadata.
 
-See the [DOE development roadmap](../problems/doe_development_roadmap.md) for the
-remaining certification, uncertainty-calibration, temporal, fairness, and
-scaling agenda, and the [detailed scientific
-audit](../problems/doe_quantification_review.md) for its rationale.
+See the [DOE problem reference](../problems/operating_envelope.md) for
+implemented scope and numerical limits, and the [detailed scientific
+audit](../problems/doe_quantification_review.md) for certification,
+uncertainty-calibration, temporal and fairness research questions.
 
 For typed calibration/test splits and empirical coverage reporting, continue to
 [DOE scenario design and held-out evaluation](doe_scenario_design.md). The

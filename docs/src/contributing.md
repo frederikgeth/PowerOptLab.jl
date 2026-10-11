@@ -65,7 +65,7 @@ at a glance:
 ```
 
 - **Kind** — Component model / Problem specification / Bespoke algorithm.
-- **Maturity** — *proof of concept*, *prototype*, *research prototype*, or
+- **Maturity** — *proof of concept*, *prototype*, *experimental*, *research prototype*, or
   *promotion candidate*. Use the definitions in [Concepts](concepts.md).
 - **Direction** — *forward* (dispatch/OPF), *inverse* (estimation), or
   *hierarchical* (multiple decision/response levels).
@@ -83,6 +83,11 @@ and the PowerOptLab version becomes a thin re-export or is retired.
 - SI at the interface; per-unit only inside a solve (via `opf_bases(ctx)`).
 - `Manifest.toml` is intentionally not committed (library convention).
 - Every feature is opt-in and covered by a test under `test/`.
+- Keep branch plans, PR readiness gates and implementation checklists in
+  `dev/notes/`, outside the published documentation. Preserve useful equations,
+  implemented scope and validation requirements in the user-facing reference
+  guides before relocating a workflow record. Current behavior belongs in the
+  reference guide; a development note is not an API contract.
 
 ## BMOPFTools compatibility contract
 
@@ -104,8 +109,8 @@ commit before diagnosing a discrepancy with CI. Record `versioninfo()`,
 results.
 
 Most integrations use BMOPFTools' public staged-model and admittance APIs. HELM
-also needs the engine's parsed constant-power and constant-impedance sub-loads,
-which BMOPFTools 0.1.0 does not expose publicly. Those imports are isolated in
+and static operability also need the engine's parsed load decomposition,
+which the pinned BMOPFTools revision does not expose publicly. Those imports are isolated in
 `src/upstream.jl`; they are the only supported private compatibility adapter.
 The upstream API needed to remove it is a public, read-only load-decomposition
 function returning each sub-load's terminal pair, complex power, and shunt

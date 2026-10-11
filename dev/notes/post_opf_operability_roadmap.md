@@ -1,12 +1,17 @@
 # Post-OPF voltage operability roadmap
 
-> **Status:** scoped native-static PR ready for review · **Implementation:**
-> first static checker slice, HELM cross-check, continuation, and study-row
-> contracts landed · **Scope:** static,
-> fundamental-frequency, unbalanced four-wire networks · **Current focus:**
-> final API and scientific-scope review
+> Developer workflow record, excluded from the documentation build.
+> Current user-facing contracts live in the operability reference guide.
+
+> **Original recorded review date:** 2026-08-22 · **Document role:** historical
+> design and implementation notes · **Scope:**
+> static, fundamental-frequency, unbalanced four-wire networks.
 >
-> **Owner:** PowerOptLab maintainers · **Last reviewed:** 2026-08-22
+> Current API behavior, supported physics and result semantics are documented in
+> the [operability reference](../../docs/src/problems/operability.md) and
+> [study tutorial](../../docs/src/tutorials/post_opf_operability_study.md). The milestones and
+> review checklists below record the development plan; they do not identify an
+> active branch or PR, and some proposed steps are already implemented.
 
 This page preserves the scientific and implementation plan for a processor that
 checks the voltage operability of an OPF-determined equilibrium. It is not an API
@@ -15,7 +20,7 @@ stability.
 
 ## Implementation checkpoint
 
-The current branch contains the first bounded implementation slice in
+The implementation inventory below records the native static slice in
 `src/problems/operability.jl`:
 
 - independent static-load endpoint residuals with explicit scope exclusions;
@@ -197,10 +202,10 @@ complete branch discovery or a production-grade fold certificate. The current
 pseudo-arclength slice is limited to the native static ybus load scope; target
 refinement improves endpoint matching but does not replace fold refinement or
 global branch discovery. The bordered localizer is a local candidate solver and
-does not certify uniqueness or global reachability. The pinned documentation
-environment does not yet expose the staged BMOPFTools scaling-policy seam, so
-the executable documentation example and the final scaling-contract release
-remain blocked on that upstream compatibility step.
+does not certify uniqueness or global reachability. The pinned BMOPFTools
+revision exposes the scaling-policy types and staged policy seam used by the
+current reference. Supply the audited context, retained scaling provenance or
+an explicit matching policy as described there.
 
 The fixed-point certificate is a sufficient contraction result, not a
 necessary test. Its `:inconclusive` outcome is deliberately conservative when
@@ -208,17 +213,16 @@ the norm bound cannot be satisfied, when the candidate is outside the certified
   polydisc, or when the load law is outside the implemented native static
   scope.
 
-## Scoped PR readiness checkpoint
+## Historical review scope
 
-The current PR is ready for review for the native frozen-dispatch,
-single-snapshot scope. It includes endpoint/model-domain checks,
+The native frozen-dispatch, single-snapshot implementation includes endpoint/model-domain checks,
 connection-aware phase and sequence evidence, local Jacobian and directional
 sensitivities, HELM and sufficient fixed-point certificates, natural and
 pseudo-arclength continuation with local fold evidence, finite stress-study
 adapters, and table-ready snapshot/continuation rows with scaling, limit,
 validation, and claim provenance.
 
-The following are explicit follow-on work, not hidden gaps in this PR:
+The following remain outside the declared implementation scope:
 
 - generator, IBR, droop/PV, inverter-capability, and other controller residual
   equations remain outside the pinned native-ybus derivative seam;
@@ -226,12 +230,12 @@ The following are explicit follow-on work, not hidden gaps in this PR:
   multidimensional closest-boundary searches are not claimed;
 - sparse/iterative certificate backends for routine very-large meshed studies
   remain a later performance milestone; and
-- contingency orchestration remains a separate PR over this stable
+- contingency orchestration remains separate from this
   single-snapshot API.
 
-The review gate for this PR is therefore the public-field naming, claim-scope,
-and scientific-interpretation contract. The native-static implementation and
-its focused regression suite are complete within that boundary.
+The reference guide documents the public fields, claim scope and scientific
+interpretation of the native static implementation. Historical milestones below
+are not a checklist of currently missing API features.
 
 ## Research question and intended claims
 
@@ -255,7 +259,7 @@ which of these different claims was established.
 
 The four per-check outcomes are initially **operability-local vocabulary**, not
 a repository-wide replacement for result-specific solver statuses or
-[`SolveStatus`](@ref). Milestone 0 will define one local type and aggregation
+[`SolveStatus`](../../docs/src/api.md). Milestone 0 will define one local type and aggregation
 rules before result structs ship. Promotion to a shared repository vocabulary
 requires a separate review against the existing result contracts.
 
@@ -573,12 +577,12 @@ near-duplicate helper.
 
 ### HELM cross-check
 
-PowerOptLab's existing [four-wire HELM implementation](../algorithms/helm.md)
+PowerOptLab's existing [four-wire HELM implementation](../../docs/src/algorithms/helm.md)
 starts from the energized no-load germ and analytically continues its selected
 branch. When the HELM physics covers the case and its endpoint converges to the
 OPF voltage vector, that agreement is strong independent evidence for
 no-load-connected reachability. The [HELM versus nonlinear power-flow
-tutorial](../tutorials/helm_vs_nonlinear_power_flow.md) states the existing
+tutorial](../../docs/src/tutorials/helm_vs_nonlinear_power_flow.md) states the existing
 cross-method evidence contract.
 
 The current HELM scope is constant-power and constant-impedance load parts; it
@@ -663,8 +667,8 @@ in a multidimensional injection space is a different and harder research task.
 
 ## Relationship to operating envelopes
 
-[`solve_operating_envelope`](@ref) allocates feasible import/export capacities
-over declared forecast/model scenarios, while [`verify_operating_envelope`](@ref)
+[`solve_operating_envelope`](../../docs/src/api.md) allocates feasible import/export capacities
+over declared forecast/model scenarios, while [`verify_operating_envelope`](../../docs/src/api.md)
 checks fixed allocations at selected utilization points. The operability
 processor answers an adjacent question about one returned equilibrium: endpoint
 validity, local regularity, branch reachability, and path-specific margin.

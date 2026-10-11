@@ -31,6 +31,7 @@ The repository contains useful foundations, but not the integrated workflow.
 | Inverse Carson reconstruction | Enumeration of overhead-construction candidates, compatible-candidate retention, local rank and profile intervals, materialized primitive four-wire models | It uses sequence linecode data, not joint operational telemetry, and does not combine candidates with the state estimator |
 | Operating envelopes | Shared allocation across explicit forecast/model scenarios; bound-point, corner, and custom-utilization checks | Scenario models must be supplied by the caller; corner checks are not a global robust-feasibility certificate |
 | Differentiated controller experiment | Local DiffOpt sensitivity of smooth lower-level PV/controller responses | Derivatives are conditional on the returned local solution and stable active set; discrete modes and alternative solution branches are not covered |
+| Post-OPF operability | Native static snapshot checks, scaling provenance, directional sensitivities, natural/pseudo-arclength continuation, local fold refinement and sufficient fixed-point certificates | Generator/IBR/controller residual extensions and general global branch discovery are outside this scope |
 | HELM power flow | No-load-connected branch with physical residual and series diagnostics | It does not discover every power-flow branch or certify non-existence when its finite series fails |
 
 These boundaries are deliberate. Terms such as *compatible*, *locally
@@ -80,8 +81,8 @@ The operating-envelope implementation already states the central gap correctly:
 feasibility at the simultaneous bound, or even at every box corner, does not
 prove feasibility throughout a nonconvex AC utilization box.
 
-The current implementation boundary and next research increments are maintained
-in the [DOE development roadmap](problems/doe_development_roadmap.md). The
+The current implementation boundary is documented in the
+[DOE problem reference](problems/operating_envelope.md). The
 detailed implementation audit and benchmark rationale remain in the [DOE
 quantification scientific audit](problems/doe_quantification_review.md).
 The accompanying [DOE literature evidence
@@ -111,20 +112,22 @@ branch, not a claim of the current prototype.
 
 ## Foundational track: solution validity and differentiability
 
-The inference and intervention program depends on local nonlinear solves. A
-parallel foundational track should therefore add pseudo-arclength continuation,
-multiple-solution discovery, active-set transition tracking, KKT regularity and
-conditioning diagnostics, and finite-difference or continuation checks of
-DiffOpt sensitivities.
+The inference and intervention program depends on local nonlinear solves. The
+[static operability checker](problems/operability.md) already provides local
+Jacobian diagnostics, finite-difference sensitivity checks, natural-parameter and
+pseudo-arclength continuation, local fold refinement, and sufficient fixed-point
+certificates within its native static scope. General multiple-solution discovery,
+controller/active-set transition handling, and KKT or continuation validation of
+DiffOpt sensitivities remain research extensions.
 
 The scientific output is not just a derivative. It should state which solution
 branch was differentiated, whether the local solution is isolated, where the
 derivative becomes ill-conditioned or discontinuous, and whether another local
 response changes the decision.
 
-The maintained scientific and implementation plan for the first post-solve
-processor in this track is the [Post-OPF voltage operability
-roadmap](problems/post_opf_operability_roadmap.md). It separates endpoint feasibility,
+The [Post-OPF voltage operability reference](problems/operability.md) and
+[study tutorial](tutorials/post_opf_operability_study.md) document the implemented
+processor. They separate endpoint feasibility,
 local Jacobian evidence, phase/sequence sensitivity, energized-base-connected
 reachability, and path-specific margin rather than compressing them into one
 stability index.

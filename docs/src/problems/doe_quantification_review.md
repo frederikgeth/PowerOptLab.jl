@@ -6,8 +6,8 @@
 The curated source-by-source assessment is maintained in [DOE literature:
 evidence and interpretation](doe_literature_evidence.md). That register
 separates primary results, review evidence, reanalysis, and research hypotheses.
-Current implementation status and future work are summarized separately in the
-[DOE development roadmap](doe_development_roadmap.md). This longer page retains
+Current implementation status and limits are documented in the
+[DOE problem reference](operating_envelope.md). This longer page retains
 the detailed reasoning behind those priorities.
 
 ## Executive assessment
@@ -593,9 +593,8 @@ material:
   API-dense workflow.
 - [Operating envelopes](operating_envelope.md) defines stable semantics and
   result fields, the [literature evidence register](doe_literature_evidence.md)
-  records scientific support, and the [development
-  roadmap](doe_development_roadmap.md) separates current capability from future
-  work.
+  records scientific support, and the [research program](../research_program.md)
+  places future experiments in the wider scientific direction.
 
 The maintenance rules are:
 
