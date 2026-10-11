@@ -1,6 +1,7 @@
 # API reference
 
-All exported names, grouped by capability.
+Shared interfaces and capability references. The [symbol index](symbol_index.md)
+provides an alphabetical index across the core and topic-specific API pages.
 
 ## Module
 
@@ -39,9 +40,9 @@ measurement_prediction
 
 ## Devices
 
-Storage and charging types are documented in the [EV and storage API](ev/api.md):
-[`StorageDevice`](@ref), [`EVDevice`](@ref), [`EV`](@ref), [`EVSE`](@ref), and
-[`ChargingSession`](@ref).
+See the [battery storage API](components/battery_storage_api.md) for
+[`StorageDevice`](@ref), and the [electric vehicle API](ev/api.md) for
+[`EVDevice`](@ref), [`EV`](@ref), [`EVSE`](@ref), and [`ChargingSession`](@ref).
 
 ## Multi-period OPF
 
@@ -174,22 +175,9 @@ inverter_handles
 
 ## Current–voltage (IVQ) battery
 
-```@docs
-IVQBattery
-solve_ivq_battery
-IVQBatteryResult
-solve_multiperiod_ivq
-MultiperiodIVQResult
-BatteryChemistry
-thevenin_chemistry
-linear_chemistry
-tabulated_chemistry
-illustrative_lfp
-illustrative_nmc
-illustrative_nca
-illustrative_lead_acid
-illustrative_leaf
-```
+The [battery storage API](components/battery_storage_api.md) documents
+[`IVQBattery`](@ref), chemistry constructors, single-snapshot and multi-period
+solvers, and their result types.
 
 ## HELM power flow
 

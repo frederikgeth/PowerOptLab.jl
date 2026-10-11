@@ -32,9 +32,11 @@ supports the research loop; it is not the project's scientific identity.
 ## The three kinds of contribution
 
 Every capability in PowerOptLab is one of three structurally different things,
-distinguished by *which layer of the engine it extends*. The docs and the source
-tree (`src/components/`, `src/problems/`, `src/algorithms/`) are organised the
-same way.
+distinguished by *which layer of the engine it extends*. The source tree follows
+these implementation layers (`src/components/`, `src/problems/`,
+`src/algorithms/`). The documentation groups related study topics, with
+[component families](components/index.md) providing entry points to device
+models, examples and references.
 
 | Kind | What it contributes | Seam it reuses | Source |
 |---|---|---|---|

@@ -25,11 +25,14 @@ boundary and priorities.
 
 ### Component models
 
-New network elements, stamped via `model_hook!` / `solution_hook!`.
+Start with the [component model families](components/index.md) for generators,
+battery storage and electric vehicles. Converter physics and controls have a
+dedicated [inverter-based resources guide](ibr/index.md).
 
 | Capability | Entry point | Maturity |
 |---|---|---|
-| [Storage / battery](components/devices.md) with state of charge | [`StorageDevice`](@ref) | promotion candidate |
+| [Generalized generators](components/generators.md) | [`GeneralizedGenerator`](@ref), [`SourceGenerator`](@ref) | research prototype |
+| [Battery storage](components/battery_storage.md) with state of charge | [`StorageDevice`](@ref) | promotion candidate |
 | [EV charging](ev/index.md) (V1G / V2G) with availability & departure energy | [`EVDevice`](@ref), [`ChargingSession`](@ref) | promotion candidate |
 | [Advanced inverter](ibr/index.md) (circuit-aware IBR) | [`AdvancedInverter`](@ref) | experimental |
 | [Phase-aware inverter controls](components/inverter_controls.md) (local three-leg laws) | [`SequenceController`](@ref) | research prototype |

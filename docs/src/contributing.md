@@ -31,7 +31,9 @@ A new network *element*. Put it in `src/components/`.
    example; register it in `docs/make.jl` and export public names from
    `PowerOptLab.jl`.
 
-See [Storage & EVs](components/devices.md) as the reference example.
+Group the new page with its component family in the
+[component model navigation](components/index.md). See
+[PE battery storage](components/devices.md) as the reference example.
 
 ## Adding a problem specification
 

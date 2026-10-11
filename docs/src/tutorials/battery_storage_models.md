@@ -236,5 +236,6 @@ PE is a clear, efficient contractual abstraction; IVQ is a cell-boundary-aware
 model. Their comparison matters when it tests whether PE is a sound aggregation
 of battery physics for the decision at hand.
 
-For API details see [Storage & EV devices](../components/devices.md) and
+For API details see the [battery storage API](../components/battery_storage_api.md).
+For model equations and usage see [PE storage](../components/devices.md) and
 [Current-voltage (IVQ) battery](../components/ivq_battery.md).

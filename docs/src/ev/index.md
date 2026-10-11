@@ -1,4 +1,4 @@
-# Electric vehicles, equipment and sessions
+# Electric vehicles
 
 > **Scope:** deterministic fixed-assignment AC charging, smooth NLP or NLP with
 > complementarity. **Evidence:** analytical cases and regression tests; no
@@ -24,6 +24,26 @@ yet simulate a pilot-response controller.
 The [literature notes](literature.md) distinguish research findings from our
 implementation choices. More detailed battery physics is useful only when the
 data support it; see [PE versus IVQ](../tutorials/battery_storage_models.md).
+
+## Choose a starting point
+
+| Your task | Guide |
+|:--|:--|
+| Derive energy, port and operating-mode constraints | [Scientific model and solvers](model.md) |
+| Model a vehicle, an AC outlet and a fixed visit | [Equipment, energy and sessions](sessions.md) |
+| Use the compact compatibility constructor | [EVDevice model](legacy_device.md) |
+| Run a complete feeder charging comparison | [Workplace feeder study](workplace.md) |
+| Understand simultaneous charging, V2G and solver choices | [Artificial cycling and arbitrage](modes.md) |
+| Inspect a specific complementarity-backend result | [CCOpt zero-dispatch investigation](ccopt_investigation.md) |
+| Assess taper and smoothing assumptions | [Taper, smoothing and flexibility](approximations.md) |
+| Look up constructors and fields | [EV API](api.md) |
+| Assess scientific precedent and evidence limits | [Literature evidence](literature.md) |
+| Identify unsupported studies and planned extensions | [Scope and research roadmap](roadmap.md) |
+| Reproduce studies using earlier defaults | [Compatibility and migration](migration.md) |
+
+Start with the session guide and workplace study for a new fixed-assignment
+charging study. The remaining sections explain object responsibilities and the
+physical boundary; the linked model guide develops the equations.
 
 ## Object responsibilities
 
