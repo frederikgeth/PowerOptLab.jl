@@ -426,8 +426,7 @@ function _solve_exact_current_plant(
         net; per_unit=true, s_base=s_base, add_objective=false,
         model_hook! = hook!, optimizer=optimizer, verbose=verbose)
     _set_solver_options!(_opf_model(ctx), solver_options)
-    enforce_kcl!(ctx)
-    JuMP.optimize!(_opf_model(ctx))
+    BMOPFTools.optimize_opf!(ctx)
     outcome = _solve_outcome(_opf_model(ctx))
     status = SolveStatus(outcome)
     h = handles[]
@@ -1065,8 +1064,7 @@ function _solve_exact_current_fleet_plant(
         build_spec=build_spec, model_hook! = hook!, optimizer=optimizer,
         verbose=verbose)
     _set_solver_options!(_opf_model(ctx), solver_options)
-    enforce_kcl!(ctx)
-    JuMP.optimize!(_opf_model(ctx))
+    BMOPFTools.optimize_opf!(ctx)
     outcome = _solve_outcome(_opf_model(ctx))
     status = SolveStatus(outcome)
     plants = Dict{String,Any}()

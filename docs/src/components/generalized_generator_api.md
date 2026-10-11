@@ -192,7 +192,10 @@ a named tuple of model-unit expressions: `ur/ui` (PCC port voltage), `er/ei`
 handles. Do not interpret their working coordinates as SI.
 
 `build_generator_model` returns the engine `context` and handles before KCL and
-optimization. Call `enforce_kcl!` exactly once before solving. Its hook receives
+optimization. After completing contributions and solver configuration, call
+`BMOPFTools.optimize_opf!(built.context)` to finalize KCL and solve once.
+The manual `enforce_kcl!` followed by `JuMP.optimize!` sequence remains available.
+Its hook receives
 `(ctx, handles)` and can supply an explicit angle reference, an objective, or
 additional problem equations. `solve_generator_opf` is the convenience composition
 of those same steps; it contains no second network solver.

@@ -38,7 +38,7 @@ New network elements, stamped via `model_hook!` / `solution_hook!`.
 ### Problem specifications
 
 New formulations over the same physics, via the staged `build_opf_model` /
-`enforce_kcl!` / `generation_cost` / `extract_result` API.
+`optimize_opf!` / `generation_cost` / `extract_result` API.
 
 | Capability | Entry point | Direction | Maturity |
 |---|---|---|---|

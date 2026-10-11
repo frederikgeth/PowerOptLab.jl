@@ -131,7 +131,7 @@ function solve_generator_opf(net,devices::AbstractVector;solver_options=(),kwarg
     built=build_generator_model(net,devices;kwargs...)
     ctx=built.context; m=_opf_model(ctx)
     _set_solver_options!(m,solver_options)
-    BMOPFTools.enforce_kcl!(ctx); JuMP.optimize!(m)
+    BMOPFTools.optimize_opf!(ctx)
     outcome=_solve_outcome(m); status=SolveStatus(outcome)
     results=Dict(d.id=>extract_device(d,built.handles[d.id],status) for d in devices)
     network=_extract_result(ctx,outcome)
