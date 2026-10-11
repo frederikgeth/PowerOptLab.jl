@@ -31,8 +31,9 @@ A new network *element*. Put it in `src/components/`.
    example; register it in `docs/make.jl` and export public names from
    `PowerOptLab.jl`.
 
-Group the new page with its component family in the
-[component model navigation](components/index.md). See
+Register the new page once under the study topic and device family it supports.
+The [device modeling and scheduling overview](components/index.md) links the
+generator, storage and EV families. See
 [PE battery storage](components/devices.md) as the reference example.
 
 ## Adding a problem specification
@@ -52,7 +53,23 @@ pattern and [Multi-period OPF](problems/multiperiod.md) for inter-temporal linki
 ## Adding a bespoke algorithm
 
 A new *solution method*. Put it in `src/algorithms/` and add a page under
-`docs/src/algorithms/`. See [Bespoke algorithms](algorithms/index.md).
+`docs/src/algorithms/`. Register it with the study question it answers; the
+[power-flow and operability chapter](algorithms/index.md) groups the current
+HELM and static-continuation methods.
+
+## Documentation navigation and API ownership
+
+The published chapters follow study topics, while source folders describe
+implementation layers. Add a guide or tutorial to its study chapter in
+`docs/make.jl`; avoid separate global lists of components, problems, algorithms
+or tutorials. Register each published page once.
+
+Place canonical `@docs` entries in the relevant topic API reference. The
+[shared API](api.md) owns result, time-grid and extension contracts and links to
+the topic references. Use `@ref` to link a symbol from guides and examples,
+rather than reproducing its docstring. The documentation build checks exported
+symbols and cross-references, and the [symbol index](symbol_index.md) spans all
+chapters.
 
 ## Badge line convention
 

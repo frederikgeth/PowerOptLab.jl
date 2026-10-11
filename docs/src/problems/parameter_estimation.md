@@ -125,3 +125,8 @@ natural extensions left for later.
 
 See the API reference for [`CalibLine`](@ref), [`CalibTap`](@ref),
 [`solve_parameter_estimation`](@ref), and [`ParameterEstimationResult`](@ref).
+
+## API reference
+
+The [calibration API](../api/parameter_estimation.md) lists the public types, functions and result fields
+for this guide.

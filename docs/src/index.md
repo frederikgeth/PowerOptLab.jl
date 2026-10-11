@@ -16,7 +16,26 @@ For an existing checkout, install the pinned dependencies from its root:
 julia --project=. scripts/instantiate_pinned.jl
 ```
 
-Then choose a topic from the guide's next-study table or the capabilities below.
+Then choose a study topic below.
+
+## Study topics
+
+The chapters bring models, worked studies, API references and evidence together
+around the question you want to answer.
+
+| Study topic | Question | Start here |
+|:--|:--|:--|
+| State and model inference | What states, shared parameters or line constructions are supported by the available evidence? | [Choose an inference study](estimation/studies.md) |
+| Device modeling and scheduling | Which generator, storage or EV assumptions matter, and how are stored states linked over time? | [Choose device models](components/index.md) |
+| Inverter control and hardware | How do local laws, converter topology and ratings change network and hardware outcomes? | [Inverter studies](ibr/index.md) |
+| Dynamic operating envelopes | What capacity can be allocated and what does the declared verification establish? | [DOE in 15 minutes](tutorials/doe_getting_started.md) |
+| Power flow and operability | What operating point, branch, static margin or model reduction is supported? | [Choose a power-flow or operability study](algorithms/index.md) |
+| Numerical formulations and solvers | How do encodings, bounds and tolerances affect a declared mathematical model? | [Formulation studies](formulations/index.md) |
+
+Use the [API index](api.md) to find a callable interface or the
+[symbol index](symbol_index.md) to look up a name. The
+[capability status catalogue](concepts.md#Capability-status) retains the maturity
+and direction labels for the component and problem prototypes.
 
 ## Research context
 
@@ -40,48 +59,7 @@ uncertainty-set certification APIs as existing functionality.
 contracts; the [Research program](research_program.md) distinguishes current
 capabilities from the intended integrated workflow.
 
-## Capabilities
-
-### Component models
-
-Start with the [component model families](components/index.md) for generators,
-battery storage and electric vehicles. Converter physics and controls have a
-dedicated [inverter-based resources guide](ibr/index.md).
-
-| Capability | Entry point | Maturity |
-|---|---|---|
-| [Generalized generators](components/generators.md) | [`GeneralizedGenerator`](@ref), [`SourceGenerator`](@ref) | research prototype |
-| [Battery storage](components/battery_storage.md) with state of charge | [`StorageDevice`](@ref) | promotion candidate |
-| [EV charging](ev/index.md) (V1G / V2G) with availability & departure energy | [`EVDevice`](@ref), [`ChargingSession`](@ref) | promotion candidate |
-| [Advanced inverter](ibr/index.md) (circuit-aware IBR) | [`AdvancedInverter`](@ref) | experimental |
-| [Phase-aware inverter controls](components/inverter_controls.md) (local three-leg laws) | [`SequenceController`](@ref) | research prototype |
-| [IVQ battery](components/ivq_battery.md) (current–voltage–charge model) | [`IVQBattery`](@ref) | prototype |
-
-### Problem specifications
-
-Network-level questions built on the engine physics. Optimization wrappers use
-the staged OPF API; the compiled constrained estimator and static operability
-checker use their own residual and diagnostic workflows.
-
-| Capability | Entry point | Direction | Maturity |
-|---|---|---|---|
-| [Multi-period OPF](problems/multiperiod.md) co-optimising many snapshots | [`solve_multiperiod_opf`](@ref) | forward | promotion candidate |
-| [Legacy WLS state estimation](problems/state_estimation.md) | [`solve_state_estimation`](@ref) | inverse | prototype |
-| [Constrained NLLS state estimation](problems/constrained_state_estimation.md) | [`solve_sparse_state_estimator`](@ref) | inverse | prototype |
-| [Post-OPF operability](problems/operability.md) (native static snapshot diagnostics and sufficient certificates) | [`check_opf_operability`](@ref) | forward | research prototype |
-| [Parameter estimation](problems/parameter_estimation.md) (line lengths / taps) | [`solve_parameter_estimation`](@ref) | inverse | prototype |
-| [Inverse Carson reconstruction](problems/inverse_carson.md) (compatible overhead constructions) | [`solve_inverse_carson`](@ref) | inverse | prototype |
-| [Dynamic operating envelopes](tutorials/doe_getting_started.md) (active import/export capacity) | [`solve_operating_envelope`](@ref) | forward | research prototype |
-| [Bilevel PV/tap POC](problems/bilevel.md) (DiffOpt lower-level response) | [`solve_bilevel_pv_tap`](@ref) | hierarchical | proof of concept |
-
-### Bespoke algorithms
-
-Custom solution methods include [HELM power flow](algorithms/helm.md) and
-natural-parameter or pseudo-arclength static operability continuation. See
-[Bespoke algorithms](algorithms/index.md) for implemented methods and their
-scope.
-
-## How it fits together
+## Extending the package
 
 See [Concepts](concepts.md) for how each capability layers over the BMOPFTools
 staged API, and [Contributing](contributing.md) for how to add your own and the

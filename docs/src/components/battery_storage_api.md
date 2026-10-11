@@ -7,6 +7,8 @@ units and the distinction between energy and charge-based SoC.
 
 See the [PE model](devices.md) for equations and usage, and
 [Multi-period OPF](../problems/multiperiod.md) for scheduling and solve results.
+The [scheduling API](../api/multiperiod.md) documents the shared solver and result
+type used by PE storage and EV sessions.
 
 ```@docs
 StorageDevice

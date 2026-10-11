@@ -1,0 +1,32 @@
+# Post-OPF operability API
+
+The [operability reference](../problems/operability.md) defines supported
+physics, scaling provenance, equations and permitted claims. The
+[study tutorial](../tutorials/post_opf_operability_study.md) shows snapshot
+checks, finite stress campaigns and publication records.
+
+```@docs
+OperabilitySpec
+OperabilityCheck
+OperabilityModelError
+OperabilityResult
+check_opf_operability
+operability_scope_audit
+operability_upstream_audit
+OperabilityContinuationSpec
+OperabilityContinuationResult
+continue_opf_operability
+OperabilityPseudoArclengthSpec
+continue_opf_operability_pseudo_arclength
+OperabilityFoldResult
+locate_opf_operability_fold
+operability_continuation_margin
+operability_continuation_rows
+OperabilityStressDirection
+operability_stress_network
+operability_stress_rows
+operability_stress_summary
+operability_stress_ensemble_rows
+operability_snapshot_row
+operability_snapshot_rows
+```

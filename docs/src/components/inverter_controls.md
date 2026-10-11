@@ -1,4 +1,4 @@
-# [Phase-aware inverter-control API](@id inverter-control-api)
+# [Phase-aware control modeling guide](@id inverter-control-api)
 
 PowerOptLab implements the first manufacturer-facing law from the
 [phase-aware control design](@ref ibr-phase-aware-control-laws) as a closed-form
@@ -603,3 +603,8 @@ converter-terminal total and sequence powers, `current_scale`, `power_scale`,
 margin, curtailment, and the exact/smooth residual. Compare controls first with
 fixed hardware, then perform outer sweeps over `i_max`, `c_dc`, and capacitor
 ripple-current rating.
+
+## API reference
+
+The [phase-aware control API](../api/inverter_controls.md) lists the public types, functions and result fields
+for this guide.

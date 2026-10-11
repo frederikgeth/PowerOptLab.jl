@@ -2,6 +2,11 @@
 
 > **Kind:** Problem specification · **Direction:** inverse · **Maturity:** prototype
 
+For calibration or line-construction questions, begin with the
+[state and model inference overview](studies.md). This page compares the two
+state estimators; their callable interfaces are in the
+[state estimation API](../api/state_estimation.md).
+
 State estimation is the inverse of power flow. Power flow asks *given the
 injections, what is the state?* Estimation asks *given noisy, incomplete,
 partly-wrong telemetry, what state best explains it — and how much should I

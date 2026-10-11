@@ -181,5 +181,11 @@ Read [Concepts](concepts.md) for the shared units and result contracts.
 | Can an EV meet its departure target through a given outlet? | [Electric vehicles](ev/index.md) |
 | How do source impedance, grounding and voltage regulation affect the result? | [Generators](components/generators.md) |
 | Do converter topology, limits or local controls change the operating point? | [Inverter-based resources](ibr/index.md) |
-| What state is supported by imperfect measurements? | [State estimation](estimation/index.md) |
+| What states or model parameters are supported by evidence? | [State and model inference](estimation/studies.md) |
 | What can a declared set of operating-envelope checks establish? | [DOE in 15 minutes](tutorials/doe_getting_started.md) |
+
+For power-flow branches, static checks or neutral reduction, use the
+[power-flow and operability overview](algorithms/index.md). For numerical
+representations and solver tolerances, use
+[formulation studies](formulations/index.md). The [home page](index.md) maps all
+six study topics, and the [API index](api.md) locates their callable interfaces.

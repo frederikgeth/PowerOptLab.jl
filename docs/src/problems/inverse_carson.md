@@ -211,3 +211,8 @@ per-length sequence linecode and infers plausible construction data. Keeping the
 two formulations separate makes their distinct data assumptions and
 identifiability limits explicit. A future joint estimator can use compatible
 inverse-Carson candidates as structural priors.
+
+## API reference
+
+The [line reconstruction API](../api/inverse_carson.md) lists the public types, functions and result fields
+for this guide.

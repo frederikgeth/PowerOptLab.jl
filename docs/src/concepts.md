@@ -33,12 +33,14 @@ supports the research loop; it is not the project's scientific identity.
 
 ## The three kinds of contribution
 
-Every capability in PowerOptLab is one of three structurally different things,
-distinguished by *which layer of the engine it extends*. The source tree follows
+Engine extensions have three implementation kinds, distinguished by
+*which layer of the engine they extend*. The source tree follows
 these implementation layers (`src/components/`, `src/problems/`,
 `src/algorithms/`). The documentation groups related study topics, with
-[component families](components/index.md) providing entry points to device
-models, examples and references.
+[inference](estimation/studies.md), [device modeling and scheduling](components/index.md),
+[inverter studies](ibr/index.md), [operating envelopes](tutorials/doe_getting_started.md),
+[power flow and operability](algorithms/index.md), and
+[numerical formulations](formulations/index.md) providing reading paths.
 
 | Kind | What it contributes | Seam it reuses | Source |
 |---|---|---|---|
@@ -61,8 +63,8 @@ models, examples and references.
 
 ## Cross-cutting dimensions
 
-The three kinds above are the primary axis, but each capability also carries a few
-orthogonal attributes, surfaced as a badge line at the top of its page:
+Implementation kind identifies the engine seam. Each capability also carries
+attributes surfaced as a badge line at the top of its guide:
 
 - **Maturity** — *proof of concept* (demonstrates a narrow idea), *prototype*
   (test-backed but experimental), *experimental* (an evolving model/interface
@@ -106,3 +108,33 @@ but new code should branch on `solve_status(result).publishable`.
 
 See [Contributing](contributing.md) for how to add each kind of contribution,
 the research-fit test, and the path back to the BMOPF spec.
+
+## Capability status
+
+These catalogues retain the component and problem prototypes' maturity and
+direction labels. The study-topic overviews on the [home page](index.md) provide
+the reading paths; each linked guide defines its own implemented scope.
+
+### Component models
+
+| Capability | Entry point | Maturity |
+|---|---|---|
+| [Generalized generators](components/generators.md) | [`GeneralizedGenerator`](@ref), [`SourceGenerator`](@ref) | research prototype |
+| [Battery storage](components/battery_storage.md) with state of charge | [`StorageDevice`](@ref) | promotion candidate |
+| [EV charging](ev/index.md) (V1G / V2G) with availability & departure energy | [`EVDevice`](@ref), [`ChargingSession`](@ref) | promotion candidate |
+| [Advanced inverter](ibr/index.md) (circuit-aware IBR) | [`AdvancedInverter`](@ref) | experimental |
+| [Phase-aware inverter controls](components/inverter_controls.md) (local three-leg laws) | [`SequenceController`](@ref) | research prototype |
+| [IVQ battery](components/ivq_battery.md) (current–voltage–charge model) | [`IVQBattery`](@ref) | prototype |
+
+### Problem formulations
+
+| Capability | Entry point | Direction | Maturity |
+|---|---|---|---|
+| [Multi-period OPF](problems/multiperiod.md) co-optimising many snapshots | [`solve_multiperiod_opf`](@ref) | forward | promotion candidate |
+| [Legacy WLS state estimation](problems/state_estimation.md) | [`solve_state_estimation`](@ref) | inverse | prototype |
+| [Constrained NLLS state estimation](problems/constrained_state_estimation.md) | [`solve_sparse_state_estimator`](@ref) | inverse | prototype |
+| [Post-OPF operability](problems/operability.md) (native static snapshot diagnostics and sufficient certificates) | [`check_opf_operability`](@ref) | forward | research prototype |
+| [Parameter estimation](problems/parameter_estimation.md) (line lengths / taps) | [`solve_parameter_estimation`](@ref) | inverse | prototype |
+| [Inverse Carson reconstruction](problems/inverse_carson.md) (compatible overhead constructions) | [`solve_inverse_carson`](@ref) | inverse | prototype |
+| [Dynamic operating envelopes](tutorials/doe_getting_started.md) (active import/export capacity) | [`solve_operating_envelope`](@ref) | forward | research prototype |
+| [Bilevel PV/tap POC](problems/bilevel.md) (DiffOpt lower-level response) | [`solve_bilevel_pv_tap`](@ref) | hierarchical | proof of concept |

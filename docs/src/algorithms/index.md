@@ -1,9 +1,19 @@
-# Bespoke algorithms
+# Power flow and operability
 
-A **bespoke algorithm** is a new *solution method*: it changes *how* a problem is
-solved rather than *what* is solved. Where a [problem specification](../problems/multiperiod.md)
-hands one monolithic model to Ipopt, an algorithm wraps the staged API (or the
-engine's admittance-matrix primitives) in a custom loop.
+Choose a method from the question about the operating point, its branch or the
+network model. A nonlinear solve, a HELM calculation, a static operability check
+and a neutral reduction provide different evidence.
+
+| Your task | Guide | API |
+|:--|:--|:--|
+| Compare nonlinear power flow with the no-load-connected HELM branch | [HELM versus nonlinear power flow](../tutorials/helm_vs_nonlinear_power_flow.md) | [HELM API](../api/helm.md) |
+| Audit a solved native static equilibrium and follow a declared stress path | [Post-OPF operability](../problems/operability.md) and [study tutorial](../tutorials/post_opf_operability_study.md) | [Operability API](../api/operability.md) |
+| Study an ideal-ground neutral projection and its retained/lost physics | [Neutral reduction reference](../api/network_reduction.md) | [Reduction API](../api/network_reduction.md) |
+
+HELM and operability have explicit supported-physics boundaries. Follow the
+linked guides before applying their results to a network containing generators,
+IBRs or controls. A fixed-point certificate, a path-specific continuation margin
+and an endpoint residual are distinct claims.
 
 ## Available
 
@@ -46,5 +56,12 @@ rather than form an unconnected catalogue:
 - **Decomposition** — spatial, temporal, or hypothesis decomposition only when
   the integrated inference or verification studies require it for scale.
 
-When one lands, add it under `src/algorithms/`, give it a page here, and document
-the validity of its claims. See [Contributing](../contributing.md) for the pattern.
+## Implementation layers
+
+A **bespoke algorithm** is a new *solution method*: it changes *how* a problem is
+solved rather than *what* is solved. Where a [problem specification](../problems/multiperiod.md)
+hands one monolithic model to Ipopt, an algorithm wraps the staged API (or the
+engine's admittance-matrix primitives) in a custom loop.
+
+See [Contributing](../contributing.md) for extension interfaces and source-tree
+conventions. Register a new guide with the study topic it supports.

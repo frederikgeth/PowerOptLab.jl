@@ -73,7 +73,7 @@ requires per-unit stamping and rejects raw SI because its saturated convergence
 is not sufficiently reliable.
 
 The controller derivations and calling conventions are documented in the
-[phase-aware inverter-control API](@ref inverter-control-api). This page is the
+[phase-aware control modeling guide](@ref inverter-control-api). This page is the
 canonical claim-to-test map and publication gate. In particular, neither a balanced
 OpenDSS comparison nor the four-leg/three-single-phase reduction validates
 negative-sequence control or shared-DC-link dynamics; those are mechanism tests,

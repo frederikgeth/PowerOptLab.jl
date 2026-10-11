@@ -88,3 +88,8 @@ Numerical values are published only when the shared solve reaches `OPTIMAL` or
 relaxed-tolerance outcomes retain their termination status and return `NaN`
 objective/trajectory values rather than presenting a candidate iterate as an
 optimum.
+
+## API reference
+
+The [scheduling API](../api/multiperiod.md) lists the public types, functions and result fields
+for this guide.

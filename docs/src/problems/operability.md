@@ -528,28 +528,7 @@ branch evidence, not a claim that the low branch is infeasible.
 bordered-equation fold candidate for the declared static model and initial
 guess, not uniqueness or global reachability.
 
-```@docs
-OperabilitySpec
-OperabilityCheck
-OperabilityModelError
-OperabilityResult
-check_opf_operability
-operability_scope_audit
-operability_upstream_audit
-OperabilityContinuationSpec
-OperabilityContinuationResult
-continue_opf_operability
-OperabilityPseudoArclengthSpec
-continue_opf_operability_pseudo_arclength
-OperabilityFoldResult
-locate_opf_operability_fold
-operability_continuation_margin
-operability_continuation_rows
-OperabilityStressDirection
-operability_stress_network
-operability_stress_rows
-operability_stress_summary
-operability_stress_ensemble_rows
-operability_snapshot_row
-operability_snapshot_rows
-```
+## API reference
+
+The [operability API](../api/operability.md) lists snapshot checks, continuation,
+fold refinement, finite stress-study adapters and their result types.

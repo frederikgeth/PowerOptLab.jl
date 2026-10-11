@@ -13,6 +13,22 @@ one that retains the mechanism relevant to the study question.
 
 ![Fidelity ladder from POC injection through EMT](../assets/ibr/fidelity-ladder.svg)
 
+## Study paths and references
+
+Use the [advanced inverter modeling guide](../components/advanced_inverter.md)
+and [tutorial](../tutorials/advanced_inverter_modelling.md) to choose a plant.
+The [advanced inverter API](../api/advanced_inverter.md) lists its constructor,
+solve entry point and results. For local laws, use the
+[control modeling guide](../components/inverter_controls.md) and
+[phase-aware control API](../api/inverter_controls.md).
+
+[Fleet and hardware studies](network_control_studies.md) and
+[closed-loop evidence diagnostics](closed_loop_evidence.md) document their
+network-level interfaces. The [learning tutorial](../tutorials/learning_smart_inverter_controls.md)
+examines policy fitting and replay; the
+[bilevel PV/tap guide](../problems/bilevel.md) and
+[API](../api/bilevel.md) cover a separate hierarchical-control proof of concept.
+
 ## Implemented physical scope
 
 `AdvancedInverter` represents RMS fundamental phasors and derives selected
@@ -63,7 +79,7 @@ silently folded into either existing category.
 2. [Phase-aware local control laws](@ref ibr-phase-aware-control-laws) derives
    and classifies topology-compatible Volt-var/Volt-watt extensions for
    unbalanced voltages.
-3. [Phase-aware inverter-control API](@ref inverter-control-api) constructs and
+3. [Phase-aware control modeling guide](@ref inverter-control-api) constructs and
    solves the implemented three-leg laws with executable examples.
 4. [Inverter-control study methodology](@ref ibr-control-study-methodology)
    defines the software layers, upstream seams, validation gates, scaling tests,

@@ -456,3 +456,8 @@ observed state. Failure to reach feasibility at the iteration limit is
 `:constraint_not_satisfied`, not a claim that the mathematical problem is
 infeasible. Invalid initial device domains and detected negative curvature have
 explicit non-publishable statuses described above.
+
+## API reference
+
+The [state estimation API](../api/state_estimation.md) lists the public types, functions and result fields
+for this guide.
