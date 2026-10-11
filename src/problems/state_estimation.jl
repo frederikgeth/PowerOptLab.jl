@@ -449,8 +449,7 @@ function solve_state_estimation(net::Dict{String,Any}, measurements::AbstractVec
                           add_objective=false, model_hook! = wls!,
                           optimizer=optimizer, verbose=verbose)
     _set_solver_options!(_opf_model(ctx), solver_options)
-    enforce_kcl!(ctx)
-    JuMP.optimize!(_opf_model(ctx))
+    BMOPFTools.optimize_opf!(ctx)
 
     outcome = _solve_outcome(_opf_model(ctx))
     status = string(outcome.termination_status)

@@ -21,7 +21,7 @@ The package builds on the
 current–voltage OPF engine. It reuses the engine's neutral-explicit device
 physics, per-unit handling, and result extraction through public extension seams
 (`model_hook!` / `solution_hook!` and the staged `build_opf_model` /
-`enforce_kcl!` / `generation_cost` / `extract_result` API), without forking the
+`optimize_opf!` / `generation_cost` / `extract_result` API), without forking the
 engine.
 
 The full evidence-to-decision loop is a research direction, not a claim about

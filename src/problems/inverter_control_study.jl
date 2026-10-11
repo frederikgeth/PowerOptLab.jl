@@ -304,8 +304,7 @@ function solve_controlled_inverter_fleet(
         build_spec=build_spec, model_hook! = hook!, optimizer=optimizer,
         verbose=verbose)
     _set_solver_options!(_opf_model(ctx), solver_options)
-    enforce_kcl!(ctx)
-    JuMP.optimize!(_opf_model(ctx))
+    BMOPFTools.optimize_opf!(ctx)
 
     outcome = _solve_outcome(_opf_model(ctx))
     status = SolveStatus(outcome)

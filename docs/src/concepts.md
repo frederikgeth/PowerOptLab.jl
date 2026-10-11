@@ -30,7 +30,7 @@ folders follow the same three categories; the documentation groups them by
 | Category | Contribution | Programming interface | Source |
 |---|---|---|---|
 | **Component model** | a new network *element* (device physics) | `model_hook!` / `solution_hook!` | `src/components/` |
-| **Problem specification** | a new *objective + variable/constraint structure* over the whole network | staged `build_opf_model` / `enforce_kcl!` / `generation_cost` / `extract_result` | `src/problems/` |
+| **Problem specification** | a new *objective + variable/constraint structure* over the whole network | staged `build_opf_model` / `optimize_opf!` / `generation_cost` / `extract_result` | `src/problems/` |
 | **Solution method** | a numerical procedure for solving the equations | custom solve loops around the staged API | `src/algorithms/` |
 
 - A **component model** adds the electrical equations and ratings of a device.

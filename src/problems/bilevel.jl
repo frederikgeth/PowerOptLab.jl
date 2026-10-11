@@ -809,8 +809,7 @@ function solve_single_level_pv_tap(net::Dict{String,Any};
         Float64(voltage_weight) * stress +
         Float64(tap_penalty) * (tap_multiplier - 1.0)^2 -
         Float64(export_weight) * export_expr)
-    BMOPFTools.enforce_kcl!(ctx)
-    JuMP.optimize!(model)
+    BMOPFTools.optimize_opf!(ctx)
     status = _bilevel_status(model).status
     exported, voltages = _bilevel_snapshot(model, p_handles, vm_handles,
                                             voltage_scales, power_scale)

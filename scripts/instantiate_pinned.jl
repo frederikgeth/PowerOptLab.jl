@@ -20,3 +20,6 @@ info = only(info for info in values(Pkg.dependencies()) if info.name == "BMOPFTo
 info.is_tracking_repo && info.git_revision == source["rev"] ||
     error("Resolved BMOPFTools does not match the requested source commit")
 println("BMOPFTools ", info.git_revision, " at ", info.source)
+import BMOPFTools
+isdefined(BMOPFTools, :optimize_opf!) ||
+    error("The pinned BMOPFTools source must provide optimize_opf!")

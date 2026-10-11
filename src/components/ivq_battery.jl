@@ -297,8 +297,7 @@ function solve_ivq_battery(net::Dict{String,Any}, battery::IVQBattery;
                           add_objective=false, model_hook! = hook!,
                           optimizer=optimizer, verbose=verbose)
     _set_solver_options!(_opf_model(ctx), solver_options)
-    enforce_kcl!(ctx)
-    JuMP.optimize!(_opf_model(ctx))
+    BMOPFTools.optimize_opf!(ctx)
 
     outcome = _solve_outcome(_opf_model(ctx))
     status = string(outcome.termination_status)
@@ -522,8 +521,7 @@ function solve_multiperiod_ivq(nets::AbstractVector, batteries::AbstractVector;
     # horizon energy cost (generation_cost is a per-snapshot rate).
     JuMP.@objective(model, Min,
         sum(grid[t] * generation_cost(ctxs[t]) for t in 1:T))
-    foreach(enforce_kcl!, ctxs)
-    JuMP.optimize!(model)
+    BMOPFTools.optimize_opf!(ctxs...)
 
     outcome = _solve_outcome(model)
     status = string(outcome.termination_status)

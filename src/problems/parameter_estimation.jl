@@ -321,8 +321,7 @@ function solve_parameter_estimation(nets::AbstractVector, measurements::Abstract
         JuMP.@objective(model, Min, obj)
     end
 
-    foreach(enforce_kcl!, ctxs)
-    JuMP.optimize!(model)
+    BMOPFTools.optimize_opf!(ctxs...)
 
     outcome = _solve_outcome(model)
     status = string(outcome.termination_status)

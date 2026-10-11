@@ -1,7 +1,7 @@
 # Multi-period optimal power flow: several network snapshots co-optimised in one
 # JuMP model, with storage/EV devices whose state of charge links each step to
 # the next. Built entirely on the BMOPFTools staged API — `build_opf_model`
-# (one shared model, `add_objective=false`), `generation_cost`, `enforce_kcl!`,
+# (one shared model, `add_objective=false`), `generation_cost`, `optimize_opf!`,
 # `extract_result` — plus this package's device port stamping and SOC linking.
 
 """
@@ -219,8 +219,7 @@ function solve_multiperiod_opf(nets::AbstractVector, devices::AbstractVector;
         sum(grid[t] * (generation_cost(ctxs[t]) +
             sum(_snapshot_device_cost(d,ports[device_id(d)][t]) for d in devices;init=0.0)) for t in 1:T))
 
-    foreach(enforce_kcl!, ctxs)
-    JuMP.optimize!(model)
+    BMOPFTools.optimize_opf!(ctxs...)
 
     outcome = _solve_outcome(model)
     status_contract = SolveStatus(outcome)

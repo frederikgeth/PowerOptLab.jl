@@ -41,7 +41,7 @@ generator, storage and EV families. See
 A new *formulation* over the same physics. Put it in `src/problems/`.
 
 1. Build the network snapshot(s) via the staged API — `build_opf_model(add_objective=false)`,
-   then compose your own objective and constraints, `enforce_kcl!` per snapshot,
+   then compose your own objective and constraints, `optimize_opf!(ctxs...)` once,
    and `extract_result`.
 2. Return a bespoke result struct.
 3. Add a page under `docs/src/problems/` (badge line + worked example), register in
@@ -166,7 +166,7 @@ and the PowerOptLab version becomes a thin re-export or is retired.
 ## BMOPFTools compatibility
 
 BMOPFTools is unregistered. The root and docs `Project.toml` source tables pin
-commit `72e6cec22a66cf376c37ec4d64aef350b9f1100d`; package compatibility remains
+commit `56e3b2f0261488acd30f1c98ad812c4eff4611f1`; package compatibility remains
 0.1.0. Update both source pins together, then run the complete tests and
 documentation build on the Julia compatibility floor and current stable.
 
