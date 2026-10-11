@@ -64,5 +64,5 @@ wrong:
   parts of an estimate are supported by measurements and which are decoration.
 * [Current-magnitude measurements](current_magnitude.md) — why ampere readings
   are genuinely hard, demonstrated rather than asserted.
-* [Background and roadmap](state_of_the_art.md) — selected literature, and what
+* [Background and open questions](state_of_the_art.md) — selected literature, and what
   these prototypes do not yet do.

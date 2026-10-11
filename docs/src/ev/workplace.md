@@ -102,4 +102,4 @@ arrivals, continuous charging commands and constant efficiencies. A real study
 needs measured charger response, availability uncertainty, installation data,
 and appropriate feeder validation; see the [literature notes](literature.md).
 Shared DC cabinets, discrete pilots and driving between visits require the
-additional models described in the [roadmap](roadmap.md).
+additional models described in the [scope and limitations](roadmap.md).

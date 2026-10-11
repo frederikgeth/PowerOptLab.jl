@@ -1,8 +1,8 @@
-# Scope, extensions and research validation
+# EV scope and limitations
 
-## Implemented foundation
+## Supported models
 
-The first implementation provides disconnected conductor isolation, current and
+The current models provide disconnected conductor isolation, current and
 apparent-power ratings, equal-power or explicit independent phase dispatch,
 normalized mode relaxation and exact MPCC encoding, fixed AC outlet assignments,
 vehicle/equipment/session capability intersections, energy diagnostics, and
@@ -13,9 +13,9 @@ numerical relaxation explicit. All multi-phase PE ports now require a conductor
 rating. These changes should be treated as model changes when reproducing old
 studies, not as a numerical performance update.
 
-## Next layers and their intended uses
+## Unsupported studies and required model layers
 
-| Extension | Enables | Required design/validation |
+| Missing model layer | Studies requiring it | Required data and validation |
 |:--|:--|:--|
 | Persistent vehicle trajectories and trip withdrawals | Home–work–home, fleets and depot returns | Boundary event ordering, measured arrival states, trip-energy accounting; never reset energy at each visit |
 | DC EVSE and shared conversion groups | Multiple dispensers on one power cabinet | Stamp AC conversion once; couple per-port DC V/I/P and cabinet limits; distinguish cable and converter ratings |
@@ -25,7 +25,7 @@ studies, not as a numerical performance update.
 | Aggregate service contracts | DOE/ancillary services | Disaggregation, activation duration, recovery, uncertainty and feeder feasibility |
 | Minimum/discrete pilots and assignment MPCCs | Operational scheduling and allocation | Exact discrete semantics, multiple starts, numerical residuals, implementation replay |
 
-These are prospective features. In particular, the current model does not
+These model layers are not implemented. In particular, the current model does not
 implement trip withdrawals, shared DC cabinets, stochastic control or optimized
 assignments. A session's occupancy mask is not a mobile battery.
 
@@ -44,11 +44,12 @@ assignments. A session's occupancy mask is not a mobile battery.
 7. Compare economic cases with matched initial/final inventory and distinguish
    physical service from a model's controllable feasible set.
 
-## Research acceptance tests for future extensions
+## Validation requirements for these studies
 
-A feature should include a counterexample that demonstrates why it is needed,
-an analytical or independently simulated reference, a calibrated/illustrative
-data declaration, and a domain where its conclusion is valid. Examples include
+A study using an additional model layer needs an analytical or independently
+simulated reference, a calibrated/illustrative data declaration, and a domain
+where its conclusion is valid. A counterexample can establish why the extra
+mechanism changes the decision. Examples include
 trip-energy conservation over repeated visits; shared-cabinet conservation with
 two outlets; held-out pilot tracking; temperature trajectories against measured
 charging; and explicit disaggregation of every sampled aggregate offer.

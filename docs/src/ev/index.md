@@ -38,7 +38,7 @@ data support it; see [PE versus IVQ](../tutorials/battery_storage_models.md).
 | Assess taper and smoothing assumptions | [Taper, smoothing and flexibility](approximations.md) |
 | Look up constructors and fields | [EV API](api.md) |
 | Assess scientific precedent and evidence limits | [Literature evidence](literature.md) |
-| Identify unsupported studies and planned extensions | [Scope and research roadmap](roadmap.md) |
+| Identify unsupported studies and missing model layers | [Scope and limitations](roadmap.md) |
 | Reproduce studies using earlier defaults | [Compatibility and migration](migration.md) |
 
 Start with the session guide and workplace study for a new fixed-assignment
@@ -123,7 +123,7 @@ phase-switching decision.
   accuracy or global optimality certificate. Inspect physical diagnostics.
 
 See [equations and solver choices](model.md), [mode misconceptions](modes.md),
-[approximation and flexibility](approximations.md), and [the roadmap](roadmap.md).
+[approximation and flexibility](approximations.md), and [scope and limitations](roadmap.md).
 The [workplace feeder tutorial](workplace.md) demonstrates equipment-dependent
 cost and deadline feasibility. Existing studies should read the
 [compatibility and migration review](migration.md).

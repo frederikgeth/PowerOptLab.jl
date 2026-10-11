@@ -4,7 +4,7 @@
 
 [`IVQBattery`](@ref) models grid storage in the **voltage–current–charge**
 variable space instead of the power–energy space of [`StorageDevice`](@ref). It
-is the Julia counterpart to the model of
+uses a charge-based formulation motivated by
 
 > P. Aaslid, F. Geth, M. Korpås, M. M. Belsnes, O. B. Fosso,
 > *Non-linear charge-based battery storage optimization model with bi-variate
@@ -12,18 +12,22 @@ is the Julia counterpart to the model of
 > [doi:10.1016/j.est.2020.101979](https://doi.org/10.1016/j.est.2020.101979)
 
 Where the power–energy ("PE") model — [`StorageDevice`](@ref) plus the
-state-of-charge balance in [`solve_multiperiod_opf`](@ref) — tracks energy with a
-**fixed** round-trip efficiency, the IVQ model tracks **charge** and represents
-the cell **terminal voltage explicitly**, so voltage and current limits are
-enforced *individually* rather than folded into a conservative power limit. Two
-consequences matter for dispatch:
+state-of-charge balance in [`solve_multiperiod_opf`](@ref) — tracks energy with
+fixed one-way charging and discharging efficiencies, the IVQ model tracks
+**charge** and represents the cell **terminal voltage explicitly**. Voltage and
+current limits are constrained individually at the modeled operating points.
+Two consequences matter for dispatch:
 
-- **Safe operation up to the cell boundaries.** A PE-model must pad its power and
-  SoC limits to guarantee the true voltage/current limits are never crossed; the
-  IVQ model carries those limits directly and can use the full envelope.
+- **Explicit modeled cell limits.** IVQ constrains the voltage and current of the
+  supplied equivalent-circuit model. Whether those bounds describe real equipment
+  depends on calibration and omitted physics. The illustrative presets do not
+  establish physical safety or a validated operating envelope. PE ratings and
+  energy bounds likewise need evidence for the study's AC-to-stored-energy boundary.
 - **A current-dependent efficiency proxy is derived, not assumed.**
   ``\eta = f_v(\text{soc}, i)\,/\,f_v(\text{soc}, -i)`` falls out of the voltage
-  curve and *worsens with current* — no `eff_charge`/`eff_discharge` parameters.
+  curve for equal positive current magnitudes at fixed SoC. For the Rint law with
+  positive resistance it decreases with current — no cell-level
+  `eff_charge`/`eff_discharge` parameters.
   Note this is an *instantaneous, equal-current, fixed-SoC cell* efficiency, **not**
   a full round-trip *energy* efficiency over a cycle, and it excludes the converter
   losses (which live on the [`AdvancedInverter`](@ref)).
@@ -31,8 +35,8 @@ consequences matter for dispatch:
 ## Terminal-voltage model
 
 The paper represents the cell voltage as a bivariate cubic spline
-``v = f_v(\text{soc}, i)`` fitted to multi-C-rate discharge data. That surface
-needs data published for almost no chemistry, so PowerOptLab instead uses the
+``v = f_v(\text{soc}, i)`` fitted to multi-C-rate discharge data. An empirical
+surface requires matched state-of-charge and current data. PowerOptLab uses the
 0th-order equivalent-circuit (Thévenin / *Rint*) decomposition
 
 ```math
@@ -40,11 +44,10 @@ v(\text{soc}, i) = \mathrm{OCV}(\text{soc}) - i \cdot R(\text{soc}),
 \qquad i > 0 \ \text{discharge},
 ```
 
-which captures the same *qualitative* behaviour — terminal voltage sags under
-discharge and rises under charge — from an **open-circuit-voltage curve**
-(abundant and citable for every chemistry) plus an **internal resistance** (from
-HPPC pulse data). It is **not** the same physics as the empirical surface: Rint
-omits polarization dynamics, relaxation, rate dependence and hysteresis (which
+This is the implemented 0th-order equivalent-circuit approximation, rather than
+the paper's empirical spline surface. With positive resistance, terminal voltage
+sags under discharge and rises under charge, using the supplied OCV and resistance
+curves. Rint omits polarization dynamics, relaxation, rate dependence and hysteresis (which
 matter especially for LFP — a hysteresis-aware RC model is the usual next step).
 The pack scales the cell by
 its series/parallel counts: ``v_\text{pack} = n_\text{series}\,v_\text{cell}``,
@@ -59,8 +62,13 @@ Three fidelity levels, cheapest first — each a [`BatteryChemistry`](@ref):
 | [`linear_chemistry`](@ref) | linear `v_empty → v_full` | fixed | two endpoint voltages + a resistance |
 | [`tabulated_chemistry`](@ref) | monotone cubic (PCHIP) | fixed or `R(soc)` table | an OCV curve (± HPPC) |
 
-The PE-model is the further special case of `thevenin_chemistry` with `R = 0`
-(constant voltage ⇒ power ∝ current).
+With constant OCV and `R = 0`, ideal cell power is proportional to current and
+stored energy is proportional to charge after choosing a consistent voltage and
+capacity scale. Equivalence with a PE energy account additionally requires
+consistent AC/DC boundaries, efficiencies and converter constraints. Setting
+`R = 0` removes cell resistive loss; the [`AdvancedInverter`](@ref) still has its
+own loss and capability model. See [PE versus IVQ](../tutorials/battery_storage_models.md)
+for a comparison of the complete storage models.
 
 !!! note "OCV(soc) smoothness — and its limits"
     In multi-period, `OCV(soc)` is evaluated at the SoC *variable*.
@@ -113,9 +121,9 @@ r.p_dc       # DC-link power = p_conv + p_loss
 
 `objective` is `:max_export` (discharge to a cell voltage/current or converter
 limit), `:max_charge`, or `:min_loss` (with a `p_set` delivery target). SoC is
-fixed at `soc_init` — this single operating point reproduces the paper's second
-case study: the deliverable power set by the cell's own voltage and current
-limits, which a power-only model misses.
+fixed at `soc_init`. This operating-point study computes deliverable power under
+the supplied cell and converter limits. Reproducing published numerical results
+requires the corresponding cell data, fitted voltage model and network assumptions.
 
 ## Multi-period arbitrage
 

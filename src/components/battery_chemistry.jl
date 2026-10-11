@@ -11,14 +11,14 @@
 #
 # We deliberately do NOT reproduce the paper's raw bivariate cubic spline as the
 # primary interface: a full `f_v(soc, i)` surface needs multi-C-rate discharge
-# data at matched SoC, which is published for almost no chemistry. Instead the
+# data at matched SoC. Instead the
 # terminal voltage is decomposed into an equivalent-circuit (Thévenin / Rint)
 # form
 #
 #     v(soc, i) = OCV(soc) − i · R(soc)            (i > 0 discharge)
 #
-# where OCV(soc) is the open-circuit voltage (abundant and citable for every
-# chemistry) and R(soc) the internal resistance (from HPPC pulse data).
+# where OCV(soc) is the supplied open-circuit-voltage curve and R(soc) the supplied
+# internal resistance. Measured resistance can be fitted from pulse data.
 #
 # This is a 0th-order (Rint) equivalent circuit. It captures the same *qualitative*
 # effect the paper's empirical surface does — terminal voltage sagging with
@@ -31,8 +31,9 @@
 # (those live on the `AdvancedInverter`).
 #
 # Three levels of fidelity, cheapest first:
-#   • `thevenin_chemistry` — constant OCV behind a fixed resistance (the paper's
-#     PE-model is the further special case R → 0).
+#   • `thevenin_chemistry` — constant OCV behind a fixed resistance. At R = 0
+#     ideal cell power is proportional to current; equivalence to an AC-side PE
+#     model also requires matching state scales, boundaries and converter losses.
 #   • `linear_chemistry`   — OCV drops linearly between a full and an empty
 #     voltage as SoC falls (a "state-dependent voltage source"), fixed R.
 #   • `tabulated_chemistry`— OCV(soc) (and optionally R(soc)) from data points,
@@ -61,7 +62,8 @@ Construct one with [`thevenin_chemistry`](@ref), [`linear_chemistry`](@ref) or
 - `name::String` — chemistry label.
 - `ocv::Function` — `soc ∈ [0,1] → open-circuit voltage (V)`; non-decreasing and
   smooth (C¹). `linear`/`thevenin` OCV is affine; `tabulated` OCV is a monotone
-  cubic (PCHIP) so it is safe to embed as a function of the SoC *variable*.
+  cubic (PCHIP), embedded as a function of the SoC *variable*. Interior knots
+  are C¹ rather than C²; smoothness alone does not guarantee NLP convergence.
 - `r_internal::Function` — `soc ∈ [0,1] → internal resistance (Ω) ≥ 0`.
 - `ocv_affine::Union{Tuple{Float64,Float64},Nothing}` — `(intercept, slope)` when
   OCV is affine (so the multi-period model embeds it as a plain expression rather

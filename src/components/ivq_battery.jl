@@ -1,19 +1,19 @@
 # Current–voltage (IVQ) battery storage device.
 #
 # The IVQ counterpart to the energy/power `StorageDevice` (`components/devices.jl`),
-# implementing the voltage–current–charge storage model of Aaslid, Geth, Korpås,
+# using a voltage–current–charge formulation motivated by Aaslid, Geth, Korpås,
 # Belsnes & Fosso, "Non-linear charge-based battery storage optimization model
 # with bi-variate cubic spline constraints", Journal of Energy Storage 32 (2020)
-# 101979. Where the PE-model tracks energy with a fixed round-trip efficiency,
+# 101979. Where the PE-model tracks energy with fixed one-way efficiencies,
 # the IVQ device tracks charge and models the cell terminal voltage explicitly:
 #
 #     v(soc, i) = OCV(soc) − i · R(soc)            (i > 0 discharge, per cell)
 #
-# so voltage and current limits are enforced individually — enabling safe
-# operation right up to the cell boundaries that a power-only model can only
-# approximate with conservative padding — and the round-trip efficiency
-# η = f_v(soc, i)/f_v(soc, −i) emerges from the physics instead of being a
-# parameter (see [`BatteryChemistry`](@ref)).
+# The optimization constrains voltage/current in the supplied Rint cell model.
+# Real equipment limits need calibration; illustrative presets and the omitted
+# thermal, polarization and aging mechanisms do not establish physical safety.
+# The equal-current, fixed-SoC cell proxy eta = f_v(soc, i)/f_v(soc, -i) excludes
+# converter losses and is not a cycle round-trip energy efficiency.
 #
 # The AC-side converter is NOT re-implemented here: an [`AdvancedInverter`](@ref)
 # owns the point-of-connection coupling, output filter, converter losses and

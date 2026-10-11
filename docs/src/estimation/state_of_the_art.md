@@ -1,4 +1,4 @@
-# Background and roadmap
+# Background and open questions
 
 Selected literature that bears on these two prototypes, what they implement,
 and what they do not. This page is deliberately blunt about the gaps.
@@ -6,7 +6,7 @@ and what they do not. This page is deliberately blunt about the gaps.
 !!! note "A selective bibliography, not a survey"
     The works below were chosen because they bear directly on decisions taken
     in this codebase. This is not a systematic review of state estimation, and
-    the "open" items in the roadmap are open *relative to this bibliography* —
+    the open questions below are open *relative to this bibliography* —
     treat them as leads for a proper literature search, not as claims of
     novelty. For actual surveys see Primadianto and Lu (2017) and Dehghanpour
     et al. (2019).
@@ -84,9 +84,11 @@ both estimators assume a diagonal covariance.
 | Multistart / global search | ❌ | ❌ | |
 | PMU / synchrophasor model | ❌ | partial | `:vr`/`:vi` exist; no reference-angle or PMU error model |
 
-## Roadmap
+## Open questions
 
-Ordered by how much each would change what a user can defensibly claim.
+These gaps affect the interpretation, numerical scalability and validity of
+the current estimates. The discussion connects the missing capabilities to
+selected literature and the assumptions they would need to address.
 
 ### 1. Bad-data processing (largest gap)
 

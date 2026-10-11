@@ -402,55 +402,25 @@ unbalanced, current-limited, and ripple-limited points against an averaged model
 and a switched EMT model. The network-wide NLP supplies breadth; the higher-
 fidelity subset supplies confidence in the mechanisms used for sizing.
 
-## Implementation sequence
+## Implemented study support and evidence limits
 
-Steps 1--5 are implemented by the public BMOPFTools smooth-PWL API and the
-PowerOptLab phase-aware control component. The exact and smooth evaluators,
-three voltage-reference policies, converter/grid current targets, dominant
-conflict policy, converter-terminal power extraction, three-leg plant
-composition, supported-unit regression, and extracted exact-versus-smooth current
-residual are covered by unit tests. Fleet construction, matched-case execution
-and initial hardware counterfactuals are also implemented, as recorded in steps
-6--9 below. Dataset-specific campaigns and the independent exact-law network
-oracle remain separate work; batteries are outside this programme.
+The local controller, fleet construction, matched-case execution and initial
+hardware counterfactuals are implemented. Use the
+[network study guide](network_control_studies.md) for those interfaces and their
+supported inputs. Unit and regression tests establish the declared algebraic,
+physical-balance and result contracts; dataset-specific performance and sizing
+conclusions need their own recorded campaigns.
 
-1. **Complete:** submit the BMOPFTools public smooth-PWL API PR.
-2. **Complete:** add PowerOptLab exact sequence/curve/limiter numeric helpers and tests.
-3. **Complete:** add `SequenceController`, `ControlledDevice{AdvancedInverter}`, and semantic
-   control handles.
-4. **Complete:** stamp the smoothed worst-phase and negative-sequence admittance laws into one
-   advanced inverter; verify exact/smooth agreement.
-5. **Complete:** add continuous normalised conflict handling, rated/available
-   Volt-watt bases, P/Q priority, plant-side converter/grid current and
-   apparent-power backoff, optional `dv2_max` backoff, and binding-limit tests.
-6. **Complete:** add multi-device single-snapshot construction using
-   per-component `OpfDeviceBuilder` replacement for dataset IBRs.
-7. **Complete:** add deterministic tidy device/phase extraction, ownership
-   provenance, physical-balance tests, and supported-unit checks. Large-network
-   scaling benchmarks remain part of the case-study campaign rather than the
-   unit suite.
-8. **Infrastructure complete:** add deterministic matched-case execution,
-   failure retention, duration/weight-aware summaries, and paired variant
-   differences. The dataset-specific fixed-hardware penetration campaign is the
-   next research run.
-9. **Initial infrastructure complete:** expand matched cases over explicit
-   converter-current, grid-current, DC-capacitance, and capacitor-current
-   counterfactuals; report achieved-current and closed-form 2ω requirements.
-   Dataset-specific service predicates and complete capability frontiers are
-   the next research run.
-10. **Open:** implement the exact-law fixed-point oracle described in
-    [Verification and benchmark cases](@ref ibr-verification) and report
-    ``\|\Delta V\|_\infty`` between the firmware-law and smooth-law equilibria on
-    at least one unbalanced feeder per control law. Until this exists, the
-    reported exact/smooth residual bounds controller-algebra smoothing only, and
-    equilibrium agreement is an assumption of every comparison above.
-11. **Open:** audit the starts and scales of every lifted magnitude, decide
-    whether the controller selectors become rating-relative, and re-measure the
-    `per_unit=true` restriction against the shifted-expression representation.
-    The evidence and the three specific defects are in the numerical-policy
-    section of [Phase-aware local control laws](@ref
-    ibr-phase-aware-control-laws). This gates any study on devices whose ratings
-    differ by more than about a decade, and any MV study.
-12. **Open:** read the licensed AS/NZS 4777.2 and IEEE 1547-2018 clauses that
-    specify the monitored voltage for a multi-phase DER, and settle the novelty
-    framing of the worst-phase envelope before writing it up.
+Exact-versus-smooth residuals currently compare controller commands at the smooth
+model's returned operating point. The independent exact-law network fixed-point
+oracle remains unimplemented, so those residuals do not bound the difference
+between exact-law and smooth-law network equilibria. See the
+[verification guide](verification.md)
+for the required comparison.
+
+Coupled controller stamping requires per-unit coordinates. The
+[numerical-policy discussion](phase_aware_control_laws.md) records the unresolved
+magnitude-start and scale issues that limit extrapolation across widely different
+ratings and voltage levels. Hardware conclusions also require the matched
+higher-fidelity validation described above. Standards compliance and novelty
+claims require clause-specific evidence beyond these algebraic tests.

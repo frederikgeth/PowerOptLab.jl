@@ -202,7 +202,7 @@ per-row whitened residuals:  -24.97,  -0.90,  0.00,  0.00,  +24.98
 ```
 
 This is the concrete argument for local redundancy, and it is also why
-[bad-data processing is the top roadmap item](state_of_the_art.md#Roadmap).
+[bad-data processing remains an open capability](state_of_the_art.md#Open-questions).
 For measurement-only whitened residuals in the linearised constrained model,
 set ``A=HZ``. Their residual covariance is ``\Omega_w=I-AA^\dagger``;
 normalised residuals are ``r_i/\sqrt{(\Omega_w)_{ii}}``. This uses the

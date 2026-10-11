@@ -98,7 +98,7 @@ makedocs(
                 "Taper, smoothing and flexibility" => "ev/approximations.md",
                 "API reference" => "ev/api.md",
                 "Literature evidence" => "ev/literature.md",
-                "Scope and research roadmap" => "ev/roadmap.md",
+                "Scope and limitations" => "ev/roadmap.md",
                 "Compatibility and migration" => "ev/migration.md",
             ],
         ],
@@ -111,7 +111,7 @@ makedocs(
             "Modelling tutorial"           => "tutorials/constrained_nlls_state_estimation.md",
             "Observability & under-observed" => "estimation/observability.md",
             "Current-magnitude measurements" => "estimation/current_magnitude.md",
-            "Background & roadmap"         => "estimation/state_of_the_art.md",
+            "Background and open questions"         => "estimation/state_of_the_art.md",
         ],
         "Problem specifications" => [
             "Multi-period OPF"     => "problems/multiperiod.md",
