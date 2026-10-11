@@ -174,7 +174,16 @@ Run `julia --project=. scripts/instantiate_pinned.jl` for local tests and
 `julia --project=docs scripts/instantiate_pinned.jl` for documentation. CI uses
 these commands too. The script checks agreement between the two declarations
 and explicitly installs the commit, including on Julia 1.10 where `[sources]`
-is not consumed automatically.
+is not consumed automatically. A fresh Julia 1.10 documentation environment
+is bootstrapped with the local PowerOptLab path before resolving the registered
+documentation dependencies.
+
+Documentation CI builds on Julia 1.10 and current stable; only current stable
+deploys. To build locally without deployment, use:
+
+```sh
+DOCUMENTER_DEPLOY=false julia --project=docs docs/make.jl
+```
 
 Both manifest files remain local. A `Pkg.develop` path override means tests
 use that checkout's working tree. Re-run the setup script to restore the tested

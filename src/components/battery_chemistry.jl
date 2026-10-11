@@ -233,9 +233,10 @@ published OCV curve or a slow-rate (≈ C/20) discharge test. `OCV(soc)` is a
 **monotone cubic (PCHIP) interpolant** of `(soc_points, ocv_points)`, which must
 be strictly increasing in `soc` and non-decreasing in `ocv` (a physical OCV
 curve). Outside the fitted range it is held flat so the optimiser cannot
-extrapolate into non-physical voltage — note this makes the function only C⁰ at
-the two outer knots, so keep `soc_min`/`soc_max` strictly inside them (the
-default nudges them in). `r_internal` may be a scalar Ω or a matching vector
+extrapolate into non-physical voltage. Clamping can make the derivative
+discontinuous at an outer knot. The defaults include those knots; choose
+`soc_min`/`soc_max` strictly inside them when avoiding endpoint derivative
+discontinuities matters to the solve. `r_internal` may be a scalar Ω or a matching vector
 `r_points` interpolated the same way.
 
 # Keywords

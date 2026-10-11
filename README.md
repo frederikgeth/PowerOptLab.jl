@@ -19,7 +19,7 @@ questions that are often treated separately:
 The package builds on the
 [BMOPFTools](https://github.com/frederikgeth/BMOPFTools.jl) reference
 current–voltage OPF engine. It reuses the engine's neutral-explicit device
-physics, per-unit handling, and result extraction through public extension seams
+physics, per-unit handling, and result extraction through public model-building interfaces
 (`model_hook!` / `solution_hook!` and the staged `build_opf_model` /
 `optimize_opf!` / `generation_cost` / `extract_result` API), without forking the
 engine.
@@ -73,6 +73,7 @@ including [HELM power flow](docs/src/algorithms/helm.md).
 
 Start with the [first-run guide](docs/src/getting_started.md) for installation,
 a complete network and an executed solve with status and physical checks.
+The snippets below illustrate interfaces and require your own network inputs.
 
 ### Battery arbitrage across two prices
 

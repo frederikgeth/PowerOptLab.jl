@@ -14,7 +14,31 @@ source = first(sources)
 occursin(r"^[0-9a-f]{40}$", source["rev"]) || error("BMOPFTools must use a full commit SHA")
 Base.active_project() in project_paths || error("Run with --project=. or --project=docs")
 
-Pkg.add(Pkg.PackageSpec(name="BMOPFTools", url=source["url"], rev=source["rev"]))
+upstream = Pkg.PackageSpec(name="BMOPFTools", url=source["url"], rev=source["rev"])
+docs_manifest = joinpath(root, "docs", "Manifest.toml")
+if VERSION < v"1.11" && Base.active_project() == project_paths[2] && !isfile(docs_manifest)
+    # Julia 1.10 ignores [sources]. Seed both unregistered packages together in
+    # a temporary environment before resolving the remaining docs dependencies.
+    mktempdir() do bootstrap
+        try
+            Pkg.activate(bootstrap)
+            Pkg.add(upstream)
+            Pkg.develop(Pkg.PackageSpec(path=root))
+            manifest = TOML.parsefile(joinpath(bootstrap, "Manifest.toml"))
+            for entries in values(manifest["deps"]), entry in entries
+                haskey(entry, "path") || continue
+                entry["path"] = abspath(bootstrap, entry["path"])
+            end
+            open(docs_manifest, "w") do io
+                TOML.print(io, manifest)
+            end
+        finally
+            Pkg.activate(joinpath(root, "docs"))
+        end
+    end
+    Pkg.resolve()
+end
+Pkg.add(upstream)
 Pkg.instantiate()
 info = only(info for info in values(Pkg.dependencies()) if info.name == "BMOPFTools")
 info.is_tracking_repo && info.git_revision == source["rev"] ||

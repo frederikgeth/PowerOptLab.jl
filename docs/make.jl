@@ -156,8 +156,10 @@ makedocs(
     checkdocs = :exports,
 )
 
-deploydocs(
-    repo = "github.com/frederikgeth/PowerOptLab.jl.git",
-    devbranch = "main",
-    push_preview = false,
-)
+if get(ENV, "DOCUMENTER_DEPLOY", "true") == "true"
+    deploydocs(
+        repo = "github.com/frederikgeth/PowerOptLab.jl.git",
+        devbranch = "main",
+        push_preview = false,
+    )
+end

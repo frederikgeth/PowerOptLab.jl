@@ -45,8 +45,8 @@ Each metered user contributes noisy `(P, Q, |V|)` readings as
 [`Measurement`](@ref)s — the same struct as state estimation:
 
 - `:vmag` — phase-to-neutral voltage magnitude [V].
-- `:pinj`, `:qinj` — active/reactive power **injected into the network** [W]/[var]
-  (negative for a load). A free injection current is added at each measured bus and
+- `:pinj`, `:qinj` — active/reactive power **injected into the network**,
+  in W and var respectively (negative for a load). A free injection current is added at each measured bus and
   fit to these; buses with no injection measurement are zero-injection.
 
 `sigma` is the standard deviation (WLS weight `1/σ²`). Choose the objective with

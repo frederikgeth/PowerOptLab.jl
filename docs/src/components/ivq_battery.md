@@ -70,19 +70,19 @@ consistent AC/DC boundaries, efficiencies and converter constraints. Setting
 own loss and capability model. See [PE versus IVQ](../tutorials/battery_storage_models.md)
 for a comparison of the complete storage models.
 
-!!! note "OCV(soc) smoothness — and its limits"
-    In multi-period, `OCV(soc)` is evaluated at the SoC *variable*.
-    `linear`/`thevenin` OCV is affine (C^∞, embedded directly). `tabulated` OCV
-    uses a **monotone cubic (PCHIP)** interpolant, which is **C¹ but not C²** at
-    interior knots and only **C⁰** at the two outer knots (where it clamps flat to
-    forbid extrapolation). Ipopt's theory assumes twice-continuously-differentiable
-    functions, so PCHIP is a pragmatic choice, not a guaranteed-convergent one — in
-    practice it works because evaluations rarely land exactly on a knot, and the
-    `soc_min`/`soc_max` window is required to sit strictly inside the outer knots so
-    the C⁰ points are never in range. A monotone C² alternative (shape-constrained
-    smoothing) is the robust upgrade. PCHIP is preferred over a plain cubic spline
-    (C² but overshoots, handing an optimiser free voltage) because monotonicity
-    matters more than the extra derivative here.
+!!! note "OCV(soc) smoothness and SoC bounds"
+    Multi-period IVQ evaluates `OCV(soc)` at the unknown SoC. Constant and linear
+    OCV are affine; tabulated OCV uses shape-preserving PCHIP interpolation.
+    Interior knots are C¹ rather than C². Holding the curve flat outside the
+    table can also make the derivative discontinuous at an outer knot.
+
+    The constructor permits the usable SoC range to include the outer knots,
+    and uses them as its defaults. Choose `soc_min` and `soc_max` strictly inside
+    the table when avoiding those endpoint derivative discontinuities matters
+    to the solve. This does not remove the interior C² limitation. PCHIP avoids
+    OCV overshoot, but that property alone does not guarantee NLP convergence;
+    inspect status and physical residuals. A smoother interpolant would need
+    separate checks that it preserves the supplied voltage data and limits.
 
 ## Reusing the converter
 

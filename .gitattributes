@@ -1,0 +1,3 @@
+# Keep generated plot geometry and data collapsed in pull-request reviews.
+docs/src/assets/studies/*.svg linguist-generated=true
+docs/src/assets/studies/study-figure-data.json linguist-generated=true
