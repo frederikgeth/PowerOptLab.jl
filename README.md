@@ -1,252 +1,164 @@
-> [!WARNING]  
-> This project is currently ongoing rapid development and may have breaking changes made directly to main. Use at your own risk until further notice.
-> Note that the bar for quality here is research contributions, not production grade code.
-
 # PowerOptLab.jl
 
 [![CI](https://github.com/frederikgeth/PowerOptLab.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/frederikgeth/PowerOptLab.jl/actions/workflows/CI.yml)
 [![Documentation](https://img.shields.io/badge/docs-dev-blue.svg)](https://frederikgeth.github.io/PowerOptLab.jl/dev/)
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue.svg)](LICENSE.md)
 
-PowerOptLab is a research laboratory for **four-wire distribution-network
-decisions when the network state or model is uncertain**. It connects three
-questions that are often treated separately:
-
-1. What states and network models are compatible with the available evidence?
-2. Which additional evidence would separate the important alternatives?
-3. Which operating decisions remain feasible under those alternatives?
+PowerOptLab provides models and numerical methods for **four-wire distribution
+networks with uncertain states and parameters**. It supports state and parameter
+estimation, generator and inverter studies, battery and EV scheduling, dynamic
+operating envelopes, and static voltage-operability checks.
 
 The package builds on the
-[BMOPFTools](https://github.com/frederikgeth/BMOPFTools.jl) reference
-current–voltage OPF engine. It reuses the engine's neutral-explicit device
-physics, per-unit handling, and result extraction through public model-building interfaces
-(`model_hook!` / `solution_hook!` and the staged `build_opf_model` /
-`optimize_opf!` / `generation_cost` / `extract_result` API), without forking the
-engine.
+[BMOPFTools](https://github.com/frederikgeth/BMOPFTools.jl) current–voltage OPF
+formulation, retaining explicit neutral conductors and per-unit scaling. The
+[documentation](https://frederikgeth.github.io/PowerOptLab.jl/dev/) explains each
+model's assumptions, validation and numerical limits.
 
-The full evidence-to-decision loop is a research direction, not a claim about
-the current API. Today the repository provides separate foundations for
-constrained state estimation, line/tap estimation, inverse-Carson candidate
-screening, scenario-aware operating envelopes, differentiated controller
-experiments, and power-flow diagnostics. See the
-[research program](docs/src/research_program.md) for the boundary between what
-exists and what remains to be built.
+> [!NOTE]
+> This is research software under active development. APIs may change, and the
+> validation scope differs between models and methods.
 
-## What's inside
+## Getting started
 
-The documentation is organized around study topics; the
-[home page](docs/src/index.md#Study-topics) links estimation, device models and
-scheduling, inverter controls, operating envelopes, power flow and numerical
-formulations.
-The [API index](docs/src/api.md) routes to the corresponding references.
-
-Contributions are organised by *what layer of the engine they extend* — see
-[Concepts](docs/src/concepts.md).
-
-**Component models** (`src/components/`) — network elements that support a
-specific estimation, control, or verification experiment via `model_hook!` /
-`solution_hook!`:
-
-| Capability | Entry point | Reuses |
-|---|---|---|
-| **Storage / battery** devices with state of charge | [`StorageDevice`](src/components/devices.jl) | `model_hook!` current injection + KCL |
-| **EV charging** (V1G / V2G), equipment and fixed sessions | [`EVDevice`](src/components/devices.jl), [`EV` / `EVSE` / `ChargingSession`](src/components/evse.jl) | AC capability, energy, acceptance envelopes and explicit mode formulations |
-| **Advanced inverter** (internal-node IBR prototype) | [`AdvancedInverter`](src/components/advanced_inverter.jl) | internal node + filter / EMF / losses / ripple |
-| **IVQ battery** (current–voltage–charge model) | [`IVQBattery`](src/components/ivq_battery.jl) | battery chemistry + advanced inverter |
-
-**Problem specifications** (`src/problems/`) — new formulations via the staged API:
-
-| Capability | Entry point | Reuses |
-|---|---|---|
-| **Multi-period OPF** co-optimising many snapshots | [`solve_multiperiod_opf`](src/problems/multiperiod.jl) | staged API (one shared model) |
-| **Legacy WLS state estimation** | [`solve_state_estimation`](src/problems/state_estimation.jl) | bounds-free physics + custom objective |
-| **Constrained NLLS state estimation** | [`solve_sparse_state_estimator`](src/problems/constrained_state_estimation.jl) | compiled four-wire residual/constraint model |
-| **Parameter estimation** (calibrate line lengths / taps) | [`solve_parameter_estimation`](src/problems/parameter_estimation.jl) | shared parameters across snapshots + WLS objective |
-| **Inverse Carson reconstruction** (retain compatible construction candidates) | [`solve_inverse_carson`](src/problems/inverse_carson.jl) | multiconductor line physics + local identifiability diagnostics |
-| **Dynamic operating envelopes** (active import/export capacity) | [`solve_operating_envelope`](src/problems/operating_envelope.jl) | operational bounds + scenarios + fairness policy |
-| **Bilevel PV/tap proof of concept** | [`solve_bilevel_pv_tap`](src/problems/bilevel.jl) | DiffOpt sensitivity of a local lower-level response |
-
-**Bespoke algorithms** (`src/algorithms/`) — custom solution methods, currently
-including [HELM power flow](docs/src/algorithms/helm.md).
-
-## Examples
-
-Start with the [first-run guide](docs/src/getting_started.md) for installation,
-a complete network and an executed solve with status and physical checks.
-The snippets below illustrate interfaces and require your own network inputs.
-
-### Battery arbitrage across two prices
-
-```julia
-using PowerOptLab
-# `nets` are BMOPFTools net dicts, one per period, with a time-varying slack
-# import price (voltage_source `cost`).
-bat = StorageDevice(id="bat", bus="bus1",
-                    p_charge_max=40e3, p_discharge_max=40e3,   # W
-                    energy_max=100e3, energy_init=40e3,        # Wh
-                    eff_charge=0.95, eff_discharge=0.95, cyclic=true)
-res = solve_multiperiod_opf(nets, [bat]; dt_h=1.0)
-res.dispatch["bat"].p_net    # SI discharge (+) / charge (−) per period
-res.dispatch["bat"].soc      # SI state of charge (Wh) at each step boundary
-```
-
-### EV charging with a departure deadline
-
-```julia
-ev = EVDevice(id="ev1", bus="bus1", p_charge_max=20e3,        # V1G (charge only)
-              energy_max=40e3, energy_init=10e3,
-              available=[true, true, true, false],            # unplugged in period 4
-              departure_energy=30e3, departure_period=3)      # ≥30 kWh by end of period 3
-res = solve_multiperiod_opf(nets, [ev]; dt_h=1.0)
-```
-
-Set `p_discharge_max > 0` for bidirectional (V2G) charging. The default
-`operation=:relaxed` bounds normalized simultaneous operation; exact mathematical
-exclusion uses `:complementarity` with CCOpt. Efficiencies alone do not guarantee
-exclusive modes. Use `EV`, `EVSE` and `ChargingSession` for equipment capability
-intersections, fixed outlet assignments and optional acceptance curves. See the
-[scientific EV guide and tutorials](docs/src/ev/index.md).
-
-### State estimation from noisy measurements
-
-```julia
-using PowerOptLab
-meas = [
-    Measurement(kind=:vmag, bus="bus1", value=979.5, sigma=2.0),   # volts
-    Measurement(kind=:pinj, bus="bus1", value=-20_000.0, sigma=400.0),  # watts
-    Measurement(kind=:qinj, bus="bus1", value=0.0, sigma=400.0),   # vars
-    # …
-]
-# `net` is a physics-only net (buses, lines, source; no operational limits).
-se = solve_state_estimation(net, meas)
-se.bus["bus1"]["1"]["vm"]   # estimated voltage magnitude (V)
-se.residuals                # measured, estimated, residual, and standardized residual
-```
-
-### Calibrate line lengths / taps from smart-meter data
-
-```julia
-using PowerOptLab
-# `nets` are per-snapshot physics nets (known source + transformers; uncertain
-# lines omitted; no loads). `meas[t]` are that snapshot's noisy (P,Q,|V|) readings
-# as `Measurement`s. Taps use the engine's native free-tap; lines are re-stamped
-# with a shared free length. Follows Vanin, Geth et al., arXiv:2506.04949.
-r = solve_parameter_estimation(nets, meas;
-        lines=[CalibLine(id="l1", bus_from="src", bus_to="b1",
-                         r_per_length=0.4, x_per_length=0.25)],
-        taps =[CalibTap(id="t1", tap_min=0.9, tap_max=1.1)],
-        objective=:wls)       # or :wlav (less sensitive to isolated outliers)
-r.line_length["l1"]   # estimated line length
-r.tap["t1"]           # estimated tap multiplier τ
-r.residual_rms        # RMS voltage misfit (V); near the meter noise floor if the fit is good
-```
-
-Load variation across snapshots can improve identification, but does not
-guarantee unique lengths or taps. The uncertain-line primitive is an independent
-single-terminal branch, with fixed nominal R/X; it does not estimate mutual
-coupling. SI and per-unit formulations return SI values, while numerical
-conditioning and the local fit can differ.
-
-### Dynamic operating envelopes
-
-```julia
-using PowerOptLab
-cps = [ConnectionPoint(id="der1", bus="bus1", export_max=10e3),
-       # Bind realistic PV/batteries to an existing BMOPFTools IBR so its
-       # mandatory Q-V law and converter limits remain active.
-       ConnectionPoint(id="der2", bus="bus2", ibr_id="pv2", export_max=10e3)]
-
-env = solve_operating_envelope(nets, cps;
-    direction=:export,
-    fairness=FairnessPolicy(kind=:max_min, normalization=:capacity),
-    security=:bound_point)  # use :corners for every zero/full box corner
-
-env.envelope["der1"][1]  # positive directional capacity in interval 1 (W)
-env.total_capacity[1]
-env.diagnostics
-```
-
-The solver supports export or import, forecast/model scenario groups, weighted
-and normalized fairness policies, and explicit bound-point versus all-corner
-security semantics. Loads retain snapshot P/Q; connection-bound IBRs retain
-their prescribed Volt-VAr/Volt-Watt laws. Add a BMOPFTools STATCOM to a copy of
-the network to quantify its impact on the active-power envelope.
-
-### Advanced inverter (prototype internal-node IBR)
-
-A more detailed IBR than the engine's built-in current-injection model: an
-explicit internal AC node behind the converter, with an output filter, internal
-EMF / DC-link modulation bounds, grid-forming operation, converter losses, and
-double-frequency ripple limits (following the BMOPFTools
-[IBR model extensions](https://github.com/frederikgeth/BMOPFTools.jl/blob/main/docs/ibr_model_extensions.md)
-design doc). For three phases it carries the exact **switching-polytope**
-feasible-region models of the 3-leg, 4-leg, and split-DC-link topologies (exact
-time-sampled DC-utilisation limits, 2ω bus-ripple derating, neutral-current
-limits). Every feature is opt-in; runs in SI or per-unit.
-
-```julia
-using PowerOptLab
-inv = AdvancedInverter(id="inv", bus="poc", s_max=5e3,   # VA converter rating
-                       r_filter=0.2, x_filter=0.5,        # Ω output filter
-                       p_loss_fixed=20.0, a_loss=0.3, c_loss=0.02)  # 3-term loss
-r = solve_advanced_inverter(net, inv; objective=:min_loss, p_set=3e3)
-r.p_poc    # power delivered to the grid (W)
-r.p_dc     # DC-link power = p_conv + p_loss  (non-branching)
-r.v_int_mag  # internal EMF magnitude per phase (V)
-```
-
-For feeder-scale matched controller experiments, the
-[`scripts/enwl_advanced_ibr`](scripts/enwl_advanced_ibr/README.md) campaign
-adapts the 30-, 99-, and 538-bus ENWL snapshots in a sibling BMOPFDraftData
-checkout. The adapter explicitly labels its single-phase-to-three-phase PV
-retrofit and preserves the source cases and provenance.
-
-## Development setup
-
-BMOPFTools is not yet registered. Local tests, CI, and documentation builds use
-commit `72e6cec22a66cf376c37ec4d64aef350b9f1100d`, declared in the root and docs
-`Project.toml` source tables. Set up the tested environment with:
+Use Julia **1.10 or later**. Clone the repository and install its pinned dependencies:
 
 ```sh
+git clone https://github.com/frederikgeth/PowerOptLab.jl.git
+cd PowerOptLab.jl
 julia --project=. scripts/instantiate_pinned.jl
-julia --project=. -e 'using Pkg; Pkg.test()'
-julia --project=docs scripts/instantiate_pinned.jl
 ```
 
-The setup script checks that both source declarations agree and replaces any
-previous BMOPFTools development-path override with the pinned source. It also
-supports Julia 1.10, whose package manager does not use `[sources]` directly.
-`Manifest.toml` remains local and untracked; BMOPFTools 0.1.0 alone does not
-identify its source commit. This snapshot uses PowerIO 0.11.
+For an existing checkout, run the last command from its root. BMOPFTools is
+unregistered; the setup script installs the tested commit declared in
+[Project.toml](Project.toml) and checks agreement with
+[docs/Project.toml](docs/Project.toml). It replaces a local BMOPFTools
+`Pkg.develop` override. Manifests remain local and untracked.
 
-For intentional upstream development, opt into a local checkout with
-`Pkg.develop(path="../BMOPFTools.jl")`. Re-run the setup script before comparing
-local results with CI so the tested source is identical again.
+Start with [Your first PowerOptLab study](docs/src/getting_started.md): a complete
+230 V feeder and two-hour battery schedule, including network data, solver
+status and physical checks. Its Julia blocks execute during the documentation
+build.
+
+## Study topics
+
+| Study | Questions and methods | Start here |
+|:--|:--|:--|
+| State and parameter estimation | Estimate conductor voltages; calibrate selected line lengths and taps; retain overhead-line constructions consistent with sequence data. | [Estimation methods](docs/src/estimation/studies.md) |
+| Device models and scheduling | Compare generator assumptions, select battery models, and schedule charging at fixed EV outlets. | [Device models](docs/src/components/index.md) |
+| Inverter models and controls | Examine filters, converter topology, neutral current, DC-link stress and local control laws. | [Inverter studies](docs/src/ibr/index.md) |
+| Dynamic operating envelopes | Allocate import/export capacity and test it over declared scenarios and participant utilisation points. | [DOE in 15 minutes](docs/src/tutorials/doe_getting_started.md) |
+| Power flow and voltage operability | Compare nonlinear and HELM solutions; examine static voltage margins; reduce the neutral under declared grounding assumptions. | [Power-flow methods](docs/src/algorithms/index.md) |
+| Numerical formulations and solvers | Compare smoothing, complementarity, exact PWL graphs and relaxations, with physical error budgets and solver diagnostics. | [Formulation studies](docs/src/formulations/index.md) |
+
+The [API index](docs/src/api.md) locates topic references. The
+[symbol index](docs/src/symbol_index.md) provides alphabetical lookup.
+
+### Generators, battery storage and electric vehicles
+
+| Family | Models | Guide |
+|:--|:--|:--|
+| Generators | `GeneralizedGenerator` and `SourceGenerator`: winding connections, internal voltage laws, source impedance, neutral grounding and operating limits. | [Generator models](docs/src/components/generators.md) |
+| Battery storage | `StorageDevice` for AC power-energy scheduling; `IVQBattery` for cell current, voltage and charge under a supplied Rint model. | [Battery storage](docs/src/components/battery_storage.md) |
+| Electric vehicles | `EV`, `EVSE` and `ChargingSession` for vehicles, AC outlet capability and fixed visits; `EVDevice` for compact compatibility studies. | [EV models and sessions](docs/src/ev/index.md) |
+
+Battery efficiencies and limits require data appropriate to the study boundary.
+The IVQ presets are illustrative, not calibrated cells. EV sessions use fixed
+outlet assignments and availability; trip modelling and assignment optimisation
+are outside the current model.
+
+### Inverters and controls
+
+`AdvancedInverter` represents the internal converter node, reduced-L or explicit
+LCL filters, losses, current and apparent-power limits, and selected DC-link
+stresses. Its three-phase alternatives are a three-leg three-wire bridge, a
+four-leg four-wire bridge, and a three-leg four-wire split-capacitor bridge.
+
+Switching limits use a sampled outer approximation of the continuous-time
+switching hull; inspect the independent dense switching-margin audit and sampling
+sensitivity near that boundary. Optional carrier-harmonic audits are local
+calculations around a solved fundamental operating point. Steady-state
+grid-forming constraints and these audits do not establish dynamic stability.
+See [inverter models and controls](docs/src/ibr/index.md) for the equations,
+phase-aware local laws, fleet studies and validation. A separate
+[PV/tap bilevel proof of concept](docs/src/problems/bilevel.md) uses DiffOpt
+sensitivities of a local lower-level response.
+
+## Worked studies
+
+Each of these includes complete inputs, expected results and executable checks:
+
+- [Battery-model comparison](docs/src/tutorials/battery_storage_models.md): match
+  PE and IVQ cycles, introduce resistance, and identify SoC-dependent export limits.
+- [Four-wire state estimation](docs/src/tutorials/constrained_nlls_state_estimation.md):
+  recover a displaced neutral, fit perturbed readings and remove measurements to
+  examine observability and covariance.
+- [Generator trade-offs under unbalance](docs/src/tutorials/generalized_generator_tradeoffs.md):
+  compare voltage laws, winding connections and grounding on the same feeder.
+- [Inverter topology under unbalance](docs/src/tutorials/ibr_topology_under_unbalance.md),
+  [DC-source current sharing](docs/src/tutorials/ibr_dc_source_and_split_link.md)
+  and [L/LCL carrier harmonics](docs/src/tutorials/ibr_ac_harmonics_lcl.md).
+- [HELM versus nonlinear power flow](docs/src/tutorials/helm_vs_nonlinear_power_flow.md)
+  and [post-OPF operability](docs/src/tutorials/post_opf_operability_study.md).
+- [DOE allocation and verification](docs/src/tutorials/doe_getting_started.md),
+  followed by [range guarantees](docs/src/tutorials/doe_range_guarantees.md) and
+  [uncertainty studies](docs/src/tutorials/doe_uncertainty_coverage.md).
+
+Run the published study and DOE code directly from the checkout:
+
+```sh
+julia --project=. scripts/run_study_tutorials.jl
+julia --project=. scripts/run_doe_tutorials.jl
+```
+
+CI executes those pages on Julia 1.10 and current stable. The first-run,
+generator and formulation examples execute through Documenter. The battery and
+state-estimation figures are generated from solved data, with CI checks for
+stale inputs and rendering code.
+
+For larger inverter campaigns, see the
+[Australian LV study](studies/australian_pv/README.md) and the earlier
+[ENWL retrofit experiment](scripts/enwl_advanced_ibr/README.md). Their guides
+state dataset requirements, conversion assumptions and provenance.
+
+## Interpreting results and research scope
+
+A successful local nonlinear solve does not establish global optimality.
+Measurement fit, observability, covariance and physical validation are distinct
+claims. For nonlinear AC envelopes, finite scenario/corner tests alone do not
+certify a continuous uncertainty or utilisation set; sufficient static
+certificates apply to their stated model
+and region. See [Concepts](docs/src/concepts.md) for units, signs, status and
+interpretation.
+
+The longer-term research programme connects three questions: which states and
+network models fit the evidence, which additional measurements would distinguish
+them, and which operating decisions remain feasible under those alternatives.
+Current APIs provide separate estimation, optimisation and checking methods.
+Joint network-model identification and automatic experiment design remain
+research objectives described in the [research programme](docs/src/research_program.md).
+
+## Development and documentation
+
+Run the package tests and build the documentation without deploying it:
+
+```sh
+julia --project=. -e 'using Pkg; Pkg.test()'
+julia --project=docs scripts/instantiate_pinned.jl
+DOCUMENTER_DEPLOY=false julia --project=docs docs/make.jl
+```
+
+Both package and documentation CI cover Julia 1.10 and current stable. For
+intentional upstream development, use `Pkg.develop(path="../BMOPFTools.jl")`;
+rerun the setup script to restore the tested revision before comparing with CI.
+See [Contributing](docs/src/contributing.md) for extensions, documentation style,
+figure regeneration and compatibility checks. Development workflow records live
+in `dev/notes/`, outside the published documentation.
 
 ## License
 
 Dual-licensed:
 
-- **Source code** — BSD-3-Clause. See [LICENSE.md](LICENSE.md).
-- **Data files** (test cases, benchmark networks, and any dataset shipped with
-  the package) — Creative Commons Attribution 4.0 International (CC BY 4.0). See
-  [LICENSE-DATA.md](LICENSE-DATA.md).
-
-This mirrors the BMOPFTools convention: code under a permissive software license,
-data under CC BY so cases can be shared and cited with attribution.
-
-### Function formulations
-
-Bounded continuous PWL curves can share one canonical definition across BMOPFTools
-softplus, compact C2 smoothing, complementarity, exact segment graphs (optional
-PiecewiseLinearOpt), and continuous hull relaxations. Contracts expose physical
-units, signed approximation bounds, and graph/relaxation semantics. The
-[executable tutorial](docs/src/formulations/theory.md) compares these on an analytic
-resistive feeder; external CCOpt and MIP experiments use an isolated environment.
-The [configurable experiment tutorial](docs/src/formulations/experiments.md)
-shows user-owned cases, solver options, sweeps, assessments and result export.
-Physical error budgets, purpose-specific magnitude/root operations and local
-sensitivity diagnostics support interpretation. Existing inverter controllers can
-select a family per curve, and the [extension tutorial](docs/src/formulations/extensions.md)
-shows how to implement a new family. Start with the
-[formulation overview](docs/src/formulations/index.md) to choose a guide or API.
+- **Source code:** [BSD-3-Clause](LICENSE.md).
+- **Shipped data files:** [Creative Commons Attribution 4.0](LICENSE-DATA.md),
+  including test cases, benchmark networks and datasets.
