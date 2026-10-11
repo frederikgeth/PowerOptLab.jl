@@ -58,12 +58,12 @@ ideal ground in `net["_meta"]["kron_reduction"]` and
 `net["extras"]["kron_reduction"]`.
 
 The package test target requires OpenDSSDirect.jl and runs an independent
-paired oracle: an explicit four-wire node-0-ground deck and its manually
+independent comparison: an explicit four-wire node-0-ground deck and its manually
 projected three-wire deck. It asserts convergence and compares retained phase
 voltages and line currents at both ends, source P/Q, total losses, and the
 neutral-current recovery relation `Iₙ = K Iₚ` against the reduced BMOPF solve.
 The older bundled finite-0.001-ohm grounding fixture remains useful as a
-near-ground comparison, but is not the exact-equivalence gate.
+near-ground comparison, but is not the test of exact equivalence.
 
 ```julia
 reduced = kron_reduce_bmopf(net)

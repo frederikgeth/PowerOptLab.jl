@@ -1,11 +1,11 @@
 # Phase-aware control API
 
-Use the [control modeling guide](../components/inverter_controls.md) for
-construction and executable examples, the
-[control-law derivation](../ibr/phase_aware_control_laws.md) for equations, and
-[verification](../ibr/verification.md) for the scope of the evidence.
-[Fleet and hardware studies](../ibr/network_control_studies.md) document the
-network-level interfaces.
+The [control guide](../components/inverter_controls.md) shows how to specify
+and solve the local control laws. Their equations are derived in the
+[phase-aware control chapter](../ibr/phase_aware_control_laws.md), and the
+[validation guide](../ibr/verification.md) describes the reference calculations
+and numerical tests. [Network studies](../ibr/network_control_studies.md) cover
+multiple inverters and comparisons of equipment ratings.
 
 ```@docs
 AbstractInverterControlLaw

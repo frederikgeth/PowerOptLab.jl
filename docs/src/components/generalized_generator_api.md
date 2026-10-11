@@ -4,7 +4,7 @@
 
 The implementation adds optional generator components to the BMOPFTools engine.
 It supports all five source-voltage laws in the [scientific model](generalized_generator.md),
-sequence capability overlays, a hard terminal-PV target, and a dedicated source
+sequence-component limits, a terminal-voltage PV constraint, and a source model
 with separate neutral and earth currents. The [numerical tutorial](../tutorials/generalized_generator_tradeoffs.md)
 compares these choices on one loaded, unbalanced four-wire feeder.
 The [data-model specification drafts](../specifications/generators/index.md) give

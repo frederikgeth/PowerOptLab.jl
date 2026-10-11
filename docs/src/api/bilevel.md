@@ -1,8 +1,9 @@
 # Bilevel PV and tap control API
 
-The [bilevel guide](../problems/bilevel.md) defines the utility tap decision,
-lower-level PV response and local differentiated search. It is a proof of
-concept with a centralized comparison, not a general bilevel global solver.
+The [bilevel example](../problems/bilevel.md) optimises a utility tap setting
+while PV systems respond through their local controls. The search uses local
+voltage sensitivities and is compared with a centralised optimisation. This is
+a proof of concept for the specified network and control model.
 
 ```@docs
 BilevelPVResult

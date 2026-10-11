@@ -3,18 +3,14 @@
 > **Kind:** Problem specification · **Direction:** inverse · **Maturity:** prototype
 
 For calibration or line-construction questions, begin with the
-[state and model inference overview](studies.md). This page compares the two
-state estimators; their callable interfaces are in the
+[estimation overview](studies.md). This page compares the two
+state estimators; their functions and arguments are listed in the
 [state estimation API](../api/state_estimation.md).
 
-State estimation is the inverse of power flow. Power flow asks *given the
-injections, what is the state?* Estimation asks *given noisy, incomplete,
-partly-wrong telemetry, what state best explains it — and how much should I
-trust the answer?*
-
-PowerOptLab carries **two independent estimators** over the same network
-physics. They are not two solvers for one problem; they are two different
-problem statements, and the difference matters more than the numerics:
+State estimation determines bus voltages from measurements and an assumed
+network model. PowerOptLab provides a JuMP/Ipopt WLS estimator and a constrained
+nonlinear least-squares estimator. Their treatment of exact device equations,
+measurements and numerical solution differs.
 
 | | [Legacy WLS](../problems/state_estimation.md) | [Constrained NLLS](../problems/constrained_state_estimation.md) |
 |---|---|---|
@@ -22,14 +18,13 @@ problem statements, and the difference matters more than the numerics:
 | Statement | ``\min \sum_i (z_i - h_i(x))^2/\sigma_i^2`` | ``\min \tfrac12\lVert r(x)\rVert^2`` s.t. ``c(x)=0`` |
 | Engine | JuMP + Ipopt | own Gauss–Newton / Hachtel solvers |
 
-[Choosing a formulation](comparison.md) is the head-to-head, with the
-measured behaviour of both on the same problem.
+[Choosing a formulation](comparison.md) compares the two estimators on the
+same network and measurements.
 
 ## What both of them assume
 
-Read this before either page. These assumptions are shared, they are not all
-enforceable, and every one of them is a way an estimate can be confidently
-wrong:
+Both methods rely on the following assumptions. Errors in those assumptions
+can bias the estimate even when the numerical solver converges:
 
 * **Errors are independent, zero-mean, and Gaussian**, with a diagonal
   covariance. Both estimators whiten by ``1/\sigma``; neither supports a

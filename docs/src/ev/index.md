@@ -4,13 +4,12 @@
 > complementarity. **Evidence:** analytical cases and regression tests; no
 > fleet-wide calibration or field-performance claim.
 
-A charging study needs to distinguish **what the driver needs**, **what the
-vehicle accepts**, **what the equipment can supply**, and **what the controller
-can command**. A departure-energy constraint addresses only the first question.
-PowerOptLab represents the first three as a scheduling feasible set. It does not
-yet simulate a pilot-response controller.
+A charging schedule must meet the departure-energy requirement within the
+vehicle and charger ratings. PowerOptLab represents availability, equipment
+limits, stored energy and optional state-dependent charging acceptance.
+Pilot-response dynamics are not represented.
 
-## Start with the question
+## Charging studies
 
 | Question | Model and additional evidence |
 |:--|:--|
@@ -41,13 +40,13 @@ data support it; see [PE versus IVQ](../tutorials/battery_storage_models.md).
 | Identify unsupported studies and missing model layers | [Scope and limitations](roadmap.md) |
 | Reproduce studies using earlier defaults | [Compatibility and migration](migration.md) |
 
-Start with the session guide and workplace study for a new fixed-assignment
-charging study. The remaining sections explain object responsibilities and the
-physical boundary; the linked model guide develops the equations.
+The session and workplace examples show charging at assigned outlets. The
+sections below describe the vehicle, outlet and visit data; the model guide
+gives the electrical and energy-balance equations.
 
-## Object responsibilities
+## Vehicle, outlet and visit data
 
-| Object | Owns | Does not imply |
+| Model | Quantities and constraints | Additional assumptions needed |
 |:--|:--|:--|
 | `EV` | Capacity/bounds, AC-referred onboard limits, efficiency, phase capability, optional acceptance curve | Location or a reusable initial state for multiple visits |
 | `EVSE` | One fixed AC outlet, conductor mapping, equipment P/Q/S/I ratings, operational availability | An onboard converter, a DC cabinet, or independent Q support while empty |
@@ -57,7 +56,7 @@ physical boundary; the linked model guide develops the equations.
 AC conversion occurs onboard the vehicle; DC charging requires offboard
 conversion and potentially shared power electronics. The present `EVSE` is
 explicitly an **AC outlet envelope**. It does not double-count an onboard
-converter by stamping another inverter at the outlet. Background and source:
+converter by adding another inverter at the outlet. Background and source:
 [NREL EVSE technical overview](https://docs.nrel.gov/docs/fy21osti/78085.pdf).
 
 ## A complete fixed session
@@ -107,7 +106,7 @@ redistribution requires `phase_policy=:independent` on both the EV and EVSE.
 Set `phase_count` on the EV to match the fixed outlet connection. There is no
 phase-switching decision.
 
-## Numerical and compatibility contract
+## Units, solver settings and compatibility
 
 - Powers and ratings are W/var/VA; energy is Wh; current is A; duration is hours.
 - `energy_wh` is the explicit PE state name. `soc` retains the same Wh values
@@ -119,8 +118,9 @@ phase-switching decision.
 - All multi-phase PE devices require `i_max`. Legacy single-phase devices may
   omit `i_max` and `s_max`, retaining a declared power-only abstraction.
 - A disconnected port has every phase-current component fixed to zero.
-- `solve_status(result).publishable` is a solver-status contract, not a physical
-  accuracy or global optimality certificate. Inspect physical diagnostics.
+- `solve_status(result).publishable` checks solver convergence. Check the
+  electrical and energy-balance residuals separately. A converged local solution
+  does not establish global optimality.
 
 See [equations and solver choices](model.md), [mode misconceptions](modes.md),
 [approximation and flexibility](approximations.md), and [scope and limitations](roadmap.md).

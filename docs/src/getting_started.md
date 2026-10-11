@@ -1,10 +1,9 @@
 # Your first PowerOptLab study
 
-This guide installs the package, builds a complete small network, schedules a
-battery across two electricity prices, and checks the returned result. It uses
-synthetic data and the standard Ipopt dependency; no external dataset or optional
-solver is needed. The Julia examples on this page execute during documentation
-builds.
+This example calculates a two-hour battery schedule for a small feeder with
+different electricity prices in each hour. It includes the network data, device
+ratings and checks on the solution. The data are synthetic and the solver is
+Ipopt. The Julia examples are run when the documentation is built.
 
 ## Install from a checkout
 
@@ -76,8 +75,8 @@ nothing # hide
 
 Terminal labels are strings and the terminal-map order matches the linecode
 matrix order. Network powers are in W, voltages in V and impedances in Ω.
-This small single-phase example introduces the workflow; it is not a study of
-three-phase unbalance or an equipment-calibrated feeder.
+This is a single-phase teaching example. Three-phase unbalance and equipment
+calibration require additional network and device data.
 
 ## Add storage and solve
 
@@ -168,10 +167,9 @@ These checks validate this returned schedule under its declared model. The
 mode residual is the absolute smaller charge/discharge power. Solver tolerances
 can produce a small negative value for a nominally nonnegative power; the
 power-bound check measures that violation separately, without clipping dispatch.
-The
-voltage check is an observation at the solved point; this example does not impose
+The voltage check is an observation at the solved point; this example does not impose
 a voltage operating band or prove feasibility under other loads or prices.
-Read [Concepts](concepts.md) for the shared units and result contracts.
+See [Concepts](concepts.md) for units and interpretation of solver status.
 
 ## Choose your next study
 

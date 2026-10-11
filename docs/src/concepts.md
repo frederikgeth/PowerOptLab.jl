@@ -1,70 +1,50 @@
 # Concepts
 
-PowerOptLab studies **four-wire distribution-network decisions under state and
-model uncertainty**. It is built on the
-[BMOPFTools](https://github.com/frederikgeth/BMOPFTools.jl) reference
-current–voltage OPF engine and reuses the engine's neutral-explicit device
-physics, per-unit handling, and result extraction through public extension
-seams, without forking the engine.
+PowerOptLab studies four-wire distribution networks in which measurements,
+parameters or operating conditions are uncertain. The network equations use RMS
+voltage and current phasors, with an explicit neutral conductor. They are based
+on the [BMOPFTools](https://github.com/frederikgeth/BMOPFTools.jl)
+current–voltage formulation.
 
-The scientific organizing principle is an evidence-to-decision loop:
+The intended research sequence is to estimate the network state and parameters,
+identify additional measurements or operating-point changes that reduce the
+uncertainty, and test operating decisions against the remaining possible models.
+The present solvers address parts of that sequence. Joint topology and parameter
+identification and automatic experiment design remain research objectives.
+The [research programme](research_program.md) describes those objectives.
 
-1. **Model evidence:** compile telemetry, metadata, and exact circuit equations.
-2. **Forensics:** retain the states, parameter regions, or discrete models that
-   the evidence cannot distinguish.
-3. **Experiment design:** seek safe measurements or interventions that separate
-   alternatives which matter to a decision.
-4. **Decision verification:** test an operating decision across the remaining
-   model and forecast alternatives.
-5. **Revision:** return new evidence to the inference stage.
+The nonlinear operating-envelope solvers test specified scenarios and utilisation
+points. The static operability methods also provide sufficient fixed-point
+conditions for supported network models. These establish different results:
+finite scenario tests do not establish feasibility over a continuous uncertainty
+set, and a fixed-point condition applies only to its specified model and region.
 
-Only parts of this loop exist today. The constrained estimator, parameter
-estimator, and inverse-Carson solver provide distinct forms of model evidence;
-the operating-envelope solver consumes explicitly supplied network scenarios;
-the bilevel and HELM work provide local sensitivity and solution diagnostics.
-There is not yet a joint model-hypothesis API, an active-probing optimizer, or a
-general robust-feasibility certificate across uncertain models and utilization
-sets. Native static operability has narrower sufficient fixed-point certificates
-with explicit applicability limits. The [Research program](research_program.md)
-keeps those proposed capabilities separate from the callable API.
+## Models, formulations and solution methods
 
-The source tree is organized by implementation layer. That engineering taxonomy
-supports the research loop; it is not the project's scientific identity.
+A component model describes a device, a problem formulation specifies the
+network calculation, and a solution method defines the numerical procedure.
+These distinctions help identify what changes between two studies. The source
+folders follow the same three categories; the documentation groups them by
+[study topic](index.md#Study-topics).
 
-## The three kinds of contribution
-
-Engine extensions have three implementation kinds, distinguished by
-*which layer of the engine they extend*. The source tree follows
-these implementation layers (`src/components/`, `src/problems/`,
-`src/algorithms/`). The documentation groups related study topics, with
-[inference](estimation/studies.md), [device modeling and scheduling](components/index.md),
-[inverter studies](ibr/index.md), [operating envelopes](tutorials/doe_getting_started.md),
-[power flow and operability](algorithms/index.md), and
-[numerical formulations](formulations/index.md) providing reading paths.
-
-| Kind | What it contributes | Seam it reuses | Source |
+| Category | Contribution | Programming interface | Source |
 |---|---|---|---|
 | **Component model** | a new network *element* (device physics) | `model_hook!` / `solution_hook!` | `src/components/` |
 | **Problem specification** | a new *objective + variable/constraint structure* over the whole network | staged `build_opf_model` / `enforce_kcl!` / `generation_cost` / `extract_result` | `src/problems/` |
-| **Bespoke algorithm** | a new *solution method* — how you solve, not what | custom solve loops around the staged API | `src/algorithms/` |
+| **Solution method** | a numerical procedure for solving the equations | custom solve loops around the staged API | `src/algorithms/` |
 
-- A **component model** answers *"what new thing can sit on the network?"* It is
-  stamped into a snapshot as a per-phase current injection added to the engine's
-  Kirchhoff-current-law accumulators, optionally with extra variables (e.g. a
-  state-of-charge state linking snapshots).
-- A **problem specification** answers *"what question do we ask of the same
-  physics?"* It builds one or more snapshots into a JuMP model via the staged API,
-  swaps in its own objective and constraints, and reads back a bespoke result. It
-  changes the *formulation*, not the elements.
-- A **bespoke algorithm** answers *"how do we solve it?"* — decomposition,
-  sequential linearization, warm-start schemes, or any custom loop around the
-  staged API. HELM is the first: it uses the engine's augmented admittance
-  matrix in a custom power-series solve.
+- A **component model** adds the electrical equations and ratings of a device.
+  Its terminal currents enter network KCL; storage models also introduce a state
+  equation between time intervals.
+- A **problem formulation** defines an objective and constraints over the network
+  model. Examples include OPF, state estimation and multi-period scheduling.
+- A **solution method** determines how those equations are solved. HELM, for
+  example, constructs a power series from the network admittance matrix.
 
-## Cross-cutting dimensions
+## Study assumptions and development status
 
-Implementation kind identifies the engine seam. Each capability also carries
-attributes surfaced as a badge line at the top of its guide:
+The metadata at the start of a model guide describes its development status and
+intended use:
 
 - **Maturity** — *proof of concept* (demonstrates a narrow idea), *prototype*
   (test-backed but experimental), *experimental* (an evolving model/interface
@@ -79,41 +59,43 @@ attributes surfaced as a badge line at the top of its guide:
 
 - **Uncertainty/security treatment** — deterministic, explicit scenarios,
   tested utilization points, or globally certified. These labels describe
-  different claim strengths and must not be used interchangeably.
+  different levels of assurance. State which one was used when reporting results.
 
-## Interface conventions
+## Units and solution status
 
-Everything is **SI at the interface** (watts, vars, watt-hours, volts); per-unit
-conditioning inside engine-backed solves uses the engine's `opf_bases(ctx)`
-accessor. Solvers that support both `per_unit=true` and `per_unit=false` retain
+Inputs and results are expressed in physical units, including W, var, Wh, V and A.
+The OPF-based
+models use the BMOPFTools bases obtained with `opf_bases(ctx)` for per-unit
+scaling. Solvers that support both `per_unit=true` and `per_unit=false` retain
 the same physical units at their interfaces. Numerical scaling, convergence and
 the local solution reached can differ. Coupled phase-aware inverter-control
-stamping currently requires per-unit coordinates; its parameters and results
+modelling currently requires per-unit coordinates; its parameters and results
 remain SI-valued. Check each solver's supported formulation.
 
-Cross-cutting code uses four shared contracts:
+The solvers use the following common definitions:
 
-- [`AbstractDevice`](@ref) with validation, stamping, temporal linking, and
-  extraction methods;
+- [`AbstractDevice`](@ref) describes how a device is checked, added to the
+  network equations, linked across intervals and reported in the results;
 - [`TimeGrid`](@ref), which gives every snapshot an explicit positive duration;
-- [`AbstractMeasurement`](@ref) with common value/uncertainty accessors;
+- [`AbstractMeasurement`](@ref) describes a measurement value and its uncertainty;
 - [`build_multi_context`](@ref), which builds ordered snapshots into one JuMP
-  model, plus [`solve_status`](@ref) / [`solve_diagnostics`](@ref) for a stable
-  result-status view.
+  model, plus [`solve_status`](@ref) and [`solve_diagnostics`](@ref) for
+  convergence information and numerical checks.
 
-JuMP-backed results retain the exact normalized [`SolveStatus`](@ref) produced
-at solve time, including whether a primal candidate existed and whether it was
-strictly publishable. Compatibility fields such as `termination_status` remain,
-but new code should branch on `solve_status(result).publishable`.
+Results from the JuMP solvers retain a [`SolveStatus`](@ref), including the
+termination and primal feasibility statuses. Check
+`solve_status(result).publishable` before reading the reported solution. This
+flag applies the solver-convergence criteria used by the package; physical
+residuals and operating limits still need to be checked for the study.
 
-See [Contributing](contributing.md) for how to add each kind of contribution,
-the research-fit test, and the path back to the BMOPF spec.
+See [Contributing](contributing.md) for adding models and methods, documenting
+their validation and proposing established work for inclusion in BMOPFTools.
 
 ## Capability status
 
-These catalogues retain the component and problem prototypes' maturity and
-direction labels. The study-topic overviews on the [home page](index.md) provide
-the reading paths; each linked guide defines its own implemented scope.
+The following tables summarise the development status of the component models
+and network calculations. Each linked guide describes its supported equations
+and validation.
 
 ### Component models
 

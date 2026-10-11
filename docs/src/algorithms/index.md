@@ -1,47 +1,48 @@
-# Power flow and operability
+# Power flow and voltage operability
 
-Choose a method from the question about the operating point, its branch or the
-network model. A nonlinear solve, a HELM calculation, a static operability check
-and a neutral reduction provide different evidence.
+The methods in this chapter calculate power-flow solutions, examine static
+voltage behaviour and reduce the network model under specified grounding
+assumptions.
 
-| Your task | Guide | API |
+| Study | Guide | Function reference |
 |:--|:--|:--|
-| Compare nonlinear power flow with the no-load-connected HELM branch | [HELM versus nonlinear power flow](../tutorials/helm_vs_nonlinear_power_flow.md) | [HELM API](../api/helm.md) |
-| Audit a solved native static equilibrium and follow a declared stress path | [Post-OPF operability](../problems/operability.md) and [study tutorial](../tutorials/post_opf_operability_study.md) | [Operability API](../api/operability.md) |
-| Study an ideal-ground neutral projection and its retained/lost physics | [Neutral reduction reference](../api/network_reduction.md) | [Reduction API](../api/network_reduction.md) |
+| Compare an iterative power flow with the HELM solution connected to the no-load state | [HELM comparison](../tutorials/helm_vs_nonlinear_power_flow.md) | [HELM API](../api/helm.md) |
+| Check a solved equilibrium and trace voltage response as loading changes | [Post-OPF operability](../problems/operability.md) and [worked study](../tutorials/post_opf_operability_study.md) | [Operability API](../api/operability.md) |
+| Compare an explicit neutral model with an ideally grounded neutral reduction | [Neutral reduction](../api/network_reduction.md) | [Reduction API](../api/network_reduction.md) |
 
-HELM and operability have explicit supported-physics boundaries. Follow the
-linked guides before applying their results to a network containing generators,
-IBRs or controls. A fixed-point certificate, a path-specific continuation margin
-and an endpoint residual are distinct claims.
+The HELM and operability guides list the load models, connections and controls
+they support. Check the equation residuals and operating limits at the calculated point.
+Continuation gives information along a specified loading path; sufficient
+fixed-point conditions establish existence or uniqueness only in the region
+covered by those conditions.
 
-## Available
+## Available methods
 
 - [**HELM power flow**](helm.md) — the Holomorphic Embedding Load-flow Method: a
   non-iterative 4-wire power flow that expands each voltage as a power series in
   a load-scaling parameter and evaluates it by Padé analytic continuation, with
-  physical-residual, Padé-spread, coefficient-tail, and heuristic singularity
-  diagnostics exposed for independent validation.
+  equation residuals, agreement between Padé approximants, coefficient decay
+  and a heuristic singularity estimate for assessing numerical convergence.
 - **Static operability continuation** — `continue_opf_operability` provides the
   natural-parameter trace, while `continue_opf_operability_pseudo_arclength`
-  provides an opt-in first fold-capable predictor/corrector slice for the same
-  native static-load scope, including fixed-λ refinement when a target crossing
-  is bracketed; `stop_at_target=false` continues a declared stress path beyond
+  provides a pseudo-arclength predictor–corrector method for the supported
+  static load models, including refinement when the trace crosses a target
+  loading level; `stop_at_target=false` continues a declared stress path beyond
   λ=1. `locate_opf_operability_fold` separately refines a declared fold
   candidate with bordered equations, and `stop_on_voltage_limit=true` can
   terminate at the first declared terminal-voltage violation. The
   `operability_continuation_margin` helper summarizes the first declared
   voltage-limit or localized fold boundary relative to λ=1; pseudo-arclength
   traces also retain tangent-turning curvature and accepted-step histories.
-  `operability_continuation_rows` provides deterministic table-ready records.
+  `operability_continuation_rows` returns the trace as records for study tables.
 
-## Question-driven candidates not yet built
+## Further research
 
-The next algorithms should support the [research program](../research_program.md),
-rather than form an unconnected catalogue:
+The [research programme](../research_program.md) identifies several extensions
+needed for studies with uncertain network models and operating conditions:
 
 - **Continuation and branch discovery** — the implemented path and margin
-  contracts are documented in [Post-OPF operability](../problems/operability.md);
+  methods are described in [Post-OPF operability](../problems/operability.md);
   the current pseudo-arclength slice still needs refined singular-point
   handling, deflation, and systematic multistart to identify which nonlinear
   solution a sensitivity or decision uses.
@@ -52,16 +53,14 @@ rather than form an unconnected catalogue:
   falsifying operating-envelope candidates, with explicit local-search stopping
   semantics.
 - **Relaxations and valid bounds** — multiconductor convex relaxations when a
-  valid bound can strengthen a forensics or robust-decision claim.
+  valid bound can strengthen network identification or robust operating decisions.
 - **Decomposition** — spatial, temporal, or hypothesis decomposition only when
   the integrated inference or verification studies require it for scale.
 
-## Implementation layers
+## Adding a solution method
 
-A **bespoke algorithm** is a new *solution method*: it changes *how* a problem is
-solved rather than *what* is solved. Where a [problem specification](../problems/multiperiod.md)
-hands one monolithic model to Ipopt, an algorithm wraps the staged API (or the
-engine's admittance-matrix primitives) in a custom loop.
-
-See [Contributing](../contributing.md) for extension interfaces and source-tree
-conventions. Register a new guide with the study topic it supports.
+A solution method changes the numerical procedure used to solve the network
+problem. Examples include continuation, decomposition and successive
+linearisation. These methods can reuse the BMOPFTools network equations or
+admittance matrices. [Contributing](../contributing.md) describes the programming
+interfaces and how to document a new method.

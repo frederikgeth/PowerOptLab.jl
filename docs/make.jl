@@ -13,8 +13,8 @@ makedocs(
         "Home" => "index.md",
         "Getting started" => "getting_started.md",
         "Concepts" => "concepts.md",
-        "State and model inference" => [
-            "Choose an inference study" => "estimation/studies.md",
+        "State and parameter estimation" => [
+            "Estimation methods" => "estimation/studies.md",
             "State estimation" => [
                 "State estimation overview" => "estimation/index.md",
                 "Choosing a formulation" => "estimation/comparison.md",
@@ -37,8 +37,8 @@ makedocs(
                 "Line reconstruction API" => "api/inverse_carson.md",
             ],
         ],
-        "Device modeling and scheduling" => [
-            "Choose device models" => "components/index.md",
+        "Device models and scheduling" => [
+            "Device model selection" => "components/index.md",
             "Multi-period scheduling" => [
                 "Multi-period OPF guide" => "problems/multiperiod.md",
                 "Scheduling API" => "api/multiperiod.md",
@@ -82,14 +82,14 @@ makedocs(
                 "Compatibility and migration" => "ev/migration.md",
             ],
         ],
-        "Inverter control and hardware" => [
+        "Inverter models and controls" => [
             "Inverter study overview" => "ibr/index.md",
             "Scientific foundations" => "ibr/foundations.md",
             "Phase-aware control laws" => "ibr/phase_aware_control_laws.md",
             "Control-study methodology" => "ibr/control_study_methodology.md",
             "Fleet and hardware studies" => "ibr/network_control_studies.md",
             "Closed-loop evidence diagnostics" => "ibr/closed_loop_evidence.md",
-            "Phase-aware control modeling guide" => "components/inverter_controls.md",
+            "Phase-aware control modelling guide" => "components/inverter_controls.md",
             "Advanced inverter model guide" => "components/advanced_inverter.md",
             "Advanced inverter tutorial" => "tutorials/advanced_inverter_modelling.md",
             "Topology under unbalance" => "tutorials/ibr_topology_under_unbalance.md",
@@ -116,13 +116,13 @@ makedocs(
             "Uncertainty models" => "tutorials/doe_uncertainty_models.md",
             "Statistical validation" => "tutorials/doe_statistical_validation.md",
             "Advanced uncertainty laboratory" => "tutorials/doe_uncertainty_coverage.md",
-            "DOE model and result contract" => "problems/operating_envelope.md",
+            "DOE equations and results" => "problems/operating_envelope.md",
             "DOE literature evidence" => "problems/doe_literature_evidence.md",
             "DOE scientific audit" => "problems/doe_quantification_review.md",
             "DOE API" => "api/operating_envelope.md",
         ],
-        "Power flow and operability" => [
-            "Choose a power-flow or operability study" => "algorithms/index.md",
+        "Power flow and voltage operability" => [
+            "Power-flow and operability methods" => "algorithms/index.md",
             "HELM power flow" => [
                 "HELM model and diagnostics" => "algorithms/helm.md",
                 "HELM versus nonlinear power flow" => "tutorials/helm_vs_nonlinear_power_flow.md",
@@ -137,14 +137,14 @@ makedocs(
         ],
         "Numerical formulations and solvers" => [
             "Formulation study overview" => "formulations/index.md",
-            "Control intent, compilation and solvers" => "formulations/compilation.md",
-            "Bounds and relation-aware lowering" => "formulations/bounds_and_relations.md",
-            "Tolerances and whole-model solver choice" => "formulations/tolerances_and_solvers.md",
-            "Start a configurable experiment" => "formulations/experiments.md",
-            "Mathematics and analytic reference" => "formulations/theory.md",
-            "Physical error and conditioning" => "formulations/error_budgets.md",
-            "Controller integration" => "formulations/controllers.md",
-            "Implement a smoothing family" => "formulations/extensions.md",
+            "Volt-var and volt-watt formulations" => "formulations/compilation.md",
+            "Voltage bounds and constraint formulation" => "formulations/bounds_and_relations.md",
+            "Tolerances and solver choice" => "formulations/tolerances_and_solvers.md",
+            "Formulation comparison experiments" => "formulations/experiments.md",
+            "Equations and analytical examples" => "formulations/theory.md",
+            "Approximation error and conditioning" => "formulations/error_budgets.md",
+            "Inverter control example" => "formulations/controllers.md",
+            "Adding a smoothing method" => "formulations/extensions.md",
             "Formulation API" => "formulations/api.md",
             "Formulation references" => "formulations/references.md",
         ],

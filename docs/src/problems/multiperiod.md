@@ -7,12 +7,11 @@ one JuMP model, with storage/EV devices whose state of charge links each period
 to the next. This is the formulation the single-snapshot `solve_opf` cannot
 express, because state of charge couples time steps.
 
-Under the hood it uses the BMOPFTools staged API: every snapshot is built into
-one shared model with `build_opf_model(add_objective=false)`, each device's
-state of charge is linked across the snapshots, the per-snapshot generation-cost
-rates are multiplied by the corresponding [`TimeGrid`](@ref) duration and summed
-into one interval-cost objective, KCL is enforced per snapshot, and the model is
-solved once. The `dt_h` keyword is the uniform-duration shorthand.
+The optimisation contains the network equations for each operating point,
+energy balances between intervals and a total energy-cost objective. Each
+snapshot's generation-cost rate is multiplied by its duration, specified by
+[`TimeGrid`](@ref). KCL is enforced at every snapshot. Use `dt_h` when all
+intervals have the same duration.
 
 ## Worked example: battery arbitrage
 

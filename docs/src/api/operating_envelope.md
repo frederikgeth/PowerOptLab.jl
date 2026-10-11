@@ -1,13 +1,12 @@
 # Dynamic operating envelopes API
 
-The public types and functions for defining, solving, verifying, and recording
-dynamic operating-envelope studies. See
-[Reproducible DOE recourse, verification, and search](@ref) for
-an end-to-end example and guidance on interpreting finite numerical evidence.
-The [problem specification](../problems/operating_envelope.md) defines the
-terminology, result units, missing-value semantics, and permitted claim levels;
-the [literature evidence register](../problems/doe_literature_evidence.md)
-records the scientific scope behind those distinctions.
+Functions for specifying connection points, allocating import or export limits,
+and testing the resulting envelopes. The [worked study](../tutorials/doe_research_workflow.md)
+shows allocation and verification over specified scenarios. The
+[DOE guide](../problems/operating_envelope.md) defines the equations, units and
+interpretation of the results; the
+[literature review](../problems/doe_literature_evidence.md) explains the
+underlying assumptions.
 
 ## Connections, fairness, and control recourse
 

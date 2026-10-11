@@ -1,9 +1,9 @@
 # Post-OPF operability API
 
-The [operability reference](../problems/operability.md) defines supported
-physics, scaling provenance, equations and permitted claims. The
-[study tutorial](../tutorials/post_opf_operability_study.md) shows snapshot
-checks, finite stress campaigns and publication records.
+The [operability guide](../problems/operability.md) gives the supported network
+models, scaling conventions, sensitivity equations and sufficient conditions.
+The [worked study](../tutorials/post_opf_operability_study.md) shows how to check
+an operating point, vary loading and report the resulting voltage margins.
 
 ```@docs
 OperabilitySpec

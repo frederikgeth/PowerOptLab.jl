@@ -1,10 +1,10 @@
 # State estimation API
 
-Choose an estimator using the [state estimation overview](../estimation/index.md)
-and [formulation comparison](../estimation/comparison.md). The
-[legacy WLS guide](../problems/state_estimation.md) and
-[constrained NLLS guide](../problems/constrained_state_estimation.md) specify
-their different network contracts, measurement models and numerical limits.
+Select an estimator using the [state estimation overview](../estimation/index.md)
+and [comparison](../estimation/comparison.md). The
+[legacy WLS](../problems/state_estimation.md) and
+[constrained NLLS](../problems/constrained_state_estimation.md) guides describe
+the network assumptions, measurement equations and convergence criteria.
 
 ## Legacy WLS estimator
 

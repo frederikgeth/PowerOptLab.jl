@@ -1,38 +1,41 @@
-# State and model inference
+# State and parameter estimation
 
-Choose an inference workflow from what is uncertain and the evidence available.
-State estimation, parameter calibration and line reconstruction have different
-inputs and identify different quantities.
+The appropriate estimation method depends on which quantities are unknown and
+which measurements are available. PowerOptLab provides state estimation,
+calibration of selected line lengths and taps, and overhead-line reconstruction.
 
-| Your question | Evidence and fixed assumptions | Start here |
+| Estimation problem | Required data and assumptions | Guide |
 |:--|:--|:--|
-| What network state is supported by noisy measurements? | Telemetry with declared uncertainties; known topology and parameters | [State estimation](index.md) |
-| Which shared line lengths or transformer taps fit multiple operating points? | Snapshot measurements; fixed topology, nominal per-length R/X and terminal maps | [Parameter calibration](../problems/parameter_estimation.md) |
-| Which supplied overhead constructions agree with sequence line data? | Sequence impedance observations and declared geometry/material candidates | [Inverse Carson reconstruction](../problems/inverse_carson.md) |
+| Estimate bus voltages from noisy measurements. | Measurements and their uncertainties; known topology and parameters | [State estimation](index.md) |
+| Estimate line lengths or transformer taps using several operating points. | Measurements at each operating point; fixed topology, conductor connections and per-length R/X | [Parameter calibration](../problems/parameter_estimation.md) |
+| Identify overhead-line configurations consistent with sequence impedances. | Sequence impedances and candidate conductor geometries and materials | [Inverse Carson reconstruction](../problems/inverse_carson.md) |
 
-## Follow a study path
+## Selecting a method
 
 For state estimation, begin with the [formulation comparison](comparison.md),
-then the [modeling tutorial](../tutorials/constrained_nlls_state_estimation.md).
+then the [modelling tutorial](../tutorials/constrained_nlls_state_estimation.md).
 Use [observability](observability.md) and
 [likelihood, loss and priors](maximum_likelihood.md) to interpret the result.
-The [state estimation API](../api/state_estimation.md) lists the constructors,
-compiled-model interfaces, solvers and diagnostics.
+The [state estimation API](../api/state_estimation.md) lists measurement types,
+solvers and returned diagnostics.
 
 The [calibration guide](../problems/parameter_estimation.md) contains a complete
-shared-parameter example. The [calibration API](../api/parameter_estimation.md)
-defines its selected lengths/taps and result fields.
+example in which line lengths and taps are common to several snapshots. The
+[calibration API](../api/parameter_estimation.md) describes the input parameters
+and estimated quantities.
 
 The [line reconstruction tutorial](../tutorials/inverse_carson_reconstruction.md)
-shows candidate screening and model materialization; the
-[line reconstruction API](../api/inverse_carson.md) lists the observation,
-candidate and profile interfaces.
+tests candidate conductor arrangements and constructs the corresponding
+four-wire line models. The [line reconstruction API](../api/inverse_carson.md)
+describes the inputs, fitted models and parameter profiles.
 
-## Keep the inference boundary visible
+## Interpreting the estimates
 
-These are separate workflows. A fitted state, a local parameter optimum and a
-compatible construction are different forms of evidence. Their models and
-uncertainty assumptions must remain explicit when preparing a downstream
-[operating-envelope study](../tutorials/doe_scenario_design.md).
-The [research program](../research_program.md) describes the proposed integrated
-model-forensics workflow; it is not an existing joint inference API.
+A state estimate is conditional on the assumed network parameters. A
+calibration result is a local fit to the specified measurements. Line
+reconstruction can return several configurations that fit the same sequence
+impedances. When using these results in an
+[operating-envelope study](../tutorials/doe_scenario_design.md), carry the
+remaining uncertainty into the network scenarios. Joint estimation across these
+problems is a research objective described in the
+[research programme](../research_program.md).

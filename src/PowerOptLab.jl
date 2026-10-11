@@ -1,14 +1,13 @@
 """
     PowerOptLab
 
-A research laboratory for four-wire distribution-network decisions when the
-network state or model is uncertain. It connects model evidence and forensics,
-informative interventions, and verification of operating decisions. The complete
-workflow is a research direction; current APIs provide separate foundations and
-state their local, scenario, or prototype limits explicitly.
+Models and numerical methods for studying four-wire distribution networks with
+uncertain states and parameters. The package provides separate methods for
+estimation, optimisation and checking operating points. Joint network-model
+identification and automatic experiment design remain research objectives.
 
 PowerOptLab builds on the BMOPFTools reference current–voltage OPF engine, using
-its public extension seams (`model_hook!` / `solution_hook!` and the staged
+its public model-building functions (`model_hook!` / `solution_hook!` and the staged
 `build_opf_model` / `enforce_kcl!` / `generation_cost` / `extract_result` API)
 rather than forking the engine. Experimental devices and formulations reuse the
 engine's neutral-explicit physics, per-unit handling, and result extraction.
@@ -18,11 +17,11 @@ Contributions are organised by *what layer of the engine they extend*:
 
 ### Component models — new network elements (`src/components/`)
 
-Stamped into a solve through `model_hook!` / `solution_hook!`.
+Added to the network equations through `model_hook!` / `solution_hook!`.
 
 - **Storage / EV** ([`StorageDevice`](@ref), [`EVDevice`](@ref)) — battery/EV
-  inverter ports stamped as current injections with an inter-temporal
-  state-of-charge state (an energy/power "PE" model with fixed efficiency).
+  inverter currents included in KCL, with an energy-balance equation
+  between intervals (an energy/power "PE" model with fixed efficiency).
 - **IVQ battery** ([`IVQBattery`](@ref)) — the current–voltage counterpart: cells
   of a [`BatteryChemistry`](@ref) modelled in the voltage–current–charge space
   (`v = OCV(soc) − i·R`), so voltage and current limits bind individually and a
@@ -44,7 +43,7 @@ A different objective/variable/constraint structure on the same physics.
   least-squares estimation of the network state from noisy measurements (an
   *inverse* problem on the same physics).
 - **Constrained NLLS state estimation** ([`solve_sparse_state_estimator`](@ref))
-  — a compiled neutral-explicit residual/constraint model with tangent-space
+  — a neutral-explicit model of measurement residuals and network equations with tangent-space
   observability, selected local covariance, and sparse or dense reference solves.
 - **Parameter estimation** ([`solve_parameter_estimation`](@ref)) — calibration
   of uncertain line lengths and transformer tap ratios from smart-meter data
@@ -63,11 +62,12 @@ A different objective/variable/constraint structure on the same physics.
 - **Network-scale inverter-control studies**
   ([`solve_controlled_inverter_fleet`](@ref)) — selected dataset IBRs are
   replaced by phase-aware advanced inverters in one simultaneous snapshot,
-  with explicit ownership provenance and table-ready hardware-stress results.
+  with records of the model used for each device and quantities for equipment
+  rating comparisons.
 
-### Bespoke algorithms — new solution methods (`src/algorithms/`)
+### Solution methods (`src/algorithms/`)
 
-Question-driven custom solve loops and alternative solution methods.
+Alternative numerical methods for solving the network equations.
 
 - **HELM** ([`solve_pf_helm`](@ref)) — the Holomorphic Embedding Load-flow
   Method: a non-iterative power flow that expands each voltage as a power series

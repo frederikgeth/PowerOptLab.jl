@@ -1,9 +1,9 @@
 # Parameter calibration API
 
-The [calibration guide](../problems/parameter_estimation.md) describes the
-selected shared lengths/taps, fixed model assumptions and limits of parameter
-identification. For other inference questions, see
-[state and model inference](../estimation/studies.md).
+The [calibration example](../problems/parameter_estimation.md) estimates selected
+line lengths and transformer taps from several operating points. It states the
+fixed network assumptions and the limits of parameter identification. See
+[estimation methods](../estimation/studies.md) for related problems.
 
 ```@docs
 CalibLine

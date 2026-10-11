@@ -3,13 +3,12 @@
 > **Kind:** Problem specification · **Maturity:** research prototype · **Direction:** forward · **Temporal:** per-interval
 
 New readers should begin with [Dynamic operating envelopes in 15
-minutes](../tutorials/doe_getting_started.md), then return here for stable
-semantics and result-field definitions.
+minutes](../tutorials/doe_getting_started.md), then use this reference for the model equations and returned quantities.
 
-The implemented scope and limitations are summarized below. The claim hierarchy and detailed rationale
-are in the [scientific audit](doe_quantification_review.md); source-by-source
-boundaries are in [DOE literature: evidence and
-interpretation](doe_literature_evidence.md).
+The available calculations and their limitations are summarised below. The
+[scientific review](doe_quantification_review.md) explains the difference between
+pointwise feasibility, finite scenario tests and robust feasibility. The
+[literature review](doe_literature_evidence.md) discusses the supporting results.
 
 [`solve_operating_envelope`](@ref) allocates an active-power import or export
 capacity to each participating connection while retaining the nonlinear,
@@ -585,7 +584,7 @@ The pinned separate-PF API cannot faithfully carry those settings yet.
 
 The runner requires convergence, a feasible primal witness, complete finite complex-voltage comparisons and a
 1 mV DOE/PF agreement tolerance. It is an independent build of the same engine's
-power-flow equations, not an independent software oracle or a range certificate.
+power-flow equations, not an independent power-flow calculation or a certificate for the full range.
 The synthetic adapter uses estimated net P/Q as demand only because its
 pre-DOE DER dispatch is known to be zero and each bus has one load. General
 feeders need explicit load/DER disaggregation; voltage estimates alone do not

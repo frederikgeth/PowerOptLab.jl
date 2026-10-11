@@ -1,25 +1,25 @@
 # Inverter-based resources
 
-PowerOptLab has two complementary inverter abstractions:
+PowerOptLab provides two inverter models:
 
-- a **POC injection model** for studies whose inputs and outputs are contractual
-  active/reactive-power or current commands; and
+- a **POC injection model** for studies specified by active/reactive-power or current commands; and
 - [`AdvancedInverter`](@ref), a **circuit-aware fundamental-frequency model** for
   studies in which the internal converter voltage, output filter, bridge
   topology, neutral path, or DC-link stress changes the feasible operating set.
 
-Neither is universally “more correct.” The defensible model is the least detailed
-one that retains the mechanism relevant to the study question.
+Use the point-of-connection model for studies described by terminal power and
+current limits. Use the circuit model when the filter, converter topology or
+DC link affects the feasible operating region.
 
 ![Fidelity ladder from POC injection through EMT](../assets/ibr/fidelity-ladder.svg)
 
-## Study paths and references
+## Models and worked studies
 
-Use the [advanced inverter modeling guide](../components/advanced_inverter.md)
+Use the [advanced inverter modelling guide](../components/advanced_inverter.md)
 and [tutorial](../tutorials/advanced_inverter_modelling.md) to choose a plant.
 The [advanced inverter API](../api/advanced_inverter.md) lists its constructor,
 solve entry point and results. For local laws, use the
-[control modeling guide](../components/inverter_controls.md) and
+[control modelling guide](../components/inverter_controls.md) and
 [phase-aware control API](../api/inverter_controls.md).
 
 [Fleet and hardware studies](network_control_studies.md) and
@@ -29,7 +29,7 @@ examines policy fitting and replay; the
 [bilevel PV/tap guide](../problems/bilevel.md) and
 [API](../api/bilevel.md) cover a separate hierarchical-control proof of concept.
 
-## Implemented physical scope
+## Represented phenomena
 
 `AdvancedInverter` represents RMS fundamental phasors and derives selected
 line-frequency DC quantities from them. It includes:
@@ -58,7 +58,7 @@ line-frequency DC quantities from them. It includes:
 
 ![Comparison of the three implemented three-phase converter topologies](../assets/ibr/topology-comparison.svg)
 
-The topology names are deliberately literal:
+The available topologies are:
 
 | `topology` | AC conductors | Neutral return | DC structure | Distinct limiting mechanism |
 | --- | ---: | --- | --- | --- |
@@ -79,11 +79,11 @@ silently folded into either existing category.
 2. [Phase-aware local control laws](@ref ibr-phase-aware-control-laws) derives
    and classifies topology-compatible Volt-var/Volt-watt extensions for
    unbalanced voltages.
-3. [Phase-aware control modeling guide](@ref inverter-control-api) constructs and
+3. [Phase-aware control modelling guide](@ref inverter-control-api) constructs and
    solves the implemented three-leg laws with executable examples.
 4. [Inverter-control study methodology](@ref ibr-control-study-methodology)
-   defines the software layers, upstream seams, validation gates, scaling tests,
-   and hardware-sizing experiments for network-wide comparisons.
+   describes the model implementation, validation tests and hardware-sizing
+   experiments used in network studies.
 5. [Verification and benchmark cases](@ref ibr-verification) maps claims to unit,
    regression, paper, and higher-fidelity tests.
 6. [IBR references](@ref ibr-references) is the maintained bibliography and

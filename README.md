@@ -35,8 +35,9 @@ exists and what remains to be built.
 ## What's inside
 
 The documentation is organized around study topics; the
-[home page](docs/src/index.md#Study-topics) links inference, device scheduling,
-inverter studies, operating envelopes, power flow and numerical formulations.
+[home page](docs/src/index.md#Study-topics) links estimation, device models and
+scheduling, inverter controls, operating envelopes, power flow and numerical
+formulations.
 The [API index](docs/src/api.md) routes to the corresponding references.
 
 Contributions are organised by *what layer of the engine they extend* — see

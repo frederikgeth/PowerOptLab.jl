@@ -1,14 +1,13 @@
 # PowerOptLab.jl
 
-PowerOptLab is a research laboratory for **four-wire distribution-network
-decisions when the network state or model is uncertain**.
+PowerOptLab provides models and numerical methods for studying **four-wire
+distribution networks with uncertain states and parameters**.
 
 ## Start here
 
-Follow [Your first PowerOptLab study](getting_started.md) to install from a
-checkout, build a complete network, schedule a battery, and check status and
-physical residuals. The guide uses synthetic data and the standard solver, and
-its Julia examples execute during documentation builds.
+The [getting-started example](getting_started.md) builds a small feeder,
+schedules a battery and checks the solution. It uses synthetic data and Ipopt.
+The example is run automatically when the documentation is built.
 
 For an existing checkout, install the pinned dependencies from its root:
 
@@ -20,48 +19,48 @@ Then choose a study topic below.
 
 ## Study topics
 
-The chapters bring models, worked studies, API references and evidence together
-around the question you want to answer.
+Choose a chapter according to the quantities you want to estimate, optimise or
+check.
 
 | Study topic | Question | Start here |
 |:--|:--|:--|
-| State and model inference | What states, shared parameters or line constructions are supported by the available evidence? | [Choose an inference study](estimation/studies.md) |
-| Device modeling and scheduling | Which generator, storage or EV assumptions matter, and how are stored states linked over time? | [Choose device models](components/index.md) |
-| Inverter control and hardware | How do local laws, converter topology and ratings change network and hardware outcomes? | [Inverter studies](ibr/index.md) |
-| Dynamic operating envelopes | What capacity can be allocated and what does the declared verification establish? | [DOE in 15 minutes](tutorials/doe_getting_started.md) |
-| Power flow and operability | What operating point, branch, static margin or model reduction is supported? | [Choose a power-flow or operability study](algorithms/index.md) |
-| Numerical formulations and solvers | How do encodings, bounds and tolerances affect a declared mathematical model? | [Formulation studies](formulations/index.md) |
+| State and parameter estimation | Estimate voltages, line lengths, taps or overhead-line configurations from measurements and network data. | [Estimation methods](estimation/studies.md) |
+| Device models and scheduling | Select generator, battery and EV models, and calculate charging and discharging schedules. | [Device models](components/index.md) |
+| Inverter models and controls | Study voltage control, converter losses, conductor currents and DC-link requirements. | [Inverter studies](ibr/index.md) |
+| Dynamic operating envelopes | Calculate import or export limits and test them over specified operating conditions. | [DOE in 15 minutes](tutorials/doe_getting_started.md) |
+| Power flow and voltage operability | Compare power-flow solutions, examine static voltage margins and assess neutral reduction. | [Power-flow methods](algorithms/index.md) |
+| Numerical formulations and solvers | Compare mathematical representations, approximation errors and solver tolerances. | [Formulation studies](formulations/index.md) |
 
-Use the [API index](api.md) to find a callable interface or the
-[symbol index](symbol_index.md) to look up a name. The
-[capability status catalogue](concepts.md#Capability-status) retains the maturity
-and direction labels for the component and problem prototypes.
+The [API reference](api.md) lists functions, arguments and returned quantities.
+The [symbol index](symbol_index.md) provides an alphabetical lookup.
+[Concepts](concepts.md#Capability-status) summarises the development status of
+the models and methods.
 
 ## Research context
 
-The organizing questions are:
+The research programme addresses three questions:
 
-1. What states and models are compatible with telemetry and metadata?
-2. What safe measurement or intervention would distinguish material
-   alternatives?
-3. What operating decision is justified by the remaining alternatives?
+1. Which network states and parameter values are consistent with measurements
+   and network records?
+2. Which additional measurements or changes in operating point would distinguish
+   the plausible models while respecting voltage and equipment limits?
+3. Which operating decisions remain feasible under those models?
 
 The package builds on the
 [BMOPFTools](https://github.com/frederikgeth/BMOPFTools.jl) reference
-current–voltage OPF engine and reuses its neutral-explicit device physics,
-per-unit handling, and result extraction through public extension seams.
+current–voltage OPF formulation. It uses the same network equations, with an
+explicit neutral conductor and per-unit scaling, and adds models through the
+public model-building functions.
 
-The complete loop is not implemented yet. Current capabilities provide its
-foundations as separate, explicit research prototypes; the documentation does
-not treat proposed joint model-forensics, active-probing, or general
-uncertainty-set certification APIs as existing functionality.
-[Concepts](concepts.md) explains the shared modeling
-contracts; the [Research program](research_program.md) distinguishes current
-capabilities from the intended integrated workflow.
+The current package provides separate estimation, optimisation and checking
+methods. Joint network-model identification and automatic experiment design
+remain research objectives. The nonlinear DOE solvers also lack a general
+feasibility certificate for continuous uncertainty and utilisation sets.
+[Concepts](concepts.md) explains the modelling assumptions and conventions; the
+[research programme](research_program.md) sets out the longer-term questions.
 
 ## Extending the package
 
-See [Concepts](concepts.md) for how each capability layers over the BMOPFTools
-staged API, and [Contributing](contributing.md) for how to add your own and the
-promotion path back to the BMOPF spec. The topic guides link equations, worked
-examples, API references and validation evidence.
+See [Contributing](contributing.md) for adding a model or solution method.
+Models with sufficiently established interfaces and validation may be proposed
+for inclusion in BMOPFTools.

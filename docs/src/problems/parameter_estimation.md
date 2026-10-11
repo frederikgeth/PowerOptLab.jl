@@ -55,21 +55,19 @@ Each metered user contributes noisy `(P, Q, |V|)` readings as
 used in Vanin et al.). WLAV does not identify or remove bad measurements; inspect
 the fitted residuals before attributing a discrepancy to a particular meter.
 
-## How the uncertain elements are stamped
+## Equations for uncertain lines and taps
 
-The two element classes are handled differently, reflecting how the BMOPFTools
-engine exposes them:
+The estimated taps and line lengths enter the network equations as follows:
 
-- **Transformer taps** use the engine's **native free-tap variable**. A transformer
-  carrying `tap_min`/`tap_max` gets a `:tap` decision variable that the engine
-  threads through its per-unit-correct, base-referred winding constraints.
-  [`CalibTap`](@ref) keeps the transformer in every snapshot net, sets those
-  bounds, and the solver couples the tap equal across snapshots — the engine's
-  transformer physics (leakage, losses, referral) is reused unchanged.
-- **Line lengths** have no native free variable, so [`CalibLine`](@ref)s are
-  **omitted** from the physics nets and re-stamped here with a shared free length
-  `ℓ`: `V_f − V_t = (r₀+jx₀)·ℓ·I`. This is the one genuine "replace Ohm's law"
-  step; per-unit scaling by `z_base` is applied so SI and per-unit solves agree.
+- **Transformer taps** use the BMOPFTools tap variable in the winding equations.
+  [`CalibTap`](@ref) sets its bounds and requires the same tap in every snapshot.
+  The transformer model, including leakage impedance, losses and voltage
+  referral, is retained.
+- **Line lengths** enter the series voltage drop through the unknown length
+  `ℓ`: `V_f − V_t = (r₀+jx₀)·ℓ·I`. The nominal per-length R/X values remain
+  fixed. Omit these lines from the input networks so that their equations are
+  included once by [`CalibLine`](@ref). The impedance is scaled by `z_base` in
+  the per-unit formulation.
 
 ## Worked example
 

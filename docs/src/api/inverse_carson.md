@@ -1,9 +1,9 @@
 # Line reconstruction API
 
-Start with the [inverse Carson reference](../problems/inverse_carson.md)
-and [reconstruction tutorial](../tutorials/inverse_carson_reconstruction.md).
-These APIs screen supplied overhead-construction candidates against sequence
-line data and retain compatible alternatives.
+The [inverse Carson guide](../problems/inverse_carson.md) and
+[worked example](../tutorials/inverse_carson_reconstruction.md) compare candidate
+conductor arrangements with specified sequence impedances and construct the
+corresponding four-wire line models.
 
 ```@docs
 SequenceLineObservation

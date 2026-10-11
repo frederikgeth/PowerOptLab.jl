@@ -10,13 +10,13 @@ Before adding a capability, answer two separate questions:
 1. **Research fit:** which inference, experiment-design, decision-verification,
    or solution-validity question does it enable?
 2. **Implementation kind:** is it a component model, problem specification, or
-   bespoke algorithm?
+   solution method?
 
 A standalone device or generic algorithm is not a sufficient contribution by
 itself. Its documentation should name the research question, the evidence or
 decision it connects to, and the validity limits of the result. Once that fit is
 clear, the [kind of contribution](concepts.md) determines where the code and docs
-go and which engine seam it reuses.
+go and which model-building functions it uses.
 
 ## Adding a component model
 
@@ -50,7 +50,7 @@ A new *formulation* over the same physics. Put it in `src/problems/`.
 See [State estimation](problems/state_estimation.md) for the *inverse*-problem
 pattern and [Multi-period OPF](problems/multiperiod.md) for inter-temporal linking.
 
-## Adding a bespoke algorithm
+## Adding a solution method
 
 A new *solution method*. Put it in `src/algorithms/` and add a page under
 `docs/src/algorithms/`. Register it with the study question it answers; the
@@ -65,11 +65,28 @@ implementation layers. Add a guide or tutorial to its study chapter in
 or tutorials. Register each published page once.
 
 Place canonical `@docs` entries in the relevant topic API reference. The
-[shared API](api.md) owns result, time-grid and extension contracts and links to
+[shared API](api.md) describes result status, time intervals and extension interfaces, and links to
 the topic references. Use `@ref` to link a symbol from guides and examples,
 rather than reproducing its docstring. The documentation build checks exported
 symbols and cross-references, and the [symbol index](symbol_index.md) spans all
 chapters.
+
+## Writing for power-engineering readers
+
+Start with the network problem, the assumptions and the quantities being
+calculated. Explain the equations, units and sign conventions before describing
+the software implementation. Use standard power-system terminology and short,
+direct sentences.
+
+Prefer concrete descriptions: add currents to KCL, construct a four-wire line
+model, compare with an independent reference calculation, or check equation
+residuals. Reserve terms such as callback, ownership and compilation for sections
+that explain the programming interface. Keep public function names unchanged.
+
+State the conditions under which a result holds. Distinguish numerical
+convergence, satisfaction of the model equations and validation against physical
+data. Give limitations where they affect interpretation, and refer to that
+explanation elsewhere rather than repeating a general warning on every page.
 
 ## Badge line convention
 
@@ -106,7 +123,7 @@ and the PowerOptLab version becomes a thin re-export or is retired.
   guides before relocating a workflow record. Current behavior belongs in the
   reference guide; a development note is not an API contract.
 
-## BMOPFTools compatibility contract
+## BMOPFTools compatibility
 
 BMOPFTools is unregistered. The root and docs `Project.toml` source tables pin
 commit `72e6cec22a66cf376c37ec4d64aef350b9f1100d`; package compatibility remains
@@ -131,5 +148,5 @@ which the pinned BMOPFTools revision does not expose publicly. Those imports are
 `src/upstream.jl`; they are the only supported private compatibility adapter.
 The upstream API needed to remove it is a public, read-only load-decomposition
 function returning each sub-load's terminal pair, complex power, and shunt
-admittance. Until BMOPFTools provides that seam, an upstream upgrade must treat
+admittance. Until BMOPFTools provides that interface, an upstream upgrade must treat
 changes to the adapter's imported names as breaking.

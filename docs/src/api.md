@@ -1,7 +1,8 @@
 # Shared interfaces and API index
 
-Common result, time-grid and extension contracts are documented here. Types and
-solvers for a specific study live in the topic references below. The
+This reference describes solution status, time intervals and the interfaces
+used to add devices and measurements. The links below lead to the functions
+and input parameters for each study. The
 [symbol index](symbol_index.md) provides alphabetical lookup across all chapters.
 
 ## Module
@@ -10,7 +11,7 @@ solvers for a specific study live in the topic references below. The
 PowerOptLab
 ```
 
-## Shared contracts
+## Results and time intervals
 
 ```@docs
 SolveOutcome
