@@ -89,9 +89,10 @@ available through a public upstream seam.
 Local load-law power derivatives are evaluated analytically from the isolated
 BMOPFTools sub-load coefficients and compared with the retained finite-
 difference derivative. Each terminal record keeps both values, the absolute
-discrepancy, and a validation status. The full network residual and Jacobian
-remain finite-difference diagnostics until the broader analytic/AD Milestone 2
-cross-check is completed.
+discrepancy, and a validation status. The default network Jacobian and load-scale
+forcing use finite differences. The analytic native static validation paths
+below are implemented; they do not extend the residual scope to controllers,
+generators or IBRs.
 
 Set `compute_analytic_jacobian_validation=true` to compare the full scaled
 finite-difference Jacobian against the analytic native static load-law
@@ -141,6 +142,87 @@ region's `condition_margin` is intentionally paired with
 member, while the latter is the best `1-q` observed over the finite scan and
 retains a meaningful conditioning margin instead of a bisection-boundary
 artifact.
+
+## Equations and interpretation
+
+### Static equilibrium and terminal coordinates
+
+For the implemented frozen-dispatch closure, write the rectangular static
+network residual as
+
+```math
+F(z,\lambda;m)=0,
+```
+
+where ``z`` contains the free conductor-voltage components, ``\lambda`` is the
+declared load-scale parameter and ``m`` records load laws and connections.
+Optimized independent setpoints are held fixed. An operational closure with
+endogenous droop, PV or controller states needs additional residual equations
+and is not implemented by this checker. The OPF KKT matrix is not this
+power-flow Jacobian.
+
+Let a real incidence matrix ``C`` map conductor potentials to oriented device
+voltages. Its rows form phase-to-neutral voltages for wye branches and
+line-to-line voltages for delta branches:
+
+```math
+u=Cv,\qquad i_{\mathrm{node}}=C^{\mathsf T}i_{\mathrm{branch}}(u).
+```
+
+With ``C_R=\operatorname{diag}(C,C)``, the rectangular device tangent is
+
+```math
+J_{\mathrm{device}}=C_R^{\mathsf T}J_{\mathrm{branch}}C_R.
+```
+
+This preserves delta cross-phase coupling and free-neutral displacement. The
+derivative must follow the declared load law: constant-P/I/Z, ZIP and supported
+exponential loads can have different incremental responses at the same power
+and voltage. The analytic validation options check this native static assembly
+against the finite-difference calculation.
+
+### Directional sensitivities and conditioning
+
+At a regular equilibrium, ``J=F_z`` and the tangent for a declared stress path
+satisfies
+
+```math
+J\frac{dz}{d\lambda}=-F_\lambda,\qquad
+\frac{dg}{d\lambda}=g_z\frac{dz}{d\lambda}+g_\lambda.
+```
+
+The same construction applies to named P/Q perturbations. A sensitivity is
+conditional on that model, equilibrium and direction. A reported ``dP/dV`` is a
+path-qualified ratio of tangents; a near-zero voltage tangent makes the quotient
+singular or inconclusive. Local nonsingularity alone does not distinguish the
+high- and low-voltage branches.
+
+Use the audited solve's scaling policy for residual and state coordinates before
+interpreting singular values, rank tolerances or mode participation. Singular
+values and raw vector components depend on those coordinates. A determinant or
+a reduced Q–V approximation is not a substitute for the full rectangular
+four-wire evidence.
+
+### Continuation, margins and certificates
+
+Natural-parameter continuation follows a specified load-scale path. Near a fold,
+the voltage Jacobian becomes singular and natural-parameter sensitivities can
+grow without bound. Pseudo-arclength continuation augments the equations to
+follow the curve; the optional bordered localizer refines a fold candidate via
+``F=0``, ``Jr=0`` and ``\lVert r\rVert_2=1``. These are local numerical results
+for the declared path and initial state.
+
+An operational voltage boundary can precede a fold. Report which boundary was
+observed, the path parameter and the reference point. A missing boundary is
+`:not_observed`, not an unlimited margin. HELM agreement, a continuation trace,
+local regularity and a sufficient fixed-point certificate establish different
+claims. The candidate-centered certificate can establish local uniqueness
+without no-load reachability; failure of a sufficient contraction bound remains
+inconclusive.
+
+These snapshot and path diagnostics do not allocate a DOE or certify every
+utilization/scenario combination. A study that invokes them for selected DOE
+snapshots must retain that finite scope.
 
 ## Computational scaling and size guidance
 
@@ -436,8 +518,9 @@ This is a local post-solve screen, not a proof of global solvability or dynamic
 voltage stability. HELM agreement is path-qualified evidence for its energized
 no-load homotopy; HELM non-convergence is inconclusive, not a non-existence
 certificate. The current pseudo-arclength implementation is a first static
-slice: it does not yet provide refined fold points, deflation/global branch
-discovery, controller closures, or fuller generator/IBR equilibrium seams. A
+slice with opt-in bordered-equation fold refinement. It does not provide
+deflation/global branch discovery, controller closures, or fuller generator/IBR
+equilibrium seams. A
 low-voltage equilibrium can still pass the local endpoint residual check while
 failing the no-load-connected target comparison; that distinction is deliberate
 branch evidence, not a claim that the low branch is infeasible.
@@ -445,28 +528,7 @@ branch evidence, not a claim that the low branch is infeasible.
 bordered-equation fold candidate for the declared static model and initial
 guess, not uniqueness or global reachability.
 
-```@docs
-OperabilitySpec
-OperabilityCheck
-OperabilityModelError
-OperabilityResult
-check_opf_operability
-operability_scope_audit
-operability_upstream_audit
-OperabilityContinuationSpec
-OperabilityContinuationResult
-continue_opf_operability
-OperabilityPseudoArclengthSpec
-continue_opf_operability_pseudo_arclength
-OperabilityFoldResult
-locate_opf_operability_fold
-operability_continuation_margin
-operability_continuation_rows
-OperabilityStressDirection
-operability_stress_network
-operability_stress_rows
-operability_stress_summary
-operability_stress_ensemble_rows
-operability_snapshot_row
-operability_snapshot_rows
-```
+## API reference
+
+The [operability API](../api/operability.md) lists snapshot checks, continuation,
+fold refinement, finite stress-study adapters and their result types.

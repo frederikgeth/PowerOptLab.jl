@@ -7,12 +7,11 @@ one JuMP model, with storage/EV devices whose state of charge links each period
 to the next. This is the formulation the single-snapshot `solve_opf` cannot
 express, because state of charge couples time steps.
 
-Under the hood it uses the BMOPFTools staged API: every snapshot is built into
-one shared model with `build_opf_model(add_objective=false)`, each device's
-state of charge is linked across the snapshots, the per-snapshot generation-cost
-rates are multiplied by the corresponding [`TimeGrid`](@ref) duration and summed
-into one interval-cost objective, KCL is enforced per snapshot, and the model is
-solved once. The `dt_h` keyword is the uniform-duration shorthand.
+The optimisation contains the network equations for each operating point,
+energy balances between intervals and a total energy-cost objective. Each
+snapshot's generation-cost rate is multiplied by its duration, specified by
+[`TimeGrid`](@ref). KCL is enforced at every snapshot. Use `dt_h` when all
+intervals have the same duration.
 
 ## Worked example: battery arbitrage
 
@@ -59,12 +58,17 @@ res = solve_multiperiod_opf(nets, [bat]; time_grid=grid)
 
 ## Multiple devices
 
-Pass any mix of [`StorageDevice`](@ref) and [`EVDevice`](@ref); each gets its own
+Pass a mix of [`StorageDevice`](@ref), [`EVDevice`](@ref) and
+[`ChargingSession`](@ref); each gets its own
 state-of-charge trajectory and constraints, all co-optimised in the same model:
 
 ```julia
 res = solve_multiperiod_opf(nets, [bat, ev1, ev2]; dt_h=0.5)
 ```
+
+For equipment-aware charging, pass `ChargingSession` objects. Their associated
+`EV` and `EVSE` describe vehicle and outlet capabilities; they are not standalone
+devices passed directly to this solver. See the [session guide](../ev/sessions.md).
 
 Per-period economics come from the snapshots themselves — a time-varying import
 price, differing loads, or any other per-snapshot data the BMOPFTools objective
@@ -83,3 +87,8 @@ Numerical values are published only when the shared solve reaches `OPTIMAL` or
 relaxed-tolerance outcomes retain their termination status and return `NaN`
 objective/trajectory values rather than presenting a candidate iterate as an
 optimum.
+
+## API reference
+
+The [scheduling API](../api/multiperiod.md) lists the public types, functions and result fields
+for this guide.

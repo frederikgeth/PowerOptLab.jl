@@ -1,0 +1,32 @@
+# Post-OPF operability API
+
+The [operability guide](../problems/operability.md) gives the supported network
+models, scaling conventions, sensitivity equations and sufficient conditions.
+The [worked study](../tutorials/post_opf_operability_study.md) shows how to check
+an operating point, vary loading and report the resulting voltage margins.
+
+```@docs
+OperabilitySpec
+OperabilityCheck
+OperabilityModelError
+OperabilityResult
+check_opf_operability
+operability_scope_audit
+operability_upstream_audit
+OperabilityContinuationSpec
+OperabilityContinuationResult
+continue_opf_operability
+OperabilityPseudoArclengthSpec
+continue_opf_operability_pseudo_arclength
+OperabilityFoldResult
+locate_opf_operability_fold
+operability_continuation_margin
+operability_continuation_rows
+OperabilityStressDirection
+operability_stress_network
+operability_stress_rows
+operability_stress_summary
+operability_stress_ensemble_rows
+operability_snapshot_row
+operability_snapshot_rows
+```

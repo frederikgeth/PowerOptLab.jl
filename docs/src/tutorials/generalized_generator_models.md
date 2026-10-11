@@ -10,6 +10,13 @@ Run their reproducible calculations from the repository root:
 julia --project=. scripts/generalized_generators/analytic_examples.jl
 ```
 
+The documentation build also executes that same script:
+
+```@example generator_analytic
+using PowerOptLab
+include(joinpath(pkgdir(PowerOptLab), "scripts", "generalized_generators", "analytic_examples.jl"))
+```
+
 The script uses only Julia standard libraries. Its assertions check the numerical
 identities below; the separate component unit tests cover BMOPFTools integration.
 Neither is a dynamic simulation.

@@ -1,10 +1,58 @@
 # HELM versus nonlinear power flow
 
+<!-- study-executable -->
+
 > **Audience:** power-system researchers · **Scope:** four-wire distribution power flow, solvability diagnostics, and cross-method validation.
 
 The Holomorphic Embedding Load-flow Method (HELM) is not merely another nonlinear iteration. It constructs the branch connected to an energized no-load network and evaluates it by analytic continuation. This gives it useful, independent numerical evidence beside the Ipopt-based nonlinear `solve_pf`, but a finite-order divergent series is not a proof of voltage collapse.
 
 The trade-off is explicit: the present embedding supports constant-power and constant-impedance load components only. It cannot replace the nonlinear engine for arbitrary ZIP/exponential loads, IBRs, generators, controls, or OPF limits.
+
+From a checkout with [pinned dependencies installed](../getting_started.md),
+run `julia --project=. scripts/run_study_tutorials.jl`, or paste this page's
+Julia blocks into a fresh session in order. CI executes the published blocks
+on Julia 1.10 and current stable.
+
+## Build the teaching feeder
+
+The data are synthetic: a 230 V source supplies a 2 kW constant-power load
+through phase and neutral conductors of 0.05 Ω each. Only the source neutral
+is grounded. This single-phase example keeps the reference calculation simple
+while retaining neutral displacement.
+
+```julia
+using PowerOptLab
+using BMOPFTools: parse_bmopf, solve_pf, SIUnitsScaling
+
+function resistive_feeder(; power_w=2000.0, model="constant_power")
+    parse_bmopf("""
+    {"bus": {
+       "grid": {"terminal_names": ["1", "n"],
+                "perfectly_grounded_terminals": ["n"]},
+       "loadbus": {"terminal_names": ["1", "n"]}},
+     "voltage_source": {
+       "supply": {"bus": "grid", "terminal_map": ["1"],
+                  "v_magnitude": [230.0], "v_angle": [0.0]}},
+     "linecode": {"cable": {"R_series_1_1": 0.05, "R_series_2_2": 0.05}},
+     "line": {"service": {"bus_from": "grid", "bus_to": "loadbus",
+               "terminal_map_from": ["1", "n"], "terminal_map_to": ["1", "n"],
+               "linecode": "cable", "length": 1.0}},
+     "load": {"demand": {"bus": "loadbus", "terminal_map": ["1", "n"],
+               "configuration": "SINGLE_PHASE", "model": "$model",
+               "p_nom": [$power_w], "q_nom": [0.0], "v_nom": [230.0]}}}
+    """; from_string=true)
+end
+
+net = resistive_feeder()
+vbase = 230.0
+loop_resistance = 0.10
+load_voltage_ref = (vbase + sqrt(vbase^2 - 4loop_resistance*2000.0))/2
+neutral_voltage_ref = (vbase - load_voltage_ref)/2
+```
+
+The high-voltage root of ``U^2-230U+0.10P=0`` gives approximately 229.127 V
+phase-to-neutral at the load and 0.4364 V neutral-to-earth. This independent
+reference is conditional on the resistive, unity-power-factor circuit.
 
 ## 1. Two solvers, different evidence
 
@@ -38,6 +86,10 @@ helm.residual     # full nonlinear current mismatch [A]
 helm.pade_spread  # last-two Padé differences for every coefficient row
 helm.coefficient_tail_ratios
 helm.singularity_estimate # heuristic; validate before calling it a margin
+@assert helm.status == :converged
+@assert helm.residual < 1e-7
+@assert abs(helm.V[("loadbus", "1")] - helm.V[("loadbus", "n")] - load_voltage_ref) < 1e-5
+@assert abs(helm.V[("loadbus", "n")] - neutral_voltage_ref) < 1e-5
 ```
 
 The final test is physical: returned voltages are substituted into the full nonlinear current mismatch. `solve_pf_helm` returns the standard result shape.
@@ -75,6 +127,8 @@ Their voltage identities hold term-by-term. With `switches=:constrain`, HELM als
 ```julia
 hr = helm_series(net; switches=:constrain, ideal_xfmrs=:constrain)
 hr.couplings
+@assert hr.converged
+@assert isempty(hr.couplings)  # This fixture has no switches or transformers.
 ```
 
 ### Pitfall: using a huge admittance for an ideal element
@@ -91,7 +145,15 @@ using BMOPFTools: solve_pf
 h = solve_pf_helm(net)
 n = solve_pf(net; per_unit=false)
 @assert h["termination_status"] == "HELM_CONVERGED"
+@assert n["termination_status"] in ("LOCALLY_SOLVED", "OPTIMAL")
 Δv = h["bus"]["loadbus"]["1"]["vm"] - n["bus"]["loadbus"]["1"]["vm"]
+@assert abs(Δv) < 1e-5
+n_phase = complex(n["bus"]["loadbus"]["1"]["vr"], n["bus"]["loadbus"]["1"]["vi"])
+n_neutral = complex(n["bus"]["loadbus"]["n"]["vr"], n["bus"]["loadbus"]["n"]["vi"])
+@assert abs(n_phase - n_neutral - load_voltage_ref) < 1e-5
+@assert abs(n_neutral - neutral_voltage_ref) < 1e-5
+println("HELM / nonlinear PF: load voltage = ", round(load_voltage_ref; digits=4),
+        " V; neutral rise = ", round(neutral_voltage_ref; digits=4), " V")
 ```
 
 Repository validation combines closed-form feeders, a separate `ybus_linearized` current-mismatch oracle, OpenDSS decks, and three-way HELM-Ipopt-OpenDSS comparisons. A good research workflow is:
@@ -111,10 +173,20 @@ HELM cannot validate nonlinear PF when the latter includes constant-current ZIP 
 The v1 embedding accepts constant-P and constant-Z components, including ZIP P/Z fractions. It rejects constant-current ZIP fractions and non-integer exponential loads because they involve ``|\Delta V|``, which is not holomorphic:
 
 ```julia
-solve_pf_helm(net_with_constant_current_zip) # throws an informative ArgumentError
+net_with_constant_current = resistive_feeder(model="constant_current")
+rejected_current_load = try
+    solve_pf_helm(net_with_constant_current)
+    false
+catch err
+    err isa ArgumentError || rethrow()
+    true
+end
+@assert rejected_current_load
 ```
 
-It also needs an energized WYE/SINGLE_PHASE source and a linear path from every node to a reference at the no-load germ. Generators and IBRs are not injected in v1. Use nonlinear OPF PF or the `ybus_linearized` fixed-point map when those models are required.
+It also needs an energized WYE/SINGLE_PHASE source and a linear path from every node to a reference at the no-load germ. Generators and IBRs are not injected in v1. Use nonlinear PF for operational devices and controls. The static
+`ybus_linearized` fixed-point map supports additional load laws within its own
+declared scope; it does not supply generator or IBR-control equations.
 
 ### Pitfall: treating rejection as a numerical weakness
 

@@ -1,82 +1,69 @@
 # PowerOptLab.jl
 
-PowerOptLab is a research laboratory for **four-wire distribution-network
-decisions when the network state or model is uncertain**. Its organizing
-questions are:
+PowerOptLab provides models and numerical methods for studying **four-wire
+distribution networks with uncertain states and parameters**.
 
-1. What states and models are compatible with telemetry and metadata?
-2. What safe measurement or intervention would distinguish material
-   alternatives?
-3. What operating decision is justified by the remaining alternatives?
+## Start here
 
-The package builds on the
-[BMOPFTools](https://github.com/frederikgeth/BMOPFTools.jl) reference
-current–voltage OPF engine and reuses its neutral-explicit device physics,
-per-unit handling, and result extraction through public extension seams.
+The [getting-started example](getting_started.md) builds a small feeder,
+schedules a battery and checks the solution. It uses synthetic data and Ipopt.
+The example is run automatically when the documentation is built.
 
-The complete loop is not implemented yet. Current capabilities provide its
-foundations as separate, explicit research prototypes; the documentation does
-not treat proposed model-forensics, active-probing, or global-certification APIs
-as existing functionality. Start with [Concepts](concepts.md) for the modelling
-contracts, then read the [Research program](research_program.md) for the current
-boundary and priorities.
-
-## Capabilities
-
-### Component models
-
-New network elements, stamped via `model_hook!` / `solution_hook!`.
-
-| Capability | Entry point | Maturity |
-|---|---|---|
-| [Storage / battery](components/devices.md) with state of charge | [`StorageDevice`](@ref) | promotion candidate |
-| [EV charging](ev/index.md) (V1G / V2G) with availability & departure energy | [`EVDevice`](@ref), [`ChargingSession`](@ref) | promotion candidate |
-| [Advanced inverter](ibr/index.md) (circuit-aware IBR) | [`AdvancedInverter`](@ref) | experimental |
-| [Phase-aware inverter controls](components/inverter_controls.md) (local three-leg laws) | [`SequenceController`](@ref) | research prototype |
-| [IVQ battery](components/ivq_battery.md) (current–voltage–charge model) | [`IVQBattery`](@ref) | prototype |
-
-### Problem specifications
-
-New formulations over the same physics, via the staged `build_opf_model` /
-`optimize_opf!` / `generation_cost` / `extract_result` API.
-
-| Capability | Entry point | Direction | Maturity |
-|---|---|---|---|
-| [Multi-period OPF](problems/multiperiod.md) co-optimising many snapshots | [`solve_multiperiod_opf`](@ref) | forward | promotion candidate |
-| [Legacy WLS state estimation](problems/state_estimation.md) | [`solve_state_estimation`](@ref) | inverse | prototype |
-| [Constrained NLLS state estimation](problems/constrained_state_estimation.md) | [`solve_sparse_state_estimator`](@ref) | inverse | prototype |
-| [Parameter estimation](problems/parameter_estimation.md) (line lengths / taps) | [`solve_parameter_estimation`](@ref) | inverse | prototype |
-| [Inverse Carson reconstruction](problems/inverse_carson.md) (compatible overhead constructions) | [`solve_inverse_carson`](@ref) | inverse | prototype |
-| [Dynamic operating envelopes](tutorials/doe_getting_started.md) (active import/export capacity) | [`solve_operating_envelope`](@ref) | forward | research prototype |
-| [Bilevel PV/tap POC](problems/bilevel.md) (DiffOpt lower-level response) | [`solve_bilevel_pv_tap`](@ref) | hierarchical | proof of concept |
-
-### Bespoke algorithms
-
-Custom solution methods, currently including [HELM power
-flow](algorithms/helm.md). See [Bespoke algorithms](algorithms/index.md) for the
-method roadmap.
-
-## Installation
-
-BMOPFTools is not yet registered. Local tests and automated builds use commit
-`72e6cec22a66cf376c37ec4d64aef350b9f1100d`. From the PowerOptLab checkout,
-install the pinned source with the same setup script used by CI:
+For an existing checkout, install the pinned dependencies from its root:
 
 ```sh
 julia --project=. scripts/instantiate_pinned.jl
 ```
 
-This replaces a previous local BMOPFTools development-path override for this
-project without changing the sibling checkout. Use `Pkg.develop` only when
-intentionally testing uncommitted upstream work.
+Then choose a study topic below. For a complete worked experiment, follow the
+[battery-model comparison](tutorials/battery_storage_models.md) or
+[four-wire state-estimation study](tutorials/constrained_nlls_state_estimation.md).
+Both include figures, expected results and executable checks.
 
-Everything is SI at the interface (watts, vars, watt-hours, volts); per-unit
-conditioning inside each solve is handled through the engine's
-`opf_bases(ctx)` accessor.
+## Study topics
 
-## How it fits together
+Choose a chapter according to the quantities you want to estimate, optimise or
+check.
 
-See [Concepts](concepts.md) for how each capability layers over the BMOPFTools
-staged API, and [Contributing](contributing.md) for how to add your own and the
-promotion path back to the BMOPF spec. Each capability page carries a worked
-example.
+| Study topic | Question | Start here |
+|:--|:--|:--|
+| State and parameter estimation | Estimate voltages, line lengths, taps or overhead-line configurations from measurements and network data. | [Estimation methods](estimation/studies.md) |
+| Device models and scheduling | Select generator, battery and EV models, and calculate charging and discharging schedules. | [Device models](components/index.md) |
+| Inverter models and controls | Study voltage control, converter losses, conductor currents and DC-link requirements. | [Inverter studies](ibr/index.md) |
+| Dynamic operating envelopes | Calculate import or export limits and test them over specified operating conditions. | [DOE in 15 minutes](tutorials/doe_getting_started.md) |
+| Power flow and voltage operability | Compare power-flow solutions, examine static voltage margins and assess neutral reduction. | [Power-flow methods](algorithms/index.md) |
+| Numerical formulations and solvers | Compare mathematical representations, approximation errors and solver tolerances. | [Formulation studies](formulations/index.md) |
+
+The [API reference](api.md) lists functions, arguments and returned quantities.
+The [symbol index](symbol_index.md) provides an alphabetical lookup.
+[Concepts](concepts.md#Capability-status) summarises the development status of
+the models and methods.
+
+## Research context
+
+The research programme addresses three questions:
+
+1. Which network states and parameter values are consistent with measurements
+   and network records?
+2. Which additional measurements or changes in operating point would distinguish
+   the plausible models while respecting voltage and equipment limits?
+3. Which operating decisions remain feasible under those models?
+
+The package builds on the
+[BMOPFTools](https://github.com/frederikgeth/BMOPFTools.jl) reference
+current–voltage OPF formulation. It uses the same network equations, with an
+explicit neutral conductor and per-unit scaling, and adds models through the
+public model-building functions.
+
+The current package provides separate estimation, optimisation and checking
+methods. Joint network-model identification and automatic experiment design
+remain research objectives. The nonlinear DOE solvers also lack a general
+feasibility certificate for continuous uncertainty and utilisation sets.
+[Concepts](concepts.md) explains the modelling assumptions and conventions; the
+[research programme](research_program.md) sets out the longer-term questions.
+
+## Extending the package
+
+See [Contributing](contributing.md) for adding a model or solution method.
+Models with sufficiently established interfaces and validation may be proposed
+for inclusion in BMOPFTools.

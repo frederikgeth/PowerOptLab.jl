@@ -603,8 +603,9 @@ For scalable Ipopt studies:
 The additional nonlinearities remain nonconvex, so Ipopt still finds a local
 equilibrium/optimum. Large-scale validation should include independent starts
 and explicit scaling sweeps in both device count and controller gain. The
-current wrappers perform one solve with fixed smoothing; continuation and
-exact-law network re-solves are not implemented in this cleanup.
+smooth controlled solvers use fixed smoothing parameters. Separate
+[exact-law network calculations](closed_loop_evidence.md) are available for
+single inverters and fleets, with convergence, cycling and plant-solve checks.
 
 ### Accuracy, sparsity and conditioning
 
@@ -700,16 +701,15 @@ separate scalar thermal limiter can turn
 `i_cap_max` into the corresponding allowable ``\widetilde S_{max}`` after reserving the
 measured or modelled switching-current component.
 
-## Development roadmap
+## Supported studies and evidence limits
 
-The single maintained roadmap and completion status are in
-[Inverter-control study methodology](@ref ibr-control-study-methodology). Fleet
-construction, matched-case execution, and hardware sweeps are in place. The next
-milestones are the exact-law fixed-point oracle, the magnitude start/scale audit,
-and the licensed-clause novelty check; virtual-delta, a closest-feasible offline
-oracle, and sequence-service priority remain comparison laws after those.
+Fleet construction, matched-case execution and hardware sweeps are implemented;
+see [Inverter-control study methodology](@ref ibr-control-study-methodology).
+The [verification guide](verification.md) describes exact-law network
+comparisons, while the numerical-policy discussion above explains the current
+start, scale and per-unit restrictions. Virtual-delta, closest-feasible projection
+and sequence-service-priority laws remain outside the implemented policy set.
 
-The first implementation should not simply enable the existing four-leg
-per-phase equalities for `THREE_LEG`. That would confuse preferred curve values
-with independently realisable phase powers and would bypass the topology, DC,
-and modulation constraints that motivate this work.
+The three-leg plant constrains realizable coupled phase currents. Independently
+imposing preferred per-phase power curves would bypass the topology, DC and
+modulation constraints that the study is intended to retain.

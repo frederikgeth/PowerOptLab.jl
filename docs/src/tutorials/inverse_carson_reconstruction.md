@@ -3,12 +3,17 @@
 > **Audience:** power-system researchers · **Scope:** reconstructing plausible
 > overhead-line constructions from diagonal sequence impedance data.
 
-Inverse Carson is an inverse *construction* problem, not a magic conversion
-from sequence impedance to a unique geometry. Diagonal zero- and
+Inverse Carson tests which overhead-line constructions are consistent with
+sequence impedance; those observations need not identify a unique geometry. Diagonal zero- and
 positive-sequence data discard coupling information; several conductor catalogs,
 spacings, and neutral arrangements can fit the same reported values. This
 tutorial shows how to frame the problem honestly, fit a bounded catalog, assess
 ambiguity, and materialize models without erasing their assumptions.
+
+The code fragments illustrate the observation and candidate APIs. Supply your
+own candidate catalog, selected fit and parameter-profile settings before
+using them together. A complete single-candidate fit appears in the
+[inverse Carson reference](../problems/inverse_carson.md#Example).
 
 ## 1. Start from the observation model
 

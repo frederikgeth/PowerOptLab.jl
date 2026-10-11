@@ -143,3 +143,8 @@ scenarios and take the worst-case margin.
 - The consumer objective does not include negative export prices, curtailment
   compensation, or fairness. Those are policy choices that can be added as
   lower-level weights or a game layer later.
+
+## API reference
+
+The [bilevel control API](../api/bilevel.md) lists the public types, functions and result fields
+for this guide.

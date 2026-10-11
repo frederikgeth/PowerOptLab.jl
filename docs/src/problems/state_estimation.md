@@ -201,3 +201,8 @@ from the measurement's own `reference`.
 
 See the API reference for [`Measurement`](@ref), [`solve_state_estimation`](@ref),
 and [`StateEstimationResult`](@ref).
+
+## API reference
+
+The [state estimation API](../api/state_estimation.md) lists the public types, functions and result fields
+for this guide.

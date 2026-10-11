@@ -14,6 +14,10 @@ unbalance](@ref ibr-topology-under-unbalance), [finite DC-source and split-link
 carrier stress](@ref ibr-dc-source-and-split-link), and [carrier harmonics through
 L/LCL filters](@ref ibr-ac-harmonics-lcl).
 
+The parameter fragments below require a caller-supplied network with matching
+buses and terminals. They are model-selection examples, not a sequential
+script. The three focused studies above provide complete inputs and CI checks.
+
 ## Model-selection guide
 
 | Study question | Recommended model | Why |

@@ -1,7 +1,10 @@
 # [Inverter-control study methodology](@id ibr-control-study-methodology)
 
-This chapter turns the candidate [phase-aware local control laws](@ref
-ibr-phase-aware-control-laws) into an implementation and experimental programme.
+This chapter describes the implemented [phase-aware local control laws](@ref
+ibr-phase-aware-control-laws), their software layers and a methodology for
+comparative experiments. The local controller, fleet solver, matched-case
+runner and initial hardware-counterfactual infrastructure exist; a particular
+dataset campaign or higher-fidelity validation is separate evidence.
 The goal is to compare control laws on LV networks with many PV inverters, then
 quantify how each law changes AC conductor-current requirements,
 DC-link capacitance, capacitor ripple-current rating, losses, curtailment, and
@@ -46,7 +49,10 @@ Primary response variables are:
 
 ## Software layers
 
-The implementation should have four layers with one-way dependencies.
+The implementation separates four layers. The
+[control API](../components/inverter_controls.md) and
+[network study guide](network_control_studies.md) document their current
+constructors, supported plant/topology, inputs and outputs.
 
 ### 1. Physical plant
 
@@ -61,30 +67,12 @@ out of scope; they must not complicate the first control-law comparison.
 
 ### 2. Controller primitives
 
-Add `src/components/inverter_controls.jl` containing no network-study logic:
+`src/components/inverter_controls.jl` implements numeric controller primitives,
+[`SequenceController`](@ref), typed current targets and the controlled-device
+wrapper. Use their public constructors rather than copying a struct definition:
+constructor validation and field layouts are part of the implementation.
 
-```julia
-abstract type AbstractInverterControlLaw end
-abstract type AbstractPositiveSequencePolicy end
-abstract type AbstractUnbalancePolicy end
-abstract type AbstractLimiterPolicy end
-abstract type AbstractCurrentTarget end
-
-struct PiecewiseLinearLaw
-    x::Vector{Float64}
-    y::Vector{Float64}
-end
-
-struct SequenceController{P,U,L,T} <: AbstractInverterControlLaw
-    positive::P
-    unbalance::U
-    limiter::L
-    current_target::T
-    power_voltage_floor::Float64
-end
-```
-
-The concrete first policies should be:
+The implemented policies include:
 
 - `AverageVoltageVoltVarWatt` — the legacy mean-magnitude comparator;
 - `PositiveSequenceVoltVarWatt` — ``|U_1|`` Volt-var with a maximum-phase
@@ -106,7 +94,8 @@ Watt/var/proportional P/Q priority is implemented. Positive-sequence-power versu
 negative-sequence-balance priority, virtual-delta, and closest-feasible
 projection policies can be added without changing the plant or study interfaces.
 
-Every law needs two evaluators with the same field semantics:
+The supported controller has a pure numeric exact evaluator and a JuMP stamping
+method:
 
 ```julia
 evaluate_exact(control, measurement, request, ratings)
@@ -114,22 +103,17 @@ stamp_smooth_control!(ctx, control, request, inverter, inverter_handles)
 ```
 
 The exact evaluator is a pure numeric firmware oracle with exact PWL corners,
-comparisons, and saturation. The smooth evaluator adds JuMP expressions and
-equalities. Their output records should use the same names so exact-versus-smooth
-residuals are automatic.
+comparisons, and saturation. The stamping method adds the smooth JuMP expressions
+and equalities.
+[`evaluate_smooth`](@ref) evaluates the numeric surrogate, while extracted
+control results retain exact-versus-smooth residuals. These are implemented
+checks at the returned point, not an independent exact-law network solve.
 
 ### 3. Plant/controller composition
 
-Do not add every experimental control field to `AdvancedInverter`. Preserve its
-backward-compatible plant API and compose it with a typed decorator:
-
-```julia
-struct ControlledDevice{D<:AbstractDevice,C<:AbstractInverterControlLaw} <:
-       AbstractDevice
-    device::D
-    controller::C
-end
-```
+[`ControlledDevice`](@ref) composes an [`AdvancedInverter`](@ref) with a typed
+controller. The physical plant retains its own API and equations. The public
+constructor is `ControlledDevice(inverter, controller)`.
 
 The device lifecycle becomes:
 
@@ -156,8 +140,10 @@ The first implementation supports `ControlledDevice{AdvancedInverter}` only.
 This composition boundary keeps local-law data out of the physical plant.
 
 Control parameters are immutable law data. Time-varying inputs such as PV
-availability, enable flags, or firmware modes belong
-to a separate `ControlRequest`/schedule passed by the problem builder. This keeps
+availability, enable flags, or firmware modes belong in request/schedule data.
+The current [`InverterControlRequest`](@ref) carries available/rated active power
+and reactive-power scaling; it does not implement an arbitrary firmware-mode
+schedule. This keeps
 one controller configuration reusable across thousands of snapshots and avoids
 placing arbitrary functions inside reproducibility-critical device structs.
 
@@ -173,8 +159,8 @@ formulation-level slice:
 - extract device-local and network-wide results; and
 - expose a single-snapshot solve suitable for warm starts and outer parallelism.
 
-Keep dataset-specific ingestion, scenario generation, plots, and batch output in
-`scripts/studies/inverter_controls/`. The library API should consume prepared
+Keep dataset-specific ingestion, scenario generation, plots and batch output
+outside the core library. The library API should consume prepared
 BMOPF networks and typed device/request collections rather than know the schema
 of one research dataset.
 
@@ -401,9 +387,12 @@ Every published scenario should retain:
 - KCL, device, switching, current, and capacitor residuals; and
 - solver options, starts, status, iterations, and timing.
 
-The reviewed reference environment for the initial controller suite was Julia
+The historical reference environment for the initial controller suite was Julia
 1.12.6, JuMP 1.31.1, Ipopt 1.15.0, and BMOPFTools commit
-`4c0ec8b9c947eea5cd94966f32d2c97f65115b87`. Examples and publication runs
+`4c0ec8b9c947eea5cd94966f32d2c97f65115b87`. That is a historical run, not the
+current source pin. Install the revision declared in `Project.toml` using
+`scripts/instantiate_pinned.jl`, and record the actual environment used.
+Examples and publication runs
 should set `tol` explicitly (the initial cases use `1e-8`) rather than rely on a
 solver-version default, and should record all feasibility tolerances separately
 from controller smoothing widths.
@@ -413,53 +402,27 @@ unbalanced, current-limited, and ripple-limited points against an averaged model
 and a switched EMT model. The network-wide NLP supplies breadth; the higher-
 fidelity subset supplies confidence in the mechanisms used for sizing.
 
-## Implementation sequence
+## Implemented study support and evidence limits
 
-Steps 1--5 are implemented by the public BMOPFTools smooth-PWL API and the
-PowerOptLab phase-aware control component. The exact and smooth evaluators,
-three voltage-reference policies, converter/grid current targets, dominant
-conflict policy, converter-terminal power extraction, three-leg plant
-composition, supported-unit regression, and extracted exact-versus-smooth current
-residual are covered by unit tests. The remaining sequence starts with fleet
-construction; batteries are outside this programme.
+The local controller, fleet construction, matched-case execution and initial
+hardware counterfactuals are implemented. Use the
+[network study guide](network_control_studies.md) for those interfaces and their
+supported inputs. Unit and regression tests establish the declared algebraic,
+physical-balance and result contracts; dataset-specific performance and sizing
+conclusions need their own recorded campaigns.
 
-1. **Complete:** submit the BMOPFTools public smooth-PWL API PR.
-2. **Complete:** add PowerOptLab exact sequence/curve/limiter numeric helpers and tests.
-3. **Complete:** add `SequenceController`, `ControlledDevice{AdvancedInverter}`, and semantic
-   control handles.
-4. **Complete:** stamp the smoothed worst-phase and negative-sequence admittance laws into one
-   advanced inverter; verify exact/smooth agreement.
-5. **Complete:** add continuous normalised conflict handling, rated/available
-   Volt-watt bases, P/Q priority, plant-side converter/grid current and
-   apparent-power backoff, optional `dv2_max` backoff, and binding-limit tests.
-6. **Complete:** add multi-device single-snapshot construction using
-   per-component `OpfDeviceBuilder` replacement for dataset IBRs.
-7. **Complete:** add deterministic tidy device/phase extraction, ownership
-   provenance, physical-balance tests, and supported-unit checks. Large-network
-   scaling benchmarks remain part of the case-study campaign rather than the
-   unit suite.
-8. **Infrastructure complete:** add deterministic matched-case execution,
-   failure retention, duration/weight-aware summaries, and paired variant
-   differences. The dataset-specific fixed-hardware penetration campaign is the
-   next research run.
-9. **Initial infrastructure complete:** expand matched cases over explicit
-   converter-current, grid-current, DC-capacitance, and capacitor-current
-   counterfactuals; report achieved-current and closed-form 2ω requirements.
-   Dataset-specific service predicates and complete capability frontiers are
-   the next research run.
-10. **Open:** implement the exact-law fixed-point oracle described in
-    [Verification and benchmark cases](@ref ibr-verification) and report
-    ``\|\Delta V\|_\infty`` between the firmware-law and smooth-law equilibria on
-    at least one unbalanced feeder per control law. Until this exists, the
-    reported exact/smooth residual bounds controller-algebra smoothing only, and
-    equilibrium agreement is an assumption of every comparison above.
-11. **Open:** audit the starts and scales of every lifted magnitude, decide
-    whether the controller selectors become rating-relative, and re-measure the
-    `per_unit=true` restriction against the shifted-expression representation.
-    The evidence and the three specific defects are in the numerical-policy
-    section of [Phase-aware local control laws](@ref
-    ibr-phase-aware-control-laws). This gates any study on devices whose ratings
-    differ by more than about a decade, and any MV study.
-12. **Open:** read the licensed AS/NZS 4777.2 and IEEE 1547-2018 clauses that
-    specify the monitored voltage for a multi-phase DER, and settle the novelty
-    framing of the worst-phase envelope before writing it up.
+Exact-versus-smooth residuals compare controller commands at the smooth model's
+returned operating point. A separate exact-law equilibrium calculation is
+available for single inverters and fleets; see
+[closed-loop comparisons](closed_loop_evidence.md). Report its voltage/current
+residuals, convergence, cycling and plant-solve status alongside the differences
+from the smooth solution. It is a quasi-static comparison, not a test of dynamic
+stability.
+
+Coupled controller modelling requires per-unit coordinates. The
+[numerical-policy discussion](phase_aware_control_laws.md) describes scaling
+choices and remaining plant-conditioning limitations. Use
+[`inverter_control_scaling_audit`](@ref) to record the initial values, scales and
+rating-relative smoothing widths used in a study. Hardware conclusions also require the matched
+higher-fidelity validation described above. Standards compliance and novelty
+claims require clause-specific evidence beyond these algebraic tests.

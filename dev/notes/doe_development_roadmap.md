@@ -1,8 +1,13 @@
 # DOE development roadmap
 
+> Developer workflow record, excluded from the documentation build.
+> Current user-facing contracts live in the DOE reference guide.
+
 > **Status date:** 5 September 2026 · **Purpose:** implementation boundary and
-> next research increments; scientific claims and citations live in the
-> [literature evidence register](doe_literature_evidence.md)
+> next research increments recorded at that date. This page includes historical
+> workflow notes; current callable behavior is documented in the
+> [problem reference](../../docs/src/problems/operating_envelope.md), and scientific evidence in the
+> [literature evidence register](../../docs/src/problems/doe_literature_evidence.md).
 
 PowerOptLab treats DOE quantification as a framework for comparing declared
 geometries, network models, uncertainty sets, information structures, and
@@ -22,8 +27,8 @@ pointwise perfect recourse for reproducing anticipative formulations.
 | Statistical evidence | Held-out coverage, leakage audits, capacity curves, model pairing, shift and probability-calibration diagnostics | Assumptions such as independence, exchangeability, and stationarity are declared, not inferred |
 | Reproducibility | Study hashes, manifests, benchmark rows, eight executable tutorials, committed synthetic fixtures | Real datasets and estimator-specific materializers remain study-specific |
 
-The cleanup adds [faithful replay](../tutorials/doe_faithful_replay.md) and an
-[analytic reference suite](../tutorials/doe_analytic_reference.md). One physical
+The cleanup adds [faithful replay](../../docs/src/tutorials/doe_faithful_replay.md) and an
+[analytic reference suite](../../docs/src/tutorials/doe_analytic_reference.md). One physical
 IBR may bind only one participant; terminal declarations must match the engine,
 and legacy ports are single-phase. Numerical limits remain unresolved rather
 than becoming candidate violations. The separate PF adapter rejects droop
@@ -37,9 +42,9 @@ Automatic model pairing requires a declared shared namespace. Probability scores
 separate original and bin-mean forecasts through an explicit Brier remainder.
 Execution-derived experiment manifests remain deferred to a later pass.
 
-## Branch-completion gate
+## Historical branch-completion gate
 
-The current DOE research branch is ready for review when:
+The original research-branch review checklist was:
 
 - the focused DOE tests and documentation build pass;
 - the committed benchmark writes stable-schema rows from a clean checkout;
@@ -124,13 +129,13 @@ decision under study.
 
 Every new research increment should update four places:
 
-1. the [DOE start page](../tutorials/doe_getting_started.md), only if the core
+1. the [DOE start page](../../docs/src/tutorials/doe_getting_started.md), only if the core
    learning path changes;
-2. the [problem specification](operating_envelope.md), for stable semantics;
-3. the [literature evidence register](doe_literature_evidence.md), for new
+2. the [problem specification](../../docs/src/problems/operating_envelope.md), for stable semantics;
+3. the [literature evidence register](../../docs/src/problems/doe_literature_evidence.md), for new
    scientific evidence; and
 4. this roadmap, for implementation status and the next acceptance gate.
 
 Detailed historical reasoning remains in the [DOE quantification scientific
-audit](doe_quantification_review.md). API additions belong in the [DOE API
-reference](../api/operating_envelope.md), not in introductory tutorials.
+audit](../../docs/src/problems/doe_quantification_review.md). API additions belong in the [DOE API
+reference](../../docs/src/api/operating_envelope.md), not in introductory tutorials.

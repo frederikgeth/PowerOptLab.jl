@@ -1,8 +1,13 @@
-# Storage & EV devices
+# Power-energy battery storage
 
 > **Kind:** Component model · **Maturity:** promotion candidate · **Direction:** forward · **Temporal:** inter-temporal (state of charge)
 
-Devices are the reusable building blocks that
+[`StorageDevice`](@ref) describes battery storage in power-energy (PE) space.
+Start with the [battery storage overview](battery_storage.md) or the
+[PE versus IVQ comparison](../tutorials/battery_storage_models.md) when choosing
+model fidelity.
+
+PE devices are the reusable building blocks that
 [`solve_multiperiod_opf`](@ref) stamps into each network snapshot. A device is
 described by an SI-valued struct; the package handles the per-unit scaling, the
 current-injection stamping into the engine's KCL, and the inter-temporal
@@ -52,7 +57,7 @@ efficiencies in `(0, 1]`, terminal existence in every snapshot, and an EV
 availability entry for every interval before constructing the optimization
 model.
 
-## Battery / storage
+## Usage
 
 ```julia
 using PowerOptLab
@@ -76,38 +81,19 @@ power factor). Multi-phase inverters are supported via `phase_terminals`; the
 
 ## Electric vehicles
 
-An [`EVDevice`](@ref) is a storage device that is only controllable while plugged
-in and must reach a target energy by departure:
-
-```julia
-ev = EVDevice(
-    id               = "ev1",
-    bus              = "bus1",
-    p_charge_max     = 20e3,               # W  (V1G: no discharge)
-    energy_max       = 40e3,               # Wh
-    energy_init      = 10e3,               # Wh
-    available        = [true, true, true, false],  # unplugged in period 4
-    departure_energy = 30e3,               # Wh required …
-    departure_period = 3,                  # … by the end of period 3
-)
-```
-
-While a period is unavailable the charger is idle and the state of charge is
-held. Set `p_discharge_max > 0` for bidirectional (V2G) operation, letting the
-vehicle discharge into expensive periods subject to its departure requirement.
-
-See the API reference for the full field list of [`StorageDevice`](@ref) and
-[`EVDevice`](@ref).
-
+EV scheduling reuses this energy balance and port model, with availability and
+departure requirements. See the [electric vehicle overview](../ev/index.md)
+and the [compact EVDevice guide](../ev/legacy_device.md) for EV-specific usage.
 
 ## Dedicated vehicle, equipment and session objects
 
-Use [`EV`](@ref), [`EVSE`](@ref) and [`ChargingSession`](@ref) for fixed AC outlet
-assignments, capability/permission intersections, occupancy conflicts, and
-optional state-dependent charging acceptance. Start with the
-[scientific EV guide](../ev/index.md), its executable tutorials and annotated
-[literature evidence](../ev/literature.md).
+The [session guide](../ev/sessions.md) explains [`EV`](@ref), [`EVSE`](@ref) and
+[`ChargingSession`](@ref), including fixed AC outlet assignments, capability and
+permission intersections, and occupancy conflicts.
+
+## Results and API
 
 PE results expose `energy_wh` alongside the compatible Wh-valued `soc`, phase
 currents/powers and independent physical residuals in `diagnostics`. Inspect
-those and the normalized solve status before interpreting a schedule.
+those and [`solve_status`](@ref) before interpreting a schedule. For the full
+storage field list see the [battery storage API](battery_storage_api.md).

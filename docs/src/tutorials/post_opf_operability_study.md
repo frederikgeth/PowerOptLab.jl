@@ -1,5 +1,7 @@
 # Single-snapshot post-OPF operability study
 
+<!-- study-executable -->
+
 > **Audience:** power-system researchers · **Scope:** one solved native-static
 > equilibrium, with optional finite stress and load-model comparisons.
 
@@ -25,6 +27,52 @@ julia --project=. scripts/run_post_opf_operability_study.jl
 The script asserts that all declared snapshots and finite rows pass. Its final
 `PASS` line means only that this finite, declared study completed; it is not a
 global solvability or operating-envelope claim.
+
+From a checkout with [pinned dependencies installed](../getting_started.md),
+run `julia --project=. scripts/run_study_tutorials.jl`, or paste this page's
+Julia blocks into a fresh session in order. CI executes the published blocks
+on Julia 1.10 and current stable.
+
+## Build the teaching feeder
+
+The data are synthetic: a 230 V source supplies a 2 kW constant-power load
+through phase and neutral conductors of 0.05 Ω each. Only the source neutral
+is grounded. This single-phase example keeps the reference calculation simple
+while retaining neutral displacement.
+
+```julia
+using PowerOptLab
+using BMOPFTools: parse_bmopf, solve_pf, SIUnitsScaling
+
+function resistive_feeder(; power_w=2000.0, model="constant_power")
+    parse_bmopf("""
+    {"bus": {
+       "grid": {"terminal_names": ["1", "n"],
+                "perfectly_grounded_terminals": ["n"]},
+       "loadbus": {"terminal_names": ["1", "n"]}},
+     "voltage_source": {
+       "supply": {"bus": "grid", "terminal_map": ["1"],
+                  "v_magnitude": [230.0], "v_angle": [0.0]}},
+     "linecode": {"cable": {"R_series_1_1": 0.05, "R_series_2_2": 0.05}},
+     "line": {"service": {"bus_from": "grid", "bus_to": "loadbus",
+               "terminal_map_from": ["1", "n"], "terminal_map_to": ["1", "n"],
+               "linecode": "cable", "length": 1.0}},
+     "load": {"demand": {"bus": "loadbus", "terminal_map": ["1", "n"],
+               "configuration": "SINGLE_PHASE", "model": "$model",
+               "p_nom": [$power_w], "q_nom": [0.0], "v_nom": [230.0]}}}
+    """; from_string=true)
+end
+
+net = resistive_feeder()
+vbase = 230.0
+loop_resistance = 0.10
+load_voltage_ref = (vbase + sqrt(vbase^2 - 4loop_resistance*2000.0))/2
+neutral_voltage_ref = (vbase - load_voltage_ref)/2
+```
+
+The high-voltage root of ``U^2-230U+0.10P=0`` gives approximately 229.127 V
+phase-to-neutral at the load and 0.4364 V neutral-to-earth. This independent
+reference is conditional on the resistive, unity-power-factor circuit.
 
 ## 1. Define the claim before running the checker
 
@@ -54,6 +102,7 @@ scope = operability_scope_audit(net)
 scope["status"]
 scope["topology"]
 scope["unsupported_reasons"]
+@assert scope["status"] == :supported
 ```
 
 The checker consumes the SI-valued solution returned by BMOPFTools. Pass the
@@ -62,10 +111,11 @@ context. For a non-SI policy, provide voltage and current bases for every bus;
 the checker rejects incomplete base maps rather than inventing defaults.
 
 ```julia
-using BMOPFTools
+using BMOPFTools: solve_pf, SIUnitsScaling
 using PowerOptLab
 
 pf = solve_pf(net; per_unit=false)
+@assert pf["termination_status"] in ("LOCALLY_SOLVED", "OPTIMAL")
 
 spec = OperabilitySpec(
     scaling_policy = SIUnitsScaling(),
@@ -78,6 +128,7 @@ spec = OperabilitySpec(
 
 report = check_opf_operability(net, pf; spec)
 report.status
+@assert report.status == :pass
 ```
 
 The detailed result keeps the ordering and physical interpretation needed for
@@ -109,6 +160,12 @@ counts. It is intentionally not a contingency or envelope row.
 ```julia
 row = operability_snapshot_row(report; snapshot_id="base")
 
+@assert row.status == :pass
+@assert row.endpoint_status == :pass
+@assert abs(row.minimum_terminal_voltage - load_voltage_ref) < 1e-4
+@assert row.maximum_vuf_status == :not_applicable
+println("Operability: ", row.status, "; minimum voltage = ",
+        round(row.minimum_terminal_voltage; digits=4), " V")
 row.status
 row.schema_version
 row.claim_scope
@@ -159,6 +216,10 @@ For a collection of already solved cases, map the stable checker over the
 cases and retain the case identifier in `snapshot_id`:
 
 ```julia
+half_load = resistive_feeder(power_w=1000.0)
+solved_cases = [(id="base", network=net, solution=pf),
+                (id="half_load", network=half_load,
+                 solution=solve_pf(half_load; per_unit=false))]
 rows = [
     operability_snapshot_row(
         check_opf_operability(case.network, case.solution; spec),
@@ -166,6 +227,7 @@ rows = [
     )
     for case in solved_cases
 ]
+@assert all(row.status == :pass for row in rows)
 ```
 
 This is the appropriate place to add a contingency label later. The processor
@@ -195,6 +257,10 @@ stress_rows = operability_stress_rows(net, pf;
 )
 
 stress_summary = operability_stress_summary(stress_rows)
+@assert length(stress_rows) == 6
+@assert all(row.status == :pass for row in stress_rows)
+@assert all(row.boundary_status == :not_observed for row in stress_summary)
+println("Operability stress study: ", length(stress_rows), " finite passing rows")
 ```
 
 Each row retains the direction, loading parameter, endpoint status, certificate
@@ -202,14 +268,23 @@ status, the best finite-scan contraction margin, and any solve/checking error.
 A missing non-pass
 boundary is reported as `:not_observed`; it is not an unlimited margin.
 
-For ZIP or exponential uncertainty, label each finite campaign and combine the
+For load-law uncertainty, label each finite campaign and combine the
 rows with `operability_stress_ensemble_rows`:
 
 ```julia
+alternative_net = resistive_feeder(model="constant_current")
+alternative_pf = solve_pf(alternative_net; per_unit=false)
+alternative_rows = operability_stress_rows(alternative_net, alternative_pf;
+    spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
+                         compute_fixed_point_certificate=true),
+    directions=directions, lambdas=[0.0, 0.5, 1.0],
+    solve=network -> solve_pf(network; per_unit=false))
+@assert all(row.status == :pass for row in alternative_rows)
 ensemble = operability_stress_ensemble_rows(Dict(
     "nominal" => stress_rows,
     "alternative_load_model" => alternative_rows,
 ))
+@assert all(row.status == :pass for row in ensemble)
 ```
 
 The resulting table supports comparisons across declared models. It does not
@@ -221,13 +296,19 @@ The current residual scope is the native static `ybus_linearized` model:
 constant-P/I/Z, ZIP, and finite exponential loads with supported WYE,
 SINGLE_PHASE, and DELTA connections. Generators, IBR controls, unsupported
 load laws, and unsupported connections are returned as `:not_applicable` with
-reasons in three places:
+reasons in the report and its provenance. A missing source reference is also
+reported as unsupported, as the deliberately incomplete network below shows:
 
 ```julia
-report.status
-report.unsupported
-report.checks["scope"]
-report.provenance["operability"]
+unsupported_net = deepcopy(net)
+delete!(unsupported_net, "voltage_source")  # No prescribed voltage reference.
+unsupported_report = check_opf_operability(unsupported_net, pf; spec=spec)
+@assert unsupported_report.status == :not_applicable
+@assert !isempty(unsupported_report.unsupported)
+unsupported_report.status
+unsupported_report.unsupported
+unsupported_report.checks["scope"]
+unsupported_report.provenance["operability"]
 ```
 
 Do not reinterpret `:not_applicable` as a pass or a failed power-flow solve.
@@ -252,5 +333,4 @@ This record makes the positive claim auditable without implying contingency
 coverage, global branch discovery, or dynamic voltage stability.
 
 See [Post-OPF operability](../problems/operability.md) for the full result
-contract and [the roadmap](../problems/post_opf_operability_roadmap.md) for the
-remaining certificate and study extensions.
+contract, equations, certificate interpretation and supported study scope.

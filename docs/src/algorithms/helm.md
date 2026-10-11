@@ -162,3 +162,8 @@ The test suite (`test/helm_tests.jl`) checks, always:
 Gated on OpenDSSDirect: node-to-earth voltage parity on the `pf_comparison`
 decks (sub-mV on line/delta/capacitor decks; a few mV through Yd/Dy
 transformers), and a 3-way HELM ≈ Ipopt `solve_pf` ≈ OpenDSS oracle.
+
+## API reference
+
+The [HELM API](../api/helm.md) lists the public types, functions and result fields
+for this guide.

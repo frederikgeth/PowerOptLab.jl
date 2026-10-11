@@ -554,3 +554,8 @@ the point; a positive value is a dense numerical audit, not a formal global
 certificate. Every per-sample voltage constraint is linear in the phasor
 variables and ripple auxiliary `D`, while the ripple link and other optional
 device features make the full model a smooth NLP (Ipopt).
+
+## API reference
+
+The [advanced inverter API](../api/advanced_inverter.md) lists the public types, functions and result fields
+for this guide.

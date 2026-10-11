@@ -4,9 +4,9 @@
 > claims, examples, and research boundaries of the PowerOptLab DOE framework.
 
 For a tutorial-first introduction, begin with [Dynamic operating envelopes in
-15 minutes](../tutorials/doe_getting_started.md). For implemented capability
-versus proposed research, use the [DOE development
-roadmap](doe_development_roadmap.md).
+15 minutes](../tutorials/doe_getting_started.md). For implemented capability and its limits, use the
+[DOE problem reference](operating_envelope.md); the
+[research program](../research_program.md) describes the wider scientific direction.
 
 Dynamic operating envelope (DOE) does not name one mathematical object across
 the literature. It can mean a time-varying import/export limit, a feasible

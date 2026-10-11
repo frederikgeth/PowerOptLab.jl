@@ -320,7 +320,7 @@ BMOPFTools release containing `line_yprim` (introduced by PR #348).
     `reference`: `:pflow`/`:qflow` use the measured conductor's voltage to
     **earth**.  On a four-wire line with a displaced neutral that is not the
     phase-to-neutral power a real meter reports.  A per-measurement reference
-    is [on the roadmap](../estimation/state_of_the_art.md#Roadmap).
+    remains an [open measurement-model question](../estimation/state_of_the_art.md#Open-questions).
 
 ## Exact devices and continuation
 
@@ -456,3 +456,8 @@ observed state. Failure to reach feasibility at the iteration limit is
 `:constraint_not_satisfied`, not a claim that the mathematical problem is
 infeasible. Invalid initial device domains and detected negative curvature have
 explicit non-publishable statuses described above.
+
+## API reference
+
+The [state estimation API](../api/state_estimation.md) lists the public types, functions and result fields
+for this guide.

@@ -1,4 +1,4 @@
-# [Phase-aware inverter-control API](@id inverter-control-api)
+# [Phase-aware control modeling guide](@id inverter-control-api)
 
 PowerOptLab implements the first manufacturer-facing law from the
 [phase-aware control design](@ref ibr-phase-aware-control-laws) as a closed-form
@@ -501,13 +501,15 @@ plant-aware backoff.
     network equilibrium, because a firmware controller iterating against the
     real network would settle at a different voltage.
 
-    Closing that gap needs an independent oracle: a Picard/Gauss–Seidel
-    iteration that evaluates [`evaluate_exact`](@ref) at the current voltage,
-    imposes the resulting current on an otherwise uncontrolled power flow, and
-    repeats to a fixed point, then reports ``\|\Delta V\|`` against the smooth
-    equilibrium. That oracle is not implemented. Until it is, equilibrium-level
-    agreement between the firmware law and the network surrogate is an
-    assumption of every study on this page, not a tested property. Local
+    For a separate network equilibrium calculation, use
+    [`solve_inverter_control_network_fixed_point`](@ref), or
+    [`solve_controlled_inverter_fleet_network_fixed_point`](@ref) for several
+    inverters. These routines evaluate the exact law, fix its current targets
+    and solve the physical network repeatedly. Compare the returned voltage and
+    current differences only after checking convergence, cycling and plant-solve
+    status. The [equilibrium comparison guide](../ibr/closed_loop_evidence.md)
+    describes the inputs and results. This is a quasi-static calculation; it
+    does not establish dynamic stability or uniqueness. Local
     Volt-var droop is known to have equilibrium existence, uniqueness, and
     convergence conditions of its own; see Farivar, Chen, and Low and Zhu and
     Liu in [IBR references](@ref ibr-references).
@@ -603,3 +605,8 @@ converter-terminal total and sequence powers, `current_scale`, `power_scale`,
 margin, curtailment, and the exact/smooth residual. Compare controls first with
 fixed hardware, then perform outer sweeps over `i_max`, `c_dc`, and capacitor
 ripple-current rating.
+
+## API reference
+
+The [phase-aware control API](../api/inverter_controls.md) lists the public types, functions and result fields
+for this guide.

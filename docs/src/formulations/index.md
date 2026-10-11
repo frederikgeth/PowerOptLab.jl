@@ -1,21 +1,20 @@
 # Function formulations
 
-PowerOptLab separates **what a control law means** from **how its equations are
-encoded**. Define a bounded continuous piecewise-linear (PWL) curve in physical
-units, specify whether an occurrence tracks that curve or imposes a limit, and
-choose a numerical representation and a solver for the resulting whole model.
+Volt-var and volt-watt characteristics can be represented by smooth
+approximations, exact piecewise-linear constraints, complementarity conditions
+or convex-hull relaxations. The choice affects the optimisation problem, its
+numerical conditioning and the error relative to the specified characteristic.
 
-The toolkit supports smooth approximations, exact segment graphs,
-complementarity graphs, and convex-hull relaxations. It also provides physical
-error bounds, purpose-specific magnitude approximations, configurable experiment
-runners, and integration with the advanced inverter models.
+This chapter compares those representations for bounded continuous
+piecewise-linear (PWL) curves in physical units. It also covers approximation
+error, solver tolerances and their use in the inverter models.
 
-## Choose a starting point
+## Worked comparisons
 
 | Your task | Worked guide |
 |:--|:--|
-| Model volt-var or volt-watt without tying the data to a solver | [Control intent and compilation](compilation.md) |
-| Exploit voltage bounds or distinguish tracking from a power limit | [Bounds, equalities and limits](bounds_and_relations.md) |
+| Model volt-var or volt-watt without tying the data to a solver | [Volt-var and volt-watt formulations](compilation.md) |
+| Exploit voltage bounds or distinguish tracking from a power limit | [Voltage bounds and constraints](bounds_and_relations.md) |
 | Compare encodings, scales, starts and solver settings reproducibly | [Configurable experiments](experiments.md) |
 | Select smoothing in a physical feeder/inverter model | [Physical inverter example](controllers.md) |
 | Understand approximation error, derivatives and relaxation witnesses | [Mathematics and analytic reference](theory.md) |
@@ -23,15 +22,14 @@ runners, and integration with the advanced inverter models.
 | Interpret OpenDSS tolerances and choose a whole-model solver | [Tolerances and solver choice](tolerances_and_solvers.md) |
 | Implement a different smooth approximation | [Smoothing-family extension](extensions.md) |
 
-For a first encounter, follow compilation → bounds → experiments. Power-system
-modelers can then use the physical inverter example; OR researchers can use the
-analytic reference and solver guide to examine feasible-set and stationarity
-questions. The examples execute during documentation builds. The
-[API reference](api.md) lists constructors and options; the
-[references](references.md) connect the mathematics to primary literature and
-external software.
+Start with the control-characteristic example, the effect of voltage bounds,
+and the numerical experiments. The feeder example shows how formulation choices
+affect an inverter study. The analytical reference examines approximation error
+and stationary solutions. The examples are run when the documentation is built.
+The [API reference](api.md) gives the function arguments, and the
+[references](references.md) identify the relevant literature and software.
 
-## Choose the modeling interface
+## Choose the modelling interface
 
 | Interface | Modeler's responsibility | Returned object |
 |:--|:--|:--|
@@ -46,16 +44,16 @@ limit over a concave portion may reduce exactly to linear inequalities even when
 tracking the same curve needs a nonlinear or discrete representation. Scalar
 convexity does not establish convexity of the network model.
 
-## Read results with the right meaning
+## Interpreting the formulations
 
-- **Canonical curve:** the prescribed PWL function, before approximation.
-- **Surrogate graph:** equality to a smooth approximation; its error budget is a
+- **Specified characteristic:** the prescribed PWL function, before approximation.
+- **Smoothed characteristic:** equality to a smooth approximation; its error budget is a
   function-value bound, not a network equilibrium or DOE safety guarantee.
-- **Exact graph or relation:** a mathematically equivalent encoding on the
+- **Exact constraints:** a mathematically equivalent formulation on the
   declared domain; finite solver tolerances still require candidate checks.
 - **Outer relaxation:** a superset of the intended feasible set. A graph hull may
   admit points off the curve; some projected inequality relations are exact.
-- **Candidate audit:** residuals at a returned point, separate from solver success,
+- **Solution checks:** residuals at a returned point, separate from solver success,
   stationarity, global optimality and physical safety.
 
 The library specializes scalar occurrences using declared bounds. It does not

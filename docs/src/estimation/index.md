@@ -2,14 +2,15 @@
 
 > **Kind:** Problem specification · **Direction:** inverse · **Maturity:** prototype
 
-State estimation is the inverse of power flow. Power flow asks *given the
-injections, what is the state?* Estimation asks *given noisy, incomplete,
-partly-wrong telemetry, what state best explains it — and how much should I
-trust the answer?*
+For calibration or line-construction questions, begin with the
+[estimation overview](studies.md). This page compares the two
+state estimators; their functions and arguments are listed in the
+[state estimation API](../api/state_estimation.md).
 
-PowerOptLab carries **two independent estimators** over the same network
-physics. They are not two solvers for one problem; they are two different
-problem statements, and the difference matters more than the numerics:
+State estimation determines bus voltages from measurements and an assumed
+network model. PowerOptLab provides a JuMP/Ipopt WLS estimator and a constrained
+nonlinear least-squares estimator. Their treatment of exact device equations,
+measurements and numerical solution differs.
 
 | | [Legacy WLS](../problems/state_estimation.md) | [Constrained NLLS](../problems/constrained_state_estimation.md) |
 |---|---|---|
@@ -17,24 +18,25 @@ problem statements, and the difference matters more than the numerics:
 | Statement | ``\min \sum_i (z_i - h_i(x))^2/\sigma_i^2`` | ``\min \tfrac12\lVert r(x)\rVert^2`` s.t. ``c(x)=0`` |
 | Engine | JuMP + Ipopt | own Gauss–Newton / Hachtel solvers |
 
-[Choosing a formulation](comparison.md) is the head-to-head, with the
-measured behaviour of both on the same problem.
+[Choosing a formulation](comparison.md) compares the two estimators on the
+same network and measurements.
 
 ## What both of them assume
 
-Read this before either page. These assumptions are shared, they are not all
-enforceable, and every one of them is a way an estimate can be confidently
-wrong:
+Both methods rely on the following assumptions. Errors in those assumptions
+can bias the estimate even when the numerical solver converges:
 
-* **Errors are independent, zero-mean, and Gaussian**, with a diagonal
-  covariance. Both estimators whiten by ``1/\sigma``; neither supports a
-  correlated covariance. A meter whose error is a calibration offset rather
-  than noise violates this, and no amount of redundancy repairs it. This is a
-  *likelihood* assumption, not a weighting convention — see
+* **Measurement weights are diagonal.** Both estimators scale residuals by
+  ``1/\sigma`` and do not support correlated measurement errors. Independent,
+  zero-mean Gaussian errors give the weighted least-squares objective its
+  maximum-likelihood interpretation. Least-squares fitting can also be used
+  under other error distributions, but the likelihood, covariance and residual
+  tests then need separate justification. A systematic meter offset requires
+  analysis of bias as well as random noise. See
   [likelihood, loss, and priors](maximum_likelihood.md).
 * **Topology and line parameters are exact.** Neither estimator hypothesises a
-  different switch status or a different impedance. A topology error surfaces
-  as a large residual that looks exactly like bad data. See
+  different switch status or a different impedance. A topology error can
+  produce large residuals or be partly absorbed into the estimated voltages. See
   [parameter estimation](../problems/parameter_estimation.md) and
   [inverse Carson](../problems/inverse_carson.md) for the complementary
   problems.
@@ -42,27 +44,29 @@ wrong:
   Convergence is not uniqueness, and neither estimator does multistart. The
   [current-magnitude tutorial](current_magnitude.md) shows two different
   states that both fit the same data exactly, each reported as converged.
-* **Redundancy is not observability, and observability is not a binary.**
-  Placement decides what is identified, and the smallest singular value
-  decides whether the identification is worth anything. See
+* **Observability requires rank; precision also depends on conditioning.**
+  Measurement placement determines which state directions are identified. Small
+  singular values indicate directions that are weakly supported by the data. See
   [observability](observability.md).
-* **A σ is a modelling claim, not a formality.** It sets the weight, and it is
-  the only channel through which you say how much a reading should move the
-  answer. A pseudo-measurement given a meter's σ *is* a meter.
+* **Standard deviations determine the relative measurement weights.** Assign
+  uncertainties according to the evidence for each reading or forecast. Giving
+  a load forecast the precision of a calibrated meter can overstate the
+  information it contributes.
 
 ## Where to go next
 
+* [Worked state-estimation study](../tutorials/constrained_nlls_state_estimation.md) —
+  estimate a displaced neutral, inspect residuals and remove measurements to test
+  observability. The complete code and assertions run in CI.
 * [Choosing a formulation](comparison.md) — the comparison, and which to reach for.
 * [Likelihood, loss, and priors](maximum_likelihood.md) — when these estimators
   coincide with Gaussian MLE, when a prior makes the result MAP, and which error
   models each engine can represent.
 * [Legacy WLS state estimation](../problems/state_estimation.md) — reference.
 * [Constrained NLLS state estimation](../problems/constrained_state_estimation.md) — reference.
-* [Modelling tutorial](../tutorials/constrained_nlls_state_estimation.md) — exact
-  vs uncertain information, grounding, and diagnostics.
 * [Observability and under-observed estimation](observability.md) — which
-  parts of an estimate are supported by measurements and which are decoration.
-* [Current-magnitude measurements](current_magnitude.md) — why ampere readings
-  are genuinely hard, demonstrated rather than asserted.
-* [Background and roadmap](state_of_the_art.md) — selected literature, and what
+  state directions are identifiable and how to report partial observability.
+* [Current-magnitude measurements](current_magnitude.md) — how distinct states
+  can fit the same current magnitudes.
+* [Background and open questions](state_of_the_art.md) — selected literature, and what
   these prototypes do not yet do.

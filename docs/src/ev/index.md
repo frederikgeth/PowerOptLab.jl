@@ -1,16 +1,15 @@
-# Electric vehicles, equipment and sessions
+# Electric vehicles
 
 > **Scope:** deterministic fixed-assignment AC charging, smooth NLP or NLP with
 > complementarity. **Evidence:** analytical cases and regression tests; no
 > fleet-wide calibration or field-performance claim.
 
-A charging study needs to distinguish **what the driver needs**, **what the
-vehicle accepts**, **what the equipment can supply**, and **what the controller
-can command**. A departure-energy constraint addresses only the first question.
-PowerOptLab represents the first three as a scheduling feasible set. It does not
-yet simulate a pilot-response controller.
+A charging schedule must meet the departure-energy requirement within the
+vehicle and charger ratings. PowerOptLab represents availability, equipment
+limits, stored energy and optional state-dependent charging acceptance.
+Pilot-response dynamics are not represented.
 
-## Start with the question
+## Charging studies
 
 | Question | Model and additional evidence |
 |:--|:--|
@@ -25,9 +24,29 @@ The [literature notes](literature.md) distinguish research findings from our
 implementation choices. More detailed battery physics is useful only when the
 data support it; see [PE versus IVQ](../tutorials/battery_storage_models.md).
 
-## Object responsibilities
+## Choose a starting point
 
-| Object | Owns | Does not imply |
+| Your task | Guide |
+|:--|:--|
+| Derive energy, port and operating-mode constraints | [Scientific model and solvers](model.md) |
+| Model a vehicle, an AC outlet and a fixed visit | [Equipment, energy and sessions](sessions.md) |
+| Use the compact compatibility constructor | [EVDevice model](legacy_device.md) |
+| Run a complete feeder charging comparison | [Workplace feeder study](workplace.md) |
+| Understand simultaneous charging, V2G and solver choices | [Artificial cycling and arbitrage](modes.md) |
+| Inspect a specific complementarity-backend result | [CCOpt zero-dispatch investigation](ccopt_investigation.md) |
+| Assess taper and smoothing assumptions | [Taper, smoothing and flexibility](approximations.md) |
+| Look up constructors and fields | [EV API](api.md) |
+| Assess scientific precedent and evidence limits | [Literature evidence](literature.md) |
+| Identify unsupported studies and missing model layers | [Scope and limitations](roadmap.md) |
+| Reproduce studies using earlier defaults | [Compatibility and migration](migration.md) |
+
+The session and workplace examples show charging at assigned outlets. The
+sections below describe the vehicle, outlet and visit data; the model guide
+gives the electrical and energy-balance equations.
+
+## Vehicle, outlet and visit data
+
+| Model | Quantities and constraints | Additional assumptions needed |
 |:--|:--|:--|
 | `EV` | Capacity/bounds, AC-referred onboard limits, efficiency, phase capability, optional acceptance curve | Location or a reusable initial state for multiple visits |
 | `EVSE` | One fixed AC outlet, conductor mapping, equipment P/Q/S/I ratings, operational availability | An onboard converter, a DC cabinet, or independent Q support while empty |
@@ -37,7 +56,7 @@ data support it; see [PE versus IVQ](../tutorials/battery_storage_models.md).
 AC conversion occurs onboard the vehicle; DC charging requires offboard
 conversion and potentially shared power electronics. The present `EVSE` is
 explicitly an **AC outlet envelope**. It does not double-count an onboard
-converter by stamping another inverter at the outlet. Background and source:
+converter by adding another inverter at the outlet. Background and source:
 [NREL EVSE technical overview](https://docs.nrel.gov/docs/fy21osti/78085.pdf).
 
 ## A complete fixed session
@@ -87,7 +106,7 @@ redistribution requires `phase_policy=:independent` on both the EV and EVSE.
 Set `phase_count` on the EV to match the fixed outlet connection. There is no
 phase-switching decision.
 
-## Numerical and compatibility contract
+## Units, solver settings and compatibility
 
 - Powers and ratings are W/var/VA; energy is Wh; current is A; duration is hours.
 - `energy_wh` is the explicit PE state name. `soc` retains the same Wh values
@@ -99,11 +118,12 @@ phase-switching decision.
 - All multi-phase PE devices require `i_max`. Legacy single-phase devices may
   omit `i_max` and `s_max`, retaining a declared power-only abstraction.
 - A disconnected port has every phase-current component fixed to zero.
-- `solve_status(result).publishable` is a solver-status contract, not a physical
-  accuracy or global optimality certificate. Inspect physical diagnostics.
+- `solve_status(result).publishable` checks solver convergence. Check the
+  electrical and energy-balance residuals separately. A converged local solution
+  does not establish global optimality.
 
 See [equations and solver choices](model.md), [mode misconceptions](modes.md),
-[approximation and flexibility](approximations.md), and [the roadmap](roadmap.md).
+[approximation and flexibility](approximations.md), and [scope and limitations](roadmap.md).
 The [workplace feeder tutorial](workplace.md) demonstrates equipment-dependent
 cost and deadline feasibility. Existing studies should read the
 [compatibility and migration review](migration.md).

@@ -4,12 +4,14 @@
 
 The implementation adds optional generator components to the BMOPFTools engine.
 It supports all five source-voltage laws in the [scientific model](generalized_generator.md),
-sequence capability overlays, a hard terminal-PV target, and a dedicated source
+sequence-component limits, a terminal-voltage PV constraint, and a source model
 with separate neutral and earth currents. The [numerical tutorial](../tutorials/generalized_generator_tradeoffs.md)
 compares these choices on one loaded, unbalanced four-wire feeder.
 The [data-model specification drafts](../specifications/generators/index.md) give
-upstream-style field tables, complete equations, and an explicit proposed JSON-to-API
-mapping for later Task Force contributions.
+upstream-style field tables and complete equations for later Task Force
+contributions. The [local JSON reader/writer](../specifications/generators/serialization.md)
+and its schema are already implemented in PowerOptLab; the schema remains
+experimental and has not been adopted upstream.
 
 ## A first device
 
