@@ -13,16 +13,16 @@ using Random: MersenneTwister, randn
     append!(ms, [BranchMeasurement(kind=kind, line="l1", side=side,
         terminal="1", value=0., sigma=2.) for kind in (:ire, :iim, :imag, :pflow, :qflow)
         for side in (:from, :to)])
-    # Put the exact device downstream: the b1 phases and neutral also carry
-    # unknown customer injections, outside the exact-node device contract.
+    # Keep the exact device on the same bus as unknown customers: its neutral
+    # is shared, so this exercises the explicit-current formulation.
     device = ExactDeviceEquation(ZIPDevice(
-        [TerminalConnection(("b2", "1"), ("b2", "n"))],
+        [TerminalConnection(("b1", "1"), ("b1", "n"))],
         ComplexF64[4000 + 1000im], ComplexF64[2 - .5im], ComplexF64[.01 - .002im]))
     s = compile_state_estimator(net, ms; exact_devices=[device], zero_injection=[("b2", "1")])
     p = SEParameters(s, ms; exact_devices=[device])
     rng = MersenneTwister(741)
     for _ in 1:4
-        x = flat_compiled_state(s) + 4randn(rng, 2length(s.free_state_map))
+        x = initial_state_estimator(s,p) + 4randn(rng, length(s.nominal_state))
         H = residual_jacobian(s, p, x)
         @test H isa SparseMatrixCSC
         @test H ≈ central_jacobian(y -> evaluate_state_estimator(s, p, y).residual, x) rtol=1e-5 atol=1e-5

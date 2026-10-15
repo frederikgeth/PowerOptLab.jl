@@ -11,20 +11,28 @@ Compile once with `compile_state_estimator`, create `SEParameters`, and solve
 with `solve_compiled_state_estimator` (dense composite step),
 `solve_sparse_state_estimator` (Hachtel/sparse QR), or
 `solve_ipopt_state_estimator` (classic nonlinear programming).
-`solve_state_estimation(structure, parameters, x0)` is also the shared Ipopt path.
-All three consume the same residuals, exact constraints, first derivatives,
-source phasors, customer-power profiles and priors. Solver choice does not change
-what a reading means. The Ipopt backend uses limited-memory Hessians and a
-complete constraint-Jacobian pattern; it is currently a compatibility/reference
-backend, not a sparse scaling solution.
-Its default quasi-Newton history is 30 vectors; callers can override
-`limited_memory_max_history` through `solver_options`. This improves the
-coupled mixed-winding P/Q cases without relaxing physical publication checks.
+`solve_state_estimation(structure, parameters, x0)` defaults to the sparse solver.
+The explicit solver names are preferred when comparing algorithms. All three
+consume the same residuals, exact constraints, first derivatives, source phasors,
+customer identities and priors. They report the same `objective = sum(abs2,r)`
+and `dof = residual_count - observable_dimension - nuisance_dimension`.
+Internally they may minimize half that sum; the public statistic is always J.
+
+Ipopt receives sparse derivative patterns compiled from dependencies and the
+Gauss–Newton curvature `H' * H`. This approximation omits residual and nonlinear
+constraint second derivatives; it is not the exact Lagrangian Hessian. Residual,
+Jacobian and constraint evaluations are cached separately at each iterate.
+Every available primal point is checked for physical feasibility, reduced
+stationarity, rank and negative curvature, regardless of the optimizer's
+termination label. Its original termination and primal labels remain separate
+in diagnostics. Finite local checks do not establish a global optimum.
 
 For floating networks, some KCL equations can be identities of the others.
 The shared Ipopt backend selects an independent equation basis using the full
 affine network/device coefficients plus independent nonlinear branch-current
-incidences. It verifies those coefficient identities near roundoff; it does not
+incidences. Sparse QR verifies those coefficient identities near roundoff. A
+bounded, synchronized cache reuses the proof when only readings, uncertainties
+or priors change; physical source/device changes require a fresh proof. It does not
 drop a physical equation just because its Jacobian is zero at the starting
 point. Original equations remain in `evaluation.constraints` and every final
 physical feasibility and rank check. `solve_diagnostics` reports both equation
@@ -38,7 +46,7 @@ n-winding coil connections. Summing all phase and neutral terminal currents
 is exactly zero for a complete isolated winding, but summing rounded Ybus rows
 can manufacture a tiny coefficient. The structural proof applies only when all
 coil endpoints have equal component weights and no other touched element or
-device breaks the identity. Any finite electrode, however weak, retains its
+device breaks the identity. Unknown element groups fail closed. Any finite electrode, however weak, retains its
 physical return equation. This conservative reduction leaves other element
 families to the numerical coefficient checks above.
 
@@ -47,7 +55,44 @@ native-engine compatibility API. It accepts `Measurement` only, requires paired
 customer P/Q coverage or explicit zero injection, and does not accept the newer
 measurement types or exact-device objects. Its source neutral must be explicitly
 grounded: otherwise the native engine would introduce an implicit earth bond.
-Use the compiled API for a source neutral connected through finite electrodes.
+The native current-variable model supports overlapping delta/wye paths and
+merged customers with distinct returns. Only conflicting returns for the same
+original customer are rejected. The native observability diagnostic uses
+ForwardDiff, with analytic current elimination for overlapping paths.
+
+A second contract difference remains explicit: native KCL imposes zero injection
+at every non-source conductor without an injection variable, including neutrals.
+It warns about undeclared conductors. The compiled model leaves such injections
+free and reports `:undeclared_injection` in preflight. Declare zero injections
+explicitly when comparing these APIs; missing telemetry alone is not a physical
+zero-injection declaration. Use the compiled API for finite source-neutral
+electrodes or incomplete conductor coverage.
+
+## Injection states and customer identities
+
+`compile_state_estimator(...; formulation=:auto)` retains voltage elimination
+for simple disjoint customer paths. It adds one complex current per original
+unknown customer for merged customers, overlapping returns or mixtures of known
+and unknown devices on shared conductors. The latter include a known PV/charger
+on one phase and an unknown load on another phase sharing a neutral. Distinct
+original terminals preserve customer identity even when ideal switches merge
+their electrical nodes.
+
+Select `formulation=:current` to use explicit unknown currents throughout, or
+`:voltage` to require the optimized elimination contract. Voltage entries remain
+`[real(V_free); imag(V_free)]`; current entries follow them. Use
+`injection_state_indices(s)` rather than guessing their ordering. Branch current
+is positive into the network; KCL is `YV + I_exact - A*I_customer = 0`.
+An explicit `injection_connections` path denotes an additional unknown customer,
+even when a known device has the same endpoints; its P/Q meters describe that
+unknown customer. Without an explicit unknown declaration, matching telemetry
+meters the exact device. Individual power is `U*conj(I_customer)`, so its evaluator remains defined at
+zero connection voltage with finite currents. In contrast, the optional merged
+power profile requires nonzero voltage and retains its explicit domain check.
+
+With explicit currents, missing customer channels may leave individual currents
+unobserved while total voltage remains identifiable. Compare identified quantities
+and selective covariance, not arbitrary unobserved current coordinates.
 
 ## Measurement functions
 
@@ -86,7 +131,7 @@ neutral_current = NetInjectionMeasurement(kind=:ire, bus="load", terminal="n",
 electrode_current = ShuntMeasurement(kind=:ire, shunt="earth", terminal="n",
     value=0.4, sigma=0.05)
 secondary_power = TransformerMeasurement(kind=:pflow, transformer="tx",
-    variant="single_phase", port=2, terminal="1", reference="n",
+    port=2, terminal="1", reference="n",
     value=2000.0, sigma=30.0)
 squared_voltage = FunctionalMeasurement(name=:squared_voltage,
     nodes=[("load", "1"), ("load", "n")],
@@ -104,12 +149,14 @@ Finite-leakage `single_phase`, `center_tap`, `wye_delta`, `delta_wye`,
 `single_phase_autotransformer`, `open_delta_regulator`, and `n_winding` are
 supported within the electrical preflight contract. Regressions compare all
 three shared solvers and compare compatible node telemetry with native WLS.
-Ordinary transformer ports are 1/from and 2/to; center-tap port 2 includes both
+Transformer IDs are looked up across subtypes; `variant` is optional and only
+needed to disambiguate a duplicated ID. Ordinary transformer ports are 1/from and 2/to; center-tap port 2 includes both
 legs and the center conductor. An n-winding port is its winding-list index.
 
 The open-delta shared phase has an ideal copper bond **in addition to** the finite
 winding primitive. Compilation identifies its two nodes exactly, matching the
-native engine; it does not insert a large fictitious admittance. Shared-phase
+native engine. The bond is assembled upstream in BMOPFTools; PowerOptLab no
+longer inserts synthetic switches or maintains a separate admittance patch. Shared-phase
 port current includes an ideal-wire reaction and cannot be obtained from the
 winding primitive alone, so its element telemetry is rejected. Meter adjacent
 finite branches instead. N-winding telemetry is also rejected where different
@@ -119,7 +166,7 @@ the distinct autotransformer ordering.
 
 This is not support for every transformer model. Ideal/zero-leakage transformers,
 unrepresented vector groups/phase shifts, and automatic tap control remain
-outside the voltage-only contract. Fixed supported taps are network parameters;
+outside the finite-primitive contract. Fixed supported taps are network parameters;
 recompile after changing them. Preflight rejects ignored or unsupported fields
 rather than treating them as implemented physics.
 
@@ -158,7 +205,9 @@ generate an answer from the estimator's own Ybus:
 | Floating exact devices | Hand-constructed constant-current, constant-power and ZIP equilibria expose redundant KCL; inconsistent constants must remain nonpublishable |
 | Gauge freedom | Solvers agree on identified voltage differences, objective and derived covariance; individual conductor voltages need not agree |
 | Three-winding transformer | An independent OpenDSS deck supplies voltages and winding-port currents/powers for a grounded single-phase WYE/WYE/WYE case; excitation and artificial anti-float shunts are disabled explicitly |
-| Mixed winding connections and grounding | Independent hidden-emf/star-leakage equations cover WYE/DELTA/WYE, DELTA/WYE/DELTA and WYE/WYE/DELTA, both DELTA rotations, two winding reference orders, unbalanced loads and floating/solid/complex-electrode grounding; OpenDSS terminal equations independently check every phase and neutral port current |
+| Mixed winding connections and grounding | Independent hidden-emf/star-leakage equations cover WYE/DELTA/WYE, DELTA/WYE/DELTA and WYE/WYE/DELTA, both DELTA rotations, two winding reference orders, unbalanced loads and floating/solid/complex-electrode grounding; OpenDSS terminal equations independently check every phase and neutral port current, with zero and nonzero excitation |
+| Loaded 5/20/40-bus four-wire feeders | Independent series Ohm's law and electrode KCL generate unbalanced operating points; noisy P/Q/magnitude fits compare dense, sparse, shared Ipopt and native WLS states, J and degrees of freedom |
+| Nonlinear statistical calibration | 500 seeded independent draws with unequal variances, repeated readings and merged customers check E[J] against dof and empirical voltage covariance against the local calculation; explicit and profiled formulations agree |
 | Floating winding rank and covariance | A completely uninformative projected Jacobian must not turn roundoff into observability; all shared solvers and the native rank diagnostic preserve gauges, reject absolute-voltage covariance, and retain weak genuine reference information |
 
 The existing OpenDSS component/feeder matrix covers the other finite transformer
@@ -194,12 +243,18 @@ The mixed-winding statistical comparisons use explicit absolute-voltage
 readings when comparing native SI/per-unit WLS with the shared solvers. Those
 readings supply stochastic gauge information; no implicit neutral bond is
 added. Separate floating-circuit tests omit that information and compare only
-identified quantities. External component checks disable excitation and
+identified quantities. External component checks specify excitation explicitly, disable
 OpenDSS anti-float shunts and evaluate terminal equations at specified voltages,
 so an external solver's arbitrary gauge choice does not become ground truth.
 
-Remaining quality work should add excitation/saturation and further transformer
-configurations, nonlinear uncertainty-coverage studies, realistic sparse
+`ConstantCurrentDevice` defaults to a fixed earth-frame phasor. Set
+`angle_reference=:voltage` for fixed magnitude and power factor relative to the
+connection voltage. Its angle is undefined at zero voltage unless the coefficient
+is zero. `ZIPDevice` retains a fixed-phasor current term; compose exact models
+when a voltage-following current term is required.
+
+Remaining quality work includes nonlinear core/saturation models, further
+transformer configurations, broader uncertainty-coverage studies, realistic sparse
 telemetry and dropout sequences, and multi-start/conditioning benchmarks. A
 missing physical state or equipment equation needs a model extension; additional
 unit tests cannot manufacture that support.
@@ -223,3 +278,20 @@ Always inspect `structure.preflight`, `solve_status(result).publishable` and
 `observability_diagnostics`. A converged but underobserved result is feasible;
 it does not identify every voltage direction. A regularized continuation stage
 is not a publishable solution of the physical device law.
+
+## Statistical interpretation and numerical limits
+
+J includes measurement and independent prior residuals; diagnostics also report
+the two components separately. In the optional voltage profile, fitted customer
+powers are nuisance parameters and are subtracted from dof. In the current
+formulation their estimated directions already enter `rank(HZ)`, so they must
+not be subtracted twice. A chi-square interpretation is local/asymptotic and
+requires the stated independent Gaussian errors, correct physical model and
+properly counted independent prior information. Reusing correlated past data
+as an independent prior invalidates that interpretation.
+
+The 500-draw regression covers one low-noise nonlinear circuit, not general
+calibration or bad-data processing. Final rank/covariance diagnostics still use
+dense SVD. Sparse derivatives and cached equation reduction do not establish
+large-network scalability; the demonstrated feeder range is 5–40 downstream
+buses.

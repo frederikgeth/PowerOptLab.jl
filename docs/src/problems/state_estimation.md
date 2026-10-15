@@ -139,9 +139,15 @@ one power. The voltage observability diagnostic profiles out individual
 customer allocations, so a pair of customer meters is not mistaken for
 redundant observations of the net power. Conflicting P/Q return references for
 one customer are rejected before building the model; electrically identical
-grounded references are accepted. Unknown injections sharing a merged positive
-terminal must share one return, and unknown positive/return paths must not
-overlap.
+grounded references are accepted. Distinct customers may use different returns
+at one merged positive node, and delta/wye injection paths may overlap. The
+native model keeps a separate current for each original customer.
+
+Native KCL imposes zero injection on every non-source conductor without an
+injection variable, including undeclared neutrals. Preflight warns about these
+conductors. Declare physical zero injections explicitly when comparing with
+the compiled API, which leaves undeclared currents free; see the
+[compatibility guide](../estimation/compatibility.md).
 
 !!! warning "Local optimum"
     Like the IVQ battery solve, this is a

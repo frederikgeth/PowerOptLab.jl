@@ -35,33 +35,10 @@ const _SE_BRANCH_LIMIT_FIELDS = ("i_max", "s_max", "s_rating")
 # Device blocks that inject current / impose a dispatch (not passive physics).
 const _SE_INJECTING_BLOCKS = ("load", "generator", "ibr", "dc_source")
 
-# The finite open-delta primitive contains the two winding branches, while
-# BMOPFTools' native model also imposes an ideal shared-phase copper bond.
-# Preserve that topology by node identification, rather than a large admittance.
-function _se_open_delta_bond(el)
-    pairs = get(Dict("ABBC"=>((1,2),(2,3)), "BCAC"=>((2,3),(1,3)),
-                     "CABA"=>((3,1),(2,1))), uppercase(strip(string(get(el,"connection","")))), nothing)
-    pairs === nothing && throw(ArgumentError("invalid open-delta connection"))
-    shared = only(intersect(pairs[1], pairs[2]))
-    fr = String.(el["terminal_map_from"]); to = String.(el["terminal_map_to"])
-    fp = BMOPFTools._phase_positions(fr); tp = BMOPFTools._phase_positions(to)
-    ((String(el["bus_from"]),fr[fp[shared]]), (String(el["bus_to"]),to[tp[shared]]))
-end
-function _se_passive_ybus(net)
-    group = get(get(net,"transformer",Dict()),"open_delta_regulator",Dict())
-    isempty(group) && return ybus_passive(net)
-    working = deepcopy(net)
-    switches = Dict{String,Any}(get(working,"switch",Dict()))
-    for (id,el) in sort!(collect(group);by=first)
-        a,b = _se_open_delta_bond(el)
-        name = "__se_open_delta_$(id)"
-        while haskey(switches,name); name *= "_"; end
-        switches[name] = Dict("bus_from"=>a[1],"bus_to"=>b[1],
-            "terminal_map_from"=>[a[2]],"terminal_map_to"=>[b[2]],"status"=>"closed")
-    end
-    working["switch"] = switches
-    ybus_passive(working)
-end
+# Passive node identities, including the open-delta copper bond, are owned
+# upstream alongside the native transformer model.
+_se_open_delta_bond(el)=BMOPFTools._open_delta_bond(el)
+_se_passive_ybus(net)=ybus_passive(net)
 
 """
     Measurement(; kind, bus, value, sigma, terminal="1", reference=missing)
@@ -172,7 +149,10 @@ solve_status(result::StateEstimationResult) = result.solve
 
 solve_diagnostics(result::StateEstimationResult) =
     (objective=result.objective, observability=result.observability,
-     residual_count=length(result.residuals))
+     measurement_objective=result.objective, prior_objective=0.0,
+     residual_count=length(result.residuals),
+     nuisance_dimension=get(result.observability,:nuisance_dimension,missing),
+     dof=result.solve.publishable && !ismissing(result.observability.observable) ? result.observability.redundancy : missing)
 
 _vscale(ctx, bus) = begin
     bases = _opf_bases(ctx)
@@ -419,11 +399,15 @@ function solve_state_estimation(net::Dict{String,Any}, measurements::AbstractVec
     fixed_nodes = Set(node for (node,i) in passive_index if i == 0 || haskey(fixed_sources,i))
     _check_coverage(net, measurements, neutral, zi;fixed_nodes)
     # Preserve the legacy ArgumentError contract for inconsistent P/Q paths.
-    _se_injection_layout(measurements, neutral, passive_index)
+    _se_injection_layout(measurements, neutral, passive_index;voltage_only=false)
     # Keep the legacy physics/diagnostic contract within the same validated
     # finite-primitive domain as the shared solvers. Native ideal-transformer
     # OPF support alone does not make the Ybus observability check valid.
-    report, _ = _se_preflight(net, measurements; neutral)
+    report, _ = _se_preflight(net, measurements; neutral,formulation=:native,
+        zero_injection=[node for node in zi if !(node in fixed_nodes)])
+    for finding in report.findings
+        finding.code===:implicit_zero_injection && @warn finding.message
+    end
     report.supported || throw(SEUnsupportedNetwork(report))
     # Native BMOPFTools sources implicitly ground their bus neutral. Refuse
     # to add that unrequested bond to an explicitly floating/electrode model.
@@ -597,7 +581,10 @@ function _observability(net, measurements, neutral, zi::Set{Tuple{String,String}
     # well as earth entries (index zero). Source and meter names need not be
     # the lexicographically chosen representative of a merged conductor.
     posof = yb.index
-    _, power_groups = _se_injection_layout(measurements, neutral, posof)
+    connections, power_groups = _se_injection_layout(measurements, neutral, posof;voltage_only=false)
+    if _se_requires_current_states(connections,power_groups,measurements,Any[],posof,Dict())
+        return _se_native_current_observability(net,measurements,neutral,est_bus)
+    end
     offsets, factors, nuisance = _se_power_profile(power_groups,
         Float64[m.value for m in measurements], Float64[m.sigma for m in measurements])
     # Non-broadcast real/imag: these return SparseMatrixCSC{Float64}. The
@@ -707,7 +694,8 @@ function _observability(net, measurements, neutral, zi::Set{Tuple{String,String}
             elseif meas.kind === :vi
                 push!(rows, w * dvi)
             elseif meas.kind == :vmag
-                push!(rows, w * sqrt(dvr^2 + dvi^2))
+                fixed_voltage=!haskey(spos,(b,t)) && (ref===nothing || !haskey(spos,(b,ref)))
+                push!(rows, fixed_voltage && iszero(dvr) && iszero(dvi) ? zero(T) : w * sqrt(dvr^2 + dvi^2))
             elseif kt != 0 && meas.kind == :pinj
                 push!(rows, w * (dvr * Ir[kt] + dvi * Ii[kt]))
             elseif kt != 0  # :qinj
@@ -745,10 +733,14 @@ function _observability(net, measurements, neutral, zi::Set{Tuple{String,String}
     end
 
     # Evaluate at the returned voltages (falls back to source-flat if missing).
-    x0 = zeros(Float64, n_states)
-    for (k, (b, _)) in enumerate(state_nodes)
-        x0[k] = _flat_re(fixed, b)
+    free_indices=[posof[node] for node in state_nodes]
+    rows=vcat(free_indices,N .+ free_indices)
+    operator=[Yr -Yi;Yi Yr]
+    boundary=zeros(2N)
+    for (i,v) in fixed_indices
+        boundary[i]=real(v);boundary[N+i]=imag(v)
     end
+    x0=_se_least_squares(operator[rows,rows],-operator[rows,:]*boundary)
     # Look through all aliases: an external estimate can contain only an
     # original bus name, rather than the representative chosen by Ybus.
     for (nd, k) in spos
@@ -762,8 +754,8 @@ function _observability(net, measurements, neutral, zi::Set{Tuple{String,String}
     n_states == 0 && return (observable=true, n_states=0, rank=0, redundancy=0,
                              min_singular=Inf, cond=1.0, tangent_dimension=0)
 
-    Hm = _fd_jacobian(hmeas, x0)                      # whitened measurement rows
-    C  = _fd_jacobian(hkcl, x0)                       # exact KCL rows
+    Hm = ForwardDiff.jacobian(hmeas, x0)                      # whitened measurement rows
+    C  = ForwardDiff.jacobian(hkcl, x0)                       # exact KCL rows
     _se_observability_metrics(Hm, C; nuisance_dimension=nuisance)
 end
 
@@ -772,7 +764,7 @@ end
 # rank test on `vcat(Hm, C)` therefore depends on their arbitrary relative
 # scaling. Rank C in its own scale, restrict Hm to C's tangent space, and rank
 # that reduced map in its own scale.
-function _se_observability_metrics(Hm::AbstractMatrix{<:Real}, C::AbstractMatrix{<:Real}; nuisance_dimension::Integer=0)
+function _se_observability_metrics(Hm::AbstractMatrix{<:Real}, C::AbstractMatrix{<:Real}; nuisance_dimension::Integer=0, constraint_reference_scale::Real=0.)
     n_states = size(Hm, 2)
     size(C, 2) == n_states || throw(DimensionMismatch(
         "measurement and constraint Jacobians must have the same number of columns"))
@@ -784,7 +776,7 @@ function _se_observability_metrics(Hm::AbstractMatrix{<:Real}, C::AbstractMatrix
     else
         F = svd(collect(Float64, C); full=true)
         smaxC = isempty(F.S) ? 0.0 : maximum(F.S)
-        tolC = smaxC * max(size(C)...) * eps(Float64)
+        tolC = max(smaxC * max(size(C)...) * eps(Float64),8eps(Float64)*max(size(C)...)*constraint_reference_scale)
         rC = count(>(tolC), F.S)
         rC, collect(F.V[:, rC+1:n_states])
     end
@@ -807,22 +799,10 @@ function _se_observability_metrics(Hm::AbstractMatrix{<:Real}, C::AbstractMatrix
      # Exact equations reduce the tangent dimension; they are not noisy
      # observations and must not be counted as residual redundancy.
      redundancy = size(Hm, 1) - rankM - nuisance_dimension,
+     nuisance_dimension = nuisance_dimension,
      min_singular = smin,
      cond = condn,
      tangent_dimension = tangent)
-end
-
-# Central-difference Jacobian of `f: Rⁿ → Rᵐ` at `x` (steps scaled to |x| so it
-# is well-conditioned across SI volt magnitudes). Used only for the rank check.
-function _fd_jacobian(f, x::Vector{Float64})
-    m = length(f(x)); n = length(x)
-    J = Matrix{Float64}(undef, m, n)
-    for j in 1:n
-        h = max(1e-6, 1e-6 * abs(x[j]))
-        xp = copy(x); xm = copy(x); xp[j] += h; xm[j] -= h
-        J[:, j] = (f(xp) .- f(xm)) ./ (2h)
-    end
-    J
 end
 
 # Any source magnitude as a flat fallback voltage for a bus with no estimate.

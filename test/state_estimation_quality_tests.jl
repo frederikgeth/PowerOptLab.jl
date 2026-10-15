@@ -27,7 +27,7 @@ end
     x = [229., 0.]
     @test length(evaluate_state_estimator(s, p, x).constraints) == 2
     @test norm(evaluate_state_estimator(s, p, x).constraints) < 1e-10
-    for solver in (solve_compiled_state_estimator, solve_sparse_state_estimator)
+    for solver in (solve_compiled_state_estimator, solve_sparse_state_estimator, solve_ipopt_state_estimator)
         r = solver(s, p, [230., 0.])
         @test solve_status(r).publishable
         @test r.state ≈ x atol=1e-6
@@ -43,14 +43,14 @@ end
     expected[sf.free_state_map[("b", "1")]] = 229.
     expected[sf.free_state_map[("b", "n")]] = 2.5
     @test norm(evaluate_state_estimator(sf, pf, expected).constraints) < 1e-10
-    for solver in (solve_compiled_state_estimator, solve_sparse_state_estimator)
+    for solver in (solve_compiled_state_estimator, solve_sparse_state_estimator, solve_ipopt_state_estimator)
         r = solver(sf, pf, initial_state_estimator(sf, pf))
         @test solve_status(r).publishable
         @test r.state ≈ expected atol=1e-6
     end
 end
 
-@testset "DSSE review: reject partially exact shared injection nodes" begin
+@testset "DSSE review: support partially exact shared injection nodes" begin
     net = quality_se_net()
     known = ExactDeviceEquation(ConstantCurrentDevice(
         [TerminalConnection(("b", "1"), ("b", "n"))], ComplexF64[2]))
@@ -63,10 +63,17 @@ end
         "linecode"=>"lc", "length"=>0.)
     other = [Measurement(kind=:pinj, bus="z", value=-1760., sigma=10.),
              Measurement(kind=:qinj, bus="z", value=0., sigma=10.)]
-    @test !state_estimator_preflight(net, other; exact_devices=[known]).supported
-    @test_throws SEUnsupportedNetwork compile_state_estimator(net, other; exact_devices=[known])
+    @test state_estimator_preflight(net, other; exact_devices=[known]).supported
+        se=compile_state_estimator(net,other;exact_devices=[known])
+    pe=SEParameters(se,other;exact_devices=[known])
+    for solver in (solve_compiled_state_estimator,solve_sparse_state_estimator,solve_ipopt_state_estimator)
+        result=solver(se,pe,initial_state_estimator(se,pe))
+        @test solve_status(result).publishable
+        @test result.evaluation.voltage[se.node_index[("b","1")]]≈225 atol=1e-7
+        @test result.evaluation.voltage[se.node_index[("b","n")]]≈5 atol=1e-7
+    end
     # The same protection applies to connections declared without telemetry.
-    @test !state_estimator_preflight(net; exact_devices=[known],
+    @test state_estimator_preflight(net; exact_devices=[known],
         injection_connections=[TerminalConnection(("z", "1"), ("z", "n"))]).supported
     # Metering the exact device itself is supported.
     own = [Measurement(kind=:pinj, bus="b", value=-456., sigma=10.),
@@ -74,7 +81,7 @@ end
     @test state_estimator_preflight(net, own; exact_devices=[known]).supported
     known_alias = ExactDeviceEquation(ConstantCurrentDevice(
         [TerminalConnection(("z", "1"), ("z", "n"))], ComplexF64[8]))
-    @test !state_estimator_preflight(net, vcat(own, other);
+    @test state_estimator_preflight(net, vcat(own, other);
         exact_devices=[known, known_alias]).supported
 
     # A shared ungrounded return also couples distinct phase conductors.
@@ -88,7 +95,7 @@ end
     push!(net["line"]["l"]["terminal_map_to"], "2")
     net["linecode"]["lc"]["R_series_3_3"] = .5
     unknown = [TerminalConnection(("b", "2"), ("b", "n"))]
-    @test !state_estimator_preflight(net; exact_devices=[known], injection_connections=unknown).supported
+    @test state_estimator_preflight(net; exact_devices=[known], injection_connections=unknown).supported
     # Sharing ideal earth is safe: it has no KCL/voltage state to overconstrain.
     for bus in ("b", "z")
         net["bus"][bus]["perfectly_grounded_terminals"] = ["n"]
@@ -170,7 +177,7 @@ end
     device = ExactDeviceEquation(ConstantPowerDevice(
         [TerminalConnection(("b", "1"), nothing)], ComplexF64[1000]))
     s = compile_state_estimator(net; exact_devices=[device])
-    for solver in (solve_compiled_state_estimator, solve_sparse_state_estimator)
+    for solver in (solve_compiled_state_estimator, solve_sparse_state_estimator, solve_ipopt_state_estimator)
         p = SEParameters(s; exact_devices=[device], regularization_voltage=100., continuation_alpha=0.)
         r = solver(s, p, [230., 0.])
         @test r.status == :converged_regularized
@@ -200,7 +207,7 @@ end
         [TerminalConnection(("b", "1"), nothing)], ComplexF64[2]))
     sc = compile_state_estimator(net; exact_devices=[current])
     pc = SEParameters(sc; exact_devices=[current], continuation_alpha=0.)
-    for solver in (solve_compiled_state_estimator, solve_sparse_state_estimator)
+    for solver in (solve_compiled_state_estimator, solve_sparse_state_estimator, solve_ipopt_state_estimator)
         @test solve_status(solver(sc, pc, [230., 0.])).publishable
     end
 end
@@ -219,14 +226,14 @@ end
                (; optimality_tolerance=Inf), (; optimality_tolerance=-1.),
                (; rank_rtol=NaN), (; rank_rtol=-1.), (; min_radius=0.),
                (; initial_radius=Inf, max_radius=Inf), (; penalty=Inf)]
-    for solver in (solve_compiled_state_estimator, solve_sparse_state_estimator), options in invalid
+    for solver in (solve_compiled_state_estimator, solve_sparse_state_estimator, solve_ipopt_state_estimator), options in invalid
         @test_throws ArgumentError solver(s, p, [230., 0.]; options...)
     end
     @test_throws ArgumentError solve_sparse_state_estimator(s, p, [230., 0.]; damping=Inf)
     ms = [Measurement(kind=:vr, bus="b", reference=nothing, value=230., sigma=1.),
           Measurement(kind=:vi, bus="b", reference=nothing, value=0., sigma=1.)]
     sl = compile_state_estimator(net, ms); pl = SEParameters(sl, ms)
-    for solver in (solve_compiled_state_estimator, solve_sparse_state_estimator)
+    for solver in (solve_compiled_state_estimator, solve_sparse_state_estimator, solve_ipopt_state_estimator)
         @test solve_status(solver(sl, pl, [230., 0.]; constraint_tolerance=0., constraint_rtol=0.,
                                   optimality_tolerance=0., rank_rtol=0.)).publishable
     end

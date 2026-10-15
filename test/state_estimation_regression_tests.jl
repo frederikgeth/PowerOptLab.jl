@@ -149,7 +149,7 @@ end
     p = SEParameters(s, ms)
     reference = solve_state_estimation(net, ms; per_unit=false)
     @test reference.primal_status == "FEASIBLE_POINT"
-    for solver in (solve_compiled_state_estimator, solve_sparse_state_estimator)
+    for solver in (solve_compiled_state_estimator, solve_sparse_state_estimator, solve_ipopt_state_estimator)
         r = solver(s, p, initial_state_estimator(s, p))
         @test r.status == :converged_unique
         @test norm(r.evaluation.constraints) < 1e-7
@@ -226,7 +226,7 @@ end
         "terminal_map_from" => ["1", "2", "n"], "terminal_map_to" => ["1", "2", "n"], "status" => "closed"))
     aliases = vcat(ms, [Measurement(kind=m.kind, bus="z", terminal=m.terminal,
         value=m.value, sigma=m.sigma) for m in ms])
-    sa = compile_state_estimator(aliased, aliases)
+    sa = compile_state_estimator(aliased, aliases;formulation=:voltage)
     pa = SEParameters(sa, aliases)
     @test length(evaluate_state_estimator(sa, pa, x).constraints) == 2
     @test norm(evaluate_state_estimator(sa, pa, x).constraints) < 1e-10

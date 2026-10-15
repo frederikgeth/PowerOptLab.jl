@@ -33,6 +33,7 @@ SEPreflightReport
 SEUnsupportedNetwork
 state_estimator_preflight
 initial_state_estimator
+injection_state_indices
 SEStructure
 SEParameters
 SEEvaluation

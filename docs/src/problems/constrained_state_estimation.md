@@ -10,6 +10,9 @@ nonlinear least-squares problem
 ```
 
 It also offers a classic Ipopt backend over the same compiled evaluator.
+Every solver reports the conventional statistic `J=sum(abs2,r)` and degrees of
+freedom through `solve_diagnostics`; the factor one half above is only an internal
+optimization convention.
 The original [native WLS formulation](state_estimation.md) remains separate; see
 [Choosing a formulation](../estimation/comparison.md) for the head-to-head.
 Use this API when the distinction between **uncertain information** and a
@@ -19,7 +22,7 @@ retain explicitly modelled ungrounded neutral voltages.
 
 !!! warning "Prototype scope"
     The dense, sparse and shared Ipopt solvers are reference/prototype implementations.  The
-    sparse Hachtel step is available, but large-feeder benchmarks, bad-data
+    sparse Hachtel step and 5–40-bus feeder comparisons are available, but broader scaling studies, bad-data
     processing, topology hypotheses, ideal-transformer current states, and sparse
     rank/covariance backends remain future work.
 
@@ -29,7 +32,7 @@ Call `state_estimator_preflight(net, measurements; zero_injection, exact_devices
 before compiling to inspect the snapshot interpretation. The same report is
 retained as `structure.preflight`; compilation throws `SEUnsupportedNetwork`
 with its report if any error is present. `supported` means representable by this
-voltage-only model. It does **not** certify observability, a correct network
+compiled finite-primitive model. It does **not** certify observability, a correct network
 calibration, or convergence.
 
 ```julia
@@ -347,18 +350,20 @@ reference only for an actual earth return.
 P and Q readings of one original `(bus, terminal)` describe one customer and
 must use the same electrical return. Grounded-terminal and explicit earth
 references are equivalent. Conflicting references are rejected, independently
-of row order. Unknown injection connections must not overlap with one another's
-positive terminals, and customers whose positive terminals merge must share
-one electrical return. More general unknown-current networks require separate
-current states and are rejected; connection-aware **exact** device models
-remain available for phase-phase and delta laws.
+of row order. The default `formulation=:auto` adds explicit unknown-current
+states for overlapping paths, merged customers and partially exact shared
+conductors. Mixed delta/wye customers and a known device sharing a neutral
+with an unknown customer are supported. `formulation=:voltage` explicitly
+requests the narrower elimination contract; `:current` uses current states
+for all unknown customer paths. Current indices are available through
+`injection_state_indices(s)` and follow the rectangular voltage entries.
 
 ### Customers on merged buses
 
 Ideal-switch aliases share voltage, but distinct original `(bus, terminal)`
 identities retain distinct customer powers. Their powers add to the merged
 node's total; repeated readings of the same original customer measure the same
-quantity. The compiled evaluator profiles out these individual powers: it
+quantity. The optional `formulation=:voltage` evaluator profiles out these individual powers: it
 fuses repeated readings by precision, sums customer means and independent
 variances, and allocates any discrepancy according to those variances.
 `evaluation.predicted` reports these conditional customer predictions in the
@@ -366,7 +371,9 @@ original row order. Residuals and the objective retain disagreement between
 repeat readings; the voltage Jacobian and covariance use the profiled
 information. Predictions for these rows therefore depend on both readings and
 sigmas, as well as voltage.
-Profiling assumes a nonzero connection voltage: individual powers cannot be
+The default explicit-current formulation uses finite branch currents and
+`S=U*conj(I)` directly, including at zero voltage. Optional power
+profiling assumes a nonzero connection voltage: individual powers cannot be
 allocated to finite customer currents at zero voltage. Evaluation and
 Jacobians reject voltage drops below `SEParameters.voltage_min_model` (default
 0.001 V); solvers reject such initial points as `:invalid_initial_domain` and
@@ -426,14 +433,14 @@ Use [`ExactDeviceEquation`](@ref) only when a device law is truly exact.
 `TerminalConnection` is a general oriented branch: phase-neutral connections
 model wye/single-phase devices; phase-phase connections model delta devices.
 
-The present exact-device equations specify the **complete net injection** on
-their free conductors. A different unknown customer sharing one of those
-conductors, including a shared neutral, requires separate current states and
-is rejected by preflight. Power telemetry of the same exact device connection
-is supported; merged-customer power allocation on an exact-device conductor
-is rejected. This prevents a partial device model from silently fixing the
-whole node's injection. Voltage and line telemetry can still observe exact
-devices without declaring additional unknown injections.
+Known and unknown customer devices may share free conductors, including a
+neutral. The default compiler assigns explicit states to the unknown currents
+and includes every known device current in KCL. Without an explicit unknown declaration, a measurement matching an
+original exact-device connection meters that known device. An explicit
+`injection_connections` path declares an additional unknown customer even on
+those same endpoints; matching P/Q meters then describe the unknown customer. Positive
+exact-device power is consumption, while positive customer power injects into
+the network.
 
 An ideal source supplies its attached devices through a free boundary current.
 An exact device at a source therefore adds KCL only on any free endpoint;
@@ -529,8 +536,9 @@ filtered posterior.
 ## Current limitations
 
 - Diagonal measurement covariance only; no correlated whitening yet.
-- Line telemetry only; transformer, uncertain source-phasor, and angle
-  measurement models are pending.
+- Finite line, transformer-port and shunt telemetry and custom voltage functions
+  are supported. Uncertain source-phasor and reference-angle error models remain
+  pending; ideal-device reaction currents need additional equipment equations.
 - No robust bad-data test, automated bad-constraint ranking, topology-error
   hypothesis search, or full filter globalisation.
 - Jacobians use sparse triplets and cached transposed operators for row access.
@@ -549,10 +557,12 @@ impedance, both line ends, an independent analytic noisy reactive-power optimum,
 conflicting exact constraints, square rank deficiency, negative-curvature
 rejection, identifiable covariance, and seeded Monte Carlo variance of a linear
 estimate. These checks complement the existing power-flow recovery tests;
-they do not establish robustness on operational feeders or nonlinear coverage.
+they do not establish robustness on operational feeders. The separate review
+suite adds independent 5/20/40-bus four-wire circuits and a seeded 500-draw
+nonlinear covariance/J calibration; these remain finite synthetic studies.
 The regression suite also checks merged source/measurement aliases, noisy
 customer injections with exact neutral return, shared and earth returns, both
-compiled solvers against JuMP/Ipopt, and angle-aware current starts in SI and
+shared solvers against native JuMP/Ipopt, and angle-aware current starts in SI and
 per-unit units.
 The quality suite exercises immutable snapshot identities, exact device
 topology and finite-value validation, named grounded returns, explicit zero
@@ -579,9 +589,9 @@ The complete sparse solve still performs dense rank/null-space diagnostics: an
 already exact 1,600-state warm start allocated about 196 MB. No real-time or
 large-feeder performance claim follows from these synthetic measurements.
 
-Remaining validation priorities are independent unbalanced feeder oracles,
-nonlinear Monte Carlo coverage, bad-data and model-error experiments, and
-end-to-end feeder/time-series benchmarks. Remaining implementation priorities
+Remaining validation priorities are operational feeder oracles, broader noise
+and measurement-dropout Monte Carlo studies, bad-data and model-error experiments,
+and end-to-end time-series benchmarks. Remaining implementation priorities
 include correlated whitening, robust and leverage-adjusted bad-data processing,
 ideal-transformer and bond-reaction current states, multistart, symbolic
 factorisation reuse, reusable numerical workspaces, and sparse rank/covariance.
@@ -600,3 +610,11 @@ explicit non-publishable statuses described above.
 
 The [state estimation API](../api/state_estimation.md) lists the public types, functions and result fields
 for this guide.
+
+For backend-specific time-series options use, for example,
+`solver_kwargs=(dense=(initial_radius=0.5,),ipopt=(max_iterations=100,))`.
+Shared keyword arguments must be meaningful for the selected backend; Ipopt
+rejects trust-region-only options with an explanatory `ArgumentError`.
+See [compatibility and validation](../estimation/compatibility.md) for explicit
+current layouts, missing-conductor semantics, statistical calibration and the
+Gauss–Newton Ipopt approximation.

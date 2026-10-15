@@ -178,14 +178,18 @@ end
     c=[TerminalConnection(("b","p"),("b","n"))]
     current=10-2im;power=(220+2im)*conj(current)
     for model in (ConstantCurrentDevice(c,[current]),ConstantPowerDevice(c,[power]),
-                  ZIPDevice(c,[.5power],[.25current],[.25current/(220+2im)]))
+                  ZIPDevice(c,[.5power],[.25current],[.25current/(220+2im)])),
+        formulation in (:voltage,:current)
         exact=[ExactDeviceEquation(model)]
-        s=compile_state_estimator(net,meters;exact_devices=exact,
+        s=compile_state_estimator(net,meters;exact_devices=exact,formulation,
             injection_connections=[TerminalConnection(("s","p"),("s","n"))])
         p=SEParameters(s,meters;exact_devices=exact);truth=consistency_pack(s,voltage)
+        formulation===:current && append!(truth,[real(current),imag(current)])
+        physical_rows=formulation===:current ? 8 : 6
+        independent_rows=formulation===:current ? 6 : 4
         initial=truth+.1cos.(eachindex(truth))
-        @test size(constraint_jacobian(s,p,truth))==(6,8)
-        @test rank(Matrix(constraint_jacobian(s,p,truth)))==4
+        @test size(constraint_jacobian(s,p,truth))==(physical_rows,length(truth))
+        @test rank(Matrix(constraint_jacobian(s,p,truth)))==independent_rows
         snapshot=deepcopy(p)
         for solver in CONSISTENCY_SE_SOLVERS
             r=solver(s,p,initial)
@@ -195,15 +199,15 @@ end
             @test norm(r.evaluation.residual)<1e-6
             if solver===solve_ipopt_state_estimator
                 diagnostics=solve_diagnostics(r)
-                @test diagnostics.physical_constraint_count==6
-                @test diagnostics.optimizer_constraint_count==4
+                @test diagnostics.physical_constraint_count==physical_rows
+                @test diagnostics.optimizer_constraint_count==independent_rows
                 # Identities hold far from the initial Jacobian, including
                 # changed nonlinear currents, not just at the fitted point.
                 signature=PowerOptLab._se_ipopt_constraint_signature(s,p)
                 rows=diagnostics.optimizer_constraint_rows
                 for x in (truth,truth+.7sin.(eachindex(truth)))
                     value=evaluate_state_estimator(s,p,x).constraints
-                    map=signature*pinv(signature[rows,:])
+                    map=signature*pinv(Matrix(signature[rows,:]))
                     @test value ≈ map*value[rows] atol=1e-10
                 end
             end

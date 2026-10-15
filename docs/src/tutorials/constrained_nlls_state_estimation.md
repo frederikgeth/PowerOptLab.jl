@@ -245,9 +245,12 @@ ipopt_fit = solve_ipopt_state_estimator(structure, noisy_parameters, x0; solver_
 @assert norm(dense_fit.state - sparse_fit.state, Inf) < 1e-5
 @assert norm(sparse_fit.evaluation.constraints, Inf) < 1e-7
 @assert norm(sparse_fit.state - known_state, Inf) < 0.05
-fit_objective = sum(abs2, sparse_fit.evaluation.residual)/2
-@assert abs(fit_objective - 0.2636024) < 1e-4
-@assert abs(sum(abs2, dense_fit.evaluation.residual)/2 - fit_objective) < 1e-6
+fit_objective = solve_diagnostics(sparse_fit).objective
+@assert abs(fit_objective - 0.5272048) < 1e-4
+@assert abs(solve_diagnostics(dense_fit).objective - fit_objective) < 1e-6
+
+@assert solve_diagnostics(ipopt_fit).objective ≈ fit_objective atol=1e-6
+@assert solve_diagnostics(sparse_fit).dof == solve_diagnostics(ipopt_fit).dof
 
 obs = observability_diagnostics(structure, noisy_parameters, sparse_fit.state;
     include_prior=false)
@@ -269,7 +272,7 @@ println("Perturbed estimate: objective = ", round(fit_objective; digits=5),
 | Dense, sparse and shared Ipopt clean solves | `:converged_unique`, state error below 0.00001 V |
 | Dense and sparse perturbed solves | `:converged_unique`, agreement within 0.00001 V |
 | Perturbed maximum voltage-component error | about 0.00942 V |
-| Perturbed weighted objective | about 0.26360 |
+| Perturbed weighted objective | about 0.52720 |
 | Exact-junction current residual | below 0.0000001 A |
 | Feasible tangent dimension / observable dimension | 6 / 6 |
 
@@ -371,7 +374,7 @@ exact_loads = [ExactDeviceEquation(ConstantPowerDevice(
     [TerminalConnection(("load", string(k)), ("load", "n"))],
     ComplexF64[-injection[k]])) for k in 1:3]
 exact_structure = compile_state_estimator(net, voltage_only;
-    zero_injection=["mid"], injection_connections, exact_devices=exact_loads)
+    zero_injection=["mid"], exact_devices=exact_loads)
 exact_parameters = SEParameters(exact_structure, voltage_only;
     exact_devices=exact_loads, voltage_min_model=1.0, regularization_voltage=230.0)
 continued = solve_with_continuation(exact_structure, exact_parameters,
@@ -389,6 +392,10 @@ physical_fit = continued.result
 exact_obs = observability_diagnostics(exact_structure, exact_parameters, physical_fit.state)
 @assert (exact_obs.constraint_rank, exact_obs.tangent_dimension) == (16, 0)
 ```
+
+This separate benchmark replaces the unknown customers with exact devices, so
+it omits `injection_connections`. Supplying those declarations here would add
+unknown customer currents alongside the exact loads.
 
 Continuation moves the internally regularized constant-power equations from
 ``\alpha=0`` to their physical form at ``\alpha=1``. Accept a physical estimate

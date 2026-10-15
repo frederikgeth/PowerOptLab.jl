@@ -48,7 +48,7 @@ function _se_capture_primitive(f)
     value, String(take!(buffer))
 end
 
-function _se_preflight(net, measurements; neutral="n", zero_injection=String[], exact_devices=Any[], injection_connections=nothing)
+function _se_preflight(net, measurements; neutral="n", zero_injection=String[], exact_devices=Any[], injection_connections=nothing, formulation=:auto)
     findings = SEPreflightFinding[]; elements = NamedTuple[]; omitted = NamedTuple[]
     sources = NamedTuple[]; refs = NamedTuple[]; exact = NamedTuple[]
     grounds = Tuple{String,String}[]
@@ -266,9 +266,34 @@ function _se_preflight(net, measurements; neutral="n", zero_injection=String[], 
                 haskey(fixed, i) && throw(ArgumentError("zero-injection terminal $node is fixed by a source"))
             end
             _compile_measurements(net, measurements, ybus.index, neutral)
-            connections, groups = _se_injection_layout(measurements, neutral, ybus.index; injection_connections)
+            connections, groups = _se_injection_layout(measurements, neutral, ybus.index; injection_connections, voltage_only=false,
+                known_connections=_se_known_connections(exact_devices,ybus.index))
             _compile_exact_devices(exact_devices, ybus.index)
-            _se_check_device_injections(connections, groups, measurements, exact_devices, ybus.index, fixed)
+            if formulation===:voltage
+                _se_injection_layout(measurements,neutral,ybus.index;injection_connections,known_connections=_se_known_connections(exact_devices,ybus.index))
+                _se_check_device_injections(connections,groups,measurements,exact_devices,ybus.index,fixed)
+                _se_check_explicit_device_unknowns(injection_connections,exact_devices,ybus.index,fixed)
+            end
+            represented=Set{Int}()
+            for c in connections, node in (c.positive,c.negative)
+                node===nothing || push!(represented,ybus.index[node])
+            end
+            for d in exact_devices, c in d.model.connections, node in (c.positive,c.negative)
+                node===nothing || push!(represented,ybus.index[node])
+            end
+            for node in _zero_injection_set(net,zero_injection,neutral;include_neutral=true)
+                push!(represented,ybus.index[node])
+            end
+            missing=[node for (k,node) in enumerate(ybus.nodes) if !haskey(fixed,k) && !(k in represented)]
+            if !isempty(missing)
+                if formulation===:native
+                    issue(:warning,:implicit_zero_injection,"network",
+                        "Native WLS imposes zero injection at undeclared conductors $(missing). Declare these zero_injection explicitly or use the compiled API to leave their injections free.")
+                else
+                    issue(:warning,:undeclared_injection,"network",
+                        "No declared injection path or exact KCL for conductors $(missing); the compiled model leaves their injections free. Declare zero_injection where physically known.")
+                end
+            end
         catch err
             issue(:error,:invalid_compilation,"network",sprint(showerror,err))
         end

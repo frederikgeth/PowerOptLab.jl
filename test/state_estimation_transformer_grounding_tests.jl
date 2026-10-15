@@ -4,7 +4,7 @@ import BMOPFTools
 # Independent three-winding star circuit, not the package's ZB/Yprim stamp.
 # Each core has a hidden common emf E; sum((u[k]/N[k]-E)/z[k]) == 0.
 # All impedances below are referred to the high winding's coil base.
-function tg_case(configurations; grounding=:floating, roll=-1, order=[1,2,3])
+function tg_case(configurations; grounding=:floating, roll=-1, order=[1,2,3], no_load=0im)
     buses=["h","l","t"]; nominal=[2400.,1200.,600.]
     z=ComplexF64[1+.8im,1+1.2im,1+2.2im]; turns=nominal./nominal[1]
     phases=["a","b","c"]
@@ -21,6 +21,10 @@ function tg_case(configurations; grounding=:floating, roll=-1, order=[1,2,3])
             for (b,ref,i) in zip(buses,refs,coil)
                 current[(b,phases[k])]+=i;current[(b,ref)]-=i
             end
+            # Independently specified excitation on winding 2's coil base.
+            excitation=no_load*u[2]
+            current[(buses[2],phases[k])]+=excitation
+            current[(buses[2],refs[2])]-=excitation
         end
         current
     end
@@ -75,7 +79,7 @@ function tg_case(configurations; grounding=:floating, roll=-1, order=[1,2,3])
         "delta_roll"=>roll,"v_nom"=>nominal[k],"r_winding"=>real(z[k])*turns[k]^2) for k in order]
     # Re-refer physical pair reactances when another winding is first.
     xsc=Dict("$(i)_$(j)"=>(imag(z[order[i]])+imag(z[order[j]]))*turns[order[1]]^2 for i in 1:3 for j in i+1:3)
-    net["transformer"]=Dict("n_winding"=>Dict("tx"=>Dict{String,Any}("windings"=>windings,"x_sc"=>xsc)))
+    net["transformer"]=Dict("n_winding"=>Dict("tx"=>Dict{String,Any}("windings"=>windings,"x_sc"=>xsc,"g_no_load"=>real(no_load),"b_no_load"=>imag(no_load))))
     exact=[ExactDeviceEquation(ConstantCurrentDevice(connections,amps))]
     (;net,voltage,port_currents,electrodes,exact,balance,x,free,terms,configurations,order,turns,z)
 end
@@ -283,8 +287,8 @@ end
 
 if isdefined(Main,:OpenDSSDirect)
     @testset "SE mixed-winding external OpenDSS terminal equations" begin
-        for cs in (["WYE","DELTA","WYE"],["DELTA","WYE","DELTA"],["WYE","WYE","DELTA"]), roll in (-1,1)
-            case=tg_case(cs;grounding=:impedance,roll)
+        for cs in (["WYE","DELTA","WYE"],["DELTA","WYE","DELTA"],["WYE","WYE","DELTA"]), roll in (-1,1), no_load in (0im,1e-4-2e-4im)
+            case=tg_case(cs;grounding=:impedance,roll,no_load)
             OpenDSSDirect.dss("Clear")
             OpenDSSDirect.dss("Set DefaultBaseFreq=50")
             OpenDSSDirect.dss("New Circuit.mixed phases=3 bus1=h.1.2.3.0 basekv=4.156921938165306 model=ideal")
@@ -301,7 +305,9 @@ if isdefined(Main,:OpenDSSDirect)
             end
             base=3*2400^2/100000
             leadlag=cs[1]=="DELTA" ? "lead" : "lag"
-            OpenDSSDirect.dss("~ XHL=$(100*2/base) XHT=$(100*3/base) XLT=$(100*3.4/base) %noloadloss=0 %imag=0 ppm_antifloat=0 leadlag=$leadlag")
+            percent_loss=100*3*1200^2*real(no_load)/100000
+            percent_imag=-100*3*1200^2*imag(no_load)/100000
+            OpenDSSDirect.dss("~ XHL=$(100*2/base) XHT=$(100*3/base) XLT=$(100*3.4/base) %noloadloss=$percent_loss %imag=$percent_imag ppm_antifloat=0 leadlag=$leadlag")
             OpenDSSDirect.dss("CalcVoltageBases")
             OpenDSSDirect.Circuit.SetActiveElement("Transformer.t")
             @test OpenDSSDirect.CktElement.NumTerminals()==3

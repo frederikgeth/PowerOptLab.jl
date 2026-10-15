@@ -5,6 +5,35 @@ isdefined(@__MODULE__, :_se_net_1ph_xfmr) || include("state_estimation_feeder_fi
 
 const COMPAT_SE_SOLVERS = (solve_compiled_state_estimator, solve_sparse_state_estimator, solve_ipopt_state_estimator)
 
+@testset "SE transformer telemetry: optional subtype and duplicated ids" begin
+    net=_se_net_1ph_xfmr()
+    # N-winding primitives use canonical a/b/c/n names.
+    for bus in values(net["bus"])
+        bus["terminal_names"]=replace(bus["terminal_names"],"1"=>"a")
+    end
+    for kind in ("voltage_source","shunt","load"), el in values(net[kind])
+        el["terminal_map"]=replace(el["terminal_map"],"1"=>"a")
+    end
+    transformer=net["transformer"]["single_phase"]["t1"]
+    for side in ("from","to")
+        transformer["terminal_map_$side"]=replace(transformer["terminal_map_$side"],"1"=>"a")
+    end
+    automatic=TransformerMeasurement(kind=:ire,transformer="t1",port=2,terminal="a",value=0.,sigma=1.)
+    explicit=TransformerMeasurement(kind=:ire,transformer="t1",variant="single_phase",port=2,terminal="a",value=0.,sigma=1.)
+    a=compile_state_estimator(net,[automatic]);pa=SEParameters(a,[automatic])
+    b=compile_state_estimator(net,[explicit]);pb=SEParameters(b,[explicit])
+    x=initial_state_estimator(a,pa)
+    @test evaluate_state_estimator(a,pa,x).predicted ≈ evaluate_state_estimator(b,pb,x).predicted
+    @test residual_jacobian(a,pa,x) ≈ residual_jacobian(b,pb,x)
+    net["transformer"]["n_winding"]=Dict("t1"=>Dict(
+        "windings"=>[Dict("bus"=>bus,"terminal_map"=>["a","n"],"configuration"=>"WYE",
+                          "v_nom"=>v,"r_winding"=>r) for (bus,v,r) in (("hv",11000.,24.2),("lv",240.,.01152))],
+        "x_sc"=>Dict("1_2"=>96.8)))
+    @test_throws SEUnsupportedNetwork compile_state_estimator(net,[automatic])
+    @test state_estimator_preflight(net,[explicit]).supported
+    @test compile_state_estimator(net,[explicit]) isa SEStructure
+end
+
 function compat_ground_net(mode)
     grounded = mode === :solid ? ",\"perfectly_grounded_terminals\":[\"n\"]" : ""
     source_ground = mode === :multi_impedance ? "[]" : "[\"n\"]"
@@ -336,7 +365,7 @@ end
     end
     s=compile_state_estimator(net,ms);p=SEParameters(s,ms)
     @test solve_status(solve_state_estimation(s,p,initial_state_estimator(s,p))).publishable
-    @test_throws ArgumentError solve_ipopt_state_estimator(s,p,[230.,0.];solver_options=(hessian_approximation="exact",))
+    @test_throws ArgumentError solve_ipopt_state_estimator(s,p,[230.,0.];solver_options=(hessian_approximation="limited-memory",))
     @test_throws ArgumentError solve_ipopt_state_estimator(s,p,[230.,0.];constraint_tolerance=Inf)
 end
 
@@ -369,15 +398,22 @@ end
         NetInjectionMeasurement(kind=:pinj,bus="z",value=-2250.,sigma=1.),
         NetInjectionMeasurement(kind=:qinj,bus="b",value=0.,sigma=1.)]
     s=compile_state_estimator(net,meters;injection_connections=cs);p=SEParameters(s,meters)
-    # A missing customer's P leaves the individual P row uninformative about
-    # voltage; the separate net meter still observes the total -2250 W.
-    truth=[225.,0.]
+    # The missing customer's current absorbs the individual reading's voltage
+    # information; the separate net meter still observes the total -2250 W.
+    truth=initial_state_estimator(s,p);truth[1:2]=[225.,0.]
+    indices=injection_state_indices(s)
+    truth[indices[("b","1")].real]=-1000/225
+    truth[indices[("z","1")].real]=-1250/225
+    truth[indices[("b","1")].imag]=truth[indices[("z","1")].imag]=0.
     @test norm(evaluate_state_estimator(s,p,truth).residual)<1e-10
-    @test norm(Matrix(residual_jacobian(s,p,truth))[1,:]) == 0.
+    net_only=compile_state_estimator(net,meters[2:3];injection_connections=cs)
+    pn=SEParameters(net_only,meters[2:3])
+    @test selected_state_covariance(s,p,truth,[1,2])≈selected_state_covariance(net_only,pn,[225.,0.],[1,2]) rtol=1e-6
+    @test observability_diagnostics(s,p,truth).unobservable_dimension==1
     for solver in COMPAT_SE_SOLVERS
         r=solver(s,p,initial_state_estimator(s,p))
         @test solve_status(r).publishable
-        @test r.state ≈ truth atol=1e-5
+        @test r.state[1:2] ≈ truth[1:2] atol=1e-5
     end
 end
 

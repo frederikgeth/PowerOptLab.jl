@@ -17,6 +17,9 @@ measurements and numerical solution differs.
 | Statement | ``\min \sum_i (z_i - h_i(x))^2/\sigma_i^2`` | ``\min \tfrac12\lVert r(x)\rVert^2`` s.t. ``c(x)=0`` |
 | Engine | JuMP + Ipopt | Gauss–Newton / Hachtel / shared Ipopt solvers |
 
+Both APIs report `J=sum(abs2,r)` through `solve_diagnostics`; the internal factor
+one half in the compiled objective does not change that public statistic.
+
 [Choosing a formulation](comparison.md) compares the two estimators on the
 same network and measurements.
 

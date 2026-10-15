@@ -48,6 +48,7 @@ const _HAS_ODS = true
     include("state_estimation_compatibility_tests.jl")
     include("state_estimation_consistency_tests.jl")
     include("state_estimation_transformer_grounding_tests.jl")
+    include("state_estimation_review_tests.jl")
     include("parameter_estimation_tests.jl")
     include("inverse_carson_tests.jl")
     include("inverse_carson_benchmark_tests.jl")

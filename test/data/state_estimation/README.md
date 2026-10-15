@@ -88,8 +88,11 @@ affine laws give zero covariance for their fixed differential voltages.
 
 OpenDSS independently checks every transformer terminal-current equation at
 specified conductor voltages, avoiding arbitrary external load-flow gauges.
-The inline DSS commands disable excitation and artificial anti-float shunts;
-unused DELTA fourth conductors are mapped explicitly. Native SI/per-unit WLS
+The inline DSS commands disable artificial anti-float shunts and test both zero
+excitation and a winding-2 coil admittance of `0.0001-0.0002j` S. The independent
+star circuit adds this branch explicitly; OpenDSS supplies a separate check of
+its loss and reactive-current base conversion. Unused DELTA fourth conductors
+are mapped explicitly. Native SI/per-unit WLS
 comparisons use the same P/Q and absolute rectangular-voltage readings as all
 three shared solvers, with those absolute readings supplying explicit
 stochastic reference information.

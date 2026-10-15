@@ -30,7 +30,8 @@ end
                              reference=nothing, value, sigma)
 
 Current (`:ire`, `:iim`, `:imag`) or power (`:pflow`, `:qflow`) into a finite
-transformer port. `variant` is its BMOPF subtype. Ordinary transformers use
+transformer port. The id is looked up across BMOPF subtypes; optional `variant` disambiguates
+a duplicated id. Ordinary transformers use
 port 1 (from) or 2 (to); a center-tap's port 2 contains both secondary legs and
 neutral. For `n_winding`, port is the winding-list index. Power is referenced
 to earth unless a terminal on the selected port's bus is named explicitly.
@@ -45,13 +46,14 @@ struct TransformerMeasurement <: AbstractMeasurement
     reference::Union{String,Nothing}
     value::Float64
     sigma::Float64
-    function TransformerMeasurement(; kind::Symbol, transformer::String, variant::String,
+    function TransformerMeasurement(; kind::Symbol, transformer::String, variant::Union{Nothing,String}=nothing,
             port::Integer=1, terminal::String, reference::Union{String,Nothing}=nothing,
             value::Real, sigma::Real)
         _se_validate_meter(kind, terminal, reference, value, sigma; passive=true)
-        isempty(transformer) || isempty(variant) ? throw(ArgumentError("transformer and variant must be non-empty")) : nothing
+        isempty(transformer) && throw(ArgumentError("transformer must be non-empty"))
+        variant===nothing || !isempty(variant) || throw(ArgumentError("variant must be non-empty when provided"))
         port > 0 || throw(ArgumentError("port must be positive"))
-        new(kind, transformer, variant, Int(port), terminal, reference, Float64(value), Float64(sigma))
+        new(kind, transformer, something(variant,""), Int(port), terminal, reference, Float64(value), Float64(sigma))
     end
 end
 
@@ -155,9 +157,12 @@ function _se_meter_primitive(m::BranchMeasurement, net)
 end
 
 function _se_meter_primitive(m::TransformerMeasurement, net)
-    el = get(get(get(net, "transformer", Dict()), m.variant, Dict()), m.transformer, nothing)
+    variants=[kind for (kind,group) in get(net,"transformer",Dict()) if haskey(group,m.transformer)]
+    variant=isempty(m.variant) ? (length(variants)==1 ? only(variants) :
+        throw(ArgumentError("transformer id must be present and unique; provide variant to disambiguate"))) : m.variant
+    el = get(get(get(net, "transformer", Dict()), variant, Dict()), m.transformer, nothing)
     el isa AbstractDict || throw(ArgumentError("transformer $(m.variant)/$(m.transformer) is absent"))
-    if m.variant == "n_winding"
+    if variant == "n_winding"
         ws = BMOPFTools._nw_windings(el)
         m.port <= length(ws) || throw(ArgumentError("transformer port $(m.port) is absent"))
         w = ws[m.port]; bus = String(w.bus); ts = String.(w.terminal_map)
@@ -168,10 +173,10 @@ function _se_meter_primitive(m::TransformerMeasurement, net)
         m.port in (1, 2) || throw(ArgumentError("ordinary transformer ports are 1 (from) or 2 (to)"))
         side = m.port == 1 ? "from" : "to"
         bus = String(el["bus_$side"]); ts = String.(el["terminal_map_$side"])
-        if m.variant == "open_delta_regulator" && (bus,m.terminal) in _se_open_delta_bond(el)
+        if variant == "open_delta_regulator" && (bus,m.terminal) in _se_open_delta_bond(el)
             throw(ArgumentError("open-delta shared-phase port current includes an ideal-wire reaction not recoverable from voltage alone; meter adjacent finite branches instead"))
         end
-        nodes, Y = transformer_yprim(el, m.variant)
+        nodes, Y = transformer_yprim(el, variant)
     end
     m.terminal in ts || throw(ArgumentError("terminal '$(m.terminal)' is absent on transformer port $(m.port)"))
     matches = findall(==((bus, m.terminal)), nodes)
