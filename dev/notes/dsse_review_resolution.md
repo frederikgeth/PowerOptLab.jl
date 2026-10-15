@@ -71,3 +71,29 @@ recorded in the test; it does not establish universal coverage.
 The upstream compatibility tree passes its full suite and required scientific,
 Finding-registry, metadata and execution-interface gates. The conflict-free
 integration with upstream main passes those gates and its full suite as well.
+
+## Final critical pass
+
+The final PR review found two additional estimator boundaries and one CI setup
+failure:
+
+- A fully fixed voltage model could retain declared unknown current states while
+  `initial_state_estimator` returned an empty vector. Initialization now preserves
+  those states. Regressions check their unobservability and identification by a
+  current prior across all three shared solvers.
+- A zero-injection declaration touching an unknown customer path changed meaning
+  between voltage elimination and explicit currents: a reproduction gave J=10000
+  versus essentially zero. Preflight now rejects the conflicting declarations,
+  including electrical aliases and persistent paths without telemetry. Known
+  exact devices remain supported; net meters can observe a known zero without
+  declaring an unknown customer.
+- Current-Julia optional CI failed during incremental Pkg precompilation with
+  `Unknown package: MathOptIIS`. Optional setup now resolves/develops its complete
+  environment with automatic precompilation deferred, then explicitly precompiles
+  that environment once. The production dependency pin is unchanged. Setup has
+  been verified on Julia 1.13.2, the version from the failing CI job.
+
+The expanded DSSE/parameter numerical suite passes 6,454 checks on Julia 1.12.6.
+Final validation also exercises the optional solver integrations and reruns the
+full package suite, documentation and executable tutorials; the PR body and
+head-specific CI checks record those results.

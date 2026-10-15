@@ -20,16 +20,22 @@ Pkg.activate(destination)
 # Optional bridges need newer transitive MOI than the production manifest.
 # DiffOpt 0.6.1 caps MOI below that requirement; use 0.6.2 only here.
 # Preserve other direct dependencies and the immutable BMOPFTools source.
-Pkg.add([
-    PackageSpec(name="DiffOpt",version="0.6.2"),
-    PackageSpec(name="CCOpt",version="0.1.0"),
-    PackageSpec(name="MathOptComplements",version="0.1.1"),
-    PackageSpec(name="NLPModelsJuMP",version="0.13.6"),
-    PackageSpec(name="PiecewiseLinearOpt",version="0.4.2"),
-    PackageSpec(name="HiGHS",version="1.20.1"),
-    PackageSpec(name="MadNLP",version="0.10.1"),
-]; preserve=Pkg.PRESERVE_DIRECT)
-Pkg.develop(path=repo; preserve=Pkg.PRESERVE_ALL)
+# Julia 1.13's incremental Pkg.add precompile can request newly resolved
+# transitive packages (e.g. MathOptIIS) by names unavailable in the root project.
+# Resolve the complete environment first, then precompile that environment once.
+withenv("JULIA_PKG_PRECOMPILE_AUTO"=>"0") do
+    Pkg.add([
+        PackageSpec(name="DiffOpt",version="0.6.2"),
+        PackageSpec(name="CCOpt",version="0.1.0"),
+        PackageSpec(name="MathOptComplements",version="0.1.1"),
+        PackageSpec(name="NLPModelsJuMP",version="0.13.6"),
+        PackageSpec(name="PiecewiseLinearOpt",version="0.4.2"),
+        PackageSpec(name="HiGHS",version="1.20.1"),
+        PackageSpec(name="MadNLP",version="0.10.1"),
+    ]; preserve=Pkg.PRESERVE_DIRECT)
+    Pkg.develop(path=repo; preserve=Pkg.PRESERVE_ALL)
+end
 info = only(i for i in values(Pkg.dependencies()) if i.name == "BMOPFTools")
 info.is_tracking_repo && info.git_revision == expected_revision || error("BMOPFTools pin changed")
+Pkg.precompile()
 println("Optional formulation environment: ",destination)

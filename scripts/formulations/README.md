@@ -18,6 +18,9 @@ version running the setup: a Julia 1.12 manifest is not necessarily consumable b
 Julia 1.10. The optional setup preserves the BMOPFTools commit, uses DiffOpt 0.6.2
 for bridge compatibility, and records the resolved solver stack in the results.
 It neither changes the production environment nor adds a PowerOptLab solve loop.
+Setup resolves and develops the complete optional environment before explicitly
+precompiling it once. This avoids incremental precompilation requesting newly
+resolved transitive packages by names outside the active project's dependencies.
 
 The experiment solves `V = Vs + I` and `I = f(V)` on a one-ohm resistive feeder.
 The canonical controller has knots `[220,240,250,270]` V and values `[20,20,0,0]` A.

@@ -741,10 +741,7 @@ function compile_state_estimator(net::Dict{String,Any}, measurements::AbstractVe
     incidence=spzeros(Float64,n,0)
     injection_map=Dict{TerminalID,Int}()
     if augmented
-        known=Set((c.positive,c.negative===nothing ? 0 : node_index[c.negative])
-            for d in exact_devices for c in d.model.connections)
-        explicit=injection_connections===nothing ? Set{TerminalID}() : Set(c.positive for c in injection_connections)
-        unknown=[c for c in connections if c.positive in explicit || !((c.positive,c.negative===nothing ? 0 : node_index[c.negative]) in known)]
+        unknown=_se_unknown_connections(connections,exact_devices,node_index,injection_connections)
         incidence=spzeros(Float64,n,length(unknown))
         for (k,c) in enumerate(unknown)
             injection_map[c.positive]=k
@@ -2110,7 +2107,8 @@ function initial_state_estimator(s::SEStructure, p::SEParameters)
     n = length(s.nodes)
     free = findall(i -> !haskey(s.reference_map,s.nodes[i]), 1:n)
     _, _, ir, ii = _se_parts(s,p,zeros(size(s.voltage_state_jacobian,2)))
-    isempty(free) && return Float64[]
+    # Fixed voltages do not eliminate explicitly declared unknown currents.
+    isempty(free) && return _se_initial_currents(s,p,copy(s.nominal_state))
     rows = vcat(free,n .+ free)
     # Reuse the compiled guess for unchanged source phasors; updated boundaries
     # need a new sparse solve, but measurement updates do not.

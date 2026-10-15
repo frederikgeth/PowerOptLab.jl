@@ -192,6 +192,14 @@ Floating/common-mode freedoms appear in the tangent-space observability result.
     phase terminals only.  Passing `(bus, terminal)` tuples is explicit either
     way.
 
+An unknown customer path cannot touch a declared zero-injection conductor,
+including through an electrical alias. Preflight reports
+`:conflicting_injection_declaration` for that contradictory input, consistently
+across formulations. Customer P/Q `Measurement`s declare such paths; use
+`NetInjectionMeasurement` to observe a known zero without declaring an unknown
+customer. Exact-device currents remain included in KCL when zero injection is
+declared alongside a known device.
+
 `compile_state_estimator` imports BMOPFTools' passive `I = YV` in SI units.
 Closed ideal switches use BMOPFTools' node aliases.  The compiled structure owns
 ordering and sparsity; [`SEParameters`](@ref) owns readings, standard deviations,

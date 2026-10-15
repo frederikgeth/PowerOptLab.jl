@@ -261,6 +261,15 @@ function _se_known_connections(devices, index)
     )
 end
 
+function _se_unknown_connections(connections, devices, index, declarations)
+    known=_se_known_connections(devices, index)
+    explicit=declarations===nothing ? Set{TerminalID}() : Set(c.positive for c in declarations)
+    [
+        c for c in connections if c.positive in explicit ||
+            !((c.positive, c.negative===nothing ? 0 : index[c.negative]) in known)
+    ]
+end
+
 function _se_check_explicit_device_unknowns(connections, devices, index, fixed)
     connections===nothing && return nothing
     free(node) = node===nothing ? 0 : index[node]

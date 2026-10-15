@@ -119,6 +119,96 @@ end
     @test native.observability.redundancy == 2
 end
 
+@testset "Review: fixed voltages retain declared current states in the initial guess" begin
+    net=Dict{String,Any}(
+        "bus"=>Dict("s"=>Dict("terminal_names"=>["p", "n"], "perfectly_grounded_terminals"=>["n"])),
+        "voltage_source"=>Dict(
+            "source"=>Dict(
+                "bus"=>"s",
+                "terminal_map"=>["p"],
+                "v_magnitude"=>[230.0],
+                "v_angle"=>[0.0],
+            ),
+        ),
+    )
+    connections=[TerminalConnection(("s", "p"), ("s", "n"))]
+    s=compile_state_estimator(net; injection_connections = connections, formulation = :current)
+    p=SEParameters(s)
+    initial=initial_state_estimator(s, p)
+    @test isempty(s.free_state_map)
+    @test length(initial)==2
+    @test initial==zeros(2)
+    @test injection_state_indices(s)[("s", "p")] == (real = 1, imag = 2)
+    for solver in REVIEW_SE_SOLVERS
+        r=solver(s, p, initial)
+        @test r.status==:converged_underobserved
+        @test r.tangent_dimension==2
+        @test r.observable_dimension==0
+        @test solve_diagnostics(r).dof==0
+    end
+    # A real current prior identifies those states without changing fixed V.
+    set_state_prior!(p, StatePrior([1, 2], [3.0, -2.0], [0.1, 0.1]))
+    for solver in REVIEW_SE_SOLVERS
+        r=solver(s, p, initial)
+        @test r.status==:converged_unique
+        @test r.state ≈ [3.0, -2.0] atol=1e-7
+        @test r.evaluation.voltage[s.node_index[("s", "p")]]==230+0im
+        @test solve_diagnostics(r).dof==0
+    end
+end
+
+@testset "Review: conflicting zero and unknown injection declarations fail closed" begin
+    case=review_feeder(1)
+    meters=filter(m->m.terminal=="a", case.meters)
+    connection=TerminalConnection(("b1", "a"), ("b1", "n"))
+    for formulation in (:auto, :voltage, :current), terminal in ("a", "n")
+        options=(; formulation, zero_injection = [("b1", terminal)])
+        report=state_estimator_preflight(case.net, meters; options...)
+        @test !report.supported
+        @test any(f->f.code==:conflicting_injection_declaration, report.findings)
+        @test_throws SEUnsupportedNetwork compile_state_estimator(case.net, meters; options...)
+        # The same conflict exists without P/Q telemetry when the path persists.
+        @test !state_estimator_preflight(case.net; options..., injection_connections = [connection]).supported
+    end
+    # Electrical aliases cannot evade the declaration check.
+    net=deepcopy(case.net)
+    net["bus"]["alias"]=deepcopy(net["bus"]["b1"])
+    net["switch"]=Dict(
+        "bond"=>Dict(
+            "bus_from"=>"alias",
+            "bus_to"=>"b1",
+            "terminal_map_from"=>["a"],
+            "terminal_map_to"=>["a"],
+            "status"=>"closed",
+        ),
+    )
+    @test !state_estimator_preflight(net, meters; zero_injection = [("alias", "a")]).supported
+    # A known device is not an unknown injection; its exact KCL remains valid.
+    exact=[ExactDeviceEquation(ConstantCurrentDevice([connection], ComplexF64[2]))]
+    @test state_estimator_preflight(
+        case.net,
+        meters;
+        zero_injection = [("b1", "a")],
+        exact_devices = exact,
+    ).supported
+    @test !state_estimator_preflight(
+        case.net,
+        meters;
+        zero_injection = [("b1", "a")],
+        exact_devices = exact,
+        injection_connections = [connection],
+    ).supported
+    net_meter=NetInjectionMeasurement(
+        kind = :pinj,
+        bus = "b1",
+        terminal = "a",
+        reference = "n",
+        value = 0.0,
+        sigma = 10.0,
+    )
+    @test state_estimator_preflight(case.net, [net_meter]; zero_injection = [("b1", "a")]).supported
+end
+
 @testset "Review: loaded 5/20/40-bus four-wire backend agreement" begin
     for n in (5, 20, 40)
         @testset "$n downstream buses" begin

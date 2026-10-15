@@ -269,6 +269,15 @@ function _se_preflight(net, measurements; neutral="n", zero_injection=String[], 
             connections, groups = _se_injection_layout(measurements, neutral, ybus.index; injection_connections, voltage_only=false,
                 known_connections=_se_known_connections(exact_devices,ybus.index))
             _compile_exact_devices(exact_devices, ybus.index)
+            zero_nodes=Set(ybus.index[node] for node in
+                _zero_injection_set(net,zero_injection,neutral;include_neutral=true))
+            for c in _se_unknown_connections(connections,exact_devices,ybus.index,injection_connections)
+                incident=(ybus.index[c.positive],c.negative===nothing ? 0 : ybus.index[c.negative])
+                if any(i->i in zero_nodes,incident)
+                    issue(:error,:conflicting_injection_declaration,string(c.positive),
+                        "An unknown customer path touches a declared zero-injection conductor. Remove the conflicting declaration; use NetInjectionMeasurement to observe a known zero without declaring an unknown customer.")
+                end
+            end
             if formulation===:voltage
                 _se_injection_layout(measurements,neutral,ybus.index;injection_connections,known_connections=_se_known_connections(exact_devices,ybus.index))
                 _se_check_device_injections(connections,groups,measurements,exact_devices,ybus.index,fixed)
