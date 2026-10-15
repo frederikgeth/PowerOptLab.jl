@@ -90,6 +90,35 @@ function review_feeder(n; seed = 143)
     (; net, meters, volts, amps)
 end
 
+@testset "Review: fully fixed voltages retain residual degrees of freedom" begin
+    net=Dict{String,Any}(
+        "bus"=>Dict("s"=>Dict("terminal_names"=>["p", "n"], "perfectly_grounded_terminals"=>["n"])),
+        "voltage_source"=>Dict(
+            "source"=>Dict(
+                "bus"=>"s",
+                "terminal_map"=>["p"],
+                "v_magnitude"=>[230.0],
+                "v_angle"=>[0.0],
+            ),
+        ),
+    )
+    meters=[
+        Measurement(; kind, bus = "s", terminal = "p", reference = nothing, value, sigma = 1.0) for
+        (kind, value) in ((:vr, 232.0), (:vi, 3.0))
+    ]
+    native=solve_state_estimation(net, meters; per_unit = false)
+    s=compile_state_estimator(net, meters)
+    p=SEParameters(s, meters)
+    results=[native; [f(s, p, Float64[]) for f in REVIEW_SE_SOLVERS]]
+    for r in results
+        @test solve_status(r).publishable
+        @test solve_diagnostics(r).objective ≈ 13.0
+        @test solve_diagnostics(r).dof == 2
+        @test solve_diagnostics(r).nuisance_dimension == 0
+    end
+    @test native.observability.redundancy == 2
+end
+
 @testset "Review: loaded 5/20/40-bus four-wire backend agreement" begin
     for n in (5, 20, 40)
         @testset "$n downstream buses" begin
@@ -268,9 +297,22 @@ end
 
 @testset "Review: missing conductor declaration and backend options" begin
     case=review_feeder(1)
-    zero=[("b1",t) for t in ("a","b","c","n")]
-    voltage=[Measurement(kind=:vmag,bus="b1",terminal="a",reference="n",value=230.,sigma=1.)]
-    native=@test_logs min_level=Logging.Warn solve_state_estimation(case.net,voltage;zero_injection=zero)
+    zero=[("b1", t) for t in ("a", "b", "c", "n")]
+    voltage=[
+        Measurement(
+            kind = :vmag,
+            bus = "b1",
+            terminal = "a",
+            reference = "n",
+            value = 230.0,
+            sigma = 1.0,
+        ),
+    ]
+    native=@test_logs min_level=Logging.Warn solve_state_estimation(
+        case.net,
+        voltage;
+        zero_injection = zero,
+    )
     @test solve_status(native).publishable
     earth=[
         Measurement(

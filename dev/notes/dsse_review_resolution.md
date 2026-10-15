@@ -20,7 +20,7 @@ result and the boundaries that remain.
 | Compiled mixed delta/wye customers and partially exact shared neutrals are excluded | Valid model gap. Default compilation adds explicit unknown currents for those cases and for merged customers. Exact and unknown device currents coexist in conductor KCL, including an additional explicitly declared unknown on the same phase/neutral endpoints. The shared-bus ZIP derivative regression is restored at its original bus. |
 | Merged profiling imposes an artificial low-voltage domain | Valid for a general API. Default merged-current equations use finite currents and `S=U*conj(I)` at zero voltage. Optional `formulation=:voltage` still requires nonzero voltage for analytical power profiling; its domain guard is retained and tested as an explicit narrower contract. Physical nonzero constant-power device laws remain undefined at zero connection voltage. |
 | Undeclared conductors have different meanings | Valid. Native KCL continues to impose zero injection and warns about undeclared conductors. Compiled preflight reports `:undeclared_injection` and leaves those currents free. Comparisons declare all intended zero injections explicitly. |
-| Public objective and degrees of freedom differ | Valid. All solver diagnostics report J as the full squared residual sum, its measurement/prior components, residual count, nuisance dimension and dof. Explicit current directions enter the measurement rank; profiled nuisance powers are subtracted separately. The tutorial uses the same scale. |
+| Public objective and degrees of freedom differ | Valid. All solver diagnostics report J as the full squared residual sum, its measurement/prior components, residual count, nuisance dimension and dof. Explicit current directions enter the measurement rank; profiled nuisance powers are subtracted separately. Fully fixed states retain all residual degrees of freedom, checked against J=13/dof=2 in every solver. The tutorial uses the same scale. |
 | Legacy finite differences defeat a roundoff-level projection floor | Valid. Ordinary legacy diagnostics use ForwardDiff. Overlapping current paths use analytic Jacobians and eliminate current/nuisance tangent directions for the voltage diagnostic. |
 | The winding identity proof can fail open | Valid. Unknown element groups prevent the structural reduction. Finite electrodes retain their equations regardless of strength. |
 | Two reductions change `constraint_rank` semantics | The two proofs have different purposes, but reported rank is computed from the same complete physical Jacobian in every backend. Structural identities are removed for all solvers; Ipopt additionally selects optimizer rows. Feeder comparisons assert equal reported ranks, and optimizer row mappings remain separate diagnostics. |
@@ -55,14 +55,19 @@ keeps the existing upstream API base rather than adopting that separate API
 migration.
 
 On Julia 1.12.6 the full package suite passes 15,718 checks plus 11 Aqua checks.
-The complete documentation build/doctests, seven executable study tutorials
-and three reproducible figure checks pass. The final 2,510 review regressions also
-pass directly against the root manifest's immutable dependency source, including
-two explicit-zero warning checks added after that full run. Julia 1.10.11 passes
-the resulting complete 15,720-check suite plus its 10 enabled Aqua checks. Both
-Julia versions pass the full documentation build/doctests, seven executable
-study tutorials and three reproducible figure checks.
+Julia 1.10.11 passes the 15,720-check suite plus its 10 enabled Aqua checks;
+the two explicit-zero warning checks were added between those runs. After the
+full runs, all 2,527 review checks pass on both versions, including 17 new
+fully fixed-state checks. The Julia 1.12 run uses the actual root manifest's
+immutable dependency source. Both versions pass the complete documentation
+build/doctests, seven executable study tutorials and three reproducible figure
+checks.
 
-The independent nonlinear calibration has mean J=2.90376 for 3 dof and relative
-voltage-covariance error 0.16066 over 500 draws. Its finite regression budgets are
+On Julia 1.12.6 the independent nonlinear calibration has mean J=2.90376 for
+3 dof and relative voltage-covariance error 0.16066 over 500 draws; Julia 1.10.11
+gives 3.04283 and 0.04348 respectively. Its finite regression budgets are
 recorded in the test; it does not establish universal coverage.
+
+The upstream compatibility tree passes its full suite and required scientific,
+Finding-registry, metadata and execution-interface gates. The conflict-free
+integration with upstream main passes those gates and its full suite as well.

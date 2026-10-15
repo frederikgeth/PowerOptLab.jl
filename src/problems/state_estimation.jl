@@ -751,8 +751,8 @@ function _observability(net, measurements, neutral, zi::Set{Tuple{String,String}
         isfinite(vi) && (x0[ns + k] = vi)
     end
 
-    n_states == 0 && return (observable=true, n_states=0, rank=0, redundancy=0,
-                             min_singular=Inf, cond=1.0, tangent_dimension=0)
+    n_states == 0 && return _se_observability_metrics(
+        zeros(length(measurements),0),zeros(0,0);nuisance_dimension=nuisance)
 
     Hm = ForwardDiff.jacobian(hmeas, x0)                      # whitened measurement rows
     C  = ForwardDiff.jacobian(hkcl, x0)                       # exact KCL rows
@@ -768,8 +768,9 @@ function _se_observability_metrics(Hm::AbstractMatrix{<:Real}, C::AbstractMatrix
     n_states = size(Hm, 2)
     size(C, 2) == n_states || throw(DimensionMismatch(
         "measurement and constraint Jacobians must have the same number of columns"))
-    n_states == 0 && return (observable=true, n_states=0, rank=0, redundancy=0,
-                             min_singular=Inf, cond=1.0, tangent_dimension=0)
+    n_states == 0 && return (observable=true, n_states=0, rank=0,
+        redundancy=size(Hm,1)-nuisance_dimension,nuisance_dimension=nuisance_dimension,
+        min_singular=Inf, cond=1.0, tangent_dimension=0)
 
     rankC, Z = if size(C, 1) == 0
         (0, _se_identity(n_states))

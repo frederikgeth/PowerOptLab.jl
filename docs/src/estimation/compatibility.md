@@ -208,6 +208,7 @@ generate an answer from the estimator's own Ybus:
 | Mixed winding connections and grounding | Independent hidden-emf/star-leakage equations cover WYE/DELTA/WYE, DELTA/WYE/DELTA and WYE/WYE/DELTA, both DELTA rotations, two winding reference orders, unbalanced loads and floating/solid/complex-electrode grounding; OpenDSS terminal equations independently check every phase and neutral port current, with zero and nonzero excitation |
 | Loaded 5/20/40-bus four-wire feeders | Independent series Ohm's law and electrode KCL generate unbalanced operating points; noisy P/Q/magnitude fits compare dense, sparse, shared Ipopt and native WLS states, J and degrees of freedom |
 | Nonlinear statistical calibration | 500 seeded independent draws with unequal variances, repeated readings and merged customers check E[J] against dof and empirical voltage covariance against the local calculation; explicit and profiled formulations agree |
+| Fully fixed source voltages | Conflicting noisy voltage readings retain J=13 and 2 residual degrees of freedom in native WLS and all three shared solvers; zero fitted states do not imply zero residual dof |
 | Floating winding rank and covariance | A completely uninformative projected Jacobian must not turn roundoff into observability; all shared solvers and the native rank diagnostic preserve gauges, reject absolute-voltage covariance, and retain weak genuine reference information |
 
 The existing OpenDSS component/feeder matrix covers the other finite transformer
