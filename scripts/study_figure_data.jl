@@ -44,7 +44,7 @@ function study_figure_exporter(directory)
                 "weighted_residuals" => value(:sparse_fit).evaluation.residual,
                 "voltage_only_residuals" => value(:weak_fit).evaluation.residual,
                 "voltage_only_positions" => [k for (k,m) in enumerate(meters) if
-                    m isa value(:Measurement) && m.kind in (:vr,:vi) && m.reference == "n"],
+                    m in value(:voltage_only)],
                 "meter_labels" => ["Vr1", "Vi1", "P1", "Q1", "Vr2", "Vi2", "P2", "Q2",
                                    "Vr3", "Vi3", "P3", "Q3", "Vrn", "Vin", "|I1|"],
                 "unobserved_directions" => value(:weak_obs).unobservable_dimension,

@@ -13,8 +13,8 @@ of the problem are still open research.
 Both estimators report **local numerical observability**: the rank of the
 measurement Jacobian at the returned point.
 
-For the [constrained estimator](../problems/constrained_state_estimation.md)
-the test is on the *feasible tangent space*. With ``C\,\delta x = 0`` describing tangent perturbations of the
+For both estimators the test is on the *feasible tangent space*. With
+``C\,\delta x = 0`` describing tangent perturbations of the
 exact equations and ``Z`` a basis for ``\ker C``, the relevant matrix is
 ``HZ``, not ``H``:
 
@@ -60,7 +60,8 @@ The WLS estimator's `result.observability` reports the analogous
 tangent_dimension)`. Exact KCL equations are ranked in their own units, then the
 **whitened** measurement Jacobian is ranked on their tangent space. `rank` is
 the sum of those two independent ranks; `redundancy` counts measurement rows
-beyond the tangent directions they identify. `min_singular` and `cond` come
+beyond the tangent directions they identify and the fitted individual-customer
+power allocations at merged nodes. `min_singular` and `cond` come
 from the reduced measurement Jacobian, so they have the same interpretation as
 the constrained estimator's.
 
@@ -315,12 +316,22 @@ weakness is that rank in floating point needs a threshold, and with many
 injection measurements the disparity of magnitudes in ``H`` makes that
 threshold delicate (Expósito and Abur, 1998).
 
-PowerOptLab is entirely numerical: dense SVD with a relative tolerance
-(`rank_rtol`, default ``\sqrt{\varepsilon}``), on ``HZ`` for the constrained
-estimator and on the measurement-plus-KCL Jacobian for WLS. That choice buys
+PowerOptLab is entirely numerical: both estimators rank exact equations
+separately, then use dense SVD on the whitened measurement map ``HZ`` on the
+feasible tangent space. The compiled estimator's threshold is
+``\max(\mathtt{rank\_rtol}\,\max(m,n)\,\sigma_{\max},\varepsilon)``, with
+`rank_rtol` defaulting to ``\sqrt{\varepsilon}``; legacy WLS uses
+``\varepsilon\max(m,n)\sigma_{\max}``. These thresholds differ, so extremely
+weak directions can receive different classifications. Merged-customer power
+allocations are profiled out before testing voltage information. That choice buys
 the constraint handling and the singular values; it costs ``O(n^3)`` and a
 threshold. Treat a ``\sigma_{\min}`` near the tolerance as "ask again", not as
 an answer.
+
+With a zero-dimensional feasible tangent, the minimum singular value is `Inf`
+and the condition number is `1.0` by convention: no free direction remains to
+condition. This does not imply that the stipulated exact equations are certain
+in a real network.
 
 ## Academic questions suggested by the prototype
 

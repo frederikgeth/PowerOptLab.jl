@@ -48,7 +48,7 @@ function _se_capture_primitive(f)
     value, String(take!(buffer))
 end
 
-function _se_preflight(net, measurements; neutral="n", zero_injection=String[], exact_devices=Any[])
+function _se_preflight(net, measurements; neutral="n", zero_injection=String[], exact_devices=Any[], injection_connections=nothing)
     findings = SEPreflightFinding[]; elements = NamedTuple[]; omitted = NamedTuple[]
     sources = NamedTuple[]; refs = NamedTuple[]; exact = NamedTuple[]
     grounds = Tuple{String,String}[]
@@ -248,7 +248,9 @@ function _se_preflight(net, measurements; neutral="n", zero_injection=String[], 
                 haskey(fixed, i) && throw(ArgumentError("zero-injection terminal $node is fixed by a source"))
             end
             _compile_measurements(net, measurements, ybus.index, neutral)
+            connections, groups = _se_injection_layout(measurements, neutral, ybus.index; injection_connections)
             _compile_exact_devices(exact_devices, ybus.index)
+            _se_check_device_injections(connections, groups, measurements, exact_devices, ybus.index, fixed)
         catch err
             issue(:error,:invalid_compilation,"network",sprint(showerror,err))
         end
@@ -263,18 +265,24 @@ function _se_preflight(net, measurements; neutral="n", zero_injection=String[], 
     end
     for node in zero_injection; push!(exact,(kind=:zero_injection, specification=deepcopy(node))); end
     for d in exact_devices; push!(exact,(kind=:device, specification=deepcopy(d))); end
+    if injection_connections !== nothing
+        for c in injection_connections; push!(exact,(kind=:injection_connection, specification=deepcopy(c))); end
+    end
     report = SEPreflightReport(!any(f -> f.severity === :error, findings), findings, elements,
         omitted, sources, sort!(grounds), refs, exact)
     report, ybus
 end
 
 """
-    state_estimator_preflight(net, measurements=[]; neutral="n", zero_injection=[], exact_devices=[])
+    state_estimator_preflight(net, measurements=[]; neutral="n", zero_injection=[],
+                              exact_devices=[], injection_connections=nothing)
 
 Inspect the supported electrical interpretation before compiling. Ideal and
 warning-producing transformer primitives are rejected, never regularised or
 silently skipped. Fixed taps are data, not estimated controls. This report does
 not certify observability, model accuracy, or convergence.
+Pass `injection_connections` to declare unknown injection paths independently
+of P/Q telemetry; the default infers them from the measurements.
 """
 state_estimator_preflight(net::Dict{String,Any}, measurements::AbstractVector=Measurement[]; kwargs...) =
     first(_se_preflight(net, measurements; kwargs...))

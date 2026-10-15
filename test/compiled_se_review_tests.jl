@@ -13,8 +13,10 @@ using Random: MersenneTwister, randn
     append!(ms, [BranchMeasurement(kind=kind, line="l1", side=side,
         terminal="1", value=0., sigma=2.) for kind in (:ire, :iim, :imag, :pflow, :qflow)
         for side in (:from, :to)])
+    # Put the exact device downstream: the b1 phases and neutral also carry
+    # unknown customer injections, outside the exact-node device contract.
     device = ExactDeviceEquation(ZIPDevice(
-        [TerminalConnection(("b1", "1"), ("b1", "n"))],
+        [TerminalConnection(("b2", "1"), ("b2", "n"))],
         ComplexF64[4000 + 1000im], ComplexF64[2 - .5im], ComplexF64[.01 - .002im]))
     s = compile_state_estimator(net, ms; exact_devices=[device], zero_injection=[("b2", "1")])
     p = SEParameters(s, ms; exact_devices=[device])

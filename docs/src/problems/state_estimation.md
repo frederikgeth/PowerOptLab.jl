@@ -73,6 +73,11 @@ earlier inconsistency where `:vmag` was terminal-to-ground while `:pinj`/`:qinj`
 were phase-to-neutral — masked only because the test feeders perfectly ground
 every neutral.
 
+Injection-current warm starts use the complex phase-to-reference voltage start,
+including its angle and any neutral displacement: ``I_0=\overline{S_0/V_0}``.
+Voltage and power bases are applied in the model's units, so the same physical
+start is used in SI and per-unit solves.
+
 ## Observability — convergence is not uniqueness
 
 The WLS fit is **nonconvex**: the squared `P`/`Q` residuals are quartic and the
@@ -93,7 +98,8 @@ equation set the *solver* imposes, not a convenient approximation of it:
 
 `observable = rank == n_states`, where `rank` combines the exact-constraint
 rank with the measurement rank on the resulting tangent space. `redundancy`
-counts stochastic measurement rows beyond that tangent-space measurement rank;
+counts stochastic measurement rows beyond that tangent-space measurement rank
+and the fitted individual-customer powers at merged nodes;
 exact constraints do not create residual redundancy. The result also reports
 the smallest reduced singular value and condition number, and
 `solve_state_estimation` warns on rank deficiency.
@@ -111,11 +117,25 @@ reported unobservable even though the estimate was correct. The current
 diagnostic derives the tangent space from all exact KCL combinations and keeps
 their numerical rank separate from the whitened measurement rows.
 
+Source boundaries, measurement locations, and returned voltages are resolved
+through the Ybus alias index. Terminals merged by ideal switches or negligible
+line impedances therefore share one voltage state even when their original
+bus names differ from the chosen representative.
+Distinct original injection terminals retain distinct customer powers whose
+sum enters merged-node KCL. Repeated readings of one original terminal share
+one power. The voltage observability diagnostic profiles out individual
+customer allocations, so a pair of customer meters is not mistaken for
+redundant observations of the net power. Conflicting P/Q return references for
+one customer are rejected before building the model; electrically identical
+grounded references are accepted. Unknown injections sharing a merged positive
+terminal must share one return, and unknown positive/return paths must not
+overlap.
+
 !!! warning "Local optimum"
     Like the IVQ battery solve, this is a
     nonconvex problem solved to a local stationary point. For a promotion-grade
     estimator, add multistart or an appropriate global-validation strategy,
-    and check `observability.observable` and `primal_status` before trusting a
+    and check `observability.observable` and `solve_status(se).publishable` before trusting a
     result. Switching local algorithms does not establish global uniqueness.
 
 ## Residuals
@@ -160,8 +180,8 @@ meas = [
 
 se = solve_state_estimation(net, meas)
 
-se.primal_status            # "FEASIBLE_POINT" — trust the estimate only then
-se.bus["bus1"]["1"]["vm"]   # estimated |V| at bus1 (V); NaN if not FEASIBLE_POINT
+solve_status(se).publishable # checks termination and primal feasibility
+se.bus["bus1"]["1"]["vm"]   # estimated |V| at bus1 (V); NaN if not publishable
 se.residuals                # per-measurement measured/estimated/residual/standardized
 se.observability            # (observable, n_states, rank, redundancy,
                             #  min_singular, cond, tangent_dimension)
@@ -178,10 +198,12 @@ state is determined.
 
 Branch-flow / branch-current / phasor (PMU) / source measurements; bad-data
 detection and identification (χ², largest-`rᴺ`); multistart / global search.
-Four-wire modelling with an ungrounded neutral as a first-class state belongs
-to the [constrained NLLS estimator](constrained_state_estimation.md); this
+Both estimators keep ungrounded neutrals as explicit voltage states. This
 formulation states zero injection per phase against a return terminal, so
 `zero_injection` expands a bare bus id over its *phase* terminals only.
+The [constrained NLLS estimator](constrained_state_estimation.md) additionally
+supports explicit injection connections independent of power telemetry,
+branch readings, exact device laws, and covariance queries.
 
 Measurements whose return terminal does not exist on their bus are rejected up
 front, naming whether the terminal came from the solve's `neutral` default or

@@ -1,16 +1,17 @@
 # Choosing a formulation
 
-Both estimators fit the same physics to the same telemetry. The choice between
-them is a modelling choice, not a performance one.
+Both estimators use the passive network physics and a Gaussian measurement
+objective. Their APIs differ in injection coverage, supported exact device
+models, diagnostics, and computational cost.
 
 ## The one-sentence version
 
-Use the **[legacy WLS](../problems/state_estimation.md)** estimator when every
-piece of information you have is uncertain and the network is
-grounded-neutral. Use the **[constrained NLLS](../problems/constrained_state_estimation.md)**
-estimator when something in your model is *exactly* true, when neutral
-displacement is part of the answer, or when you need branch telemetry,
-covariance, or a time series.
+Use the **[legacy WLS](../problems/state_estimation.md)** estimator for a
+JuMP/Ipopt model with complete paired P/Q injection coverage and explicit zero
+injections. Use the **[constrained NLLS](../problems/constrained_state_estimation.md)**
+estimator for exact nonlinear device laws, branch telemetry, covariance, or a
+time series. Both retain ungrounded neutral voltages and impose exact network
+equations; uncertain readings remain weighted residuals in both.
 
 ## Side by side
 
@@ -19,16 +20,16 @@ covariance, or a time series.
 | **Problem** | one weighted sum of squares | ``\min \tfrac12\lVert r\rVert^2`` subject to ``c(x)=0`` |
 | **Solver** | Ipopt (general interior-point NLP) | Byrd–Omojokun composite step (dense) or Hachtel augmented system with sparse QR |
 | **State** | rectangular ``V`` at non-source nodes, plus a free injection current per measured terminal | rectangular ``V`` of free conductors only |
-| **Neutrals** | per-phase contract; a modelled neutral is not a first-class state | explicit conductor; an ungrounded neutral stays in the state |
+| **Neutrals** | explicit BMOPFTools voltage variables with terminal-to-reference injection currents | explicit conductor voltages and compiled return-current constraints |
 | **Node measurements** | `:vmag`, `:pinj`, `:qinj` | `:vr`, `:vi`, `:vmag`, `:pinj`, `:qinj` |
 | **Branch measurements** | none | `:ire`, `:iim`, `:imag`, `:pflow`, `:qflow` on a named line |
 | **Exact device laws** | none | `ConstantPowerDevice`, `ConstantCurrentDevice`, `ZIPDevice` |
 | **Zero injection** | hard (the engine's KCL), declared per phase | hard `c(x)=0`, declared per conductor |
-| **Input contract** | strict — rejects loads, limits, and uncovered buses | none; rank diagnostics instead |
-| **Observability** | rank of the measurement + KCL Jacobian at the solution | rank of ``HZ`` on the feasible tangent space, where ``CZ=0`` |
+| **Input contract** | rejects loads, limits, and uncovered phase injections | electrical preflight rejects unsupported models and reports omissions; no complete injection-coverage requirement |
+| **Observability** | measurement rank on the exact-KCL tangent space at the solution | rank of ``HZ`` on the feasible tangent space, where ``CZ=0`` |
 | **Covariance** | not provided | `selected_state_covariance`, `derived_covariance` |
 | **Time series / priors** | no | `solve_time_series_state_estimator`, `StatePrior` |
-| **Warm start** | Ipopt-internal, seeded from the readings | explicit `x0`, reused across snapshots |
+| **Warm start** | phase-aware voltage and injection-current starts, seeded from the readings | explicit `x0` or load-free initialiser, reused across snapshots |
 | **Error model** | Gaussian today; the JuMP model can express solver-compatible ``-\log f`` objectives and exact reformulations of WLAV/Huber | Gaussian today; robust/general likelihoods require changes to step weights, globalisation, and uncertainty calculations |
 | **Bad data** | neither. `standardized` is a raw σ-normalised residual; multipliers are leads | |
 
@@ -57,11 +58,22 @@ informative, and much better than a soft compromise that hides the conflict.
 
 ### Four-wire networks
 
-The WLS estimator states zero injection per phase, against a return terminal.
-The constrained estimator states KCL per conductor against earth, so an
-ungrounded neutral is a state and neutral displacement is estimated rather
-than assumed away. If your question involves neutral-to-earth voltage,
-unbalance, or a broken neutral, only the second formulation can express it.
+Both estimators preserve explicitly modelled, ungrounded neutral voltages.
+The legacy estimator attaches free current to a measured terminal and its
+return with opposite signs. The compiled estimator eliminates those currents
+and imposes a combined current-sum equation for each connected injection return
+component. Several measured phases sharing one neutral therefore contribute one
+combined balance, independently of the uncertain P/Q readings.
+Use `injection_connections` in the compiled API to preserve those paths when
+power telemetry drops out; the default infers paths from the available P/Q rows.
+Distinct original customer terminals retain separate powers at merged buses,
+whose powers and independent variances add. Repeated readings of the same
+original customer instead share its power and combine by precision.
+
+Neither formulation grounds a floating neutral merely to make the estimate
+observable. Supply the physical grounding and return paths, then inspect the
+rank diagnostics. The compiled interface also supports explicit nonlinear
+device laws and selective covariance for neutral-related quantities.
 
 Note the matching difference in the `zero_injection` keyword: a bare bus id
 expands over *phase* terminals for WLS and over *all* conductors, neutral
@@ -89,10 +101,11 @@ a retained load adds its injection *on top of* the estimated one, and a
 retained voltage limit pins the estimate to the limit — both while still
 reporting `LOCALLY_SOLVED`.
 
-`compile_state_estimator` has no equivalent contract. It is the more
-expressive interface and the sharper instrument; it will happily compile an
-under-determined problem and tell you so afterwards through
-`observability_diagnostics`. Check the diagnostics; nothing else will — and see
+`compile_state_estimator` runs an electrical support preflight and records
+network injections and operating limits that it omits. It does not require
+complete injection telemetry or reject every underdetermined problem: rank
+diagnostics describe the information available at the evaluation point.
+Inspect both `structure.preflight` and `observability_diagnostics`, and see
 [observability](observability.md) for how to read them and what to do when a
 set turns out to be under-observed.
 
@@ -100,7 +113,7 @@ set turns out to be under-observed.
 
 Neither estimator's success status is a uniqueness claim.
 
-* WLS: trust `primal_status == "FEASIBLE_POINT"`, then read
+* WLS: check `solve_status(result).publishable` (termination and primal feasibility), then read
   `observability.observable`. Voltages are `NaN` when the solve did not
   converge — an unconverged iterate is not published as an estimate.
 * Constrained: read `:converged_unique` and `:converged_underobserved` as first-order termination; the
@@ -116,8 +129,13 @@ Where both can express the same problem, they agree. `test/` checks the
 compiled estimator against a BMOPFTools `solve_pf` state recovered from exact
 telemetry, and checks the dense and sparse solvers against each other on that
 problem; the WLS estimator is checked against a power flow of the same feeder.
-The two formulations are validated against the same physics, not against each
-other's output.
+The regression suite also compares both compiled solvers directly with the
+legacy JuMP/Ipopt fit on noisy phase-to-neutral measurements while checking
+exact return-current balance. Merged-customer tests check summed power,
+unequal uncertainties, repeated readings, missing components and row permutations
+against the JuMP formulation, including profiled voltage information and
+covariance against aggregate telemetry. These small cases establish agreement within
+their tested models and tolerances, rather than equivalence on every network.
 
 ## Known limitations of both
 

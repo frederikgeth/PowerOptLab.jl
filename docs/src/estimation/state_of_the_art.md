@@ -70,7 +70,7 @@ both estimators assume a diagonal covariance.
 | Nonlinear WLS fit | ✅ | ✅ | |
 | Exact zero injection | ✅ | ✅ | constraints, not weighted rows |
 | Exact device laws | ❌ | ✅ | constant P, constant I, ZIP |
-| Four-wire / floating neutral | ❌ | ✅ | |
+| Four-wire / floating neutral | ✅ | ✅ | Both retain ungrounded neutral states. |
 | Branch telemetry | ❌ | ✅ | lines only; no transformers |
 | Local observability | ✅ | ✅ | dense SVD, both |
 | State covariance | ❌ | ✅ | checks identifiability of each requested quantity |

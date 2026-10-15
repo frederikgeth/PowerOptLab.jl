@@ -12,9 +12,9 @@ nonlinear least-squares problem
 It is separate from the [legacy WLS/Ipopt formulation](state_estimation.md); see
 [Choosing a formulation](../estimation/comparison.md) for the head-to-head.
 Use this API when the distinction between **uncertain information** and a
-**genuinely exact electrical equation** matters, when neutral displacement must
-remain in the state, or when branch telemetry/exact nonlinear devices are
-required.
+**genuinely exact electrical equation** matters, or when branch telemetry,
+exact nonlinear devices, or selective covariance are required. Both estimators
+retain explicitly modelled ungrounded neutral voltages.
 
 !!! warning "Prototype scope"
     The dense and sparse solvers are reference/prototype implementations.  The
@@ -24,7 +24,7 @@ required.
 
 ## Electrical support preflight and initialization
 
-Call `state_estimator_preflight(net, measurements; zero_injection, exact_devices)`
+Call `state_estimator_preflight(net, measurements; zero_injection, exact_devices, injection_connections)`
 before compiling to inspect the snapshot interpretation. The same report is
 retained as `structure.preflight`; compilation throws `SEUnsupportedNetwork`
 with its report if any error is present. `supported` means representable by this
@@ -178,6 +178,13 @@ ordering and sparsity; [`SEParameters`](@ref) owns readings, standard deviations
 source phasors, device values, and priors.  Update parameters between snapshots
 instead of recompiling whenever topology is unchanged.
 
+`SEParameters(structure, measurements; exact_devices=...)` checks measurement
+kinds, bus/line locations, references, and row order against the compiled
+pattern. It also checks exact device kinds and oriented connections. Reordering
+measurements or changing a device's location or law requires recompilation;
+having the same number of rows or devices is insufficient. Values and standard
+deviations may change freely within their finite-value contracts.
+
 ### Sign convention
 
 Passive and branch currents are positive **from a bus into an element**.  An
@@ -276,6 +283,12 @@ precision cannot deliver.  Stationarity is divided by `norm(H, Inf)`, so
 `optimality_tolerance` reads in units of the whitened residual rather than in
 whatever units ``\partial h/\partial x`` happens to carry.
 
+Both solvers require finite, non-negative feasibility, stationarity, and rank
+tolerances. Trust-region radii and the merit penalty must be finite and
+positive; sparse damping must be finite and non-negative. In particular,
+`constraint_tolerance=Inf` is rejected rather than turning every initial point
+into a feasible estimate. Zero absolute or relative tolerances are allowed.
+
 ## Measurements
 
 All values are SI and every scalar has an independent standard deviation
@@ -288,6 +301,71 @@ All values are SI and every scalar has an independent standard deviation
 - `:vr`, `:vi`, `:vmag` — voltage component/magnitude across terminal to its
   `reference` (default: `neutral`; `nothing`: earth);
 - `:pinj`, `:qinj` — terminal injection power into the passive network.
+
+Declare unknown injection paths independently of telemetry with
+`compile_state_estimator(...; injection_connections=[TerminalConnection(("b1", "1"), ("b1", "n"))])`.
+Pass the same keyword to preflight. A declaration fixes only the electrical
+connection, not its power or current. Retain all physical connections when
+compiling a snapshot with missing P/Q channels. With the default
+`injection_connections=nothing`, paths are inferred from power measurements for
+compatibility; removing the last P/Q row for a customer then removes its path.
+An explicit list is authoritative: each power measurement must match a declared
+positive terminal and electrical return. Voltage and line readings declare no
+paths. `injection_connections=[]` declares none.
+
+For a customer connected between a phase and an ungrounded neutral, the estimator enforces
+``I_{\mathrm{phase}} + I_n = 0`` exactly. Several measured phases sharing a
+neutral give one combined equation, ``\sum_p I_p + I_n = 0``. The P/Q readings
+remain stochastic residuals; their values and standard deviations do not set
+the return current. These equations also include any explicit device currents.
+
+Return equations are assembled from connected components of the declared
+terminal-to-reference injection paths, using the merged Ybus node index. A
+component connected to earth (`reference=nothing` or a perfectly grounded
+terminal) or an ideal-source terminal has an unconstrained boundary return, so
+it adds no current-sum constraint. All unknown injections sharing an ungrounded
+return must be included in the declared or inferred connections; use an earth
+reference only for an actual earth return.
+
+P and Q readings of one original `(bus, terminal)` describe one customer and
+must use the same electrical return. Grounded-terminal and explicit earth
+references are equivalent. Conflicting references are rejected, independently
+of row order. Unknown injection connections must not overlap with one another's
+positive terminals, and customers whose positive terminals merge must share
+one electrical return. More general unknown-current networks require separate
+current states and are rejected; connection-aware **exact** device models
+remain available for phase-phase and delta laws.
+
+### Customers on merged buses
+
+Ideal-switch aliases share voltage, but distinct original `(bus, terminal)`
+identities retain distinct customer powers. Their powers add to the merged
+node's total; repeated readings of the same original customer measure the same
+quantity. The compiled evaluator profiles out these individual powers: it
+fuses repeated readings by precision, sums customer means and independent
+variances, and allocates any discrepancy according to those variances.
+`evaluation.predicted` reports these conditional customer predictions in the
+original row order. Residuals and the objective retain disagreement between
+repeat readings; the voltage Jacobian and covariance use the profiled
+information. Predictions for these rows therefore depend on both readings and
+sigmas, as well as voltage.
+Profiling assumes a nonzero connection voltage: individual powers cannot be
+allocated to finite customer currents at zero voltage. Evaluation and
+Jacobians reject voltage drops below `SEParameters.voltage_min_model` (default
+0.001 V); solvers reject such initial points as `:invalid_initial_domain` and
+reject trials outside that domain. This domain guard also applies when
+positive and negative customer powers cancel to zero net power.
+
+If any declared customer lacks a P or Q component, other customers' readings
+of that component alone do not constrain the node total: the unmeasured
+customer can absorb the remaining power. Neither a missing channel nor an
+unmeasured declared connection implies zero injection. To represent a meter
+of the entire node total, declare one aggregate injection identity and supply
+its aggregate readings rather than labelling a customer reading as a total.
+
+`evaluation.constraints` and the sparse solver's multipliers list explicit
+zero-injection/device conductor equations first, followed by the return-current
+component equations, with real and imaginary rows interleaved in both blocks.
 
 Magnitude derivatives are undefined at zero.  Set
 `SEParameters(...; magnitude_epsilon=...)` only when smoothing below the
@@ -314,6 +392,9 @@ Supported kinds are `:ire`, `:iim`, `:imag`, `:pflow`, and `:qflow`.  They use
 BMOPFTools' public `line_yprim` primitive, so linecode truncation and shunt
 stamping match the passive network model exactly.  This requires the
 BMOPFTools release containing `line_yprim` (introduced by PR #348).
+Current telemetry on a grounded neutral conductor remains meaningful and is
+supported. Its earth-referenced active/reactive power is identically zero,
+because that conductor's voltage is fixed at zero.
 
 !!! note "Branch power is referenced to earth"
     Unlike a node [`Measurement`](@ref), a `BranchMeasurement` takes no
@@ -327,6 +408,19 @@ BMOPFTools release containing `line_yprim` (introduced by PR #348).
 Use [`ExactDeviceEquation`](@ref) only when a device law is truly exact.
 `TerminalConnection` is a general oriented branch: phase-neutral connections
 model wye/single-phase devices; phase-phase connections model delta devices.
+
+The present exact-device equations specify the **complete net injection** on
+their free conductors. A different unknown customer sharing one of those
+conductors, including a shared neutral, requires separate current states and
+is rejected by preflight. Power telemetry of the same exact device connection
+is supported; merged-customer power allocation on an exact-device conductor
+is rejected. This prevents a partial device model from silently fixing the
+whole node's injection. Voltage and line telemetry can still observe exact
+devices without declaring additional unknown injections.
+
+An ideal source supplies its attached devices through a free boundary current.
+An exact device at a source therefore adds KCL only on any free endpoint;
+it does not impose zero net current at a source-fixed conductor.
 
 ```julia
 load = ExactDeviceEquation(ConstantPowerDevice(
@@ -351,6 +445,19 @@ Available models are [`ConstantPowerDevice`](@ref),
 evaluation rejects trial states below `voltage_min_model`.  Continuation starts
 with a regularised internal law and **must finish at `α=1`** before accepting a
 physical result.
+
+A converged stage with a nonzero constant-power term and `α<1` reports
+`:converged_regularized`. It is not publishable through `solve_status`, and a
+time-series driver stops instead of accepting it as a physical snapshot. The
+continuation driver accepts it only as an intermediate stage, and publishes
+only after reaching the physical `α=1` model. Failed or interrupted-by-exception
+continuation restores the caller's original `continuation_alpha`; success
+leaves it at one.
+
+A named perfectly grounded return, such as `TerminalConnection(("b1", "1"),
+("b1", "n"))` when that neutral is declared grounded, is equivalent to an
+explicit earth return. A source may explicitly list its grounded neutral at
+zero volts; a nonzero source phasor on an ideally grounded terminal is rejected.
 
 ## Diagnostics, multipliers, and uncertainty
 
@@ -385,6 +492,9 @@ series = solve_time_series_state_estimator(structure, [p1, p2], x0;
 The prior from snapshot `t-1` is a whitened residual, not a hard voltage
 constraint.  The driver warm-starts each snapshot, stops on the first failed
 one, and returns `:time_series_stalled` without publishing later estimates.
+`solve_diagnostics(series).requested_snapshots` retains the original request
+count, while `length(series.snapshots)` includes only attempted solves and
+`completed_snapshots` counts successful ones.
 
 A prior the caller configured on an `SEParameters` is **preserved**.  When
 `previous_state_sigma` is supplied the previous-state prior is layered on top of
@@ -416,13 +526,25 @@ in the API reference for the full callable interface.
 ## Validation and computational scope
 
 Run the focused suite with
-`julia --project=. -e 'using Test, PowerOptLab; include("test/constrained_state_estimation_tests.jl")'`.
+`julia --project=. -e 'using Test, PowerOptLab; include("test/constrained_state_estimation_tests.jl"); include("test/state_estimation_regression_tests.jl"); include("test/state_estimation_quality_tests.jl"); include("test/state_estimation_injection_tests.jl")'`.
 It includes loaded four-wire finite-difference checks with complex and mutual
 impedance, both line ends, an independent analytic noisy reactive-power optimum,
 conflicting exact constraints, square rank deficiency, negative-curvature
 rejection, identifiable covariance, and seeded Monte Carlo variance of a linear
 estimate. These checks complement the existing power-flow recovery tests;
 they do not establish robustness on operational feeders or nonlinear coverage.
+The regression suite also checks merged source/measurement aliases, noisy
+customer injections with exact neutral return, shared and earth returns, both
+compiled solvers against JuMP/Ipopt, and angle-aware current starts in SI and
+per-unit units.
+The quality suite exercises immutable snapshot identities, exact device
+topology and finite-value validation, named grounded returns, explicit zero
+source neutrals, solver-option validation, and the distinction between
+regularised continuation stages and physical estimates.
+The injection suite checks summed merged-customer powers with unequal
+uncertainties, repeated and missing channels, aggregate-equivalent voltage
+covariance, return-reference order independence, persistent connection
+declarations, grounded-neutral line telemetry, and time-series request counts.
 
 Run `julia --project=. scripts/benchmark_compiled_state_estimation.jl` to
 reproduce sparse-chain allocation and timing measurements. With Julia 1.12.6,

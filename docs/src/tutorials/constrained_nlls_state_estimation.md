@@ -163,17 +163,23 @@ relabelled as branch power without conversion.
 The model minimizes ``\frac12\lVert r(x)\rVert^2`` subject to ``c(x)=0``.
 Residuals are divided by their standard deviations. The unloaded `mid` bus
 supplies exact zero-injection equations for **all four conductors**, giving
-eight real KCL equations in A. Missing load telemetry would not imply zero
-injection.
+eight real KCL equations in A. Three declared phase-to-neutral connections
+also impose two real equations balancing the load's phase and neutral currents.
+These electrical connections remain present when telemetry is missing; missing
+load telemetry does not imply zero injection.
 
 The state contains free conductor-to-earth potentials as
 `[real(V_free); imag(V_free)]`. There are eight free complex voltages: four at
 `mid` and four at `load`. No downstream neutral is grounded or removed.
 
 ```julia
-preflight = state_estimator_preflight(net, clean_readings; zero_injection=["mid"])
+injection_connections = [TerminalConnection(("load", string(k)), ("load", "n"))
+                         for k in 1:3]
+preflight = state_estimator_preflight(net, clean_readings;
+    zero_injection=["mid"], injection_connections)
 @assert preflight.supported
-structure = compile_state_estimator(net, clean_readings; zero_injection=["mid"])
+structure = compile_state_estimator(net, clean_readings;
+    zero_injection=["mid"], injection_connections)
 parameters = SEParameters(structure, clean_readings)
 nf = length(structure.free_state_map)
 @assert nf == 8
@@ -233,13 +239,13 @@ sparse_fit = solve_sparse_state_estimator(structure, noisy_parameters, x0; solve
 @assert norm(sparse_fit.evaluation.constraints, Inf) < 1e-7
 @assert norm(sparse_fit.state - known_state, Inf) < 0.05
 fit_objective = sum(abs2, sparse_fit.evaluation.residual)/2
-@assert abs(fit_objective - 0.1721181) < 1e-4
+@assert abs(fit_objective - 0.2636024) < 1e-4
 @assert abs(sum(abs2, dense_fit.evaluation.residual)/2 - fit_objective) < 1e-6
 
 obs = observability_diagnostics(structure, noisy_parameters, sparse_fit.state;
     include_prior=false)
 @assert (obs.constraint_rank, obs.tangent_dimension,
-         obs.observable_dimension, obs.unobservable_dimension) == (8, 8, 8, 0)
+         obs.observable_dimension, obs.unobservable_dimension) == (10, 6, 6, 0)
 @assert isfinite(obs.condition_number)
 neutral_index = structure.free_state_map[("load", "n")]
 neutral_covariance = selected_state_covariance(structure, noisy_parameters,
@@ -255,10 +261,10 @@ println("Perturbed estimate: objective = ", round(fit_objective; digits=5),
 |:--|:--|
 | Dense and sparse clean solves | `:converged_unique`, state error below 0.00001 V |
 | Dense and sparse perturbed solves | `:converged_unique`, agreement within 0.00001 V |
-| Perturbed maximum voltage-component error | about 0.03193 V |
-| Perturbed weighted objective | about 0.17212 |
+| Perturbed maximum voltage-component error | about 0.00942 V |
+| Perturbed weighted objective | about 0.26360 |
 | Exact-junction current residual | below 0.0000001 A |
-| Feasible tangent dimension / observable dimension | 8 / 8 |
+| Feasible tangent dimension / observable dimension | 6 / 6 |
 
 Observability is local and conditional on the exact equations. If ``CZ=0``
 for the constraint Jacobian ``C``, the relevant measurement rank is that of
@@ -275,16 +281,18 @@ topology error, gross bad data and model discrepancy are outside this covariance
 
 ## Remove information and identify what remains observable
 
-Keep only the six phase-to-neutral rectangular readings. Retain the true
-zero-injection junction, but remove the P/Q readings, earth-referenced neutral
-readings and line-current reading. Eight feasible state directions remain,
-while only six are observed. Phase-to-neutral voltages remain identifiable;
-two conductor-to-earth directions do not.
+Keep only the four rectangular phase-to-neutral readings on phases 1 and 2.
+Retain the zero-injection junction and all three physical load connections, but
+remove the other readings. Six feasible state directions remain, while only
+four are observed. The measured phase-to-neutral voltages remain identifiable;
+two state directions, including neutral displacement, do not.
 
 ```julia
 voltage_only = [m for m in clean_readings if
-    m isa Measurement && m.kind in (:vr, :vi) && m.reference == "n"]
-weak_structure = compile_state_estimator(net, voltage_only; zero_injection=["mid"])
+    m isa Measurement && m.kind in (:vr, :vi) && m.reference == "n" &&
+    m.terminal in ("1", "2")]
+weak_structure = compile_state_estimator(net, voltage_only;
+    zero_injection=["mid"], injection_connections)
 weak_parameters = SEParameters(weak_structure, voltage_only)
 weak_fit = solve_sparse_state_estimator(weak_structure, weak_parameters,
     initial_state_estimator(weak_structure, weak_parameters); solver_settings...)
@@ -294,7 +302,7 @@ weak_fit = solve_sparse_state_estimator(weak_structure, weak_parameters,
 @assert norm(weak_fit.evaluation.residual, Inf) < 1e-6
 weak_obs = observability_diagnostics(weak_structure, weak_parameters, weak_fit.state)
 @assert (weak_obs.tangent_dimension, weak_obs.observable_dimension,
-         weak_obs.unobservable_dimension) == (8, 6, 2)
+         weak_obs.unobservable_dimension) == (6, 4, 2)
 
 # Jacobian of [real(V_load,1 - V_load,n), imag(V_load,1 - V_load,n)].
 weak_nf = length(weak_structure.free_state_map)
@@ -331,7 +339,7 @@ println("Voltage-only estimate: 2 unobserved directions; phase-neutral sigma = 0
 
 *The full-data fit uses the perturbed readings; its bars show predicted minus
 reported values divided by their stated standard deviations. The voltage-only
-fit uses clean readings and matches all six exactly, yet its plotted neutral
+fit uses clean readings and matches all four exactly, yet its plotted neutral
 is only one admissible estimate. It has no finite neutral-to-earth covariance.
 The blue component error bars show local ±1σ uncertainty for the full-data
 fit; the dotted residual lines mark ±1σ, not a bad-data threshold.*
@@ -348,7 +356,7 @@ or a justified physical assumption are needed.
 For a separate benchmark, declare three exact constant-power devices whose
 consumption equals the reference operating-point power. Each connects a phase
 to the actual load neutral. Along with the unloaded junction, those equations
-locally determine all 16 real states, even with only the six voltage readings.
+locally determine all 16 real states, even with only four voltage readings.
 This is a much stronger information assumption than the main experiment.
 
 ```julia
@@ -356,7 +364,7 @@ exact_loads = [ExactDeviceEquation(ConstantPowerDevice(
     [TerminalConnection(("load", string(k)), ("load", "n"))],
     ComplexF64[-injection[k]])) for k in 1:3]
 exact_structure = compile_state_estimator(net, voltage_only;
-    zero_injection=["mid"], exact_devices=exact_loads)
+    zero_injection=["mid"], injection_connections, exact_devices=exact_loads)
 exact_parameters = SEParameters(exact_structure, voltage_only;
     exact_devices=exact_loads, voltage_min_model=1.0, regularization_voltage=230.0)
 continued = solve_with_continuation(exact_structure, exact_parameters,
@@ -365,7 +373,9 @@ continued = solve_with_continuation(exact_structure, exact_parameters,
 @assert solve_status(continued).publishable
 @assert length(continued.stages) == 5
 @assert continued.alphas[end] == 1.0
-@assert all(stage.status == :converged_unique for stage in continued.stages)
+@assert all(stage.status == :converged_regularized for stage in continued.stages[1:4])
+@assert all(!solve_status(stage).publishable for stage in continued.stages[1:4])
+@assert continued.stages[end].status == :converged_unique
 physical_fit = continued.result
 @assert norm(physical_fit.state - known_state, Inf) < 1e-5
 @assert norm(physical_fit.evaluation.constraints, Inf) < 1e-7
@@ -411,7 +421,7 @@ println("Time series: 2 completed snapshots; second maximum state error = ",
 ```
 
 Expect two completed snapshots and a second-snapshot maximum component error
-of about 0.03171 V. The driver stops at the first failed solve. It uses the
+below 0.01 V. The driver stops at the first failed solve. It uses the
 previous point estimate as a residual prior; it does not propagate its
 covariance or define process noise. This is temporal regularization, not a
 Kalman filter or a complete sequential Bayesian estimator. Report the prior
