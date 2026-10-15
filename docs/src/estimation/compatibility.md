@@ -18,6 +18,18 @@ what a reading means. The Ipopt backend uses limited-memory Hessians and a
 complete constraint-Jacobian pattern; it is currently a compatibility/reference
 backend, not a sparse scaling solution.
 
+For floating networks, some KCL equations can be identities of the others.
+The shared Ipopt backend selects an independent equation basis using the full
+affine network/device coefficients plus independent nonlinear branch-current
+incidences. It verifies those coefficient identities near roundoff; it does not
+drop a physical equation just because its Jacobian is zero at the starting
+point. Original equations remain in `evaluation.constraints` and every final
+physical feasibility and rank check. `solve_diagnostics` reports both equation
+counts and the physical row indices sent to the optimizer. Feasibility scaling
+also includes amplification from the independent rows back to all physical
+currents, including transformer turns ratios. Inconsistent constant
+terms and weak grounding information are retained.
+
 The original `solve_state_estimation(net, measurements)` remains a separate
 native-engine compatibility API. It accepts `Measurement` only, requires paired
 customer P/Q coverage or explicit zero injection, and does not accept the newer
@@ -120,6 +132,46 @@ Compiled source phasors fix only the listed conductor-to-earth voltages. A
 floating phase-to-neutral voltage source with unknown common-mode voltage is a
 different model and is not implemented. Soil potentials, frequency-dependent
 electrodes and separate ideal-bond reaction-current states are also absent.
+
+## What the consistency tests establish
+
+`test/state_estimation_consistency_tests.jl` adds references that do not simply
+generate an answer from the estimator's own Ybus:
+
+| Test | Independent evidence |
+|---|---|
+| Four-wire linear WLS | Series Ohm's law and electrode KCL give a closed-form constrained optimum and covariance |
+| Representation changes | Renaming buses, reversing a line, permuting conductors/readings, and consistent voltage/current rescaling preserve the statistical problem |
+| Noisy nonlinear fits | Native SI and per-unit WLS agree with all three shared solvers on the same readings and tolerances |
+| Floating exact devices | Hand-constructed constant-current, constant-power and ZIP equilibria expose redundant KCL; inconsistent constants must remain nonpublishable |
+| Gauge freedom | Solvers agree on identified voltage differences, objective and derived covariance; individual conductor voltages need not agree |
+| Three-winding transformer | An independent OpenDSS deck supplies voltages and winding-port currents/powers for a grounded single-phase WYE/WYE/WYE case; excitation and artificial anti-float shunts are disabled explicitly |
+
+The existing OpenDSS component/feeder matrix covers the other finite transformer
+families. These tests do not establish all configurations of each family or
+global uniqueness of a nonlinear fit. A common bug can survive agreement among
+solvers sharing one evaluator; independent circuit equations and external
+simulations are essential.
+
+Use the same initial state, residual weights, injection paths, priors and
+stopping tolerances when comparing algorithms. The nonlinear comparison uses
+`optimality_tolerance=1e-6` explicitly: dense/sparse currently default to `1e-8`
+and shared Ipopt to `1e-6`. An overstrict request can correctly return a
+nonpublishable stall near floating-point resolution even when voltages and
+objectives already agree. Do not loosen a test merely to hide a physical
+constraint error.
+
+For underobserved problems, compare predicted measurements and identifiable
+derived quantities, not arbitrary gauge choices. The tests verify that an
+independent stochastic prior resolves the gauge while preserving the uncertainty
+of measured voltage differences. An absolute voltage covariance that depends
+on an unresolved gauge must be rejected.
+
+Remaining quality work should add more independently specified transformer and
+neutral configurations, nonlinear uncertainty-coverage studies, realistic sparse
+telemetry and dropout sequences, and multi-start/conditioning benchmarks. A
+missing physical state or equipment equation needs a model extension; additional
+unit tests cannot manufacture that support.
 
 ## Priorities for further work
 

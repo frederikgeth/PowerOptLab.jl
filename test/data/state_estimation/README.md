@@ -50,3 +50,18 @@ Ipopt backends, plus native WLS comparisons. This OpenDSS matrix does not
 validate n-winding transformers, automatic regulator
 controls, unknown taps, ideal transformers, transformer branch telemetry,
 large-feeder scaling, bad-data processing or statistical confidence coverage.
+
+## Three-winding independent port oracle
+
+`three_winding.dss` is a synthetic grounded single-phase WYE/WYE/WYE transformer
+with 2400/1200/600 V windings, 100 kVA per winding, and two constant-power loads.
+Winding resistances are 1/.25/.0625 ohm. Pair reactances X12/X13/X23 are 2/3/2
+ohm on winding 1's 57.6-ohm base; the deck expresses those as percentages.
+Grounds use node 0 exactly; excitation losses and OpenDSS artificial anti-float
+shunts (`ppm_antifloat`) are disabled to match the stated electrical model.
+
+`state_estimation_consistency_tests.jl` reads conductor voltages and transformer
+port currents/powers directly from OpenDSS, rather than constructing those meter
+readings from the compiled Ybus. It checks all three shared solvers and native
+SI/per-unit WLS. This covers one three-winding configuration, not arbitrary
+winding counts, connections or ungrounded windings.
