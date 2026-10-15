@@ -56,8 +56,12 @@ migration.
 
 On Julia 1.12.6 the full package suite passes 15,718 checks plus 11 Aqua checks.
 The complete documentation build/doctests, seven executable study tutorials
-and three reproducible figure checks pass. The final review regressions also
-pass directly against the root manifest's immutable dependency source.
+and three reproducible figure checks pass. The final 2,510 review regressions also
+pass directly against the root manifest's immutable dependency source, including
+two explicit-zero warning checks added after that full run. Julia 1.10.11 passes
+the resulting complete 15,720-check suite plus its 10 enabled Aqua checks. Both
+Julia versions pass the full documentation build/doctests, seven executable
+study tutorials and three reproducible figure checks.
 
 The independent nonlinear calibration has mean J=2.90376 for 3 dof and relative
 voltage-covariance error 0.16066 over 500 draws. Its finite regression budgets are
