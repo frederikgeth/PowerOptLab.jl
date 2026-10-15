@@ -117,7 +117,12 @@ function tg_meters(case)
     for (id,e) in case.net["shunt"]
         bus=e["bus"];terminal=only(e["terminal_map"]);v=case.voltage[(bus,terminal)]
         i=case.electrodes[(bus,terminal)]*v
-        for (kind,value) in ((:vr,real(v)),(:vi,imag(v)),(:vmag,abs(v)))
+        # A delta winding's sole earth path fixes that phase to exactly zero.
+        # |V| has no ambient derivative there; tiny SVD roundoff must not decide
+        # whether the oracle is differentiable. Phase telemetry stays rectangular.
+        voltage_readings=[(:vr,real(v)),(:vi,imag(v))]
+        terminal=="n" && push!(voltage_readings,(:vmag,abs(v)))
+        for (kind,value) in voltage_readings
             push!(meters,Measurement(;kind,bus,terminal,reference=nothing,value,sigma=.1))
         end
         for (kind,value,sigma) in ((:ire,real(i),.02),(:iim,imag(i),.02),(:pflow,real(v*conj(i)),20.),(:qflow,imag(v*conj(i)),20.))
@@ -176,6 +181,37 @@ end
             end
         end
     end
+end
+
+@testset "SE grounded delta phase: exact-zero voltage telemetry" begin
+    case=tg_case(["WYE","WYE","DELTA"];grounding=:impedance,roll=1)
+    @test abs(case.voltage[("t","a")])<1e-7
+    case.voltage[("t","a")]=0im # deterministic reproduction across BLAS/platforms
+    meters=tg_meters(case)
+    @test !any(m->m isa Measurement && m.kind===:vmag && m.bus=="t" && m.terminal=="a",meters)
+    s=compile_state_estimator(case.net,meters;exact_devices=case.exact)
+    p=SEParameters(s,meters;exact_devices=case.exact)
+    nf=length(s.free_state_map);truth=zeros(2nf)
+    for (node,k) in s.free_state_map
+        truth[k]=real(case.voltage[node]);truth[nf+k]=imag(case.voltage[node])
+    end
+    @test norm(evaluate_state_estimator(s,p,truth).constraints,Inf)<1e-8
+    @test all(isfinite,residual_jacobian(s,p,truth))
+    @test observability_diagnostics(s,p,truth).unobservable_dimension==0
+    for solver in (solve_compiled_state_estimator,solve_sparse_state_estimator,solve_ipopt_state_estimator)
+        r=solver(s,p,truth+.01cos.(eachindex(truth));optimality_tolerance=1e-6)
+        @test solve_status(r).publishable
+        @test r.state ≈ truth atol=1e-5
+        @test norm(r.evaluation.constraints,Inf)<1e-7
+    end
+    # Reject the nonsmooth channel explicitly; never invent a zero derivative.
+    nonsmooth=[meters;Measurement(kind=:vmag,bus="t",terminal="a",reference=nothing,value=0.,sigma=.1)]
+    bad=compile_state_estimator(case.net,nonsmooth;exact_devices=case.exact)
+    bp=SEParameters(bad,nonsmooth;exact_devices=case.exact)
+    @test bad.free_state_map==s.free_state_map
+    @test_throws DomainError residual_jacobian(bad,bp,truth)
+    smooth=SEParameters(bad,nonsmooth;exact_devices=case.exact,magnitude_epsilon=1e-6)
+    @test all(isfinite,residual_jacobian(bad,smooth,truth))
 end
 
 @testset "SE floating winding: weak real reference information survives projection" begin

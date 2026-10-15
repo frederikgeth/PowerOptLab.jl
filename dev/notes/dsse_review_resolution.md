@@ -97,3 +97,13 @@ The expanded DSSE/parameter numerical suite passes 6,454 checks on Julia 1.12.6.
 Final validation also exercises the optional solver integrations and reruns the
 full package suite, documentation and executable tutorials; the PR body and
 head-specific CI checks record those results.
+
+Linux Julia 1.10 CI subsequently exposed a platform-dependent oracle issue:
+an impedance-grounded delta phase was exactly zero, whereas local SVD roundoff
+left it tiny and nonzero. The mixed-winding test had requested an unsmoothed
+voltage-magnitude derivative at that point. Electrode phase telemetry now uses
+rectangular voltage channels, retaining displaced-neutral magnitudes. A new
+deterministic exact-zero regression checks the physical solution, rank and all
+shared solvers, and explicitly tests rejection/smoothing of the nonsmooth
+magnitude channel. The production derivative guard and numerical tolerances
+are unchanged.

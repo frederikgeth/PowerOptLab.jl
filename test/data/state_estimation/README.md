@@ -88,6 +88,11 @@ affine laws give zero covariance for their fixed differential voltages.
 
 OpenDSS independently checks every transformer terminal-current equation at
 specified conductor voltages, avoiding arbitrary external load-flow gauges.
+Electrode phase voltages use rectangular telemetry: an isolated delta winding's
+sole earth path can fix its phase voltage to exactly zero, where unsmoothed
+`|V|` has no derivative. A deterministic zero-voltage regression checks this
+boundary and the explicit magnitude-domain error; neutral magnitudes remain
+covered where the neutral is displaced.
 The inline DSS commands disable artificial anti-float shunts and test both zero
 excitation and a winding-2 coil admittance of `0.0001-0.0002j` S. The independent
 star circuit adds this branch explicitly; OpenDSS supplies a separate check of
