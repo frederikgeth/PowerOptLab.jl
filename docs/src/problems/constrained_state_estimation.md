@@ -64,7 +64,7 @@ phase scale without being grounded.
 | Closed ideal switches / negligible-impedance line aliases | Imported as node aliases; open switches remain open |
 | Single-phase, center-tap, wye–delta, delta–wye transformers | Finite leakage, valid winding maps and positive fixed ratios |
 | Single-phase and open-delta regulators | Finite leakage and known fixed taps; no automatic control or tap estimation |
-| General n-winding transformers | Finite primitive, positive winding voltages, WYE/DELTA connections, equal nonzero phase counts and a/b/c/n names required; not covered by the component oracle matrix |
+| General n-winding transformers | Finite primitive, positive winding voltages, nonnegative winding resistance, WYE/DELTA connections, equal nonzero phase counts and a/b/c/n names required; independent three-winding tests include mixed connections and grounding |
 | Ideal or degenerate transformers | Rejected; auxiliary current states and exact winding relations require a future augmented formulation |
 | Loads, generators and inverters in network data | Not automatically imported as injections; listed in `omitted` |
 | Operating limits and controls | Inventoried but not imposed on the estimated state |
@@ -78,7 +78,22 @@ physical accuracy guarantees. Primitive warnings become preflight errors,
 rather than allowing a skipped or shunt-only substitute to pass silently.
 
 For n-winding data, fixed ratios are encoded in the winding `v_nom` values;
-separate tap fields are rejected because the exporter does not apply them.
+separate tap fields, including winding-local taps, are rejected because the
+exporter does not apply them. Use `configuration="WYE"` or `"DELTA"`, not
+`connection`. WYE `v_nom` is the phase-neutral coil voltage; DELTA `v_nom` is
+the phase-phase coil voltage. `r_winding` is in ohms on that winding's coil
+base, and every pair in `x_sc` is referred to winding 1's coil base.
+
+A DELTA map contains phases only. `delta_roll=1` connects each phase to the
+next phase in its ordered map; `-1` connects it to the preceding phase. These
+are explicit coil orientations, not universal OpenDSS lead/lag labels: matching
+vector groups also depends on the reference connection and conductor order.
+Other roll values are rejected. For an explicit WYE neutral, include `n` in
+the winding and bus maps. Leaving that neutral ungrounded preserves its state;
+use `perfectly_grounded_terminals` for an ideal earth bond or a separate finite
+shunt for an electrode. N-winding `r_neutral`/`x_neutral` fields are rejected
+because the exporter ignores them. A WYE map without `n` references its coils
+directly to earth and cannot represent a floating star point.
 
 Recompile after changing taps, topology, impedances or terminal maps.
 `SEParameters` updates measurements, source phasors and supported exact-device

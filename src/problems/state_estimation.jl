@@ -793,9 +793,12 @@ function _se_observability_metrics(Hm::AbstractMatrix{<:Real}, C::AbstractMatrix
     Hr = collect(Float64, Hm) * Z
     svr = svdvals(Hr)
     smaxr = isempty(svr) ? 0.0 : maximum(svr)
-    tolr = smaxr * max(size(Hr)...) * eps(Float64)
+    # A zero reduced map still contains projection roundoff from Hm. Do not
+    # infer information by comparing those entries only with one another.
+    tolr = max(smaxr * max(size(Hr)...) * eps(Float64),
+        8eps(Float64) * max(size(Hr)...) * norm(Hm))
     rankM = count(>(tolr), svr)
-    smin = tangent == 0 ? Inf : length(svr) >= tangent ? svr[tangent] : 0.0
+    smin = tangent == 0 ? Inf : rankM == tangent ? svr[tangent] : 0.0
     condn = tangent == 0 ? 1.0 : smin > 0 ? smaxr / smin : Inf
 
     (observable = rankM == tangent,

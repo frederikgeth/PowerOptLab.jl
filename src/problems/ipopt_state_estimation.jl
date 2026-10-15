@@ -242,6 +242,10 @@ function solve_ipopt_state_estimator(s::SEStructure, p::SEParameters, x0::Abstra
     verbose || set_silent(model)
     @variable(model, y[1:length(x)], start=0.)
     set_optimizer_attribute(model, "hessian_approximation", "limited-memory")
+    # Mixed winding P/Q channels have strongly coupled voltage curvature.
+    # Ipopt's six-vector default can repeatedly forget it even on small
+    # circuits; a bounded larger history remains linear in the state count.
+    set_optimizer_attribute(model, "limited_memory_max_history", 30)
     set_optimizer_attribute(model, "nlp_scaling_method", "none")
     set_optimizer_attribute(model, "max_iter", Int(max_iterations))
     set_optimizer_attribute(model, "tol", max(Float64(optimality_tolerance) / 100, 1e-12))
@@ -271,7 +275,7 @@ function solve_ipopt_state_estimator(s::SEStructure, p::SEParameters, x0::Abstra
     jf === nothing && return result(:undefined_derivative, xf, ef, 0, 0, 0, term, primal)
     H, C = jf
     rc, Z = _se_rank_nullspace(C; rtol=rank_rtol)
-    od, _ = _se_rank_nullspace(H * Z; rtol=rank_rtol)
+    od, _ = _se_rank_nullspace(H * Z; rtol=rank_rtol, reference_scale=norm(H))
     td = size(Z, 2)
     status = !_publishable(outcome) ? :optimizer_failed :
              norm(ef.constraints) > ctol ? :constraint_not_satisfied :

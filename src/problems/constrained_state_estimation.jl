@@ -491,6 +491,47 @@ function _compile_return_currents(specs, fixed, n)
     sparse(rows, cols, ones(length(rows)), length(groups), n)
 end
 
+# A complete explicit winding has zero total terminal current by its coil
+# incidence, regardless of leakage, turns ratio or excitation. Prove that
+# identity from terminal connections BEFORE summing floating-point Ybus rows.
+# Otherwise roundoff in phase + neutral currents becomes a tiny fictitious
+# constraint, which row equilibration can amplify into an optimizer equation.
+# Other touched element families conservatively retain the equation; notably
+# even an arbitrarily weak electrode must prevent this structural reduction.
+function _se_nwinding_return_identity(net, index, weights, devices)
+    isempty(get(get(net,"transformer",Dict()),"n_winding",Dict())) && return false
+    weight(node) = (i=get(index,node,0); i==0 ? 0.0 : weights[i])
+    touched(bus,ts) = any(t->!iszero(weight((bus,string(t)))),ts)
+    for kind in ("line","shunt","capacitor"), el in values(get(net,kind,Dict()))
+        if kind=="line"
+            any(side->touched(el["bus_$side"],el["terminal_map_$side"]),("from","to")) && return false
+        else
+            touched(el["bus"],el["terminal_map"]) && return false
+        end
+    end
+    hit=false
+    for (kind,group) in get(net,"transformer",Dict()), el in values(group)
+        if kind!="n_winding"
+            any(side->touched(el["bus_$side"],el["terminal_map_$side"]),("from","to")) && return false
+            continue
+        end
+        for w in BMOPFTools._nw_windings(el)
+            hit |= touched(w.bus,w.terminal_map)
+            phases,neutral=BMOPFTools._nw_phase_terminals(w.terminal_map)
+            for k in eachindex(phases)
+                reference=w.connection=="DELTA" ? phases[mod1(k+w.delta_roll,length(phases))] : neutral
+                a=weight((w.bus,phases[k]))
+                b=reference===nothing ? 0.0 : weight((w.bus,reference))
+                a==b || return false
+            end
+        end
+    end
+    for d in devices, (a,b) in zip(d.positive,d.negative)
+        (a==0 ? 0.0 : weights[a]) == (b==0 ? 0.0 : weights[b]) || return false
+    end
+    hit
+end
+
 _se_constraint_count(s::SEStructure) =
     2 * (length(s.constraint_pattern) + size(s.return_current_pattern, 1))
 
@@ -654,6 +695,8 @@ function compile_state_estimator(net::Dict{String,Any}, measurements::AbstractVe
     covered = Set(constraint_nodes)
     keep = [r for r in axes(returns, 1) if any(i -> !(i in covered), findnz(returns[r, :])[1])]
     returns = returns[keep, :]
+    keep = [r for r in axes(returns,1) if !_se_nwinding_return_identity(net,node_index,returns[r,:],devices)]
+    returns = returns[keep,:]
 
     # A load-free electrical initialisation respects transformer ratios and
     # phase shifts. It is not an estimated operating state or extra information.
@@ -1115,12 +1158,21 @@ function _se_validate_solver_options(; max_iterations, initial_radius, max_radiu
     nothing
 end
 
-function _se_rank_nullspace(A::AbstractMatrix{<:Real}; rtol::Real=sqrt(eps(Float64)))
+# Projection onto a computed null space introduces roundoff proportional to the
+# ORIGINAL operator. If H*Z is mathematically zero, a threshold relative only to
+# H*Z promotes that roundoff to information and invents gauge observability.
+function _se_rank_tolerance(A, smax, rtol, reference_scale)
+    dimension = max(size(A)...)
+    max(Float64(rtol) * dimension * smax,
+        8eps(Float64) * dimension * reference_scale, eps(Float64))
+end
+
+function _se_rank_nullspace(A::AbstractMatrix{<:Real}; rtol::Real=sqrt(eps(Float64)), reference_scale::Real=0.0)
     n = size(A, 2)
     size(A, 1) == 0 && return (0, Matrix{Float64}(I, n, n))
     F = svd(collect(Float64, A); full=size(A, 1) < size(A, 2))
     smax = isempty(F.S) ? 0.0 : maximum(F.S)
-    tol = max(Float64(rtol) * max(size(A)...) * smax, eps(Float64))
+    tol = _se_rank_tolerance(A, smax, rtol, reference_scale)
     rank = count(>(tol), F.S)
     # `collect` deliberately avoids `Matrix(...)`: OpenDSSDirect extends that
     # constructor for its parser enum, which makes the unparameterised call
@@ -1345,7 +1397,7 @@ function solve_compiled_state_estimator(s::SEStructure, p::SEParameters,
         # failure merely because there is no step left to take.
         gred0 = size(Z, 2) == 0 ? 0.0 : _se_stationarity(H, Z' * (H' * r))
         if norm(c) <= ctol && gred0 <= optimality_tolerance
-            observable, _ = _se_rank_nullspace(H * Z; rtol=rank_rtol)
+            observable, _ = _se_rank_nullspace(H * Z; rtol=rank_rtol, reference_scale=norm(H))
             status = observable == size(Z, 2) ? :converged_unique : :converged_underobserved
             status = _se_checked_status(s, p, x, e, H, C, Z, status; rank_rtol)
             return ConstrainedStateEstimationResult(status, x, e, iteration - 1, rankC,
@@ -1437,7 +1489,7 @@ function solve_compiled_state_estimator(s::SEStructure, p::SEParameters,
             rankC, Znow = _se_rank_nullspace(Cnow; rtol=rank_rtol)
             gred = size(Znow, 2) == 0 ? 0.0 : _se_stationarity(Hnow, Znow' * (Hnow' * e.residual))
             if norm(e.constraints) <= ctol && gred <= optimality_tolerance
-                observable, _ = _se_rank_nullspace(Hnow * Znow; rtol=rank_rtol)
+                observable, _ = _se_rank_nullspace(Hnow * Znow; rtol=rank_rtol, reference_scale=norm(Hnow))
                 status = observable == size(Znow, 2) ? :converged_unique : :converged_underobserved
                 status = _se_checked_status(s, p, x, e, Hnow, Cnow, Znow, status; rank_rtol)
                 return ConstrainedStateEstimationResult(status, x, e, iteration, rankC,
@@ -1563,7 +1615,7 @@ end
 
 function _se_status_from_linearisation(H, C; rank_rtol=sqrt(eps(Float64)))
     rankC, Z = _se_rank_nullspace(C; rtol=rank_rtol)
-    observable, _ = _se_rank_nullspace(H * Z; rtol=rank_rtol)
+    observable, _ = _se_rank_nullspace(H * Z; rtol=rank_rtol, reference_scale=norm(H))
     status = observable == size(Z, 2) ? :converged_unique : :converged_underobserved
     status, rankC, size(Z, 2), observable
 end
@@ -1649,7 +1701,7 @@ function solve_sparse_state_estimator(s::SEStructure, p::SEParameters,
         if norm(c) <= ctol &&
            _se_stationarity(H, H' * r - C' * λ) <= optimality_tolerance
             rankC, Z = _se_rank_nullspace(C; rtol=rank_rtol)
-            observable, _ = _se_rank_nullspace(H * Z; rtol=rank_rtol)
+            observable, _ = _se_rank_nullspace(H * Z; rtol=rank_rtol, reference_scale=norm(H))
             tangent = size(Z, 2)
             status = observable == tangent ? :converged_unique : :converged_underobserved
             status = _se_checked_status(s, p, x, e, H, C, Z, status; rank_rtol)
@@ -1727,10 +1779,10 @@ function _se_reduced_jacobian(s::SEStructure, p::SEParameters, x;
     H, C, Z, rankC, H * Z
 end
 
-function _se_svd_rank(A; rank_rtol=sqrt(eps(Float64)))
+function _se_svd_rank(A; rank_rtol=sqrt(eps(Float64)), reference_scale=0.0)
     F = svd(collect(Float64, A); full=size(A, 1) < size(A, 2))
     smax = isempty(F.S) ? 0.0 : maximum(F.S)
-    tol = max(Float64(rank_rtol) * max(size(A)...) * smax, eps(Float64))
+    tol = _se_rank_tolerance(A, smax, rank_rtol, reference_scale)
     count(>(tol), F.S), F
 end
 
@@ -1751,10 +1803,13 @@ function observability_diagnostics(s::SEStructure, p::SEParameters,
                                    include_prior::Bool=true,
                                    rank_rtol::Real=sqrt(eps(Float64)))
     H, _, Z, rankC, Hred = _se_reduced_jacobian(s, p, x; rank_rtol=rank_rtol)
-    include_prior || (Hred = H[1:length(s.measurement_pattern), :] * Z)
-    rankH, F = _se_svd_rank(Hred; rank_rtol=rank_rtol)
+    if !include_prior
+        H = H[1:length(s.measurement_pattern), :]
+        Hred = H * Z
+    end
+    rankH, F = _se_svd_rank(Hred; rank_rtol=rank_rtol, reference_scale=norm(H))
     tangent = size(Z, 2)
-    minsing = tangent == 0 ? Inf : (length(F.S) >= tangent ? F.S[tangent] : 0.0)
+    minsing = tangent == 0 ? Inf : (rankH == tangent ? F.S[tangent] : 0.0)
     smax = isempty(F.S) ? 0.0 : maximum(F.S)
     condn = tangent == 0 ? 1.0 : minsing > 0 ? smax / minsing : Inf
     SEObservability(rankC, tangent, rankH, tangent - rankH, minsing, condn)
@@ -1771,8 +1826,8 @@ function unobservable_directions(s::SEStructure, p::SEParameters,
                                  x::AbstractVector{<:Real};
                                  count::Union{Nothing,Integer}=nothing,
                                  rank_rtol::Real=sqrt(eps(Float64)))
-    _, _, Z, _, Hred = _se_reduced_jacobian(s, p, x; rank_rtol=rank_rtol)
-    rankH, F = _se_svd_rank(Hred; rank_rtol=rank_rtol)
+    H, _, Z, _, Hred = _se_reduced_jacobian(s, p, x; rank_rtol=rank_rtol)
+    rankH, F = _se_svd_rank(Hred; rank_rtol=rank_rtol, reference_scale=norm(H))
     available = size(Z, 2) - rankH
     requested = isnothing(count) ? available : Int(count)
     0 <= requested <= available ||
@@ -1783,10 +1838,10 @@ end
 
 function _derived_covariance(s::SEStructure, p::SEParameters, x, Jderived;
                              rank_rtol=sqrt(eps(Float64)))
-    _, _, Z, _, Hred = _se_reduced_jacobian(s, p, x; rank_rtol=rank_rtol)
+    H, _, Z, _, Hred = _se_reduced_jacobian(s, p, x; rank_rtol=rank_rtol)
     size(Jderived, 2) == size(Z, 1) ||
         throw(DimensionMismatch("derived Jacobian has $(size(Jderived, 2)) columns; expected $(size(Z, 1))"))
-    rankH, F = _se_svd_rank(Hred; rank_rtol=rank_rtol)
+    rankH, F = _se_svd_rank(Hred; rank_rtol=rank_rtol, reference_scale=norm(H))
     # Unobservable state directions are harmless only when the requested
     # quantity has no first-order sensitivity to any of them.
     JZ = collect(Float64, Jderived) * Z
@@ -1794,7 +1849,8 @@ function _derived_covariance(s::SEStructure, p::SEParameters, x, Jderived;
     for row in axes(JZ, 1)
         sensitivity = norm(JZ[row, :])
         leakage = norm(JZ[row, :]' * U)
-        leakage <= max(rank_rtol * sensitivity, eps(Float64) * sensitivity) ||
+        projection_floor = 8eps(Float64) * max(size(Z)...) * norm(Jderived[row, :])
+        leakage <= max(rank_rtol * sensitivity, projection_floor) ||
             throw(ArgumentError("requested covariance is not finite: quantity $row depends on an unobservable tangent direction"))
     end
     size(Z, 2) == 0 && return zeros(Float64, size(Jderived, 1), size(Jderived, 1))

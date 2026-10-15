@@ -17,6 +17,9 @@ source phasors, customer-power profiles and priors. Solver choice does not chang
 what a reading means. The Ipopt backend uses limited-memory Hessians and a
 complete constraint-Jacobian pattern; it is currently a compatibility/reference
 backend, not a sparse scaling solution.
+Its default quasi-Newton history is 30 vectors; callers can override
+`limited_memory_max_history` through `solver_options`. This improves the
+coupled mixed-winding P/Q cases without relaxing physical publication checks.
 
 For floating networks, some KCL equations can be identities of the others.
 The shared Ipopt backend selects an independent equation basis using the full
@@ -29,6 +32,15 @@ counts and the physical row indices sent to the optimizer. Feasibility scaling
 also includes amplification from the independent rows back to all physical
 currents, including transformer turns ratios. Inconsistent constant
 terms and weak grounding information are retained.
+
+Compilation also omits return-current identities proved directly from explicit
+n-winding coil connections. Summing all phase and neutral terminal currents
+is exactly zero for a complete isolated winding, but summing rounded Ybus rows
+can manufacture a tiny coefficient. The structural proof applies only when all
+coil endpoints have equal component weights and no other touched element or
+device breaks the identity. Any finite electrode, however weak, retains its
+physical return equation. This conservative reduction leaves other element
+families to the numerical coefficient checks above.
 
 The original `solve_state_estimation(net, measurements)` remains a separate
 native-engine compatibility API. It accepts `Measurement` only, requires paired
@@ -146,6 +158,8 @@ generate an answer from the estimator's own Ybus:
 | Floating exact devices | Hand-constructed constant-current, constant-power and ZIP equilibria expose redundant KCL; inconsistent constants must remain nonpublishable |
 | Gauge freedom | Solvers agree on identified voltage differences, objective and derived covariance; individual conductor voltages need not agree |
 | Three-winding transformer | An independent OpenDSS deck supplies voltages and winding-port currents/powers for a grounded single-phase WYE/WYE/WYE case; excitation and artificial anti-float shunts are disabled explicitly |
+| Mixed winding connections and grounding | Independent hidden-emf/star-leakage equations cover WYE/DELTA/WYE, DELTA/WYE/DELTA and WYE/WYE/DELTA, both DELTA rotations, two winding reference orders, unbalanced loads and floating/solid/complex-electrode grounding; OpenDSS terminal equations independently check every phase and neutral port current |
+| Floating winding rank and covariance | A completely uninformative projected Jacobian must not turn roundoff into observability; all shared solvers and the native rank diagnostic preserve gauges, reject absolute-voltage covariance, and retain weak genuine reference information |
 
 The existing OpenDSS component/feeder matrix covers the other finite transformer
 families. These tests do not establish all configurations of each family or
@@ -167,8 +181,25 @@ independent stochastic prior resolves the gauge while preserving the uncertainty
 of measured voltage differences. An absolute voltage covariance that depends
 on an unresolved gauge must be rejected.
 
-Remaining quality work should add more independently specified transformer and
-neutral configurations, nonlinear uncertainty-coverage studies, realistic sparse
+Projection roundoff is assessed against the original measurement Jacobian as
+well as the reduced map. This matters when exact device laws fix every
+differential voltage and only unobserved common-mode directions remain:
+`H*Z` is then zero mathematically, but its numerical entries need not be zero.
+The same rank convention governs shared solver statuses, diagnostics,
+unobservable directions and covariance. A quantity fixed by exact equations
+has zero local covariance. A weak real reference or prior remains information
+when it exceeds the projection's numerical resolution.
+
+The mixed-winding statistical comparisons use explicit absolute-voltage
+readings when comparing native SI/per-unit WLS with the shared solvers. Those
+readings supply stochastic gauge information; no implicit neutral bond is
+added. Separate floating-circuit tests omit that information and compare only
+identified quantities. External component checks disable excitation and
+OpenDSS anti-float shunts and evaluate terminal equations at specified voltages,
+so an external solver's arbitrary gauge choice does not become ground truth.
+
+Remaining quality work should add excitation/saturation and further transformer
+configurations, nonlinear uncertainty-coverage studies, realistic sparse
 telemetry and dropout sequences, and multi-start/conditioning benchmarks. A
 missing physical state or equipment equation needs a model extension; additional
 unit tests cannot manufacture that support.

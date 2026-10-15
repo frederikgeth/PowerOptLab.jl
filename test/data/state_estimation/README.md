@@ -63,5 +63,33 @@ shunts (`ppm_antifloat`) are disabled to match the stated electrical model.
 `state_estimation_consistency_tests.jl` reads conductor voltages and transformer
 port currents/powers directly from OpenDSS, rather than constructing those meter
 readings from the compiled Ybus. It checks all three shared solvers and native
-SI/per-unit WLS. This covers one three-winding configuration, not arbitrary
+SI/per-unit WLS. This deck covers one three-winding configuration, not arbitrary
 winding counts, connections or ungrounded windings.
+
+## Mixed winding and grounding circuit oracles
+
+`state_estimation_transformer_grounding_tests.jl` builds separate synthetic
+three-phase WYE/DELTA/WYE, DELTA/WYE/DELTA and WYE/WYE/DELTA cases. The reference
+uses three physical star leakage impedances, referred to the high winding's
+coil base: `1+0.8j`, `1+1.2j`, `1+2.2j` ohm. Coil nominal voltages are
+2400/1200/600 V. Per core it solves for a hidden common emf from
+`sum((u[k]/N[k]-E)/z[k])=0`, then obtains winding and conductor currents by
+Ohm's law and the explicit WYE/DELTA connections. It never calls the package's
+ZB, Yprim or Ybus code to generate expected readings.
+
+Unbalanced current loads return to a WYE neutral or another DELTA phase.
+Cases have floating windings, ideal neutral bonds, or explicit complex
+electrodes with a separate phase-earth path. Both DELTA rotations and a change
+of reference winding are checked. Tests compare phase/neutral port currents,
+voltage differences, phase power, finite-electrode current/power and neutral
+earth-power where earth reference information exists. Floating tests retain
+the physical common-mode gauges and reject absolute state covariance; exact
+affine laws give zero covariance for their fixed differential voltages.
+
+OpenDSS independently checks every transformer terminal-current equation at
+specified conductor voltages, avoiding arbitrary external load-flow gauges.
+The inline DSS commands disable excitation and artificial anti-float shunts;
+unused DELTA fourth conductors are mapped explicitly. Native SI/per-unit WLS
+comparisons use the same P/Q and absolute rectangular-voltage readings as all
+three shared solvers, with those absolute readings supplying explicit
+stochastic reference information.

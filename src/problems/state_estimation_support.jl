@@ -98,23 +98,36 @@ function _se_preflight(net, measurements; neutral="n", zero_injection=String[], 
                 length(windings) >= 2 && length(windings) == length(raw) ||
                     issue(:error, :invalid_windings, label, "Supply at least two winding records.")
                 phase_counts = Int[]
-                for w in windings
+                for (k, w) in enumerate(windings)
                     terminals!(label, w.bus, w.terminal_map)
                     isfinite(w.v_nom) && w.v_nom > 0 ||
                         issue(:error, :invalid_ratio, label, "Every winding nominal voltage must be finite and positive.")
                     w.connection in ("WYE", "DELTA") ||
                         issue(:error, :invalid_connection, label, "Winding configuration must be WYE or DELTA.")
+                    isfinite(w.r_winding) && w.r_winding >= 0 ||
+                        issue(:error, :invalid_impedance, label, "Winding resistance must be finite and nonnegative.")
+                    for field in ("connection", "tap", "tap_ratio", "r_neutral", "x_neutral")
+                        haskey(raw[k], field) || continue
+                        issue(:error, :unsupported_winding_field, "$label/windings/$k",
+                            "The n-winding exporter does not apply '$field'; use configuration, v_nom, explicit neutral terminals and separate grounding shunts.")
+                    end
                     phases, ref = BMOPFTools._nw_phase_terminals(w.terminal_map)
                     length(phases) + (ref === nothing ? 0 : 1) == length(w.terminal_map) ||
                         issue(:error, :unsupported_terminal_name, label, "The n-winding exporter recognises only a/b/c/n conductor names.")
                     push!(phase_counts, length(phases))
                     w.connection == "DELTA" && length(phases) < 2 &&
                         issue(:error, :terminal_count, label, "A delta winding requires at least two phases.")
+                    w.connection == "DELTA" && ref !== nothing &&
+                        issue(:error, :invalid_connection, label, "A delta winding has no neutral; remove n from its terminal_map.")
+                    w.connection == "DELTA" && !(w.delta_roll in (-1,1)) &&
+                        issue(:error, :invalid_connection, label, "Delta winding delta_roll must be -1 or +1.")
                 end
                 !isempty(phase_counts) && minimum(phase_counts) > 0 && all(==(first(phase_counts)), phase_counts) ||
                     issue(:error, :terminal_count, label, "All windings must have the same nonzero phase count.")
                 any(key -> haskey(x, key), ("tap", "tap_ratio")) &&
                     issue(:error, :unsupported_tap, label, "The n-winding exporter does not apply tap fields; encode known winding ratios in v_nom.")
+                any(key -> haskey(x,key), ("r_neutral_from","x_neutral_from","r_neutral_to","x_neutral_to")) &&
+                    issue(:error, :unsupported_winding_field, label, "The n-winding exporter does not apply two-port neutral impedances; use explicit winding neutral terminals and separate grounding shunts.")
             else
                 for side in ("from", "to")
                     terminals!(label, get(x, "bus_$side", ""), get(x, "terminal_map_$side", String[]))
