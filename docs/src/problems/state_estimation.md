@@ -40,6 +40,18 @@ devices (`load`, `generator`, `ibr`, `dc_source`) or operational limits
 `allow_operational=true` to override with a warning when you deliberately want to
 estimate against such a model.
 
+Native source neutrals must be explicitly grounded. The wrapper rejects an
+ungrounded source neutral because the native engine would otherwise silently
+fix it to earth. Use the shared compiled Ipopt backend for finite electrode or
+floating source-neutral states. Both APIs run the finite-electrical preflight;
+[compatibility](../estimation/compatibility.md) lists the transformer boundaries.
+
+Individual customer power at a source-fixed conductor or its aliases is also
+rejected: the free source reaction prevents identifying it from passive-network
+current. Use the compiled API with `NetInjectionMeasurement` for net source
+telemetry. Coverage follows fixed electrical conductors, including aliases;
+unlisted free conductors on a source bus still require explicit coverage.
+
 ## Injection coverage is explicit
 
 Absence of telemetry is **not** evidence of zero injection. Every non-source
@@ -50,8 +62,7 @@ zero-injection:
   complex quantity; a lone `P` or `Q` is ill-posed). That pair gives the bus a
   free injection current.
 - Everything else must be listed in `zero_injection` (a bus id, expanded over its
-  phase terminals, or a `(bus, terminal)` pair) — the classic zero-injection
-  pseudo-measurement.
+  phase terminals, or a `(bus, terminal)` pair) — imposed as an exact KCL equation.
 
 An un-declared, un-measured bus is an **error**, not a silent zero injection.
 
@@ -61,11 +72,12 @@ Each [`Measurement`](@ref) is an SI scalar with a standard deviation `sigma`
 (WLS weight ``1/\sigma^2``), validated at construction (finite value, `sigma>0`,
 supported `kind`):
 
+- `:vr` / `:vi` — rectangular voltage components across the chosen reference, volts.
 - `:vmag` — voltage magnitude across `(bus, terminal)` → `reference`, in volts.
 - `:pinj` — active power injected into the network at that terminal pair, watts.
 - `:qinj` — reactive power injection, vars.
 
-All three share **one** reference terminal per measurement (`reference`,
+All five use a reference terminal per measurement (`reference`,
 defaulting to the solve's `neutral`): a smart-meter reading is phase-to-neutral
 for voltage *and* power. Pass `reference=nothing` to reference a terminal to
 ground, or an explicit terminal name for a bespoke return path. This resolves the

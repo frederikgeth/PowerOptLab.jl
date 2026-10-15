@@ -13,7 +13,7 @@ independent differentiation, but shares the compiled admittance matrices.
 ## Reference run
 
 Julia 1.12.6, OpenDSSDirect 0.9.9, BMOPFTools at
-`72e6cec22a66cf376c37ec4d64aef350b9f1100d`, 10 September 2026.
+`56e3b2f0261488acd30f1c98ad812c4eff4611f1`, 15 October 2026.
 Maximum dense-estimator voltage-component error relative to the oracle phasor
 magnitude (100 V floor), in percent. Noise is deterministic with seed 349,
 independent Gaussian perturbations at the specified measurement standard
@@ -26,7 +26,7 @@ deviations. This is one realization, not a coverage study.
 | wye_delta | 0.0597075 | 0.313663 |
 | delta_wye | 0.0648071 | 0.166337 |
 | regulator | 0.0380304 | 0.131529 |
-| open_delta | 0.0055748 | 0.180888 |
+| open_delta | 0.00709892 | 0.0838431 |
 | center_tap | 2.49465e-06 | 0.00971615 |
 | SE-IEEE13-finite | 0.054711 | 0.142925 |
 
@@ -40,8 +40,13 @@ covariance. The separate package tests exercise underobserved cases.
 SE-IEEE13-finite is a modified benchmark with finite leakage/losses, constant
 power loads and fixed unequal phase taps, not the original IEEE case. The
 open-delta component includes 1 kOhm phase-earth shunts in both models for a
-physical common-mode path. Component neutrals use their declared grounding.
+physical common-mode path. Its shared phase B uses one OpenDSS node on both
+sides, preserving the exact copper bond; secondary A/C are src.11/src.13, mapped
+to reg.1/reg.3. Component neutrals use their declared grounding.
 
-The matrix does not validate n-winding transformers, automatic regulator
+The separate `state_estimation_compatibility_tests.jl` suite exercises n-winding
+and other finite transformer-port telemetry across dense, sparse and shared
+Ipopt backends, plus native WLS comparisons. This OpenDSS matrix does not
+validate n-winding transformers, automatic regulator
 controls, unknown taps, ideal transformers, transformer branch telemetry,
 large-feeder scaling, bad-data processing or statistical confidence coverage.

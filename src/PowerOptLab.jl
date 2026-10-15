@@ -135,6 +135,7 @@ include("problems/generator_opf.jl")
 include("problems/state_estimation.jl")
 include("problems/state_estimation_support.jl")
 include("problems/constrained_state_estimation.jl")
+include("problems/ipopt_state_estimation.jl")
 include("problems/parameter_estimation.jl")
 include("problems/inverse_carson.jl")
 include("problems/operating_envelope.jl")
@@ -196,6 +197,8 @@ export solve_multiperiod_opf, MultiperiodResult
 
 # State estimation
 export Measurement, BranchMeasurement, solve_state_estimation, StateEstimationResult
+export NetInjectionMeasurement, TransformerMeasurement, ShuntMeasurement, FunctionalMeasurement
+export solve_ipopt_state_estimator, IpoptStateEstimationResult
 export TerminalID, ExactInjectionSpecification, NoExactInjection,
        ExactZeroInjection, ExactDeviceEquation, TerminalConnection,
        ConstantPowerDevice, ConstantCurrentDevice, ZIPDevice, SEStructure, SEParameters,

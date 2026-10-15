@@ -3,8 +3,7 @@
 > **Kind:** Problem specification · **Direction:** inverse · **Maturity:** prototype
 
 For calibration or line-construction questions, begin with the
-[estimation overview](studies.md). This page compares the two
-state estimators; their functions and arguments are listed in the
+[estimation overview](studies.md). The compiled API offers dense, sparse and classic Ipopt solvers over one model; their functions and arguments are listed in the
 [state estimation API](../api/state_estimation.md).
 
 State estimation determines bus voltages from measurements and an assumed
@@ -16,7 +15,7 @@ measurements and numerical solution differs.
 |---|---|---|
 | Entry point | `solve_state_estimation` | `compile_state_estimator` + a solver |
 | Statement | ``\min \sum_i (z_i - h_i(x))^2/\sigma_i^2`` | ``\min \tfrac12\lVert r(x)\rVert^2`` s.t. ``c(x)=0`` |
-| Engine | JuMP + Ipopt | own Gauss–Newton / Hachtel solvers |
+| Engine | JuMP + Ipopt | Gauss–Newton / Hachtel / shared Ipopt solvers |
 
 [Choosing a formulation](comparison.md) compares the two estimators on the
 same network and measurements.
@@ -58,6 +57,7 @@ can bias the estimate even when the numerical solver converges:
 * [Worked state-estimation study](../tutorials/constrained_nlls_state_estimation.md) —
   estimate a displaced neutral, inspect residuals and remove measurements to test
   observability. The complete code and assertions run in CI.
+* [Measurement and electrical compatibility](compatibility.md) — measurement types, transformer ports, grounding and remaining gaps.
 * [Choosing a formulation](comparison.md) — the comparison, and which to reach for.
 * [Likelihood, loss, and priors](maximum_likelihood.md) — when these estimators
   coincide with Gaussian MLE, when a prior makes the result MAP, and which error

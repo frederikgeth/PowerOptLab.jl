@@ -24,7 +24,7 @@ julia --project=. scripts/run_study_tutorials.jl
 
 You can also paste this page's Julia blocks into a fresh Julia session in
 order. CI executes these same blocks on Julia 1.10 and the latest stable release.
-The dense and sparse estimators are prototypes; this small example demonstrates
+The dense, sparse and shared Ipopt solvers are prototypes; this small example demonstrates
 their interpretation, not large-feeder performance or field validation.
 
 ## Define the circuit and its known state
@@ -199,6 +199,9 @@ x0 = initial_state_estimator(structure, parameters)
 solver_settings = (optimality_tolerance=1e-6, constraint_tolerance=1e-8)
 dense_clean = solve_compiled_state_estimator(structure, parameters, x0; solver_settings...)
 sparse_clean = solve_sparse_state_estimator(structure, parameters, x0; solver_settings...)
+ipopt_clean = solve_ipopt_state_estimator(structure, parameters, x0; solver_settings...)
+@assert solve_status(ipopt_clean).publishable
+@assert norm(ipopt_clean.state - known_state, Inf) < 1e-5
 @assert dense_clean.status == :converged_unique
 @assert sparse_clean.status == :converged_unique
 @assert solve_status(sparse_clean).publishable
@@ -232,6 +235,10 @@ while keeping the junction equations exact.
 noisy_parameters = SEParameters(structure, perturbed_readings)
 dense_fit = solve_compiled_state_estimator(structure, noisy_parameters, x0; solver_settings...)
 sparse_fit = solve_sparse_state_estimator(structure, noisy_parameters, x0; solver_settings...)
+ipopt_fit = solve_ipopt_state_estimator(structure, noisy_parameters, x0; solver_settings...)
+@assert solve_status(ipopt_fit).publishable
+@assert norm(ipopt_fit.state - sparse_fit.state, Inf) < 1e-5
+@assert norm(ipopt_fit.evaluation.constraints, Inf) < 1e-7
 @assert dense_fit.status == :converged_unique
 @assert sparse_fit.status == :converged_unique
 @assert solve_status(sparse_fit).publishable
@@ -259,7 +266,7 @@ println("Perturbed estimate: objective = ", round(fit_objective; digits=5),
 
 | Check | Expected result |
 |:--|:--|
-| Dense and sparse clean solves | `:converged_unique`, state error below 0.00001 V |
+| Dense, sparse and shared Ipopt clean solves | `:converged_unique`, state error below 0.00001 V |
 | Dense and sparse perturbed solves | `:converged_unique`, agreement within 0.00001 V |
 | Perturbed maximum voltage-component error | about 0.00942 V |
 | Perturbed weighted objective | about 0.26360 |

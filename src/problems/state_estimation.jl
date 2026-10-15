@@ -35,11 +35,39 @@ const _SE_BRANCH_LIMIT_FIELDS = ("i_max", "s_max", "s_rating")
 # Device blocks that inject current / impose a dispatch (not passive physics).
 const _SE_INJECTING_BLOCKS = ("load", "generator", "ibr", "dc_source")
 
+# The finite open-delta primitive contains the two winding branches, while
+# BMOPFTools' native model also imposes an ideal shared-phase copper bond.
+# Preserve that topology by node identification, rather than a large admittance.
+function _se_open_delta_bond(el)
+    pairs = get(Dict("ABBC"=>((1,2),(2,3)), "BCAC"=>((2,3),(1,3)),
+                     "CABA"=>((3,1),(2,1))), uppercase(strip(string(get(el,"connection","")))), nothing)
+    pairs === nothing && throw(ArgumentError("invalid open-delta connection"))
+    shared = only(intersect(pairs[1], pairs[2]))
+    fr = String.(el["terminal_map_from"]); to = String.(el["terminal_map_to"])
+    fp = BMOPFTools._phase_positions(fr); tp = BMOPFTools._phase_positions(to)
+    ((String(el["bus_from"]),fr[fp[shared]]), (String(el["bus_to"]),to[tp[shared]]))
+end
+function _se_passive_ybus(net)
+    group = get(get(net,"transformer",Dict()),"open_delta_regulator",Dict())
+    isempty(group) && return ybus_passive(net)
+    working = deepcopy(net)
+    switches = Dict{String,Any}(get(working,"switch",Dict()))
+    for (id,el) in sort!(collect(group);by=first)
+        a,b = _se_open_delta_bond(el)
+        name = "__se_open_delta_$(id)"
+        while haskey(switches,name); name *= "_"; end
+        switches[name] = Dict("bus_from"=>a[1],"bus_to"=>b[1],
+            "terminal_map_from"=>[a[2]],"terminal_map_to"=>[b[2]],"status"=>"closed")
+    end
+    working["switch"] = switches
+    ybus_passive(working)
+end
+
 """
     Measurement(; kind, bus, value, sigma, terminal="1", reference=missing)
 
 A single scalar measurement for [`solve_state_estimation`](@ref). `value` and
-`sigma` are SI (volts for `:vmag`, watts for `:pinj`, vars for `:qinj`); `sigma`
+`sigma` are SI (volts for `:vr`, `:vi`, `:vmag`, watts for `:pinj`, vars for `:qinj`); `sigma`
 is the measurement standard deviation (WLS weight `1/sigma²`), and must be
 finite and strictly positive.
 
@@ -47,12 +75,12 @@ finite and strictly positive.
   magnitude of the voltage across `(bus, terminal)`→`reference`), `:pinj`
   (active power injected into the network at that terminal pair), or `:qinj`
   (reactive power injection).
-- `bus::String`, `terminal::String="1"` — the measured phase conductor.
+- `bus::String`, `terminal::String="1"` — the measured conductor.
 - `reference` — the return terminal the quantity is referenced to. `missing`
   (the default) inherits the solve's `neutral`; a `String` names an explicit
   return terminal on the same bus; `nothing` references terminal-to-ground.
-  Voltage and power measurements at a bus therefore share one reference — a
-  smart-meter reading is phase-to-neutral for both.
+  Each voltage reading selects its own reference; P/Q for one customer must
+  share a return path. A smart-meter reading is usually phase-to-neutral.
 
 Construction validates `kind`, finiteness, `sigma > 0`, and non-empty
 identifiers; it does not check that the identifiers exist in a particular net.
@@ -262,7 +290,8 @@ end
 # Enforce the injection-coverage contract: every non-source phase terminal is
 # either a measured injection (both :pinj and :qinj present) or declared
 # zero-injection, and the two are mutually exclusive. Throws on any violation.
-function _check_coverage(net, measurements, neutral, zi::Set{Tuple{String,String}})
+function _check_coverage(net, measurements, neutral, zi::Set{Tuple{String,String}};
+                         fixed_nodes=Set{Tuple{String,String}}())
     has_p = Set{Tuple{String,String}}()
     has_q = Set{Tuple{String,String}}()
     for m in measurements
@@ -281,13 +310,12 @@ function _check_coverage(net, measurements, neutral, zi::Set{Tuple{String,String
         push!(problems, "bus '$(k[1])' terminal '$(k[2])' is declared zero_injection but also has an injection measurement")
     end
     # Coverage: no silent zero-injection assumption for un-declared, un-measured buses.
-    srcs = _source_buses(net)
     measured = intersect(has_p, has_q)
     for (bid, bus) in get(net, "bus", Dict())
-        bid in srcs && continue
         bus isa AbstractDict || continue
         for t in _phase_terminals(bus, neutral)
             k = (bid, t)
+            k in fixed_nodes && continue
             (k in measured || k in zi) && continue
             push!(problems, "bus '$bid' terminal '$t' has no injection measurement and is not declared zero_injection " *
                             "(absence of telemetry is not evidence of zero injection)")
@@ -379,18 +407,35 @@ function solve_state_estimation(net::Dict{String,Any}, measurements::AbstractVec
     isempty(measurements) && throw(ArgumentError("no measurements supplied"))
     all(m -> m isa Measurement, measurements) ||
         throw(ArgumentError("measurements must be a collection of `Measurement`"))
-    all(m -> m.kind in (:vmag, :pinj, :qinj), measurements) ||
-        throw(ArgumentError("solve_state_estimation currently supports :vmag, :pinj, and :qinj; " *
-                            "use the compiled constrained-NLLS evaluator for :vr/:vi measurements"))
+    all(m -> m.kind in _NODE_MEASUREMENT_KINDS, measurements) ||
+        throw(ArgumentError("unsupported legacy node measurement kind"))
     isfinite(s_base) && s_base > 0 || throw(ArgumentError("s_base must be finite and > 0"))
 
     _reject_operational(net, allow_operational)
     _check_references(net, measurements, neutral)
     zi = _zero_injection_set(net, zero_injection, neutral)
-    _check_coverage(net, measurements, neutral, zi)
+    passive_index = _se_passive_ybus(net).index
+    fixed_sources = _source_phasors(net, passive_index)
+    fixed_nodes = Set(node for (node,i) in passive_index if i == 0 || haskey(fixed_sources,i))
+    _check_coverage(net, measurements, neutral, zi;fixed_nodes)
+    # Preserve the legacy ArgumentError contract for inconsistent P/Q paths.
+    _se_injection_layout(measurements, neutral, passive_index)
+    # Keep the legacy physics/diagnostic contract within the same validated
+    # finite-primitive domain as the shared solvers. Native ideal-transformer
+    # OPF support alone does not make the Ybus observability check valid.
+    report, _ = _se_preflight(net, measurements; neutral)
+    report.supported || throw(SEUnsupportedNetwork(report))
+    # Native BMOPFTools sources implicitly ground their bus neutral. Refuse
+    # to add that unrequested bond to an explicitly floating/electrode model.
+    for source in values(get(net,"voltage_source",Dict()))
+        bus = source["bus"]; data = net["bus"][bus]
+        nt = BMOPFTools._neutral_terminal(Dict{String,Any}(data))
+        nt === nothing && continue
+        idx = get(passive_index,(bus,nt),0)
+        (idx == 0 || iszero(get(fixed_sources,idx,NaN))) || throw(ArgumentError("native WLS implicitly grounds source neutral ($bus, $nt); use compile_state_estimator and solve_ipopt_state_estimator for an ungrounded or impedance-grounded source neutral"))
+    end
     # Validate all injection references before the first meter can choose KCL's
     # return path. Electrically identical aliases/earth references are allowed.
-    _se_injection_layout(measurements, neutral, ybus_passive(net).index)
 
     # Seed injection starts from the measured P/Q at each (bus, terminal).
     pmeas = Dict{Tuple{String,String},Float64}()
@@ -446,8 +491,20 @@ function solve_state_estimation(net::Dict{String,Any}, measurements::AbstractVec
                 dvr = JuMP.@expression(m, vr[(b,t)] - vr[(b,ref)])
                 dvi = JuMP.@expression(m, vi[(b,t)] - vi[(b,ref)])
             end
-            if meas.kind == :vmag
+            if meas.kind in (:vr, :vi)
+                h_si = measurement_prediction(meas.kind, dvr, dvi) * _vscale(ctx, b)
+                obj += w * (h_si - meas.value)^2
+                push!(probes, (meas, h_si))
+            elseif meas.kind == :vmag
                 vb = _vscale(ctx, b)
+                if iszero(dvr) && iszero(dvi)
+                    # A grounded-to-grounded voltage is an exact constant, not
+                    # a nonsmooth free magnitude or a degenerate vm²=0 equality.
+                    h_si = 0.0
+                    obj += w * meas.value^2
+                    push!(probes, (meas, h_si))
+                    continue
+                end
                 # Auxiliary |V| ≥ 0 with |V|² = dvr²+dvi², seeded from the reading
                 # (a zero start sits on the degenerate |V|²=… Jacobian).
                 vm = JuMP.@variable(m, base_name = "sevm_$(b)_$(t)", lower_bound = 0.0,
@@ -533,7 +590,7 @@ _se_identity(n) = (M = zeros(Float64, n, n); for k in 1:n; M[k, k] = 1.0; end; M
 # construction below already emits its KCL row.
 function _observability(net, measurements, neutral, zi::Set{Tuple{String,String}},
                         est_bus)
-    yb = ybus_passive(net)
+    yb = _se_passive_ybus(net)
     nodes = yb.nodes                                  # Vector{(bus, term)}
     N = length(nodes)
     # Unlike `nodes`, this index retains every original terminal alias, as
@@ -645,7 +702,11 @@ function _observability(net, measurements, neutral, zi::Set{Tuple{String,String}
             dvr = vtr - rr; dvi = vti - ri
             kt = get(posof, (b, t), 0)
             w = 1.0 / meas.sigma
-            if meas.kind == :vmag
+            if meas.kind === :vr
+                push!(rows, w * dvr)
+            elseif meas.kind === :vi
+                push!(rows, w * dvi)
+            elseif meas.kind == :vmag
                 push!(rows, w * sqrt(dvr^2 + dvi^2))
             elseif kt != 0 && meas.kind == :pinj
                 push!(rows, w * (dvr * Ir[kt] + dvi * Ii[kt]))

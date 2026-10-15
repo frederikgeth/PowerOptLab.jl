@@ -112,15 +112,18 @@ struct BranchMeasurement <: AbstractMeasurement
     terminal::String
     value::Float64
     sigma::Float64
+    reference::Union{String,Nothing}
     function BranchMeasurement(; kind::Symbol, line::String, side::Symbol=:from,
-                               terminal::String, value::Real, sigma::Real)
+                               terminal::String, value::Real, sigma::Real,
+                               reference::Union{String,Nothing}=nothing)
         kind in _BRANCH_MEASUREMENT_KINDS ||
             throw(ArgumentError("unknown branch measurement kind :$kind"))
         side in (:from, :to) || throw(ArgumentError("branch measurement side must be :from or :to"))
         isempty(line) && throw(ArgumentError("branch measurement line must be non-empty"))
         isempty(terminal) && throw(ArgumentError("branch measurement terminal must be non-empty"))
         _validate_measurement_scalar(kind, value, sigma)
-        new(kind, line, side, terminal, Float64(value), Float64(sigma))
+        reference isa String && isempty(reference) && throw(ArgumentError("reference must be non-empty"))
+        new(kind, line, side, terminal, Float64(value), Float64(sigma), reference)
     end
 end
 
@@ -128,14 +131,17 @@ end
 # and row order are part of the compiled model. Keep branch locations too,
 # since their primitive rows alone do not identify the original line and side.
 _se_measurement_key(m::Measurement) = (:terminal, m.kind, m.bus, m.terminal, m.reference)
-_se_measurement_key(m::BranchMeasurement) = (:branch, m.kind, m.line, m.side, m.terminal)
+_se_measurement_key(m::BranchMeasurement) = (:branch, m.kind, m.line, m.side, m.terminal, m.reference)
 
 struct _SEBranchMeasurementSpec{Ti<:Integer}
     kind::Symbol
     nodes::Vector{Ti}              # 0 denotes earth
     conductor::Ti
+    reference::Ti
     yrow::Vector{ComplexF64}
 end
+
+include("state_estimation_measurements.jl")
 
 struct _SEExactDeviceSpec{Ti<:Integer}
     kind::Symbol
@@ -331,29 +337,24 @@ end
 function _compile_measurements(net, measurements, node_index, neutral)
     specs = Any[]
     for m in measurements
-        if m isa BranchMeasurement
-            line = get(get(net, "line", Dict()), m.line, nothing)
-            line isa AbstractDict || throw(ArgumentError("branch measurement line '$(m.line)' is absent from net"))
-            nodes, Y = line_yprim(line, get(net, "linecode", Dict()))
-            isempty(nodes) && throw(ArgumentError("branch measurement line '$(m.line)' has no finite primitive"))
-            n = length(nodes) ÷ 2
-            terminals = String.(get(line, m.side === :from ? "terminal_map_from" : "terminal_map_to", String[]))
-            k = findfirst(==(m.terminal), terminals)
-            isnothing(k) && throw(ArgumentError("terminal '$(m.terminal)' is not on $(m.side) side of line '$(m.line)'"))
-            row = m.side === :from ? k : n + k
-            local_nodes = Int[get(node_index, TerminalID(node), 0) for node in nodes]
-            conductor = local_nodes[row]
-            push!(specs, _SEBranchMeasurementSpec(m.kind, local_nodes, conductor, ComplexF64.(Y[row, :])))
+        if m isa _SEPassiveTelemetry
+            push!(specs, _se_compile_passive_measurement(m, net, node_index))
+            continue
+        elseif m isa FunctionalMeasurement
+            all(node -> haskey(node_index, node), m.nodes) || throw(ArgumentError("functional measurement $(m.name) names an absent terminal"))
+            push!(specs, _SEFunctionalSpec(:functional, Int[node_index[node] for node in m.nodes], m.prediction, m.gradient))
             continue
         end
-        m isa Measurement || throw(ArgumentError("measurements must contain Measurement or BranchMeasurement values"))
+        m isa Union{Measurement,NetInjectionMeasurement} || throw(ArgumentError("unsupported measurement type $(typeof(m))"))
+        haskey(node_index, (m.bus, m.terminal)) || throw(ArgumentError("measurement terminal ($(m.bus), $(m.terminal)) is absent"))
         i = get(node_index, (m.bus, m.terminal), 0)
-        i == 0 && throw(ArgumentError("measurement terminal ($(m.bus), $(m.terminal)) is not a free Ybus conductor"))
         ref = _resolve_ref(m, neutral)
         j = ref === nothing ? 0 : get(node_index, (m.bus, ref), 0)
         ref !== nothing && !haskey(node_index, (m.bus, ref)) &&
             throw(ArgumentError("measurement reference terminal ($(m.bus), $ref) is absent from Ybus"))
-        m.kind in (:vr, :vi, :vmag, :pinj, :qinj) ||
+        i == 0 && m.kind in (:ire, :iim, :imag) && throw(ArgumentError("net current at an ideal ground is not recoverable from reduced Ybus; meter a line, transformer port, or finite grounding shunt"))
+        i == 0 && j != 0 && m.kind in (:pinj, :qinj) && throw(ArgumentError("grounded-terminal net power requires an earth reference; use element telemetry for another voltage reference"))
+        m.kind in (:vr, :vi, :vmag, :pinj, :qinj, :ire, :iim, :imag) ||
             throw(ArgumentError("compiled state estimator does not support measurement kind :$(m.kind)"))
         push!(specs, _SEMeasurementSpec(m.kind, i, j))
     end
@@ -647,6 +648,12 @@ function compile_state_estimator(net::Dict{String,Any}, measurements::AbstractVe
     append!(constraint_nodes, (i for i in device_nodes if !haskey(fixed, i)))
     unique!(constraint_nodes)
     sort!(constraint_nodes)
+    # A component sum is exactly implied when every constituent conductor
+    # already has its own KCL equation. Avoid redundant equalities in NLP
+    # backends as well as in the dense/sparse constrained steps.
+    covered = Set(constraint_nodes)
+    keep = [r for r in axes(returns, 1) if any(i -> !(i in covered), findnz(returns[r, :])[1])]
+    returns = returns[keep, :]
 
     # A load-free electrical initialisation respects transformer ratios and
     # phase shifts. It is not an estimated operating state or extra information.
@@ -665,8 +672,8 @@ function SEParameters(s::SEStructure, measurements::AbstractVector=Measurement[]
                       continuation_alpha::Real=1.0, prior::Union{StatePrior,Nothing}=nothing)
     length(measurements) == length(s.measurement_pattern) ||
         throw(ArgumentError("SEParameters needs the same number of measurements used for compilation"))
-    all(m -> m isa Union{Measurement,BranchMeasurement}, measurements) ||
-        throw(ArgumentError("measurements must contain Measurement or BranchMeasurement values"))
+    all(m -> m isa _SESupportedMeasurement, measurements) ||
+        throw(ArgumentError("unsupported measurement type"))
     isequal(Tuple[_se_measurement_key(m) for m in measurements], s.measurement_keys) ||
         throw(ArgumentError("measurement kinds, locations, references, and row order must match compilation; recompile for a different measurement pattern"))
     epsmag = Float64(magnitude_epsilon)
@@ -785,9 +792,9 @@ end
 
 function _measurement_value(spec, vr, vi, ir, ii, epsmag)
     i, j = spec.terminal, spec.reference
-    dvr = vr[i] - (j == 0 ? 0.0 : vr[j])
-    dvi = vi[i] - (j == 0 ? 0.0 : vi[j])
-    measurement_prediction(spec.kind, dvr, dvi; ir=ir[i], ii=ii[i],
+    dvr = (i == 0 ? 0.0 : vr[i]) - (j == 0 ? 0.0 : vr[j])
+    dvi = (i == 0 ? 0.0 : vi[i]) - (j == 0 ? 0.0 : vi[j])
+    measurement_prediction(spec.kind, dvr, dvi; ir=i == 0 ? 0.0 : ir[i], ii=i == 0 ? 0.0 : ii[i],
                            magnitude_epsilon=epsmag)
 end
 
@@ -801,6 +808,9 @@ function _branch_measurement_value(spec::_SEBranchMeasurementSpec, vr, vi, epsma
     end
     vrr = spec.conductor == 0 ? 0.0 : vr[spec.conductor]
     vii = spec.conductor == 0 ? 0.0 : vi[spec.conductor]
+    if spec.reference != 0
+        vrr -= vr[spec.reference]; vii -= vi[spec.reference]
+    end
     measurement_prediction(spec.kind, vrr, vii; ir=br, ii=bi,
                            magnitude_epsilon=epsmag)
 end
@@ -828,15 +838,20 @@ function _branch_measurement_jacobian(spec::_SEBranchMeasurementSpec, s::SEStruc
         # magnitude, or the analytic Jacobian stops being the Jacobian of the
         # evaluated residual.
         mag = sqrt(br^2 + bi^2 + epsmag^2)
+        mag == 0 && all(iszero, jir) && all(iszero, jii) && return mag, spzeros(Float64, ns)
         mag > 0 || throw(DomainError(mag,
             "branch-current magnitude derivative is undefined at zero current; " *
             "set `current_epsilon > 0` (in amperes; see SEParameters) to smooth it"))
         return mag, (br .* jir .+ bi .* jii) ./ mag
     end
-    i = spec.conductor
-    i == 0 && return 0.0, spzeros(Float64, ns)
-    vrr, vii = vr[i], vi[i]
-    jvr, jvi = s.voltage_state_rows[:, i], s.voltage_state_rows[:, n + i]
+    i, j = spec.conductor, spec.reference
+    vrr = (i == 0 ? 0.0 : vr[i]) - (j == 0 ? 0.0 : vr[j])
+    vii = (i == 0 ? 0.0 : vi[i]) - (j == 0 ? 0.0 : vi[j])
+    jvr = i == 0 ? spzeros(Float64, ns) : s.voltage_state_rows[:, i]
+    jvi = i == 0 ? spzeros(Float64, ns) : s.voltage_state_rows[:, n + i]
+    if j != 0
+        jvr -= s.voltage_state_rows[:, j]; jvi -= s.voltage_state_rows[:, n + j]
+    end
     spec.kind === :pflow && return vrr * br + vii * bi,
         br .* jvr .+ bi .* jvi .+ vrr .* jir .+ vii .* jii
     spec.kind === :qflow && return vii * br - vrr * bi,
@@ -948,10 +963,7 @@ function evaluate_state_estimator(s::SEStructure, p::SEParameters, x::AbstractVe
     vr, vi, ir, ii = _se_parts(s, p, x)
     _se_check_profile_voltage(s, p, vr, vi)
     dir, dii, _, _ = _device_parts(s, p, vr, vi; derivatives=false)
-    predicted = [spec isa _SEBranchMeasurementSpec ?
-                 _branch_measurement_value(spec, vr, vi, p.current_epsilon) :
-                 _measurement_value(spec, vr, vi, ir, ii, p.magnitude_epsilon)
-                 for spec in s.measurement_pattern]
+    predicted = [_se_spec_value(spec, vr, vi, ir, ii, p) for spec in s.measurement_pattern]
     offsets, factors, _ = _se_power_profile(s.power_groups, p.measurement_values, p.covariance_values)
     offsets === nothing || (predicted = offsets + factors .* predicted)
     measurement_residual = (predicted .- p.measurement_values) ./ p.covariance_values
@@ -997,26 +1009,51 @@ function residual_jacobian(s::SEStructure, p::SEParameters, x::AbstractVector{<:
     rows = Int[]; cols = Int[]; vals = Float64[]
     _, factors, _ = _se_power_profile(s.power_groups, p.measurement_values, p.covariance_values)
     for (row, spec) in enumerate(s.measurement_pattern)
+        if spec isa _SEFunctionalSpec
+            Jrow = _se_functional_jacobian(spec, s, vr, vi)
+            _se_append_row!(rows, cols, vals, row, Jrow ./ p.covariance_values[row])
+            continue
+        end
         if spec isa _SEBranchMeasurementSpec
             _, Jrow = _branch_measurement_jacobian(spec, s, vr, vi, p.current_epsilon)
             _se_append_row!(rows, cols, vals, row, Jrow ./ p.covariance_values[row])
             continue
         end
         i, j = spec.terminal, spec.reference
-        jdvr = s.voltage_state_rows[:, i]; jdvi = s.voltage_state_rows[:, n + i]
+        jdvr = i == 0 ? spzeros(Float64, nstate) : s.voltage_state_rows[:, i]
+        jdvi = i == 0 ? spzeros(Float64, nstate) : s.voltage_state_rows[:, n + i]
         if j != 0
             jdvr .-= s.voltage_state_rows[:, j]; jdvi .-= s.voltage_state_rows[:, n + j]
         end
-        dvr = vr[i] - (j == 0 ? 0.0 : vr[j])
-        dvi = vi[i] - (j == 0 ? 0.0 : vi[j])
+        dvr = (i == 0 ? 0.0 : vr[i]) - (j == 0 ? 0.0 : vr[j])
+        dvi = (i == 0 ? 0.0 : vi[i]) - (j == 0 ? 0.0 : vi[j])
         if spec.kind === :vr
             Jrow = jdvr
         elseif spec.kind === :vi
             Jrow = jdvi
         elseif spec.kind === :vmag
             mag = sqrt(dvr^2 + dvi^2 + p.magnitude_epsilon^2)
-            mag > 0 || throw(DomainError(mag, "voltage-magnitude derivative is undefined at zero; set magnitude_epsilon > 0"))
-            Jrow = (dvr .* jdvr .+ dvi .* jdvi) ./ mag
+            if mag == 0 && all(iszero, jdvr) && all(iszero, jdvi)
+                Jrow = spzeros(Float64, nstate)
+            else
+                mag > 0 || throw(DomainError(mag, "voltage-magnitude derivative is undefined at zero; set magnitude_epsilon > 0"))
+                Jrow = (dvr .* jdvr .+ dvi .* jdvi) ./ mag
+            end
+        elseif spec.kind in (:ire, :iim, :imag)
+            jr = s.current_state_rows[:, i]; ji = s.current_state_rows[:, n + i]
+            if spec.kind === :imag
+                mag = sqrt(ir[i]^2 + ii[i]^2 + p.current_epsilon^2)
+                if mag == 0 && all(iszero, jr) && all(iszero, ji)
+                    Jrow = spzeros(Float64, nstate)
+                else
+                    mag > 0 || throw(DomainError(mag, "net-current magnitude derivative is undefined at zero; set current_epsilon > 0"))
+                    Jrow = (ir[i] .* jr .+ ii[i] .* ji) ./ mag
+                end
+            else
+                Jrow = spec.kind === :ire ? jr : ji
+            end
+        elseif i == 0
+            Jrow = spzeros(Float64, nstate)
         elseif spec.kind === :pinj
             Jrow = ir[i] .* jdvr .+ ii[i] .* jdvi .+
                          dvr .* s.current_state_rows[:, i] .+ dvi .* s.current_state_rows[:, n + i]
@@ -1194,7 +1231,7 @@ function _se_checked_status(s, p, x, e, H, C, Z, status; rank_rtol=sqrt(eps(Floa
     end
     tangent = size(Z, 2)
     tangent == 0 && return status
-    nonlinear_measurement = any(spec -> spec.kind in (:vmag, :pinj, :qinj, :imag, :pflow, :qflow), s.measurement_pattern)
+    nonlinear_measurement = any(spec -> spec.kind in (:vmag, :pinj, :qinj, :imag, :pflow, :qflow, :functional), s.measurement_pattern)
     (!nonlinear_measurement && !nonlinear_constraint) && return status
     norm(e.residual) <= 1e-7 && return status
     multipliers = _se_least_squares(C', -(H' * e.residual); rtol=rank_rtol)
@@ -1852,7 +1889,7 @@ warm-starts from the preceding result.  When `previous_state_sigma` is supplied,
 that preceding state becomes a whitened stochastic prior for the next snapshot,
 not an exact equation.
 
-`solver` is `:sparse` (default) or `:dense`.  The result preserves every
+`solver` is `:sparse` (default), `:dense`, or `:ipopt`.  The result preserves every
 per-snapshot result and stops at the first non-converged snapshot, reporting
 `:time_series_stalled` without claiming later estimates.
 """
@@ -1864,7 +1901,8 @@ function solve_time_series_state_estimator(s::SEStructure,
     isempty(parameters) && throw(ArgumentError("time-series estimation needs at least one parameter snapshot"))
     solve_one = solver === :sparse ? solve_sparse_state_estimator :
                 solver === :dense ? solve_compiled_state_estimator :
-                throw(ArgumentError("solver must be :sparse or :dense"))
+                solver === :ipopt ? solve_ipopt_state_estimator :
+                throw(ArgumentError("solver must be :sparse, :dense or :ipopt"))
     x = Float64.(x0)
     snapshots = Any[]
     # Capture caller priors BEFORE any snapshot runs, and restore them on the way

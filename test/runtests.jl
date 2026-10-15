@@ -45,6 +45,7 @@ const _HAS_ODS = true
     include("state_estimation_injection_tests.jl")
     include("state_estimation_network_tests.jl")
     include("state_estimation_nwinding_preflight_tests.jl")
+    include("state_estimation_compatibility_tests.jl")
     include("parameter_estimation_tests.jl")
     include("inverse_carson_tests.jl")
     include("inverse_carson_benchmark_tests.jl")

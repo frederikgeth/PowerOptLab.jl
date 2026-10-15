@@ -65,13 +65,13 @@ both estimators assume a diagonal covariance.
 
 ## Where these prototypes stand
 
-| Capability | WLS | Constrained NLLS | Notes |
+| Capability | Native WLS | Compiled (dense / sparse / Ipopt) | Notes |
 |---|:--:|:--:|---|
 | Nonlinear WLS fit | ✅ | ✅ | |
 | Exact zero injection | ✅ | ✅ | constraints, not weighted rows |
 | Exact device laws | ❌ | ✅ | constant P, constant I, ZIP |
-| Four-wire / floating neutral | ✅ | ✅ | Both retain ungrounded neutral states. |
-| Branch telemetry | ❌ | ✅ | lines only; no transformers |
+| Four-wire / floating neutral | ✅ | ✅ | Native WLS requires a grounded source neutral. |
+| Branch telemetry | ❌ | ✅ | finite lines, transformer ports and shunts; restricted ideal-wire telemetry |
 | Local observability | ✅ | ✅ | dense SVD, both |
 | State covariance | ❌ | ✅ | checks identifiability of each requested quantity |
 | Time series / priors | ❌ | ✅ | |
@@ -82,7 +82,11 @@ both estimators assume a diagonal covariance.
 | Correlated covariance | ❌ | ❌ | |
 | Topology-error hypotheses | ❌ | ❌ | |
 | Multistart / global search | ❌ | ❌ | |
-| PMU / synchrophasor model | ❌ | partial | `:vr`/`:vi` exist; no reference-angle or PMU error model |
+| PMU / synchrophasor model | partial | partial | `:vr`/`:vi` exist; no reference-angle or PMU error model |
+
+See [measurement and electrical compatibility](compatibility.md) for the tested
+transformer variants, custom functions, grounding configurations and remaining
+model boundaries. Solver choice within the compiled API preserves semantics.
 
 ## Open questions
 
@@ -149,13 +153,14 @@ combinatorial step this codebase does not take.
 
 ### 7. Transformer and source telemetry
 
-`BranchMeasurement` covers lines via `line_yprim`. Transformer and switch telemetry and uncertain source phasors are not
-modelled. Line current readings can target any represented conductor,
-including a neutral. Note also that
-`:pflow`/`:qflow` are referenced to **earth** at the measured conductor, with
-no per-measurement `reference`, unlike node `Measurement`s — a real meter
-reports phase-to-neutral power, so on a four-wire line with a displaced
-neutral these are not the same quantity.
+Line, finite transformer-port and finite-shunt telemetry now share a measurement
+interface, with explicit voltage references for power. Net conductor injection
+and user-defined scalar voltage functions are also available in all three
+compiled solvers. Ideal-switch/bond reactions and ambiguous transformer-port
+currents need an augmented current-state model. Source-free absolute voltage
+telemetry is supported; uncertain phasors on an otherwise fixed source require
+removing that fixed boundary and explicitly supplying enough information.
+See [compatibility](compatibility.md) for the exact tested scope.
 
 ## References
 

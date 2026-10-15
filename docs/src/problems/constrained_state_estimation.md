@@ -9,7 +9,8 @@ nonlinear least-squares problem
 \min_x \frac12\lVert r(x)\rVert_2^2 \qquad \text{subject to}\qquad c(x)=0.
 ```
 
-It is separate from the [legacy WLS/Ipopt formulation](state_estimation.md); see
+It also offers a classic Ipopt backend over the same compiled evaluator.
+The original [native WLS formulation](state_estimation.md) remains separate; see
 [Choosing a formulation](../estimation/comparison.md) for the head-to-head.
 Use this API when the distinction between **uncertain information** and a
 **genuinely exact electrical equation** matters, or when branch telemetry,
@@ -17,9 +18,9 @@ exact nonlinear devices, or selective covariance are required. Both estimators
 retain explicitly modelled ungrounded neutral voltages.
 
 !!! warning "Prototype scope"
-    The dense and sparse solvers are reference/prototype implementations.  The
+    The dense, sparse and shared Ipopt solvers are reference/prototype implementations.  The
     sparse Hachtel step is available, but large-feeder benchmarks, bad-data
-    processing, topology hypotheses, transformer branch telemetry, and sparse
+    processing, topology hypotheses, ideal-transformer current states, and sparse
     rank/covariance backends remain future work.
 
 ## Electrical support preflight and initialization
@@ -100,7 +101,7 @@ unequal phase taps, constant-power loads, omitted line shunts, and a source at
 bus 650. It includes mixed phases, delta loads, mutual line coupling and a
 4.16 kV / 480 V voltage transition. It is **not** a reproduction of the original
 IEEE operating case. The open-delta component includes physical 1 kΩ
-phase-to-earth shunts to establish its common-mode reference in both models.
+phase-to-earth shunts; compilation also preserves its ideal shared-phase copper bond.
 
 OpenDSS supplies conductor voltages. Injection readings are constructed from
 specified load currents and those voltages, independently of the estimator's
@@ -133,7 +134,8 @@ or a proof of coverage for general distribution networks. It uses generous
 redundant instrumentation; sparse field telemetry, correlated load forecasts,
 bad data, unknown taps, switching hypotheses, automatic regulator controls,
 ideal transformers and large-feeder runtime/memory scaling need separate
-validation. Transformer branch telemetry is still outside this API.
+validation. Finite transformer-port telemetry has a separate compatibility
+regression suite, including all three shared solvers.
 
 Run the complete reproducible matrix with `julia --project -e 'using Pkg;
 Pkg.test()'`; OpenDSSDirect is a declared test dependency.
@@ -179,7 +181,7 @@ source phasors, device values, and priors.  Update parameters between snapshots
 instead of recompiling whenever topology is unchanged.
 
 `SEParameters(structure, measurements; exact_devices=...)` checks measurement
-kinds, bus/line locations, references, and row order against the compiled
+kinds, element locations, references, callbacks, and row order against the compiled
 pattern. It also checks exact device kinds and oriented connections. Reordering
 measurements or changing a device's location or law requires recompilation;
 having the same number of rows or devices is insufficient. Values and standard
@@ -370,7 +372,7 @@ component equations, with real and imaginary rows interleaved in both blocks.
 Magnitude derivatives are undefined at zero.  Set
 `SEParameters(...; magnitude_epsilon=...)` only when smoothing below the
 instrument's meaningful resolution is appropriate. It applies to `:vmag`;
-branch `:imag` uses `current_epsilon` in amperes.  Note that a smoothed magnitude row evaluated at
+branch and net-injection `:imag` use `current_epsilon` in amperes.  Note that a smoothed magnitude row evaluated at
 exactly zero is *differentiable but information-free* — its gradient there is
 zero — so zero gradient is not evidence of minimisation. If the requested magnitude
 is larger than the smoothed prediction, the point can be a local maximum and
@@ -396,12 +398,12 @@ Current telemetry on a grounded neutral conductor remains meaningful and is
 supported. Its earth-referenced active/reactive power is identically zero,
 because that conductor's voltage is fixed at zero.
 
-!!! note "Branch power is referenced to earth"
-    Unlike a node [`Measurement`](@ref), a `BranchMeasurement` takes no
-    `reference`: `:pflow`/`:qflow` use the measured conductor's voltage to
-    **earth**.  On a four-wire line with a displaced neutral that is not the
-    phase-to-neutral power a real meter reports.  A per-measurement reference
-    remains an [open measurement-model question](../estimation/state_of_the_art.md#Open-questions).
+Element power defaults to earth-referenced voltage. Pass `reference="n"` for
+phase-to-neutral power on that element's bus. The compiled API also accepts
+`TransformerMeasurement`, `ShuntMeasurement`, `NetInjectionMeasurement` and
+`FunctionalMeasurement`; see [measurement and electrical compatibility](../estimation/compatibility.md)
+for port semantics, grounding restrictions and user-defined functions. All three
+shared solvers, including `solve_ipopt_state_estimator`, use the same equations.
 
 ## Exact devices and continuation
 
@@ -566,7 +568,7 @@ Remaining validation priorities are independent unbalanced feeder oracles,
 nonlinear Monte Carlo coverage, bad-data and model-error experiments, and
 end-to-end feeder/time-series benchmarks. Remaining implementation priorities
 include correlated whitening, robust and leverage-adjusted bad-data processing,
-reference-aware branch power and transformer telemetry, multistart, symbolic
+ideal-transformer and bond-reaction current states, multistart, symbolic
 factorisation reuse, reusable numerical workspaces, and sparse rank/covariance.
 
 ### Compatibility notes

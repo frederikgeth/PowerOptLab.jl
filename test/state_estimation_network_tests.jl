@@ -134,7 +134,13 @@ if isdefined(Main,:OpenDSSDirect)
         OpenDSSDirect.dss("Set MaxIterations=1000 algorithm=newton")
         OpenDSSDirect.dss("Solve")
         @test OpenDSSDirect.Solution.Converged()
-        Dict(lowercase(name)=>ComplexF64(v) for (name,v) in zip(OpenDSSDirect.Circuit.AllNodeNames(),OpenDSSDirect.Circuit.AllBusVolts()))
+        volts = Dict(lowercase(name)=>ComplexF64(v) for (name,v) in zip(OpenDSSDirect.Circuit.AllNodeNames(),OpenDSSDirect.Circuit.AllBusVolts()))
+        if file == "pf_open_delta_reg.dss"
+            for (secondary,source) in (("1","11"),("2","2"),("3","13"))
+                volts["reg.$secondary"] = volts["src.$source"]
+            end
+        end
+        volts
     end
     @testset "SE finite transformers and fixed regulators: independent oracles" begin
         cases=[("single_phase",_se_net_1ph_xfmr,"pf_1ph_xfmr.dss"),

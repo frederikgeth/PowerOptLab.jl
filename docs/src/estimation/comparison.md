@@ -1,10 +1,13 @@
 # Choosing a formulation
 
-Both estimators use the passive network physics and a Gaussian measurement
+The native WLS and compiled estimators use the passive network physics and a Gaussian measurement
 objective. Their APIs differ in injection coverage, supported exact device
 models, diagnostics, and computational cost.
 
 ## The one-sentence version
+
+For new work, use the compiled API with dense, sparse, or classic Ipopt solution
+over one shared evaluator. See [measurement and electrical compatibility](compatibility.md).
 
 Use the **[legacy WLS](../problems/state_estimation.md)** estimator for a
 JuMP/Ipopt model with complete paired P/Q injection coverage and explicit zero
@@ -18,11 +21,11 @@ equations; uncertain readings remain weighted residuals in both.
 | | Legacy WLS | Constrained NLLS |
 |---|---|---|
 | **Problem** | one weighted sum of squares | ``\min \tfrac12\lVert r\rVert^2`` subject to ``c(x)=0`` |
-| **Solver** | Ipopt (general interior-point NLP) | Byrd–Omojokun composite step (dense) or Hachtel augmented system with sparse QR |
+| **Solver** | Ipopt (general interior-point NLP) | Byrd–Omojokun composite step (dense) or Hachtel augmented system with sparse QR, or shared Ipopt |
 | **State** | rectangular ``V`` at non-source nodes, plus a free injection current per measured terminal | rectangular ``V`` of free conductors only |
 | **Neutrals** | explicit BMOPFTools voltage variables with terminal-to-reference injection currents | explicit conductor voltages and compiled return-current constraints |
-| **Node measurements** | `:vmag`, `:pinj`, `:qinj` | `:vr`, `:vi`, `:vmag`, `:pinj`, `:qinj` |
-| **Branch measurements** | none | `:ire`, `:iim`, `:imag`, `:pflow`, `:qflow` on a named line |
+| **Node measurements** | `:vr`, `:vi`, `:vmag`, `:pinj`, `:qinj` | `:vr`, `:vi`, `:vmag`, `:pinj`, `:qinj` |
+| **Branch measurements** | none | `:ire`, `:iim`, `:imag`, `:pflow`, `:qflow` on finite lines, transformer ports and shunts; net-injection and custom scalar functions also available |
 | **Exact device laws** | none | `ConstantPowerDevice`, `ConstantCurrentDevice`, `ZIPDevice` |
 | **Zero injection** | hard (the engine's KCL), declared per phase | hard `c(x)=0`, declared per conductor |
 | **Input contract** | rejects loads, limits, and uncovered phase injections | electrical preflight rejects unsupported models and reports omissions; no complete injection-coverage requirement |
@@ -70,15 +73,14 @@ Distinct original customer terminals retain separate powers at merged buses,
 whose powers and independent variances add. Repeated readings of the same
 original customer instead share its power and combine by precision.
 
-Neither formulation grounds a floating neutral merely to make the estimate
-observable. Supply the physical grounding and return paths, then inspect the
+The compiled formulation preserves floating neutrals. Native WLS implicitly
+grounds source neutrals, so its wrapper requires an explicit source earth bond. Supply the physical grounding and return paths, then inspect the
 rank diagnostics. The compiled interface also supports explicit nonlinear
 device laws and selective covariance for neutral-related quantities.
 
 Note the matching difference in the `zero_injection` keyword: a bare bus id
 expands over *phase* terminals for WLS and over *all* conductors, neutral
-included, for the compiled estimator. Both are correct for their own
-formulation.
+included, for the compiled estimator. Use explicit conductor tuples when moving between APIs.
 
 ### Error models run the other way
 
@@ -125,7 +127,7 @@ Neither estimator's success status is a uniqueness claim.
 
 ## Agreement between them
 
-Where both can express the same problem, they agree. `test/` checks the
+Tests establish agreement on specific compatible problems. `test/` checks the
 compiled estimator against a BMOPFTools `solve_pf` state recovered from exact
 telemetry, and checks the dense and sparse solvers against each other on that
 problem; the WLS estimator is checked against a power flow of the same feeder.

@@ -233,7 +233,7 @@ function _se_preflight(net, measurements; neutral="n", zero_injection=String[], 
     ybus = nothing
     if !any(f -> f.severity === :error, findings)
         try
-            ybus, warnings = _se_capture_primitive(() -> ybus_passive(net))
+            ybus, warnings = _se_capture_primitive(() -> _se_passive_ybus(net))
             isempty(warnings) || issue(:error,:primitive_warning,"network",strip(warnings))
             for (node, index) in sort!(collect(ybus.index); by=first)
                 if index != 0 && node != ybus.nodes[index]
@@ -242,6 +242,11 @@ function _se_preflight(net, measurements; neutral="n", zero_injection=String[], 
             end
             all(isfinite, ybus.Y) || issue(:error,:nonfinite_admittance,"network","Passive Ybus is nonfinite.")
             fixed = _source_phasors(net, ybus.index)
+            for m in measurements
+                m isa Measurement && m.kind in (:pinj,:qinj) || continue
+                i = get(ybus.index,(m.bus,m.terminal),0)
+                haskey(fixed,i) && throw(ArgumentError("individual customer power at a source-fixed conductor cannot be inferred from passive-network current; use NetInjectionMeasurement for net source telemetry"))
+            end
             for node in _zero_injection_set(net, zero_injection, neutral; include_neutral=true)
                 i = get(ybus.index, node, 0)
                 i == 0 && throw(ArgumentError("zero-injection terminal $node is grounded or absent"))
@@ -256,12 +261,11 @@ function _se_preflight(net, measurements; neutral="n", zero_injection=String[], 
         end
     end
     for (i,m) in enumerate(measurements)
-        if !(m isa Union{Measurement,BranchMeasurement})
-            issue(:error, :invalid_measurement, string(i), "Expected Measurement or BranchMeasurement.")
+        if !(m isa _SESupportedMeasurement)
+            issue(:error, :invalid_measurement, string(i), "Unsupported measurement type.")
             continue
         end
-        push!(refs, m isa BranchMeasurement ? (row=i, kind=m.kind, location="line/$(m.line)/$(m.side)/$(m.terminal)", reference=nothing) :
-            (row=i, kind=m.kind, location="$(m.bus)/$(m.terminal)", reference=_resolve_ref(m,neutral)))
+        push!(refs, merge((row=i,), _se_measurement_description(m, neutral)))
     end
     for node in zero_injection; push!(exact,(kind=:zero_injection, specification=deepcopy(node))); end
     for d in exact_devices; push!(exact,(kind=:device, specification=deepcopy(d))); end
