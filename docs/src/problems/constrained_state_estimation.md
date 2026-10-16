@@ -446,7 +446,9 @@ neutral. The default compiler assigns explicit states to the unknown currents
 and includes every known device current in KCL. Without an explicit unknown declaration, a measurement matching an
 original exact-device connection meters that known device. An explicit
 `injection_connections` path declares an additional unknown customer even on
-those same endpoints; matching P/Q meters then describe the unknown customer. Positive
+those same endpoints; matching P/Q meters then describe the unknown customer.
+Preflight records an `:info` finding with code `:reinterpreted_customer_measurement`
+for each affected row, naming its row number and customer terminal. Positive
 exact-device power is consumption, while positive customer power injects into
 the network.
 
@@ -551,7 +553,10 @@ filtered posterior.
   hypothesis search, or full filter globalisation.
 - Jacobians use sparse triplets and cached transposed operators for row access.
   Sparse rank/uncertainty methods and cached symbolic factorisations are not yet
-  production-scale implementations.
+  production-scale implementations. Native WLS current-observability diagnostics
+  compile the current model twice and use dense Jacobians, null-space SVDs and
+  `pinv(A)` to eliminate current directions; this diagnostic can dominate runtime
+  and memory on large networks.
 
 See [`SEStructure`](@ref), [`SEParameters`](@ref), and the solver/result types
 in the API reference for the full callable interface.
@@ -621,6 +626,8 @@ for this guide.
 
 For backend-specific time-series options use, for example,
 `solver_kwargs=(dense=(initial_radius=0.5,),ipopt=(max_iterations=100,))`.
+Options unsupported by the selected backend raise an explanatory `ArgumentError`,
+including `damping` for `:dense` and `normal_fraction` for `:sparse`.
 Shared keyword arguments must be meaningful for the selected backend; Ipopt
 rejects trust-region-only options with an explanatory `ArgumentError`.
 See [compatibility and validation](../estimation/compatibility.md) for explicit

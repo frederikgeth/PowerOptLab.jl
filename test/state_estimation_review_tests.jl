@@ -1,4 +1,5 @@
 using Test, PowerOptLab, LinearAlgebra, SparseArrays, Random, Logging
+using StableRNGs
 import BMOPFTools
 
 const REVIEW_SE_SOLVERS=(
@@ -9,8 +10,8 @@ const REVIEW_SE_SOLVERS=(
 
 # Independent four-wire nodal Ohm's-law construction. No package admittance,
 # device evaluator or power-flow solver generates the reference voltages/data.
-function review_feeder(n; seed = 143)
-    rng=MersenneTwister(seed)
+function review_feeder(n; seed = 143, noise = 1.0)
+    rng=StableRNG(seed)
     terms=["a", "b", "c", "n"]
     z=fill(0.03im, 4, 4)+Diagonal(fill(0.2+0.05im, 4))
     y=inv(0.05z)
@@ -81,13 +82,26 @@ function review_feeder(n; seed = 143)
                     bus = "b$b",
                     terminal = terms[k],
                     reference = "n",
-                    value = value+sigma*randn(rng),
+                    value = value+noise*sigma*randn(rng),
                     sigma,
                 ),
             )
         end
     end
     (; net, meters, volts, amps)
+end
+
+# The oracle is in conductor order, independent of the compiler's state order.
+function review_voltage_truth(s, volts)
+    nf=length(s.free_state_map)
+    truth=zeros(2nf)
+    terms=("a", "b", "c", "n")
+    for b in axes(volts, 2), (k, terminal) in enumerate(terms)
+        j=s.free_state_map[("b$b", terminal)]
+        truth[j]=real(volts[k, b])
+        truth[nf+j]=imag(volts[k, b])
+    end
+    truth
 end
 
 @testset "Review: fully fixed voltages retain residual degrees of freedom" begin
@@ -234,6 +248,48 @@ end
                     @test r.evaluation.voltage[s.node_index[node]]≈v atol=1e-5
                 end
             end
+            # Compare each estimate to the independent Ohm's-law truth, not
+            # only to another backend using the same package admittance.
+            truth=review_voltage_truth(s, case.volts)
+            for r in results
+                covariance=selected_state_covariance(s, p, r.state, collect(eachindex(truth)))
+                spectrum=eigen(Symmetric(covariance))
+                rank=r.tangent_dimension
+                @test rank==r.observable_dimension==6n
+                keep=(length(truth)-rank+1):length(truth)
+                @test minimum(spectrum.values[keep])>0
+                null_values=spectrum.values[1:(first(keep)-1)]
+                @test maximum(abs, null_values)<1e-9*maximum(spectrum.values)
+                error=r.state-truth
+                coordinates=spectrum.vectors[:, keep]'*error
+                q=sum(abs2.(coordinates)./spectrum.values[keep])
+                # A local nonlinear calibration check: approximately chi²_rank.
+                # A five-standard-deviation budget avoids selecting a lucky draw.
+                @test abs(q-rank)<5sqrt(2rank)
+                @test norm(error-spectrum.vectors[:, keep]*coordinates)<1e-7
+            end
+            noiseless=review_feeder(n; noise = 0.0)
+            sn=compile_state_estimator(noiseless.net, noiseless.meters)
+            pn=SEParameters(sn, noiseless.meters)
+            xn=initial_state_estimator(sn, pn)
+            for solver in REVIEW_SE_SOLVERS
+                r=solver(sn, pn, xn;
+                    optimality_tolerance = 1e-8)
+                @test solve_status(r).publishable
+                error=maximum(
+                    abs(r.evaluation.voltage[sn.node_index[("b$b", t)]]-noiseless.volts[k, b])
+                    for b in 1:n, (k, t) in enumerate(("a", "b", "c", "n"))
+                )
+                @test error<1e-8
+            end
+            native_truth=solve_state_estimation(noiseless.net, noiseless.meters; per_unit = false)
+            @test solve_status(native_truth).publishable
+            native_error=maximum(
+                abs(complex(native_truth.bus["b$b"][t]["vr"],
+                    native_truth.bus["b$b"][t]["vi"])-noiseless.volts[k, b])
+                for b in 1:n, (k, t) in enumerate(("a", "b", "c", "n"))
+            )
+            @test native_error<1e-8
             @test maximum(abs, results[1].state-results[2].state)<1e-6
             ipopt_diagnostics=solve_diagnostics(results[3])
             @test ipopt_diagnostics.optimizer_jacobian_entries <
@@ -359,6 +415,9 @@ end
         Measurement(; kind, bus = "b", terminal = "p", reference = "n", value, sigma = 10.0) for
         (kind, value) in ((:pinj, -1760.0), (:qinj, 0.0))
     ]
+    baseline=state_estimator_preflight(net, meters; exact_devices = [known])
+    @test baseline.supported
+    @test !any(f->f.code==:reinterpreted_customer_measurement, baseline.findings)
     # An explicit path declares an ADDITIONAL unknown customer. Without it,
     # matching telemetry would meter the known device itself.
     s=compile_state_estimator(
@@ -367,6 +426,11 @@ end
         exact_devices = [known],
         injection_connections = [connection],
     )
+    info=filter(f->f.code==:reinterpreted_customer_measurement, s.preflight.findings)
+    @test length(info)==2
+    @test all(f->f.severity==:info, info)
+    @test [f.element for f in info]==["measurement/1", "measurement/2"]
+    @test all(f->occursin("additional unknown customer", f.message), info)
     p=SEParameters(s, meters; exact_devices = [known])
     for f in REVIEW_SE_SOLVERS
         r=f(s, p, initial_state_estimator(s, p))
@@ -432,6 +496,32 @@ end
         solver = :ipopt,
         initial_radius = 0.5,
     )
+    for (backend, option) in ((:dense, (damping = 1e-8,)),
+        (:sparse, (normal_fraction = 0.5,)), (:dense, (solver_options = (),)),
+        (:ipopt, (typo_tolerance = 1e-8,)))
+        error=try
+            solve_time_series_state_estimator(s, [p], initial_state_estimator(s, p);
+                solver = backend, option...)
+            nothing
+        catch err
+            err
+        end
+        @test error isa ArgumentError
+        @test occursin("solver=$backend does not support", sprint(showerror, error))
+        @test occursin(string(first(keys(option))), sprint(showerror, error))
+    end
+    @test_throws ArgumentError solve_time_series_state_estimator(s, [p], initial_state_estimator(s, p);
+        solver_kwargs = (typo_backend = NamedTuple(),))
+    @test_throws ArgumentError solve_time_series_state_estimator(s, [p], initial_state_estimator(s, p);
+        solver_kwargs = (dense = 1,))
+    @test_throws ArgumentError solve_time_series_state_estimator(s, [p], initial_state_estimator(s, p);
+        solver = :dense, solver_kwargs = (dense = (damping = 1e-8,),))
+    for backend in (:dense, :sparse, :ipopt)
+        result=solve_time_series_state_estimator(s, [p], initial_state_estimator(s, p);
+            solver = backend, solver_kwargs = (dense = (normal_fraction = 0.7,),
+                sparse = (damping = 1e-9,), ipopt = (verbose = false,)))
+        @test result.completed_snapshots==1
+    end
     @test solve_state_estimation(s, p, initial_state_estimator(s, p)) isa
           SparseConstrainedStateEstimationResult
 end
@@ -561,9 +651,10 @@ end
     truth=[real(voltage), imag(voltage)]
     expected=selected_state_covariance(s, p, truth, [1, 2])
     means=copy(p.measurement_values)
-    rng=MersenneTwister(8941)
+    rng=StableRNG(8941)
     estimates=zeros(2, 500)
     statistics=zeros(500)
+    mahalanobis=zeros(500)
     for draw = 1:500
         p.measurement_values.=means .+ p.covariance_values .* randn(rng, length(means))
         r=solve_compiled_state_estimator(s, p, truth; optimality_tolerance = 1e-6)
@@ -571,6 +662,8 @@ end
         d=solve_diagnostics(r)
         @test d.dof==3
         @test d.nuisance_dimension==2
+        error=r.state-truth
+        mahalanobis[draw]=dot(error, expected\error)
         estimates[:, draw]=r.state
         statistics[draw]=d.objective
         if draw<=10
@@ -595,6 +688,9 @@ end
         empirical-expected,
     )/norm(expected)
     @test abs(sum(statistics)/500-3)<0.5 # >4 standard errors of chi-square mean
-    @test norm(empirical-expected)/norm(expected)<0.2
+    # For a linear Gaussian model q is chi²_2, with mean standard error
+    # 2/sqrt(N). Here the local nonlinear approximation gets a four-SE budget.
+    @info "Whitened voltage-error calibration" mean_q=sum(mahalanobis)/500 standard_error=2/sqrt(500)
+    @test abs(sum(mahalanobis)/500-2)<4*2/sqrt(500)
     @test all(abs.(vec(center)-truth) .< 4sqrt.(diag(expected)/500))
 end

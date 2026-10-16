@@ -49,8 +49,12 @@ function _se_capture_primitive(f)
 end
 
 function _se_preflight(net, measurements; neutral="n", zero_injection=String[], exact_devices=Any[], injection_connections=nothing, formulation=:auto)
-    findings = SEPreflightFinding[]; elements = NamedTuple[]; omitted = NamedTuple[]
-    sources = NamedTuple[]; refs = NamedTuple[]; exact = NamedTuple[]
+    findings = SEPreflightFinding[]
+    elements = NamedTuple[]
+    omitted = NamedTuple[]
+    sources = NamedTuple[]
+    refs = NamedTuple[]
+    exact = NamedTuple[]
     grounds = Tuple{String,String}[]
     issue(severity, code, element, message) = push!(findings,
         SEPreflightFinding(severity, code, element, message))
@@ -66,16 +70,19 @@ function _se_preflight(net, measurements; neutral="n", zero_injection=String[], 
     for (id, bus) in buses
         terminals!("bus/$id", id, get(bus, "terminal_names", String[]))
         for terminal in get(bus, "perfectly_grounded_terminals", [])
-            terminals!("bus/$id", id, [terminal]); push!(grounds, (String(id), String(terminal)))
+            terminals!("bus/$id", id, [terminal])
+            push!(grounds, (String(id), String(terminal)))
         end
         for key in ("v_min", "v_max", "vm_min", "vm_max")
             haskey(bus, key) && push!(omitted, (element="bus/$id", field=key, reason="Operating limit is not an estimator constraint."))
         end
     end
     for (id, source) in get(net, "voltage_source", Dict())
-        ts = get(source, "terminal_map", String[]); bus = get(source, "bus", "")
+        ts = get(source, "terminal_map", String[])
+        bus = get(source, "bus", "")
         terminals!("voltage_source/$id", bus, ts)
-        vs = get(source, "v_magnitude", Float64[]); angles = get(source, "v_angle", zeros(length(ts)))
+        vs = get(source, "v_magnitude", Float64[])
+        angles = get(source, "v_angle", zeros(length(ts)))
         length(vs) == length(ts) && length(angles) == length(ts) &&
             all(v -> isfinite(v) && v >= 0, vs) && all(isfinite, angles) ||
             issue(:error, :invalid_source, "voltage_source/$id", "Supply finite phasors with one magnitude and angle per source conductor.")
@@ -265,10 +272,21 @@ function _se_preflight(net, measurements; neutral="n", zero_injection=String[], 
                 i == 0 && throw(ArgumentError("zero-injection terminal $node is grounded or absent"))
                 haskey(fixed, i) && throw(ArgumentError("zero-injection terminal $node is fixed by a source"))
             end
-            _compile_measurements(net, measurements, ybus.index, neutral)
+            specs = _compile_measurements(net, measurements, ybus.index, neutral)
             connections, groups = _se_injection_layout(measurements, neutral, ybus.index; injection_connections, voltage_only=false,
                 known_connections=_se_known_connections(exact_devices,ybus.index))
             _compile_exact_devices(exact_devices, ybus.index)
+            known_connections = _se_known_connections(exact_devices, ybus.index)
+            explicit_unknowns = injection_connections === nothing ? Set{TerminalID}() :
+                Set(c.positive for c in injection_connections)
+            for (row, m) in enumerate(measurements)
+                m isa Measurement && m.kind in (:pinj, :qinj) || continue
+                node = (m.bus, m.terminal)
+                if node in explicit_unknowns && (node, specs[row].reference) in known_connections
+                    issue(:info, :reinterpreted_customer_measurement, "measurement/$row",
+                        "Row $row ($(m.kind) at $node) meters the additional unknown customer because injection_connections explicitly declares this path. Without that declaration it would meter the exact device on these endpoints.")
+                end
+            end
             zero_nodes=Set(ybus.index[node] for node in
                 _zero_injection_set(net,zero_injection,neutral;include_neutral=true))
             for c in _se_unknown_connections(connections,exact_devices,ybus.index,injection_connections)
@@ -314,10 +332,16 @@ function _se_preflight(net, measurements; neutral="n", zero_injection=String[], 
         end
         push!(refs, merge((row=i,), _se_measurement_description(m, neutral)))
     end
-    for node in zero_injection; push!(exact,(kind=:zero_injection, specification=deepcopy(node))); end
-    for d in exact_devices; push!(exact,(kind=:device, specification=deepcopy(d))); end
+    for node in zero_injection
+        push!(exact, (kind=:zero_injection, specification=deepcopy(node)))
+    end
+    for d in exact_devices
+        push!(exact, (kind=:device, specification=deepcopy(d)))
+    end
     if injection_connections !== nothing
-        for c in injection_connections; push!(exact,(kind=:injection_connection, specification=deepcopy(c))); end
+        for c in injection_connections
+            push!(exact, (kind=:injection_connection, specification=deepcopy(c)))
+        end
     end
     report = SEPreflightReport(!any(f -> f.severity === :error, findings), findings, elements,
         omitted, sources, sort!(grounds), refs, exact)

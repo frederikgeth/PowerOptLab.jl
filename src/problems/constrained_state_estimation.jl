@@ -586,10 +586,9 @@ function _compile_exact_devices(exact_devices, node_index)
     specs, constrained
 end
 
-# Exact device equations currently prescribe the complete net injection at
-# their free conductors. A different unknown customer on the same conductor
-# (including a shared neutral) would need additional current states. Reject
-# that mixture rather than treating one device law as the whole node's law.
+# Voltage elimination prescribes the complete injection at each free conductor.
+# Shared known/unknown customers need the explicit-current formulation instead.
+# This guard is only used when the caller requests voltage elimination.
 function _se_check_device_injections(connections, groups, measurements, exact_devices,
                                      node_index, fixed)
     isempty(exact_devices) && return nothing
@@ -604,10 +603,17 @@ function _se_check_device_injections(connections, groups, measurements, exact_de
     end
     for c in connections
         if (c.positive, index(c.negative)) in known
-            i=index(c.positive);j=index(c.negative)
-            any(other->index(other.negative)==i || (index(other.positive)==i && index(other.negative)!=j),
-                (other for d in exact_devices for other in d.model.connections)) &&
-                throw(ArgumentError("a known customer's positive node also carries other device currents; use formulation=:current or :auto"))
+            i = index(c.positive)
+            j = index(c.negative)
+            overlapping = any(
+                other -> index(other.negative) == i ||
+                    (index(other.positive) == i && index(other.negative) != j),
+                (other for d in exact_devices for other in d.model.connections),
+            )
+            if overlapping
+                throw(ArgumentError(
+                    "a known customer's positive node also carries other device currents; use formulation=:current or :auto"))
+            end
             continue
         end
         any(i -> i in constrained, (index(c.positive), index(c.negative))) &&
@@ -623,7 +629,9 @@ function _se_check_device_injections(connections, groups, measurements, exact_de
 end
 
 function _flatten_device_parameters(exact_devices)
-    powers = ComplexF64[]; currents = ComplexF64[]; admittances = ComplexF64[]
+    powers = ComplexF64[]
+    currents = ComplexF64[]
+    admittances = ComplexF64[]
     for wrapped in exact_devices
         model = wrapped.model
         if model isa ConstantPowerDevice
@@ -2050,13 +2058,21 @@ function solve_time_series_state_estimator(s::SEStructure,
                 solver === :dense ? solve_compiled_state_estimator :
                 solver === :ipopt ? solve_ipopt_state_estimator :
                 throw(ArgumentError("solver must be :sparse, :dense or :ipopt"))
-    specific=get(solver_kwargs,solver,NamedTuple())
-    options=merge((;kwargs...),specific)
-    if solver===:ipopt
-        trust_region=(:initial_radius,:max_radius,:normal_fraction,:penalty,:acceptance_threshold,:min_radius,:damping)
-        invalid=intersect(collect(keys(options)),collect(trust_region))
-        isempty(invalid) || throw(ArgumentError("Ipopt does not use trust-region options $invalid; put backend-specific options in solver_kwargs=(dense=(...),sparse=(...),ipopt=(...))"))
-    end
+    unknown_backends=setdiff(keys(solver_kwargs), (:dense, :sparse, :ipopt))
+    isempty(unknown_backends) || throw(ArgumentError("unknown solver_kwargs backends $unknown_backends"))
+    all(value->value isa NamedTuple, values(solver_kwargs)) ||
+        throw(ArgumentError("each solver_kwargs entry must be a NamedTuple"))
+    specific=get(solver_kwargs, solver, NamedTuple())
+    options=merge((; kwargs...), specific)
+    shared=(:max_iterations, :constraint_tolerance, :constraint_rtol,
+        :optimality_tolerance, :rank_rtol)
+    trust_region=(:initial_radius, :max_radius, :penalty, :acceptance_threshold, :min_radius)
+    allowed=solver===:ipopt ? (shared..., :verbose, :solver_options) :
+        solver===:dense ? (shared..., trust_region..., :normal_fraction) :
+        (shared..., trust_region..., :damping)
+    invalid=setdiff(keys(options), allowed)
+    isempty(invalid) || throw(ArgumentError(
+        "solver=$solver does not support options $invalid; put backend-specific options in solver_kwargs=(dense=(...), sparse=(...), ipopt=(...))"))
     x = Float64.(x0)
     snapshots = Any[]
     # Capture caller priors BEFORE any snapshot runs, and restore them on the way

@@ -206,8 +206,8 @@ generate an answer from the estimator's own Ybus:
 | Gauge freedom | Solvers agree on identified voltage differences, objective and derived covariance; individual conductor voltages need not agree |
 | Three-winding transformer | An independent OpenDSS deck supplies voltages and winding-port currents/powers for a grounded single-phase WYE/WYE/WYE case; excitation and artificial anti-float shunts are disabled explicitly |
 | Mixed winding connections and grounding | Independent hidden-emf/star-leakage equations cover WYE/DELTA/WYE, DELTA/WYE/DELTA and WYE/WYE/DELTA, both DELTA rotations, two winding reference orders, unbalanced loads and floating/solid/complex-electrode grounding; OpenDSS terminal equations independently check every phase and neutral port current, with zero and nonzero excitation |
-| Loaded 5/20/40-bus four-wire feeders | Independent series Ohm's law and electrode KCL generate unbalanced operating points; noisy P/Q/magnitude fits compare dense, sparse, shared Ipopt and native WLS states, J and degrees of freedom |
-| Nonlinear statistical calibration | 500 seeded independent draws with unequal variances, repeated readings and merged customers check E[J] against dof and empirical voltage covariance against the local calculation; explicit and profiled formulations agree |
+| Loaded 5/20/40-bus four-wire feeders | Independent series Ohm's law and electrode KCL generate unbalanced operating points; noiseless fits assert all four backends against conductor-voltage truth below 1e-8 V; noisy P/Q/magnitude fits compare states, J and degrees of freedom, and shared solvers check whitened truth error using the constrained covariance pseudoinverse |
+| Nonlinear statistical calibration | 500 StableRNG draws with unequal variances, repeated readings and merged customers check E[J] against dof and mean whitened voltage error against the local chi-square prediction; explicit and profiled formulations agree |
 | Fully fixed source voltages | Conflicting noisy voltage readings retain J=13 and 2 residual degrees of freedom in native WLS and all three shared solvers; zero fitted states do not imply zero residual dof |
 | Floating winding rank and covariance | A completely uninformative projected Jacobian must not turn roundoff into observability; all shared solvers and the native rank diagnostic preserve gauges, reject absolute-voltage covariance, and retain weak genuine reference information |
 
@@ -294,5 +294,7 @@ as an independent prior invalidates that interpretation.
 The 500-draw regression covers one low-noise nonlinear circuit, not general
 calibration or bad-data processing. Final rank/covariance diagnostics still use
 dense SVD. Sparse derivatives and cached equation reduction do not establish
-large-network scalability; the demonstrated feeder range is 5–40 downstream
+large-network scalability. Native WLS current-observability diagnostics additionally
+compile twice and use dense Jacobians/null-space SVDs and `pinv(A)` to eliminate
+current directions. The demonstrated feeder range is 5–40 downstream
 buses.
