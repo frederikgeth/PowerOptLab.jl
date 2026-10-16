@@ -198,3 +198,54 @@ if isdefined(Main,:OpenDSSDirect)
         end
     end
 end
+
+
+@testset "SE switch topology matches the upstream open_switch field" begin
+    net=Dict{String,Any}(
+        "bus"=>Dict(b=>Dict("terminal_names"=>["p"]) for b in ("s", "b", "z")),
+        "voltage_source"=>Dict("s"=>Dict("bus"=>"s", "terminal_map"=>["p"],
+            "v_magnitude"=>[230.0], "v_angle"=>[0.0])),
+        "line"=>Dict("l"=>Dict("bus_from"=>"s", "bus_to"=>"b",
+            "terminal_map_from"=>["p"], "terminal_map_to"=>["p"], "R_series_1_1"=>0.5)),
+        "switch"=>Dict("sw"=>Dict("bus_from"=>"b", "bus_to"=>"z",
+            "terminal_map_from"=>["p"], "terminal_map_to"=>["p"])),
+    )
+    for opened in (nothing, false, true)
+        case=deepcopy(net)
+        opened===nothing || (case["switch"]["sw"]["open_switch"]=opened)
+        isopen=opened===true
+        meters=[Measurement(; kind, bus, terminal="p", reference=nothing, value, sigma=1.0)
+            for (bus, vr) in (("b", 225.0), ("z", isopen ? 220.0 : 225.0))
+            for (kind, value) in ((:vr, vr), (:vi, 0.0))]
+        s=compile_state_estimator(case, meters)
+        @test s.preflight.supported
+        switch=only(filter(e->e.element=="switch/sw", s.preflight.elements))
+        @test switch.representation==(isopen ? :open : :closed)
+        @test (s.node_index[("b", "p")]!=s.node_index[("z", "p")])==isopen
+        p=SEParameters(s, meters)
+        for solver in (solve_compiled_state_estimator, solve_sparse_state_estimator,
+            solve_ipopt_state_estimator)
+            r=solver(s, p, initial_state_estimator(s, p))
+            @test solve_status(r).publishable
+            @test r.evaluation.voltage[s.node_index[("b", "p")]]≈225.0 atol=1e-7
+            @test r.evaluation.voltage[s.node_index[("z", "p")]]≈(isopen ? 220.0 : 225.0) atol=1e-7
+            @test solve_diagnostics(r).dof==(isopen ? 0 : 2)
+        end
+    end
+    for invalid in ("open", 1, nothing)
+        case=deepcopy(net)
+        case["switch"]["sw"]["open_switch"]=invalid
+        report=state_estimator_preflight(case)
+        @test !report.supported
+        @test any(f->f.code==:invalid_switch, report.findings)
+        @test_throws SEUnsupportedNetwork compile_state_estimator(case)
+    end
+    for status in ("open", "closed")
+        case=deepcopy(net)
+        case["switch"]["sw"]["status"]=status
+        report=state_estimator_preflight(case)
+        @test !report.supported
+        @test any(f->f.code==:unsupported_switch_field, report.findings)
+        @test_throws SEUnsupportedNetwork compile_state_estimator(case)
+    end
+end

@@ -312,7 +312,7 @@ end
         net["bus"]["mid"] = Dict{String,Any}("terminal_names" => ["a", "n"])
         net["switch"] = Dict{String,Any}(
             "sw1" => Dict{String,Any}(
-                "bus_from" => "src", "bus_to" => "mid", "status" => "closed",
+                "bus_from" => "src", "bus_to" => "mid", "open_switch" => false,
                 "terminal_map_from" => ["a", "n"], "terminal_map_to" => ["a", "n"]))
         net["line"]["l1"]["bus_from"] = "mid"
 
@@ -525,7 +525,7 @@ end
             ),
             "switch" => Dict{String,Any}(
                 "sw1" => Dict{String,Any}(
-                    "bus_from" => "src", "bus_to" => "mid", "status" => "closed",
+                    "bus_from" => "src", "bus_to" => "mid", "open_switch" => false,
                     "terminal_map_from" => ["a", "n"], "terminal_map_to" => ["a", "n"])),
             "line" => Dict{String,Any}(
                 "l1" => Dict{String,Any}(

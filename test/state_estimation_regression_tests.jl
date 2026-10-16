@@ -223,7 +223,7 @@ end
     aliased = deepcopy(net)
     aliased["bus"]["z"] = Dict{String,Any}("terminal_names" => ["1", "2", "n"])
     aliased["switch"] = Dict("sw" => Dict("bus_from" => "b", "bus_to" => "z",
-        "terminal_map_from" => ["1", "2", "n"], "terminal_map_to" => ["1", "2", "n"], "status" => "closed"))
+        "terminal_map_from" => ["1", "2", "n"], "terminal_map_to" => ["1", "2", "n"], "open_switch" => false))
     aliases = vcat(ms, [Measurement(kind=m.kind, bus="z", terminal=m.terminal,
         value=m.value, sigma=m.sigma) for m in ms])
     sa = compile_state_estimator(aliased, aliases;formulation=:voltage)

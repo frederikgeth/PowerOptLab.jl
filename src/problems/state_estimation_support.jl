@@ -211,9 +211,14 @@ function _se_preflight(net, measurements; neutral="n", zero_injection=String[], 
                 size(Y) == (length(nodes), length(nodes)) && all(isfinite, Y) ||
                     issue(:error, :invalid_primitive, label, "Admittance must be finite and match the terminal map.")
             elseif kind == "switch"
-                get(x,"status","closed") in ("open","closed") || issue(:error,:invalid_switch,label,"Status must be open or closed.")
+                get(x, "open_switch", false) isa Bool ||
+                    issue(:error, :invalid_switch, label, "open_switch must be true or false.")
+                haskey(x, "status") && issue(:error, :unsupported_switch_field, label,
+                    "The status field does not define switch topology; use open_switch=true or false.")
             end
-            push!(elements, (element=label, representation=kind == "switch" ? Symbol(get(x,"status","closed")) : :passive, tap=nothing))
+            representation = kind == "switch" ?
+                (get(x, "open_switch", false) === true ? :open : :closed) : :passive
+            push!(elements, (element=label, representation, tap=nothing))
         catch err
             issue(:error, :invalid_element, label, sprint(showerror,err))
         end

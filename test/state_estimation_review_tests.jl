@@ -193,7 +193,7 @@ end
             "bus_to"=>"b1",
             "terminal_map_from"=>["a"],
             "terminal_map_to"=>["a"],
-            "status"=>"closed",
+            "open_switch" => false,
         ),
     )
     @test !state_estimator_preflight(net, meters; zero_injection = [("alias", "a")]).supported
@@ -371,7 +371,7 @@ end
             "bus_to"=>"alias",
             "terminal_map_from"=>["a", "b", "c", "n"],
             "terminal_map_to"=>["a", "b", "c", "n"],
-            "status"=>"closed",
+            "open_switch" => false,
         ),
     )
     meters=[
@@ -600,7 +600,7 @@ end
                 "bus_to"=>"z",
                 "terminal_map_from"=>["p"],
                 "terminal_map_to"=>["p"],
-                "status"=>"closed",
+                "open_switch" => false,
             ),
         ),
     )

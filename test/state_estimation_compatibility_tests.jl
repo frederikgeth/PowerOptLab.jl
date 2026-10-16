@@ -392,7 +392,7 @@ end
     net=compat_ground_net(:solid)
     net["bus"]["z"]=deepcopy(net["bus"]["b"])
     net["switch"]=Dict("closed"=>Dict("bus_from"=>"b","bus_to"=>"z",
-        "terminal_map_from"=>["1","n"],"terminal_map_to"=>["1","n"],"status"=>"closed"))
+        "terminal_map_from"=>["1","n"],"terminal_map_to"=>["1","n"],"open_switch" => false))
     cs=[TerminalConnection((bus,"1"),(bus,"n")) for bus in ("b","z")]
     meters=Any[Measurement(kind=:pinj,bus="b",value=-1000.,sigma=10.),
         NetInjectionMeasurement(kind=:pinj,bus="z",value=-2250.,sigma=1.),
@@ -465,7 +465,7 @@ end
     net=compat_ground_net(:solid)
     net["bus"]["alias"]=deepcopy(net["bus"]["src"])
     net["switch"]=Dict("closed"=>Dict("bus_from"=>"src","bus_to"=>"alias",
-        "terminal_map_from"=>["1","n"],"terminal_map_to"=>["1","n"],"status"=>"closed"))
+        "terminal_map_from"=>["1","n"],"terminal_map_to"=>["1","n"],"open_switch" => false))
     load=[Measurement(kind=kind,bus="b",value=value,sigma=10.)
           for (kind,value) in ((:pinj,-2250.),(:qinj,-450.))]
     for bus in ("src","alias")

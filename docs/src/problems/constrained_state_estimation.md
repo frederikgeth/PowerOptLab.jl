@@ -35,6 +35,11 @@ with its report if any error is present. `supported` means representable by this
 compiled finite-primitive model. It does **not** certify observability, a correct network
 calibration, or convergence.
 
+Switch topology follows BMOPFTools: `open_switch=true` leaves the terminals
+separate; `false` or an absent field closes the switch. Preflight reports this
+interpretation and rejects non-Boolean values and the unsupported legacy
+`status` field, which would otherwise be ignored by upstream Ybus assembly.
+
 ```julia
 report = state_estimator_preflight(net, measurements)
 report.findings                 # severity, code, element, explanation

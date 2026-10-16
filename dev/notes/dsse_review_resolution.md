@@ -47,12 +47,11 @@ inferred from solver agreement.
 
 ## Validation record
 
-The 16 October 2026 run uses BMOPFTools compatibility commit
+The earlier 16 October 2026 runs used BMOPFTools compatibility commit
 `8ddec1e557e6bb405567b26b810b5b14cbab5274`. Both source declarations and ignored
 local manifests are refreshed with `scripts/instantiate_pinned.jl`. Companion
-PR #436 also integrates the same fix with current upstream main; PowerOptLab
-keeps the existing upstream API base rather than adopting that separate API
-migration.
+PR #436 subsequently integrated current upstream main and was merged. The
+latest-pin follow-up below supersedes this historical compatibility source.
 
 On Julia 1.12.6 the full package suite passes 15,718 checks plus 11 Aqua checks.
 Julia 1.10.11 passes the 15,720-check suite plus its 10 enabled Aqua checks;
@@ -149,3 +148,25 @@ the regression retains the requested 1e-8 V bound on complex conductor voltage.
 Full Documenter/doctests, seven executable study tutorials and three reproducible
 figure checks also pass. This supplements the earlier CI record; new CI must
 be checked on the follow-up commit itself.
+
+
+## Merged upstream dependency pin
+
+After upstream PR #436 merged, both root and documentation source declarations
+were advanced to BMOPFTools main `df6bc42bfd64fc5475658c438adcdb28a3469777`.
+The merged source retains the shared-phase open-delta bond and also includes
+PR #435's canonical `open_switch` semantics. PowerOptLab preflight now uses
+that Boolean field (absent means closed), reports the corresponding topology,
+and rejects non-Boolean values or the unsupported legacy `status` field.
+Fixtures now use `open_switch=false`; a regression checks default/closed/open
+node aliasing, distinct recovered voltages across open terminals, residual dof,
+and invalid declarations. The production version bound remains 0.1.0 and the
+source is an immutable merged main commit, not an unmerged compatibility branch.
+
+Validation at this merged source: full package suites pass 15,963 checks on both
+Julia 1.10.11 and current stable 1.13.2, plus 10 and 11 Aqua checks respectively.
+The added switch regression contributes 60 checks. Full documentation builds
+and doctests pass on both versions, with deployment disabled. Julia 1.13.2
+also passes seven executable study tutorials and eight executable DOE tutorials;
+all three reproducible figure checks pass. Root, docs and both test manifests
+resolve the immutable merged source rather than a path override.
