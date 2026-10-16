@@ -19,6 +19,7 @@ makedocs(
                 "State estimation overview" => "estimation/index.md",
                 "Worked state-estimation study" => "tutorials/constrained_nlls_state_estimation.md",
                 "Choosing a formulation" => "estimation/comparison.md",
+                "Measurement and electrical compatibility" => "estimation/compatibility.md",
                 "Likelihood, loss, and priors" => "estimation/maximum_likelihood.md",
                 "Legacy WLS model" => "problems/state_estimation.md",
                 "Constrained NLLS model" => "problems/constrained_state_estimation.md",

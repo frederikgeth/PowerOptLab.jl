@@ -1,9 +1,9 @@
-# Compiled four-wire voltage-state evaluation for the constrained-NLLS estimator.
+# Compiled four-wire voltage/current evaluation for the constrained-NLLS estimator.
 #
 # This is deliberately separate from the legacy JuMP/Ipopt WLS prototype in
 # `state_estimation.jl`.  It owns only immutable topology/equation structure and
-# mutable numerical parameters; a dense composite-step solver is layered on top
-# in the next development phase.
+# mutable numerical parameters, with dense composite-step and sparse Hachtel
+# solvers layered on top.
 
 const TerminalID = Tuple{String,String}
 
@@ -28,7 +28,12 @@ struct ExactDeviceEquation{M} <: ExactInjectionSpecification
     model::M
 end
 
-"""One oriented device branch: current is positive from `positive` to `negative`."""
+"""
+One oriented device branch: current is positive from `positive` to `negative`.
+Also declares an unknown injection's physical path through
+`compile_state_estimator(...; injection_connections=[...])`, without stipulating
+a current or power law. `negative=nothing` denotes earth.
+"""
 struct TerminalConnection
     positive::TerminalID
     negative::Union{TerminalID,Nothing}
@@ -45,20 +50,33 @@ struct ConstantPowerDevice <: ExactDeviceModel
         length(connections) == length(powers) ||
             throw(ArgumentError("constant-power device needs one power per connection"))
         isempty(connections) && throw(ArgumentError("constant-power device needs at least one connection"))
-        new(collect(connections), ComplexF64.(powers))
+        values = ComplexF64.(powers)
+        all(isfinite, values) || throw(ArgumentError("constant-power device powers must be finite"))
+        new(collect(connections), values)
     end
 end
 
-"""Exact constant-current branches; positive current flows into the device."""
+"""
+    ConstantCurrentDevice(connections, currents; angle_reference=:earth)
+
+Exact current branches; positive current flows into the device. `:earth` fixes
+an absolute phasor. `:voltage` fixes magnitude and power factor relative to the
+connection voltage: `I=currents[k]*V/abs(V)`. Its angle is undefined at zero V
+unless the current coefficient is zero.
+"""
 struct ConstantCurrentDevice <: ExactDeviceModel
     connections::Vector{TerminalConnection}
     currents::Vector{ComplexF64}
+    angle_reference::Symbol
     function ConstantCurrentDevice(connections::AbstractVector{TerminalConnection},
-                                   currents::AbstractVector{<:Complex})
+                                   currents::AbstractVector{<:Complex};angle_reference::Symbol=:earth)
+        angle_reference in (:earth,:voltage) || throw(ArgumentError("angle_reference must be :earth or :voltage"))
         length(connections) == length(currents) ||
             throw(ArgumentError("constant-current device needs one current per connection"))
         isempty(connections) && throw(ArgumentError("constant-current device needs at least one connection"))
-        new(collect(connections), ComplexF64.(currents))
+        values = ComplexF64.(currents)
+        all(isfinite, values) || throw(ArgumentError("constant-current device currents must be finite"))
+        new(collect(connections), values, angle_reference)
     end
 end
 
@@ -75,7 +93,10 @@ struct ZIPDevice <: ExactDeviceModel
         length(powers) == n && length(currents) == n && length(admittances) == n ||
             throw(ArgumentError("ZIP device needs one S, I, and Y value per connection"))
         n > 0 || throw(ArgumentError("ZIP device needs at least one connection"))
-        new(collect(connections), ComplexF64.(powers), ComplexF64.(currents), ComplexF64.(admittances))
+        ps, cs, ys = ComplexF64.(powers), ComplexF64.(currents), ComplexF64.(admittances)
+        all(isfinite, ps) && all(isfinite, cs) && all(isfinite, ys) ||
+            throw(ArgumentError("ZIP device powers, currents, and admittances must be finite"))
+        new(collect(connections), ps, cs, ys)
     end
 end
 
@@ -83,6 +104,13 @@ struct _SEMeasurementSpec{Ti<:Integer}
     kind::Symbol
     terminal::Ti
     reference::Ti                  # 0 denotes the earth reference
+end
+
+# Original customer identities survive electrical node aliasing. Each vector
+# contains repeated readings of one customer's power component; different
+# customers contribute additively to the merged node's total power.
+struct _SEPowerGroup
+    customers::Vector{Vector{Int}}
 end
 
 """A scalar telemetry reading on one end/conductor of a named BMOPF line."""
@@ -93,24 +121,36 @@ struct BranchMeasurement <: AbstractMeasurement
     terminal::String
     value::Float64
     sigma::Float64
+    reference::Union{String,Nothing}
     function BranchMeasurement(; kind::Symbol, line::String, side::Symbol=:from,
-                               terminal::String, value::Real, sigma::Real)
+                               terminal::String, value::Real, sigma::Real,
+                               reference::Union{String,Nothing}=nothing)
         kind in _BRANCH_MEASUREMENT_KINDS ||
             throw(ArgumentError("unknown branch measurement kind :$kind"))
         side in (:from, :to) || throw(ArgumentError("branch measurement side must be :from or :to"))
         isempty(line) && throw(ArgumentError("branch measurement line must be non-empty"))
         isempty(terminal) && throw(ArgumentError("branch measurement terminal must be non-empty"))
         _validate_measurement_scalar(kind, value, sigma)
-        new(kind, line, side, terminal, Float64(value), Float64(sigma))
+        reference isa String && isempty(reference) && throw(ArgumentError("reference must be non-empty"))
+        new(kind, line, side, terminal, Float64(value), Float64(sigma), reference)
     end
 end
+
+# Values and uncertainties may change between snapshots; measurement identity
+# and row order are part of the compiled model. Keep branch locations too,
+# since their primitive rows alone do not identify the original line and side.
+_se_measurement_key(m::Measurement) = (:terminal, m.kind, m.bus, m.terminal, m.reference)
+_se_measurement_key(m::BranchMeasurement) = (:branch, m.kind, m.line, m.side, m.terminal, m.reference)
 
 struct _SEBranchMeasurementSpec{Ti<:Integer}
     kind::Symbol
     nodes::Vector{Ti}              # 0 denotes earth
     conductor::Ti
+    reference::Ti
     yrow::Vector{ComplexF64}
 end
+
+include("state_estimation_measurements.jl")
 
 struct _SEExactDeviceSpec{Ti<:Integer}
     kind::Symbol
@@ -122,16 +162,26 @@ end
 """
     SEStructure{Ti}
 
-Immutable compiled structure for the voltage-only, four-wire state-estimation
+Compiled structure for the voltage/current four-wire state-estimation
 formulation.  It imports BMOPFTools' passive, conductor-to-earth Ybus exactly
 once.  `free_state_map` maps a free conductor to its position in the rectangular
-state `[real(V_free); imag(V_free)]`; ideal-source conductors are held in the
-parameter vector instead.  Closed ideal switches are already represented by the
+state's leading `[real(V_free); imag(V_free)]` entries; explicit unknown-current
+entries follow when needed, indexed by `injection_state_indices`. Ideal-source
+conductors are held in the parameter vector instead.  Closed ideal switches are already represented by the
 node aliases in `ybus_passive`.
 
 The evaluator supports terminal voltage components/magnitudes and terminal
 active/reactive injection measurements, exact zero-injection equations, and
 connection-aware exact constant-power, constant-current, and ZIP devices.
+Explicit `injection_connections` (or power-measurement references by default)
+declare injection return paths: the sum of
+terminal currents on each connected, non-source, non-earth return component
+is exactly zero, independently of the noisy power readings.
+Distinct original terminals that alias to one node retain separate customer
+powers. The default uses explicit currents when customer powers cannot safely
+be eliminated; `formulation=:voltage` retains the optimized power profile for
+eligible connections. Repeated readings of one original terminal share its power.
+Only numerical solver-proof caches are mutable; topology and patterns are fixed.
 Line telemetry is compiled from the same passive primitives.
 """
 struct SEStructure{Ti<:Integer}
@@ -141,7 +191,11 @@ struct SEStructure{Ti<:Integer}
     node_index::Dict{TerminalID,Ti}
     passive_pattern::SparseMatrixCSC{ComplexF64,Ti}
     measurement_pattern::Vector{Any}
+    measurement_keys::Vector{Tuple}
+    injection_connections::Vector{TerminalConnection}
+    power_groups::Vector{_SEPowerGroup}
     constraint_pattern::Vector{Ti}
+    return_current_pattern::SparseMatrixCSC{Float64,Ti}
     device_pattern::Vector{_SEExactDeviceSpec{Ti}}
     free_state_map::Dict{TerminalID,Ti}
     reference_map::Dict{TerminalID,ComplexF64}
@@ -151,6 +205,10 @@ struct SEStructure{Ti<:Integer}
     current_state_rows::SparseMatrixCSC{Float64,Ti}
     fixed_voltage_state::Vector{Float64}
     fixed_current_state::Vector{Float64}
+    injection_incidence::SparseMatrixCSC{Float64,Ti}
+    injection_state_map::Dict{TerminalID,Ti}
+    constraint_basis_cache::Dict{Any,Any}
+    constraint_basis_lock::ReentrantLock
 end
 
 """
@@ -161,12 +219,21 @@ measurement values, standard deviations, or fixed source phasors does not alter
 terminal ordering or symbolic sparsity.  Standard deviations are the diagonal
 whitening factors for this first implementation.
 
+Construct parameter updates with the same measurement kinds, locations,
+references, and row order used at compilation. Exact device kinds and oriented
+connections must also match. Only their numerical readings, uncertainties, and
+device values may change; a changed pattern requires recompilation.
+
 `magnitude_epsilon` (volts) and `current_epsilon` (amperes) smooth `:vmag` and
 `:imag` residuals respectively.  They are deliberately separate scalars: a
 magnitude derivative is undefined at zero for both, but the two are different
 physical quantities and a mixed `:vmag`/`:imag` dataset has no single
 meaningful smoothing value.  Size each below the resolution of the instrument
 it applies to.
+
+`voltage_min_model` (volts) bounds the domain of physical constant-power laws
+and merged-customer power profiling. At zero connection voltage individual
+customer powers cannot be recovered from their sum using finite currents.
 """
 mutable struct SEParameters
     fixed_voltages::Vector{ComplexF64}
@@ -185,7 +252,7 @@ mutable struct SEParameters
     prior_sigmas::Vector{Float64}
 end
 
-"""A stochastic prior on selected rectangular voltage-state entries."""
+"""A stochastic prior on selected SI voltage or branch-current state entries."""
 struct StatePrior
     indices::Vector{Int}
     values::Vector{Float64}
@@ -202,7 +269,7 @@ struct StatePrior
     end
 end
 
-"""Values of the compiled residual/constraint model at one voltage state."""
+"""Values of the compiled residual/constraint model at one voltage/current state."""
 struct SEEvaluation
     voltage::Vector{ComplexF64}
     current::Vector{ComplexF64}
@@ -230,6 +297,7 @@ struct ConstrainedStateEstimationResult <: AbstractSolveResult
     tangent_dimension::Int
     observable_dimension::Int
     history::Vector{NamedTuple}
+    statistics::NamedTuple
 end
 
 function solve_status(result::ConstrainedStateEstimationResult)
@@ -238,9 +306,9 @@ function solve_status(result::ConstrainedStateEstimationResult)
 end
 
 solve_diagnostics(result::ConstrainedStateEstimationResult) =
-    (iterations=result.iterations, constraint_rank=result.constraint_rank,
+    merge(result.statistics, (iterations=result.iterations, constraint_rank=result.constraint_rank,
      tangent_dimension=result.tangent_dimension,
-     observable_dimension=result.observable_dimension)
+     observable_dimension=result.observable_dimension))
 
 """Result and per-stage diagnostics from constant-power continuation."""
 struct ContinuationStateEstimationResult <: AbstractSolveResult
@@ -268,8 +336,12 @@ function _source_phasors(net::Dict{String,Any}, node_index)
             throw(ArgumentError("voltage source at bus '$bus' must provide one v_magnitude per terminal"))
         for k in eachindex(terminals)
             i = get(node_index, (bus, terminals[k]), 0)
-            i == 0 && throw(ArgumentError("voltage source terminal ($bus, $(terminals[k])) is earth-referenced or absent from Ybus"))
             v = magnitudes[k] * cis(k <= length(angles) ? angles[k] : 0.0)
+            # An explicitly listed grounded neutral at zero volts adds no
+            # boundary state. Distinguish it from an absent terminal and from
+            # an inconsistent nonzero source imposed on ideal earth.
+            i == 0 && haskey(node_index, (bus, terminals[k])) && iszero(v) && continue
+            i == 0 && throw(ArgumentError("voltage source terminal ($bus, $(terminals[k])) is absent or imposes a nonzero phasor on earth"))
             if haskey(fixed, i) && !isapprox(fixed[i], v; rtol=1e-10, atol=1e-10)
                 throw(ArgumentError("conflicting ideal source phasors at aliased Ybus node ($bus, $(terminals[k]))"))
             end
@@ -282,35 +354,207 @@ end
 function _compile_measurements(net, measurements, node_index, neutral)
     specs = Any[]
     for m in measurements
-        if m isa BranchMeasurement
-            line = get(get(net, "line", Dict()), m.line, nothing)
-            line isa AbstractDict || throw(ArgumentError("branch measurement line '$(m.line)' is absent from net"))
-            nodes, Y = line_yprim(line, get(net, "linecode", Dict()))
-            isempty(nodes) && throw(ArgumentError("branch measurement line '$(m.line)' has no finite primitive"))
-            n = length(nodes) ÷ 2
-            terminals = String.(get(line, m.side === :from ? "terminal_map_from" : "terminal_map_to", String[]))
-            k = findfirst(==(m.terminal), terminals)
-            isnothing(k) && throw(ArgumentError("terminal '$(m.terminal)' is not on $(m.side) side of line '$(m.line)'"))
-            row = m.side === :from ? k : n + k
-            local_nodes = Int[get(node_index, TerminalID(node), 0) for node in nodes]
-            conductor = local_nodes[row]
-            conductor != 0 || throw(ArgumentError("branch measurement conductor is earth-referenced"))
-            push!(specs, _SEBranchMeasurementSpec(m.kind, local_nodes, conductor, ComplexF64.(Y[row, :])))
+        if m isa _SEPassiveTelemetry
+            push!(specs, _se_compile_passive_measurement(m, net, node_index))
+            continue
+        elseif m isa FunctionalMeasurement
+            all(node -> haskey(node_index, node), m.nodes) || throw(ArgumentError("functional measurement $(m.name) names an absent terminal"))
+            push!(specs, _SEFunctionalSpec(:functional, Int[node_index[node] for node in m.nodes], m.prediction, m.gradient))
             continue
         end
-        m isa Measurement || throw(ArgumentError("measurements must contain Measurement or BranchMeasurement values"))
+        m isa Union{Measurement,NetInjectionMeasurement} || throw(ArgumentError("unsupported measurement type $(typeof(m))"))
+        haskey(node_index, (m.bus, m.terminal)) || throw(ArgumentError("measurement terminal ($(m.bus), $(m.terminal)) is absent"))
         i = get(node_index, (m.bus, m.terminal), 0)
-        i == 0 && throw(ArgumentError("measurement terminal ($(m.bus), $(m.terminal)) is not a free Ybus conductor"))
         ref = _resolve_ref(m, neutral)
         j = ref === nothing ? 0 : get(node_index, (m.bus, ref), 0)
         ref !== nothing && !haskey(node_index, (m.bus, ref)) &&
             throw(ArgumentError("measurement reference terminal ($(m.bus), $ref) is absent from Ybus"))
-        m.kind in (:vr, :vi, :vmag, :pinj, :qinj) ||
+        i == 0 && m.kind in (:ire, :iim, :imag) && throw(ArgumentError("net current at an ideal ground is not recoverable from reduced Ybus; meter a line, transformer port, or finite grounding shunt"))
+        i == 0 && j != 0 && m.kind in (:pinj, :qinj) && throw(ArgumentError("grounded-terminal net power requires an earth reference; use element telemetry for another voltage reference"))
+        m.kind in (:vr, :vi, :vmag, :pinj, :qinj, :ire, :iim, :imag) ||
             throw(ArgumentError("compiled state estimator does not support measurement kind :$(m.kind)"))
         push!(specs, _SEMeasurementSpec(m.kind, i, j))
     end
     specs
 end
+
+function _se_injection_layout(measurements, neutral, node_index; injection_connections=nothing, voltage_only=true, known_connections=Set())
+    connections = TerminalConnection[]
+    by_customer = Dict{TerminalID,TerminalConnection}()
+    index(node) = node === nothing ? 0 : get(node_index, node, 0)
+    function add_connection(c)
+        c isa TerminalConnection || throw(ArgumentError("injection_connections must contain TerminalConnection values"))
+        haskey(node_index, c.positive) && index(c.positive) != 0 ||
+            throw(ArgumentError("injection terminal $(c.positive) is absent or grounded"))
+        c.negative === nothing || haskey(node_index, c.negative) ||
+            throw(ArgumentError("injection return $(c.negative) is absent"))
+        index(c.positive) != index(c.negative) || throw(ArgumentError("injection endpoints are electrically identical"))
+        if haskey(by_customer, c.positive)
+            index(by_customer[c.positive].negative) == index(c.negative) ||
+                throw(ArgumentError("power measurements at $(c.positive) must use one electrical return; conflicting references would make KCL depend on row order"))
+        else
+            by_customer[c.positive] = c
+            push!(connections, c)
+        end
+    end
+    if injection_connections !== nothing
+        for c in injection_connections; add_connection(c); end
+    end
+    for m in measurements
+        m isa Measurement && m.kind in (:pinj, :qinj) || continue
+        ref = _resolve_ref(m, neutral)
+        c = TerminalConnection((m.bus, m.terminal), ref === nothing ? nothing : (m.bus, ref))
+        if injection_connections !== nothing && !haskey(by_customer, c.positive) && !((c.positive,index(c.negative)) in known_connections)
+            throw(ArgumentError("power measurement at $(c.positive) has no declared injection connection"))
+        end
+        add_connection(c)
+    end
+    # The voltage-only prediction uses total current at a positive terminal.
+    # It cannot separate a current which is also another injection's return,
+    # or powers with different voltage drops at a merged positive terminal.
+    returns = Dict{Int,Int}()
+    customers = Dict{Int,Vector{TerminalID}}()
+    for c in connections
+        i, j = index(c.positive), index(c.negative)
+        voltage_only && haskey(returns, i) && returns[i] != j && throw(ArgumentError(
+            "merged injection terminals must share one electrical return; distinct return paths require separate current states"))
+        returns[i] = j
+        push!(get!(customers, i, TerminalID[]), c.positive)
+    end
+    voltage_only && any(j -> j != 0 && haskey(returns, j), values(returns)) && throw(ArgumentError(
+            "overlapping injection return paths require separate current states; select formulation=:auto or :current"))
+    groups = _SEPowerGroup[]
+    rows_by_customer = Dict{Tuple{Symbol,TerminalID},Vector{Int}}()
+    for (k, m) in enumerate(measurements)
+        m isa Measurement && m.kind in (:pinj, :qinj) || continue
+        push!(get!(rows_by_customer, (m.kind, (m.bus, m.terminal)), Int[]), k)
+    end
+    for i in sort!(collect(keys(customers)))
+        cs = sort!(customers[i])
+        length(cs) > 1 || continue
+        for kind in (:pinj, :qinj)
+            rows = [get(rows_by_customer, (kind, c), Int[]) for c in cs]
+            any(!isempty, rows) && push!(groups, _SEPowerGroup(rows))
+        end
+    end
+    connections, groups
+end
+
+# Profile out individual customer powers in a common-voltage merged group.
+# Repeats of one customer's reading are fused by precision; customer means
+# add, and independent variances add. Keeping the original residual rows also
+# preserves within-customer disagreement and its constant objective term.
+function _se_power_profile(groups, values, sigmas)
+    isempty(groups) && return nothing, nothing, 0
+    offsets = zeros(length(values)); factors = ones(length(values)); nuisance = 0
+    for group in groups
+        means = zeros(length(group.customers)); noise = zeros(length(group.customers))
+        observed = 0
+        for (c, rows) in enumerate(group.customers)
+            isempty(rows) && continue
+            observed += 1
+            smallest = minimum(sigmas[rows])
+            w = (smallest ./ sigmas[rows]).^2
+            means[c] = sum((w ./ sum(w)) .* values[rows])
+            noise[c] = smallest / sqrt(sum(w))
+        end
+        complete = observed == length(group.customers)
+        fractions = complete ? (noise ./ maximum(noise)).^2 : zeros(length(noise))
+        complete && (fractions ./= sum(fractions))
+        total = sum(means)
+        nuisance += complete ? observed - 1 : observed
+        for (c, rows) in enumerate(group.customers), row in rows
+            factors[row] = fractions[c]
+            offsets[row] = means[c] - fractions[c] * total
+        end
+    end
+    offsets, factors, nuisance
+end
+
+# Eliminate unknown currents on declared terminal-to-reference injections.
+# For an incidence matrix A, the surviving KCL equations are P'*(YV+Idev)=0,
+# where P spans ker(A'). For a graph incidence, P has one component-indicator
+# column per connected component without an earth or fixed-source endpoint.
+# Build those indicators directly, preserving sparsity and summing a shared
+# neutral only once. Voltage/branch telemetry alone declares no injection.
+function _compile_return_currents(specs, fixed, n)
+    parent = Dict{Int,Int}()
+    function root(i)
+        get!(parent, i, i)
+        while parent[i] != i
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        end
+        i
+    end
+    for spec in specs
+        spec isa _SEMeasurementSpec && spec.kind in (:pinj, :qinj) || continue
+        a, b = root(spec.terminal), root(spec.reference)
+        parent[max(a, b)] = min(a, b)
+    end
+    anchored = Set{Int}(root(i) for i in keys(parent) if i == 0 || haskey(fixed, i))
+    groups = Dict{Int,Vector{Int}}()
+    for i in sort!(collect(keys(parent)))
+        r = root(i)
+        r in anchored && continue
+        push!(get!(groups, r, Int[]), i)
+    end
+    rows = Int[]; cols = Int[]
+    for (row, r) in enumerate(sort!(collect(keys(groups))))
+        for i in groups[r]
+            push!(rows, row); push!(cols, i)
+        end
+    end
+    sparse(rows, cols, ones(length(rows)), length(groups), n)
+end
+
+# A complete explicit winding has zero total terminal current by its coil
+# incidence, regardless of leakage, turns ratio or excitation. Prove that
+# identity from terminal connections BEFORE summing floating-point Ybus rows.
+# Otherwise roundoff in phase + neutral currents becomes a tiny fictitious
+# constraint, which row equilibration can amplify into an optimizer equation.
+# Other touched element families conservatively retain the equation; notably
+# even an arbitrarily weak electrode must prevent this structural reduction.
+function _se_nwinding_return_identity(net, index, weights, devices)
+    isempty(get(get(net,"transformer",Dict()),"n_winding",Dict())) && return false
+    # New upstream electrical groups must never inherit this proof silently.
+    recognized=Set(("bus","linecode","line","switch","shunt","capacitor","transformer",
+                    "voltage_source","load","generator","ibr"))
+    any(key->!(key in recognized) && net[key] isa AbstractDict,keys(net)) && return false
+    weight(node) = (i=get(index,node,0); i==0 ? 0.0 : weights[i])
+    touched(bus,ts) = any(t->!iszero(weight((bus,string(t)))),ts)
+    for kind in ("line","shunt","capacitor"), el in values(get(net,kind,Dict()))
+        if kind=="line"
+            any(side->touched(el["bus_$side"],el["terminal_map_$side"]),("from","to")) && return false
+        else
+            touched(el["bus"],el["terminal_map"]) && return false
+        end
+    end
+    hit=false
+    for (kind,group) in get(net,"transformer",Dict()), el in values(group)
+        if kind!="n_winding"
+            any(side->touched(el["bus_$side"],el["terminal_map_$side"]),("from","to")) && return false
+            continue
+        end
+        for w in BMOPFTools._nw_windings(el)
+            hit |= touched(w.bus,w.terminal_map)
+            phases,neutral=BMOPFTools._nw_phase_terminals(w.terminal_map)
+            for k in eachindex(phases)
+                reference=w.connection=="DELTA" ? phases[mod1(k+w.delta_roll,length(phases))] : neutral
+                a=weight((w.bus,phases[k]))
+                b=reference===nothing ? 0.0 : weight((w.bus,reference))
+                a==b || return false
+            end
+        end
+    end
+    for d in devices, (a,b) in zip(d.positive,d.negative)
+        (a==0 ? 0.0 : weights[a]) == (b==0 ? 0.0 : weights[b]) || return false
+    end
+    hit
+end
+
+_se_constraint_count(s::SEStructure) =
+    2 * (length(s.constraint_pattern) + size(s.return_current_pattern, 1))
 
 function _compile_exact_devices(exact_devices, node_index)
     specs = _SEExactDeviceSpec{Int}[]
@@ -323,14 +567,14 @@ function _compile_exact_devices(exact_devices, node_index)
         model isa ExactDeviceModel ||
             throw(ArgumentError("unsupported exact device model $(typeof(model))"))
         kind = model isa ConstantPowerDevice ? :constant_power :
-               model isa ConstantCurrentDevice ? :constant_current : :zip
+               model isa ConstantCurrentDevice ? (model.angle_reference===:earth ? :constant_current : :constant_magnitude_current) : :zip
         positive = Int[]; negative = Int[]
         for connection in model.connections
             i = get(node_index, connection.positive, 0)
             i == 0 && throw(ArgumentError("exact device positive terminal $(connection.positive) is earth-referenced or absent from Ybus"))
             j = connection.negative === nothing ? 0 : get(node_index, connection.negative, 0)
-            connection.negative !== nothing && j == 0 &&
-                throw(ArgumentError("exact device negative terminal $(connection.negative) is earth-referenced or absent from Ybus"))
+            connection.negative !== nothing && !haskey(node_index, connection.negative) &&
+                throw(ArgumentError("exact device negative terminal $(connection.negative) is absent from Ybus"))
             i == j && throw(ArgumentError("exact device connection $(connection.positive) has identical endpoints"))
             push!(positive, i); push!(negative, j); push!(constrained, i)
             j != 0 && push!(constrained, j)
@@ -342,8 +586,52 @@ function _compile_exact_devices(exact_devices, node_index)
     specs, constrained
 end
 
+# Voltage elimination prescribes the complete injection at each free conductor.
+# Shared known/unknown customers need the explicit-current formulation instead.
+# This guard is only used when the caller requests voltage elimination.
+function _se_check_device_injections(connections, groups, measurements, exact_devices,
+                                     node_index, fixed)
+    isempty(exact_devices) && return nothing
+    index(node) = node === nothing ? 0 : node_index[node]
+    known = Set{Tuple{TerminalID,Int}}()
+    constrained = Set{Int}()
+    for wrapped in exact_devices, c in wrapped.model.connections
+        push!(known, (c.positive, index(c.negative)))
+        for i in (index(c.positive), index(c.negative))
+            i == 0 || haskey(fixed, i) || push!(constrained, i)
+        end
+    end
+    for c in connections
+        if (c.positive, index(c.negative)) in known
+            i = index(c.positive)
+            j = index(c.negative)
+            overlapping = any(
+                other -> index(other.negative) == i ||
+                    (index(other.positive) == i && index(other.negative) != j),
+                (other for d in exact_devices for other in d.model.connections),
+            )
+            if overlapping
+                throw(ArgumentError(
+                    "a known customer's positive node also carries other device currents; use formulation=:current or :auto"))
+            end
+            continue
+        end
+        any(i -> i in constrained, (index(c.positive), index(c.negative))) &&
+            throw(ArgumentError("unknown injection $(c.positive) to $(c.negative) shares a conductor with exact device equations; partially exact shared-node injections require separate current states"))
+    end
+    for group in groups, rows in group.customers
+        isempty(rows) && continue
+        m = measurements[first(rows)]
+        index((m.bus, m.terminal)) in constrained && throw(ArgumentError(
+            "merged customer power at $((m.bus, m.terminal)) cannot be combined with exact device equations on the same conductor"))
+    end
+    nothing
+end
+
 function _flatten_device_parameters(exact_devices)
-    powers = ComplexF64[]; currents = ComplexF64[]; admittances = ComplexF64[]
+    powers = ComplexF64[]
+    currents = ComplexF64[]
+    admittances = ComplexF64[]
     for wrapped in exact_devices
         model = wrapped.model
         if model isa ConstantPowerDevice
@@ -367,18 +655,30 @@ end
 
 """
     compile_state_estimator(net, measurements=Measurement[];
-                            neutral="n", zero_injection=String[], exact_devices=[]) -> SEStructure
+                            neutral="n", zero_injection=String[], exact_devices=[],
+                            injection_connections=nothing) -> SEStructure
 
-Compile the immutable voltage-state evaluator.  The network is represented by
+Compile the voltage/current evaluator.  The network is represented by
 BMOPFTools' passive `I = YV` relation in SI units.  Every source terminal with a
 specified phasor is eliminated from the state; ungrounded neutrals and floating
 conductors remain explicit states, so gauge/reference deficiencies are visible
 to the later rank diagnostics rather than silently grounded.
+
+`injection_connections` is a vector of `TerminalConnection`s for unknown
+injections, independent of their telemetry; omit it to infer paths from P/Q
+measurements. Preserve declarations when channels drop out. Each power meter
+must match a declared original positive terminal and electrical return.
+The default `formulation=:auto` adds explicit currents for merged customers,
+overlapping paths and partially exact shared conductors. `:current` always uses
+unknown current states; `:voltage` requires the narrower elimination contract.
 """
 function compile_state_estimator(net::Dict{String,Any}, measurements::AbstractVector=Measurement[];
                                  neutral::Union{String,Nothing}="n",
-                                 zero_injection=String[], exact_devices=Any[])
-    report, ybus = _se_preflight(net, measurements; neutral, zero_injection, exact_devices)
+                                 zero_injection=String[], exact_devices=Any[], injection_connections=nothing,
+                                 formulation::Symbol=:auto)
+    formulation in (:auto,:voltage,:current) || throw(ArgumentError("formulation must be :auto, :voltage or :current"))
+    report, ybus = _se_preflight(net, measurements; neutral, zero_injection, exact_devices, injection_connections,
+                               formulation)
     report.supported || throw(SEUnsupportedNetwork(report))
     nodes = TerminalID.(ybus.nodes)
     node_index = Dict{TerminalID,Int}(TerminalID(k) => Int(v) for (k, v) in ybus.index)
@@ -407,6 +707,19 @@ function compile_state_estimator(net::Dict{String,Any}, measurements::AbstractVe
     fixed_current = Vector{Float64}(K * fixed_voltage)
 
     specs = _compile_measurements(net, measurements, node_index, neutral)
+    connections, groups = _se_injection_layout(measurements, neutral, node_index; injection_connections, voltage_only=false,
+        known_connections=_se_known_connections(exact_devices,node_index))
+    augmented = formulation===:current || (formulation===:auto &&
+        ((injection_connections!==nothing && !isempty(exact_devices)) ||
+         _se_requires_current_states(connections,groups,measurements,exact_devices,node_index,fixed)))
+    if !augmented
+        _se_injection_layout(measurements,neutral,node_index;injection_connections,known_connections=_se_known_connections(exact_devices,node_index))
+        _se_check_device_injections(connections,groups,measurements,exact_devices,node_index,fixed)
+        _se_check_explicit_device_unknowns(injection_connections,exact_devices,node_index,fixed)
+    end
+    connection_specs = [_SEMeasurementSpec(:pinj, node_index[c.positive],
+        c.negative === nothing ? 0 : node_index[c.negative]) for c in connections]
+    returns = _compile_return_currents(connection_specs, fixed, n)
     # Four-wire KCL is stated per conductor against earth, so a bare bus id in
     # `zero_injection` covers the neutral conductor too.
     zi = _zero_injection_set(net, zero_injection, neutral; include_neutral=true)
@@ -419,17 +732,51 @@ function compile_state_estimator(net::Dict{String,Any}, measurements::AbstractVe
     end
     unique!(constraint_nodes)
     devices, device_nodes = _compile_exact_devices(exact_devices, node_index)
-    append!(constraint_nodes, device_nodes)
+    # Ideal-source currents are free boundary reactions. A known device at a
+    # source contributes current, but must not impose zero net source current.
+    append!(constraint_nodes, (i for i in device_nodes if !haskey(fixed, i)))
     unique!(constraint_nodes)
     sort!(constraint_nodes)
+    # A component sum is exactly implied when every constituent conductor
+    # already has its own KCL equation. Avoid redundant equalities in NLP
+    # backends as well as in the dense/sparse constrained steps.
+    covered = Set(constraint_nodes)
+    keep = [r for r in axes(returns, 1) if any(i -> !(i in covered), findnz(returns[r, :])[1])]
+    returns = returns[keep, :]
+    keep = [r for r in axes(returns,1) if !_se_nwinding_return_identity(net,node_index,returns[r,:],devices)]
+    returns = returns[keep,:]
+
+    incidence=spzeros(Float64,n,0)
+    injection_map=Dict{TerminalID,Int}()
+    if augmented
+        unknown=_se_unknown_connections(connections,exact_devices,node_index,injection_connections)
+        incidence=spzeros(Float64,n,length(unknown))
+        for (k,c) in enumerate(unknown)
+            injection_map[c.positive]=k
+            i=node_index[c.positive];j=c.negative===nothing ? 0 : node_index[c.negative]
+            incidence[i,k]+=1.; j==0 || (incidence[j,k]-=1.)
+            haskey(fixed,i) || push!(constraint_nodes,i)
+            j==0 || haskey(fixed,j) || push!(constraint_nodes,j)
+        end
+        unique!(constraint_nodes);sort!(constraint_nodes)
+        returns=spzeros(Float64,0,n)
+        groups=_SEPowerGroup[]
+        specs=_se_current_measurements(specs,measurements,neutral,injection_map,exact_devices,node_index,2nf,length(unknown))
+    end
 
     # A load-free electrical initialisation respects transformer ratios and
     # phase shifts. It is not an estimated operating state or extra information.
     rows = vcat(free_indices, n .+ free_indices)
     nominal_state = isempty(rows) ? Float64[] : Vector{Float64}(qr(M[rows, :]) \ (-fixed_current[rows]))
-    SEStructure(report, nominal_state, nodes, node_index, sparse(ybus.Y), specs, constraint_nodes, devices,
+    keys = Tuple[_se_measurement_key(m) for m in measurements]
+    if augmented
+        nu=size(incidence,2)
+        nominal_state=vcat(nominal_state,zeros(2nu))
+        E=hcat(E,spzeros(Float64,2n,2nu));M=hcat(M,spzeros(Float64,2n,2nu))
+    end
+    SEStructure(report, nominal_state, nodes, node_index, sparse(ybus.Y), specs, keys, connections, groups, constraint_nodes, returns, devices,
                 free_state_map, Dict(nodes[i] => v for (i, v) in fixed),
-                E, M, copy(transpose(E)), copy(transpose(M)), fixed_voltage, fixed_current)
+                E, M, copy(transpose(E)), copy(transpose(M)), fixed_voltage, fixed_current, incidence, injection_map, Dict{Any,Any}(), ReentrantLock())
 end
 
 function SEParameters(s::SEStructure, measurements::AbstractVector=Measurement[];
@@ -439,6 +786,10 @@ function SEParameters(s::SEStructure, measurements::AbstractVector=Measurement[]
                       continuation_alpha::Real=1.0, prior::Union{StatePrior,Nothing}=nothing)
     length(measurements) == length(s.measurement_pattern) ||
         throw(ArgumentError("SEParameters needs the same number of measurements used for compilation"))
+    all(m -> m isa _SESupportedMeasurement, measurements) ||
+        throw(ArgumentError("unsupported measurement type"))
+    isequal(Tuple[_se_measurement_key(m) for m in measurements], s.measurement_keys) ||
+        throw(ArgumentError("measurement kinds, locations, references, and row order must match compilation; recompile for a different measurement pattern"))
     epsmag = Float64(magnitude_epsilon)
     epsmag >= 0 && isfinite(epsmag) ||
         throw(ArgumentError("magnitude_epsilon must be finite and non-negative"))
@@ -452,6 +803,11 @@ function SEParameters(s::SEStructure, measurements::AbstractVector=Measurement[]
     0 <= α <= 1 && isfinite(α) || throw(ArgumentError("continuation_alpha must lie in [0, 1]"))
     length(exact_devices) == length(s.device_pattern) ||
         throw(ArgumentError("SEParameters needs the exact_devices used for compilation"))
+    updated_devices, _ = _compile_exact_devices(exact_devices, s.node_index)
+    all(zip(updated_devices, s.device_pattern)) do (updated, compiled)
+        updated.kind == compiled.kind && updated.positive == compiled.positive &&
+            updated.negative == compiled.negative
+    end || throw(ArgumentError("exact device kinds, connections, and order must match compilation; recompile for a different device pattern"))
     # Store one phasor per fixed Ybus node in the deterministic node order.
     fixed_by_node = fill(ComplexF64(NaN, NaN), length(s.nodes))
     for (node, v) in s.reference_map
@@ -466,8 +822,10 @@ function SEParameters(s::SEStructure, measurements::AbstractVector=Measurement[]
     prior_indices = isnothing(prior) ? Int[] : copy(prior.indices)
     prior_values = isnothing(prior) ? Float64[] : copy(prior.values)
     prior_sigmas = isnothing(prior) ? Float64[] : copy(prior.sigmas)
-    SEParameters(fixed_by_node, values, sigmas, epsmag, epscur, powers, currents, admittances,
-                 vmin, vreg, α, prior_indices, prior_values, prior_sigmas)
+    p = SEParameters(fixed_by_node, values, sigmas, epsmag, epscur, powers, currents, admittances,
+                     vmin, vreg, α, prior_indices, prior_values, prior_sigmas)
+    _validate_parameters(s, p)
+    p
 end
 
 """Replace the stochastic state prior without recompiling network structure."""
@@ -500,6 +858,8 @@ function _validate_parameters(s::SEStructure, p::SEParameters)
     length(p.device_powers) == ndevice || throw(ArgumentError("device_powers length does not match compiled device pattern"))
     length(p.device_currents) == ndevice || throw(ArgumentError("device_currents length does not match compiled device pattern"))
     length(p.device_admittances) == ndevice || throw(ArgumentError("device_admittances length does not match compiled device pattern"))
+    all(isfinite, p.device_powers) && all(isfinite, p.device_currents) && all(isfinite, p.device_admittances) ||
+        throw(ArgumentError("device powers, currents, and admittances must be finite"))
     p.voltage_min_model > 0 && isfinite(p.voltage_min_model) ||
         throw(ArgumentError("voltage_min_model must be finite and > 0"))
     p.regularization_voltage > 0 && isfinite(p.regularization_voltage) ||
@@ -546,9 +906,9 @@ end
 
 function _measurement_value(spec, vr, vi, ir, ii, epsmag)
     i, j = spec.terminal, spec.reference
-    dvr = vr[i] - (j == 0 ? 0.0 : vr[j])
-    dvi = vi[i] - (j == 0 ? 0.0 : vi[j])
-    measurement_prediction(spec.kind, dvr, dvi; ir=ir[i], ii=ii[i],
+    dvr = (i == 0 ? 0.0 : vr[i]) - (j == 0 ? 0.0 : vr[j])
+    dvi = (i == 0 ? 0.0 : vi[i]) - (j == 0 ? 0.0 : vi[j])
+    measurement_prediction(spec.kind, dvr, dvi; ir=i == 0 ? 0.0 : ir[i], ii=i == 0 ? 0.0 : ii[i],
                            magnitude_epsilon=epsmag)
 end
 
@@ -562,6 +922,9 @@ function _branch_measurement_value(spec::_SEBranchMeasurementSpec, vr, vi, epsma
     end
     vrr = spec.conductor == 0 ? 0.0 : vr[spec.conductor]
     vii = spec.conductor == 0 ? 0.0 : vi[spec.conductor]
+    if spec.reference != 0
+        vrr -= vr[spec.reference]; vii -= vi[spec.reference]
+    end
     measurement_prediction(spec.kind, vrr, vii; ir=br, ii=bi,
                            magnitude_epsilon=epsmag)
 end
@@ -589,13 +952,20 @@ function _branch_measurement_jacobian(spec::_SEBranchMeasurementSpec, s::SEStruc
         # magnitude, or the analytic Jacobian stops being the Jacobian of the
         # evaluated residual.
         mag = sqrt(br^2 + bi^2 + epsmag^2)
+        mag == 0 && all(iszero, jir) && all(iszero, jii) && return mag, spzeros(Float64, ns)
         mag > 0 || throw(DomainError(mag,
             "branch-current magnitude derivative is undefined at zero current; " *
             "set `current_epsilon > 0` (in amperes; see SEParameters) to smooth it"))
         return mag, (br .* jir .+ bi .* jii) ./ mag
     end
-    i = spec.conductor; vrr, vii = vr[i], vi[i]
-    jvr, jvi = s.voltage_state_rows[:, i], s.voltage_state_rows[:, n + i]
+    i, j = spec.conductor, spec.reference
+    vrr = (i == 0 ? 0.0 : vr[i]) - (j == 0 ? 0.0 : vr[j])
+    vii = (i == 0 ? 0.0 : vi[i]) - (j == 0 ? 0.0 : vi[j])
+    jvr = i == 0 ? spzeros(Float64, ns) : s.voltage_state_rows[:, i]
+    jvi = i == 0 ? spzeros(Float64, ns) : s.voltage_state_rows[:, n + i]
+    if j != 0
+        jvr -= s.voltage_state_rows[:, j]; jvi -= s.voltage_state_rows[:, n + j]
+    end
     spec.kind === :pflow && return vrr * br + vii * bi,
         br .* jvr .+ bi .* jvi .+ vrr .* jir .+ vii .* jii
     spec.kind === :qflow && return vii * br - vrr * bi,
@@ -604,6 +974,7 @@ function _branch_measurement_jacobian(spec::_SEBranchMeasurementSpec, s::SEStruc
 end
 
 function _power_current_and_derivative(S, vr, vi, p::SEParameters)
+    iszero(S) && return (0.,0.,0.,0.,0.,0.)
     d = vr^2 + vi^2
     if p.continuation_alpha > 0 && sqrt(d) < p.voltage_min_model
         throw(DomainError(sqrt(d), "constant-power device voltage is below voltage_min_model"))
@@ -657,7 +1028,10 @@ function _device_parts(s::SEStructure, p::SEParameters, vr, vi; derivatives::Boo
                 jr, ji, djr_dvr, djr_dvi, dji_dvr, dji_dvi =
                     _power_current_and_derivative(p.device_powers[k], dvr, dvi, p)
             end
-            if device.kind === :constant_current || device.kind === :zip
+            if device.kind === :constant_magnitude_current
+                cr,ci,ca,cb,da,db=_se_voltage_following_current(p.device_currents[k],dvr,dvi)
+                jr+=cr;ji+=ci;djr_dvr+=ca;djr_dvi+=cb;dji_dvr+=da;dji_dvi+=db
+            elseif device.kind === :constant_current || device.kind === :zip
                 I = p.device_currents[k]
                 jr += real(I); ji += imag(I)
             end
@@ -684,27 +1058,57 @@ function _device_parts(s::SEStructure, p::SEParameters, vr, vi; derivatives::Boo
     dr, di, Jdr, Jdi
 end
 
+function _se_check_profile_voltage(s, p, vr, vi)
+    for group in s.power_groups
+        row = first(group.customers[findfirst(!isempty, group.customers)])
+        spec = s.measurement_pattern[row]
+        i, j = spec.terminal, spec.reference
+        dv = complex(vr[i], vi[i]) - (j == 0 ? 0im : complex(vr[j], vi[j]))
+        abs(dv) >= p.voltage_min_model || throw(DomainError(abs(dv),
+            "merged-customer power profiling voltage is below voltage_min_model"))
+    end
+    nothing
+end
+
 """
     evaluate_state_estimator(structure, parameters, x) -> SEEvaluation
 
 Evaluate SI phasors, whitened stochastic residuals `(h(x)-z)/σ`, and exact
-zero-injection residuals.  The constraint vector is never whitened or otherwise
-softened.
+zero-injection, device, and return-current KCL residuals. The constraint vector
+is never whitened or otherwise softened.
 """
 function evaluate_state_estimator(s::SEStructure, p::SEParameters, x::AbstractVector{<:Real})
     vr, vi, ir, ii = _se_parts(s, p, x)
+    _se_check_profile_voltage(s, p, vr, vi)
     dir, dii, _, _ = _device_parts(s, p, vr, vi; derivatives=false)
-    predicted = [spec isa _SEBranchMeasurementSpec ?
-                 _branch_measurement_value(spec, vr, vi, p.current_epsilon) :
-                 _measurement_value(spec, vr, vi, ir, ii, p.magnitude_epsilon)
-                 for spec in s.measurement_pattern]
+    predicted = [spec isa _SECurrentPowerSpec ? _se_current_power(spec,vr,vi,x)[1] :
+                 spec isa _SEKnownPowerSpec ? _se_known_power(spec,vr,vi,p)[1] :
+                 _se_spec_value(spec, vr, vi, ir, ii, p) for spec in s.measurement_pattern]
+    balance_real=ir+dir
+    balance_imag=ii+dii
+    if !isempty(s.injection_state_map)
+        nv=2length(s.free_state_map);nu=size(s.injection_incidence,2)
+        balance_real-=s.injection_incidence*x[nv+1:nv+nu]
+        balance_imag-=s.injection_incidence*x[nv+nu+1:nv+2nu]
+    end
+    offsets, factors, _ = _se_power_profile(s.power_groups, p.measurement_values, p.covariance_values)
+    offsets === nothing || (predicted = offsets + factors .* predicted)
     measurement_residual = (predicted .- p.measurement_values) ./ p.covariance_values
     prior_residual = (Float64.(x[p.prior_indices]) .- p.prior_values) ./ p.prior_sigmas
     residual = vcat(measurement_residual, prior_residual)
-    constraints = Vector{Float64}(undef, 2length(s.constraint_pattern))
+    constraints = Vector{Float64}(undef, _se_constraint_count(s))
     for (k, i) in enumerate(s.constraint_pattern)
-        constraints[2k - 1] = ir[i] + dir[i]
-        constraints[2k] = ii[i] + dii[i]
+        constraints[2k - 1] = balance_real[i]
+        constraints[2k] = balance_imag[i]
+    end
+    if size(s.return_current_pattern, 1) > 0
+        rr = s.return_current_pattern * balance_real
+        ri = s.return_current_pattern * balance_imag
+        offset = 2length(s.constraint_pattern)
+        for k in eachindex(rr)
+            constraints[offset + 2k - 1] = rr[k]
+            constraints[offset + 2k] = ri[k]
+        end
     end
     SEEvaluation(ComplexF64.(vr .+ im .* vi), ComplexF64.(ir .+ im .* ii),
                  ComplexF64.(dir .+ im .* dii),
@@ -724,32 +1128,64 @@ Use `collect(Float64, H)` if a downstream routine requires a dense matrix.
 """
 function residual_jacobian(s::SEStructure, p::SEParameters, x::AbstractVector{<:Real})
     vr, vi, ir, ii = _se_parts(s, p, x)
+    _se_check_profile_voltage(s, p, vr, vi)
     n = length(s.nodes)
     E = s.voltage_state_jacobian
     M = s.current_state_jacobian
     nstate = size(E, 2)
     rows = Int[]; cols = Int[]; vals = Float64[]
+    _, factors, _ = _se_power_profile(s.power_groups, p.measurement_values, p.covariance_values)
     for (row, spec) in enumerate(s.measurement_pattern)
+        if spec isa Union{_SECurrentPowerSpec,_SEKnownPowerSpec}
+            value,g=_se_power_state_jacobian(spec,s,p,x,vr,vi)
+            _se_append_row!(rows,cols,vals,row,g./p.covariance_values[row])
+            continue
+        end
+        if spec isa _SEFunctionalSpec
+            Jrow = _se_functional_jacobian(spec, s, vr, vi)
+            _se_append_row!(rows, cols, vals, row, Jrow ./ p.covariance_values[row])
+            continue
+        end
         if spec isa _SEBranchMeasurementSpec
             _, Jrow = _branch_measurement_jacobian(spec, s, vr, vi, p.current_epsilon)
             _se_append_row!(rows, cols, vals, row, Jrow ./ p.covariance_values[row])
             continue
         end
         i, j = spec.terminal, spec.reference
-        jdvr = s.voltage_state_rows[:, i]; jdvi = s.voltage_state_rows[:, n + i]
+        jdvr = i == 0 ? spzeros(Float64, nstate) : s.voltage_state_rows[:, i]
+        jdvi = i == 0 ? spzeros(Float64, nstate) : s.voltage_state_rows[:, n + i]
         if j != 0
             jdvr .-= s.voltage_state_rows[:, j]; jdvi .-= s.voltage_state_rows[:, n + j]
         end
-        dvr = vr[i] - (j == 0 ? 0.0 : vr[j])
-        dvi = vi[i] - (j == 0 ? 0.0 : vi[j])
+        dvr = (i == 0 ? 0.0 : vr[i]) - (j == 0 ? 0.0 : vr[j])
+        dvi = (i == 0 ? 0.0 : vi[i]) - (j == 0 ? 0.0 : vi[j])
         if spec.kind === :vr
             Jrow = jdvr
         elseif spec.kind === :vi
             Jrow = jdvi
         elseif spec.kind === :vmag
             mag = sqrt(dvr^2 + dvi^2 + p.magnitude_epsilon^2)
-            mag > 0 || throw(DomainError(mag, "voltage-magnitude derivative is undefined at zero; set magnitude_epsilon > 0"))
-            Jrow = (dvr .* jdvr .+ dvi .* jdvi) ./ mag
+            if mag == 0 && all(iszero, jdvr) && all(iszero, jdvi)
+                Jrow = spzeros(Float64, nstate)
+            else
+                mag > 0 || throw(DomainError(mag, "voltage-magnitude derivative is undefined at zero; set magnitude_epsilon > 0"))
+                Jrow = (dvr .* jdvr .+ dvi .* jdvi) ./ mag
+            end
+        elseif spec.kind in (:ire, :iim, :imag)
+            jr = s.current_state_rows[:, i]; ji = s.current_state_rows[:, n + i]
+            if spec.kind === :imag
+                mag = sqrt(ir[i]^2 + ii[i]^2 + p.current_epsilon^2)
+                if mag == 0 && all(iszero, jr) && all(iszero, ji)
+                    Jrow = spzeros(Float64, nstate)
+                else
+                    mag > 0 || throw(DomainError(mag, "net-current magnitude derivative is undefined at zero; set current_epsilon > 0"))
+                    Jrow = (ir[i] .* jr .+ ii[i] .* ji) ./ mag
+                end
+            else
+                Jrow = spec.kind === :ire ? jr : ji
+            end
+        elseif i == 0
+            Jrow = spzeros(Float64, nstate)
         elseif spec.kind === :pinj
             Jrow = ir[i] .* jdvr .+ ii[i] .* jdvi .+
                          dvr .* s.current_state_rows[:, i] .+ dvi .* s.current_state_rows[:, n + i]
@@ -757,7 +1193,8 @@ function residual_jacobian(s::SEStructure, p::SEParameters, x::AbstractVector{<:
             Jrow = ir[i] .* jdvi .- ii[i] .* jdvr .+
                          dvi .* s.current_state_rows[:, i] .- dvr .* s.current_state_rows[:, n + i]
         end
-        _se_append_row!(rows, cols, vals, row, Jrow ./ p.covariance_values[row])
+        factor = factors === nothing ? 1.0 : factors[row]
+        _se_append_row!(rows, cols, vals, row, (factor / p.covariance_values[row]) .* Jrow)
     end
     for (offset, i) in enumerate(p.prior_indices)
         push!(rows, length(s.measurement_pattern) + offset)
@@ -766,27 +1203,70 @@ function residual_jacobian(s::SEStructure, p::SEParameters, x::AbstractVector{<:
     sparse(rows, cols, vals, length(s.measurement_pattern) + length(p.prior_indices), nstate)
 end
 
-"""Sparse analytic Jacobian of exact zero-injection and device constraints."""
+"""Sparse analytic Jacobian of exact zero-injection, device, and return-current constraints."""
 function constraint_jacobian(s::SEStructure, p::SEParameters, x::AbstractVector{<:Real})
     vr, vi, _, _ = _se_parts(s, p, x)
     _, _, Jdr, Jdi = _device_parts(s, p, vr, vi)
     n = length(s.nodes)
+    if !isempty(s.injection_state_map)
+        nv=2length(s.free_state_map);nu=size(s.injection_incidence,2)
+        Jdr[:,nv+1:nv+nu]-=s.injection_incidence
+        Jdi[:,nv+nu+1:nv+2nu]-=s.injection_incidence
+    end
     rows = Int[]; cols = Int[]; vals = Float64[]
     for (k, i) in enumerate(s.constraint_pattern)
         _se_append_row!(rows, cols, vals, 2k - 1, s.current_state_rows[:, i] + Jdr[i, :])
         _se_append_row!(rows, cols, vals, 2k, s.current_state_rows[:, n + i] + Jdi[i, :])
     end
-    sparse(rows, cols, vals, 2length(s.constraint_pattern), size(s.current_state_jacobian, 2))
+    if size(s.return_current_pattern, 1) > 0
+        Jr = s.return_current_pattern * (s.current_state_jacobian[1:n, :] + Jdr)
+        Ji = s.return_current_pattern * (s.current_state_jacobian[n+1:2n, :] + Jdi)
+        offset = 2length(s.constraint_pattern)
+        for k in axes(Jr, 1)
+            _se_append_row!(rows, cols, vals, offset + 2k - 1, Jr[k, :])
+            _se_append_row!(rows, cols, vals, offset + 2k, Ji[k, :])
+        end
+    end
+    sparse(rows, cols, vals, _se_constraint_count(s), size(s.current_state_jacobian, 2))
 end
 
 # ── dense composite-step reference solver ───────────────────────────────────
 
-function _se_rank_nullspace(A::AbstractMatrix{<:Real}; rtol::Real=sqrt(eps(Float64)))
+# Invalid tolerances must fail before a convergence test can mistake an
+# infeasible initial state for a result (notably norm(c) <= Inf). Both solver
+# paths use the same Float64 numerical contracts.
+function _se_validate_solver_options(; max_iterations, initial_radius, max_radius,
+                                      penalty, acceptance_threshold, constraint_tolerance,
+                                      constraint_rtol, optimality_tolerance, min_radius, rank_rtol)
+    max_iterations > 0 || throw(ArgumentError("max_iterations must be positive"))
+    for (name, value) in pairs((; initial_radius, max_radius, penalty, min_radius))
+        v = Float64(value)
+        isfinite(v) && v > 0 || throw(ArgumentError("$name must be finite and > 0"))
+    end
+    initial_radius <= max_radius || throw(ArgumentError("require initial_radius ≤ max_radius"))
+    0 < acceptance_threshold < 1 || throw(ArgumentError("acceptance_threshold must lie in (0, 1)"))
+    for (name, value) in pairs((; constraint_tolerance, constraint_rtol, optimality_tolerance, rank_rtol))
+        v = Float64(value)
+        isfinite(v) && v >= 0 || throw(ArgumentError("$name must be finite and non-negative"))
+    end
+    nothing
+end
+
+# Projection onto a computed null space introduces roundoff proportional to the
+# ORIGINAL operator. If H*Z is mathematically zero, a threshold relative only to
+# H*Z promotes that roundoff to information and invents gauge observability.
+function _se_rank_tolerance(A, smax, rtol, reference_scale)
+    dimension = max(size(A)...)
+    max(Float64(rtol) * dimension * smax,
+        8eps(Float64) * dimension * reference_scale, eps(Float64))
+end
+
+function _se_rank_nullspace(A::AbstractMatrix{<:Real}; rtol::Real=sqrt(eps(Float64)), reference_scale::Real=0.0)
     n = size(A, 2)
     size(A, 1) == 0 && return (0, Matrix{Float64}(I, n, n))
     F = svd(collect(Float64, A); full=size(A, 1) < size(A, 2))
     smax = isempty(F.S) ? 0.0 : maximum(F.S)
-    tol = max(Float64(rtol) * max(size(A)...) * smax, eps(Float64))
+    tol = _se_rank_tolerance(A, smax, rtol, reference_scale)
     rank = count(>(tol), F.S)
     # `collect` deliberately avoids `Matrix(...)`: OpenDSSDirect extends that
     # constructor for its parser enum, which makes the unparameterised call
@@ -880,7 +1360,7 @@ function _se_invalid_evaluation(s, p)
     SEEvaluation(fill(ComplexF64(NaN, NaN), n), fill(ComplexF64(NaN, NaN), n),
         fill(ComplexF64(NaN, NaN), n), fill(NaN, length(s.measurement_pattern)),
         fill(NaN, length(s.measurement_pattern) + length(p.prior_indices)),
-        fill(NaN, length(p.prior_indices)), fill(NaN, 2length(s.constraint_pattern)))
+        fill(NaN, length(p.prior_indices)), fill(NaN, _se_constraint_count(s)))
 end
 
 # A first-order stationary point can be a maximum when magnitude rows have
@@ -888,11 +1368,17 @@ end
 # at nonzero-residual nonlinear stationary points. This is a numerical rejection
 # test for negative curvature, not a proof of a strict or global minimum.
 function _se_checked_status(s, p, x, e, H, C, Z, status; rank_rtol=sqrt(eps(Float64)))
+    regularized_constraint = any(d -> d.kind in (:constant_power,:zip) && any(!iszero,p.device_powers[d.parameter_range]),s.device_pattern)
+    nonlinear_constraint = regularized_constraint || any(d -> d.kind===:constant_magnitude_current &&
+        any(!iszero,p.device_currents[d.parameter_range]),s.device_pattern)
+    # Convergence of the homotopy's internal device law is useful to advance a
+    # stage, but cannot be published as an estimate of the physical network.
+    if p.continuation_alpha < 1 && regularized_constraint
+        status = :converged_regularized
+    end
     tangent = size(Z, 2)
     tangent == 0 && return status
-    nonlinear_measurement = any(spec -> spec.kind in (:vmag, :pinj, :qinj, :imag, :pflow, :qflow), s.measurement_pattern)
-    nonlinear_constraint = any(d -> d.kind in (:constant_power, :zip) &&
-        any(!iszero, p.device_powers[d.parameter_range]), s.device_pattern)
+    nonlinear_measurement = any(spec -> spec.kind in (:vmag, :pinj, :qinj, :imag, :pflow, :qflow, :functional), s.measurement_pattern)
     (!nonlinear_measurement && !nonlinear_constraint) && return status
     norm(e.residual) <= 1e-7 && return status
     multipliers = _se_least_squares(C', -(H' * e.residual); rtol=rank_rtol)
@@ -934,8 +1420,8 @@ end
 
 function _se_history_entry(iteration, radius, merit, e; penalty)
     (iteration=iteration, radius=radius, merit=merit,
-     measurement_objective=0.5 * sum(abs2, view(e.residual, 1:length(e.predicted))),
-     prior_objective=0.5 * sum(abs2, e.prior_residual),
+     measurement_objective=sum(abs2, view(e.residual, 1:length(e.predicted))),
+     prior_objective=sum(abs2, e.prior_residual),
      penalty=penalty, constraint_norm=norm(e.constraints))
 end
 
@@ -955,7 +1441,7 @@ uses dense SVD rank/null-space diagnostics; the compiled evaluator preserves the
 sparsity used by [`solve_sparse_state_estimator`](@ref), the sparse
 Hachtel-system implementation for larger networks.
 """
-function solve_compiled_state_estimator(s::SEStructure, p::SEParameters,
+function _solve_compiled_state_estimator(s::SEStructure, p::SEParameters,
                                         x0::AbstractVector{<:Real};
                                         max_iterations::Integer=100,
                                         initial_radius::Real=0.25,
@@ -968,12 +1454,10 @@ function solve_compiled_state_estimator(s::SEStructure, p::SEParameters,
                                         optimality_tolerance::Real=1e-8,
                                         min_radius::Real=1e-10,
                                         rank_rtol::Real=sqrt(eps(Float64)))
-    max_iterations > 0 || throw(ArgumentError("max_iterations must be positive"))
-    0 < initial_radius <= max_radius || throw(ArgumentError("require 0 < initial_radius ≤ max_radius"))
+    _se_validate_solver_options(; max_iterations, initial_radius, max_radius, penalty,
+        acceptance_threshold, constraint_tolerance, constraint_rtol, optimality_tolerance,
+        min_radius, rank_rtol)
     0 < normal_fraction < 1 || throw(ArgumentError("normal_fraction must lie in (0, 1)"))
-    penalty > 0 || throw(ArgumentError("penalty must be positive"))
-    0 < acceptance_threshold < 1 || throw(ArgumentError("acceptance_threshold must lie in (0, 1)"))
-    constraint_rtol >= 0 || throw(ArgumentError("constraint_rtol must be non-negative"))
     ctol = _se_constraint_tolerance(constraint_tolerance, constraint_rtol,
                                     _se_current_scale(s, p))
 
@@ -1008,7 +1492,7 @@ function solve_compiled_state_estimator(s::SEStructure, p::SEParameters,
         # failure merely because there is no step left to take.
         gred0 = size(Z, 2) == 0 ? 0.0 : _se_stationarity(H, Z' * (H' * r))
         if norm(c) <= ctol && gred0 <= optimality_tolerance
-            observable, _ = _se_rank_nullspace(H * Z; rtol=rank_rtol)
+            observable, _ = _se_rank_nullspace(H * Z; rtol=rank_rtol, reference_scale=norm(H))
             status = observable == size(Z, 2) ? :converged_unique : :converged_underobserved
             status = _se_checked_status(s, p, x, e, H, C, Z, status; rank_rtol)
             return ConstrainedStateEstimationResult(status, x, e, iteration - 1, rankC,
@@ -1100,7 +1584,7 @@ function solve_compiled_state_estimator(s::SEStructure, p::SEParameters,
             rankC, Znow = _se_rank_nullspace(Cnow; rtol=rank_rtol)
             gred = size(Znow, 2) == 0 ? 0.0 : _se_stationarity(Hnow, Znow' * (Hnow' * e.residual))
             if norm(e.constraints) <= ctol && gred <= optimality_tolerance
-                observable, _ = _se_rank_nullspace(Hnow * Znow; rtol=rank_rtol)
+                observable, _ = _se_rank_nullspace(Hnow * Znow; rtol=rank_rtol, reference_scale=norm(Hnow))
                 status = observable == size(Znow, 2) ? :converged_unique : :converged_underobserved
                 status = _se_checked_status(s, p, x, e, Hnow, Cnow, Znow, status; rank_rtol)
                 return ConstrainedStateEstimationResult(status, x, e, iteration, rankC,
@@ -1132,6 +1616,9 @@ Advance exact constant-power/ZIP constraints from the regularised internal model
 starts the dense constrained solver.  A returned `:power_flow_initialization_failed`
 status means a stage could not establish feasibility; no final estimate is
 claimed unless the last stage is at α=1.
+Intermediate converged stages report `:converged_regularized` and are not
+publishable. Failure or an exception restores the caller's original alpha;
+successful continuation leaves it at one.
 """
 function solve_with_continuation(s::SEStructure, p::SEParameters,
                                  x0::AbstractVector{<:Real};
@@ -1145,15 +1632,24 @@ function solve_with_continuation(s::SEStructure, p::SEParameters,
 
     x = Float64.(x0)
     stages = ConstrainedStateEstimationResult[]
-    for α in αs
-        p.continuation_alpha = α
-        result = solve_compiled_state_estimator(s, p, x; kwargs...)
-        push!(stages, result)
-        if !(result.status in (:converged_unique, :converged_underobserved))
-            return ContinuationStateEstimationResult(:power_flow_initialization_failed,
-                                                     result, αs, stages)
+    original_alpha = p.continuation_alpha
+    completed = false
+    try
+        for α in αs
+            p.continuation_alpha = α
+            result = solve_compiled_state_estimator(s, p, x; kwargs...)
+            push!(stages, result)
+            stage_ok = result.status in (:converged_unique, :converged_underobserved) ||
+                       (α < 1 && result.status == :converged_regularized)
+            if !stage_ok
+                return ContinuationStateEstimationResult(:power_flow_initialization_failed,
+                                                         result, αs, stages)
+            end
+            x = result.state
         end
-        x = result.state
+        completed = true
+    finally
+        completed || (p.continuation_alpha = original_alpha)
     end
     ContinuationStateEstimationResult(stages[end].status, stages[end], αs, stages)
 end
@@ -1178,6 +1674,7 @@ struct SparseConstrainedStateEstimationResult <: AbstractSolveResult
     observable_dimension::Int
     constraint_multipliers::Vector{Float64}
     history::Vector{NamedTuple}
+    statistics::NamedTuple
 end
 
 function solve_status(result::SparseConstrainedStateEstimationResult)
@@ -1186,10 +1683,10 @@ function solve_status(result::SparseConstrainedStateEstimationResult)
 end
 
 solve_diagnostics(result::SparseConstrainedStateEstimationResult) =
-    (iterations=result.iterations, constraint_rank=result.constraint_rank,
+    merge(result.statistics, (iterations=result.iterations, constraint_rank=result.constraint_rank,
      tangent_dimension=result.tangent_dimension,
      observable_dimension=result.observable_dimension,
-     multipliers=copy(result.constraint_multipliers))
+     multipliers=copy(result.constraint_multipliers)))
 
 function _se_hachtel_step(H, C, r, c, scale, damping)
     m, n, q = size(H, 1), size(H, 2), size(C, 1)
@@ -1214,7 +1711,7 @@ end
 
 function _se_status_from_linearisation(H, C; rank_rtol=sqrt(eps(Float64)))
     rankC, Z = _se_rank_nullspace(C; rtol=rank_rtol)
-    observable, _ = _se_rank_nullspace(H * Z; rtol=rank_rtol)
+    observable, _ = _se_rank_nullspace(H * Z; rtol=rank_rtol, reference_scale=norm(H))
     status = observable == size(Z, 2) ? :converged_unique : :converged_underobserved
     status, rankC, size(Z, 2), observable
 end
@@ -1233,7 +1730,7 @@ The trust-region acceptance uses the same exact-penalty merit function as the
 dense reference solver.  `damping` is a small scaled primal regulariser used
 only to select a stable representative in rank-deficient linear systems.
 """
-function solve_sparse_state_estimator(s::SEStructure, p::SEParameters,
+function _solve_sparse_state_estimator(s::SEStructure, p::SEParameters,
                                       x0::AbstractVector{<:Real};
                                       max_iterations::Integer=100,
                                       initial_radius::Real=0.25,
@@ -1246,12 +1743,11 @@ function solve_sparse_state_estimator(s::SEStructure, p::SEParameters,
                                       min_radius::Real=1e-10,
                                       damping::Real=1e-10,
                                       rank_rtol::Real=sqrt(eps(Float64)))
-    max_iterations > 0 || throw(ArgumentError("max_iterations must be positive"))
-    0 < initial_radius <= max_radius || throw(ArgumentError("require 0 < initial_radius ≤ max_radius"))
-    penalty > 0 || throw(ArgumentError("penalty must be positive"))
-    0 < acceptance_threshold < 1 || throw(ArgumentError("acceptance_threshold must lie in (0, 1)"))
-    damping >= 0 || throw(ArgumentError("damping must be non-negative"))
-    constraint_rtol >= 0 || throw(ArgumentError("constraint_rtol must be non-negative"))
+    _se_validate_solver_options(; max_iterations, initial_radius, max_radius, penalty,
+        acceptance_threshold, constraint_tolerance, constraint_rtol, optimality_tolerance,
+        min_radius, rank_rtol)
+    isfinite(Float64(damping)) && damping >= 0 ||
+        throw(ArgumentError("damping must be finite and non-negative"))
     ctol = _se_constraint_tolerance(constraint_tolerance, constraint_rtol,
                                     _se_current_scale(s, p))
 
@@ -1301,7 +1797,7 @@ function solve_sparse_state_estimator(s::SEStructure, p::SEParameters,
         if norm(c) <= ctol &&
            _se_stationarity(H, H' * r - C' * λ) <= optimality_tolerance
             rankC, Z = _se_rank_nullspace(C; rtol=rank_rtol)
-            observable, _ = _se_rank_nullspace(H * Z; rtol=rank_rtol)
+            observable, _ = _se_rank_nullspace(H * Z; rtol=rank_rtol, reference_scale=norm(H))
             tangent = size(Z, 2)
             status = observable == tangent ? :converged_unique : :converged_underobserved
             status = _se_checked_status(s, p, x, e, H, C, Z, status; rank_rtol)
@@ -1379,10 +1875,10 @@ function _se_reduced_jacobian(s::SEStructure, p::SEParameters, x;
     H, C, Z, rankC, H * Z
 end
 
-function _se_svd_rank(A; rank_rtol=sqrt(eps(Float64)))
+function _se_svd_rank(A; rank_rtol=sqrt(eps(Float64)), reference_scale=0.0)
     F = svd(collect(Float64, A); full=size(A, 1) < size(A, 2))
     smax = isempty(F.S) ? 0.0 : maximum(F.S)
-    tol = max(Float64(rank_rtol) * max(size(A)...) * smax, eps(Float64))
+    tol = _se_rank_tolerance(A, smax, rank_rtol, reference_scale)
     count(>(tol), F.S), F
 end
 
@@ -1395,18 +1891,23 @@ Uses `H*Z` where
 `C*Z = 0`.  This is deliberately not the rank of the unconstrained measurement
 Jacobian.  The current dense diagnostic is intended for small/reference cases;
 the sparse solver uses it only after convergence, not in its linear step.
+With no feasible free direction, `min_singular=Inf` and `condition_number=1.0`
+by convention.
 """
 function observability_diagnostics(s::SEStructure, p::SEParameters,
                                    x::AbstractVector{<:Real};
                                    include_prior::Bool=true,
                                    rank_rtol::Real=sqrt(eps(Float64)))
     H, _, Z, rankC, Hred = _se_reduced_jacobian(s, p, x; rank_rtol=rank_rtol)
-    include_prior || (Hred = H[1:length(s.measurement_pattern), :] * Z)
-    rankH, F = _se_svd_rank(Hred; rank_rtol=rank_rtol)
+    if !include_prior
+        H = H[1:length(s.measurement_pattern), :]
+        Hred = H * Z
+    end
+    rankH, F = _se_svd_rank(Hred; rank_rtol=rank_rtol, reference_scale=norm(H))
     tangent = size(Z, 2)
-    minsing = tangent == 0 ? Inf : (length(F.S) >= tangent ? F.S[tangent] : 0.0)
+    minsing = tangent == 0 ? Inf : (rankH == tangent ? F.S[tangent] : 0.0)
     smax = isempty(F.S) ? 0.0 : maximum(F.S)
-    condn = minsing > 0 ? smax / minsing : Inf
+    condn = tangent == 0 ? 1.0 : minsing > 0 ? smax / minsing : Inf
     SEObservability(rankC, tangent, rankH, tangent - rankH, minsing, condn)
 end
 
@@ -1421,8 +1922,8 @@ function unobservable_directions(s::SEStructure, p::SEParameters,
                                  x::AbstractVector{<:Real};
                                  count::Union{Nothing,Integer}=nothing,
                                  rank_rtol::Real=sqrt(eps(Float64)))
-    _, _, Z, _, Hred = _se_reduced_jacobian(s, p, x; rank_rtol=rank_rtol)
-    rankH, F = _se_svd_rank(Hred; rank_rtol=rank_rtol)
+    H, _, Z, _, Hred = _se_reduced_jacobian(s, p, x; rank_rtol=rank_rtol)
+    rankH, F = _se_svd_rank(Hred; rank_rtol=rank_rtol, reference_scale=norm(H))
     available = size(Z, 2) - rankH
     requested = isnothing(count) ? available : Int(count)
     0 <= requested <= available ||
@@ -1433,10 +1934,10 @@ end
 
 function _derived_covariance(s::SEStructure, p::SEParameters, x, Jderived;
                              rank_rtol=sqrt(eps(Float64)))
-    _, _, Z, _, Hred = _se_reduced_jacobian(s, p, x; rank_rtol=rank_rtol)
+    H, _, Z, _, Hred = _se_reduced_jacobian(s, p, x; rank_rtol=rank_rtol)
     size(Jderived, 2) == size(Z, 1) ||
         throw(DimensionMismatch("derived Jacobian has $(size(Jderived, 2)) columns; expected $(size(Z, 1))"))
-    rankH, F = _se_svd_rank(Hred; rank_rtol=rank_rtol)
+    rankH, F = _se_svd_rank(Hred; rank_rtol=rank_rtol, reference_scale=norm(H))
     # Unobservable state directions are harmless only when the requested
     # quantity has no first-order sensitivity to any of them.
     JZ = collect(Float64, Jderived) * Z
@@ -1444,7 +1945,8 @@ function _derived_covariance(s::SEStructure, p::SEParameters, x, Jderived;
     for row in axes(JZ, 1)
         sensitivity = norm(JZ[row, :])
         leakage = norm(JZ[row, :]' * U)
-        leakage <= max(rank_rtol * sensitivity, eps(Float64) * sensitivity) ||
+        projection_floor = 8eps(Float64) * max(size(Z)...) * norm(Jderived[row, :])
+        leakage <= max(rank_rtol * sensitivity, projection_floor) ||
             throw(ArgumentError("requested covariance is not finite: quantity $row depends on an unobservable tangent direction"))
     end
     size(Z, 2) == 0 && return zeros(Float64, size(Jderived, 1), size(Jderived, 1))
@@ -1490,6 +1992,7 @@ struct TimeSeriesStateEstimationResult <: AbstractSolveResult
     status::Symbol
     snapshots::Vector{Any}
     completed_snapshots::Int
+    requested_snapshots::Int
 end
 
 function solve_status(result::TimeSeriesStateEstimationResult)
@@ -1499,7 +2002,7 @@ end
 
 solve_diagnostics(result::TimeSeriesStateEstimationResult) =
     (completed_snapshots=result.completed_snapshots,
-     requested_snapshots=length(result.snapshots))
+     requested_snapshots=result.requested_snapshots)
 
 function _se_previous_state_prior(x, sigma)
     n = length(x)
@@ -1536,21 +2039,40 @@ measurement/device incidence.  `parameters` contains one mutable
 covariances, sources, and device values in place before calling.  Each snapshot
 warm-starts from the preceding result.  When `previous_state_sigma` is supplied,
 that preceding state becomes a whitened stochastic prior for the next snapshot,
-not an exact equation.
+not an exact equation. Supply a scalar or one standard deviation per state in
+SI units (volts for voltage entries, amperes for explicit-current entries).
 
-`solver` is `:sparse` (default) or `:dense`.  The result preserves every
+`solver` is `:sparse` (default), `:dense`, or `:ipopt`.  The result preserves every
 per-snapshot result and stops at the first non-converged snapshot, reporting
 `:time_series_stalled` without claiming later estimates.
+Use `solver_kwargs=(dense=(...), sparse=(...), ipopt=(...))` for backend-specific
+settings; shared `kwargs` must apply to the selected solver.
 """
 function solve_time_series_state_estimator(s::SEStructure,
                                             parameters::AbstractVector{<:SEParameters},
                                             x0::AbstractVector{<:Real};
                                             previous_state_sigma=nothing,
-                                            solver::Symbol=:sparse, kwargs...)
+                                            solver::Symbol=:sparse, solver_kwargs::NamedTuple=NamedTuple(), kwargs...)
     isempty(parameters) && throw(ArgumentError("time-series estimation needs at least one parameter snapshot"))
     solve_one = solver === :sparse ? solve_sparse_state_estimator :
                 solver === :dense ? solve_compiled_state_estimator :
-                throw(ArgumentError("solver must be :sparse or :dense"))
+                solver === :ipopt ? solve_ipopt_state_estimator :
+                throw(ArgumentError("solver must be :sparse, :dense or :ipopt"))
+    unknown_backends=setdiff(keys(solver_kwargs), (:dense, :sparse, :ipopt))
+    isempty(unknown_backends) || throw(ArgumentError("unknown solver_kwargs backends $unknown_backends"))
+    all(value->value isa NamedTuple, values(solver_kwargs)) ||
+        throw(ArgumentError("each solver_kwargs entry must be a NamedTuple"))
+    specific=get(solver_kwargs, solver, NamedTuple())
+    options=merge((; kwargs...), specific)
+    shared=(:max_iterations, :constraint_tolerance, :constraint_rtol,
+        :optimality_tolerance, :rank_rtol)
+    trust_region=(:initial_radius, :max_radius, :penalty, :acceptance_threshold, :min_radius)
+    allowed=solver===:ipopt ? (shared..., :verbose, :solver_options) :
+        solver===:dense ? (shared..., trust_region..., :normal_fraction) :
+        (shared..., trust_region..., :damping)
+    invalid=setdiff(keys(options), allowed)
+    isempty(invalid) || throw(ArgumentError(
+        "solver=$solver does not support options $invalid; put backend-specific options in solver_kwargs=(dense=(...), sparse=(...), ipopt=(...))"))
     x = Float64.(x0)
     snapshots = Any[]
     # Capture caller priors BEFORE any snapshot runs, and restore them on the way
@@ -1572,17 +2094,17 @@ function solve_time_series_state_estimator(s::SEStructure,
                 set_state_prior!(p, _se_merge_priors(caller_priors[t],
                                                      _se_previous_state_prior(x, previous_state_sigma)))
             end
-            result = solve_one(s, p, x; kwargs...)
+            result = solve_one(s, p, x; options...)
             push!(snapshots, result)
             if !(result.status in (:converged_unique, :converged_underobserved))
-                return TimeSeriesStateEstimationResult(:time_series_stalled, snapshots, t - 1)
+                return TimeSeriesStateEstimationResult(:time_series_stalled, snapshots, t - 1, length(parameters))
             end
             x = result.state
         end
     finally
         restore!()
     end
-    TimeSeriesStateEstimationResult(:converged, snapshots, length(snapshots))
+    TimeSeriesStateEstimationResult(:converged, snapshots, length(snapshots), length(parameters))
 end
 
 """
@@ -1590,6 +2112,8 @@ end
 
 Return the load-free voltage state using current source phasors and compiled
 finite admittances. This respects fixed transformer ratios and phase shifts.
+When unknown-current states are present, seed them from precision-weighted
+customer P/Q and the corresponding complex connection voltage.
 It is an initial guess, not telemetry or a state estimate. Reference-deficient
 networks may have arbitrary null-space components; callers should supply a
 physical warm start when that matters. Throws if there is no nonzero reference.
@@ -1598,14 +2122,16 @@ function initial_state_estimator(s::SEStructure, p::SEParameters)
     _validate_parameters(s,p)
     n = length(s.nodes)
     free = findall(i -> !haskey(s.reference_map,s.nodes[i]), 1:n)
-    _, _, ir, ii = _se_parts(s,p,zeros(2length(free)))
-    isempty(free) && return Float64[]
+    _, _, ir, ii = _se_parts(s,p,zeros(size(s.voltage_state_jacobian,2)))
+    # Fixed voltages do not eliminate explicitly declared unknown currents.
+    isempty(free) && return _se_initial_currents(s,p,copy(s.nominal_state))
     rows = vcat(free,n .+ free)
     # Reuse the compiled guess for unchanged source phasors; updated boundaries
     # need a new sparse solve, but measurement updates do not.
     x = all(p.fixed_voltages[s.node_index[node]] == value for (node,value) in s.reference_map) ?
         copy(s.nominal_state) :
         Vector{Float64}(qr(s.current_state_jacobian[rows,:]) \ (-vcat(ir[free],ii[free])))
+    x=_se_initial_currents(s,p,x)
     all(isfinite,x) && norm(x,Inf) > 0 || throw(ArgumentError("No nonzero load-free initial state; supply a physical initial state explicitly."))
     x
 end
@@ -1618,10 +2144,48 @@ function _se_voltage_scale(s,p,x)
     for ((bus,_),k) in s.free_state_map
         levels[bus] = max(get(levels,bus,1.0), hypot(s.nominal_state[k],s.nominal_state[nf+k]))
     end
-    scale = ones(Float64,2nf)
+    scale = ones(Float64,size(s.voltage_state_jacobian,2))
     for ((bus,_),k) in s.free_state_map
         v = max(get(levels,bus,1.0),hypot(x[k],x[nf+k]),1.0)
         scale[k] = scale[nf+k] = 1/v
     end
+    if !isempty(s.injection_state_map)
+        nv=2nf;nu=size(s.injection_incidence,2)
+        level=max(1.,norm(x[nv+1:end],Inf))
+        scale[nv+1:end].=1/level
+    end
     scale
 end
+
+include("state_estimation_injections.jl")
+
+# The numerical objectives use one half for derivatives; the public statistic
+# is consistently J=sum(r^2), including independently supplied prior readings.
+ConstrainedStateEstimationResult(status,state,evaluation,iterations,rc,td,od,history) =
+    ConstrainedStateEstimationResult(status,state,evaluation,iterations,rc,td,od,history,NamedTuple())
+SparseConstrainedStateEstimationResult(status,state,evaluation,iterations,rc,td,od,multipliers,history) =
+    SparseConstrainedStateEstimationResult(status,state,evaluation,iterations,rc,td,od,multipliers,history,NamedTuple())
+
+function _se_statistics(s,p,r)
+    _,_,nuisance=_se_power_profile(s.power_groups,p.measurement_values,p.covariance_values)
+    m=length(r.evaluation.residual)
+    valid=r.status in (:converged_unique,:converged_underobserved)
+    (objective=sum(abs2,r.evaluation.residual),
+     measurement_objective=sum(abs2,r.evaluation.residual[1:length(s.measurement_pattern)]),
+     prior_objective=sum(abs2,r.evaluation.prior_residual),
+     residual_count=m,nuisance_dimension=nuisance,
+     dof=valid ? m-r.observable_dimension-nuisance : missing)
+end
+function solve_compiled_state_estimator(s::SEStructure,p::SEParameters,x0::AbstractVector{<:Real};kwargs...)
+    r=_solve_compiled_state_estimator(s,p,x0;kwargs...)
+    ConstrainedStateEstimationResult(r.status,r.state,r.evaluation,r.iterations,r.constraint_rank,
+        r.tangent_dimension,r.observable_dimension,r.history,_se_statistics(s,p,r))
+end
+function solve_sparse_state_estimator(s::SEStructure,p::SEParameters,x0::AbstractVector{<:Real};kwargs...)
+    r=_solve_sparse_state_estimator(s,p,x0;kwargs...)
+    SparseConstrainedStateEstimationResult(r.status,r.state,r.evaluation,r.iterations,r.constraint_rank,
+        r.tangent_dimension,r.observable_dimension,r.constraint_multipliers,r.history,_se_statistics(s,p,r))
+end
+
+@doc (@doc _solve_compiled_state_estimator) solve_compiled_state_estimator
+@doc (@doc _solve_sparse_state_estimator) solve_sparse_state_estimator

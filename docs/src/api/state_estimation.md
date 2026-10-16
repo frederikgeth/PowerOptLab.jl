@@ -24,11 +24,16 @@ ConstantCurrentDevice
 ZIPDevice
 ExactDeviceEquation
 BranchMeasurement
+NetInjectionMeasurement
+TransformerMeasurement
+ShuntMeasurement
+FunctionalMeasurement
 SEPreflightFinding
 SEPreflightReport
 SEUnsupportedNetwork
 state_estimator_preflight
 initial_state_estimator
+injection_state_indices
 SEStructure
 SEParameters
 SEEvaluation
@@ -40,6 +45,8 @@ ConstrainedStateEstimationResult
 solve_compiled_state_estimator
 SparseConstrainedStateEstimationResult
 solve_sparse_state_estimator
+IpoptStateEstimationResult
+solve_ipopt_state_estimator
 ContinuationStateEstimationResult
 solve_with_continuation
 SEObservability

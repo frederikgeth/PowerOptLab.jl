@@ -48,9 +48,13 @@ function _se_capture_primitive(f)
     value, String(take!(buffer))
 end
 
-function _se_preflight(net, measurements; neutral="n", zero_injection=String[], exact_devices=Any[])
-    findings = SEPreflightFinding[]; elements = NamedTuple[]; omitted = NamedTuple[]
-    sources = NamedTuple[]; refs = NamedTuple[]; exact = NamedTuple[]
+function _se_preflight(net, measurements; neutral="n", zero_injection=String[], exact_devices=Any[], injection_connections=nothing, formulation=:auto)
+    findings = SEPreflightFinding[]
+    elements = NamedTuple[]
+    omitted = NamedTuple[]
+    sources = NamedTuple[]
+    refs = NamedTuple[]
+    exact = NamedTuple[]
     grounds = Tuple{String,String}[]
     issue(severity, code, element, message) = push!(findings,
         SEPreflightFinding(severity, code, element, message))
@@ -66,16 +70,19 @@ function _se_preflight(net, measurements; neutral="n", zero_injection=String[], 
     for (id, bus) in buses
         terminals!("bus/$id", id, get(bus, "terminal_names", String[]))
         for terminal in get(bus, "perfectly_grounded_terminals", [])
-            terminals!("bus/$id", id, [terminal]); push!(grounds, (String(id), String(terminal)))
+            terminals!("bus/$id", id, [terminal])
+            push!(grounds, (String(id), String(terminal)))
         end
         for key in ("v_min", "v_max", "vm_min", "vm_max")
             haskey(bus, key) && push!(omitted, (element="bus/$id", field=key, reason="Operating limit is not an estimator constraint."))
         end
     end
     for (id, source) in get(net, "voltage_source", Dict())
-        ts = get(source, "terminal_map", String[]); bus = get(source, "bus", "")
+        ts = get(source, "terminal_map", String[])
+        bus = get(source, "bus", "")
         terminals!("voltage_source/$id", bus, ts)
-        vs = get(source, "v_magnitude", Float64[]); angles = get(source, "v_angle", zeros(length(ts)))
+        vs = get(source, "v_magnitude", Float64[])
+        angles = get(source, "v_angle", zeros(length(ts)))
         length(vs) == length(ts) && length(angles) == length(ts) &&
             all(v -> isfinite(v) && v >= 0, vs) && all(isfinite, angles) ||
             issue(:error, :invalid_source, "voltage_source/$id", "Supply finite phasors with one magnitude and angle per source conductor.")
@@ -98,23 +105,36 @@ function _se_preflight(net, measurements; neutral="n", zero_injection=String[], 
                 length(windings) >= 2 && length(windings) == length(raw) ||
                     issue(:error, :invalid_windings, label, "Supply at least two winding records.")
                 phase_counts = Int[]
-                for w in windings
+                for (k, w) in enumerate(windings)
                     terminals!(label, w.bus, w.terminal_map)
                     isfinite(w.v_nom) && w.v_nom > 0 ||
                         issue(:error, :invalid_ratio, label, "Every winding nominal voltage must be finite and positive.")
                     w.connection in ("WYE", "DELTA") ||
                         issue(:error, :invalid_connection, label, "Winding configuration must be WYE or DELTA.")
+                    isfinite(w.r_winding) && w.r_winding >= 0 ||
+                        issue(:error, :invalid_impedance, label, "Winding resistance must be finite and nonnegative.")
+                    for field in ("connection", "tap", "tap_ratio", "r_neutral", "x_neutral")
+                        haskey(raw[k], field) || continue
+                        issue(:error, :unsupported_winding_field, "$label/windings/$k",
+                            "The n-winding exporter does not apply '$field'; use configuration, v_nom, explicit neutral terminals and separate grounding shunts.")
+                    end
                     phases, ref = BMOPFTools._nw_phase_terminals(w.terminal_map)
                     length(phases) + (ref === nothing ? 0 : 1) == length(w.terminal_map) ||
                         issue(:error, :unsupported_terminal_name, label, "The n-winding exporter recognises only a/b/c/n conductor names.")
                     push!(phase_counts, length(phases))
                     w.connection == "DELTA" && length(phases) < 2 &&
                         issue(:error, :terminal_count, label, "A delta winding requires at least two phases.")
+                    w.connection == "DELTA" && ref !== nothing &&
+                        issue(:error, :invalid_connection, label, "A delta winding has no neutral; remove n from its terminal_map.")
+                    w.connection == "DELTA" && !(w.delta_roll in (-1,1)) &&
+                        issue(:error, :invalid_connection, label, "Delta winding delta_roll must be -1 or +1.")
                 end
                 !isempty(phase_counts) && minimum(phase_counts) > 0 && all(==(first(phase_counts)), phase_counts) ||
                     issue(:error, :terminal_count, label, "All windings must have the same nonzero phase count.")
                 any(key -> haskey(x, key), ("tap", "tap_ratio")) &&
                     issue(:error, :unsupported_tap, label, "The n-winding exporter does not apply tap fields; encode known winding ratios in v_nom.")
+                any(key -> haskey(x,key), ("r_neutral_from","x_neutral_from","r_neutral_to","x_neutral_to")) &&
+                    issue(:error, :unsupported_winding_field, label, "The n-winding exporter does not apply two-port neutral impedances; use explicit winding neutral terminals and separate grounding shunts.")
             else
                 for side in ("from", "to")
                     terminals!(label, get(x, "bus_$side", ""), get(x, "terminal_map_$side", String[]))
@@ -191,9 +211,14 @@ function _se_preflight(net, measurements; neutral="n", zero_injection=String[], 
                 size(Y) == (length(nodes), length(nodes)) && all(isfinite, Y) ||
                     issue(:error, :invalid_primitive, label, "Admittance must be finite and match the terminal map.")
             elseif kind == "switch"
-                get(x,"status","closed") in ("open","closed") || issue(:error,:invalid_switch,label,"Status must be open or closed.")
+                get(x, "open_switch", false) isa Bool ||
+                    issue(:error, :invalid_switch, label, "open_switch must be true or false.")
+                haskey(x, "status") && issue(:error, :unsupported_switch_field, label,
+                    "The status field does not define switch topology; use open_switch=true or false.")
             end
-            push!(elements, (element=label, representation=kind == "switch" ? Symbol(get(x,"status","closed")) : :passive, tap=nothing))
+            representation = kind == "switch" ?
+                (get(x, "open_switch", false) === true ? :open : :closed) : :passive
+            push!(elements, (element=label, representation, tap=nothing))
         catch err
             issue(:error, :invalid_element, label, sprint(showerror,err))
         end
@@ -233,7 +258,7 @@ function _se_preflight(net, measurements; neutral="n", zero_injection=String[], 
     ybus = nothing
     if !any(f -> f.severity === :error, findings)
         try
-            ybus, warnings = _se_capture_primitive(() -> ybus_passive(net))
+            ybus, warnings = _se_capture_primitive(() -> _se_passive_ybus(net))
             isempty(warnings) || issue(:error,:primitive_warning,"network",strip(warnings))
             for (node, index) in sort!(collect(ybus.index); by=first)
                 if index != 0 && node != ybus.nodes[index]
@@ -242,39 +267,102 @@ function _se_preflight(net, measurements; neutral="n", zero_injection=String[], 
             end
             all(isfinite, ybus.Y) || issue(:error,:nonfinite_admittance,"network","Passive Ybus is nonfinite.")
             fixed = _source_phasors(net, ybus.index)
+            for m in measurements
+                m isa Measurement && m.kind in (:pinj,:qinj) || continue
+                i = get(ybus.index,(m.bus,m.terminal),0)
+                haskey(fixed,i) && throw(ArgumentError("individual customer power at a source-fixed conductor cannot be inferred from passive-network current; use NetInjectionMeasurement for net source telemetry"))
+            end
             for node in _zero_injection_set(net, zero_injection, neutral; include_neutral=true)
                 i = get(ybus.index, node, 0)
                 i == 0 && throw(ArgumentError("zero-injection terminal $node is grounded or absent"))
                 haskey(fixed, i) && throw(ArgumentError("zero-injection terminal $node is fixed by a source"))
             end
-            _compile_measurements(net, measurements, ybus.index, neutral)
+            specs = _compile_measurements(net, measurements, ybus.index, neutral)
+            connections, groups = _se_injection_layout(measurements, neutral, ybus.index; injection_connections, voltage_only=false,
+                known_connections=_se_known_connections(exact_devices,ybus.index))
             _compile_exact_devices(exact_devices, ybus.index)
+            known_connections = _se_known_connections(exact_devices, ybus.index)
+            explicit_unknowns = injection_connections === nothing ? Set{TerminalID}() :
+                Set(c.positive for c in injection_connections)
+            for (row, m) in enumerate(measurements)
+                m isa Measurement && m.kind in (:pinj, :qinj) || continue
+                node = (m.bus, m.terminal)
+                if node in explicit_unknowns && (node, specs[row].reference) in known_connections
+                    issue(:info, :reinterpreted_customer_measurement, "measurement/$row",
+                        "Row $row ($(m.kind) at $node) meters the additional unknown customer because injection_connections explicitly declares this path. Without that declaration it would meter the exact device on these endpoints.")
+                end
+            end
+            zero_nodes=Set(ybus.index[node] for node in
+                _zero_injection_set(net,zero_injection,neutral;include_neutral=true))
+            for c in _se_unknown_connections(connections,exact_devices,ybus.index,injection_connections)
+                incident=(ybus.index[c.positive],c.negative===nothing ? 0 : ybus.index[c.negative])
+                if any(i->i in zero_nodes,incident)
+                    issue(:error,:conflicting_injection_declaration,string(c.positive),
+                        "An unknown customer path touches a declared zero-injection conductor. Remove the conflicting declaration; use NetInjectionMeasurement to observe a known zero without declaring an unknown customer.")
+                end
+            end
+            if formulation===:voltage
+                _se_injection_layout(measurements,neutral,ybus.index;injection_connections,known_connections=_se_known_connections(exact_devices,ybus.index))
+                _se_check_device_injections(connections,groups,measurements,exact_devices,ybus.index,fixed)
+                _se_check_explicit_device_unknowns(injection_connections,exact_devices,ybus.index,fixed)
+            end
+            represented=Set{Int}()
+            for c in connections, node in (c.positive,c.negative)
+                node===nothing || push!(represented,ybus.index[node])
+            end
+            for d in exact_devices, c in d.model.connections, node in (c.positive,c.negative)
+                node===nothing || push!(represented,ybus.index[node])
+            end
+            for node in _zero_injection_set(net,zero_injection,neutral;include_neutral=true)
+                push!(represented,ybus.index[node])
+            end
+            missing=[node for (k,node) in enumerate(ybus.nodes) if !haskey(fixed,k) && !(k in represented)]
+            if !isempty(missing)
+                if formulation===:native
+                    issue(:warning,:implicit_zero_injection,"network",
+                        "Native WLS imposes zero injection at undeclared conductors $(missing). Declare these zero_injection explicitly or use the compiled API to leave their injections free.")
+                else
+                    issue(:warning,:undeclared_injection,"network",
+                        "No declared injection path or exact KCL for conductors $(missing); the compiled model leaves their injections free. Declare zero_injection where physically known.")
+                end
+            end
         catch err
             issue(:error,:invalid_compilation,"network",sprint(showerror,err))
         end
     end
     for (i,m) in enumerate(measurements)
-        if !(m isa Union{Measurement,BranchMeasurement})
-            issue(:error, :invalid_measurement, string(i), "Expected Measurement or BranchMeasurement.")
+        if !(m isa _SESupportedMeasurement)
+            issue(:error, :invalid_measurement, string(i), "Unsupported measurement type.")
             continue
         end
-        push!(refs, m isa BranchMeasurement ? (row=i, kind=m.kind, location="line/$(m.line)/$(m.side)/$(m.terminal)", reference=nothing) :
-            (row=i, kind=m.kind, location="$(m.bus)/$(m.terminal)", reference=_resolve_ref(m,neutral)))
+        push!(refs, merge((row=i,), _se_measurement_description(m, neutral)))
     end
-    for node in zero_injection; push!(exact,(kind=:zero_injection, specification=deepcopy(node))); end
-    for d in exact_devices; push!(exact,(kind=:device, specification=deepcopy(d))); end
+    for node in zero_injection
+        push!(exact, (kind=:zero_injection, specification=deepcopy(node)))
+    end
+    for d in exact_devices
+        push!(exact, (kind=:device, specification=deepcopy(d)))
+    end
+    if injection_connections !== nothing
+        for c in injection_connections
+            push!(exact, (kind=:injection_connection, specification=deepcopy(c)))
+        end
+    end
     report = SEPreflightReport(!any(f -> f.severity === :error, findings), findings, elements,
         omitted, sources, sort!(grounds), refs, exact)
     report, ybus
 end
 
 """
-    state_estimator_preflight(net, measurements=[]; neutral="n", zero_injection=[], exact_devices=[])
+    state_estimator_preflight(net, measurements=[]; neutral="n", zero_injection=[],
+                              exact_devices=[], injection_connections=nothing)
 
 Inspect the supported electrical interpretation before compiling. Ideal and
 warning-producing transformer primitives are rejected, never regularised or
 silently skipped. Fixed taps are data, not estimated controls. This report does
 not certify observability, model accuracy, or convergence.
+Pass `injection_connections` to declare unknown injection paths independently
+of P/Q telemetry; the default infers them from the measurements.
 """
 state_estimator_preflight(net::Dict{String,Any}, measurements::AbstractVector=Measurement[]; kwargs...) =
     first(_se_preflight(net, measurements; kwargs...))

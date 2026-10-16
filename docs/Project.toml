@@ -7,7 +7,7 @@ JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
 PowerOptLab = "eb8cafbb-1592-46c9-95ea-03a10def68a3"
 
 [sources]
-BMOPFTools = {url = "https://github.com/frederikgeth/BMOPFTools.jl", rev = "56e3b2f0261488acd30f1c98ad812c4eff4611f1"}
+BMOPFTools = {url = "https://github.com/frederikgeth/BMOPFTools.jl", rev = "df6bc42bfd64fc5475658c438adcdb28a3469777"}
 PowerOptLab = {path = ".."}
 
 [compat]

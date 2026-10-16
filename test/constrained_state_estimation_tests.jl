@@ -73,7 +73,7 @@ end
     @test length(x) == 2length(s.free_state_map)
     @test s.free_state_map[("b1", "n")] > 0    # neutral was not silently grounded
     @test e.residual ≈ zeros(length(measurements)) atol=1e-9
-    @test e.constraints ≈ zeros(2) atol=1e-9
+    @test e.constraints ≈ zeros(4) atol=1e-9 # zero injection and customer return balance
 
     Hr = residual_jacobian(s, p, x)
     Hfd = central_jacobian(y -> evaluate_state_estimator(s, p, y).residual, x)

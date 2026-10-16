@@ -10,6 +10,15 @@ using Test, PowerOptLab
                          Dict{String,Any}("bus"=>"l","terminal_map"=>["a","n"],"v_nom"=>1200.,"r_winding"=>.25)],
             "x_sc"=>Dict("1_2"=>2.)))))
     @test state_estimator_preflight(net).supported
+    # A structural identity proof must fail closed when upstream gains another
+    # element group, even if today's passive stamper does not inspect that group.
+    index=Dict((bus,t)=>k for (k,(bus,t)) in enumerate(
+        [("h","a"),("h","n"),("l","a"),("l","n")]))
+    weights=[0.,0.,1.,1.]
+    @test PowerOptLab._se_nwinding_return_identity(net,index,weights,[])
+    extended=deepcopy(net)
+    extended["future_passive_element"]=Dict("x"=>Dict("bus"=>"l"))
+    @test !PowerOptLab._se_nwinding_return_identity(extended,index,weights,[])
     for mutate in (
         t -> (t["windings"][1]["v_nom"] = 0.),
         t -> (t["windings"][2]["configuration"] = "INVALID"),

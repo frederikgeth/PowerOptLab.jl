@@ -35,11 +35,16 @@ const _SE_BRANCH_LIMIT_FIELDS = ("i_max", "s_max", "s_rating")
 # Device blocks that inject current / impose a dispatch (not passive physics).
 const _SE_INJECTING_BLOCKS = ("load", "generator", "ibr", "dc_source")
 
+# Passive node identities, including the open-delta copper bond, are owned
+# upstream alongside the native transformer model.
+_se_open_delta_bond(el)=BMOPFTools._open_delta_bond(el)
+_se_passive_ybus(net)=ybus_passive(net)
+
 """
     Measurement(; kind, bus, value, sigma, terminal="1", reference=missing)
 
 A single scalar measurement for [`solve_state_estimation`](@ref). `value` and
-`sigma` are SI (volts for `:vmag`, watts for `:pinj`, vars for `:qinj`); `sigma`
+`sigma` are SI (volts for `:vr`, `:vi`, `:vmag`, watts for `:pinj`, vars for `:qinj`); `sigma`
 is the measurement standard deviation (WLS weight `1/sigma²`), and must be
 finite and strictly positive.
 
@@ -47,12 +52,12 @@ finite and strictly positive.
   magnitude of the voltage across `(bus, terminal)`→`reference`), `:pinj`
   (active power injected into the network at that terminal pair), or `:qinj`
   (reactive power injection).
-- `bus::String`, `terminal::String="1"` — the measured phase conductor.
+- `bus::String`, `terminal::String="1"` — the measured conductor.
 - `reference` — the return terminal the quantity is referenced to. `missing`
   (the default) inherits the solve's `neutral`; a `String` names an explicit
   return terminal on the same bus; `nothing` references terminal-to-ground.
-  Voltage and power measurements at a bus therefore share one reference — a
-  smart-meter reading is phase-to-neutral for both.
+  Each voltage reading selects its own reference; P/Q for one customer must
+  share a return path. A smart-meter reading is usually phase-to-neutral.
 
 Construction validates `kind`, finiteness, `sigma > 0`, and non-empty
 identifiers; it does not check that the identifiers exist in a particular net.
@@ -83,6 +88,24 @@ end
 # `missing` inherits the neutral, an explicit value is used as-is.
 _resolve_ref(m::Measurement, neutral) = m.reference === missing ? neutral : m.reference
 
+# Evaluate the electrical warm start, including affine voltage objects and fixed
+# earth/source terminals. These are already in the model's voltage units.
+_se_voltage_start(v::Number) = Float64(v)
+_se_voltage_start(v) = JuMP.value(x -> something(JuMP.start_value(x),
+    JuMP.is_fixed(x) ? JuMP.fix_value(x) : 0.0), v)
+
+function _se_injection_start(vr, vi, key, ref, p, q, sb, fallback_voltage)
+    v0 = complex(_se_voltage_start(vr[key]), _se_voltage_start(vi[key]))
+    if ref !== nothing
+        return_key = (key[1], ref)
+        v0 -= complex(_se_voltage_start(vr[return_key]), _se_voltage_start(vi[return_key]))
+    end
+    # A zero voltage cannot seed a power-to-current conversion. Retain a
+    # nonzero nominal fallback for a degenerate user/network warm start.
+    abs(v0) > 1e-9 || (v0 = complex(max(fallback_voltage, 1e-9)))
+    conj(complex(p, q) / (sb * v0))
+end
+
 """
     StateEstimationResult
 
@@ -91,12 +114,12 @@ Result of [`solve_state_estimation`](@ref).
 # Fields
 - `termination_status::String`, `primal_status::String` — the solver's
   termination status and primal-point status. Trust the estimate only when
-  `primal_status == "FEASIBLE_POINT"`.
+  `solve_status(result).publishable` is true (termination and primal feasibility).
 - `objective::Float64` — the optimal weighted-residual sum `∑ (z−h)²/σ²`
   (`NaN` if no feasible point was found).
 - `bus::Dict{String,Any}` — the estimated SI bus voltages (`vr`, `vi`, `vm`,
-  `va` per terminal). **`NaN` throughout when `primal_status` is not
-  `FEASIBLE_POINT`** — an unconverged solver iterate is not an estimate.
+  `va` per terminal). **`NaN` throughout when the result is not publishable** —
+  an unconverged solver iterate is not an estimate.
 - `residuals::Vector{NamedTuple}` — per input measurement, in order:
   `(kind, bus, terminal, reference, measured, estimated, residual, standardized)`
   with `residual = measured − estimated` and `standardized = residual/σ`.
@@ -126,7 +149,10 @@ solve_status(result::StateEstimationResult) = result.solve
 
 solve_diagnostics(result::StateEstimationResult) =
     (objective=result.objective, observability=result.observability,
-     residual_count=length(result.residuals))
+     measurement_objective=result.objective, prior_objective=0.0,
+     residual_count=length(result.residuals),
+     nuisance_dimension=get(result.observability,:nuisance_dimension,missing),
+     dof=result.solve.publishable && !ismissing(result.observability.observable) ? result.observability.redundancy : missing)
 
 _vscale(ctx, bus) = begin
     bases = _opf_bases(ctx)
@@ -244,7 +270,8 @@ end
 # Enforce the injection-coverage contract: every non-source phase terminal is
 # either a measured injection (both :pinj and :qinj present) or declared
 # zero-injection, and the two are mutually exclusive. Throws on any violation.
-function _check_coverage(net, measurements, neutral, zi::Set{Tuple{String,String}})
+function _check_coverage(net, measurements, neutral, zi::Set{Tuple{String,String}};
+                         fixed_nodes=Set{Tuple{String,String}}())
     has_p = Set{Tuple{String,String}}()
     has_q = Set{Tuple{String,String}}()
     for m in measurements
@@ -263,13 +290,12 @@ function _check_coverage(net, measurements, neutral, zi::Set{Tuple{String,String
         push!(problems, "bus '$(k[1])' terminal '$(k[2])' is declared zero_injection but also has an injection measurement")
     end
     # Coverage: no silent zero-injection assumption for un-declared, un-measured buses.
-    srcs = _source_buses(net)
     measured = intersect(has_p, has_q)
     for (bid, bus) in get(net, "bus", Dict())
-        bid in srcs && continue
         bus isa AbstractDict || continue
         for t in _phase_terminals(bus, neutral)
             k = (bid, t)
+            k in fixed_nodes && continue
             (k in measured || k in zi) && continue
             push!(problems, "bus '$bid' terminal '$t' has no injection measurement and is not declared zero_injection " *
                             "(absence of telemetry is not evidence of zero injection)")
@@ -334,16 +360,19 @@ un-declared, un-measured bus is an error, never a silent zero injection.
 
 # Observability
 The returned `observability` NamedTuple reports a LOCAL numerical check: the
-Jacobian of the measurement + zero-injection equations with respect to the
-rectangular node voltages is formed at the returned point (reusing
-`ybus_passive`), and `observable = rank == n_states`. It reports `redundancy`
-(surplus equations), the smallest singular value, and the condition number. This
+exact KCL Jacobian and whitened measurement Jacobian with respect to rectangular
+node voltages are formed at the returned point (reusing `ybus_passive`).
+Measurement rank is evaluated on the feasible tangent space, after profiling
+individual-customer powers at merged nodes. `observable = rank == n_states`,
+where `rank` combines exact and tangent measurement ranks. `redundancy` excludes
+fitted individual-customer power allocations. The smallest singular value and
+condition number describe the reduced voltage information. This
 detects local rank deficiency / critically-weak measurement sets; it is not a
 global uniqueness proof, and solver convergence alone never establishes one.
 
 # Returns
 A [`StateEstimationResult`](@ref); its `bus` voltages are `NaN` unless
-`primal_status == "FEASIBLE_POINT"`.
+`solve_status(result).publishable` is true.
 """
 function solve_state_estimation(net::Dict{String,Any}, measurements::AbstractVector;
                                 neutral::Union{String,Nothing}="n",
@@ -358,15 +387,39 @@ function solve_state_estimation(net::Dict{String,Any}, measurements::AbstractVec
     isempty(measurements) && throw(ArgumentError("no measurements supplied"))
     all(m -> m isa Measurement, measurements) ||
         throw(ArgumentError("measurements must be a collection of `Measurement`"))
-    all(m -> m.kind in (:vmag, :pinj, :qinj), measurements) ||
-        throw(ArgumentError("solve_state_estimation currently supports :vmag, :pinj, and :qinj; " *
-                            "use the compiled constrained-NLLS evaluator for :vr/:vi measurements"))
+    all(m -> m.kind in _NODE_MEASUREMENT_KINDS, measurements) ||
+        throw(ArgumentError("unsupported legacy node measurement kind"))
     isfinite(s_base) && s_base > 0 || throw(ArgumentError("s_base must be finite and > 0"))
 
     _reject_operational(net, allow_operational)
     _check_references(net, measurements, neutral)
     zi = _zero_injection_set(net, zero_injection, neutral)
-    _check_coverage(net, measurements, neutral, zi)
+    passive_index = _se_passive_ybus(net).index
+    fixed_sources = _source_phasors(net, passive_index)
+    fixed_nodes = Set(node for (node,i) in passive_index if i == 0 || haskey(fixed_sources,i))
+    _check_coverage(net, measurements, neutral, zi;fixed_nodes)
+    # Preserve the legacy ArgumentError contract for inconsistent P/Q paths.
+    _se_injection_layout(measurements, neutral, passive_index;voltage_only=false)
+    # Keep the legacy physics/diagnostic contract within the same validated
+    # finite-primitive domain as the shared solvers. Native ideal-transformer
+    # OPF support alone does not make the Ybus observability check valid.
+    report, _ = _se_preflight(net, measurements; neutral,formulation=:native,
+        zero_injection=[node for node in zi if !(node in fixed_nodes)])
+    for finding in report.findings
+        finding.code===:implicit_zero_injection && @warn finding.message
+    end
+    report.supported || throw(SEUnsupportedNetwork(report))
+    # Native BMOPFTools sources implicitly ground their bus neutral. Refuse
+    # to add that unrequested bond to an explicitly floating/electrode model.
+    for source in values(get(net,"voltage_source",Dict()))
+        bus = source["bus"]; data = net["bus"][bus]
+        nt = BMOPFTools._neutral_terminal(Dict{String,Any}(data))
+        nt === nothing && continue
+        idx = get(passive_index,(bus,nt),0)
+        (idx == 0 || iszero(get(fixed_sources,idx,NaN))) || throw(ArgumentError("native WLS implicitly grounds source neutral ($bus, $nt); use compile_state_estimator and solve_ipopt_state_estimator for an ungrounded or impedance-grounded source neutral"))
+    end
+    # Validate all injection references before the first meter can choose KCL's
+    # return path. Electrically identical aliases/earth references are allowed.
 
     # Seed injection starts from the measured P/Q at each (bus, terminal).
     pmeas = Dict{Tuple{String,String},Float64}()
@@ -395,11 +448,12 @@ function solve_state_estimation(net::Dict{String,Any}, measurements::AbstractVec
             key = (meas.bus, meas.terminal)
             haskey(inj_r, key) && continue
             ref = _resolve_ref(meas, neutral)
-            # Start: I ≈ conj(S)/conj(V). In MODEL units V_model ≈ v_nom_SI/_vscale
-            # (≈1 in per-unit, ≈v_nom in SI), so this seeds consistently in both.
+            # S = V*conj(I), using the actual phase-to-reference complex
+            # voltage start (including phase angle and neutral displacement).
             p0 = get(pmeas, key, 0.0); q0 = get(qmeas, key, 0.0)
             vmod = max(get(vnom, meas.bus, 1.0) / _vscale(ctx, meas.bus), 1e-9)
-            cr0 = (p0 / sb) / vmod; ci0 = -(q0 / sb) / vmod
+            i0 = _se_injection_start(vr, vi, key, ref, p0, q0, sb, vmod)
+            cr0, ci0 = reim(i0)
             cr = JuMP.@variable(m, base_name = "seinj_r_$(meas.bus)_$(meas.terminal)", start = cr0)
             ci = JuMP.@variable(m, base_name = "seinj_i_$(meas.bus)_$(meas.terminal)", start = ci0)
             inj_r[key] = cr; inj_i[key] = ci
@@ -421,8 +475,20 @@ function solve_state_estimation(net::Dict{String,Any}, measurements::AbstractVec
                 dvr = JuMP.@expression(m, vr[(b,t)] - vr[(b,ref)])
                 dvi = JuMP.@expression(m, vi[(b,t)] - vi[(b,ref)])
             end
-            if meas.kind == :vmag
+            if meas.kind in (:vr, :vi)
+                h_si = measurement_prediction(meas.kind, dvr, dvi) * _vscale(ctx, b)
+                obj += w * (h_si - meas.value)^2
+                push!(probes, (meas, h_si))
+            elseif meas.kind == :vmag
                 vb = _vscale(ctx, b)
+                if iszero(dvr) && iszero(dvi)
+                    # A grounded-to-grounded voltage is an exact constant, not
+                    # a nonsmooth free magnitude or a degenerate vm²=0 equality.
+                    h_si = 0.0
+                    obj += w * meas.value^2
+                    push!(probes, (meas, h_si))
+                    continue
+                end
                 # Auxiliary |V| ≥ 0 with |V|² = dvr²+dvi², seeded from the reading
                 # (a zero start sits on the degenerate |V|²=… Jacobian).
                 vm = JuMP.@variable(m, base_name = "sevm_$(b)_$(t)", lower_bound = 0.0,
@@ -508,30 +574,43 @@ _se_identity(n) = (M = zeros(Float64, n, n); for k in 1:n; M[k, k] = 1.0; end; M
 # construction below already emits its KCL row.
 function _observability(net, measurements, neutral, zi::Set{Tuple{String,String}},
                         est_bus)
-    yb = ybus_passive(net)
+    yb = _se_passive_ybus(net)
     nodes = yb.nodes                                  # Vector{(bus, term)}
     N = length(nodes)
-    posof = Dict(nd => k for (k, nd) in enumerate(nodes))
+    # Unlike `nodes`, this index retains every original terminal alias, as
+    # well as earth entries (index zero). Source and meter names need not be
+    # the lexicographically chosen representative of a merged conductor.
+    posof = yb.index
+    connections, power_groups = _se_injection_layout(measurements, neutral, posof;voltage_only=false)
+    if _se_requires_current_states(connections,power_groups,measurements,Any[],posof,Dict())
+        return _se_native_current_observability(net,measurements,neutral,est_bus)
+    end
+    offsets, factors, nuisance = _se_power_profile(power_groups,
+        Float64[m.value for m in measurements], Float64[m.sigma for m in measurements])
     # Non-broadcast real/imag: these return SparseMatrixCSC{Float64}. The
     # broadcast form `Float64.(real.(Y))` infers eltype Any on Julia 1.10.
     Yr = real(yb.Y); Yi = imag(yb.Y)
 
     # Fixed (source-boundary) node voltages: v_magnitude∠v_angle per source terminal.
-    fixed = Dict{Tuple{String,String},ComplexF64}()
+    fixed_indices = Dict{Int,ComplexF64}()
     for (_, vs) in get(net, "voltage_source", Dict())
-        b = String(get(vs, "bus", "")); tmap = String.(get(vs, "terminal_map", String[]))
+        b = String(get(vs, "bus", "")); ts = String.(get(vs, "terminal_map", String[]))
         mag = Float64.(get(vs, "v_magnitude", Float64[]))
-        ang = Float64.(get(vs, "v_angle", zeros(length(tmap))))
-        for (k, t) in enumerate(tmap)
-            k <= length(mag) || continue
-            fixed[(b, t)] = mag[k] * cis(k <= length(ang) ? ang[k] : 0.0)
+        ang = Float64.(get(vs, "v_angle", zeros(length(ts))))
+        for (k, t) in enumerate(ts)
+            i = get(posof, (b, t), 0)
+            # A grounded source neutral has no voltage degree of freedom.
+            (i == 0 || k > length(mag)) && continue
+            fixed_indices[i] = mag[k] * cis(k <= length(ang) ? ang[k] : 0.0)
         end
     end
+    fixed = Dict(nd => fixed_indices[i] for (nd, i) in posof if haskey(fixed_indices, i))
 
     # State layout: every node that is not source-fixed contributes (vr, vi).
     state_nodes = [nd for nd in nodes if !haskey(fixed, nd)]
     ns = length(state_nodes)
-    spos = Dict(nd => k for (k, nd) in enumerate(state_nodes))
+    state_positions = Dict(posof[nd] => k for (k, nd) in enumerate(state_nodes))
+    spos = Dict(nd => state_positions[i] for (nd, i) in posof if haskey(state_positions, i))
     n_states = 2 * ns
 
     # Voltage of a node at state x (returns (re, im), 0 for ground / off-grid).
@@ -610,8 +689,13 @@ function _observability(net, measurements, neutral, zi::Set{Tuple{String,String}
             dvr = vtr - rr; dvi = vti - ri
             kt = get(posof, (b, t), 0)
             w = 1.0 / meas.sigma
-            if meas.kind == :vmag
-                push!(rows, w * sqrt(dvr^2 + dvi^2))
+            if meas.kind === :vr
+                push!(rows, w * dvr)
+            elseif meas.kind === :vi
+                push!(rows, w * dvi)
+            elseif meas.kind == :vmag
+                fixed_voltage=!haskey(spos,(b,t)) && (ref===nothing || !haskey(spos,(b,ref)))
+                push!(rows, fixed_voltage && iszero(dvr) && iszero(dvi) ? zero(T) : w * sqrt(dvr^2 + dvi^2))
             elseif kt != 0 && meas.kind == :pinj
                 push!(rows, w * (dvr * Ir[kt] + dvi * Ii[kt]))
             elseif kt != 0  # :qinj
@@ -620,7 +704,7 @@ function _observability(net, measurements, neutral, zi::Set{Tuple{String,String}
                 push!(rows, zero(T))
             end
         end
-        rows
+        offsets === nothing ? rows : offsets .* [1/m.sigma for m in measurements] + factors .* rows
     end
 
     # One complex KCL row per left-null-space direction of the injection
@@ -649,21 +733,30 @@ function _observability(net, measurements, neutral, zi::Set{Tuple{String,String}
     end
 
     # Evaluate at the returned voltages (falls back to source-flat if missing).
-    x0 = zeros(Float64, n_states)
+    free_indices=[posof[node] for node in state_nodes]
+    rows=vcat(free_indices,N .+ free_indices)
+    operator=[Yr -Yi;Yi Yr]
+    boundary=zeros(2N)
+    for (i,v) in fixed_indices
+        boundary[i]=real(v);boundary[N+i]=imag(v)
+    end
+    x0=_se_least_squares(operator[rows,rows],-operator[rows,:]*boundary)
+    # Look through all aliases: an external estimate can contain only an
+    # original bus name, rather than the representative chosen by Ybus.
     for (nd, k) in spos
         b, t = nd
         vr = get(get(get(est_bus, b, Dict()), t, Dict()), "vr", NaN)
         vi = get(get(get(est_bus, b, Dict()), t, Dict()), "vi", NaN)
-        x0[k]      = isfinite(vr) ? vr : _flat_re(fixed, b)
-        x0[ns + k] = isfinite(vi) ? vi : 0.0
+        isfinite(vr) && (x0[k] = vr)
+        isfinite(vi) && (x0[ns + k] = vi)
     end
 
-    n_states == 0 && return (observable=true, n_states=0, rank=0, redundancy=0,
-                             min_singular=Inf, cond=1.0, tangent_dimension=0)
+    n_states == 0 && return _se_observability_metrics(
+        zeros(length(measurements),0),zeros(0,0);nuisance_dimension=nuisance)
 
-    Hm = _fd_jacobian(hmeas, x0)                      # whitened measurement rows
-    C  = _fd_jacobian(hkcl, x0)                       # exact KCL rows
-    _se_observability_metrics(Hm, C)
+    Hm = ForwardDiff.jacobian(hmeas, x0)                      # whitened measurement rows
+    C  = ForwardDiff.jacobian(hkcl, x0)                       # exact KCL rows
+    _se_observability_metrics(Hm, C; nuisance_dimension=nuisance)
 end
 
 # Combine exact equations and stochastic measurements without stacking their
@@ -671,19 +764,20 @@ end
 # rank test on `vcat(Hm, C)` therefore depends on their arbitrary relative
 # scaling. Rank C in its own scale, restrict Hm to C's tangent space, and rank
 # that reduced map in its own scale.
-function _se_observability_metrics(Hm::AbstractMatrix{<:Real}, C::AbstractMatrix{<:Real})
+function _se_observability_metrics(Hm::AbstractMatrix{<:Real}, C::AbstractMatrix{<:Real}; nuisance_dimension::Integer=0, constraint_reference_scale::Real=0.)
     n_states = size(Hm, 2)
     size(C, 2) == n_states || throw(DimensionMismatch(
         "measurement and constraint Jacobians must have the same number of columns"))
-    n_states == 0 && return (observable=true, n_states=0, rank=0, redundancy=0,
-                             min_singular=Inf, cond=1.0, tangent_dimension=0)
+    n_states == 0 && return (observable=true, n_states=0, rank=0,
+        redundancy=size(Hm,1)-nuisance_dimension,nuisance_dimension=nuisance_dimension,
+        min_singular=Inf, cond=1.0, tangent_dimension=0)
 
     rankC, Z = if size(C, 1) == 0
         (0, _se_identity(n_states))
     else
         F = svd(collect(Float64, C); full=true)
         smaxC = isempty(F.S) ? 0.0 : maximum(F.S)
-        tolC = smaxC * max(size(C)...) * eps(Float64)
+        tolC = max(smaxC * max(size(C)...) * eps(Float64),8eps(Float64)*max(size(C)...)*constraint_reference_scale)
         rC = count(>(tolC), F.S)
         rC, collect(F.V[:, rC+1:n_states])
     end
@@ -692,9 +786,12 @@ function _se_observability_metrics(Hm::AbstractMatrix{<:Real}, C::AbstractMatrix
     Hr = collect(Float64, Hm) * Z
     svr = svdvals(Hr)
     smaxr = isempty(svr) ? 0.0 : maximum(svr)
-    tolr = smaxr * max(size(Hr)...) * eps(Float64)
+    # A zero reduced map still contains projection roundoff from Hm. Do not
+    # infer information by comparing those entries only with one another.
+    tolr = max(smaxr * max(size(Hr)...) * eps(Float64),
+        8eps(Float64) * max(size(Hr)...) * norm(Hm))
     rankM = count(>(tolr), svr)
-    smin = tangent == 0 ? Inf : length(svr) >= tangent ? svr[tangent] : 0.0
+    smin = tangent == 0 ? Inf : rankM == tangent ? svr[tangent] : 0.0
     condn = tangent == 0 ? 1.0 : smin > 0 ? smaxr / smin : Inf
 
     (observable = rankM == tangent,
@@ -702,23 +799,11 @@ function _se_observability_metrics(Hm::AbstractMatrix{<:Real}, C::AbstractMatrix
      rank = rankC + rankM,
      # Exact equations reduce the tangent dimension; they are not noisy
      # observations and must not be counted as residual redundancy.
-     redundancy = size(Hm, 1) - rankM,
+     redundancy = size(Hm, 1) - rankM - nuisance_dimension,
+     nuisance_dimension = nuisance_dimension,
      min_singular = smin,
      cond = condn,
      tangent_dimension = tangent)
-end
-
-# Central-difference Jacobian of `f: Rⁿ → Rᵐ` at `x` (steps scaled to |x| so it
-# is well-conditioned across SI volt magnitudes). Used only for the rank check.
-function _fd_jacobian(f, x::Vector{Float64})
-    m = length(f(x)); n = length(x)
-    J = Matrix{Float64}(undef, m, n)
-    for j in 1:n
-        h = max(1e-6, 1e-6 * abs(x[j]))
-        xp = copy(x); xm = copy(x); xp[j] += h; xm[j] -= h
-        J[:, j] = (f(xp) .- f(xm)) ./ (2h)
-    end
-    J
 end
 
 # Any source magnitude as a flat fallback voltage for a bus with no estimate.
