@@ -202,19 +202,8 @@ function _controlled_inverter_result(
         bus::AbstractDict)
     extracted = extract_device(controlled, handles, status)
     grid_current = _extract_grid_current(handles.plant, status)
-    exact_control = status.publishable ? evaluate_exact(
-        controlled.controller,
-        InverterControlMeasurement(collect(extracted.control.phase_voltage)),
-        request,
-        InverterControlRatings(
-            controlled.device, controlled.controller.current_target)) :
-        extracted.control
-    if status.publishable
-        exact_control = _apply_plant_capability_exact(
-            exact_control, extracted.converter_terminal.phase_voltage,
-            extracted.converter_terminal.phase_current, grid_current,
-            controlled.device, controlled.controller.current_target)
-    end
+    exact_control = status.publishable ? _exact_control_at_solution(
+        controlled, request, extracted, grid_current) : extracted.control
     residual = status.publishable ? maximum(abs,
         exact_control.phase_current .- extracted.control.phase_current) : NaN
     ControlledInverterResult(
@@ -381,6 +370,8 @@ function controlled_inverter_rows(result::ControlledInverterFleetResult)
             p_converter_W=plant.p_conv,
             q_converter_var=plant.q_conv,
             converter_loss_W=plant.p_loss + plant.p_cap_loss,
+            p_dc_W=plant.p_dc,
+            dc_availability_margin_W=request.p_available-plant.p_dc,
             voltage_min_V=control.voltage_min,
             voltage_max_V=control.voltage_max,
             zero_sequence_voltage_V=abs(control.voltage_sequence[1]),
@@ -394,6 +385,8 @@ function controlled_inverter_rows(result::ControlledInverterFleetResult)
             poc_active_power_shortfall_W=request.p_available-plant.p_poc,
             power_scale=control.power_scale,
             current_scale=control.current_scale,
+            negative_sequence_scale=iszero(control.i2_request) ? 1.0 :
+                abs(control.i2)/abs(control.i2_request),
             apparent_power_rating_VA=inverter.s_max,
             converter_current_rating_A=
                 inverter.i_max === nothing ? NaN : inverter.i_max,

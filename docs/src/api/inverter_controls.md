@@ -22,6 +22,7 @@ PositiveSequenceVoltVarWatt
 NoUnbalanceControl
 NegativeSequenceAdmittanceDroop
 CommonScaleLimiter
+SequencePriorityLimiter
 SequenceController
 InverterControlMeasurement
 InverterControlRequest
@@ -31,6 +32,8 @@ ConverterTerminalResult
 ControlledDevice
 ControlledInverterResult
 evaluate_exact
+dc_power_offset
+sensing_terminal
 evaluate_smooth
 stamp_smooth_control!
 solve_controlled_inverter

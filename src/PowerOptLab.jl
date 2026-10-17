@@ -285,11 +285,12 @@ export AbstractUnbalancePolicy, AbstractLimiterPolicy, AbstractCurrentTarget
 export ConverterCurrentTarget, GridCurrentTarget
 export PiecewiseLinearLaw, WorstPhaseVoltVarWatt, AverageVoltageVoltVarWatt
 export PositiveSequenceVoltVarWatt
-export NoUnbalanceControl, NegativeSequenceAdmittanceDroop, CommonScaleLimiter
+export NoUnbalanceControl, NegativeSequenceAdmittanceDroop, CommonScaleLimiter,
+    SequencePriorityLimiter
 export SequenceController, InverterControlMeasurement, InverterControlRequest
 export InverterControlRatings, InverterControlResult, ConverterTerminalResult
 export ControlledDevice, ControlledInverterResult
-export evaluate_exact, evaluate_smooth, stamp_smooth_control!, solve_controlled_inverter
+export evaluate_exact, evaluate_smooth, dc_power_offset, sensing_terminal, stamp_smooth_control!, solve_controlled_inverter
 export inverter_spec, inverter_handles
 export ControlledInverterFleetSpec, ControlledInverterFleetResult
 export solve_controlled_inverter_fleet, controlled_inverter_rows

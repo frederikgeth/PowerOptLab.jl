@@ -145,8 +145,12 @@ The reported `spectral_radius` is the largest eigenvalue magnitude. A value
 below `threshold` is labelled `local_contractive`; this is explicitly the
 unrelaxed Picard screen and the `margin` is `threshold - spectral_radius`.
 `maximum_real_eigenvalue` and `continuous_time_margin` apply the ideal
-first-order response model, while `alpha_max` gives the largest update-to-
-response-time ratio predicted by the relaxed discrete iteration. These are
+first-order response model, while `alpha_max` gives the largest relaxation
+factor ``α`` for which ``x^+ = x + α(F(x)-x)`` is locally contractive,
+``\min_i 2\Re(1-λ_i)/|1-λ_i|^2`` (zero when some ``\Re λ_i \ge 1``). The
+relaxed iteration is a better proxy for a filtered or rate-limited firmware
+update than the unrelaxed Picard screen; a spectral radius above one with a
+positive `continuous_time_margin` means that small update steps still converge. These are
 local numerical screens, not certificates for a nonlinear or hybrid controller.
 
 For a four-leg controller adapter, the state is six real rectangular

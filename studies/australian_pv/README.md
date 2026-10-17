@@ -141,7 +141,8 @@ Illustrative Volt-var curve: voltage `[207,220,240,258]` V maps to
 absorption. Volt-watt: `[250,260]` V maps to `[1,0]` times **available power**.
 These curves are pedagogical settings, **not certified AS/NZS 4777 settings**.
 At zero PV availability the inverter remains energized and may supply reactive
-and negative-sequence current, drawing active power for losses. This is a
+and negative-sequence current. Its DC source then supplies nothing, so it
+imports its losses from the grid (negative POC active power). This is a
 STATCOM-capable assumption, not a model of an inverter that switches off at night.
 A supply limit and a controller knee are different quantities. The negative-sequence
 admittance curve maps VUF-like ratio `[0,0.0005,0.003,0.01]` to `[0,0,1.5,3]` A/V,

@@ -121,9 +121,16 @@ The deployed law and network model form normalized low/high severities
 
 ```math
 d=a-b,\qquad
-w={1\over2}\left(1+{d\over\sqrt{d^2+\epsilon_c^2}}\right),\qquad
+\rho={\min(a,b)\over\min(a,b)+\epsilon_c},\qquad
+w={1\over2}\left(1+{d\over\sqrt{d^2+\epsilon_c^2\rho^2}}\right),\qquad
 q=\bigl(wa-(1-w)b\bigr)\bigl(wq_+ +(1-w)q_-\bigr).
 ```
+
+The conflict measure ``\rho`` vanishes when only one branch is active, so the
+firmware law then reproduces the standard Volt-var curve exactly, including at
+the deadband edge. Deep in a conflict (``\min(a,b)\gg\epsilon_c``) the transition
+width approaches ``\epsilon_c``. The smooth model uses a zero-preserving smooth
+minimum and adds a ``10^{-3}\epsilon_c`` floor inside the root.
 
 Thus a normalised-severity tie returns zero continuously rather than choosing
 one side, including when the positive and negative curve ranges are
@@ -137,10 +144,24 @@ equilibrium near the tie surface. The priority rule never overrides physical lim
 converter-leg current, grid-side current, switching, and DC-link constraints
 remain hard plant constraints.
 
-`volt_watt_basis=:available` multiplies the curve ordinate by
-`request.p_available`. `:rated` multiplies by `request.p_rated` and then caps at
-availability. The second convention is needed for rated-power curves at partial
+`volt_watt_basis=:available` multiplies the curve ordinate by the AC-available
+power. `:rated` multiplies by `request.p_rated` and then caps at the AC-available
+power. The second convention is needed for rated-power curves at partial
 irradiance; the first is retained as an explicit scientific comparator.
+
+The AC-available power is `request.p_available` minus the plant's DC power
+offset. The offset is the DC power drawn beyond the commanded positive-sequence
+power: semiconductor, filter and capacitor losses plus negative-sequence active
+power ([`dc_power_offset`](@ref)). With this cap the plant never draws more than
+`p_available` from the DC source. When the offset exceeds the availability (for
+example at zero irradiance), the command becomes an import that covers exactly
+the uncovered losses from the grid. The Volt-watt curve curtails only positive
+availability; it never reduces that import. The smooth model reads the offset
+from the solved plant, like the LCL shunt-current offset of the capability
+backoff. [`evaluate_exact`](@ref) takes it as `dc_power_offset`; the default of
+zero describes a lossless plant. The guarantee is exact while the command is
+non-negative. With a negative command and an active current backoff, the plant
+can overdraw by up to `(1 - current_scale)` times the import.
 
 `CommonScaleLimiter` uses rating-relative current and power smoothing fractions
 by default (`current_epsilon_fraction=2.5\times10^{-5}` and
@@ -594,7 +615,8 @@ ibr-verification).
 ## Study boundary
 
 `InverterControlRequest.p_available` currently represents non-negative PV active-
-power availability. Battery operation is outside the scope of the present
+power availability at the DC terminals; device rows report `p_dc_W` and
+`dc_availability_margin_W = p_available - p_dc`. Battery operation is outside the scope of the present
 control-law programme. Fleet-level replacement of native BMOPFTools IBRs belongs
 in the next problem-builder layer; dataset fields should not be added to the
 local law.
