@@ -383,8 +383,10 @@ The exact law uses the rationalised root of the per-phase quadratic,
 `c = Re(a conj(b))`. The smooth model overestimates the square root and the
 selector denominators, so its scale never exceeds the exact one. All other
 keywords and their defaults are those of [`CommonScaleLimiter`](@ref).
-Converter-terminal apparent power, the other filter-side rating and
-`dv2_max` remain a final common-scale protection backoff.
+The plant-aware protection (converter-terminal apparent power, both
+filter-side ratings and `dv2_max`) honours the same priority. It first scales
+only the lower-priority sequence, holding the reserved one as an offset, and
+scales the reserved sequence only if that alone still violates a limit.
 
 `InverterControlResult.current_scale` reports the scale applied to the
 positive-sequence request, as it does for the common-scale limiter. The
@@ -1646,6 +1648,92 @@ function _target_limit_smooth!(
         (_scale_pair(t, i1), _scale_pair(s, i2), t)
 end
 
+# Plant-aware capability scale for one command direction. `converter_offset`
+# and `grid_offset` are per-phase currents that the scale must not touch (LCL
+# shunt current, loss import, and under sequence priority the reserved
+# sequence). Returns a scale in [0, 1] for `direction`.
+function _plant_capability_scale!(m, inverter::AdvancedInverter, handles,
+        converter_offset, grid_offset, direction, ib, ieps, imax, smax, seps, sb)
+    capability_scale = 1.0
+    # Selector widths on scale factors are ratios of physical quantities, not
+    # per-unit current or power values. They must not depend on s_base.
+    scale_eps = ieps / imax
+    if inverter.i_max !== nothing
+        for k in 1:3
+            reserve = inverter.pwm_ac_converter_reserve[k] / ib
+            limit = sqrt(max((inverter.i_max/ib)^2 - reserve^2, 0.0))
+            candidate = _safe_direction_scale_implicit!(
+                m, converter_offset[k], direction[k], limit, ieps;
+                magnitude_start=max(0.25limit, ieps),
+                scale=max(limit, ieps))
+            capability_scale = _combine_safe_scale_implicit!(
+                m, capability_scale, candidate, scale_eps)
+        end
+    end
+    if inverter.i_grid_max !== nothing
+        for k in 1:3
+            reserve = inverter.pwm_ac_grid_reserve[k] / ib
+            limit = sqrt(max((inverter.i_grid_max/ib)^2 - reserve^2, 0.0))
+            candidate = _safe_direction_scale_implicit!(
+                m, grid_offset[k], direction[k], limit, ieps;
+                magnitude_start=max(0.25limit, ieps),
+                scale=max(limit, ieps))
+            capability_scale = _combine_safe_scale_implicit!(
+                m, capability_scale, candidate, scale_eps)
+        end
+    end
+
+    converter_direction = direction
+    converter_power_offset = (0.0, 0.0)
+    converter_power_direction = (0.0, 0.0)
+    for k in 1:3
+        vo = (handles.vrint[k], handles.viint[k])
+        so = _cmul(
+            vo[1], vo[2], converter_offset[k][1], -converter_offset[k][2])
+        sd = _cmul(
+            vo[1], vo[2], converter_direction[k][1], -converter_direction[k][2])
+        converter_power_offset = (
+            converter_power_offset[1] + so[1],
+            converter_power_offset[2] + so[2])
+        converter_power_direction = (
+            converter_power_direction[1] + sd[1],
+            converter_power_direction[2] + sd[2])
+    end
+    power_candidate = _safe_direction_scale_implicit!(
+        m, converter_power_offset, converter_power_direction, smax, seps;
+        magnitude_start=max(0.25smax, seps), scale=smax)
+    capability_scale = _combine_safe_scale_implicit!(
+        m, capability_scale, power_candidate, seps/smax)
+    if inverter.dv2_max !== nothing
+        ripple_offset = (0.0, 0.0)
+        ripple_direction = (0.0, 0.0)
+        for k in 1:3
+            vo = (handles.vrint[k], handles.viint[k])
+            ro = _cmul(
+                vo[1], vo[2], converter_offset[k][1], converter_offset[k][2])
+            rd = _cmul(
+                vo[1], vo[2], converter_direction[k][1],
+                converter_direction[k][2])
+            ripple_offset = (
+                ripple_offset[1] + ro[1], ripple_offset[2] + ro[2])
+            ripple_direction = (
+                ripple_direction[1] + rd[1], ripple_direction[2] + rd[2])
+        end
+        # |D| = |S̃|·|k|/V_dc with the line-frequency source factor k.
+        ripple_limit = inverter.dv2_max*inverter.v_dc /
+                       abs(_dc_ripple_factor(inverter)) / sb
+        ripple_candidate = _safe_direction_scale_implicit!(
+            m, ripple_offset, ripple_direction, ripple_limit, seps;
+            magnitude_start=max(0.25ripple_limit, seps),
+            scale=max(ripple_limit, seps))
+        capability_scale = _combine_safe_scale_implicit!(
+            m, capability_scale, ripple_candidate,
+            seps/smax)
+    end
+
+    return capability_scale
+end
+
 """
     stamp_smooth_control!(ctx, controller, request, inverter, handles)
 
@@ -1758,87 +1846,34 @@ function stamp_smooth_control!(ctx, controller::SequenceController,
                      import_phase[k][2] - shunt[k][2]), 3) :
         import_phase
 
-    capability_scale = 1.0
-    # Selector widths on scale factors are ratios of physical quantities, not
-    # per-unit current or power values. They must not depend on s_base.
-    scale_eps = ieps / imax
-    if inverter.i_max !== nothing
-        for k in 1:3
-            reserve = inverter.pwm_ac_converter_reserve[k] / ib
-            limit = sqrt(max((inverter.i_max/ib)^2 - reserve^2, 0.0))
-            candidate = _safe_direction_scale_implicit!(
-                m, converter_offset[k], phase_pre[k], limit, ieps;
-                magnitude_start=max(0.25limit, ieps),
-                scale=max(limit, ieps))
-            capability_scale = _combine_safe_scale_implicit!(
-                m, capability_scale, candidate, scale_eps)
-        end
-    end
-    if inverter.i_grid_max !== nothing
-        for k in 1:3
-            reserve = inverter.pwm_ac_grid_reserve[k] / ib
-            limit = sqrt(max((inverter.i_grid_max/ib)^2 - reserve^2, 0.0))
-            candidate = _safe_direction_scale_implicit!(
-                m, grid_offset[k], phase_pre[k], limit, ieps;
-                magnitude_start=max(0.25limit, ieps),
-                scale=max(limit, ieps))
-            capability_scale = _combine_safe_scale_implicit!(
-                m, capability_scale, candidate, scale_eps)
-        end
+    plant_scale(offset_c, offset_g, dir) = _plant_capability_scale!(m, inverter,
+        handles, offset_c, offset_g, dir, ib, ieps, imax, smax, seps, sb)
+    add_phase(a, b) = ntuple(k -> (a[k][1] + b[k][1], a[k][2] + b[k][2]), 3)
+    scale_phase(t, a) = ntuple(k -> (t*a[k][1], t*a[k][2]), 3)
+    if controller.limiter isa SequencePriorityLimiter
+        # The plant-aware protection honours the same priority: first scale only
+        # the lower-priority sequence with the reserved one held as an offset,
+        # then scale the combination only if the reserved sequence alone still
+        # violates a limit.
+        power = controller.limiter.priority === :power
+        reserved = power ? _phase_pairs(i1_pre, (0.0, 0.0)) :
+                           _phase_pairs((0.0, 0.0), i2_pre)
+        other = power ? _phase_pairs((0.0, 0.0), i2_pre) :
+                        _phase_pairs(i1_pre, (0.0, 0.0))
+        other_scale = plant_scale(add_phase(converter_offset, reserved),
+            add_phase(grid_offset, reserved), other)
+        capability_scale = plant_scale(converter_offset, grid_offset,
+            add_phase(reserved, scale_phase(other_scale, other)))
+        s1, s2 = power ? (capability_scale, capability_scale*other_scale) :
+                         (capability_scale*other_scale, capability_scale)
+    else
+        capability_scale = plant_scale(converter_offset, grid_offset, phase_pre)
+        s1 = s2 = capability_scale
     end
 
-    converter_direction = phase_pre
-    converter_power_offset = (0.0, 0.0)
-    converter_power_direction = (0.0, 0.0)
-    for k in 1:3
-        vo = (handles.vrint[k], handles.viint[k])
-        so = _cmul(
-            vo[1], vo[2], converter_offset[k][1], -converter_offset[k][2])
-        sd = _cmul(
-            vo[1], vo[2], converter_direction[k][1], -converter_direction[k][2])
-        converter_power_offset = (
-            converter_power_offset[1] + so[1],
-            converter_power_offset[2] + so[2])
-        converter_power_direction = (
-            converter_power_direction[1] + sd[1],
-            converter_power_direction[2] + sd[2])
-    end
-    power_candidate = _safe_direction_scale_implicit!(
-        m, converter_power_offset, converter_power_direction, smax, seps;
-        magnitude_start=max(0.25smax, seps), scale=smax)
-    capability_scale = _combine_safe_scale_implicit!(
-        m, capability_scale, power_candidate, seps/smax)
-    if inverter.dv2_max !== nothing
-        ripple_offset = (0.0, 0.0)
-        ripple_direction = (0.0, 0.0)
-        for k in 1:3
-            vo = (handles.vrint[k], handles.viint[k])
-            ro = _cmul(
-                vo[1], vo[2], converter_offset[k][1], converter_offset[k][2])
-            rd = _cmul(
-                vo[1], vo[2], converter_direction[k][1],
-                converter_direction[k][2])
-            ripple_offset = (
-                ripple_offset[1] + ro[1], ripple_offset[2] + ro[2])
-            ripple_direction = (
-                ripple_direction[1] + rd[1], ripple_direction[2] + rd[2])
-        end
-        # |D| = |S̃|·|k|/V_dc with the line-frequency source factor k.
-        ripple_limit = inverter.dv2_max*inverter.v_dc /
-                       abs(_dc_ripple_factor(inverter)) / sb
-        ripple_candidate = _safe_direction_scale_implicit!(
-            m, ripple_offset, ripple_direction, ripple_limit, seps;
-            magnitude_start=max(0.25ripple_limit, seps),
-            scale=max(ripple_limit, seps))
-        capability_scale = _combine_safe_scale_implicit!(
-            m, capability_scale, ripple_candidate,
-            seps/smax)
-    end
-
-    current_scale = target_scale*capability_scale
-    i1 = (capability_scale*i1_pre[1] + i1_import[1],
-          capability_scale*i1_pre[2] + i1_import[2])
-    i2 = (capability_scale*i2_pre[1], capability_scale*i2_pre[2])
+    current_scale = target_scale*s1
+    i1 = (s1*i1_pre[1] + i1_import[1], s1*i1_pre[2] + i1_import[2])
+    i2 = (s2*i2_pre[1], s2*i2_pre[2])
     phase_current = _phase_pairs(i1, i2)
     target_re, target_im = controller.current_target isa ConverterCurrentTarget ?
         (handles.cri, handles.cii) : (handles.gri, handles.gii)
@@ -1948,21 +1983,8 @@ function _safe_direction_scale_exact(offset, direction, limit)
     return iszero(magnitude) ? 1.0 : min(1.0, available/magnitude)
 end
 
-function _apply_plant_capability_exact(
-        result::InverterControlResult,
-        converter_voltage::NTuple{3,ComplexF64},
-        converter_current::NTuple{3,ComplexF64},
-        grid_current::NTuple{3,ComplexF64},
-        inverter::AdvancedInverter,
-        target::AbstractCurrentTarget;
-        i1_import::ComplexF64=0.0im)
-    shunt = converter_current .- grid_current
-    # The loss import is an unscaled offset at the target, like the stamp.
-    imported = _phase_from_sequences(i1_import, 0.0im)
-    converter_offset = target isa ConverterCurrentTarget ? imported :
-        shunt .+ imported
-    grid_offset = target isa ConverterCurrentTarget ? imported .- shunt : imported
-    direction = result.phase_current .- imported
+function _plant_scale_exact(converter_voltage, converter_offset, grid_offset,
+                            direction, inverter::AdvancedInverter)
     scale = 1.0
     if inverter.i_max !== nothing
         for k in 1:3
@@ -1996,16 +2018,53 @@ function _apply_plant_capability_exact(
         scale = min(scale, _safe_direction_scale_exact(
             ripple_offset, ripple_direction, ripple_limit))
     end
+    return scale
+end
 
-    i1 = scale*(result.i1 - i1_import) + i1_import
-    i2 = scale*result.i2
+function _apply_plant_capability_exact(
+        result::InverterControlResult,
+        converter_voltage::NTuple{3,ComplexF64},
+        converter_current::NTuple{3,ComplexF64},
+        grid_current::NTuple{3,ComplexF64},
+        inverter::AdvancedInverter,
+        target::AbstractCurrentTarget;
+        i1_import::ComplexF64=0.0im,
+        limiter::AbstractLimiterPolicy=CommonScaleLimiter())
+    shunt = converter_current .- grid_current
+    # The loss import is an unscaled offset at the target, like the stamp.
+    imported = _phase_from_sequences(i1_import, 0.0im)
+    converter_offset = target isa ConverterCurrentTarget ? imported :
+        shunt .+ imported
+    grid_offset = target isa ConverterCurrentTarget ? imported .- shunt : imported
+    i1_service = result.i1 - i1_import
+    plant_scale(offset_c, offset_g, direction) = _plant_scale_exact(
+        converter_voltage, offset_c, offset_g, direction, inverter)
+    if limiter isa SequencePriorityLimiter
+        power = limiter.priority === :power
+        reserved = power ? _phase_from_sequences(i1_service, 0.0im) :
+                           _phase_from_sequences(0.0im, result.i2)
+        other = power ? _phase_from_sequences(0.0im, result.i2) :
+                        _phase_from_sequences(i1_service, 0.0im)
+        other_scale = plant_scale(converter_offset .+ reserved,
+                                  grid_offset .+ reserved, other)
+        scale = plant_scale(converter_offset, grid_offset,
+                            reserved .+ other_scale .* other)
+        s1, s2 = power ? (scale, scale*other_scale) : (scale*other_scale, scale)
+    else
+        scale = plant_scale(converter_offset, grid_offset,
+                            result.phase_current .- imported)
+        s1 = s2 = scale
+    end
+
+    i1 = s1*i1_service + i1_import
+    i2 = s2*result.i2
     u1, u2 = result.voltage_sequence[2], result.voltage_sequence[3]
     return InverterControlResult(
         result.phase_voltage, result.voltage_sequence,
         result.voltage_min, result.voltage_max, result.eta,
         result.p_request, result.q_request, result.power_scale,
         result.i1_request, result.i2_voltage, result.i2_ripple,
-        result.i2_request, result.current_scale*scale,
+        result.i2_request, result.current_scale*s1,
         i1, i2, _phase_from_sequences(i1, i2),
         3u1*conj(i1), 3(u1*conj(i1) + u2*conj(i2)), 3(u1*i2 + u2*i1))
 end
@@ -2032,7 +2091,8 @@ function _exact_control_at_solution(
     return _apply_plant_capability_exact(
         exact, extracted.converter_terminal.phase_voltage,
         extracted.converter_terminal.phase_current, grid_current,
-        controlled.device, target; i1_import=ComplexF64(i1_import))
+        controlled.device, target; i1_import=ComplexF64(i1_import),
+        limiter=controlled.controller.limiter)
 end
 
 function extract_device(controlled::ControlledDevice{<:AdvancedInverter},

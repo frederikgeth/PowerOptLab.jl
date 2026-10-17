@@ -72,7 +72,7 @@ The variants are:
 - `baseline`: mean-phase Volt-var/Volt-watt, balanced current;
 - `worst_phase`: worst-phase voltage guards, balanced current;
 - `sequence_droop`: positive-sequence Volt-var/Volt-watt plus a
-  negative-sequence admittance droop of 3.6 pu (the Australian study's measured
+  negative-sequence admittance droop of 43 pu (the Australian study's measured
   design for 20% attenuation) at an assumed 20° angle, with power-priority
   limiting so unbalance support never curtails active power. The ENWL feeder
   impedances are not measured here, so treat the gain and angle as

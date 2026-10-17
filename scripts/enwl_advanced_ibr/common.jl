@@ -205,11 +205,11 @@ end
 
 # Per-unit design values shared by every retrofitted device; see
 # docs/src/ibr/parameter_selection.md. κ is in units of Y_base = I_rated/V_nom,
-# matching the Australian study's measured design (≈3.6 pu for 20% attenuation
+# matching the Australian study's measured design (≈43 pu for 20% attenuation
 # on a 12-inverter LV feeder); it is an assumption here, since the ENWL feeder
 # impedances are not measured by this script.
 const NOMINAL_VOLTAGE = 230.0
-const KAPPA_PER_UNIT = 3.6
+const KAPPA_PER_UNIT = 43.0
 const FILTER_X_PU = 0.05
 const FILTER_X_OVER_R = 10.0
 const C_DC_PER_VA = 50e-9          # 50 µF/kVA

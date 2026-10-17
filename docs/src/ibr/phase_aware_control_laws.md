@@ -544,10 +544,14 @@ Two declared modes are preferable to hidden weights:
 - **balance priority** (`priority=:balance`) reserves the negative-sequence
   request, then curtails positive-sequence current if necessary.
 
-Both act on the target-side per-leg rating. The positive-sequence allocator
-separately offers watt, var, and proportional P/Q priority. The final
-plant-aware protection (the other filter side's rating, converter apparent
-power and `dv2_max`) still common-scales both sequences. In all modes,
+Both act on the target-side per-leg rating and on the plant-aware protection
+(both filter-side ratings, converter apparent power and `dv2_max`). The
+protection first scales only the lower-priority sequence with the reserved one
+held as an offset, and touches the reserved sequence only if that alone
+violates a limit. This matters most for the ripple limit: because
+``\widetilde S=3(U_1I_2+U_2I_1)`` is dominated by ``U_1I_2``, common scaling would
+give up a lot of active power for little ripple reduction. The positive-sequence
+allocator separately offers watt, var, and proportional P/Q priority. In all modes,
 protection retains absolute priority: phase current, DC voltage,
 capacitor current, and modulation margin; then net active-power availability;
 then the selected power/balance service priority. The deployed code therefore

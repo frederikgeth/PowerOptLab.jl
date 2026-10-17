@@ -161,8 +161,11 @@ g=\kappa_{tot}|Z_2|,\qquad \delta=\arg Z_2-\phi_2.
 2. **Choose the angle.** ``\phi_2=\arg Z_2`` aligns the response (``\delta=0``); any
    ``|\delta|>90°`` can amplify unbalance. Report ``\delta`` for every device.
 3. **Choose the attenuation.** For a target ratio ``a<1``, ``g=1/a-1`` when
-   aligned; for example ``a=0.8`` needs ``g=0.25``. ``N`` identical inverters
-   sharing the impedance contribute ``\kappa_{tot}=N\kappa``.
+   aligned; for example ``a=0.8`` needs ``g=0.25``. With a common per-inverter
+   gain ``\kappa``, bus ``i`` sees ``g_i=\kappa\left|\sum_jZ_{2,ij}\right|``, where
+   the sum over the fleet's measured mutual impedances already accounts for the
+   number of inverters. Do not divide by ``N`` again: for ``N`` inverters behind
+   one shared impedance this is ``g=N\kappa|Z_2|``.
 4. **Check the current.** ``|I_2|=\kappa|U_2|`` must fit the headroom above.
    Express ``\kappa`` in per unit of ``Y_b`` so that heterogeneous fleets receive
    comparable effort.

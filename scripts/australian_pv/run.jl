@@ -36,6 +36,7 @@ const AUS_A = (vv_v=[207.0, 220.0, 240.0, 258.0], vv_q=[0.44, 0.0, 0.0, -0.60],
 # The earlier pedagogical curve, kept as a named sensitivity case only.
 const PEDAGOGICAL = (vv_v=AUS_A.vv_v, vv_q=AUS_A.vv_q,
                      vw_v=[250.0, 260.0], vw_p=[1.0, 0.0], vw_basis=:available)
+const SOLVE_BASES = (1e5, 1e6, 1e4)   # numerical per-unit bases, tried in order
 const SENSING_REFERENCE = "n"   # assumed: three-wire power stage, neutral sensing lead
 const TARGET_ATTENUATION = 0.8  # design: |U2|/|E2| for the aligned fleet response
 
@@ -128,8 +129,9 @@ end
 
 # Negative-sequence design (docs: "Negative-sequence gain and angle"). The fleet
 # voltage sensitivity in sequence coordinates gives each device's self and
-# fleet-aggregate negative-sequence impedance. φ2 is the median aggregate angle
-# and κ meets TARGET_ATTENUATION for the median aggregate magnitude.
+# fleet-aggregate negative-sequence impedance Σ_j Z2_ij. φ2 is the median
+# aggregate angle, and the common per-inverter κ meets TARGET_ATTENUATION for
+# the median aggregate magnitude.
 const _DESIGN = Ref{Any}(nothing)
 function negative_sequence_design(; recompute::Bool=false)
     !recompute && _DESIGN[] !== nothing && return _DESIGN[]
@@ -149,7 +151,9 @@ function negative_sequence_design(; recompute::Bool=false)
     median(x)=sort(x)[cld(length(x),2)]
     phi2=median(angle.(aggregate))
     g=1/TARGET_ATTENUATION-1
-    kappa=g/median(abs.(aggregate))/n
+    # With every inverter applying I2 = -κU2, bus i sees g_i = κ|Σ_j Z2_ij|:
+    # the aggregate already contains the whole fleet, so κ is not divided by n.
+    kappa=g/median(abs.(aggregate))
     design=(kappa=kappa, phi2=phi2, ids=ids,
         self_impedance=self, aggregate_impedance=aggregate,
         kappa_per_unit=kappa*z_base(), target_attenuation=TARGET_ATTENUATION)
@@ -284,12 +288,21 @@ function run(; modes=MODES, levels=[0.0,0.5,1.0], sources=[1.0,1.03],
                 all(isfinite(r.vmax_pn_V) && isfinite(r.vuf_percent) for r in cr)
             push!(cases,(mode=mode,availability=level,source_pu=source,
                 source_vuf_percent=1.0,termination=solved.status,accepted=accepted,
-                exact_residual_A=0.0,min_dc_availability_margin_W=NaN))
+                exact_residual_A=0.0,min_dc_availability_margin_W=NaN,
+                s_base_VA=100000.))
         else
             net=study_network(base,level,source)
-            result=solve_controlled_inverter_fleet(net,
-                fleet(net,mode,level; curves=curves, hw=hw, design=design);
-                s_base=100000.,solver_options=OPTIONS)
+            spec=fleet(net,mode,level; curves=curves, hw=hw, design=design)
+            # Numerical policy: the per-unit base changes units, not physics.
+            # Retry a non-publishable solve at the next base and record which
+            # base produced the accepted equilibrium.
+            result=nothing; used_base=NaN
+            for s_base in SOLVE_BASES
+                result=solve_controlled_inverter_fleet(net, spec;
+                    s_base=s_base, solver_options=OPTIONS)
+                used_base=s_base
+                solve_status(result).publishable && break
+            end
             full=controlled_inverter_rows(result)
             dr=[merge((mode=mode, availability=level, source_pu=source,
                        device_id=r.device_id),
@@ -311,7 +324,7 @@ function run(; modes=MODES, levels=[0.0,0.5,1.0], sources=[1.0,1.03],
             push!(cases,(mode=mode,availability=level,source_pu=source,
                 source_vuf_percent=1.0,termination=result.termination_status,
                 accepted=accepted,exact_residual_A=residual,
-                min_dc_availability_margin_W=margin))
+                min_dc_availability_margin_W=margin,s_base_VA=used_base))
         end
         if last(cases).accepted
             append!(rows,cr); append!(devices,dr)

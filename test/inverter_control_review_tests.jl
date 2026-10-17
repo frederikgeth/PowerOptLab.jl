@@ -402,12 +402,47 @@ end
             InverterControlRequest(p_available=0.0, p_rated=6e3, q_scale=6e3);
             solver_options=("tol" => 1e-8,))
         @test result.solve.publishable
-        # The ripple backoff binds hard (scale ≈ 0.07 in the reference case).
-        @test result.control.current_scale < 0.5
+        # The ripple backoff binds hard: power priority keeps I1 and cuts I2.
+        @test abs(result.control.i2) < 0.5abs(result.control.i2_request)
         @test result.plant.dv2 ≈ 2.0 atol=0.02
         @test result.plant.p_dc <= 1e-3
         # One-sided import-selector bias: at most half of 1e-3 of the rating.
         @test result.plant.p_dc >= -0.5e-3*inverter.s_max
         @test result.exact_smooth_current_residual < 0.02
     end
+end
+
+@testset "Review A2: priority extends to the plant-aware ripple backoff" begin
+    # With a binding 2ω ripple limit, a common scale would cut I1 together with
+    # I2 although the ripple comes mostly from U1*I2. Power priority must scale
+    # I2 first and leave the active power almost untouched.
+    inverter = _review_lossy_inverter(i_max=40.0, s_max=20e3, dv2_max=3.0,
+                                      c_dc=300e-6)
+    gain = PiecewiseLinearLaw([0.0, 0.002, 0.02], [0.0, 0.0, 3.0];
+                              smoothing_epsilon=1e-4)
+    request = InverterControlRequest(p_available=12e3, p_rated=20e3, q_scale=0.0)
+    results = Dict{Symbol,Any}()
+    for (name, limiter) in ((:common, CommonScaleLimiter()),
+                            (:power, SequencePriorityLimiter(priority=:power)),
+                            (:balance, SequencePriorityLimiter(priority=:balance)))
+        controller = SequenceController(PositiveSequenceVoltVarWatt(),
+            NegativeSequenceAdmittanceDroop(gain), limiter)
+        result = solve_controlled_inverter(inv_grid3_unbal(),
+            ControlledDevice(inverter, controller), request;
+            solver_options=("tol" => 1e-8,))
+        @test result.solve.publishable
+        @test result.plant.dv2 <= 3.0 + 1e-5
+        @test result.exact_smooth_current_residual < 0.02
+        results[name] = result
+    end
+    @test results[:common].plant.dv2 ≈ 3.0 atol=0.01
+    # The priority backoff uses the conservative triangle bound
+    # limit - abs(I1 offset), so it may stop short of the ripple limit.
+    @test results[:power].plant.dv2 > 2.0
+    # Power priority keeps nearly all of the active power; common scaling does not.
+    @test results[:power].plant.p_poc > 0.95*12e3 - 300.0
+    @test results[:power].plant.p_poc > results[:common].plant.p_poc + 1000.0
+    @test abs(results[:power].control.i2) < abs(results[:common].control.i2)
+    # Balance priority keeps more negative-sequence current than power priority.
+    @test abs(results[:balance].control.i2) > abs(results[:power].control.i2)
 end
