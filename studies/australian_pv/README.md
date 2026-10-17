@@ -152,7 +152,7 @@ The negative-sequence design follows the parameter guide. The fleet's
 negative-sequence voltage sensitivity is measured at zero current; φ₂ is the
 median aggregate impedance angle; and κ gives a 20% aligned attenuation for the
 median aggregate impedance shared by the 12 inverters. The single-phase status
-quo uses native BMOPFTools droops. Because BMOPFTools `solve_pf` currently strips
+quo uses native BMOPFTools droops. Because BMOPFTools `solve_pf` currently strips ([BMOPFTools.jl#447](https://github.com/frederikgeth/BMOPFTools.jl/issues/447))
 IBR `s_max`, which zeroes S_MAX-based droops, that case is solved with the OPF
 builder, bus voltage bounds removed and maximum PV export. P is then the tighter
 of availability and the Volt-watt cap.
