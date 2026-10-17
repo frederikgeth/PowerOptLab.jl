@@ -30,7 +30,7 @@ Status: `todo`, `doing`, `done`, `deferred` (with reason).
 | B1 | The Australian Volt-watt curve (250→1, 260→0 of available) is stricter than AS/NZS 4777.2:2020 Australia A (253→1, 260→0.2 of rated). It drives the headline curtailment result. | Default to the Australia A curve on a rated basis; keep the pedagogical curve as a named sensitivity variant. Re-run and update the README tables. Australia A (BMOPFTools `Aus_A` preset) on a rated basis is the default; the pedagogical curve is the `sensitivity_pedagogical_volt_watt` run. | done |
 | B2 | 2 mF for 6 kVA with no `dv2_max` means DC-link stress never binds. | Use a representative film link (about 50–80 µF/kVA, stated as an assumption) and declare `dv2_max` and `i_cap_max`. Report 2ω ripple and capacitor current. 300 µF (50 µF/kVA) with `dv2_max` = 7.5 V; 150 µF and 2 mF sensitivity runs. | done |
 | B3 | The filter is fixed at 0.05 + j0.15 Ω (about 0.6 % per unit for 6 kVA, roughly 10× below typical) and is not scaled with rating in ENWL. | Specify filters in per unit of each device's rating (stated assumption, e.g. X = 5 %, X/R = 10) in both scripts. 5% series reactance at X/R = 10 in per unit of each rating (both scripts); per-unit loss curve added. | done |
-| B4 | The negative-sequence gain κ is in A/V and not rating-scaled. ENWL's κ is a no-op (g ≈ 0.02). | Both scripts declare κ in per unit of `I_rated/V_nom` and convert per device. Calibrate the ENWL gain to the Australian per-unit value. Australian κ is derived for 20% aligned fleet attenuation and recorded in per unit. ENWL uses the same per-unit value, marked as an assumption. | done |
+| B4 | The negative-sequence gain κ is in A/V and not rating-scaled. ENWL's κ is a no-op (g ≈ 0.02). | Both scripts declare κ in per unit of `I_rated/V_nom` and convert per device. Calibrate the ENWL gain to the Australian per-unit value. Australian κ is derived for 20% aligned fleet attenuation and recorded in per unit. The first design divided the fleet-aggregate impedance by N twice, making κ 12× too small; this was caught in the results and corrected to κ = 1.63 A/V (43 pu). ENWL uses the same per-unit value, marked as an assumption. | done |
 | B5 | `impedance_angle = atan(0.3)` is not linked to the feeder. | Measure the local negative-sequence Thévenin angle with `inverter_control_network_voltage_sensitivity` (or a direct Z2 estimate). Record it per customer and choose `phi2` from it. Keep the fixed angle only as a sensitivity. Measured with the fleet sequence sensitivity. Aggregate Z2 angles are 10–21° (median 19.4°): the feeder is resistive, so the earlier 16.7° angle was reasonable. The review was wrong to expect a transformer-dominated angle; what it lacked was the measurement. | done |
 | B6 | ENWL variants use different smoothing widths, which confounds a matched comparison. | Use one smoothing configuration across all variants. ENWL variants now use default smoothing throughout. | done |
 
@@ -66,8 +66,8 @@ the docs-to-code check is manual.
 |---|---|---|---|
 | E1 | No parameter-selection guidance | New page `docs/src/ibr/parameter_selection.md`. Cover: filter impedance in per unit (L and LCL ranges, X/R); DC-link voltage by topology and the modulation limit; DC-link capacitance (film vs electrolytic, µF/kVA, ripple-current rating); current headroom over rated current; loss-curve coefficients from a datasheet efficiency curve; AS/NZS 4777.2 Volt-var/Volt-watt settings by region and basis; κ from the target `g = κ\|Z2\|` and rating; `phi2` from a measured Z2 angle; smoothing widths from stated error budgets. Each value gets a source (marked † until verified) or is explicitly a stated assumption. Done as `docs/src/ibr/parameter_selection.md`; the Australia A values are cross-checked against the BMOPFTools `Aus_A` preset. | done |
 | E2 | Study parameters are not justified per study | Both study READMEs get an assumptions table: value, source or rationale, and the sensitivity run that covers it (links B1–B6). Assumptions table in the Australian README; per-unit assumptions listed in the ENWL README. | done |
-| E3 | Docs made stale by this branch | Update as each item lands: A1 changes the `:rated` basis text (`inverter_controls.md` ≈141), the study boundary (≈596), the protection-priority text in `phase_aware_control_laws.md` (≈192, ≈492) and the Australian README "drawing active power for losses" (now true and stated precisely). | doing |
-| E4 | No systematic docs/code sync check | Audit every IBR page against the code: API names, defaults, keyword lists and "implemented/future" status tables. Hard-coded numeric result tables (study READMEs) must be regenerated from the committed result CSVs, not hand-copied. Record the audit result here. | todo |
+| E3 | Docs made stale by this branch | Update as each item lands: A1 changes the `:rated` basis text (`inverter_controls.md` ≈141), the study boundary (≈596), the protection-priority text in `phase_aware_control_laws.md` (≈192, ≈492) and the Australian README "drawing active power for losses" (now true and stated precisely). Done alongside each item; stale statements updated in the control, foundations, verification and study pages. | done |
+| E4 | No systematic docs/code sync check | Audit every IBR page against the code: API names, defaults, keyword lists and "implemented/future" status tables. Hard-coded numeric result tables (study READMEs) must be regenerated from the committed result CSVs, not hand-copied. Record the audit result here. Done: a script checked every backticked identifier on the IBR pages against package names, fields and keywords (no drift found); verification rows were updated for the new oracles. Five table cells whose inline pipes broke rendering were fixed and confirmed in the docs build. Study README tables are generated by `summarize.jl`. | done |
 
 ## Order of work
 
@@ -79,3 +79,20 @@ the docs-to-code check is manual.
    ENWL dry run (its data checkout is external).
 5. E3 continuously with each item; E4 audit before opening the PR.
 6. C4 as a follow-up unless scope allows.
+
+
+## Outcome
+
+Study results after all fixes (Australian LV3, full PV, 1.03 pu source, 1%
+source VUF) are generated in `studies/australian_pv/README.md`. All 54 main
+and 27 sensitivity cases are accepted and the replay audit passes 80/80. The
+review's main concerns are borne out:
+
+- the headline curtailment came from the pedagogical Volt-watt curve;
+- unbalance attenuation is limited by the DC link (capacitance sensitivity);
+- common scaling gives up most of the active power for that attenuation,
+  while power priority (extended to the plant backoff) keeps it;
+- the single-phase status quo has the worst unbalance and neutral displacement.
+
+One review claim was withdrawn: the measured negative-sequence impedance angle
+is resistive (about 19°), so the original fixed angle was reasonable.
