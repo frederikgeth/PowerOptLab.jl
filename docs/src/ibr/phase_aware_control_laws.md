@@ -60,6 +60,31 @@ NLP while retaining a separate exact firmware oracle.
 | virtual-delta droop | future | line-to-line sensor comparator |
 | closest-feasible per-phase projection | future offline oracle | upper-performance benchmark |
 | power-versus-balance sequence priority | implemented (`SequencePriorityLimiter`) | service allocation comparison |
+| grid-forming virtual-impedance negative sequence | implemented (`negative_sequence_virtual_impedance`) | passive voltage-source comparator |
+
+### Position in the reference-generation taxonomy
+
+Unbalanced-voltage current-reference strategies are usually classified as in
+Wang, Duarte and Hendrix and in Rodríguez et al. (see [IBR
+references](@ref ibr-references)). The implemented policies map onto that
+classification as follows; only sinusoidal (fundamental-phasor) strategies can
+be represented by this model.
+
+| Classical strategy | Defining property | Implemented counterpart |
+| --- | --- | --- |
+| BPSC — balanced positive-sequence current | ``I_2=0`` | `NoUnbalanceControl`; leaves ``\widetilde S=3U_2I_1`` |
+| PNSC — positive/negative-sequence compensation | constant active power, sinusoidal current | ripple-cancelling target, `ripple_blend=1` |
+| AARC — average active/reactive control | conductance-like current ``I\propto U`` in every sequence | negative-sequence admittance with ``\phi_2=0``; the classical gain tracks the power command, the implemented ``\kappa(\eta)`` is a voltage-unbalance droop |
+| IARC — instantaneous active/reactive control | constant instantaneous power, non-sinusoidal current | not representable at the fundamental; excluded |
+| flexible/pliant weighting | scalar blend between strategies | `ripple_blend` between the voltage-oriented and PNSC targets |
+| positive/negative-sequence voltage support | ``I_2`` opposing ``U_2`` under a peak-current limit (Camacho et al.) | admittance droop with `SequencePriorityLimiter` |
+| grid-forming voltage source | balanced EMF behind ``Z_v`` | `negative_sequence_virtual_impedance` |
+
+The LV distribution analogue of the AARC row is the "resistive" behaviour of
+Meersman et al., in which a three-phase converter presents a conductance to the
+negative sequence. Their conclusion — that this reduces voltage unbalance on
+resistive LV feeders without communication — is the direct predecessor of the
+`impedance_angle=0` default and should be cited with it.
 
 ![Implemented phase-aware control signal chain](../assets/ibr/generated-control-signal-chain.svg)
 
@@ -72,7 +97,8 @@ must use the licensed, current edition and its prescribed test procedure.
 | Source | Public scope relevant here | Mapping and non-coverage |
 | --- | --- | --- |
 | [IEEE 1547-2018](https://standards.ieee.org/ieee/1547/5915/) and [IEEE 1547.1-2020](https://standards.ieee.org/ieee/1547.1/6039/) | DER reactive capability, voltage/power control, abnormal conditions, and conformance testing | motivates explicit curve bases and P/Q priority; this steady-state model does not reproduce response-time or conformance tests |
-| [IEEE 2800-2022](https://standards.ieee.org/ieee/2800/10453/) | interconnection and capability of IBRs on transmission systems, including required behaviour under unbalanced conditions and negative-sequence current injection | the only cited standard that addresses negative-sequence current behaviour normatively; it is a bulk-system document and is not an LV controller specification |
+| [IEEE 2800-2022](https://standards.ieee.org/ieee/2800/10453/) | interconnection and capability of IBRs on transmission systems, including required behaviour under unbalanced conditions and negative-sequence current injection | addresses negative-sequence current behaviour normatively; it is a bulk-system document and is not an LV controller specification |
+| VDE-AR-N 4110 / 4120 and ENTSO-E NC RfG (EU 2016/631) | MV/HV connection rules; fault-time reactive and negative-sequence current injection proportional to the voltage deviation ("k-factor") | the negative-sequence admittance droop is the steady-state analogue of k-factor injection with a fixed angle; these are fault-ride-through requirements, not continuous LV unbalance control, and their clause numbers and editions are unverified here |
 | [AEMO overview of AS/NZS 4777.2](https://www.aemo.com.au/initiatives/major-programs/nem-distributed-energy-resources-der-program/standards-and-connections/as-nzs-4777-2-inverter-requirements-standard) | LV inverter performance, testing, and smart-inverter functions | motivates an Australian comparator; no claim is made against a clause without the current amended licensed text |
 | EN 50549-1/-2 and VDE-AR-N 4105 | European LV/MV connection requirements for generating plants | jurisdictional comparator for fixed low-voltage/high-voltage priority; cited for scope only, and their designations/editions are unverified here |
 | [IEC 61000-4-30:2025](https://webstore.iec.ch/en/publication/71611) | power-quality measurement methods | ``|U_2|/|U_1|`` is reported from ideal phasors, not a specified measurement window or instrument class |

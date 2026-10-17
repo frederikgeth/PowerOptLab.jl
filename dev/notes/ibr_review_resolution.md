@@ -19,6 +19,7 @@ Status: `todo`, `doing`, `done`, `deferred` (with reason).
 | A5 | The `:dominant` conflict rule changes the Volt-var curve without a conflict: near the deadband edge q ∝ s², up to about 0.15·ε. | Scale the transition width by a conflict measure `ρ = min(l,h)/(min(l,h)+ε)`. The firmware law then reproduces the standard curve exactly when only one branch is active, while keeping continuity and zero at the tie. The smooth model uses the zero-preserving `nonnegative_min`. | done |
 | A6 | Docs say the positive-sequence policy is invariant to U0. Only its Volt-var is; the default worst-phase Volt-watt guard is not. | Correct the wording in the control-law page, the `SequenceController` docstring and the Australian README. | done |
 | A7 | `screen_fixed_point_gain` reports only Picard criteria (spectral radius, ∞-norm). Those are stricter than needed for lagged/incremental droop. | Also report `max_real_eigenvalue`. The criterion for a small-step relaxed iteration is `Re λ < 1`; document both. Review finding withdrawn: `maximum_real_eigenvalue`, `continuous_time_margin` and `alpha_max` already existed. Re-reading found `alpha_max = 2/\|1-λ\|`, which is wrong for complex eigenvalues; fixed to `2Re(1-λ)/\|1-λ\|²` with a rotation regression. | done |
+| A8 | Found while verifying C2: `grid_forming=true` on `:THREE_LEG` imposed a ground-referred balanced EMF. With I0 = 0 that forces the POC zero-sequence voltage to zero, so any network with zero-sequence unbalance was infeasible. | For a three-leg bridge, constrain only the internal negative-sequence EMF to zero and bound the positive-sequence magnitude; U0 follows the network. Regression: plant I2 = -U2/Z_f on a source with V0 ≠ 0. Docstring and foundations §10 updated. | done |
 
 ## B. Parameters and studies
 
@@ -36,7 +37,7 @@ Status: `todo`, `doing`, `done`, `deferred` (with reason).
 | ID | Missing comparator | Plan | Status |
 |---|---|---|---|
 | C1 | Power-priority sequence allocation | Covered by A2; add as an Australian study mode. | doing |
-| C2 | Grid-forming passive negative-sequence admittance (balanced EMF behind `Z_v` gives `I2 = -U2/Z_v`) | Constructor `VirtualImpedanceNegativeSequence(r, x)` for a flat admittance at `arg Z_v`, documented as the steady-state negative-sequence equivalent of a balanced-EMF voltage source. Add a study mode. | todo |
+| C2 | Grid-forming passive negative-sequence admittance (balanced EMF behind `Z_v` gives `I2 = -U2/Z_v`) | Constructor `VirtualImpedanceNegativeSequence(r, x)` for a flat admittance at `arg Z_v`, documented as the steady-state negative-sequence equivalent of a balanced-EMF voltage source. Add a study mode. Done as `negative_sequence_virtual_impedance(r, x)`; verified against a grid-forming plant solve. | done |
 | C3 | Status quo: single-phase PV with per-phase Volt-var | Australian study variant keeping native single-phase BMOPF PV (PN_PER_PHASE) at the original customer phases. | todo |
 | C4 | Four-leg per-phase Volt-var | Needs a FOUR_LEG controller with I0 enabled (new policy and stamp). Larger API change; planned as a follow-up PR unless time allows. | todo |
 
@@ -44,11 +45,11 @@ Status: `todo`, `doing`, `done`, `deferred` (with reason).
 
 | ID | Gap | Plan | Status |
 |---|---|---|---|
-| D1 | No BPSC/PNSC/AARC/IARC taxonomy | Cite Wang, Duarte & Hendrix (TPEL 2011) and map every implemented and candidate law onto it. | todo |
-| D2 | Peak-current-constrained voltage support in R–X grids | Cite Camacho et al. (TIE 2013; TPEL 2018) and Afshari et al. (TIE 2017); position A2 against them. | todo |
-| D3 | LV three-phase inverter unbalance predecessor | Cite Meersman et al. (EPSR 2011) as the predecessor of the conductance (`phi2 = 0`) law. | todo |
-| D4 | Grid-code negative-sequence injection | Add k-factor context (VDE-AR-N 4110/4120, NC RfG), marked unverified like the other standards. | todo |
-| D5 | Grid-forming natural unbalance response | Add a paragraph in the foundations and control-law pages connecting `grid_forming=true` and C2. | todo |
+| D1 | No BPSC/PNSC/AARC/IARC taxonomy | Cite Wang, Duarte & Hendrix (TPEL 2011) and map every implemented and candidate law onto it. | done |
+| D2 | Peak-current-constrained voltage support in R–X grids | Cite Camacho et al. (TIE 2013; TPEL 2018) and Afshari et al. (TIE 2017); position A2 against them. New references are numbered 54–59 in a separate section so existing item numbers stay stable. | done |
+| D3 | LV three-phase inverter unbalance predecessor | Cite Meersman et al. (EPSR 2011) as the predecessor of the conductance (`phi2 = 0`) law. | done |
+| D4 | Grid-code negative-sequence injection | Add k-factor context (VDE-AR-N 4110/4120, NC RfG), marked unverified like the other standards. | done |
+| D5 | Grid-forming natural unbalance response | Add a paragraph in the foundations and control-law pages connecting `grid_forming=true` and C2. | done |
 
 All new bibliography entries carry the existing † "not checked against live
 sources" marker until verified.

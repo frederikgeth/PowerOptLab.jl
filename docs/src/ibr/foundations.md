@@ -668,6 +668,28 @@ U_b=\alpha^2U_a,\qquad U_c=\alpha U_a,
 \qquad V_{min}\le |U_a|\le V_{max}.
 ```
 
+For `:THREE_LEG` the bridge has no zero-sequence path (``I_0=0``), so
+zero-sequence KVL across the filter gives ``U_0=V_{p,0}``: the converter cannot
+set its own zero-sequence EMF. The constraint is then ``U_2=0`` with
+``V_{min}\le|U_1|\le V_{max}``, and ``U_0`` follows the network. (Imposing the
+ground-referred balanced set above on a three-leg bridge would also force the
+POC zero-sequence voltage to zero, which is infeasible on any network with
+zero-sequence unbalance.)
+
+Because the internal negative-sequence EMF is zero, the negative-sequence
+current of a grid-forming plant is fixed by the filter,
+
+```math
+I_2=-\frac{V_{p,2}}{Z_{f,2}},
+```
+
+which is a passive negative-sequence admittance at angle ``\arg Z_{f,2}``. The
+same law is available to the local controllers as
+[`negative_sequence_virtual_impedance`](@ref), for a virtual impedance that
+need not equal the physical filter. With realistic filters ``|Z_f|`` is small,
+so this current can exceed the converter rating even at modest unbalance; real
+grid-forming controls must limit it.
+
 This is the steady-state voltage-source property used in algebraic power flow.
 It has no PLL, droop state, virtual impedance dynamics, current-priority state
 machine, or reference-frame transient. The network still needs an angle/voltage

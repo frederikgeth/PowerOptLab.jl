@@ -708,6 +708,12 @@ zero filter) it is a plain grid-following converter at the POC.
 # Grid-forming
 - `grid_forming=false` — balanced positive-sequence internal EMF; the magnitude
   `v_gfm ∈ [v_int_min, v_int_max]` is a decision variable (composes with a topology).
+  For `:THREE_LEG` the bridge has no zero-sequence path, so only the internal
+  negative-sequence EMF is set to zero and `v_gfm` bounds the positive-sequence
+  magnitude; the EMF's zero-sequence component follows the network. Other
+  three-phase topologies hold the full balanced set relative to their reference.
+  The negative-sequence current is then `-U2/Z_f`, the law also available to
+  controllers as [`negative_sequence_virtual_impedance`](@ref).
 
 # Converter losses
 - `p_loss_fixed=0.0` (W), `a_loss=0.0` (W/A), `c_loss=0.0` (W/A²).
@@ -1750,7 +1756,17 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
     end
 
     # Grid-forming balanced 120° internal EMF (three-phase only), magnitude v_gfm.
-    if inv.grid_forming && nph == 3
+    # A three-leg bridge has no return path (I0 = 0), so zero-sequence KVL fixes
+    # its EMF's zero-sequence component to the POC value: the converter only
+    # regulates the differential (positive/negative-sequence) voltage. Imposing
+    # a ground-referred balanced set there would also force V0_poc = 0 and make
+    # any zero-sequence network voltage infeasible.
+    three_wire_gfm = inv.grid_forming && nph == 3 && inv.topology == :THREE_LEG
+    if three_wire_gfm
+        _, u1_int, u2_int = _sequence_components(vrint, viint)
+        JuMP.@constraint(m, u2_int[1] == 0)
+        JuMP.@constraint(m, u2_int[2] == 0)
+    elseif inv.grid_forming && nph == 3
         h = _SQRT3 / 2                       # a = −½ + j√3/2 ; V_b=a²V_a, V_c=aV_a
         JuMP.@constraint(m, vrint[2] == -0.5*vrint[1] + h*viint[1])
         JuMP.@constraint(m, viint[2] == -h*vrint[1]  - 0.5*viint[1])
@@ -1766,7 +1782,11 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
             vmax_gfm = vmax_gfm === nothing ? cap : min(vmax_gfm, cap)
         end
         vmax_gfm !== nothing && JuMP.@constraint(m, vgfm <= vmax_gfm)
-        JuMP.@constraint(m, vrint[1]^2 + viint[1]^2 == vgfm^2)
+        if three_wire_gfm
+            JuMP.@constraint(m, u1_int[1]^2 + u1_int[2]^2 == vgfm^2)
+        else
+            JuMP.@constraint(m, vrint[1]^2 + viint[1]^2 == vgfm^2)
+        end
         JuMP.set_start_value(vgfm, _start_or(vrint[1], 1.0))
     end
 

@@ -328,3 +328,38 @@ end
     @test_throws ArgumentError AdvancedInverter(id="s", bus="poc", s_max=1e3,
         dc_source_l=1e-3) |> PowerOptLab._validate_inverter
 end
+
+@testset "Review C2: grid-forming virtual-impedance comparator" begin
+    r, x = 0.1, 0.3
+    policy = negative_sequence_virtual_impedance(r, x)
+    @test policy.impedance_angle ≈ atan(x, r)
+    @test_throws ArgumentError negative_sequence_virtual_impedance(0.0, 0.0)
+    @test_throws ArgumentError negative_sequence_virtual_impedance(-0.1, 0.3)
+
+    # Exact law: I2 = -U2/Z_v whenever the current limit does not bind.
+    controller = SequenceController(AverageVoltageVoltVarWatt(), policy,
+        SequencePriorityLimiter(priority=:power))
+    u2 = 2.0cis(-0.7)
+    exact = evaluate_exact(controller,
+        InverterControlMeasurement(_review_phases(230.0 + 0im, u2)),
+        InverterControlRequest(p_available=0.0, p_rated=6e3, q_scale=0.0),
+        InverterControlRatings(s_max=20e3, i_max=40.0))
+    @test exact.i2 ≈ -u2/complex(r, x) rtol=1e-9
+
+    # Plant oracle: a three-leg grid-forming plant with a balanced internal EMF
+    # behind the same series filter draws the same negative-sequence current.
+    # A mild source unbalance keeps |I2| = |U2|/|Z_v| inside generous ratings;
+    # the strongly unbalanced fixture would demand more than the plant can
+    # carry, which is exactly why this comparator needs current limiting.
+    plant = AdvancedInverter(id="gfm", bus="poc", phase_terminals=["a", "b", "c"],
+        neutral=nothing, topology=:THREE_LEG, s_max=50e3, i_max=100.0,
+        v_dc=800.0, c_dc=2e-3, r_filter=r, x_filter=x, grid_forming=true,
+        v_int_min=200.0, v_int_max=260.0)
+    mild = inv_grid3_src(mags=[232.0, 228.0, 230.0], angs=[0.0, -2.0944, 2.0944])
+    result = solve_advanced_inverter(mild, plant; objective=:max_export)
+    @test result.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+    bus = result.bus["poc"]
+    v = [complex(bus[p]["vr"], bus[p]["vi"]) for p in ("a", "b", "c")]
+    poc_u2 = (v[1] + _REVIEW_A^2*v[2] + _REVIEW_A*v[3])/3
+    @test result.i_negative ≈ abs(poc_u2)/abs(complex(r, x)) rtol=1e-4
+end

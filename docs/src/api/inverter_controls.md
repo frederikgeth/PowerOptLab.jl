@@ -21,6 +21,7 @@ AverageVoltageVoltVarWatt
 PositiveSequenceVoltVarWatt
 NoUnbalanceControl
 NegativeSequenceAdmittanceDroop
+negative_sequence_virtual_impedance
 CommonScaleLimiter
 SequencePriorityLimiter
 SequenceController

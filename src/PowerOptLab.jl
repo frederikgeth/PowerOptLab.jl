@@ -286,6 +286,7 @@ export ConverterCurrentTarget, GridCurrentTarget
 export PiecewiseLinearLaw, WorstPhaseVoltVarWatt, AverageVoltageVoltVarWatt
 export PositiveSequenceVoltVarWatt
 export NoUnbalanceControl, NegativeSequenceAdmittanceDroop, CommonScaleLimiter,
+    negative_sequence_virtual_impedance,
     SequencePriorityLimiter
 export SequenceController, InverterControlMeasurement, InverterControlRequest
 export InverterControlRatings, InverterControlResult, ConverterTerminalResult

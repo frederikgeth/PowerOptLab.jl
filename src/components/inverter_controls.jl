@@ -271,6 +271,35 @@ function NegativeSequenceAdmittanceDroop(gain::PiecewiseLinearLaw;
 end
 
 """
+    negative_sequence_virtual_impedance(r, x; ripple_blend=0, voltage_floor=1,
+                                        smoothing_epsilon=1e-4)
+
+Negative-sequence policy of a voltage source with a balanced internal EMF
+behind the virtual impedance `Z_v = r + jx` (Ω). With no internal
+negative-sequence voltage, KVL across `Z_v` gives `I2 = -U2/Z_v`, a constant
+admittance `1/|Z_v|` (A/V) at the angle `arg Z_v`. This is the steady-state
+negative-sequence behaviour of a grid-forming converter that regulates a
+balanced voltage, and the passive comparator for the negative-sequence
+admittance droop. It returns a
+[`NegativeSequenceAdmittanceDroop`](@ref) with a flat gain, so current
+limiting, priorities and DC availability apply unchanged. The plant's own
+`grid_forming=true` reproduces this law with `Z_v` equal to the series filter.
+Its synchronisation, droop and current-limit transients are not represented.
+"""
+function negative_sequence_virtual_impedance(r::Real, x::Real;
+        ripple_blend::Real=0.0, voltage_floor::Real=1.0,
+        smoothing_epsilon::Real=1e-4)
+    z = complex(Float64(r), Float64(x))
+    isfinite(z) && real(z) >= 0 && abs(z) > 0 || throw(ArgumentError(
+        "virtual impedance must be finite, nonzero and have r >= 0"))
+    admittance = 1/abs(z)
+    gain = PiecewiseLinearLaw([0.0, 1.0], [admittance, admittance];
+                              smoothing_epsilon=smoothing_epsilon)
+    return NegativeSequenceAdmittanceDroop(gain; impedance_angle=angle(z),
+        ripple_blend=ripple_blend, voltage_floor=voltage_floor)
+end
+
+"""
     CommonScaleLimiter(; current_epsilon=nothing, power_epsilon=nothing,
                          current_epsilon_fraction=2.5e-5,
                          power_epsilon_fraction=5e-8,
