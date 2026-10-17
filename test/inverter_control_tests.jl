@@ -266,9 +266,11 @@ end
               (1-CommonScaleLimiter().priority_headroom_fraction)*
               inverter.s_max atol=0.01
         @test swept[(:var, ratio)].q_request ≈ 1e3 atol=0.01
+        # The reported P includes the smooth loss-import selector, whose
+        # algebraic tail w^2/(4A) (a few mW here) perturbs the ratio at 1e-9.
         @test swept[(:proportional, ratio)].q_request /
               swept[(:proportional, ratio)].p_request ≈
-              1e3/(ratio*inverter.s_max) atol=1e-10
+              1e3/(ratio*inverter.s_max) atol=1e-8
     end
 
     # Keep the stamped regression compact: all priorities at one saturated

@@ -386,3 +386,28 @@ end
         @test Z[3, 4] ≈ -Z[4, 3] rtol=1e-6 atol=1e-9
     end
 end
+
+@testset "Review A1: loss import survives capability backoff" begin
+    # At zero irradiance a passive grid-forming negative-sequence law on a
+    # strongly unbalanced grid saturates the ripple and current limits. The
+    # import covering the losses must not be scaled down with the service
+    # command, otherwise the DC source would supply the remainder.
+    inverter = _review_lossy_inverter(i_max=10.0, dv2_max=2.0, c_dc=300e-6)
+    for target in (:converter, :grid)
+        controller = SequenceController(PositiveSequenceVoltVarWatt(),
+            negative_sequence_virtual_impedance(0.13, 1.32),
+            SequencePriorityLimiter(priority=:power); current_target=target)
+        result = solve_controlled_inverter(inv_grid3_unbal(),
+            ControlledDevice(inverter, controller),
+            InverterControlRequest(p_available=0.0, p_rated=6e3, q_scale=6e3);
+            solver_options=("tol" => 1e-8,))
+        @test result.solve.publishable
+        # The ripple backoff binds hard (scale ≈ 0.07 in the reference case).
+        @test result.control.current_scale < 0.5
+        @test result.plant.dv2 ≈ 2.0 atol=0.02
+        @test result.plant.p_dc <= 1e-3
+        # One-sided import-selector bias: at most half of 1e-3 of the rating.
+        @test result.plant.p_dc >= -0.5e-3*inverter.s_max
+        @test result.exact_smooth_current_residual < 0.02
+    end
+end

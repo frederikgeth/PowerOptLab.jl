@@ -10,12 +10,15 @@ OUT = ROOT/'figures'; OUT.mkdir(exist_ok=True)
 def read(name):
     with (ROOT/'results'/name).open() as f: return list(csv.DictReader(f))
 rows, devices, cases = read('customers.csv'),read('devices.csv'),read('cases.csv')
-assert len(cases)==36 and all(c['accepted']=='true' for c in cases), 'Complete accepted campaign required'
-assert len(rows)==36*12 and len(devices)==36*12
+NCASES=9*3*2
+assert len(cases)==NCASES and all(c['accepted']=='true' for c in cases), 'Complete accepted campaign required'
+assert len(rows)==NCASES*12 and len(devices)==NCASES*12
 net=json.load((ROOT/'networks/LV3_55bus.bmopf.json').open())
 labels={'unity':'Unity PF','mean_vv':'Mean VV','mean_vv_vw':'Mean VV+VW',
-        'worst_vv_vw':'Worst-phase VV+VW','sequence_vv_vw':'Sequence VV+VW','sequence_droop':'Sequence + I₂ droop'}
-colors=dict(zip(labels,['#555555','#d89000','#ac4875','#0072b2','#009e73','#7246a0']))
+        'worst_vv_vw':'Worst-phase VV+VW','sequence_vv_vw':'Sequence VV+VW',
+        'sequence_droop':'Sequence + I₂ (common scale)','sequence_droop_power':'Sequence + I₂ (power priority)',
+        'gfm_virtual_impedance':'Grid-forming virtual Z','single_phase_native':'Single-phase PV (status quo)'}
+colors=dict(zip(labels,['#555555','#d89000','#ac4875','#0072b2','#009e73','#7246a0','#cc79a7','#56b4e9','#000000']))
 plt.rcParams.update({'font.size':10,'axes.spines.top':False,'axes.spines.right':False,'savefig.dpi':180})
 def save(fig,name):
     for ext in ['png','svg']:fig.savefig(OUT/f'{name}.{ext}',bbox_inches='tight')
@@ -42,7 +45,7 @@ short={c:f'C{i+1}' for i,c in enumerate(customers)}
 with (OUT/'customer_key.csv').open('w') as f:
     w=csv.writer(f, lineterminator="\n");w.writerow(['label','original_load_id','bus','path_length_m'])
     for c in customers:w.writerow([short[c],c,net['load'][c]['bus'],dist[net['load'][c]['bus']]])
-fig,axs=plt.subplots(2,3,figsize=(14,7),sharex=True,sharey=True)
+fig,axs=plt.subplots(3,3,figsize=(14,10),sharex=True,sharey=True)
 for ax,mode in zip(axs.flat,labels):
     rr=select(rows,mode,1.,1.03)
     for phase,color in zip('abc',['#d55e00','#0072b2','#009e73']):
@@ -50,7 +53,7 @@ for ax,mode in zip(axs.flat,labels):
     ax.axhline(253,color='black',ls='--',lw=1);ax.set_title(labels[mode]);ax.grid(alpha=.15)
     ax.set_ylim(247,257)
 axs[0,0].legend(title='Phase',ncol=3,fontsize=9)
-for ax in axs[1]:ax.set_xlabel('Path length from LV transformer (m)')
+for ax in axs[-1]:ax.set_xlabel('Path length from LV transformer (m)')
 for ax in axs[:,0]:ax.set_ylabel('Customer phase–neutral voltage (V)')
 fig.suptitle('Same feeder, loading and PV availability; only controller changes\n12 three-phase customers • 60 kW available PV • 11 kV source at 1.03 pu, 1% VUF',y=1.03)
 fig.text(.5,-.02,'Upper LV supply limit: 253 V. Lower limit: 207 V (outside this zoom). Points on different branches are not connected.',ha='center')
@@ -92,10 +95,4 @@ ax.scatter(0,y['b641'],marker='s',s=80,color='black');ax.set_yticks([])
 ax.set_xlabel('Path length from LV transformer (m)');ax.set_title('LV3: 12 customers upgraded to three-phase connections\nEach: 1.5 kW load (A/B/C = 60/25/15%) and 5 kW PV on a 6 kVA inverter')
 ax.text(.01,.02,'Schematic layout; not a geographic map.\nOriginal lines, neutral, grounding and transformer retained.',transform=ax.transAxes)
 save(fig,'feeder')
-# Machine-readable aggregate table used by the engineering discussion.
-with (ROOT/'results'/'summary.csv').open('w') as f:
-    w=csv.writer(f, lineterminator="\n");w.writerow(['mode','max_V_PN','max_VUF_percent','max_neutral_V','delivered_P_kW','absorbed_Q_kvar','max_current_A'])
-    for mode in labels:
-        rr=select(rows,mode,1.,1.03);dd=select(devices,mode,1.,1.03)
-        w.writerow([mode,max(values(rr,'vmax_pn_V')),max(values(rr,'vuf_percent')),max(values(rr,'neutral_V')),
-                    sum(values(dd,'p_poc_W'))/1000,-sum(values(dd,'q_poc_var'))/1000,max(values(dd,'maximum_converter_current_A'))])
+# The aggregate tables are written by scripts/australian_pv/summarize.jl.

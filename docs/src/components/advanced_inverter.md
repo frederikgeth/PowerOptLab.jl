@@ -42,7 +42,7 @@ Results are returned in SI in both modes.
 | Phase | Feature | Model |
 |---|---|---|
 | 0 | Output filter | reduced one-arm primitive, or explicit LCL with independent converter/grid primitive matrices, damped midpoint capacitor, distinct arm currents, and an optional POC shunt |
-| 1 | Internal EMF / DC utilisation | `|V_int|` box; a legacy scalar `:SINGLE_PHASE` cap using the documented `/√3` convention; or a three-phase topology's sampled switching polytope (below) |
+| 1 | Internal EMF / DC utilisation | `abs(V_int)` box; a legacy scalar `:SINGLE_PHASE` cap using the documented `/√3` convention; or a three-phase topology's sampled switching polytope (below) |
 | 2 | Grid-forming | balanced 120° internal EMF with a bounded magnitude decision variable; no droop, virtual impedance, or limiter dynamics |
 | 3 | Converter losses | non-branching `P_dc = P_ac + P_loss`; fitted per-leg fixed/linear/quadratic terms include the fourth-leg neutral current for `:FOUR_LEG` |
 | 4 | Double-frequency ripple | single-phase ripple-amplitude cap; three-phase topologies form a small-ripple 2ω bus-voltage phasor that derates the sampled DC rails (below) |

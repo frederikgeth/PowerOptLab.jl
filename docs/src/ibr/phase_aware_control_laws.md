@@ -44,7 +44,7 @@ NLP while retaining a separate exact firmware oracle.
 | Voltage/current phasors | RMS; current positive from converter into network |
 | Complex power | ``S=UI^*``; positive ``P,Q`` are injection |
 | Volt-var sign | positive ``Q`` injects vars at low voltage; negative ``Q`` absorbs vars at high voltage |
-| ``|\widetilde S|`` | peak Fourier amplitude of 2ω complex power, not RMS |
+| ``\lvert \widetilde S\rvert `` | peak Fourier amplitude of 2ω complex power, not RMS |
 | Public units | SI; per-unit is internal numerical conditioning only |
 
 ## Candidate and implementation status
@@ -101,7 +101,7 @@ must use the licensed, current edition and its prescribed test procedure.
 | VDE-AR-N 4110 / 4120 and ENTSO-E NC RfG (EU 2016/631) | MV/HV connection rules; fault-time reactive and negative-sequence current injection proportional to the voltage deviation ("k-factor") | the negative-sequence admittance droop is the steady-state analogue of k-factor injection with a fixed angle; these are fault-ride-through requirements, not continuous LV unbalance control, and their clause numbers and editions are unverified here |
 | [AEMO overview of AS/NZS 4777.2](https://www.aemo.com.au/initiatives/major-programs/nem-distributed-energy-resources-der-program/standards-and-connections/as-nzs-4777-2-inverter-requirements-standard) | LV inverter performance, testing, and smart-inverter functions | motivates an Australian comparator; no claim is made against a clause without the current amended licensed text |
 | EN 50549-1/-2 and VDE-AR-N 4105 | European LV/MV connection requirements for generating plants | jurisdictional comparator for fixed low-voltage/high-voltage priority; cited for scope only, and their designations/editions are unverified here |
-| [IEC 61000-4-30:2025](https://webstore.iec.ch/en/publication/71611) | power-quality measurement methods | ``|U_2|/|U_1|`` is reported from ideal phasors, not a specified measurement window or instrument class |
+| [IEC 61000-4-30:2025](https://webstore.iec.ch/en/publication/71611) | power-quality measurement methods | ``\lvert U_2\rvert /\lvert U_1\rvert `` is reported from ideal phasors, not a specified measurement window or instrument class |
 | [IEC TR 61000-3-13](https://webstore.iec.ch/en/publication/4145) | negative-sequence allocation at MV/HV/EHV | useful planning context, explicitly not an LV controller specification |
 | EN 50160 | supply-voltage characteristics | a network-quality benchmark, not a local inverter-control prescription; the designation and edition are listed unverified in [IBR references](@ref ibr-references) and must be pinned before use |
 | [OpenDSS `InvControl`](https://opendss.epri.com/Commonproperties.html) | monitored-voltage `AVG`, `MAX`, and `MIN` modes | independent balanced fixed-point oracle; it does not implement this split low/high Volt-var conflict law or negative-sequence droop |

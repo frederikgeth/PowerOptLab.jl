@@ -74,7 +74,7 @@ Three positive-sequence comparators are available:
 | Policy | Volt-var input | Volt-watt input | Purpose |
 | --- | --- | --- | --- |
 | `AverageVoltageVoltVarWatt` | arithmetic mean of the three magnitudes | arithmetic mean | legacy comparator; can hide a phase in a different regime |
-| `PositiveSequenceVoltVarWatt` | ``|U_1|`` | maximum phase magnitude by default | inexpensive sequence-coordinate comparator with a safety guard |
+| `PositiveSequenceVoltVarWatt` | ``\lvert U_1\rvert `` | maximum phase magnitude by default | inexpensive sequence-coordinate comparator with a safety guard |
 | `WorstPhaseVoltVarWatt` | minimum and maximum envelopes | maximum phase magnitude | direction-aware candidate for unbalanced LV systems |
 
 `PositiveSequenceVoltVarWatt(worst_phase_watt_guard=false)` makes both curves
@@ -159,9 +159,13 @@ the uncovered losses from the grid. The Volt-watt curve curtails only positive
 availability; it never reduces that import. The smooth model reads the offset
 from the solved plant, like the LCL shunt-current offset of the capability
 backoff. [`evaluate_exact`](@ref) takes it as `dc_power_offset`; the default of
-zero describes a lossless plant. The guarantee is exact while the command is
-non-negative. With a negative command and an active current backoff, the plant
-can overdraw by up to `(1 - current_scale)` times the import.
+zero describes a lossless plant. The loss import is carried as an unscaled
+offset through the apparent-power, target-current and plant-aware limiters, and
+its magnitude is removed from their headroom. Current or ripple saturation
+therefore curtails only the service command, and the DC draw never exceeds the
+availability. The smooth model represents ``\min(A,0)`` with a selector of width
+``10^{-3}`` of the rating. Its error is one-sided: near ``A=0`` it overstates the
+import by at most half that width, about 3 W for a 6 kVA inverter.
 
 `CommonScaleLimiter` uses rating-relative current and power smoothing fractions
 by default (`current_epsilon_fraction=2.5\times10^{-5}` and
