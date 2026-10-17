@@ -181,7 +181,8 @@ end
 # is deliberately separate from the NLP's sample grid: it detects between-grid
 # violations but is not presented as an analytic global certificate.
 function _switching_margin(inv, ure, uim, dre, dim, nre, nim, nmean=0.0;
-                           n_eval::Int=max(3600, 100*inv.n_samples))
+                           n_eval::Int=max(3600, 100*inv.n_samples),
+                           bre::Real=0.0, bim::Real=0.0)
     inv.topology in _THREE_PHASE_TOPOLOGIES || return 0.0
     length(ure) == length(uim) == 3 || throw(DimensionMismatch(
         "switching audit requires three voltage phasors"))
@@ -190,6 +191,7 @@ function _switching_margin(inv, ure, uim, dre, dim, nre, nim, nmean=0.0;
     dvi = dim === nothing ? 0.0 : dim
     nr = nre === nothing ? 0.0 : nre
     ni = nim === nothing ? 0.0 : nim
+    n2ratio = _split_midpoint_2w_ratio(inv)
     margin = Inf
     for th in _sample_grid(n_eval)
         c1, s1 = cos(th), sin(th)
@@ -207,9 +209,10 @@ function _switching_margin(inv, ure, uim, dre, dim, nre, nim, nmean=0.0;
                 margin = min(margin, rail - abs(vpn))
             end
         elseif inv.topology == :SPLIT_DC
-            railh = rail / 2
+            railh = (rail + inv.m_max*sqrt(2)*(bre*c1 - bim*s1)) / 2
+            n2 = n2ratio*(dvr*c2 - dvi*s2)
             for k in 1:3
-                vpn = sqrt(2)*((ure[k]+nr)*c1 - (uim[k]+ni)*s1) + nmean
+                vpn = sqrt(2)*((ure[k]+nr)*c1 - (uim[k]+ni)*s1) + n2 + nmean
                 margin = min(margin, railh - abs(vpn))
             end
         end
@@ -246,7 +249,8 @@ function _dc_link_harmonic_response(i_bridge::Complex, omega::Real, ceq::Real,
 end
 
 function _pwm_ripple_audit(inv, ure, uim, ire, iim, dre=0.0, dim=0.0,
-                           nre=0.0, nim=0.0, nmean=0.0)
+                           nre=0.0, nim=0.0, nmean=0.0;
+                           bre::Real=0.0, bim::Real=0.0)
     inv.pwm_strategy == :NONE && return (
         i_rms=0.0, i_bridge_rms=0.0, i_source_rms=0.0,
         dv_rms=0.0, dv_pp=0.0, dv_upper_rms=0.0, dv_lower_rms=0.0,
@@ -279,7 +283,9 @@ function _pwm_ripple_audit(inv, ure, uim, ire, iim, dre=0.0, dim=0.0,
     for th in _sample_grid(nf)
         c1, s1 = cos(th), sin(th)
         c2, s2 = cos(2th), sin(2th)
-        rail = inv.v_dc + dre*c2 - dim*s2
+        # Total bus including the split link's fundamental ripple (zero for
+        # equal half-banks and monolithic links).
+        rail = inv.v_dc + dre*c2 - dim*s2 + sqrt(2)*(bre*c1 - bim*s1)
         rail > 0 || return (i_rms=NaN, i_bridge_rms=NaN, i_source_rms=NaN,
                             dv_rms=NaN, dv_pp=NaN, dv_upper_rms=NaN,
                             dv_lower_rms=NaN, dv_upper_pp=NaN, dv_lower_pp=NaN,
@@ -289,7 +295,8 @@ function _pwm_ripple_audit(inv, ure, uim, ire, iim, dre=0.0, dim=0.0,
         iph = [sqrt(2)*(ire[k]*c1 - iim[k]*s1) for k in 1:3]
 
         commands, currents = if inv.topology == :SPLIT_DC
-            nr = sqrt(2)*(nre*c1 - nim*s1) + nmean
+            nr = sqrt(2)*(nre*c1 - nim*s1) + nmean +
+                 _split_midpoint_2w_ratio(inv)*(dre*c2 - dim*s2)
             uph .+ nr, iph
         elseif inv.topology == :FOUR_LEG
             base = [uph; 0.0]
@@ -410,7 +417,8 @@ end
 # not enter: the usual high-frequency approximation neglects resistive ripple
 # voltage caused by the small switching-current perturbation itself.
 function _pwm_ac_ripple_audit(inv, ure, uim, dre=0.0, dim=0.0,
-                              nre=0.0, nim=0.0, nmean=0.0)
+                              nre=0.0, nim=0.0, nmean=0.0;
+                              bre::Real=0.0, bim::Real=0.0)
     zero_result() = (
         converter_rms=zeros(3), converter_pp=zeros(3),
         grid_rms=zeros(3), grid_pp=zeros(3), shunt_rms=zeros(3),
@@ -453,14 +461,17 @@ function _pwm_ac_ripple_audit(inv, ure, uim, dre=0.0, dim=0.0,
     for th in _sample_grid(nf)
         c1, s1 = cos(th), sin(th)
         c2, s2 = cos(2th), sin(2th)
-        rail = inv.v_dc + dre*c2 - dim*s2
+        # Total bus including the split link's fundamental ripple (zero for
+        # equal half-banks and monolithic links).
+        rail = inv.v_dc + dre*c2 - dim*s2 + sqrt(2)*(bre*c1 - bim*s1)
         rail > 0 || return (
             converter_rms=fill(NaN, 3), converter_pp=fill(NaN, 3),
             grid_rms=fill(NaN, 3), grid_pp=fill(NaN, 3),
             shunt_rms=fill(NaN, 3), neutral_rms=NaN, neutral_pp=NaN)
         uph = [sqrt(2)*(ure[k]*c1 - uim[k]*s1) for k in 1:3]
         commands = if inv.topology == :SPLIT_DC
-            nr = sqrt(2)*(nre*c1 - nim*s1) + nmean
+            nr = sqrt(2)*(nre*c1 - nim*s1) + nmean +
+                 _split_midpoint_2w_ratio(inv)*(dre*c2 - dim*s2)
             uph .+ nr
         elseif inv.topology == :FOUR_LEG
             base = [uph; 0.0]
@@ -574,7 +585,10 @@ zero filter) it is a plain grid-following converter at the POC.
 - `v_dc` — DC-link voltage (V). `c_dc` — DC-link capacitance (F; per half for split).
 - `c_dc_upper`, `c_dc_lower` — optional split-link half-bank capacitances (F).
   Each defaults to `c_dc`; supplying either exposes unequal series capacitance,
-  unequal neutral-current sharing, and a mean midpoint offset.
+  a mean midpoint offset, and (for a finite or open line-frequency DC source,
+  see `dc_source_r`) a 2ω midpoint ripple and a fundamental total-bus ripple.
+  The neutral-current share of each bank follows the source model: one half
+  each for an open source, `C_u/C_Σ` and `C_l/C_Σ` for an ideal stiff source.
 - `m_max=1.0` — utilisation factor applied to the ideal two-level switching
   hull (dimensionless, `0 < m_max ≤ 1`).
 - `In_max` — neutral current limit (A). For `:FOUR_LEG` this is the 4th leg's
@@ -631,6 +645,16 @@ zero filter) it is a plain grid-following converter at the POC.
   frequencies. With no branch the source is open to switching ripple and the
   capacitors carry all of it. `pwm_dc_harmonics` controls the finite-branch
   Fourier truncation.
+- `dc_source_r=nothing`, `dc_source_l=0` — optional series R–L impedance of
+  the DC source at line frequencies (ω and 2ω). With no branch the source is
+  open there, as for an MPPT-regulated DC/DC stage whose control bandwidth lies
+  below 100 Hz: the link capacitors carry all 2ω current and, in `:SPLIT_DC`,
+  each half-bank carries half the neutral current whatever its capacitance. A
+  branch shares 2ω current with the link and, for unequal half-banks, sets the
+  fundamental neutral-current split and total-bus ripple; `dc_source_r=0`,
+  `dc_source_l=0` is an ideal stiff source at both frequencies. Equal
+  half-banks are unaffected at the fundamental for every source impedance. The
+  carrier-frequency branch is configured separately by `pwm_dc_source_*`.
 - `pwm_current_factor=0` — direct-stamping approximation
   `I_sw = pwm_current_factor*sqrt(sum(I_leg,rms^2))`. The convenience solver
   updates this factor from the carrier audit; set it explicitly only when
@@ -760,6 +784,8 @@ Base.@kwdef struct AdvancedInverter <: AbstractDevice
     pwm_dc_harmonics::Int = 64
     pwm_dc_source_r::Union{Float64,Nothing} = nothing
     pwm_dc_source_l::Float64 = 0.0
+    dc_source_r::Union{Float64,Nothing} = nothing
+    dc_source_l::Float64 = 0.0
     pwm_current_factor::Float64 = 0.0
     pwm_ac_ripple::Bool = false
     pwm_ac_harmonics::Int = 64
@@ -821,6 +847,58 @@ const _THREE_PHASE_TOPOLOGIES = (:THREE_LEG, :FOUR_LEG, :SPLIT_DC)
 _split_capacitances(inv) =
     (something(inv.c_dc_upper, inv.c_dc), something(inv.c_dc_lower, inv.c_dc))
 
+# Line-frequency DC-source impedance at angular frequency `omega`, or `nothing`
+# for an open (high-impedance) source.
+_dc_source_impedance(inv, omega) = inv.dc_source_r === nothing ? nothing :
+    complex(inv.dc_source_r, omega*inv.dc_source_l)
+
+_dc_link_capacitance(inv) = inv.topology == :SPLIT_DC ?
+    (c -> c[1]*c[2]/(c[1] + c[2]))(_split_capacitances(inv)) : inv.c_dc
+
+# Complex factor k with bus-ripple phasor D = -(S̃/V_dc)·k at 2ω: the bridge's
+# 2ω current S̃/V_dc divides between the link capacitance and the source branch.
+# The open source gives the classical k = 1/(j2ωC_eq).
+function _dc_ripple_factor(inv)
+    Omega = 2*(2pi*inv.f)
+    ceq = _dc_link_capacitance(inv)
+    zs = _dc_source_impedance(inv, Omega)
+    return zs === nothing ? 1/(im*Omega*ceq) : zs/(1 + im*Omega*ceq*zs)
+end
+
+# Split-link fundamental response to the bridge return current J = ΣI_phase
+# (SI phasor, flowing back into the midpoint). Averaged rail currents carry
+# -J/2 each, so the source current is i_s = ρJ/2 with
+# ρ = (C_l-C_u)/(C_Σ + jωC_uC_lZ_s); the half-bank currents are
+# i_u = J(ρ-1)/2 and i_l = J(ρ+1)/2. Returns the coefficients mapping J to the
+# midpoint displacement from the bus centre (κ_n), the total-bus ripple (κ_b),
+# and the squared current-share weights of the two banks.
+function _split_fundamental_coefficients(inv)
+    cu, cl = _split_capacitances(inv)
+    omega = 2pi*inv.f
+    zs = _dc_source_impedance(inv, omega)
+    csum = cu + cl
+    rho = zs === nothing ? 0.0im : (cl - cu)/(csum + im*omega*cu*cl*zs)
+    upper = (rho - 1)/2
+    lower = (rho + 1)/2
+    du = upper/(im*omega*cu)
+    dl = lower/(im*omega*cl)
+    return (midpoint=(dl - du)/2, bus=du + dl,
+            upper_weight=abs2(upper), lower_weight=abs2(lower))
+end
+
+# Ratio of the 2ω midpoint displacement to the 2ω bus ripple: the series
+# 2ω charge divides the bus ripple between half-banks as C_eq/C_u and C_eq/C_l.
+# Solved split-link fundamental total-bus ripple phasor (SI, RMS).
+function _split_bus_ripple_value(inv, h)
+    inv.topology == :SPLIT_DC || return 0.0, 0.0
+    kb = _split_fundamental_coefficients(inv).bus
+    j = sum(complex(JuMP.value(h.cri[k]), JuMP.value(h.cii[k])) for k in 1:3) * h.ib
+    return reim(kb*j)
+end
+
+_split_midpoint_2w_ratio(inv) = inv.topology == :SPLIT_DC ?
+    (c -> (c[1] - c[2])/(2(c[1] + c[2])))(_split_capacitances(inv)) : 0.0
+
 function _validate_inverter(inv::AdvancedInverter, nets=())
     _validate_connection(inv.id, inv.bus, inv.phase_terminals, inv.neutral, nets)
     inv.topology in (:SINGLE_PHASE, _THREE_PHASE_TOPOLOGIES...) ||
@@ -874,6 +952,16 @@ function _validate_inverter(inv::AdvancedInverter, nets=())
         isfinite(inv.pwm_dc_source_r) && inv.pwm_dc_source_r >= 0 ||
             throw(ArgumentError("inverter '$(inv.id)' pwm_dc_source_r must be " *
                                 "finite and >= 0 when supplied"))
+    end
+    isfinite(inv.dc_source_l) && inv.dc_source_l >= 0 || throw(ArgumentError(
+        "inverter '$(inv.id)' dc_source_l must be finite and >= 0"))
+    if inv.dc_source_r !== nothing
+        isfinite(inv.dc_source_r) && inv.dc_source_r >= 0 ||
+            throw(ArgumentError("inverter '$(inv.id)' dc_source_r must be " *
+                                "finite and >= 0 when supplied"))
+    elseif inv.dc_source_l > 0
+        throw(ArgumentError("inverter '$(inv.id)' dc_source_l requires " *
+                            "dc_source_r (use 0 for a lossless branch)"))
     end
     inv.pwm_current_factor >= 0 || throw(ArgumentError(
         "inverter '$(inv.id)' pwm_current_factor must be >= 0"))
@@ -1212,7 +1300,11 @@ currents A.
 - `ripple` — 2ω power-ripple magnitude `|Σ V_int·I|` (VA).
 - `dv2` — 2ω bus-ripple amplitude (V; three-phase topologies, else 0).
 - `dv_mid` — split-link midpoint fundamental-ripple RMS magnitude (V;
-  `:SPLIT_DC`, else 0).
+  `:SPLIT_DC`, else 0), measured from the centre of the total bus.
+- `dv_bus_fundamental` — split-link total-bus fundamental-ripple RMS magnitude
+  (V). It is zero for equal half-banks or an ideal stiff source; with unequal
+  banks and a finite or open line-frequency source the neutral current also
+  ripples the total bus.
 - `v_mid_mean`, `q_mid_balance` — signed mean midpoint shift (V) used by the
   switching hull and balancing charge transfer (C; split link only).
 - `i_cap` — **total** capacitor RMS ripple current (A; three-phase topologies,
@@ -1285,6 +1377,7 @@ struct InverterResult <: AbstractSolveResult
     ripple::Float64
     dv2::Float64
     dv_mid::Float64
+    dv_bus_fundamental::Float64
     v_mid_mean::Float64
     q_mid_balance::Float64
     i_cap::Float64
@@ -1694,8 +1787,10 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
         S2re_SI = JuMP.@expression(m, rip_re * sb)
         S2im_SI = JuMP.@expression(m, rip_im * sb)
 
-        # 2ω bus-ripple phasor D = j·S2/(2ω·C_eq·Vdc). Unequal split
-        # half-banks use their exact series equivalent C_u C_l/(C_u+C_l).
+        # 2ω bus-ripple phasor D = -(S2/Vdc)·k. With an open line-frequency
+        # source k = 1/(j2ωC_eq), i.e. D = j·S2/(2ω·C_eq·Vdc); a source branch
+        # shares the 2ω current. Unequal split half-banks use their exact series
+        # equivalent C_u C_l/(C_u+C_l).
         if inv.topology == :SPLIT_DC
             cu, cl = _split_capacitances(inv)
             csum = cu + cl
@@ -1707,16 +1802,30 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
         end
         dre = JuMP.@variable(m, base_name = "dre_$(inv.id)")
         dim = JuMP.@variable(m, base_name = "dim_$(inv.id)")
-        JuMP.@constraint(m, dre == -S2im_SI / denom)
-        JuMP.@constraint(m, dim ==  S2re_SI / denom)
+        kr, ki = reim(_dc_ripple_factor(inv))
+        JuMP.@constraint(m, dre == -(kr*S2re_SI - ki*S2im_SI) / v_dc)
+        JuMP.@constraint(m, dim == -(ki*S2re_SI + kr*S2im_SI) / v_dc)
         inv.dv2_max !== nothing && JuMP.@constraint(m, dre^2 + dim^2 <= inv.dv2_max^2)
 
-        # Split-link midpoint fundamental ripple plus mean displacement. Neutral
-        # current divides in proportion to half-bank capacitance; optional
-        # balancing charge shifts the mean away from the equal-charge value.
+        # Split-link midpoint fundamental ripple plus mean displacement. The
+        # bridge return current J = ΣI divides between the half-banks and the
+        # DC source according to the line-frequency source model (see
+        # `_split_fundamental_coefficients`); unequal banks then also ripple
+        # the total bus at ω. Optional balancing charge shifts the mean away
+        # from the equal-charge value.
+        bre = 0.0; bim = 0.0; n2ratio = 0.0
         if inv.topology == :SPLIT_DC
-            nre = JuMP.@expression(m,  sumci*ib / (w * csum))
-            nim = JuMP.@expression(m, -sumcr*ib / (w * csum))
+            split = _split_fundamental_coefficients(inv)
+            jr = JuMP.@expression(m, sumcr*ib)
+            ji = JuMP.@expression(m, sumci*ib)
+            kn, kb = split.midpoint, split.bus
+            nre = JuMP.@expression(m, real(kn)*jr - imag(kn)*ji)
+            nim = JuMP.@expression(m, real(kn)*ji + imag(kn)*jr)
+            if !iszero(kb)
+                bre = JuMP.@expression(m, real(kb)*jr - imag(kb)*ji)
+                bim = JuMP.@expression(m, real(kb)*ji + imag(kb)*jr)
+            end
+            n2ratio = _split_midpoint_2w_ratio(inv)
             if inv.dv_mid_max !== nothing
                 JuMP.@constraint(m, nre^2 + nim^2 <= inv.dv_mid_max^2)
             end
@@ -1754,11 +1863,13 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
                 end
             end
             if inv.topology == :SPLIT_DC
-                railh = JuMP.@expression(m, (inv.m_max/2) * (v_dc + dre*c2 - dim*s2))
+                railh = JuMP.@expression(m, (inv.m_max/2) * (v_dc + dre*c2 - dim*s2 +
+                    sqrt(2)*(bre*c1 - bim*s1)))
+                n2 = JuMP.@expression(m, n2ratio*(dre*c2 - dim*s2))
                 for k in 1:3, sg in (1.0, -1.0)
                     JuMP.@constraint(m,
                         sg*(sqrt(2)*((UreSI[k]+nre)*c1 - (UimSI[k]+nim)*s1) +
-                            nmean) <= railh)
+                            n2 + nmean) <= railh)
                 end
             end
         end
@@ -1800,7 +1911,10 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
         # so they combine in RMS and must be allocated together — charging the
         # whole bank rating to neutral current double-counts the capacitors.
         #
-        #   I_2ω,rms = |S̃|/(√2·Vdc) = k·|D|,   k = denom/(√2·Vdc)
+        #   I_2ω,rms = |j2ωC_eq·D|/√2 = k·|D|,   k = denom/(√2·Vdc)
+        #
+        # which equals |S̃|/(√2·Vdc) for an open source and is smaller when a
+        # line-frequency source branch shares the 2ω current.
         #
         # Writing it through the ripple phasor D keeps this QUADRATIC in variables
         # that already exist, rather than quartic in the bilinear S̃.
@@ -1812,18 +1926,19 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
         switching_sq = JuMP.@expression(m, inv.i_sw^2 + pwm_model_sq)
         if inv.topology == :SPLIT_DC
             neutral_sq = JuMP.@expression(m, in_re^2 + in_im^2)
-            au, al = cu/csum, cl/csum
+            share = _split_fundamental_coefficients(inv)
+            au2, al2 = share.upper_weight, share.lower_weight
             icap_upper_sq = JuMP.@expression(m,
-                i2w_sq + au^2*neutral_sq + switching_sq)
+                i2w_sq + au2*neutral_sq + switching_sq)
             icap_lower_sq = JuMP.@expression(m,
-                i2w_sq + al^2*neutral_sq + switching_sq)
+                i2w_sq + al2*neutral_sq + switching_sq)
             icap_thermal_upper_sq = JuMP.@expression(m,
-                w2*i2w_sq + wn*au^2*neutral_sq + wsw*switching_sq)
+                w2*i2w_sq + wn*au2*neutral_sq + wsw*switching_sq)
             icap_thermal_lower_sq = JuMP.@expression(m,
-                w2*i2w_sq + wn*al^2*neutral_sq + wsw*switching_sq)
+                w2*i2w_sq + wn*al2*neutral_sq + wsw*switching_sq)
             if inv.i_cap_max !== nothing
                 JuMP.@constraint(m, icap_thermal_upper_sq <= inv.i_cap_max^2)
-                if cu != cl
+                if au2 != al2
                     JuMP.@constraint(m, icap_thermal_lower_sq <= inv.i_cap_max^2)
                 end
             end
@@ -1920,7 +2035,8 @@ function extract_device(inverter::AdvancedInverter, h::_InvHandles,
         nr = h.nre === nothing ? nothing : JuMP.value(h.nre)
         ni = h.nim === nothing ? nothing : JuMP.value(h.nim)
         nm = h.nmean === nothing ? 0.0 : JuMP.value(h.nmean)
-        _switching_margin(inverter, ure, uim, dr, di, nr, ni, nm)
+        br, bi = _split_bus_ripple_value(inverter, h)
+        _switching_margin(inverter, ure, uim, dr, di, nr, ni, nm; bre=br, bim=bi)
     end
     return (
         p_poc=scaled(h.p_poc, sb), q_poc=scaled(h.q_poc, sb),
@@ -1941,6 +2057,8 @@ function extract_device(inverter::AdvancedInverter, h::_InvHandles,
             (solved ? hypot(JuMP.value(h.dre), JuMP.value(h.dim)) : NaN),
         dv_mid=h.nre === nothing ? 0.0 :
             (solved ? hypot(JuMP.value(h.nre), JuMP.value(h.nim)) : NaN),
+        dv_bus_fundamental=inverter.topology != :SPLIT_DC ? 0.0 :
+            (solved ? hypot(_split_bus_ripple_value(inverter, h)...) : NaN),
         v_mid_mean=h.nmean === nothing ? 0.0 : scaled(h.nmean, 1.0),
         q_mid_balance=h.qbal === nothing ? 0.0 : scaled(h.qbal, 1.0),
         i_cap=icap, i_cap_thermal=icap_thermal,
@@ -2019,8 +2137,9 @@ function _solve_advanced_inverter_once(net::Dict{String,Any}, inverter::Advanced
         nr = h.nre === nothing ? 0.0 : JuMP.value(h.nre)
         ni = h.nim === nothing ? 0.0 : JuMP.value(h.nim)
         nm = h.nmean === nothing ? 0.0 : JuMP.value(h.nmean)
+        br, bi = _split_bus_ripple_value(pwm_audit_inverter, h)
         _pwm_ripple_audit(pwm_audit_inverter, ure, uim, ire, iim,
-                          dr, di, nr, ni, nm)
+                          dr, di, nr, ni, nm; bre=br, bim=bi)
     elseif pwm_audit_inverter.pwm_strategy != :NONE
         (i_rms=NaN, i_bridge_rms=NaN, i_source_rms=NaN,
          dv_rms=NaN, dv_pp=NaN, dv_upper_rms=NaN, dv_lower_rms=NaN,
@@ -2046,7 +2165,9 @@ function _solve_advanced_inverter_once(net::Dict{String,Any}, inverter::Advanced
         nr = h.nre === nothing ? 0.0 : JuMP.value(h.nre)
         ni = h.nim === nothing ? 0.0 : JuMP.value(h.nim)
         nm = h.nmean === nothing ? 0.0 : JuMP.value(h.nmean)
-        _pwm_ac_ripple_audit(pwm_audit_inverter, ure, uim, dr, di, nr, ni, nm)
+        br, bi = _split_bus_ripple_value(pwm_audit_inverter, h)
+        _pwm_ac_ripple_audit(pwm_audit_inverter, ure, uim, dr, di, nr, ni, nm;
+                             bre=br, bim=bi)
     elseif pwm_audit_inverter.pwm_ac_ripple
         (converter_rms=fill(NaN, 3), converter_pp=fill(NaN, 3),
          grid_rms=fill(NaN, 3), grid_pp=fill(NaN, 3),
@@ -2076,7 +2197,8 @@ function _solve_advanced_inverter_once(net::Dict{String,Any}, inverter::Advanced
                           device_result.i_neutral, device_result.i_zero,
                           device_result.i_positive, device_result.i_negative,
                           device_result.ripple, device_result.dv2,
-                          device_result.dv_mid, device_result.v_mid_mean,
+                          device_result.dv_mid, device_result.dv_bus_fundamental,
+                          device_result.v_mid_mean,
                           device_result.q_mid_balance,
                           device_result.i_cap, device_result.i_cap_thermal,
                           device_result.i_cap_upper, device_result.i_cap_lower,

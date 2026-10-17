@@ -287,3 +287,44 @@ end
     @test abs(q(mean_law, pg) - q(mean_law, pn)) <
           0.1abs(q(worst_law, pg) - q(worst_law, pn))
 end
+
+@testset "Review A3: one DC-source model for the split link" begin
+    # Independent oracle: nodal analysis of the averaged three-node DC circuit
+    # (rails P, M, N) at the fundamental. The bridge draws J/2 from P and
+    # returns J/2 to N... equivalently each rail supplies -J/2 and J returns
+    # into M; the source Z_s connects P and N.
+    function circuit(cu, cl, zs, j; omega=2pi*50.0)
+        yu, yl = im*omega*cu, im*omega*cl
+        ys = zs === nothing ? 0.0im : 1/zs
+        # Unknowns v_P, v_M with v_N = 0. KCL (currents leaving each node):
+        #   P: yu(vP-vM) + ys vP + J/2 = 0
+        #   M: yu(vM-vP) + yl vM - J = 0
+        A = [yu+ys -yu; -yu yu+yl]
+        vP, vM = A \ [-j/2, j]
+        midpoint = vM - vP/2          # displacement from the bus centre
+        return midpoint, vP           # vP is the total-bus ripple
+    end
+    j = 7.0cis(0.4)
+    for (cu, cl) in ((2.5e-3, 3.5e-3), (3e-3, 3e-3)),
+            source in (nothing, 0.0, 0.2, complex(0.05, 2pi*50*1e-3))
+        inv = AdvancedInverter(id="s", bus="poc", s_max=20e3,
+            phase_terminals=["a", "b", "c"], neutral="n", topology=:SPLIT_DC,
+            v_dc=900.0, c_dc=3e-3, c_dc_upper=cu, c_dc_lower=cl, In_max=40.0,
+            dc_source_r=source === nothing ? nothing : real(source),
+            dc_source_l=source === nothing ? 0.0 : imag(source)/(2pi*50))
+        k = PowerOptLab._split_fundamental_coefficients(inv)
+        zs = source === nothing ? nothing :
+            (iszero(source) ? 1e-12 + 0im : complex(source))
+        midpoint, bus = circuit(cu, cl, zs, j)
+        @test k.midpoint*j ≈ midpoint rtol=1e-8
+        @test abs(k.bus*j - bus) <= 1e-8*abs(midpoint)
+        if cu == cl
+            # Equal banks: unchanged by the source model.
+            @test k.midpoint ≈ 1/(im*2pi*50*(cu + cl)) rtol=1e-12
+            @test abs(k.bus) <= 1e-12*abs(k.midpoint)
+            @test k.upper_weight ≈ 0.25 && k.lower_weight ≈ 0.25
+        end
+    end
+    @test_throws ArgumentError AdvancedInverter(id="s", bus="poc", s_max=1e3,
+        dc_source_l=1e-3) |> PowerOptLab._validate_inverter
+end
