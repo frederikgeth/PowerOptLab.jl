@@ -130,7 +130,9 @@ end
         numeric = evaluate_smooth(device.controller,
             InverterControlMeasurement(row["metrics"].phase_voltage_V),
             InverterControlRequest(p_available=2e3,q_scale=4e3),
-            InverterControlRatings(device.device))
+            InverterControlRatings(device.device);
+            dc_power_offset=row["metrics"].dc_power_offset_W)
+        @test row["metrics"].dc_power_offset_W > 0  # filter loss is drawn from DC
         @test row["metrics"].requested_active_power_W ≈ numeric.p_request atol=1e-4
     end
     law = PiecewiseLinearLaw([0.,1.],[0.,1.];formulation=LocalC2Formulation(.1))
