@@ -316,6 +316,9 @@ worst credible condition while energy and loss outcomes accumulate over time.
 
 ## Rating and capacitor-sizing method
 
+[Choosing inverter and controller parameters](@ref ibr-parameter-selection)
+derives the starting values and the per-unit conventions used below.
+
 ### Current rating
 
 For each operating point, retain converter-side and grid-side fundamental phase

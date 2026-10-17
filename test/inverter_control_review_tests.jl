@@ -363,3 +363,26 @@ end
     poc_u2 = (v[1] + _REVIEW_A^2*v[2] + _REVIEW_A*v[3])/3
     @test result.i_negative ≈ abs(poc_u2)/abs(complex(r, x)) rtol=1e-4
 end
+
+@testset "Review A9: three-leg sensitivity uses sequence coordinates at both targets" begin
+    plant = AdvancedInverter(id="pv", bus="poc", phase_terminals=["a", "b", "c"],
+        neutral=nothing, topology=:THREE_LEG, s_max=20e3, i_max=40.0,
+        v_dc=750.0, c_dc=2e-3, r_filter=0.05, x_filter=0.15)
+    current = (5.0 + 0im, 5.0cis(-2pi/3), 5.0cis(2pi/3))
+    for target in (:converter, :grid)
+        controlled = ControlledDevice(plant, SequenceController(
+            AverageVoltageVoltVarWatt(); current_target=target))
+        result = inverter_control_network_voltage_sensitivity(
+            inv_grid3_bal(), controlled, current; step=0.1)
+        @test result.coordinate_system === :positive_negative_sequence
+        @test result.base_status.publishable
+        @test all(s -> s.publishable, result.plus_status)
+        Z = result.sensitivity
+        @test size(Z) == (4, 4) && all(isfinite, Z)
+        # Negative-sequence self-impedance of the resistive fixture line.
+        z2 = complex(Z[3, 3], Z[4, 3])
+        @test z2 ≈ 0.05 rtol=1e-3 atol=1e-4
+        @test Z[4, 4] ≈ Z[3, 3] rtol=1e-6 atol=1e-9
+        @test Z[3, 4] ≈ -Z[4, 3] rtol=1e-6 atol=1e-9
+    end
+end

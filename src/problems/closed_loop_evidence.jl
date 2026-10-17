@@ -469,9 +469,12 @@ struct ControlledInverterFleetNetworkSensitivityResult
     minus_status::Vector{SolveStatus}
 end
 
+# A three-leg controller commands only I1 and I2 at either current target, so
+# independent phase perturbations would violate the zero-sum constraint and
+# make the perturbed plant solves infeasible.
 function _sensitivity_coordinate_system(
-        inverter::AdvancedInverter, target::AbstractCurrentTarget)
-    inverter.topology == :THREE_LEG && target isa ConverterCurrentTarget ?
+        inverter::AdvancedInverter, ::AbstractCurrentTarget)
+    inverter.topology == :THREE_LEG ?
         :positive_negative_sequence : :phase_rectangular
 end
 
@@ -640,7 +643,7 @@ end
 
 Estimate the feeder voltage sensitivity for a selected fleet by central finite
 differences of simultaneous physical fleet solves. Four-leg fleets return a
-`6N × 6N` phase-rectangular matrix; three-leg converter-current fleets return a
+`6N × 6N` phase-rectangular matrix; three-leg fleets (either current target) return a
 `4N × 4N` positive/negative-sequence matrix. Blocks are ordered by sorted
 device id. A column is retained only when both fresh solves are publishable;
 failed perturbations remain `NaN` while their `SolveStatus` values are
@@ -778,7 +781,7 @@ Screen the simultaneous fleet loop
 `Δv ↦ Z⋅diag(∂iₖ/∂vₖ)⋅Δv`. Device blocks are ordered by sorted fleet id. The
 supplied `voltage_sensitivity` must be the `6N × 6N` phase-rectangular matrix
 for four-leg devices or the `4N × 4N` positive/negative-sequence matrix for a
-three-leg converter-current fleet, as returned by
+three-leg fleet at either current target, as returned by
 [`controlled_inverter_fleet_network_voltage_sensitivity`](@ref), or an
 equivalent reduced/network map. This is a local quasi-static diagnostic, not a
 dynamic stability certificate.

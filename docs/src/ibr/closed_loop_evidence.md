@@ -72,7 +72,7 @@ plant. It records plus/minus `SolveStatus` values for every column and leaves
 failed columns as `NaN`; this makes current-limit boundaries visible in the
 loop-gain evidence instead of silently extrapolating through them.
 The result uses a 6×6 phase-rectangular matrix for four-leg devices and a 4×4
-positive/negative-sequence matrix for three-leg converter-current targets,
+positive/negative-sequence matrix for three-leg devices at either current target,
 because independent phase-current perturbations violate the three-leg
 zero-neutral-current constraint.
 The reduced screen intentionally projects sensed phase voltage onto `U₁/U₂`;
@@ -82,7 +82,7 @@ screen as a complete six-coordinate model.
 
 For a selected fleet, `controlled_inverter_fleet_network_voltage_sensitivity`
 performs the same audit with all selected current targets fixed simultaneously.
-Its `6N × 6N` four-leg or `4N × 4N` three-leg converter-current matrix retains
+Its `6N × 6N` four-leg or `4N × 4N` three-leg matrix retains
 cross-device coupling, rather than assembling
 independent one-device sensitivities. Device blocks and perturbation columns
 are ordered by sorted device id, and failed columns remain `NaN` with their
@@ -169,7 +169,7 @@ screens the local loop
 J_{loop} = Z\,\frac{\partial i}{\partial v}.
 ```
 
-For a three-leg converter-current target, use the reduced four-coordinate
+For a three-leg device (converter- or grid-current target), use the reduced four-coordinate
 positive/negative-sequence basis `(Re U₁, Im U₁, Re U₂, Im U₂)` and the
 corresponding 4×4 network sensitivity. Independent phase-current perturbations
 are not physically realizable because the converter enforces zero neutral
