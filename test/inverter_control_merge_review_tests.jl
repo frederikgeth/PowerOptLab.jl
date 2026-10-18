@@ -55,15 +55,19 @@ end
 
     for floor in (1.0, 20.0), target in (:converter, :grid), limiter in
             (CommonScaleLimiter(), SequencePriorityLimiter(priority=:power))
-        controller = SequenceController(AverageVoltageVoltVarWatt();
-            power_voltage_floor=floor, current_target=target, limiter=limiter)
-        result = solve_controlled_inverter(inv_grid3_bal(),
-            ControlledDevice(_merge_review_inverter(p_loss_fixed=100.0), controller),
-            request; solver_options=("tol" => 1e-9,))
-        @test result.solve.publishable
-        @test result.plant.p_dc <= 1e-5
-        @test result.plant.p_dc >= -0.01
-        @test result.exact_smooth_current_residual < 0.001
+        @testset "floor=$floor target=$target limiter=$(nameof(typeof(limiter)))" begin
+            controller = SequenceController(AverageVoltageVoltVarWatt();
+                power_voltage_floor=floor, current_target=target, limiter=limiter)
+            # Match the existing inverter tests' solver tolerance; keep the
+            # physical DC-power assertion independent of solver coordinates.
+            result = solve_controlled_inverter(inv_grid3_bal(),
+                ControlledDevice(_merge_review_inverter(p_loss_fixed=100.0), controller),
+                request; solver_options=("tol" => 1e-8,))
+            @test result.solve.publishable
+            @test result.plant.p_dc <= 1e-5
+            @test result.plant.p_dc >= -0.01
+            @test result.exact_smooth_current_residual < 0.001
+        end
     end
 end
 
