@@ -166,7 +166,7 @@ therefore curtails only the service command, and the DC draw never exceeds the
 availability. The smooth model represents ``\min(A,0)`` with a selector of width
 ``10^{-3}`` of the rating. Its error is one-sided: near ``A=0`` it overstates the
 import by at most half that width, about 3 W for a 6 kVA inverter.
-The required import uses ``I_1^{import}=P_{import}U_1/(3|U_1|^2)`` so that
+The exact required import uses ``I_1^{import}=P_{import}U_1/(3|U_1|^2)`` so that
 its physical power is exactly ``P_{import}``, independent of
 `power_voltage_floor`. A nonzero import requires nonzero positive-sequence
 voltage. Service-current regularization and capability backoff can reduce

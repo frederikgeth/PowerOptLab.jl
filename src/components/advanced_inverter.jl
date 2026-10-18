@@ -1512,7 +1512,8 @@ function _arm_current_seed(inv, nph::Int, vmagseed::Real, sb::Real, ib::Real)
 end
 
 # Stamp the inverter's internal-node model into `ctx`. Returns `_InvHandles`.
-function _stamp_inverter!(ctx, inv::AdvancedInverter)
+function _stamp_inverter!(ctx, inv::AdvancedInverter;
+        retain_lossless_magnitude_epigraph::Bool=true)
     m = _opf_model(ctx)
     vr, vi = _opf_voltage_maps(ctx)
     bus = inv.bus; phases = inv.phase_terminals; neutral = inv.neutral
@@ -1675,7 +1676,7 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
             imag_terms = _push_magnitude(
                 ctx, imag_terms, cri[k], cii[k], inv.i_max, ib;
                 name="loss_$(inv.id)_$(ph)")
-        else
+        elseif retain_lossless_magnitude_epigraph
             # Kept even though a_loss == 0 multiplies the magnitude away:
             # removing this epigraph was measured to push otherwise healthy
             # solves (single-phase, no i_max) into ITERATION_LIMIT. This is an
@@ -1718,7 +1719,7 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
                 ctx, imag_terms, sumcr, sumci,
                 inv.In_max === nothing ? inv.i_max : inv.In_max, ib;
                 name="loss_$(inv.id)_neutral")
-        else
+        elseif retain_lossless_magnitude_epigraph
             # Same retained epigraph as the per-phase branch; the fourth leg is
             # boxed by its own rating.
             imn = JuMP.@variable(m, base_name = "imag_$(inv.id)_neutral",
@@ -2019,12 +2020,14 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter)
                        sb, vb, ib)
 end
 
-function stamp_device!(ctx, inverter::AdvancedInverter; kwargs...)
+function stamp_device!(ctx, inverter::AdvancedInverter;
+        retain_lossless_magnitude_epigraph::Bool=true, kwargs...)
     inverter.pwm_strategy == :NONE || throw(ArgumentError(
         "pwm_strategy=:$(inverter.pwm_strategy) uses the conservative outer " *
         "reserve iteration provided by solve_advanced_inverter; direct stamping " *
         "requires pwm_strategy=:NONE and explicitly calibrated DC/AC reserves"))
-    return _stamp_inverter!(ctx, inverter)
+    return _stamp_inverter!(ctx, inverter;
+        retain_lossless_magnitude_epigraph=retain_lossless_magnitude_epigraph)
 end
 
 link_device!(model, inverter::AdvancedInverter, handles, sb, grid::TimeGrid) = nothing

@@ -107,6 +107,12 @@ is resistive (about 19°), so the original fixed angle was reasonable.
   the service command. The actual imported power now covers the DC shortfall
   even with a 20 V service floor. A nonzero required import at zero
   positive-sequence voltage is rejected by the numeric evaluators.
+  Controller stamps use four sequence-current equalities when the plant already
+  enforces zero current sum, avoiding two dependent phase-current equations.
+  LCL grid targets retain all phase equations because their shunt can carry I0.
+  Controlled solves with four independent commands omit unused lossless
+  current-magnitude epigraphs; standalone and LCL grid-target solves retain
+  their legacy treatment. This removes free barrier directions at zero dispatch.
 - **Reduced loop gain:** reconstruct voltage perturbations with the measured
   zero-sequence offset held fixed, for both single-device and fleet screens.
   The reduced screen still omits changes in that channel; this limitation is
@@ -119,3 +125,5 @@ is resistive (about 19°), so the original fixed angle was reasonable.
 `test/inverter_control_merge_review_tests.jl` covers the three controller
 reproductions, both current targets, common and power-priority limiting, and
 independent finite differences at nonzero sensed zero-sequence voltage.
+It also checks the physical DC budget through the import transition under
+every P/Q priority and binding current limits.

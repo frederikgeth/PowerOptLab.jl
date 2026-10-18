@@ -1798,7 +1798,7 @@ function stamp_smooth_control!(ctx, controller::SequenceController,
     # same way as the LCL shunt offset below.
     offset_re, offset_im = controller.current_target isa ConverterCurrentTarget ?
         (handles.cri, handles.cii) : (handles.gri, handles.gii)
-    target_i1 = _sequence_pair(collect(offset_re), collect(offset_im))[2]
+    _, target_i1, target_i2 = _sequence_pair(collect(offset_re), collect(offset_im))
     offset = _defined_control_expression!(m,
         handles.p_dc - 3(u1[1]*target_i1[1] + u1[2]*target_i1[2]);
         scale=smax, start=0.0)
@@ -1892,9 +1892,20 @@ function stamp_smooth_control!(ctx, controller::SequenceController,
     phase_current = _phase_pairs(i1, i2)
     target_re, target_im = controller.current_target isa ConverterCurrentTarget ?
         (handles.cri, handles.cii) : (handles.gri, handles.gii)
-    for k in 1:3
-        JuMP.@constraint(m, target_re[k] == phase_current[k][1])
-        JuMP.@constraint(m, target_im[k] == phase_current[k][2])
+    if controller.current_target isa ConverterCurrentTarget || !_lcl_active(inverter)
+        # The three-leg plant already enforces I0=0 at this target. Six phase
+        # equalities would repeat those two rows and make the Jacobian rank
+        # deficient, especially at zero dispatch. Command only I1 and I2.
+        for (target, command) in ((target_i1, i1), (target_i2, i2)), j in 1:2
+            JuMP.@constraint(m, target[j] == command[j])
+        end
+    else
+        # An LCL shunt can carry zero sequence, so a grid-current target must
+        # also enforce the controller's zero grid-current sum explicitly.
+        for k in 1:3
+            JuMP.@constraint(m, target_re[k] == phase_current[k][1])
+            JuMP.@constraint(m, target_im[k] == phase_current[k][2])
+        end
     end
 
     u1_conj_i1 = _cmul(u1[1], u1[2], i1[1], -i1[2])
@@ -1920,7 +1931,13 @@ end
 function stamp_device!(ctx, controlled::ControlledDevice{<:AdvancedInverter};
                        request::InverterControlRequest)
     inverter = inverter_spec(controlled)
-    plant = stamp_device!(ctx, inverter)
+    # With four independent current commands, unused magnitude epigraphs add
+    # free barrier directions at zero dispatch. Keep the legacy auxiliaries for
+    # LCL grid targets, which also prescribe a separate zero-sequence channel.
+    retain_epigraph = controlled.controller.current_target isa GridCurrentTarget &&
+                      _lcl_active(inverter)
+    plant = stamp_device!(ctx, inverter;
+        retain_lossless_magnitude_epigraph=retain_epigraph)
     control = stamp_smooth_control!(ctx, controlled.controller, request,
                                     inverter,
                                     inverter_handles(controlled, plant))

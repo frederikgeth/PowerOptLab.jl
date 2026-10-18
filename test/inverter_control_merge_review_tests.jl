@@ -71,6 +71,29 @@ end
     end
 end
 
+@testset "Merge review: DC budget through smooth import transition and saturation" begin
+    measurement = InverterControlMeasurement(_merge_review_phases(230.0 + 0im))
+    request = InverterControlRequest(p_available=5000.0, p_rated=6000.0, q_scale=6000.0)
+    # A constant Q request and a tight current rating exercise both power and
+    # current saturation. Check delivered power, not the reported command.
+    vv = PiecewiseLinearLaw([200.0, 260.0], [1.0, 1.0]; smoothing_epsilon=0.05)
+    ratings = InverterControlRatings(s_max=6000.0, i_max=1.0)
+    for available in (-100.0, -1e-3, 0.0, 1e-3, 100.0, 5000.0),
+            floor in (1.0, 20.0), priority in (:proportional, :watt, :var),
+            sequence_priority in (false, true)
+        limiter = sequence_priority ? SequencePriorityLimiter(pq_priority=priority) :
+                                      CommonScaleLimiter(pq_priority=priority)
+        controller = SequenceController(AverageVoltageVoltVarWatt(volt_var=vv);
+            limiter=limiter, power_voltage_floor=floor)
+        offset = request.p_available - available
+        for evaluate in (evaluate_exact, evaluate_smooth)
+            result = evaluate(controller, measurement, request, ratings;
+                dc_power_offset=offset)
+            @test real(result.sequence_power) + offset <= request.p_available + 1e-8
+        end
+    end
+end
+
 @testset "Merge review: reduced loop gain retains sensed zero-sequence voltage" begin
     vv = PiecewiseLinearLaw([207.0, 220.0, 240.0, 258.0],
         [0.44, 0.0, 0.0, -0.60]; smoothing_epsilon=0.05)
