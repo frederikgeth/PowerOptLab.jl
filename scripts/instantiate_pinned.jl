@@ -53,5 +53,7 @@ info.is_tracking_repo && info.git_revision == source["rev"] ||
     error("Resolved BMOPFTools does not match the requested source commit")
 println("BMOPFTools ", info.git_revision, " at ", info.source)
 import BMOPFTools
-isdefined(BMOPFTools, :optimize_opf!) ||
-    error("The pinned BMOPFTools source must provide optimize_opf!")
+for api in (:optimize_opf!, :opf_object, :opf_ibr_power_key)
+    isdefined(BMOPFTools, api) ||
+        error("The pinned BMOPFTools source must provide $api")
+end

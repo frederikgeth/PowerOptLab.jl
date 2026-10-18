@@ -29,9 +29,9 @@ jobs:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
       - uses: julia-actions/cache@v3
-      # BMOPFTools is not registered yet. Pin the tested source rather than
-      # resolving whichever commit happens to be at the head of main.
-      - name: Instantiate dependencies at the tested BMOPFTools commit
+      # Install the reviewed main commit from Project.toml, replacing any
+      # cached revision. The setup script verifies the resolved source SHA.
+      - name: Instantiate dependencies at the reviewed BMOPFTools main commit
         run: julia --project=. scripts/instantiate_pinned.jl
       - uses: julia-actions/julia-buildpkg@latest
       - uses: julia-actions/julia-runtest@latest

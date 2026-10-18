@@ -2846,39 +2846,19 @@ function _stamp_legacy_port!(ctx, cp::ConnectionPoint)
     return P
 end
 
-# Recover the active-power expression already stamped by a BMOPFTools IBR. This
-# adds no reactive decision: the engine's own constant-PF / Volt-VAr equality is
-# retained unchanged.
+# Bind the envelope to the engine's registered active-power auxiliaries, which
+# also participate in its capability and control constraints. Keep topology and
+# power-expression construction in BMOPFTools rather than duplicating them here.
 function _ibr_active_power(ctx, cp::ConnectionPoint)
-    m = _opf_model(ctx)
     inv = _opf_network(ctx)["ibr"][cp.ibr_id]
-    bus = String(inv["bus"])
     tm = String.(inv["terminal_map"])
     topo = uppercase(String(get(inv, "topology", "FOUR_LEG")))
-    vr, vi = _opf_voltage_maps(ctx)
-
     if topo == "SINGLE_PHASE"
-        ph, ref = tm[1], tm[2]
-        dvr = JuMP.@expression(m, vr[(bus,ph)] - vr[(bus,ref)])
-        dvi = JuMP.@expression(m, vi[(bus,ph)] - vi[(bus,ref)])
-        cr = _opf_ibr_current(ctx, cp.ibr_id, 1)
-        ci = _opf_ibr_current(ctx, cp.ibr_id, 1; component=:imag)
-        return JuMP.@expression(m,
-            dvr*cr + dvi*ci)
+        return _opf_ibr_power(ctx, cp.ibr_id, 1)
     end
-
     neutral = cp.neutral # validated against the engine's neutral roles
-    phases = [term for term in tm if term != neutral]
-    terms = JuMP.QuadExpr[]
-    for (idx, ph) in enumerate(phases)
-        dvr = JuMP.@expression(m, vr[(bus,ph)] - vr[(bus,neutral)])
-        dvi = JuMP.@expression(m, vi[(bus,ph)] - vi[(bus,neutral)])
-        cr = _opf_ibr_current(ctx, cp.ibr_id, idx)
-        ci = _opf_ibr_current(ctx, cp.ibr_id, idx; component=:imag)
-        push!(terms, JuMP.@expression(m,
-            dvr*cr + dvi*ci))
-    end
-    return sum(terms)
+    phase_count = count(!=(neutral), tm)
+    return sum(_opf_ibr_power(ctx, cp.ibr_id, idx) for idx in 1:phase_count)
 end
 
 _connection_active_power(ctx, cp) =

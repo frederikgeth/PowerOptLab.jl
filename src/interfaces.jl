@@ -86,6 +86,10 @@ _opf_ibr_current(ctx, ibr, conductor; component::Symbol=:real) =
     BMOPFTools.opf_object(ctx,
         BMOPFTools.opf_ibr_current_key(String(ibr), conductor; component=component))
 
+_opf_ibr_power(ctx, ibr, phase; component::Symbol=:active) =
+    BMOPFTools.opf_object(ctx,
+        BMOPFTools.opf_ibr_power_key(String(ibr), phase; component=component))
+
 _opf_transformer_tap(ctx, transformer) = BMOPFTools.opf_object(ctx,
     BMOPFTools.opf_transformer_tap_key(String(transformer)))
 
