@@ -166,7 +166,7 @@ and the PowerOptLab version becomes a thin re-export or is retired.
 ## BMOPFTools compatibility
 
 BMOPFTools is unregistered. The root and docs `Project.toml` source tables pin
-commit `df6bc42bfd64fc5475658c438adcdb28a3469777`; package compatibility remains
+commit `b25c84df364a6646324dd144d60ce52a13d0c557`; package compatibility remains
 0.1.0. Update both source pins together, then run the complete tests and
 documentation build on the Julia compatibility floor and current stable.
 
@@ -177,6 +177,15 @@ and explicitly installs the commit, including on Julia 1.10 where `[sources]`
 is not consumed automatically. A fresh Julia 1.10 documentation environment
 is bootstrapped with the local PowerOptLab path before resolving the registered
 documentation dependencies.
+
+The current pin includes upstream's reactive capability enforcement alongside
+PF/Volt-var control, per-coil minimum-PF policy, device and connection-map
+validation, and corrected center-tap winding-terminal currents and ratings.
+DOE connections use the public `opf_ibr_power_key` / `opf_object` API to bind
+their active-power envelopes to the native IBR power variables. Native reactive
+bounds and control laws remain enforced together; a contradictory minimum-PF
+request raises an error. The integration regressions exercise both PF signs in
+SI and per-unit coordinates, including IBRs without an apparent-power rating.
 
 Documentation CI builds on Julia 1.10 and current stable; only current stable
 deploys. To build locally without deployment, use:

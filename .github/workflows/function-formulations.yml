@@ -22,7 +22,7 @@ jobs:
         with:
           version: ${{ matrix.version }}
       - uses: julia-actions/cache@v3
-      - name: Instantiate production source pin
+      - name: Instantiate reviewed BMOPFTools main commit
         run: julia --project=. scripts/instantiate_pinned.jl
       - name: Create isolated optional-backend environment
         run: julia scripts/formulations/setup.jl "${{ runner.temp }}/pwl-env"
