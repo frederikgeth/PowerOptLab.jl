@@ -75,10 +75,12 @@ The result uses a 6×6 phase-rectangular matrix for four-leg devices and a 4×4
 positive/negative-sequence matrix for three-leg devices at either current target,
 because independent phase-current perturbations violate the three-leg
 zero-neutral-current constraint.
-The reduced screen intentionally projects sensed phase voltage onto `U₁/U₂`;
-if a study's controller is materially sensitive to common-mode voltage, retain
-that channel in a separate phase-ground study rather than treating the 4×4
-screen as a complete six-coordinate model.
+The reduced screen perturbs `U₁/U₂` while holding the **measured** `U₀` fixed.
+It retains that offset when reconstructing sensed phase voltages, so a
+phase-magnitude controller is differentiated at its actual operating point.
+The 4×4 screen does not include changes in `U₀`; if common-mode voltage changes
+are material, retain that channel in a separate phase-ground study rather than
+treating the reduced screen as a complete six-coordinate model.
 
 For a selected fleet, `controlled_inverter_fleet_network_voltage_sensitivity`
 performs the same audit with all selected current targets fixed simultaneously.

@@ -318,11 +318,8 @@ function _inverter_control_coordinate_jacobian(
         dc_power_offset::Real=0.0)
     point = _coordinate_voltage_state(measurement.phase_voltage, coordinate_system)
     map = state -> begin
-        phase_voltage = coordinate_system === :phase_rectangular ?
-            _phasor_state(state) : _coordinate_phase_from_state(state, coordinate_system)
-        # For the sequence-reduced voltage map, `_coordinate_phase_from_state` is the
-        # same inverse Fortescue map used for the zero-sequence-free physical
-        # current subspace; it reconstructs the phase phasors from U1/U2.
+        phase_voltage = _coordinate_voltage_from_state(
+            state, coordinate_system, measurement.phase_voltage)
         control = evaluate_exact(
             controller, InverterControlMeasurement(phase_voltage), request, ratings;
             dc_power_offset=dc_power_offset)
@@ -499,6 +496,15 @@ function _coordinate_phase_from_state(state::AbstractVector, coordinate_system::
         return _phase_from_sequences(i1, i2)
     end
     throw(ArgumentError("unsupported sensitivity coordinate system '$coordinate_system'"))
+end
+
+# The reduced coordinates perturb U1/U2 with measured U0 held fixed. Current
+# reconstruction has no I0, but using it alone for voltage would silently
+# evaluate phase-magnitude policies at a different operating point.
+function _coordinate_voltage_from_state(state, coordinate_system, reference)
+    coordinate_system === :phase_rectangular && return _phasor_state(state)
+    u0 = _phasor_sequences(reference)[1]
+    return _coordinate_phase_from_state(state, coordinate_system) .+ u0
 end
 
 function _coordinate_voltage_state(values::NTuple{3,ComplexF64}, coordinate_system::Symbol)
@@ -840,10 +846,8 @@ function controlled_inverter_fleet_loop_gain(
                 inverter_spec(controlled), controlled.controller.current_target)
             request = spec.requests[id]
             block = dimension * (index - 1) + 1:dimension * index
-            measurement = InverterControlMeasurement(
-                coordinate_system === :phase_rectangular ?
-                    _phasor_state(state[block]) :
-                    _coordinate_phase_from_state(state[block], coordinate_system))
+            measurement = InverterControlMeasurement(_coordinate_voltage_from_state(
+                state[block], coordinate_system, validated[id].phase_voltage))
             currents[block] = _coordinate_state(evaluate_exact(
                 controlled.controller, measurement, request, ratings;
                 dc_power_offset=offset_of(id)).phase_current,
@@ -1453,6 +1457,8 @@ matrix in rectangular a-b-c coordinates. With
 `coordinate_system=:positive_negative_sequence`, it is a 4×4 real matrix in
 the real/imaginary positive- and negative-sequence coordinates. The latter is
 the physically realizable converter-current subspace of a three-leg inverter.
+Reduced voltage perturbations hold the sensed zero-sequence voltage fixed at
+its measured value; they do not replace it with zero.
 The exact controller evaluator supplies the current-command Jacobian. This is
 a local diagnostic for the supplied quasi-static sensitivity; it does not
 include dynamics absent from `Z` or the controller map.
@@ -1485,8 +1491,8 @@ function inverter_control_loop_gain(
         dc_power_offset=dc_power_offset).phase_current,
         coordinate_system)
     map = state -> begin
-        phase_voltage = coordinate_system === :phase_rectangular ?
-            _phasor_state(state) : _coordinate_phase_from_state(state, coordinate_system)
+        phase_voltage = _coordinate_voltage_from_state(
+            state, coordinate_system, measurement.phase_voltage)
         current = _coordinate_state(evaluate_exact(
             controller, InverterControlMeasurement(phase_voltage),
             request, ratings; dc_power_offset=dc_power_offset).phase_current,

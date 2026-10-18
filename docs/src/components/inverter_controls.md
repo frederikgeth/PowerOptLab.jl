@@ -166,6 +166,11 @@ therefore curtails only the service command, and the DC draw never exceeds the
 availability. The smooth model represents ``\min(A,0)`` with a selector of width
 ``10^{-3}`` of the rating. Its error is one-sided: near ``A=0`` it overstates the
 import by at most half that width, about 3 W for a 6 kVA inverter.
+The required import uses ``I_1^{import}=P_{import}U_1/(3|U_1|^2)`` so that
+its physical power is exactly ``P_{import}``, independent of
+`power_voltage_floor`. A nonzero import requires nonzero positive-sequence
+voltage. Service-current regularization and capability backoff can reduce
+export, but cannot reduce this required import.
 
 `CommonScaleLimiter` uses rating-relative current and power smoothing fractions
 by default (`current_epsilon_fraction=2.5\times10^{-5}` and
@@ -216,7 +221,7 @@ where ``a=e^{j2\pi/3}``, the reconstructed three-leg currents are
 ```
 
 Consequently ``I_a+I_b+I_c=0`` identically. The requested positive-sequence
-current uses
+service current, before adding the required loss import, uses
 
 ```math
 I_1^{req}=\frac{(P-jQ)U_1}{3(|U_1|^2+U_{floor}^2)}.
@@ -225,7 +230,7 @@ I_1^{req}=\frac{(P-jQ)U_1}{3(|U_1|^2+U_{floor}^2)}.
 `power_voltage_floor` is a declared low-voltage regularization, not a
 curve-smoothing parameter. It makes the division well-defined without replacing
 any physical magnitude by an epsilon-perturbed square root. Before other
-limiters, its relative positive-sequence power residual is exactly
+limiters, the service command's relative positive-sequence power residual is exactly
 
 ```math
 \frac{|S^{req}-S_1|}{|S^{req}|}

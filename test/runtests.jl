@@ -62,6 +62,7 @@ const _HAS_ODS = true
     include("inverter_control_tests.jl")
     include("inverter_control_numerics_tests.jl")
     include("inverter_control_review_tests.jl")
+    include("inverter_control_merge_review_tests.jl")
     include("inverter_control_study_tests.jl")
     include("inverter_control_experiment_tests.jl")
     include("inverter_control_sizing_tests.jl")

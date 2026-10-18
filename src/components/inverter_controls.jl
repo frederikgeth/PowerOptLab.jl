@@ -753,6 +753,16 @@ function dc_power_offset(p_dc::Real, phase_voltage, target_current)
     return Float64(p_dc) - 3real(u1*conj(i1))
 end
 
+# Required loss import is a physical power balance, not a service request.
+# Regularizing this denominator would import only |U1|²/(|U1|² + floor²) of
+# the shortfall and leave the remainder on the unavailable DC source.
+function _loss_import_current(p_import::Real, u1::Complex)
+    iszero(p_import) && return zero(u1)
+    iszero(u1) && throw(ArgumentError(
+        "a nonzero loss import requires nonzero positive-sequence voltage"))
+    return p_import*u1/(3abs2(u1))
+end
+
 function _phase_from_sequences(i1, i2)
     a = cis(2pi / 3)
     return (i1 + i2, a^2*i1 + a*i2, a*i1 + a^2*i2)
@@ -1112,7 +1122,7 @@ function evaluate_smooth(controller::SequenceController,
 
     floor = controller.power_voltage_floor
     denominator = 3(abs2(u1) + floor^2)
-    i1_import = p_import * u1 / denominator
+    i1_import = _loss_import_current(p_import, u1)
     i1_request = conj(complex(p, q)) * u1 / denominator
     i2v, i2r, i2_request, eta = _unbalance_numeric_smooth(
         controller.unbalance, u1, u2, i1_request)
@@ -1161,6 +1171,9 @@ capacitor losses plus negative-sequence active power; see
 [`dc_power_offset`](@ref). Its default of zero describes a lossless plant. When
 the offset exceeds the available power the command becomes an import that
 covers exactly the shortfall; the Volt-watt curve does not curtail that import.
+The loss import uses the physical voltage denominator without
+`power_voltage_floor`, which continues to regularize only the service command.
+A nonzero loss import requires nonzero positive-sequence voltage.
 """
 function evaluate_exact(controller::SequenceController,
                         measurement::InverterControlMeasurement,
@@ -1184,7 +1197,7 @@ function evaluate_exact(controller::SequenceController,
 
     floor = controller.power_voltage_floor
     denominator = 3(abs2(u1) + floor^2)
-    i1_import = p_import * u1 / denominator
+    i1_import = _loss_import_current(p_import, u1)
     i1_request = conj(complex(p, q)) * u1 / denominator
     i2v, i2r, i2_request, eta = _unbalance_exact(
         controller.unbalance, u1, u2, i1_request)
@@ -1704,7 +1717,7 @@ function _plant_capability_scale!(m, inverter::AdvancedInverter, handles,
         magnitude_start=max(0.25smax, seps), scale=smax)
     capability_scale = _combine_safe_scale_implicit!(
         m, capability_scale, power_candidate, seps/smax)
-    if inverter.dv2_max !== nothing
+    if inverter.dv2_max !== nothing && !iszero(_dc_ripple_factor(inverter))
         ripple_offset = (0.0, 0.0)
         ripple_direction = (0.0, 0.0)
         for k in 1:3
@@ -1809,7 +1822,9 @@ function stamp_smooth_control!(ctx, controller::SequenceController,
 
     floor = controller.power_voltage_floor / vb
     denominator = 3(u1[1]^2 + u1[2]^2 + floor^2)
-    i1_import = (p_import*u1[1]/denominator, p_import*u1[2]/denominator)
+    import_denominator = 3(u1[1]^2 + u1[2]^2)
+    i1_import = (p_import*u1[1]/import_denominator,
+                 p_import*u1[2]/import_denominator)
     i1_request = ((p_service*u1[1] + q*u1[2]) / denominator,
                   (p_service*u1[2] - q*u1[1]) / denominator)
     i2v, i2r, i2_request, eta = _unbalance_smooth(
@@ -2008,7 +2023,7 @@ function _plant_scale_exact(converter_voltage, converter_offset, grid_offset,
         converter_voltage[k]*conj(direction[k]) for k in 1:3)
     scale = min(scale, _safe_direction_scale_exact(
         power_offset, power_direction, inverter.s_max))
-    if inverter.dv2_max !== nothing
+    if inverter.dv2_max !== nothing && !iszero(_dc_ripple_factor(inverter))
         ripple_offset = sum(
             converter_voltage[k]*converter_offset[k] for k in 1:3)
         ripple_direction = sum(
@@ -2086,8 +2101,7 @@ function _exact_control_at_solution(
         request, InverterControlRatings(controlled.device, target);
         dc_power_offset=offset)
     u1 = exact.voltage_sequence[2]
-    floor = controlled.controller.power_voltage_floor
-    i1_import = min(request.p_available - offset, 0.0)*u1/(3(abs2(u1) + floor^2))
+    i1_import = _loss_import_current(min(request.p_available - offset, 0.0), u1)
     return _apply_plant_capability_exact(
         exact, extracted.converter_terminal.phase_voltage,
         extracted.converter_terminal.phase_current, grid_current,

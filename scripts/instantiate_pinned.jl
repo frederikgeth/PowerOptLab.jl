@@ -17,10 +17,18 @@ Base.active_project() in project_paths || error("Run with --project=. or --proje
 upstream = Pkg.PackageSpec(name="BMOPFTools", url=source["url"], rev=source["rev"])
 docs_manifest = joinpath(root, "docs", "Manifest.toml")
 if VERSION < v"1.11" && Base.active_project() == project_paths[2] && !isfile(docs_manifest)
-    # Julia 1.10 ignores [sources]. Seed both unregistered packages together in
-    # a temporary environment before resolving the remaining docs dependencies.
+    # Julia 1.10 ignores [sources]. Resolve the registered docs dependencies
+    # (especially Documenter) together with the pinned upstream before adding
+    # the local package. Seeding only the two unregistered packages can freeze
+    # a transitive version that Documenter cannot use when Pkg.resolve runs.
     mktempdir() do bootstrap
         try
+            bootstrap_project = TOML.parsefile(project_paths[2])
+            delete!(bootstrap_project["deps"], "PowerOptLab")
+            delete!(bootstrap_project, "sources")
+            open(joinpath(bootstrap, "Project.toml"), "w") do io
+                TOML.print(io, bootstrap_project)
+            end
             Pkg.activate(bootstrap)
             Pkg.add(upstream)
             Pkg.develop(Pkg.PackageSpec(path=root))

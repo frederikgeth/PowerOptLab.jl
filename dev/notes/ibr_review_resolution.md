@@ -96,3 +96,26 @@ review's main concerns are borne out:
 
 One review claim was withdrawn: the measured negative-sequence impedance angle
 is resistive (about 19°), so the original fixed angle was reasonable.
+
+## PR #61 merge-review follow-up
+
+- **Stiff DC source:** skip the voltage-ripple capability backoff when the
+  source factor is zero. An ideal stiff source then has zero bus ripple without
+  introducing an infinite limit into either the smooth or exact controller.
+- **Physical loss import:** use the unregularized positive-sequence voltage
+  denominator for the mandatory import, keeping the declared voltage floor on
+  the service command. The actual imported power now covers the DC shortfall
+  even with a 20 V service floor. A nonzero required import at zero
+  positive-sequence voltage is rejected by the numeric evaluators.
+- **Reduced loop gain:** reconstruct voltage perturbations with the measured
+  zero-sequence offset held fixed, for both single-device and fleet screens.
+  The reduced screen still omits changes in that channel; this limitation is
+  stated in the documentation.
+- **Julia 1.10 docs:** include the registered documentation dependencies in the
+  bootstrap resolution before adding the local package. This allows Documenter
+  to select compatible transitive dependencies instead of inheriting an
+  incompatible DocStringExtensions version from an unrelated seed environment.
+
+`test/inverter_control_merge_review_tests.jl` covers the three controller
+reproductions, both current targets, common and power-priority limiting, and
+independent finite differences at nonzero sensed zero-sequence voltage.
