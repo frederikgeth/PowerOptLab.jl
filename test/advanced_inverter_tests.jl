@@ -678,13 +678,33 @@ end
     @test asym.v_mid_mean ≈ vdc*(cu-cl)/(2csum) atol=1e-10
     @test asym.q_mid_balance == 0.0
     @test asym.dv2 ≈ asym.ripple/(2w*ceq*vdc) rtol=1e-4
-    @test asym.dv_mid ≈ asym.i_neutral/(w*csum) rtol=1e-4
+    # Default open line-frequency source: each averaged rail carries half the
+    # bridge return current, so the half-banks share the neutral current
+    # equally, the midpoint moves by In(1/C_u+1/C_l)/(4ω), and the unequal
+    # banks ripple the total bus at ω by In|1/C_l-1/C_u|/(2ω).
+    @test asym.dv_mid ≈ asym.i_neutral*(1/cu + 1/cl)/(4w) rtol=1e-4
+    @test asym.dv_bus_fundamental ≈ asym.i_neutral*abs(1/cl - 1/cu)/(2w) rtol=1e-4
     i2 = asym.ripple/(sqrt(2)*vdc)
-    @test asym.i_cap_upper^2 ≈ i2^2 + (cu/csum*asym.i_neutral)^2 rtol=1e-4
-    @test asym.i_cap_lower^2 ≈ i2^2 + (cl/csum*asym.i_neutral)^2 rtol=1e-4
-    @test asym.i_cap_lower > asym.i_cap_upper + 0.5
-    @test asym.i_cap ≈ asym.i_cap_lower rtol=1e-12
+    @test asym.i_cap_upper^2 ≈ i2^2 + (asym.i_neutral/2)^2 rtol=1e-4
+    @test asym.i_cap_lower^2 ≈ i2^2 + (asym.i_neutral/2)^2 rtol=1e-4
+    @test asym.i_cap ≈ max(asym.i_cap_upper, asym.i_cap_lower) rtol=1e-12
     @test asym.switching_margin > 0.0
+
+    # An ideal stiff source (zero branch impedance) holds the total bus at ω
+    # and 2ω: the neutral current then divides by capacitance and the source
+    # absorbs all 2ω current.
+    stiff = solve_advanced_inverter(inv_grid3_unbal(),
+        AdvancedInverter(; id="i", c_dc_upper=cu, c_dc_lower=cl,
+                         dc_source_r=0.0, common...))
+    @test stiff.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+    @test stiff.dv_mid ≈ stiff.i_neutral/(w*csum) rtol=1e-4
+    @test stiff.dv_bus_fundamental ≈ 0.0 atol=1e-9
+    @test stiff.dv2 ≈ 0.0 atol=1e-9
+    @test stiff.i_cap_upper ≈ cu/csum*stiff.i_neutral rtol=1e-4
+    @test stiff.i_cap_lower ≈ cl/csum*stiff.i_neutral rtol=1e-4
+    @test stiff.i_cap_lower > stiff.i_cap_upper + 0.5
+    @test stiff.i_cap ≈ stiff.i_cap_lower rtol=1e-12
+    @test stiff.switching_margin > 0.0
 end
 
 @testset "Advanced inverter: split-link balancing and frequency-weighted heating" begin
@@ -704,11 +724,11 @@ end
     natural = vdc*(cu-cl)/(2csum)
     @test r.v_mid_mean ≈ natural + 2r.q_mid_balance/csum rtol=1e-8 atol=1e-8
     @test abs(r.q_mid_balance) <= 0.25 + 1e-8
+    # Open line-frequency source: equal neutral-current shares.
     i2 = r.ripple/(sqrt(2)*vdc)
     expected_tu2 = weights[2]*i2^2 +
-        weights[1]*(cu/csum*r.i_neutral)^2 + weights[3]*0.0^2
-    expected_tl2 = weights[2]*i2^2 +
-        weights[1]*(cl/csum*r.i_neutral)^2 + weights[3]*0.0^2
+        weights[1]*(r.i_neutral/2)^2 + weights[3]*0.0^2
+    expected_tl2 = expected_tu2
     @test r.i_cap_thermal_upper^2 ≈ expected_tu2 rtol=1e-4
     @test r.i_cap_thermal_lower^2 ≈ expected_tl2 rtol=1e-4
     @test r.i_cap_thermal ≈ max(r.i_cap_thermal_upper,

@@ -72,17 +72,19 @@ plant. It records plus/minus `SolveStatus` values for every column and leaves
 failed columns as `NaN`; this makes current-limit boundaries visible in the
 loop-gain evidence instead of silently extrapolating through them.
 The result uses a 6×6 phase-rectangular matrix for four-leg devices and a 4×4
-positive/negative-sequence matrix for three-leg converter-current targets,
+positive/negative-sequence matrix for three-leg devices at either current target,
 because independent phase-current perturbations violate the three-leg
 zero-neutral-current constraint.
-The reduced screen intentionally projects sensed phase voltage onto `U₁/U₂`;
-if a study's controller is materially sensitive to common-mode voltage, retain
-that channel in a separate phase-ground study rather than treating the 4×4
-screen as a complete six-coordinate model.
+The reduced screen perturbs `U₁/U₂` while holding the **measured** `U₀` fixed.
+It retains that offset when reconstructing sensed phase voltages, so a
+phase-magnitude controller is differentiated at its actual operating point.
+The 4×4 screen does not include changes in `U₀`; if common-mode voltage changes
+are material, retain that channel in a separate phase-ground study rather than
+treating the reduced screen as a complete six-coordinate model.
 
 For a selected fleet, `controlled_inverter_fleet_network_voltage_sensitivity`
 performs the same audit with all selected current targets fixed simultaneously.
-Its `6N × 6N` four-leg or `4N × 4N` three-leg converter-current matrix retains
+Its `6N × 6N` four-leg or `4N × 4N` three-leg matrix retains
 cross-device coupling, rather than assembling
 independent one-device sensitivities. Device blocks and perturbation columns
 are ordered by sorted device id, and failed columns remain `NaN` with their
@@ -145,8 +147,12 @@ The reported `spectral_radius` is the largest eigenvalue magnitude. A value
 below `threshold` is labelled `local_contractive`; this is explicitly the
 unrelaxed Picard screen and the `margin` is `threshold - spectral_radius`.
 `maximum_real_eigenvalue` and `continuous_time_margin` apply the ideal
-first-order response model, while `alpha_max` gives the largest update-to-
-response-time ratio predicted by the relaxed discrete iteration. These are
+first-order response model, while `alpha_max` gives the largest relaxation
+factor ``α`` for which ``x^+ = x + α(F(x)-x)`` is locally contractive,
+``\min_i 2\Re(1-λ_i)/|1-λ_i|^2`` (zero when some ``\Re λ_i \ge 1``). The
+relaxed iteration is a better proxy for a filtered or rate-limited firmware
+update than the unrelaxed Picard screen; a spectral radius above one with a
+positive `continuous_time_margin` means that small update steps still converge. These are
 local numerical screens, not certificates for a nonlinear or hybrid controller.
 
 For a four-leg controller adapter, the state is six real rectangular
@@ -165,7 +171,7 @@ screens the local loop
 J_{loop} = Z\,\frac{\partial i}{\partial v}.
 ```
 
-For a three-leg converter-current target, use the reduced four-coordinate
+For a three-leg device (converter- or grid-current target), use the reduced four-coordinate
 positive/negative-sequence basis `(Re U₁, Im U₁, Re U₂, Im U₂)` and the
 corresponding 4×4 network sensitivity. Independent phase-current perturbations
 are not physically realizable because the converter enforces zero neutral

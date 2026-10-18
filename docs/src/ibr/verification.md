@@ -11,8 +11,8 @@ oracle. A solver returning `LOCALLY_SOLVED` is necessary, but not sufficient.
 | Phase and neutral filter KVL | conductor power balance | `Pconv - Ppoc = Rp sum(Ix^2) + Rn In^2` |
 | Primitive filter matrix | direct complex matrix product and diagonal equivalence | `ΔVxn = (Zf J)x - (Zf J)n`; a diagonal primitive reproduces scalar solves |
 | LCL zero-capacitance limit | paired reduced/explicit solves | with `Cmid=0`, the two arms collapse to their summed impedance and `Iconv=Igrid` |
-| LCL midpoint KCL | damped-capacitor admittance | `|Ish|=|Vmid|/|Rd+1/(jωCmid)|` and converter/grid currents differ |
-| LCL real-power balance | terminal powers and branch currents | `p_filter_loss=Pconv-Ppoc=IcᴴRcIc+IgᴴRgIg+Rd Σ|Ish|²` |
+| LCL midpoint KCL | damped-capacitor admittance | `abs(Ish)=abs(Vmid)/abs(Rd+1/(jωCmid))` and converter/grid currents differ |
+| LCL real-power balance | terminal powers and branch currents | `p_filter_loss=Pconv-Ppoc=IcᴴRcIc+IgᴴRgIg+Rd Σabs(Ish)²` |
 | Scalar resonance estimate | closed form | reported `fres = sqrt((Lc+Lg)/(Lc Lg Cmid))/(2π)`; matrix mode reports no scalar estimate |
 | Fortescue transform | prescribed sequence phasors | `i_neutral = 3 i_zero`; pure negative sequence has zero neutral current |
 | Sequence limits | unbalanced voltage sources | each of `i_zero_max`, `i_positive_max`, `i_negative_max` bounds its reported component |
@@ -21,9 +21,9 @@ oracle. A solver returning `LOCALLY_SOLVED` is necessary, but not sufficient.
 | Sample resolution and audit | nested sample grids plus independent dense evaluation | increasing `n_samples` tightens the outer approximation; `switching_margin < 0` reveals a missed between-sample peak |
 | 2ω power | Deakin et al. Table V | six prescribed current patterns produce `[0,1,1.5,3,0,1] Vph Iref` |
 | 2ω PLECS comparison | Deakin et al. Table VII | all six rows are retained; non-cancelling analytical powers agree with PLECS within 0.3% and reported currents within 1% |
-| Bus capacitance | capacitor energy balance | `dv2 = ripple/(2ω Ceq Vdc)`, with `Ceq=Cu Cl/(Cu+Cl)` for a split link |
-| Split midpoint | charge balance | `dv_mid = i_neutral/[ω(Cu+Cl)]`; symmetric banks recover `i_neutral/(2ω Cdc)` |
-| Split-bank mismatch | series charge and midpoint KCL | natural mean offset is `Vdc(Cu-Cl)/[2(Cu+Cl)]`; neutral shares are `Cu/(Cu+Cl)` and `Cl/(Cu+Cl)` |
+| Bus capacitance | capacitor energy balance | open line-frequency source: `dv2 = ripple/(2ω Ceq Vdc)`, with `Ceq=Cu Cl/(Cu+Cl)` for a split link; ideal stiff source: `dv2 = 0` |
+| Split midpoint | charge balance | equal banks: `dv_mid = i_neutral/[ω(Cu+Cl)]` for every source model, recovering `i_neutral/(2ω Cdc)` |
+| Split-bank mismatch | series charge, midpoint KCL, and an independent three-node nodal solve over open, stiff, resistive and R–L sources | natural mean offset is `Vdc(Cu-Cl)/[2(Cu+Cl)]`; open source: equal neutral shares, `dv_mid = In(1/Cu+1/Cl)/(4ω)` and `dv_bus_fundamental = In abs(1/Cl-1/Cu)/(2ω)`; stiff source: shares `Cu/(Cu+Cl)`, `Cl/(Cu+Cl)` and no bus ripple |
 | Bounded midpoint balancing | differential-charge identity | `v_mid_mean - v_mid_natural = 2q_mid_balance/(Cu+Cl)` and insufficient charge authority is infeasible |
 | Capacitor RMS budget | orthogonal components | reported physical upper/lower currents combine their neutral share, common 2ω current, and reserved switching term |
 | Capacitor thermal and ESR loss | weighted squared-current sum | rating constraints use `i_cap_thermal_*`; `p_cap_loss = ESRu Iu,th² + ESRl Il,th²` and enters `p_dc` exactly |
@@ -40,6 +40,12 @@ oracle. A solver returning `LOCALLY_SOLVED` is necessary, but not sufficient.
 | Harmonic filter topology | reduced-L/LCL limiting cases | two series arms with `Cf=0` reproduce their summed impedance; a physical midpoint branch separates converter, shunt, and grid ripple |
 | Neutral inductance and 3-wire projection | paired topology audits | increasing `Ln/L` suppresses four-leg neutral ripple; the 3-leg sum-zero subspace has exactly zero neutral ripple |
 | AC-ripple reserve closure | physical total-RMS ratings in a per-unit solve | allocated carrier RMS covers every predicted phase/neutral value and `hypot(Ifund, Isw)` respects `i_max`/`In_max` |
+| DC availability | lossy controlled plant at full and zero irradiance, both current targets | `p_dc <= p_available`; at zero irradiance the plant imports exactly its losses; a filter-only offset equals `3 R abs(I)^2` |
+| Sequence-priority limiting | exact quadratic fill, smooth/exact comparison and a network solve | `abs(a + t b) <= Imax` with equality when binding; power priority keeps `I1` while common scaling curtails it |
+| Grid-forming negative sequence | three-leg grid-forming plant with a zero-sequence source unbalance | the plant solves (no forced `V0 = 0`) and `abs(I2) = abs(U2)/abs(Zf)`, matching `negative_sequence_virtual_impedance` |
+| Three-leg network sensitivity | converter- and grid-current targets on a resistive fixture | sequence coordinates at both targets; the negative-sequence self-impedance equals the line resistance |
+| Sensing reference | three-wire plant sensing `"n"`, `:ground` and `:device` on a floating neutral | sensed phasors equal the declared terminal differences; `U1`/`U2` laws are invariant, worst-phase laws move at first order and mean-phase laws only at second order |
+| Relaxed fixed-point step | rotation map with complex eigenvalues | `alpha_max = 2Re(1-λ)/abs(1-λ)^2` is the exact contraction boundary of the relaxed iteration |
 | Split rating composition | paired bound cases | common and individual half-bank ratings compose; enlarging any rating cannot shrink the feasible set |
 | Fourth-leg loss | fitted loss equation | phase currents plus `i_neutral` enter the per-leg loss sum |
 | Unit system | representative paired solves | per-unit and raw-SI formulations agree on well-scaled cases, including LCL midpoint quantities |

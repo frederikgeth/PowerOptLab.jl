@@ -88,6 +88,7 @@ makedocs(
             "Scientific foundations" => "ibr/foundations.md",
             "Phase-aware control laws" => "ibr/phase_aware_control_laws.md",
             "Control-study methodology" => "ibr/control_study_methodology.md",
+            "Choosing parameters" => "ibr/parameter_selection.md",
             "Fleet and hardware studies" => "ibr/network_control_studies.md",
             "Closed-loop evidence diagnostics" => "ibr/closed_loop_evidence.md",
             "Phase-aware control modelling guide" => "components/inverter_controls.md",

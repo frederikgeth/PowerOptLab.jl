@@ -1,0 +1,67 @@
+{
+    "label": "pedagogical_volt_watt",
+    "source_vuf_percent": 1,
+    "source_positive_sequence_pu": [
+        1.03
+    ],
+    "filter_x_ohm": 1.3225000000000002,
+    "curves": {
+        "vv_q": [
+            0.44,
+            0.0,
+            0.0,
+            -0.6
+        ],
+        "vv_v": [
+            207,
+            220,
+            240,
+            258
+        ],
+        "vw_basis": "available",
+        "vw_p": [
+            1,
+            0
+        ],
+        "vw_v": [
+            250,
+            260
+        ]
+    },
+    "PowerOptLab": "0.1.0",
+    "Ipopt": "1.15.0",
+    "modes": [
+        "unity",
+        "mean_vv",
+        "mean_vv_vw",
+        "worst_vv_vw",
+        "sequence_vv_vw",
+        "sequence_droop",
+        "sequence_droop_power",
+        "gfm_virtual_impedance",
+        "single_phase_native"
+    ],
+    "Project_sha256": "42e6d21b72a8d7de7a138d813482531ff4639c637ffc6c1a7586a09869e2cb12",
+    "filter_r_ohm": 0.13225000000000003,
+    "sensing_reference": "n",
+    "julia": "1.12.6",
+    "BMOPFTools": "0.1.0",
+    "availability": [
+        1
+    ],
+    "hardware": {
+        "x_over_r": 10,
+        "v_nom": 230,
+        "a_loss": 2,
+        "s_max": 6000,
+        "m_max": 0.96,
+        "p_loss_fixed": 15,
+        "v_dc": 750,
+        "i_max": 10,
+        "dv2_max": 7.5,
+        "x_pu": 0.05,
+        "c_dc": 0.0003,
+        "c_loss": 0.3,
+        "single_phase_i_max": 28.7
+    }
+}

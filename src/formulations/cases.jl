@@ -116,9 +116,15 @@ function controlled_inverter_case(network,device_builder,request;id="controlled_
             current = [complex(value(p[1]),value(p[2]))*h.ib for p in h.phase_current]
             measurement = InverterControlMeasurement(voltage)
             ratings = InverterControlRatings(device.device,device.controller.current_target)
-            exact = evaluate_exact(device.controller,measurement,req,ratings)
-            smooth = evaluate_smooth(device.controller,measurement,req,ratings)
-            (phase_voltage_V=voltage,phase_current_A=current,
+            # The same DC-availability offset the stamp read from the solved plant.
+            plant = handles[].plant
+            target_re,target_im = device.controller.current_target isa ConverterCurrentTarget ?
+                (plant.cri,plant.cii) : (plant.gri,plant.gii)
+            target = [complex(value(target_re[k]),value(target_im[k]))*plant.ib for k in 1:3]
+            offset = dc_power_offset(value(plant.p_dc)*plant.sb,voltage,target)
+            exact = evaluate_exact(device.controller,measurement,req,ratings;dc_power_offset=offset)
+            smooth = evaluate_smooth(device.controller,measurement,req,ratings;dc_power_offset=offset)
+            (phase_voltage_V=voltage,phase_current_A=current,dc_power_offset_W=offset,
              requested_active_power_W=value(h.p_request)*h.sb,
              requested_reactive_power_var=value(h.q_request)*h.sb,
              pre_capability_target_gap_A=maximum(abs,exact.phase_current.-smooth.phase_current),

@@ -83,7 +83,9 @@ silently folded into either existing category.
    solves the implemented three-leg laws with executable examples.
 4. [Inverter-control study methodology](@ref ibr-control-study-methodology)
    describes the model implementation, validation tests and hardware-sizing
-   experiments used in network studies.
+   experiments used in network studies, and [Choosing inverter and controller
+   parameters](@ref ibr-parameter-selection) shows how to derive, source or
+   declare every hardware and controller value.
 5. [Verification and benchmark cases](@ref ibr-verification) maps claims to unit,
    regression, paper, and higher-fidelity tests.
 6. [IBR references](@ref ibr-references) is the maintained bibliography and

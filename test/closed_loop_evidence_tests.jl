@@ -25,6 +25,20 @@ using LinearAlgebra
         @test screen.continuous_time_margin ≈ 0.6 atol=1e-8
         @test screen.alpha_max ≈ 2 / 0.8 atol=1e-8
 
+        # Complex loop eigenvalues 0.5 ± 1.2im: |λ| > 1 fails the Picard
+        # screen, while relaxation with α < 2Re(1-λ)/|1-λ|² = 1/1.69 still
+        # contracts. The modulus-only bound 2/|1-λ| would overstate it.
+        rotation = [0.5 -1.2; 1.2 0.5]
+        complex_screen = screen_fixed_point_gain(
+            x -> rotation*x, [0.0, 0.0]; step=1e-6)
+        @test !complex_screen.local_contractive
+        @test complex_screen.alpha_max ≈ 1/1.69 atol=1e-6
+        relaxed(α) = maximum(abs, eigvals(I + α*(rotation - I)))
+        @test relaxed(0.99complex_screen.alpha_max) < 1
+        @test relaxed(1.01complex_screen.alpha_max) > 1
+        @test screen_fixed_point_gain(
+            x -> 1.5 .* x, [1.0]; step=1e-6).alpha_max == 0.0
+
         negative_gain = screen_fixed_point_gain(
             x -> -2.0 .* x, [1.0]; step=1e-6)
         @test !negative_gain.local_contractive

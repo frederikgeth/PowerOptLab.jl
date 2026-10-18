@@ -47,7 +47,7 @@ function audit()
     write_bmopf(n,joinpath(ROOT,"networks","LV3_three_phase_no_pv.bmopf.json"))
     pf,report=validate_pf(parse_bmopf(joinpath(ROOT,"networks","LV3_three_phase_no_pv.bmopf.json")))
     report["customer_count"]=12; report["phase_load_records"]=36
-    for mode in ["unity","worst_vv_vw","sequence_droop"]
+    for mode in ["unity","worst_vv_vw","sequence_droop","sequence_droop_power"]
         net=study_network(base,1.,1.03)
         result=solve_controlled_inverter_fleet(net,fleet(net,mode,1.);
             s_base=100000.,solver_options=OPTIONS)

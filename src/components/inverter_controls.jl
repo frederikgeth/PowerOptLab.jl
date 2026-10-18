@@ -271,6 +271,35 @@ function NegativeSequenceAdmittanceDroop(gain::PiecewiseLinearLaw;
 end
 
 """
+    negative_sequence_virtual_impedance(r, x; ripple_blend=0, voltage_floor=1,
+                                        smoothing_epsilon=1e-4)
+
+Negative-sequence policy of a voltage source with a balanced internal EMF
+behind the virtual impedance `Z_v = r + jx` (Ω). With no internal
+negative-sequence voltage, KVL across `Z_v` gives `I2 = -U2/Z_v`, a constant
+admittance `1/|Z_v|` (A/V) at the angle `arg Z_v`. This is the steady-state
+negative-sequence behaviour of a grid-forming converter that regulates a
+balanced voltage, and the passive comparator for the negative-sequence
+admittance droop. It returns a
+[`NegativeSequenceAdmittanceDroop`](@ref) with a flat gain, so current
+limiting, priorities and DC availability apply unchanged. The plant's own
+`grid_forming=true` reproduces this law with `Z_v` equal to the series filter.
+Its synchronisation, droop and current-limit transients are not represented.
+"""
+function negative_sequence_virtual_impedance(r::Real, x::Real;
+        ripple_blend::Real=0.0, voltage_floor::Real=1.0,
+        smoothing_epsilon::Real=1e-4)
+    z = complex(Float64(r), Float64(x))
+    isfinite(z) && real(z) >= 0 && abs(z) > 0 || throw(ArgumentError(
+        "virtual impedance must be finite, nonzero and have r >= 0"))
+    admittance = 1/abs(z)
+    gain = PiecewiseLinearLaw([0.0, 1.0], [admittance, admittance];
+                              smoothing_epsilon=smoothing_epsilon)
+    return NegativeSequenceAdmittanceDroop(gain; impedance_angle=angle(z),
+        ripple_blend=ripple_blend, voltage_floor=voltage_floor)
+end
+
+"""
     CommonScaleLimiter(; current_epsilon=nothing, power_epsilon=nothing,
                          current_epsilon_fraction=2.5e-5,
                          power_epsilon_fraction=5e-8,
@@ -333,18 +362,72 @@ function CommonScaleLimiter(;
     CommonScaleLimiter(ieps, seps, ief, sef, pq_priority, headroom)
 end
 
-_current_epsilon(limiter::CommonScaleLimiter, ratings) =
+"""
+    SequencePriorityLimiter(; priority=:power, kwargs...)
+
+Sequence-priority alternative to [`CommonScaleLimiter`](@ref). The reserved
+sequence current is limited on its own to `(1 - priority_headroom_fraction)`
+times the target per-leg rating. The other sequence then receives the largest
+scale `t ∈ [0, 1]` for which every reconstructed phase satisfies
+`|a_x + t b_x| <= i_max`, where `a_x` is the reserved and `b_x` the requested
+phase contribution.
+
+- `priority=:power` reserves the positive-sequence (Volt-var/Volt-watt) current,
+  so negative-sequence support uses only the remaining phase-current headroom
+  and never curtails active power.
+- `priority=:balance` reserves the negative-sequence current and curtails the
+  positive-sequence request when necessary.
+
+The exact law uses the rationalised root of the per-phase quadratic,
+`t = n/(c + sqrt(c^2 + |b|^2 n))` with `n = i_max^2 - |a|^2` and
+`c = Re(a conj(b))`. The smooth model overestimates the square root and the
+selector denominators, so its scale never exceeds the exact one. All other
+keywords and their defaults are those of [`CommonScaleLimiter`](@ref).
+The plant-aware protection (converter-terminal apparent power, both
+filter-side ratings and `dv2_max`) honours the same priority. It first scales
+only the lower-priority sequence, holding the reserved one as an offset, and
+scales the reserved sequence only if that alone still violates a limit.
+
+`InverterControlResult.current_scale` reports the scale applied to the
+positive-sequence request, as it does for the common-scale limiter. The
+negative-sequence scale is `abs(i2)/abs(i2_request)`; study rows report it as
+`negative_sequence_scale`.
+"""
+struct SequencePriorityLimiter <: AbstractLimiterPolicy
+    priority::Symbol
+    current_epsilon::Union{Nothing,Float64}
+    power_epsilon::Union{Nothing,Float64}
+    current_epsilon_fraction::Float64
+    power_epsilon_fraction::Float64
+    pq_priority::Symbol
+    priority_headroom_fraction::Float64
+end
+
+function SequencePriorityLimiter(; priority::Symbol=:power, kwargs...)
+    priority in (:power, :balance) || throw(ArgumentError(
+        "priority must be :power or :balance"))
+    base = CommonScaleLimiter(; kwargs...)
+    SequencePriorityLimiter(
+        priority, base.current_epsilon, base.power_epsilon,
+        base.current_epsilon_fraction, base.power_epsilon_fraction,
+        base.pq_priority, base.priority_headroom_fraction)
+end
+
+const _AlgebraicLimiter = Union{CommonScaleLimiter,SequencePriorityLimiter}
+
+_current_epsilon(limiter::_AlgebraicLimiter, ratings) =
     something(limiter.current_epsilon,
               limiter.current_epsilon_fraction*ratings.i_max)
 
-_power_epsilon(limiter::CommonScaleLimiter, ratings) =
+_power_epsilon(limiter::_AlgebraicLimiter, ratings) =
     something(limiter.power_epsilon,
               limiter.power_epsilon_fraction*ratings.s_max)
 
 """
     SequenceController(positive, unbalance, limiter;
                        current_target=ConverterCurrentTarget(),
-                       power_voltage_floor=1)
+                       power_voltage_floor=1,
+                       sensing_reference=:device)
 
 Closed-form three-leg controller combining a positive-sequence Volt-var/Watt
 policy, a negative-sequence policy, and an algebraic feasibility limiter.
@@ -352,15 +435,20 @@ policy, a negative-sequence policy, and an algebraic feasibility limiter.
 `power_voltage_floor` is the strictly positive SI voltage floor in the
 regularized `P,Q`-to-`I1` conversion; it is not a magnitude-smoothing epsilon.
 
-The curves observe the local POC voltage referred to the plant's declared
-`neutral` terminal. When the composed [`AdvancedInverter`](@ref) has
-`neutral=nothing` — the three-wire case, and the only one accepted for a native
-`THREE_LEG` fleet record — that reference is the network's ground, not a
-neutral conductor, so the measured phasors carry the local zero-sequence
-displacement. `|U_1|` and `|U_2|` are invariant to that choice, so
+`sensing_reference` declares the conductor the voltage sensors are referred
+to; it is part of the law, not of the power connection. The default `:device`
+uses the plant's declared `neutral` terminal. When the composed
+[`AdvancedInverter`](@ref) has `neutral=nothing` — the three-wire case, and the
+only one accepted for a native `THREE_LEG` fleet record — that reference is the
+network's ground, not a neutral conductor, so the measured phasors carry the
+local zero-sequence displacement. `:ground` always senses phase-to-ground. A
+terminal name such as `"n"` senses phase-to-neutral against that terminal of
+the inverter bus even when the power stage is three-wire, as in a three-wire
+product with a neutral sensing lead. `|U_1|` and `|U_2|` are invariant to that choice, so
 [`PositiveSequenceVoltVarWatt`](@ref) Volt-var and
 [`NegativeSequenceAdmittanceDroop`](@ref) are unaffected; the phase-magnitude
-policies are not. See the sensing-reference discussion in the
+policies are not. Neither is the default maximum-phase Volt-watt guard of
+`PositiveSequenceVoltVarWatt` (`worst_phase_watt_guard=true`). See the sensing-reference discussion in the
 [phase-aware control design](@ref ibr-phase-aware-control-laws).
 
 The controller equalities themselves use only these voltage phasors, but the
@@ -377,7 +465,30 @@ struct SequenceController{P<:AbstractPositiveSequencePolicy,
     limiter::L
     current_target::T
     power_voltage_floor::Float64
+    sensing_reference::Union{Symbol,String}
 end
+
+function _sensing_reference(reference::Symbol)
+    reference in (:device, :ground) || throw(ArgumentError(
+        "sensing_reference must be :device, :ground, or a terminal name"))
+    return reference
+end
+function _sensing_reference(reference::AbstractString)
+    isempty(reference) && throw(ArgumentError(
+        "sensing_reference terminal name must not be empty"))
+    return String(reference)
+end
+
+"""
+    sensing_terminal(controller, inverter) -> Union{Nothing,String}
+
+Terminal of the inverter bus that the controller's voltage sensors are
+referred to, or `nothing` for phase-to-ground sensing.
+"""
+sensing_terminal(controller::SequenceController, inverter::AdvancedInverter) =
+    controller.sensing_reference === :device ? inverter.neutral :
+    controller.sensing_reference === :ground ? nothing :
+    controller.sensing_reference
 
 _current_target(target::Union{ConverterCurrentTarget,GridCurrentTarget}) = target
 _current_target(::AbstractCurrentTarget) = throw(ArgumentError(
@@ -391,23 +502,27 @@ function SequenceController(
         unbalance::AbstractUnbalancePolicy,
         limiter::AbstractLimiterPolicy;
         current_target=ConverterCurrentTarget(),
-        power_voltage_floor::Real=1.0)
+        power_voltage_floor::Real=1.0,
+        sensing_reference::Union{Symbol,AbstractString}=:device)
     floor = Float64(power_voltage_floor)
     isfinite(floor) && floor > 0 || throw(ArgumentError(
         "power_voltage_floor must be finite and > 0"))
     SequenceController(
-        positive, unbalance, limiter, _current_target(current_target), floor)
+        positive, unbalance, limiter, _current_target(current_target), floor,
+        _sensing_reference(sensing_reference))
 end
 
 SequenceController(positive::AbstractPositiveSequencePolicy;
                    unbalance::AbstractUnbalancePolicy=NoUnbalanceControl(),
                    limiter::AbstractLimiterPolicy=CommonScaleLimiter(),
                    current_target=ConverterCurrentTarget(),
-                   power_voltage_floor::Real=1.0) =
+                   power_voltage_floor::Real=1.0,
+                   sensing_reference::Union{Symbol,AbstractString}=:device) =
     SequenceController(
         positive, unbalance, limiter;
         current_target=current_target,
-        power_voltage_floor=power_voltage_floor)
+        power_voltage_floor=power_voltage_floor,
+        sensing_reference=sensing_reference)
 
 """Local three-phase RMS voltage phasors in the declared a-b-c terminal order."""
 struct InverterControlMeasurement
@@ -583,11 +698,69 @@ end
 _volt_watt_basis(policy::AbstractPositiveSequencePolicy) =
     policy.volt_watt_basis
 
-function _volt_watt_request(policy::AbstractPositiveSequencePolicy,
-                            request::InverterControlRequest, fraction)
+# Width of the smooth loss-import selector min(A, 0) as a fraction of the
+# rating. A lossless plant at zero irradiance sits exactly at its kink, so it
+# needs more width than the generic power selectors. The error is one-sided: the
+# import is overstated by at most half the width, so p_dc <= p_available holds.
+const _IMPORT_WIDTH_FRACTION = 1e-3
+
+# Positive-sequence active-power command from the Volt-watt fraction and the
+# AC-available power `A = p_available - dc_power_offset`. The offset is the DC
+# power drawn beyond the commanded positive-sequence power (losses plus
+# negative-sequence active power), so a command no larger than `A` keeps
+# `p_dc <= p_available`. On the `:available` basis the fraction curtails only
+# positive availability: `A - (1-f)max(A,0)` equals `fA` by day and imports
+# exactly the uncovered losses when `A < 0`. On the `:rated` basis the curve
+# ordinate is capped by `A`.
+function _active_power_exact(policy::AbstractPositiveSequencePolicy,
+                             request::InverterControlRequest,
+                             fraction, dc_power_offset)
+    available = request.p_available - dc_power_offset
     return _volt_watt_basis(policy) === :available ?
-        request.p_available*fraction :
-        request.p_rated*fraction
+        available - (1-fraction)*max(available, 0.0) :
+        min(request.p_rated*fraction, available)
+end
+
+function _active_power_numeric_smooth(policy::AbstractPositiveSequencePolicy,
+                                      request::InverterControlRequest,
+                                      fraction, dc_power_offset, epsilon)
+    available = request.p_available - dc_power_offset
+    return _volt_watt_basis(policy) === :available ?
+        available - (1-fraction)*_smooth_positive(available, epsilon) :
+        _smooth_min(request.p_rated*fraction, available, epsilon)
+end
+
+function _validated_dc_power_offset(offset::Real)
+    value = Float64(offset)
+    isfinite(value) || throw(ArgumentError("dc_power_offset must be finite"))
+    return value
+end
+
+"""
+    dc_power_offset(p_dc, phase_voltage, target_current)
+
+DC power drawn by the plant beyond the commanded positive-sequence power
+`3Re(U1 conj(I1))`, in the units of `p_dc`. `phase_voltage` is the controller's
+sensed three-phase voltage and `target_current` the solved current at the
+controller's current target. The offset contains semiconductor, filter and
+capacitor losses and negative-sequence active power. Passing it to
+[`evaluate_exact`](@ref) reproduces the DC-availability limit stamped by
+[`stamp_smooth_control!`](@ref).
+"""
+function dc_power_offset(p_dc::Real, phase_voltage, target_current)
+    u1 = _phasor_sequences(Tuple(ComplexF64.(collect(phase_voltage))))[2]
+    i1 = _phasor_sequences(Tuple(ComplexF64.(collect(target_current))))[2]
+    return Float64(p_dc) - 3real(u1*conj(i1))
+end
+
+# Required loss import is a physical power balance, not a service request.
+# Regularizing this denominator would import only |U1|²/(|U1|² + floor²) of
+# the shortfall and leave the remainder on the unavailable DC source.
+function _loss_import_current(p_import::Real, u1::Complex)
+    iszero(p_import) && return zero(u1)
+    iszero(u1) && throw(ArgumentError(
+        "a nonzero loss import requires nonzero positive-sequence voltage"))
+    return p_import*u1/(3abs2(u1))
 end
 
 function _phase_from_sequences(i1, i2)
@@ -600,14 +773,30 @@ function _volt_var_branch_scales(policy::WorstPhaseVoltVarWatt)
     return max(maximum(values), eps()), max(-minimum(values), eps())
 end
 
-function _dominant_blend_numeric(low, high, policy::WorstPhaseVoltVarWatt)
+# Continuous dominant-severity blend. The transition width epsilon*rho scales
+# with the conflict measure rho = m/(m + epsilon), where m is the smaller
+# normalized severity: rho = 0 when only one branch is active, so the firmware
+# law then reproduces the standard Volt-var curve exactly, and rho -> 1 deep in
+# a conflict. The smooth paths use a zero-preserving smooth minimum and a
+# 1e-3*epsilon floor that keeps the root differentiable.
+const _DOMINANT_ROOT_FLOOR = 1e-3
+
+function _dominant_blend_numeric(low, high, policy::WorstPhaseVoltVarWatt;
+                                 exact::Bool=false)
     positive_scale, negative_scale = _volt_var_branch_scales(policy)
     low_severity = low/positive_scale
     high_severity = -high/negative_scale
     severity_difference = low_severity - high_severity
     epsilon = policy.conflict_epsilon
-    weight = (1 + severity_difference /
-              magnitude_value((severity_difference,), MagnitudeApproximation(epsilon;direction=:upper)))/2
+    weaker = exact ? min(low_severity, high_severity) :
+        selector_value(low_severity, high_severity,
+                       AlgebraicFormulation(epsilon); kind=:nonnegative_min)
+    rho = weaker/(weaker + epsilon)
+    root = exact ? hypot(severity_difference, epsilon*rho) :
+        magnitude_value((severity_difference, epsilon*rho),
+            MagnitudeApproximation(_DOMINANT_ROOT_FLOOR*epsilon;direction=:upper))
+    iszero(root) && return 0.0
+    weight = (1 + severity_difference/root)/2
     normalized_command = weight*low_severity - (1-weight)*high_severity
     selected_scale = weight*positive_scale + (1-weight)*negative_scale
     return normalized_command*selected_scale
@@ -619,7 +808,7 @@ function _volt_var_conflict_exact(policy::WorstPhaseVoltVarWatt, low, high)
     return policy.conflict_policy === :low_voltage ? qlo :
            policy.conflict_policy === :high_voltage ? qhi :
            policy.conflict_policy === :dominant ?
-               _dominant_blend_numeric(qlo, qhi, policy) : qlo + qhi
+               _dominant_blend_numeric(qlo, qhi, policy; exact=true) : qlo + qhi
 end
 
 function _worst_phase_exact(policy::WorstPhaseVoltVarWatt,
@@ -634,7 +823,7 @@ function _worst_phase_exact(policy::WorstPhaseVoltVarWatt,
             policy, _pwl_exact(policy.volt_var, vmin),
             _pwl_exact(policy.volt_var, vmax))
     end
-    return _volt_watt_request(policy, request, p_fraction),
+    return p_fraction,
            request.q_scale*q_fraction,
            vmin, vmax
 end
@@ -646,7 +835,7 @@ function _average_voltage_exact(policy::AverageVoltageVoltVarWatt,
         _pwl_exact(policy.volt_watt, voltage)
     q_fraction = policy.volt_var === nothing ? 0.0 :
         _pwl_exact(policy.volt_var, voltage)
-    return _volt_watt_request(policy, request, p_fraction),
+    return p_fraction,
            request.q_scale*q_fraction,
            minimum(magnitudes), maximum(magnitudes)
 end
@@ -659,7 +848,7 @@ function _positive_sequence_exact(policy::PositiveSequenceVoltVarWatt,
         _pwl_exact(policy.volt_watt, watt_voltage)
     q_fraction = policy.volt_var === nothing ? 0.0 :
         _pwl_exact(policy.volt_var, voltage)
-    return _volt_watt_request(policy, request, p_fraction),
+    return p_fraction,
            request.q_scale*q_fraction,
            minimum(magnitudes), maximum(magnitudes)
 end
@@ -713,7 +902,7 @@ function _worst_phase_numeric_smooth(policy::WorstPhaseVoltVarWatt,
         policy.conflict_policy === :dominant ?
             _dominant_blend_numeric(qlo, qhi, policy) : qlo + qhi
     end
-    return _volt_watt_request(policy, request, p_fraction),
+    return p_fraction,
            request.q_scale*q_fraction,
            vmin, vmax
 end
@@ -727,7 +916,7 @@ function _average_voltage_numeric_smooth(
         _pwl_numeric_smooth(policy.volt_watt, voltage)
     q_fraction = policy.volt_var === nothing ? 0.0 :
         _pwl_numeric_smooth(policy.volt_var, voltage)
-    return _volt_watt_request(policy, request, p_fraction),
+    return p_fraction,
            request.q_scale*q_fraction,
            vmin, vmax
 end
@@ -741,7 +930,7 @@ function _positive_sequence_numeric_smooth(
         _pwl_numeric_smooth(policy.volt_watt, watt_voltage)
     q_fraction = policy.volt_var === nothing ? 0.0 :
         _pwl_numeric_smooth(policy.volt_var, voltage)
-    return _volt_watt_request(policy, request, p_fraction),
+    return p_fraction,
            request.q_scale*q_fraction,
            vmin, vmax
 end
@@ -817,49 +1006,134 @@ function _limit_positive_power_numeric_smooth(
     return p_limited, q_limited, scale
 end
 
+
+# ── Target-current limit: common scale or sequence priority ──────────────────
+# Each method returns the limited positive- and negative-sequence currents and
+# the scale applied to the positive-sequence (power) request.
+
+function _target_limit_exact(::CommonScaleLimiter, i1, i2, imax)
+    peak = maximum(abs, _phase_from_sequences(i1, i2))
+    scale = peak > imax ? imax/peak : 1.0
+    return scale*i1, scale*i2, scale
+end
+
+# Largest t in [0, 1] with |a + t b| <= limit, given |a| <= limit. The
+# rationalised root avoids dividing by |b|^2, which vanishes at balance.
+function _priority_fill_exact(a, b, limit)
+    headroom = limit^2 - abs2(a)
+    headroom <= 0 && return 0.0
+    c = real(a*conj(b))
+    denominator = c + sqrt(c^2 + abs2(b)*headroom)
+    return denominator <= headroom ? 1.0 : headroom/denominator
+end
+
+# Reserved and other per-phase contributions for a sequence-priority limiter.
+function _priority_split(limiter::SequencePriorityLimiter, i1, i2)
+    power = limiter.priority === :power
+    reserved, other = power ? (i1, i2) : (i2, i1)
+    phase_of(z, reserved_side) = (power == reserved_side) ?
+        _phase_from_sequences(z, zero(z)) : _phase_from_sequences(zero(z), z)
+    return power, reserved, other, phase_of
+end
+
+function _target_limit_exact(limiter::SequencePriorityLimiter, i1, i2, imax)
+    power, reserved, other, phase_of = _priority_split(limiter, i1, i2)
+    reserve_limit = (1 - limiter.priority_headroom_fraction)*imax
+    magnitude = abs(reserved)
+    s = magnitude > reserve_limit ? reserve_limit/magnitude : 1.0
+    reserved_phase = phase_of(s*reserved, true)
+    other_phase = phase_of(other, false)
+    t = minimum(_priority_fill_exact(reserved_phase[k], other_phase[k], imax)
+                for k in 1:3)
+    return power ? (s*i1, t*i2, s) : (t*i1, s*i2, t)
+end
+
+function _target_limit_numeric_smooth(::CommonScaleLimiter, i1, i2, imax, ieps)
+    imags = [magnitude_value((real(i),imag(i)),
+                 MagnitudeApproximation(ieps/4;direction=:upper,unit=:A))
+             for i in _phase_from_sequences(i1, i2)]
+    denominator = foldl((a, b) -> _smooth_max(a, b, ieps), imags; init=imax)
+    scale = imax/denominator
+    return scale*i1, scale*i2, scale
+end
+
+# Smooth counterpart of `_priority_fill_exact`. The root is overestimated by at
+# most width/4 and the selector denominator never underestimates, so the
+# smooth fill never exceeds the exact one.
+function _priority_fill_numeric_smooth(a, b, limit, width)
+    headroom = limit^2 - abs2(a)
+    c = real(a*conj(b))
+    denominator = c + sqrt(c^2 + abs2(b)*headroom + (width/4)^2)
+    return headroom/_smooth_max(headroom, denominator, width)
+end
+
+function _target_limit_numeric_smooth(
+        limiter::SequencePriorityLimiter, i1, i2, imax, ieps)
+    power, reserved, other, phase_of = _priority_split(limiter, i1, i2)
+    reserve_limit = (1 - limiter.priority_headroom_fraction)*imax
+    magnitude = magnitude_value((real(reserved), imag(reserved)),
+        MagnitudeApproximation(ieps/4;direction=:upper,unit=:A))
+    s = reserve_limit/_smooth_max(reserve_limit, magnitude, ieps)
+    reserved_phase = phase_of(s*reserved, true)
+    other_phase = phase_of(other, false)
+    t = 1.0
+    for k in 1:3
+        fill = _priority_fill_numeric_smooth(
+            reserved_phase[k], other_phase[k], imax, ieps*imax)
+        t = selector_value(t, fill, AlgebraicFormulation(ieps/imax);
+                           kind=:nonnegative_min)
+    end
+    return power ? (s*i1, t*i2, s) : (t*i1, s*i2, t)
+end
+
 """
-    evaluate_smooth(controller, measurement, request, ratings)
+    evaluate_smooth(controller, measurement, request, ratings;
+                    dc_power_offset=0)
 
 Numerically evaluate the same differentiable computation graph stamped by
 [`stamp_smooth_control!`](@ref). This is intended for inexpensive SI-valued
 extraction and comparison with [`evaluate_exact`](@ref); it does not solve an
-optimization problem.
+optimization problem. `dc_power_offset` has the meaning documented for
+[`evaluate_exact`](@ref).
 """
 function evaluate_smooth(controller::SequenceController,
                          measurement::InverterControlMeasurement,
                          request::InverterControlRequest,
-                         ratings::InverterControlRatings)
+                         ratings::InverterControlRatings;
+                         dc_power_offset::Real=0.0)
     phase_voltage = measurement.phase_voltage
     u0, u1, u2 = _phasor_sequences(phase_voltage)
     magnitudes = abs.(phase_voltage)
-    p_raw, q_raw, vmin, vmax = _positive_numeric_smooth(
+    p_fraction, q_raw, vmin, vmax = _positive_numeric_smooth(
         controller.positive, u1, magnitudes, request)
-    if _volt_watt_basis(controller.positive) === :rated
-        p_raw = _smooth_min(
-            request.p_available, p_raw,
-            _power_epsilon(controller.limiter, ratings))
-    end
-
     power_epsilon = _power_epsilon(controller.limiter, ratings)
+    offset = _validated_dc_power_offset(dc_power_offset)
+    p_raw = _active_power_numeric_smooth(
+        controller.positive, request, p_fraction, offset, power_epsilon)
+    # The loss import (negative AC-available power) is a plant measurement that
+    # no capability limiter may scale; only the service part is limited.
+    p_import = _smooth_negative(request.p_available - offset,
+                                _IMPORT_WIDTH_FRACTION*ratings.s_max)
+
     p, q, power_scale = _limit_positive_power_numeric_smooth(
-        p_raw, q_raw, ratings.s_max, power_epsilon,
+        p_raw - p_import, q_raw, ratings.s_max, power_epsilon,
         controller.limiter.pq_priority,
         controller.limiter.priority_headroom_fraction)
 
     floor = controller.power_voltage_floor
     denominator = 3(abs2(u1) + floor^2)
+    i1_import = _loss_import_current(p_import, u1)
     i1_request = conj(complex(p, q)) * u1 / denominator
     i2v, i2r, i2_request, eta = _unbalance_numeric_smooth(
         controller.unbalance, u1, u2, i1_request)
-    phase_request = _phase_from_sequences(i1_request, i2_request)
-
     ieps = _current_epsilon(controller.limiter, ratings)
-    imags = [magnitude_value((real(i),imag(i)), MagnitudeApproximation(ieps/4;direction=:upper,unit=:A)) for i in phase_request]
-    current_denominator = foldl(
-        (a, b) -> _smooth_max(a, b, ieps), imags; init=ratings.i_max)
-    current_scale = ratings.i_max / current_denominator
-    i1 = current_scale*i1_request
-    i2 = current_scale*i2_request
+    import_magnitude = magnitude_value((real(i1_import), imag(i1_import)),
+        MagnitudeApproximation(ieps/4;direction=:upper,unit=:A))
+    i1, i2, current_scale = _target_limit_numeric_smooth(
+        controller.limiter, i1_request, i2_request,
+        max(ratings.i_max - import_magnitude, 0.0), ieps)
+    i1 += i1_import
+    p += p_import
     phase_current = _phase_from_sequences(i1, i2)
     sequence_power = 3u1*conj(i1)
     total_power = 3(u1*conj(i1) + u2*conj(i2))
@@ -883,39 +1157,55 @@ function _unbalance_exact(policy::NegativeSequenceAdmittanceDroop,
 end
 
 """
-    evaluate_exact(controller, measurement, request, ratings)
+    evaluate_exact(controller, measurement, request, ratings;
+                   dc_power_offset=0)
 
 Evaluate the exact local controller without JuMP. This is the firmware oracle
 for regression tests and exact-versus-smooth residuals. It uses only local RMS
 phasors and fixed controller/rating data.
+
+The positive-sequence active-power command never exceeds the AC-available
+power `p_available - dc_power_offset` (W). The offset is the DC power drawn
+beyond the commanded positive-sequence power, i.e. converter, filter and
+capacitor losses plus negative-sequence active power; see
+[`dc_power_offset`](@ref). Its default of zero describes a lossless plant. When
+the offset exceeds the available power the command becomes an import that
+covers exactly the shortfall; the Volt-watt curve does not curtail that import.
+The loss import uses the physical voltage denominator without
+`power_voltage_floor`, which continues to regularize only the service command.
+A nonzero loss import requires nonzero positive-sequence voltage.
 """
 function evaluate_exact(controller::SequenceController,
                         measurement::InverterControlMeasurement,
                         request::InverterControlRequest,
-                        ratings::InverterControlRatings)
+                        ratings::InverterControlRatings;
+                        dc_power_offset::Real=0.0)
     phase_voltage = measurement.phase_voltage
     u0, u1, u2 = _phasor_sequences(phase_voltage)
     magnitudes = abs.(phase_voltage)
-    p_raw, q_raw, vmin, vmax = _positive_exact(
+    p_fraction, q_raw, vmin, vmax = _positive_exact(
         controller.positive, u1, magnitudes, request)
-    if _volt_watt_basis(controller.positive) === :rated
-        p_raw = min(request.p_available, p_raw)
-    end
+    offset = _validated_dc_power_offset(dc_power_offset)
+    p_raw = _active_power_exact(controller.positive, request, p_fraction, offset)
+    # The loss import is never scaled by a capability limiter; see
+    # `_loss_import_current`.
+    p_import = min(request.p_available - offset, 0.0)
 
     p, q, power_scale = _limit_positive_power_exact(
-        p_raw, q_raw, ratings.s_max, controller.limiter.pq_priority,
+        p_raw - p_import, q_raw, ratings.s_max, controller.limiter.pq_priority,
         controller.limiter.priority_headroom_fraction)
 
     floor = controller.power_voltage_floor
     denominator = 3(abs2(u1) + floor^2)
+    i1_import = _loss_import_current(p_import, u1)
     i1_request = conj(complex(p, q)) * u1 / denominator
     i2v, i2r, i2_request, eta = _unbalance_exact(
         controller.unbalance, u1, u2, i1_request)
-    phase_request = _phase_from_sequences(i1_request, i2_request)
-    peak = maximum(abs, phase_request)
-    current_scale = peak > ratings.i_max ? ratings.i_max / peak : 1.0
-    i1 = current_scale*i1_request
-    i2 = current_scale*i2_request
+    i1, i2, current_scale = _target_limit_exact(
+        controller.limiter, i1_request, i2_request,
+        max(ratings.i_max - abs(i1_import), 0.0))
+    i1 += i1_import
+    p += p_import
     phase_current = _phase_from_sequences(i1, i2)
     sequence_power = 3u1*conj(i1)
     total_power = 3(u1*conj(i1) + u2*conj(i2))
@@ -955,6 +1245,18 @@ function validate_device(controlled::ControlledDevice{<:AdvancedInverter}, nets=
         "the initial SequenceController implementation requires topology=:THREE_LEG"))
     length(inv.phase_terminals) == 3 || throw(ArgumentError(
         "a SequenceController requires exactly three ordered phase terminals"))
+    reference = sensing_terminal(controlled.controller, inv)
+    if reference !== nothing
+        reference in inv.phase_terminals && throw(ArgumentError(
+            "sensing reference '$reference' must not be a phase terminal"))
+        for net in nets
+            bus = get(get(net, "bus", Dict()), inv.bus, nothing)
+            bus === nothing && continue
+            reference in String.(get(bus, "terminal_names", String[])) ||
+                throw(ArgumentError("sensing reference '$reference' is not a " *
+                                    "terminal of bus '$(inv.bus)'"))
+        end
+    end
     InverterControlRatings(inv)
     return controlled
 end
@@ -1027,7 +1329,11 @@ function _smooth_dominant_expression!(
     high_severity = -high/negative_scale
     difference = low_severity - high_severity
     epsilon = policy.conflict_epsilon
-    root = magnitude_expression(m,(difference,),MagnitudeApproximation(epsilon;direction=:upper))
+    weaker = selector_expression(m, low_severity, high_severity,
+        AlgebraicFormulation(epsilon); kind=:nonnegative_min)
+    rho = weaker/(weaker + epsilon)
+    root = magnitude_expression(m, (difference, epsilon*rho),
+        MagnitudeApproximation(_DOMINANT_ROOT_FLOOR*epsilon;direction=:upper))
     weight = (1 + difference/root)/2
     normalized_command = weight*low_severity - (1-weight)*high_severity
     selected_scale = weight*positive_scale + (1-weight)*negative_scale
@@ -1215,7 +1521,7 @@ function _worst_phase_smooth(ctx, policy::WorstPhaseVoltVarWatt,
         policy.conflict_policy === :dominant ? _smooth_dominant_expression!(
             m, qlo, qhi, policy) : qlo + qhi
     end
-    return _volt_watt_request(policy, request, p_fraction)/sb,
+    return p_fraction,
            request.q_scale/sb*q_fraction, vmin, vmax
 end
 
@@ -1233,7 +1539,7 @@ function _average_voltage_smooth(
         _pwl_smooth(ctx, policy.volt_watt, voltage, vb)
     q_fraction = policy.volt_var === nothing ? 0.0 :
         _pwl_smooth(ctx, policy.volt_var, voltage, vb)
-    return _volt_watt_request(policy, request, p_fraction)/sb,
+    return p_fraction,
            request.q_scale/sb*q_fraction, vmin, vmax
 end
 
@@ -1254,7 +1560,7 @@ function _positive_sequence_smooth(
         _pwl_smooth(ctx, policy.volt_watt, watt_voltage, vb)
     q_fraction = policy.volt_var === nothing ? 0.0 :
         _pwl_smooth(ctx, policy.volt_var, voltage, vb)
-    return _volt_watt_request(policy, request, p_fraction)/sb,
+    return p_fraction,
            request.q_scale/sb*q_fraction, vmin, vmax
 end
 
@@ -1301,6 +1607,146 @@ function _unbalance_smooth(ctx, policy::NegativeSequenceAdmittanceDroop,
     return i2v, i2r, i2, eta
 end
 
+_scale_pair(scale, pair) = (scale*pair[1], scale*pair[2])
+
+# `imax` is the numeric rating used for scaling and start values; `limit` is
+# the (possibly expression-valued) headroom left after any unscaled offset.
+function _target_limit_smooth!(m, ::CommonScaleLimiter, i1, i2, imax, ieps;
+                               limit=imax)
+    imags = [_control_upper_magnitude!(m, pair, ieps/4;
+                scale=imax, start=0.5imax)
+        for pair in _phase_pairs(i1, i2)]
+    denominator = limit
+    for imag in imags
+        denominator = _smooth_max_expression!(
+            m, denominator, imag, ieps; start=imax)
+    end
+    scale = limit / denominator
+    return _scale_pair(scale, i1), _scale_pair(scale, i2), scale
+end
+
+# JuMP counterpart of `_target_limit_numeric_smooth` for sequence priority.
+function _target_limit_smooth!(
+        m, limiter::SequencePriorityLimiter, i1, i2, imax, ieps; limit=imax)
+    power = limiter.priority === :power
+    reserved, other = power ? (i1, i2) : (i2, i1)
+    zero_pair = (0.0, 0.0)
+    phase_of(pair, reserved_side) = (power == reserved_side) ?
+        _phase_pairs(pair, zero_pair) : _phase_pairs(zero_pair, pair)
+    reserve_limit = (1 - limiter.priority_headroom_fraction)*limit
+    magnitude = _control_upper_magnitude!(m, reserved, ieps/4;
+        scale=imax, start=0.5imax)
+    s = _defined_control_expression!(m,
+        reserve_limit / _smooth_max_expression!(
+            m, reserve_limit, magnitude, ieps; start=imax);
+        scale=1.0, start=1.0)
+    reserved_phase = phase_of(_scale_pair(s, reserved), true)
+    other_phase = phase_of(other, false)
+    width = ieps*imax
+    t = 1.0
+    for k in 1:3
+        a = reserved_phase[k]
+        b = other_phase[k]
+        headroom = limit^2 - (a[1]^2 + a[2]^2)
+        c = a[1]*b[1] + a[2]*b[2]
+        root = _implicit_sqrt!(
+            m, c^2 + (b[1]^2 + b[2]^2)*headroom + (width/4)^2;
+            start=0.1imax^2, scale=imax^2)
+        fill = headroom / _smooth_max_expression!(
+            m, headroom, c + root, width; start=imax^2)
+        t = _combine_safe_scale_implicit!(m, t, fill, ieps/imax)
+    end
+    return power ?
+        (_scale_pair(s, i1), _scale_pair(t, i2), s) :
+        (_scale_pair(t, i1), _scale_pair(s, i2), t)
+end
+
+# Plant-aware capability scale for one command direction. `converter_offset`
+# and `grid_offset` are per-phase currents that the scale must not touch (LCL
+# shunt current, loss import, and under sequence priority the reserved
+# sequence). Returns a scale in [0, 1] for `direction`.
+function _plant_capability_scale!(m, inverter::AdvancedInverter, handles,
+        converter_offset, grid_offset, direction, ib, ieps, imax, smax, seps, sb)
+    capability_scale = 1.0
+    # Selector widths on scale factors are ratios of physical quantities, not
+    # per-unit current or power values. They must not depend on s_base.
+    scale_eps = ieps / imax
+    if inverter.i_max !== nothing
+        for k in 1:3
+            reserve = inverter.pwm_ac_converter_reserve[k] / ib
+            limit = sqrt(max((inverter.i_max/ib)^2 - reserve^2, 0.0))
+            candidate = _safe_direction_scale_implicit!(
+                m, converter_offset[k], direction[k], limit, ieps;
+                magnitude_start=max(0.25limit, ieps),
+                scale=max(limit, ieps))
+            capability_scale = _combine_safe_scale_implicit!(
+                m, capability_scale, candidate, scale_eps)
+        end
+    end
+    if inverter.i_grid_max !== nothing
+        for k in 1:3
+            reserve = inverter.pwm_ac_grid_reserve[k] / ib
+            limit = sqrt(max((inverter.i_grid_max/ib)^2 - reserve^2, 0.0))
+            candidate = _safe_direction_scale_implicit!(
+                m, grid_offset[k], direction[k], limit, ieps;
+                magnitude_start=max(0.25limit, ieps),
+                scale=max(limit, ieps))
+            capability_scale = _combine_safe_scale_implicit!(
+                m, capability_scale, candidate, scale_eps)
+        end
+    end
+
+    converter_direction = direction
+    converter_power_offset = (0.0, 0.0)
+    converter_power_direction = (0.0, 0.0)
+    for k in 1:3
+        vo = (handles.vrint[k], handles.viint[k])
+        so = _cmul(
+            vo[1], vo[2], converter_offset[k][1], -converter_offset[k][2])
+        sd = _cmul(
+            vo[1], vo[2], converter_direction[k][1], -converter_direction[k][2])
+        converter_power_offset = (
+            converter_power_offset[1] + so[1],
+            converter_power_offset[2] + so[2])
+        converter_power_direction = (
+            converter_power_direction[1] + sd[1],
+            converter_power_direction[2] + sd[2])
+    end
+    power_candidate = _safe_direction_scale_implicit!(
+        m, converter_power_offset, converter_power_direction, smax, seps;
+        magnitude_start=max(0.25smax, seps), scale=smax)
+    capability_scale = _combine_safe_scale_implicit!(
+        m, capability_scale, power_candidate, seps/smax)
+    if inverter.dv2_max !== nothing && !iszero(_dc_ripple_factor(inverter))
+        ripple_offset = (0.0, 0.0)
+        ripple_direction = (0.0, 0.0)
+        for k in 1:3
+            vo = (handles.vrint[k], handles.viint[k])
+            ro = _cmul(
+                vo[1], vo[2], converter_offset[k][1], converter_offset[k][2])
+            rd = _cmul(
+                vo[1], vo[2], converter_direction[k][1],
+                converter_direction[k][2])
+            ripple_offset = (
+                ripple_offset[1] + ro[1], ripple_offset[2] + ro[2])
+            ripple_direction = (
+                ripple_direction[1] + rd[1], ripple_direction[2] + rd[2])
+        end
+        # |D| = |S̃|·|k|/V_dc with the line-frequency source factor k.
+        ripple_limit = inverter.dv2_max*inverter.v_dc /
+                       abs(_dc_ripple_factor(inverter)) / sb
+        ripple_candidate = _safe_direction_scale_implicit!(
+            m, ripple_offset, ripple_direction, ripple_limit, seps;
+            magnitude_start=max(0.25ripple_limit, seps),
+            scale=max(ripple_limit, seps))
+        capability_scale = _combine_safe_scale_implicit!(
+            m, capability_scale, ripple_candidate,
+            seps/smax)
+    end
+
+    return capability_scale
+end
+
 """
     stamp_smooth_control!(ctx, controller, request, inverter, handles)
 
@@ -1328,7 +1774,7 @@ function stamp_smooth_control!(ctx, controller::SequenceController,
     sb, vb, ib = handles.sb, handles.vb, handles.ib
     phase_voltage = ntuple(3) do k
         ph = inverter.phase_terminals[k]
-        _dv(ctx, inverter.bus, ph, inverter.neutral)
+        _dv(ctx, inverter.bus, ph, sensing_terminal(controller, inverter))
     end
     vre = [phase_voltage[k][1] for k in 1:3]
     vim = [phase_voltage[k][2] for k in 1:3]
@@ -1339,42 +1785,61 @@ function stamp_smooth_control!(ctx, controller::SequenceController,
             start=voltage_start, scale=voltage_start) for k in 1:3]
     u0, u1, u2 = _sequence_pair(vre, vim)
 
-    p_raw, q_raw, vmin, vmax = _positive_smooth(
+    p_fraction, q_raw, vmin, vmax = _positive_smooth(
         ctx, controller.positive, magnitudes, u1, request, sb, vb)
     smax = ratings.s_max / sb
     power_epsilon = _power_epsilon(controller.limiter, ratings)
     seps = power_epsilon / sb
-    if _volt_watt_basis(controller.positive) === :rated
-        p_raw = _smooth_min_expression!(
-            m, request.p_available/sb, p_raw, seps;
+
+    # DC availability: the plant may not draw more than p_available from the
+    # DC source. The offset is the solved plant's DC power beyond the
+    # positive-sequence power delivered at the current target (losses plus
+    # negative-sequence active power), held as a local plant measurement in the
+    # same way as the LCL shunt offset below.
+    offset_re, offset_im = controller.current_target isa ConverterCurrentTarget ?
+        (handles.cri, handles.cii) : (handles.gri, handles.gii)
+    _, target_i1, target_i2 = _sequence_pair(collect(offset_re), collect(offset_im))
+    offset = _defined_control_expression!(m,
+        handles.p_dc - 3(u1[1]*target_i1[1] + u1[2]*target_i1[2]);
+        scale=smax, start=0.0)
+    available = request.p_available/sb - offset
+    p_raw = _volt_watt_basis(controller.positive) === :available ?
+        available - (1 - p_fraction)*_smooth_positive_expression!(
+            m, available, seps; start=request.p_available/sb) :
+        _smooth_min_expression!(
+            m, request.p_rated/sb*p_fraction, available, seps;
             start=request.p_available/sb)
-    end
-    p, q, power_scale = _limit_positive_power_smooth!(
-        m, p_raw, q_raw, smax, seps, controller.limiter.pq_priority,
+    # The loss import (negative AC-available power) is kept out of every
+    # capability limiter, like the LCL shunt offset below: scaling it down would
+    # make the DC source supply the remainder at zero irradiance.
+    p_import = _defined_control_expression!(m, _smooth_negative_expression!(
+        m, available, _IMPORT_WIDTH_FRACTION*smax; start=0.0);
+        scale=smax, start=0.0)
+    p_service, q, power_scale = _limit_positive_power_smooth!(
+        m, p_raw - p_import, q_raw, smax, seps, controller.limiter.pq_priority,
         controller.limiter.priority_headroom_fraction)
+    p = p_service + p_import
 
     floor = controller.power_voltage_floor / vb
     denominator = 3(u1[1]^2 + u1[2]^2 + floor^2)
-    i1_request = ((p*u1[1] + q*u1[2]) / denominator,
-                  (p*u1[2] - q*u1[1]) / denominator)
+    import_denominator = 3(u1[1]^2 + u1[2]^2)
+    i1_import = (p_import*u1[1]/import_denominator,
+                 p_import*u1[2]/import_denominator)
+    i1_request = ((p_service*u1[1] + q*u1[2]) / denominator,
+                  (p_service*u1[2] - q*u1[1]) / denominator)
     i2v, i2r, i2_request, eta = _unbalance_smooth(
         ctx, controller.unbalance, u1, u2, i1_request, vb, ib, voltage_start)
-    phase_request = _phase_pairs(i1_request, i2_request)
-
     ieps = _current_epsilon(controller.limiter, ratings) / ib
     imax = ratings.i_max / ib
-    imags = [_control_upper_magnitude!(m, pair, ieps/4;
-                scale=imax, start=0.5imax)
-        for pair in phase_request]
-    current_denominator = imax
-    for imag in imags
-        current_denominator = _smooth_max_expression!(
-            m, current_denominator, imag, ieps; start=imax)
-    end
-    target_scale = imax / current_denominator
-    i1_pre = (target_scale*i1_request[1], target_scale*i1_request[2])
-    i2_pre = (target_scale*i2_request[1], target_scale*i2_request[2])
+    import_magnitude = _control_upper_magnitude!(m, i1_import, ieps/4;
+        scale=imax, start=ieps/4)
+    target_limit = _smooth_positive_expression!(
+        m, imax - import_magnitude, ieps; start=imax)
+    i1_pre, i2_pre, target_scale = _target_limit_smooth!(
+        m, controller.limiter, i1_request, i2_request, imax, ieps;
+        limit=target_limit)
     phase_pre = _phase_pairs(i1_pre, i2_pre)
+    import_phase = _phase_pairs(i1_import, (0.0, 0.0))
 
     # The current command is finally backed off against the physical currents at
     # both filter locations and converter-terminal apparent power. For an LCL
@@ -1388,96 +1853,59 @@ function stamp_smooth_control!(ctx, controller::SequenceController,
         handles.cri[k] - handles.gri[k],
         handles.cii[k] - handles.gii[k]), 3)
     converter_offset = controller.current_target isa ConverterCurrentTarget ?
-        ntuple(_ -> zero_pair, 3) : shunt
+        import_phase :
+        ntuple(k -> (shunt[k][1] + import_phase[k][1],
+                     shunt[k][2] + import_phase[k][2]), 3)
     grid_offset = controller.current_target isa ConverterCurrentTarget ?
-        ntuple(k -> (-shunt[k][1], -shunt[k][2]), 3) :
-        ntuple(_ -> zero_pair, 3)
+        ntuple(k -> (import_phase[k][1] - shunt[k][1],
+                     import_phase[k][2] - shunt[k][2]), 3) :
+        import_phase
 
-    capability_scale = 1.0
-    # Selector widths on scale factors are ratios of physical quantities, not
-    # per-unit current or power values. They must not depend on s_base.
-    scale_eps = ieps / imax
-    if inverter.i_max !== nothing
-        for k in 1:3
-            reserve = inverter.pwm_ac_converter_reserve[k] / ib
-            limit = sqrt(max((inverter.i_max/ib)^2 - reserve^2, 0.0))
-            candidate = _safe_direction_scale_implicit!(
-                m, converter_offset[k], phase_pre[k], limit, ieps;
-                magnitude_start=max(0.25limit, ieps),
-                scale=max(limit, ieps))
-            capability_scale = _combine_safe_scale_implicit!(
-                m, capability_scale, candidate, scale_eps)
-        end
-    end
-    if inverter.i_grid_max !== nothing
-        for k in 1:3
-            reserve = inverter.pwm_ac_grid_reserve[k] / ib
-            limit = sqrt(max((inverter.i_grid_max/ib)^2 - reserve^2, 0.0))
-            candidate = _safe_direction_scale_implicit!(
-                m, grid_offset[k], phase_pre[k], limit, ieps;
-                magnitude_start=max(0.25limit, ieps),
-                scale=max(limit, ieps))
-            capability_scale = _combine_safe_scale_implicit!(
-                m, capability_scale, candidate, scale_eps)
-        end
+    plant_scale(offset_c, offset_g, dir) = _plant_capability_scale!(m, inverter,
+        handles, offset_c, offset_g, dir, ib, ieps, imax, smax, seps, sb)
+    add_phase(a, b) = ntuple(k -> (a[k][1] + b[k][1], a[k][2] + b[k][2]), 3)
+    scale_phase(t, a) = ntuple(k -> (t*a[k][1], t*a[k][2]), 3)
+    if controller.limiter isa SequencePriorityLimiter
+        # The plant-aware protection honours the same priority: first scale only
+        # the lower-priority sequence with the reserved one held as an offset,
+        # then scale the combination only if the reserved sequence alone still
+        # violates a limit.
+        power = controller.limiter.priority === :power
+        reserved = power ? _phase_pairs(i1_pre, (0.0, 0.0)) :
+                           _phase_pairs((0.0, 0.0), i2_pre)
+        other = power ? _phase_pairs((0.0, 0.0), i2_pre) :
+                        _phase_pairs(i1_pre, (0.0, 0.0))
+        other_scale = plant_scale(add_phase(converter_offset, reserved),
+            add_phase(grid_offset, reserved), other)
+        capability_scale = plant_scale(converter_offset, grid_offset,
+            add_phase(reserved, scale_phase(other_scale, other)))
+        s1, s2 = power ? (capability_scale, capability_scale*other_scale) :
+                         (capability_scale*other_scale, capability_scale)
+    else
+        capability_scale = plant_scale(converter_offset, grid_offset, phase_pre)
+        s1 = s2 = capability_scale
     end
 
-    converter_direction = phase_pre
-    converter_power_offset = (0.0, 0.0)
-    converter_power_direction = (0.0, 0.0)
-    for k in 1:3
-        vo = (handles.vrint[k], handles.viint[k])
-        so = _cmul(
-            vo[1], vo[2], converter_offset[k][1], -converter_offset[k][2])
-        sd = _cmul(
-            vo[1], vo[2], converter_direction[k][1], -converter_direction[k][2])
-        converter_power_offset = (
-            converter_power_offset[1] + so[1],
-            converter_power_offset[2] + so[2])
-        converter_power_direction = (
-            converter_power_direction[1] + sd[1],
-            converter_power_direction[2] + sd[2])
-    end
-    power_candidate = _safe_direction_scale_implicit!(
-        m, converter_power_offset, converter_power_direction, smax, seps;
-        magnitude_start=max(0.25smax, seps), scale=smax)
-    capability_scale = _combine_safe_scale_implicit!(
-        m, capability_scale, power_candidate, seps/smax)
-    if inverter.dv2_max !== nothing
-        ripple_offset = (0.0, 0.0)
-        ripple_direction = (0.0, 0.0)
-        for k in 1:3
-            vo = (handles.vrint[k], handles.viint[k])
-            ro = _cmul(
-                vo[1], vo[2], converter_offset[k][1], converter_offset[k][2])
-            rd = _cmul(
-                vo[1], vo[2], converter_direction[k][1],
-                converter_direction[k][2])
-            ripple_offset = (
-                ripple_offset[1] + ro[1], ripple_offset[2] + ro[2])
-            ripple_direction = (
-                ripple_direction[1] + rd[1], ripple_direction[2] + rd[2])
-        end
-        ripple_limit = 2(2pi*inverter.f)*inverter.c_dc*inverter.v_dc *
-                       inverter.dv2_max / sb
-        ripple_candidate = _safe_direction_scale_implicit!(
-            m, ripple_offset, ripple_direction, ripple_limit, seps;
-            magnitude_start=max(0.25ripple_limit, seps),
-            scale=max(ripple_limit, seps))
-        capability_scale = _combine_safe_scale_implicit!(
-            m, capability_scale, ripple_candidate,
-            seps/smax)
-    end
-
-    current_scale = target_scale*capability_scale
-    i1 = (capability_scale*i1_pre[1], capability_scale*i1_pre[2])
-    i2 = (capability_scale*i2_pre[1], capability_scale*i2_pre[2])
+    current_scale = target_scale*s1
+    i1 = (s1*i1_pre[1] + i1_import[1], s1*i1_pre[2] + i1_import[2])
+    i2 = (s2*i2_pre[1], s2*i2_pre[2])
     phase_current = _phase_pairs(i1, i2)
     target_re, target_im = controller.current_target isa ConverterCurrentTarget ?
         (handles.cri, handles.cii) : (handles.gri, handles.gii)
-    for k in 1:3
-        JuMP.@constraint(m, target_re[k] == phase_current[k][1])
-        JuMP.@constraint(m, target_im[k] == phase_current[k][2])
+    if controller.current_target isa ConverterCurrentTarget || !_lcl_active(inverter)
+        # The three-leg plant already enforces I0=0 at this target. Six phase
+        # equalities would repeat those two rows and make the Jacobian rank
+        # deficient, especially at zero dispatch. Command only I1 and I2.
+        for (target, command) in ((target_i1, i1), (target_i2, i2)), j in 1:2
+            JuMP.@constraint(m, target[j] == command[j])
+        end
+    else
+        # An LCL shunt can carry zero sequence, so a grid-current target must
+        # also enforce the controller's zero grid-current sum explicitly.
+        for k in 1:3
+            JuMP.@constraint(m, target_re[k] == phase_current[k][1])
+            JuMP.@constraint(m, target_im[k] == phase_current[k][2])
+        end
     end
 
     u1_conj_i1 = _cmul(u1[1], u1[2], i1[1], -i1[2])
@@ -1503,7 +1931,13 @@ end
 function stamp_device!(ctx, controlled::ControlledDevice{<:AdvancedInverter};
                        request::InverterControlRequest)
     inverter = inverter_spec(controlled)
-    plant = stamp_device!(ctx, inverter)
+    # With four independent current commands, unused magnitude epigraphs add
+    # free barrier directions at zero dispatch. Keep the legacy auxiliaries for
+    # LCL grid targets, which also prescribe a separate zero-sequence channel.
+    retain_epigraph = controlled.controller.current_target isa GridCurrentTarget &&
+                      _lcl_active(inverter)
+    plant = stamp_device!(ctx, inverter;
+        retain_lossless_magnitude_epigraph=retain_epigraph)
     control = stamp_smooth_control!(ctx, controlled.controller, request,
                                     inverter,
                                     inverter_handles(controlled, plant))
@@ -1581,18 +2015,8 @@ function _safe_direction_scale_exact(offset, direction, limit)
     return iszero(magnitude) ? 1.0 : min(1.0, available/magnitude)
 end
 
-function _apply_plant_capability_exact(
-        result::InverterControlResult,
-        converter_voltage::NTuple{3,ComplexF64},
-        converter_current::NTuple{3,ComplexF64},
-        grid_current::NTuple{3,ComplexF64},
-        inverter::AdvancedInverter,
-        target::AbstractCurrentTarget)
-    shunt = converter_current .- grid_current
-    zeros3 = ntuple(_ -> 0.0im, 3)
-    converter_offset = target isa ConverterCurrentTarget ? zeros3 : shunt
-    grid_offset = target isa ConverterCurrentTarget ? .-shunt : zeros3
-    direction = result.phase_current
+function _plant_scale_exact(converter_voltage, converter_offset, grid_offset,
+                            direction, inverter::AdvancedInverter)
     scale = 1.0
     if inverter.i_max !== nothing
         for k in 1:3
@@ -1616,27 +2040,90 @@ function _apply_plant_capability_exact(
         converter_voltage[k]*conj(direction[k]) for k in 1:3)
     scale = min(scale, _safe_direction_scale_exact(
         power_offset, power_direction, inverter.s_max))
-    if inverter.dv2_max !== nothing
+    if inverter.dv2_max !== nothing && !iszero(_dc_ripple_factor(inverter))
         ripple_offset = sum(
             converter_voltage[k]*converter_offset[k] for k in 1:3)
         ripple_direction = sum(
             converter_voltage[k]*direction[k] for k in 1:3)
-        ripple_limit = 2(2pi*inverter.f)*inverter.c_dc*inverter.v_dc *
-                       inverter.dv2_max
+        ripple_limit = inverter.dv2_max*inverter.v_dc /
+                       abs(_dc_ripple_factor(inverter))
         scale = min(scale, _safe_direction_scale_exact(
             ripple_offset, ripple_direction, ripple_limit))
     end
+    return scale
+end
 
+function _apply_plant_capability_exact(
+        result::InverterControlResult,
+        converter_voltage::NTuple{3,ComplexF64},
+        converter_current::NTuple{3,ComplexF64},
+        grid_current::NTuple{3,ComplexF64},
+        inverter::AdvancedInverter,
+        target::AbstractCurrentTarget;
+        i1_import::ComplexF64=0.0im,
+        limiter::AbstractLimiterPolicy=CommonScaleLimiter())
+    shunt = converter_current .- grid_current
+    # The loss import is an unscaled offset at the target, like the stamp.
+    imported = _phase_from_sequences(i1_import, 0.0im)
+    converter_offset = target isa ConverterCurrentTarget ? imported :
+        shunt .+ imported
+    grid_offset = target isa ConverterCurrentTarget ? imported .- shunt : imported
+    i1_service = result.i1 - i1_import
+    plant_scale(offset_c, offset_g, direction) = _plant_scale_exact(
+        converter_voltage, offset_c, offset_g, direction, inverter)
+    if limiter isa SequencePriorityLimiter
+        power = limiter.priority === :power
+        reserved = power ? _phase_from_sequences(i1_service, 0.0im) :
+                           _phase_from_sequences(0.0im, result.i2)
+        other = power ? _phase_from_sequences(0.0im, result.i2) :
+                        _phase_from_sequences(i1_service, 0.0im)
+        other_scale = plant_scale(converter_offset .+ reserved,
+                                  grid_offset .+ reserved, other)
+        scale = plant_scale(converter_offset, grid_offset,
+                            reserved .+ other_scale .* other)
+        s1, s2 = power ? (scale, scale*other_scale) : (scale*other_scale, scale)
+    else
+        scale = plant_scale(converter_offset, grid_offset,
+                            result.phase_current .- imported)
+        s1 = s2 = scale
+    end
+
+    i1 = s1*i1_service + i1_import
+    i2 = s2*result.i2
+    u1, u2 = result.voltage_sequence[2], result.voltage_sequence[3]
     return InverterControlResult(
         result.phase_voltage, result.voltage_sequence,
         result.voltage_min, result.voltage_max, result.eta,
         result.p_request, result.q_request, result.power_scale,
         result.i1_request, result.i2_voltage, result.i2_ripple,
-        result.i2_request, result.current_scale*scale,
-        scale*result.i1, scale*result.i2,
-        ntuple(k -> scale*result.phase_current[k], 3),
-        scale*result.sequence_power, scale*result.total_power,
-        scale*result.ripple_power)
+        result.i2_request, result.current_scale*s1,
+        i1, i2, _phase_from_sequences(i1, i2),
+        3u1*conj(i1), 3(u1*conj(i1) + u2*conj(i2)), 3(u1*i2 + u2*i1))
+end
+
+# Exact firmware law at a solved smooth operating point. The local plant
+# measurements used by the smooth stamp (DC power offset, LCL shunt current,
+# converter-terminal voltage) are taken from the same solution, so the
+# exact-versus-smooth residual isolates the controller approximation.
+function _exact_control_at_solution(
+        controlled::ControlledDevice{<:AdvancedInverter},
+        request::InverterControlRequest, extracted, grid_current)
+    target = controlled.controller.current_target
+    sensed = extracted.control.phase_voltage
+    target_current = target isa ConverterCurrentTarget ?
+        extracted.converter_terminal.phase_current : grid_current
+    offset = dc_power_offset(extracted.plant.p_dc, sensed, target_current)
+    exact = evaluate_exact(
+        controlled.controller, InverterControlMeasurement(collect(sensed)),
+        request, InverterControlRatings(controlled.device, target);
+        dc_power_offset=offset)
+    u1 = exact.voltage_sequence[2]
+    i1_import = _loss_import_current(min(request.p_available - offset, 0.0), u1)
+    return _apply_plant_capability_exact(
+        exact, extracted.converter_terminal.phase_voltage,
+        extracted.converter_terminal.phase_current, grid_current,
+        controlled.device, target; i1_import=ComplexF64(i1_import),
+        limiter=controlled.controller.limiter)
 end
 
 function extract_device(controlled::ControlledDevice{<:AdvancedInverter},
@@ -1726,19 +2213,9 @@ function solve_controlled_inverter(
     status = SolveStatus(outcome)
     extracted = extract_device(controlled, handles[], status)
     result = _extract_result(ctx, outcome)
-    exact_control = status.publishable ? evaluate_exact(
-        controlled.controller,
-        InverterControlMeasurement(collect(extracted.control.phase_voltage)),
-        request, InverterControlRatings(
-            controlled.device, controlled.controller.current_target)) :
-        extracted.control
     grid_current = _extract_grid_current(handles[].plant, status)
-    if status.publishable
-        exact_control = _apply_plant_capability_exact(
-            exact_control, extracted.converter_terminal.phase_voltage,
-            extracted.converter_terminal.phase_current, grid_current,
-            controlled.device, controlled.controller.current_target)
-    end
+    exact_control = status.publishable ? _exact_control_at_solution(
+        controlled, request, extracted, grid_current) : extracted.control
     residual = status.publishable ? maximum(abs,
         exact_control.phase_current .- extracted.control.phase_current) : NaN
     return ControlledInverterResult(string(outcome.termination_status),

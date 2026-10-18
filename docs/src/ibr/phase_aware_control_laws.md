@@ -44,7 +44,7 @@ NLP while retaining a separate exact firmware oracle.
 | Voltage/current phasors | RMS; current positive from converter into network |
 | Complex power | ``S=UI^*``; positive ``P,Q`` are injection |
 | Volt-var sign | positive ``Q`` injects vars at low voltage; negative ``Q`` absorbs vars at high voltage |
-| ``|\widetilde S|`` | peak Fourier amplitude of 2ω complex power, not RMS |
+| ``\lvert \widetilde S\rvert `` | peak Fourier amplitude of 2ω complex power, not RMS |
 | Public units | SI; per-unit is internal numerical conditioning only |
 
 ## Candidate and implementation status
@@ -59,7 +59,32 @@ NLP while retaining a separate exact firmware oracle.
 | plant-aware per-leg, apparent-power, and `dv2_max` backoff | implemented | physical protection surrogate |
 | virtual-delta droop | future | line-to-line sensor comparator |
 | closest-feasible per-phase projection | future offline oracle | upper-performance benchmark |
-| power-versus-balance sequence priority | future | service allocation comparison |
+| power-versus-balance sequence priority | implemented (`SequencePriorityLimiter`) | service allocation comparison |
+| grid-forming virtual-impedance negative sequence | implemented (`negative_sequence_virtual_impedance`) | passive voltage-source comparator |
+
+### Position in the reference-generation taxonomy
+
+Unbalanced-voltage current-reference strategies are usually classified as in
+Wang, Duarte and Hendrix and in Rodríguez et al. (see [IBR
+references](@ref ibr-references)). The implemented policies map onto that
+classification as follows; only sinusoidal (fundamental-phasor) strategies can
+be represented by this model.
+
+| Classical strategy | Defining property | Implemented counterpart |
+| --- | --- | --- |
+| BPSC — balanced positive-sequence current | ``I_2=0`` | `NoUnbalanceControl`; leaves ``\widetilde S=3U_2I_1`` |
+| PNSC — positive/negative-sequence compensation | constant active power, sinusoidal current | ripple-cancelling target, `ripple_blend=1` |
+| AARC — average active/reactive control | conductance-like current ``I\propto U`` in every sequence | negative-sequence admittance with ``\phi_2=0``; the classical gain tracks the power command, the implemented ``\kappa(\eta)`` is a voltage-unbalance droop |
+| IARC — instantaneous active/reactive control | constant instantaneous power, non-sinusoidal current | not representable at the fundamental; excluded |
+| flexible/pliant weighting | scalar blend between strategies | `ripple_blend` between the voltage-oriented and PNSC targets |
+| positive/negative-sequence voltage support | ``I_2`` opposing ``U_2`` under a peak-current limit (Camacho et al.) | admittance droop with `SequencePriorityLimiter` |
+| grid-forming voltage source | balanced EMF behind ``Z_v`` | `negative_sequence_virtual_impedance` |
+
+The LV distribution analogue of the AARC row is the "resistive" behaviour of
+Meersman et al., in which a three-phase converter presents a conductance to the
+negative sequence. Their conclusion — that this reduces voltage unbalance on
+resistive LV feeders without communication — is the direct predecessor of the
+`impedance_angle=0` default and should be cited with it.
 
 ![Implemented phase-aware control signal chain](../assets/ibr/generated-control-signal-chain.svg)
 
@@ -72,10 +97,11 @@ must use the licensed, current edition and its prescribed test procedure.
 | Source | Public scope relevant here | Mapping and non-coverage |
 | --- | --- | --- |
 | [IEEE 1547-2018](https://standards.ieee.org/ieee/1547/5915/) and [IEEE 1547.1-2020](https://standards.ieee.org/ieee/1547.1/6039/) | DER reactive capability, voltage/power control, abnormal conditions, and conformance testing | motivates explicit curve bases and P/Q priority; this steady-state model does not reproduce response-time or conformance tests |
-| [IEEE 2800-2022](https://standards.ieee.org/ieee/2800/10453/) | interconnection and capability of IBRs on transmission systems, including required behaviour under unbalanced conditions and negative-sequence current injection | the only cited standard that addresses negative-sequence current behaviour normatively; it is a bulk-system document and is not an LV controller specification |
+| [IEEE 2800-2022](https://standards.ieee.org/ieee/2800/10453/) | interconnection and capability of IBRs on transmission systems, including required behaviour under unbalanced conditions and negative-sequence current injection | addresses negative-sequence current behaviour normatively; it is a bulk-system document and is not an LV controller specification |
+| VDE-AR-N 4110 / 4120 and ENTSO-E NC RfG (EU 2016/631) | MV/HV connection rules; fault-time reactive and negative-sequence current injection proportional to the voltage deviation ("k-factor") | the negative-sequence admittance droop is the steady-state analogue of k-factor injection with a fixed angle; these are fault-ride-through requirements, not continuous LV unbalance control, and their clause numbers and editions are unverified here |
 | [AEMO overview of AS/NZS 4777.2](https://www.aemo.com.au/initiatives/major-programs/nem-distributed-energy-resources-der-program/standards-and-connections/as-nzs-4777-2-inverter-requirements-standard) | LV inverter performance, testing, and smart-inverter functions | motivates an Australian comparator; no claim is made against a clause without the current amended licensed text |
 | EN 50549-1/-2 and VDE-AR-N 4105 | European LV/MV connection requirements for generating plants | jurisdictional comparator for fixed low-voltage/high-voltage priority; cited for scope only, and their designations/editions are unverified here |
-| [IEC 61000-4-30:2025](https://webstore.iec.ch/en/publication/71611) | power-quality measurement methods | ``|U_2|/|U_1|`` is reported from ideal phasors, not a specified measurement window or instrument class |
+| [IEC 61000-4-30:2025](https://webstore.iec.ch/en/publication/71611) | power-quality measurement methods | ``\lvert U_2\rvert /\lvert U_1\rvert `` is reported from ideal phasors, not a specified measurement window or instrument class |
 | [IEC TR 61000-3-13](https://webstore.iec.ch/en/publication/4145) | negative-sequence allocation at MV/HV/EHV | useful planning context, explicitly not an LV controller specification |
 | EN 50160 | supply-voltage characteristics | a network-quality benchmark, not a local inverter-control prescription; the designation and edition are listed unverified in [IBR references](@ref ibr-references) and must be pinned before use |
 | [OpenDSS `InvControl`](https://opendss.epri.com/Commonproperties.html) | monitored-voltage `AVG`, `MAX`, and `MIN` modes | independent balanced fixed-point oracle; it does not implement this split low/high Volt-var conflict law or negative-sequence droop |
@@ -113,9 +139,14 @@ cosmetic:
 
 - ``U_1`` and ``U_2`` are invariant to it, so the positive-sequence Volt-var
   comparator and the negative-sequence droop give identical commands under any
-  common-mode offset;
+  common-mode offset. `PositiveSequenceVoltVarWatt` as a whole is invariant
+  only with `worst_phase_watt_guard=false`; its default Volt-watt guard reads
+  the largest phase magnitude;
 - the minimum, maximum, and mean phase magnitudes are **not** invariant, so the
-  worst-phase and average comparators respond to ``U_0``; and
+  worst-phase and average comparators respond to ``U_0``. The extreme phases
+  move to first order in ``|U_0|``. The first-order shifts of the three phase
+  magnitudes cancel in their mean when ``U_2=0``, so the average comparator
+  responds only at order ``|U_0||U_2|/|U_1|`` and ``|U_0|^2/|U_1|``; and
 - a three-leg bridge has ``I_0=0`` and therefore cannot act on the very
   component it is reacting to.
 
@@ -128,6 +159,13 @@ feeder. Studies using a phase-magnitude comparator should therefore report
 the reference-dependent share of each curtailment decision is visible. The
 invariance contract is pinned by a common-mode metamorphic test; see
 [Verification and benchmark cases](@ref ibr-verification).
+
+The sensing reference is therefore declared on the law, independently of the
+power-stage wiring: `SequenceController(...; sensing_reference=:device)` uses
+the plant's `neutral` (ground for a three-wire plant), `:ground` always senses
+phase-to-ground, and a terminal name such as `"n"` models a three-wire power
+stage with a neutral sensing lead. The smooth stamp, exact-law fixed points and
+network sensitivities all read the same declared reference.
 
 ## Current behaviour in BMOPFTools
 
@@ -189,7 +227,10 @@ Every candidate controller must ultimately satisfy all of the following, not
 only an aggregate apparent-power circle:
 
 - ``I_0=0`` and each phase-conductor current limit;
-- net DC active-power availability, including whether net import is permitted;
+- net DC active-power availability: the plant may not draw more than the
+  available DC power, and net import is permitted only to cover losses the DC
+  source cannot supply (implemented through the AC-available power cap
+  described in the [control modelling guide](@ref inverter-control-api));
 - converter-side apparent-power and loss limits;
 - internal-voltage/filter KVL and the instantaneous switching hull;
 - negative-sequence policy limits; and
@@ -221,7 +262,10 @@ replace the mean-voltage input by direction-aware envelopes:
 The recommended first rule is **continuous dominant severity**. Normalise the
 positive and negative branch ordinates by their respective branch maxima, form
 their signed severity difference ``d``, and blend with
-``w=(1+d/\sqrt{d^2+\epsilon_c^2})/2``. The implementation blends the signed
+``w=(1+d/\sqrt{d^2+\epsilon_c^2\rho^2})/2``, where the conflict measure
+``\rho=m/(m+\epsilon_c)`` uses the smaller normalized severity ``m``. Because
+``\rho=0`` when only one branch is active, the rule changes nothing outside a
+genuine conflict. The implementation blends the signed
 normalized command and then maps it through the same smooth branch-scale
 selector. The request approaches winner-take-all away from the tie and returns
 zero continuously at equal normalized severity, including for asymmetric
@@ -459,12 +503,27 @@ I_c=\alpha I_1+\alpha^2I_2.
 ```
 
 If any phase exceeds its limit, a common scale
-``\gamma=\min(1,I_{max}/\max_\phi|I_\phi|)`` is a safe, very cheap fallback. A less
-conservative implementation can use the same familiar priority logic as
-positive/reactive current limiters: reserve either ``I_1`` or ``I_2``, then find the
-largest admissible scale on the other request with a fixed small number of
-bisection steps. This is a one-dimensional limiter, not optimisation-based
-control.
+``\gamma=\min(1,I_{max}/\max_\phi|I_\phi|)`` is a safe, very cheap fallback
+(`CommonScaleLimiter`). It also curtails the reserved service: when
+negative-sequence support saturates a phase, positive-sequence active power is
+cut with it. The less conservative `SequencePriorityLimiter` reserves either
+``I_1`` or ``I_2`` and gives the other request the largest admissible scale. With
+reserved phase contribution ``a_\phi`` and requested contribution ``b_\phi``,
+each phase needs ``|a_\phi+t\,b_\phi|\le I_{max}``. The largest such ``t`` is the
+positive root of a quadratic, written in rationalised form so that it remains
+defined at ``b_\phi=0``:
+
+```math
+t_\phi=\frac{n_\phi}{c_\phi+\sqrt{c_\phi^2+|b_\phi|^2n_\phi}},\qquad
+n_\phi=I_{max}^2-|a_\phi|^2,\quad c_\phi=\Re\{a_\phi b_\phi^*\},\qquad
+t=\min\Big(1,\min_\phi t_\phi\Big).
+```
+
+The reserved sequence is first limited to ``(1-h)I_{max}`` with the declared
+`priority_headroom_fraction` ``h``, so ``n_\phi>0``. This is a closed-form,
+one-dimensional limiter, not optimisation-based control. It is the
+fixed-structure analogue of the peak-current-constrained sequence references of
+Camacho et al. and Afshari et al. (see [IBR references](@ref ibr-references)).
 
 The reconstructed current can be applied at either side of an output filter.
 Converter-current control maps most directly to semiconductor protection and
@@ -479,15 +538,20 @@ protection saturation from becoming an infeasible equality.
 
 Two declared modes are preferable to hidden weights:
 
-- **power priority** preserves the conventional positive-sequence Volt-var/
-  Volt-watt request and gives unbalance control the remaining phase-current and
-  ripple headroom; and
-- **balance priority** reserves a declared negative-sequence current fraction,
-  then curtails positive-sequence current if necessary.
+- **power priority** (`SequencePriorityLimiter(priority=:power)`) preserves the
+  conventional positive-sequence Volt-var/Volt-watt request and gives
+  unbalance control the remaining target phase-current headroom; and
+- **balance priority** (`priority=:balance`) reserves the negative-sequence
+  request, then curtails positive-sequence current if necessary.
 
-These two sequence-priority modes remain future work. The implemented positive-
-sequence allocator already offers watt, var, and proportional P/Q priority;
-final physical protection may common-scale both sequences. In all modes,
+Both act on the target-side per-leg rating and on the plant-aware protection
+(both filter-side ratings, converter apparent power and `dv2_max`). The
+protection first scales only the lower-priority sequence with the reserved one
+held as an offset, and touches the reserved sequence only if that alone
+violates a limit. This matters most for the ripple limit: because
+``\widetilde S=3(U_1I_2+U_2I_1)`` is dominated by ``U_1I_2``, common scaling would
+give up a lot of active power for little ripple reduction. The positive-sequence
+allocator separately offers watt, var, and proportional P/Q priority. In all modes,
 protection retains absolute priority: phase current, DC voltage,
 capacitor current, and modulation margin; then net active-power availability;
 then the selected power/balance service priority. The deployed code therefore
@@ -571,8 +635,10 @@ half its width. All exact squared capability inequalities remain in the plant;
 controller approximation bounds do not replace physical validation.
 
 Watt/var/proportional priority is applied before this final protection scale.
-Power-versus-balance sequence priority can be added later as a smooth radial
-clip of only the lower-priority sequence command. Switching-hull, modulation,
+`SequencePriorityLimiter` replaces the target-side common scale with the
+reserved-sequence limit and the per-phase quadratic fill above. Its smooth
+model overestimates the square root by at most a quarter of its width and uses
+upper selector denominators, so the smooth fill never exceeds the exact one. Switching-hull, modulation,
 and capacitor thermal allocation are not yet inside the controller; their plant
 constraints can still make a snapshot infeasible and must be reported. The
 common-scale law is the first large-network implementation because it has fixed

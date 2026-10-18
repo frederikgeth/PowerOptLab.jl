@@ -357,6 +357,54 @@ behaviour. PowerOptLab does not reproduce their complete profiles or claim
 conformance; any such study must use the current licensed standard and its
 prescribed measurement and response-time procedures.
 
+## Additions from the 2026 IBR review
+
+These entries close gaps identified in the October 2026 review
+(`dev/notes/ibr_review_resolution.md`). They are kept in one block so the
+numbering of the topical sections above stays stable.
+
+54. **† F. Wang, J. L. Duarte, and M. A. M. Hendrix**, “Pliant active and
+    reactive power control for grid-interactive converters under unbalanced
+    voltage dips,” *IEEE Transactions on Power Electronics*, 2011. The
+    BPSC/PNSC/AARC/IARC reference-generation taxonomy used to position the
+    implemented policies in [Phase-aware local control laws](@ref
+    ibr-phase-aware-control-laws).
+55. **† A. Camacho, M. Castilla, J. Miret, J. C. Vasquez, and E.
+    Alarcón-Gallo**, “Flexible voltage support control for three-phase
+    distributed generation inverters under grid fault,” *IEEE Transactions on
+    Industrial Electronics*, 2013.
+56. **† A. Camacho, M. Castilla, J. Miret, L. García de Vicuña, and R. Guzman**,
+    “Positive and negative sequence control strategies to maximize the voltage
+    support in resistive–inductive grids during grid faults,” *IEEE
+    Transactions on Power Electronics*, 2018. Items 55-56 are the closest
+    published relatives of `SequencePriorityLimiter`: sequence-current
+    references chosen in closed form under a peak phase-current limit, with the
+    R/X ratio setting the effective support angle (`impedance_angle`).
+57. **† E. Afshari, G. R. Moradi, R. Rahimi, B. Farhangi, Y. Yang, F.
+    Blaabjerg, and S. Farhangi**, “Control strategy for three-phase
+    grid-connected PV inverters enabling current limitation under unbalanced
+    faults,” *IEEE Transactions on Industrial Electronics*, 2017. Peak
+    phase-current limiting under unbalance, the alternative to the
+    conservative common scale.
+58. **† B. Meersman, B. Renders, L. Degroote, T. Vandoorn, and L.
+    Vandevelde**, “Three-phase inverter-connected DG-units and voltage
+    unbalance,” *Electric Power Systems Research*, 2011. Compares balanced-current
+    and negative-sequence-conductance ("resistive") behaviour of three-phase
+    inverters on LV feeders; the predecessor of the `impedance_angle=0`
+    admittance droop.
+
+59. **† VDE-AR-N 4110 and VDE-AR-N 4120**, technical connection rules for
+    medium- and high-voltage networks, and **† Commission Regulation (EU)
+    2016/631** (network code on requirements for generators, NC RfG). Sources of
+    fault-time positive- and negative-sequence current injection proportional
+    to voltage deviation ("k-factor"). Editions and clause numbers unverified.
+
+Items 54 and 57 position the implemented sequence policies and the
+`SequencePriorityLimiter` within converter-control practice; items 55-56 are
+its closest published relatives; item 58 is the LV distribution predecessor of
+the conductance-like admittance droop; item 59 is the grid-code context for
+negative-sequence current injection.
+
 ## Literature watch list
 
 The highest-value additions are:

@@ -273,7 +273,7 @@ function split_link_figure(path)
 <text class="small" x="532" y="358" fill="#33865a">bounded charge transfer qb</text>
 
 <rect class="formula" x="48" y="516" width="904" height="70" rx="8"/>
-<text class="small" x="65" y="540">Ceq = Cu Cl/(Cu+Cl)     αu = Cu/(Cu+Cl), αl = Cl/(Cu+Cl)     |N| = |In|/[ω(Cu+Cl)]</text>
+<text class="small" x="65" y="540">Ceq = Cu Cl/(Cu+Cl)   αu,l = |ρ∓1|/2: ½ each (open source), Cu/CΣ, Cl/CΣ (stiff source)   N = ½[Il/(jωCl) − Iu/(jωCu)]</text>
 <text class="small" x="65" y="565">Nmean = Vdc(Cu−Cl)/[2(Cu+Cl)] + 2qb/(Cu+Cl)     Ih² = αh²|In|² + I2ω² + Isw²</text>
 </svg>"""
     write(path, svg)

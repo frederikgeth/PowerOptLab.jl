@@ -266,28 +266,65 @@ The symmetric case ``C_u=C_l=C_{dc}`` recovers ``C_{eq}=C_{dc}/2``.
 `result.dv2` is ``|D|``, a peak sinusoidal voltage amplitude, and `dv2_max`
 bounds it.
 
+When the DC source is not open at line frequencies, `dc_source_r` and
+`dc_source_l` declare a series branch ``Z_s(\Omega)=R_s+j\Omega L_s``. The
+bridge's 2ω current ``\widetilde S/V_{dc}`` then divides between that branch and
+the link:
+
+```math
+D=-\frac{\widetilde S}{V_{dc}}\,
+\frac{Z_s(2\omega)}{1+j2\omega C_{eq}Z_s(2\omega)},
+```
+
+which reduces to the boxed open-source result as ``Z_s\to\infty`` and to
+``D=0`` for an ideal stiff source. The capacitor's 2ω current is
+``|j2\omega C_{eq}D|``. The same branch is used at the fundamental (Section 6),
+so one physical source model governs every line-frequency quantity. Carrier
+frequencies use the separate `pwm_dc_source_*` branch (Section 9.1).
+
 This derivation is first order. It neglects products of ripple quantities,
-higher harmonics, DC-source impedance at ``2\omega``, ESR/ESL, and controller
-response. A practical small-ripple audit should report ``|D|/V_{dc}``.
+higher harmonics, ESR/ESL, and controller response. A practical small-ripple
+audit should report ``|D|/V_{dc}``.
 
 ## 6. Split-link midpoint motion
 
 In `:SPLIT_DC`, neutral current moves the capacitor midpoint. Let
-``C_\Sigma=C_u+C_l`` and use the converter-reference sign convention implemented
-by the sampled switching hull. The fundamental midpoint-ripple phasor has RMS
-magnitude
+``C_\Sigma=C_u+C_l`` and ``J=\sum_xI_x=-I_n`` be the bridge current returning
+into the midpoint. With duty ratios ``d_x=\tfrac12+u_x/v_{dc}``, the averaged
+rail currents are ``i_P=\tfrac12J+p/v_{dc}`` and ``i_N=\tfrac12J-p/v_{dc}``, so
+each rail supplies half of ``J`` at the fundamental. Nodal analysis of the
+three DC nodes with the source branch ``Z_s(\omega)`` between the rails gives
+the source current ``\tfrac12\rho J`` and the half-bank currents
 
 ```math
-\boxed{|N|=\frac{|I_n|}{\omega C_\Sigma}}.
+\rho=\frac{C_l-C_u}{C_\Sigma+j\omega C_uC_lZ_s(\omega)},\qquad
+I_{C,u}=\frac{\rho-1}{2}J,\qquad I_{C,l}=\frac{\rho+1}{2}J.
 ```
 
-The capacitor currents caused by this component divide according to capacitance,
-not equally unless the banks match:
+The midpoint displacement from the centre of the bus and the total-bus
+fundamental ripple are then
 
 ```math
-I_{n,u}=\frac{C_u}{C_\Sigma}I_n,\qquad
-I_{n,l}=\frac{C_l}{C_\Sigma}I_n.
+N=\tfrac12\Bigl(\frac{I_{C,l}}{j\omega C_l}-\frac{I_{C,u}}{j\omega C_u}\Bigr),
+\qquad
+B=\frac{I_{C,u}}{j\omega C_u}+\frac{I_{C,l}}{j\omega C_l}.
 ```
+
+Equal banks give ``\rho=0``, ``|N|=|I_n|/(\omega C_\Sigma)`` and ``B=0`` for every
+source impedance. Unequal banks depend on the source:
+
+| line-frequency source | neutral-current shares | ``\lvert N\rvert`` | total-bus ripple ``\lvert B\rvert`` |
+| --- | --- | --- | --- |
+| open (default, `dc_source_r=nothing`) | ``\tfrac12,\ \tfrac12`` | ``\lvert I_n\rvert(1/C_u+1/C_l)/(4\omega)`` | ``\lvert I_n\rvert\,\lvert1/C_l-1/C_u\rvert/(2\omega)`` |
+| ideal stiff (`dc_source_r=0`) | ``C_u/C_\Sigma,\ C_l/C_\Sigma`` | ``\lvert I_n\rvert/(\omega C_\Sigma)`` | 0 |
+
+Earlier versions combined the stiff fundamental split with an open source at
+2ω. That pairing is inconsistent for unequal banks and is no longer available.
+The default open source matches a PV or battery interface whose DC/DC
+regulation bandwidth lies below 100 Hz. `result.dv_bus_fundamental` reports
+``|B|``. The 2ω bus ripple likewise divides between unequal banks as
+``C_{eq}/C_u`` and ``C_{eq}/C_l``, which moves the midpoint by
+``N_2=D(C_u-C_l)/(2C_\Sigma)`` at 2ω.
 
 With equal stored charge and no balancing action, unequal capacitances also
 shift the mean midpoint away from half the total bus:
@@ -308,7 +345,7 @@ charge ``q_b``:
 `result.q_mid_balance` report the signed mean shift and balancing action.
 `dv_mid_max` and `v_mid_mean_max` can bound the two distinct quantities. The
 instantaneous phase reference seen by each half-bridge is formed from
-``U_x+N+\bar N``. Fundamental ripple and mean mismatch therefore affect voltage
+``U_x+N+N_2+\bar N``, and the half rail includes ``B``. Fundamental ripple and mean mismatch therefore affect voltage
 feasibility as well as capacitor stress; neither is merely a reporting variable.
 
 The balancing variable is a steady-state charge-authority abstraction, not a
@@ -360,16 +397,19 @@ error bound is claimed once endogenous DC ripple is included.
 
 ## 8. Capacitor RMS thermal allocation
 
-The 2ω capacitor-current amplitude is ``|\widetilde S|/V_{dc}``; its RMS value is
+For an open line-frequency source the 2ω capacitor-current amplitude is
+``|\widetilde S|/V_{dc}``; its RMS value is
 
 ```math
-I_{2\omega,rms}=\frac{|\widetilde S|}{\sqrt2V_{dc}}.
+I_{2\omega,rms}=\frac{|\widetilde S|}{\sqrt2V_{dc}}
+\quad\text{(open source; in general } |2\omega C_{eq}D|/\sqrt2\text{)}.
 ```
 
 For a split link, both half-banks carry the common 2ω bus current and reserved
-switching component, while the fundamental neutral current divides by
-``\alpha_u=C_u/C_\Sigma`` and ``\alpha_l=C_l/C_\Sigma``. The *physical* RMS
-currents are therefore
+switching component, while the fundamental neutral current divides with
+``\alpha_u=|\rho-1|/2`` and ``\alpha_l=|\rho+1|/2`` from Section 6. These are
+one half each for an open source and ``C_u/C_\Sigma``, ``C_l/C_\Sigma`` for an
+ideal stiff source. The *physical* RMS currents are therefore
 
 ```math
 I_{u,rms}^2=\alpha_u^2|I_n|^2+I_{2\omega,rms}^2+i_{sw}^2,
@@ -627,6 +667,28 @@ positive-sequence set with a common magnitude decision variable:
 U_b=\alpha^2U_a,\qquad U_c=\alpha U_a,
 \qquad V_{min}\le |U_a|\le V_{max}.
 ```
+
+For `:THREE_LEG` the bridge has no zero-sequence path (``I_0=0``), so
+zero-sequence KVL across the filter gives ``U_0=V_{p,0}``: the converter cannot
+set its own zero-sequence EMF. The constraint is then ``U_2=0`` with
+``V_{min}\le|U_1|\le V_{max}``, and ``U_0`` follows the network. (Imposing the
+ground-referred balanced set above on a three-leg bridge would also force the
+POC zero-sequence voltage to zero, which is infeasible on any network with
+zero-sequence unbalance.)
+
+Because the internal negative-sequence EMF is zero, the negative-sequence
+current of a grid-forming plant is fixed by the filter,
+
+```math
+I_2=-\frac{V_{p,2}}{Z_{f,2}},
+```
+
+which is a passive negative-sequence admittance at angle ``\arg Z_{f,2}``. The
+same law is available to the local controllers as
+[`negative_sequence_virtual_impedance`](@ref), for a virtual impedance that
+need not equal the physical filter. With realistic filters ``|Z_f|`` is small,
+so this current can exceed the converter rating even at modest unbalance; real
+grid-forming controls must limit it.
 
 This is the steady-state voltage-source property used in algebraic power flow.
 It has no PLL, droop state, virtual impedance dynamics, current-priority state

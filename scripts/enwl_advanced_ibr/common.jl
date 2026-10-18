@@ -203,15 +203,29 @@ function _as4777_laws(net)
     volt_watt, volt_var, volt_watt_basis, reference
 end
 
-function _controller(variant::String, volt_watt, volt_var, volt_watt_basis::Symbol)
+# Per-unit design values shared by every retrofitted device; see
+# docs/src/ibr/parameter_selection.md. κ is in units of Y_base = I_rated/V_nom,
+# matching the Australian study's measured design (≈43 pu for 20% attenuation
+# on a 12-inverter LV feeder); it is an assumption here, since the ENWL feeder
+# impedances are not measured by this script.
+const NOMINAL_VOLTAGE = 230.0
+const KAPPA_PER_UNIT = 43.0
+const FILTER_X_PU = 0.05
+const FILTER_X_OVER_R = 10.0
+const C_DC_PER_VA = 50e-9          # 50 µF/kVA
+const DV2_FRACTION = 0.01          # 1% peak 2ω ripple allowance
+const LOSS_FIXED_FRACTION = 0.0025 # loss curve ≈2.2% at rated, ≈3.5% at 10% load
+
+function _controller(variant::String, volt_watt, volt_var, volt_watt_basis::Symbol,
+                     rating::Float64)
     positive = if variant == "baseline"
         AverageVoltageVoltVarWatt(
             volt_watt=volt_watt, volt_var=volt_var,
             volt_watt_basis=volt_watt_basis)
     elseif variant == "worst_phase"
+        # Default smoothing widths, identical to the other variants.
         WorstPhaseVoltVarWatt(
             volt_watt=volt_watt, volt_var=volt_var,
-            extrema_epsilon=0.5, conflict_epsilon=0.05,
             volt_watt_basis=volt_watt_basis)
     elseif variant == "sequence_droop"
         PositiveSequenceVoltVarWatt(
@@ -222,14 +236,20 @@ function _controller(variant::String, volt_watt, volt_var, volt_watt_basis::Symb
                             join(DEFAULT_VARIANTS, ", ")))
     end
     unbalance = if variant == "sequence_droop"
+        i_rated = rating/(3NOMINAL_VOLTAGE)
+        kappa = KAPPA_PER_UNIT*i_rated/NOMINAL_VOLTAGE
         gain = PiecewiseLinearLaw(
-            [0.0, 0.005, 0.02, 0.05], [0.0, 0.0, 0.08, 0.16];
-            smoothing_epsilon=2.5e-4)
-        NegativeSequenceAdmittanceDroop(gain; ripple_blend=0.25)
+            [0.0, 0.0005, 0.002], [0.0, 0.0, kappa]; smoothing_epsilon=2.5e-5)
+        # Fixed LV angle (assumed, not measured for these feeders): see the
+        # parameter guide before relying on it.
+        NegativeSequenceAdmittanceDroop(gain; impedance_angle=deg2rad(20.0))
     else
         NoUnbalanceControl()
     end
-    SequenceController(positive; unbalance=unbalance)
+    limiter = variant == "sequence_droop" ?
+        SequencePriorityLimiter(priority=:power) : CommonScaleLimiter()
+    SequenceController(positive; unbalance=unbalance, limiter=limiter,
+                       sensing_reference="n")
 end
 
 function _retrofit!(net, id::String; nominal_voltage::Float64=230.0)
@@ -262,12 +282,16 @@ function _retrofit!(net, id::String; nominal_voltage::Float64=230.0)
     record["q_min"] = fill(-per_phase_rating, 3)
     record["q_max"] = fill(per_phase_rating, 3)
 
-    current_rating = 1.20rating / (3nominal_voltage)
+    i_rated = rating / (3nominal_voltage)
+    current_rating = 1.20i_rated
+    x_filter = FILTER_X_PU*nominal_voltage/i_rated
     inverter = AdvancedInverter(
         id=id, bus=bus, phase_terminals=copy(PHASES), neutral=nothing,
         topology=:THREE_LEG, s_max=rating, i_max=current_rating,
-        v_dc=700.0, c_dc=1.1e-3 * rating / 20e3,
-        m_max=0.96, r_filter=0.05, x_filter=0.15)
+        v_dc=700.0, c_dc=C_DC_PER_VA*rating, dv2_max=DV2_FRACTION*700.0,
+        m_max=0.96, r_filter=x_filter/FILTER_X_OVER_R, x_filter=x_filter,
+        p_loss_fixed=LOSS_FIXED_FRACTION*rating, a_loss=0.0087nominal_voltage,
+        c_loss=0.0113*3nominal_voltage^2/rating)
     request = InverterControlRequest(
         p_available=available, p_rated=rating, q_scale=q_scale)
     provenance = Dict{String,Any}(
@@ -285,11 +309,10 @@ function _build_snapshot_cases(path::String, variants, device_count::Int)
     net = parse_bmopf(path)
     selected = _selected_ids(net, device_count)
     volt_watt, volt_var, volt_watt_basis, reference = _as4777_laws(net)
-    if reference == "PN_PER_PHASE"
-        # A three-wire retrofit has no neutral to sense against, so the curve
-        # input carries the local neutral displacement on these feeders.
-        message = "profile monitors phase-to-neutral voltage, but the " *
-                  "retrofitted three-wire plants sense phase-to-ground"
+    if reference == "PG_PER_PHASE"
+        # The retrofitted plants sense phase-to-neutral through a sensing lead.
+        message = "profile monitors phase-to-ground voltage, but the " *
+                  "retrofitted plants sense phase-to-neutral"
         @warn message reference maxlog=1
     end
     inverters = Dict{String,AdvancedInverter}()
@@ -309,12 +332,13 @@ function _build_snapshot_cases(path::String, variants, device_count::Int)
         "selected_device_ids" => selected,
         "device_provenance" => provenance,
         "profile_voltage_reference" => reference,
-        "sensed_voltage_reference" => "PG_PER_PHASE",
+        "sensed_voltage_reference" => "PN_PER_PHASE",
         "volt_watt_basis" => String(volt_watt_basis),
     )
     [begin
         devices = Dict(id => ControlledDevice(
-            inverter, _controller(variant, volt_watt, volt_var, volt_watt_basis))
+            inverter, _controller(variant, volt_watt, volt_var, volt_watt_basis,
+                                  inverter.s_max))
             for (id, inverter) in inverters)
         InverterControlStudyCase(
             scenario_id=snapshot_id(path), variant_id=variant,

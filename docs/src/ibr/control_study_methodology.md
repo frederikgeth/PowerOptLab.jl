@@ -81,8 +81,11 @@ The implemented policies include:
   resolution for conventional PWL Volt-var/Volt-watt;
 - `NegativeSequenceAdmittanceDroop` — PWL `kappa(eta)`, fixed `phi2`, and an
   optional fixed ripple blend;
-- `NoUnbalanceControl` — balanced-current baseline; and
-- `CommonScaleLimiter` — the first smooth, fixed-structure protection law.
+- `NoUnbalanceControl` — balanced-current baseline;
+- `CommonScaleLimiter` — the first smooth, fixed-structure protection law; and
+- `SequencePriorityLimiter` — power- or balance-priority sequence allocation,
+  which keeps negative-sequence support from curtailing active power (or the
+  reverse).
 
 `ConverterCurrentTarget` and `GridCurrentTarget` select which physical current
 the algebraic command constrains. In both cases the plant retains converter- and
@@ -90,9 +93,9 @@ grid-side per-leg ratings. The final plant-aware backoff includes the solved LCL
 shunt-current offset and checks both locations, converter-terminal apparent
 power, and a configured `dv2_max` before imposing the target equality.
 
-Watt/var/proportional P/Q priority is implemented. Positive-sequence-power versus
-negative-sequence-balance priority, virtual-delta, and closest-feasible
-projection policies can be added without changing the plant or study interfaces.
+Watt/var/proportional P/Q priority and power-versus-balance sequence priority
+are implemented. Virtual-delta and closest-feasible projection policies can be
+added without changing the plant or study interfaces.
 
 The supported controller has a pure numeric exact evaluator and a JuMP stamping
 method:
@@ -312,6 +315,9 @@ distributions and tails, not only averages: hardware is usually selected by a
 worst credible condition while energy and loss outcomes accumulate over time.
 
 ## Rating and capacitor-sizing method
+
+[Choosing inverter and controller parameters](@ref ibr-parameter-selection)
+derives the starting values and the per-unit conventions used below.
 
 ### Current rating
 
