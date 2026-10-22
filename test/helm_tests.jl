@@ -331,9 +331,20 @@ end
     end
 
     @testset "validation errors" begin
-        # Constant-current fraction: not holomorphic in v1 → informative error.
-        net = _two_node_net(2000.0; model="constant_current")
+        # Generators / IBRs have no fixed power-flow law: refused, not dropped.
+        net = _two_node_net(2000.0)
+        net["generator"] = Dict{String,Any}("g1" => Dict{String,Any}("bus" => "ld"))
+        err = try helm_series(net); nothing catch e; e end
+        @test err isa ArgumentError
+        @test occursin("g1", sprint(showerror, err))
+        net = _two_node_net(2000.0)
+        net["ibr"] = Dict{String,Any}("pv1" => Dict{String,Any}("bus" => "ld"))
         @test_throws ArgumentError helm_series(net)
+
+        # Unknown embedding options.
+        @test_throws ArgumentError helm_series(_two_node_net(2000.0); embedding=:flat)
+        @test_throws ArgumentError helm_series(_two_node_net(2000.0);
+                                               source_reference=:ground)
 
         # DELTA voltage source unsupported.
         net = _two_node_net(2000.0)
@@ -550,6 +561,284 @@ end
     end
 end
 
+# ── load laws, source references, ideal-transformer earthing, n-wire ────────
+
+@testset "helm: load laws, 4-wire references and n-wire networks" begin
+
+    _line(f, t, tm, R, X) = Dict{String,Any}(
+        "bus_from" => f, "bus_to" => t,
+        "terminal_map_from" => tm, "terminal_map_to" => tm,
+        Dict("R_series_$(k)_$(k)" => R for k in 1:length(tm))...,
+        Dict("X_series_$(k)_$(k)" => X for k in 1:length(tm))...)
+    _src3(E=230.0) = Dict{String,Any}(
+        "bus" => "src", "terminal_map" => ["a", "b", "c"], "configuration" => "WYE",
+        "v_magnitude" => [E, E, E], "v_angle" => [0.0, -2π/3, 2π/3])
+
+    # Single-phase 2-node feeder, loop resistance R = 1 Ω (as in the analytic
+    # layer), with an arbitrary load model.
+    function _feeder(P; E=230.0, fields...)
+        load = Dict{String,Any}("bus" => "ld", "terminal_map" => ["a", "n"],
+                                "configuration" => "WYE", "p_nom" => [P],
+                                "q_nom" => [0.0], "v_nom" => [E])
+        for (k, v) in fields
+            load[string(k)] = v
+        end
+        Dict{String,Any}(
+            "bus" => Dict{String,Any}(
+                "src" => Dict{String,Any}("terminal_names" => ["a", "n"],
+                                          "perfectly_grounded_terminals" => ["n"]),
+                "ld"  => Dict{String,Any}("terminal_names" => ["a", "n"])),
+            "voltage_source" => Dict{String,Any}("vs" => Dict{String,Any}(
+                "bus" => "src", "terminal_map" => ["a"], "configuration" => "WYE",
+                "v_magnitude" => [E], "v_angle" => [0.0])),
+            "line" => Dict{String,Any}("l1" => _line("src", "ld", ["a", "n"], 0.5, 0.0)),
+            "load" => Dict{String,Any}("d1" => load))
+    end
+    _dv(hr) = hr.V[("ld", "a")] - hr.V[("ld", "n")]
+
+    # Real scalar Newton on v² − E·v + R·P(v) = 0 (operational root), the
+    # closed-form oracle for any |ΔV|-dependent load law on the 2-node feeder.
+    function _feeder_root(Pv, dPv; E=230.0)
+        v = E
+        for _ in 1:60
+            v -= (v^2 - E * v + Pv(v)) / (2v - E + dPv(v))
+        end
+        v
+    end
+
+    # ybus_linearized oracle, optionally skipping whole buses.
+    function _lin_res(net, hr; skip=("src",))
+        lin = ybus_linearized(net; fold=:constant_z)
+        Vv = zeros(ComplexF64, length(lin.nodes))
+        for (nd, gi) in lin.index
+            gi == 0 && continue
+            Vv[gi] = hr.V[nd]
+        end
+        r = lin.Y * Vv .- lin.i_comp(Vv)
+        maximum(abs(r[gi]) for (nd, gi) in lin.index
+                if gi != 0 && !(nd[1] in skip); init=0.0)
+    end
+
+    @testset "constant-current, exponential and full ZIP laws ($emb)" for emb in
+            (:load_scaling, :impedance_germ)
+        E = 230.0; P = 5000.0
+        hr = helm_series(_feeder(P; model="constant_current"); embedding=emb)
+        @test hr.status == :converged
+        @test _dv(hr) ≈ E - P / E rtol=1e-11            # P·|v|/E ⇒ linear root
+
+        hr = helm_series(_feeder(P; model="exponential", gamma_p=[0.7],
+                                 gamma_q=[0.0]); embedding=emb)
+        @test hr.status == :converged
+        @test real(_dv(hr)) ≈ _feeder_root(v -> P * (v / E)^0.7,
+                                           v -> 0.7P * (v / E)^(-0.3) / E) rtol=1e-11
+
+        hr = helm_series(_feeder(P; model="zip", alpha_z=[0.3], alpha_i=[0.3],
+                                 alpha_p=[0.4], beta_z=[0.0], beta_i=[0.0],
+                                 beta_p=[1.0]); embedding=emb)
+        @test hr.status == :converged
+        @test real(_dv(hr)) ≈ _feeder_root(
+            v -> P * (0.3 * (v / E)^2 + 0.3 * v / E + 0.4),
+            v -> P * (0.6 * v / E^2 + 0.3 / E)) rtol=1e-11
+    end
+
+    @testset "unbalanced 4-wire ZIP/exponential loads: oracle residual" begin
+        net = Dict{String,Any}(
+            "bus" => Dict{String,Any}(
+                "src" => Dict{String,Any}("terminal_names" => ["a", "b", "c", "n"],
+                                          "perfectly_grounded_terminals" => ["n"]),
+                "ld"  => Dict{String,Any}("terminal_names" => ["a", "b", "c", "n"])),
+            "voltage_source" => Dict{String,Any}("vs" => _src3()),
+            "line" => Dict{String,Any}(
+                "l1" => _line("src", "ld", ["a", "b", "c", "n"], 0.4, 0.3)),
+            "load" => Dict{String,Any}(
+                "z" => Dict{String,Any}("bus" => "ld", "terminal_map" => ["a", "b", "c", "n"],
+                    "configuration" => "WYE", "model" => "zip", "v_nom" => [230.0],
+                    "p_nom" => [5000.0, 2000.0, 1000.0], "q_nom" => [1000.0, 500.0, 0.0],
+                    "alpha_z" => [0.2], "alpha_i" => [0.5], "alpha_p" => [0.3],
+                    "beta_z" => [0.6], "beta_i" => [0.1], "beta_p" => [0.3]),
+                "x" => Dict{String,Any}("bus" => "ld", "terminal_map" => ["a", "b", "c"],
+                    "configuration" => "DELTA", "model" => "exponential",
+                    "v_nom" => [400.0], "p_nom" => [1500.0, 500.0, 900.0],
+                    "q_nom" => [200.0, 0.0, 100.0],
+                    "gamma_p" => [1.3], "gamma_q" => [2.5])))
+        for emb in (:load_scaling, :impedance_germ)
+            hr = helm_series(net; embedding=emb)
+            @test hr.status == :converged
+            @test _lin_res(net, hr) < 1e-8
+        end
+    end
+
+    @testset "unearthed star point: needs the impedance germ" begin
+        # 3-wire feeder; the wye load's star point is held only by the load.
+        net = Dict{String,Any}(
+            "bus" => Dict{String,Any}(
+                "src" => Dict{String,Any}("terminal_names" => ["a", "b", "c", "n"],
+                                          "perfectly_grounded_terminals" => ["n"]),
+                "ld"  => Dict{String,Any}("terminal_names" => ["a", "b", "c", "n"])),
+            "voltage_source" => Dict{String,Any}("vs" => _src3()),
+            "line" => Dict{String,Any}("l1" => _line("src", "ld", ["a", "b", "c"], 0.3, 0.2)),
+            "load" => Dict{String,Any}("d1" => Dict{String,Any}(
+                "bus" => "ld", "terminal_map" => ["a", "b", "c", "n"],
+                "configuration" => "WYE", "model" => "zip", "v_nom" => [230.0],
+                "p_nom" => [4000.0, 3000.0, 2500.0], "q_nom" => [500.0, 0.0, 200.0],
+                "alpha_z" => [0.7], "alpha_i" => [0.2], "alpha_p" => [0.1],
+                "beta_z" => [1.0], "beta_i" => [0.0], "beta_p" => [0.0])))
+        err = try helm_series(net); nothing catch e; e end
+        @test err isa ErrorException
+        @test occursin("impedance_germ", sprint(showerror, err))
+        hr = helm_series(net; embedding=:impedance_germ)
+        @test hr.status == :converged
+        @test _lin_res(net, hr) < 1e-8
+        @test abs(hr.V[("ld", "n")]) > 10.0             # genuine star-point shift
+    end
+
+    @testset "source_reference = :neutral honours source earthing impedance" begin
+        # Unbalanced 4-wire feeder; source neutral earthed through 5 Ω, load
+        # neutral through 10 Ω. Constant-Z loads make an independent linear
+        # MNA solve (ybus_linearized + hand-built source rows) the oracle.
+        net = Dict{String,Any}(
+            "bus" => Dict{String,Any}(
+                "src" => Dict{String,Any}("terminal_names" => ["a", "b", "c", "n"]),
+                "ld"  => Dict{String,Any}("terminal_names" => ["a", "b", "c", "n"])),
+            "voltage_source" => Dict{String,Any}("vs" => _src3()),
+            "line" => Dict{String,Any}(
+                "l1" => _line("src", "ld", ["a", "b", "c", "n"], 0.3, 0.2)),
+            "shunt" => Dict{String,Any}(
+                "gs" => Dict{String,Any}("bus" => "src", "terminal_map" => ["n"],
+                                         "G_1_1" => 0.2, "B_1_1" => 0.0),
+                "gl" => Dict{String,Any}("bus" => "ld", "terminal_map" => ["n"],
+                                         "G_1_1" => 0.1, "B_1_1" => 0.0)),
+            "load" => Dict{String,Any}("d1" => Dict{String,Any}(
+                "bus" => "ld", "terminal_map" => ["a", "b", "c", "n"],
+                "configuration" => "WYE", "model" => "constant_impedance",
+                "v_nom" => [230.0], "p_nom" => [8000.0, 1000.0, 500.0],
+                "q_nom" => [1000.0, 0.0, 0.0])))
+        hr = helm_series(net; source_reference=:neutral)
+        @test hr.status == :converged
+
+        lin = ybus_linearized(net; fold=:constant_z)
+        nn = length(lin.nodes)
+        A = zeros(ComplexF64, 3, nn)
+        Es = 230.0 .* cis.([0.0, -2π/3, 2π/3])
+        for (k, t) in enumerate(("a", "b", "c"))
+            A[k, lin.index[("src", t)]] = 1.0
+            A[k, lin.index[("src", "n")]] = -1.0
+        end
+        M = [Matrix(lin.Y) transpose(A); A zeros(3, 3)]
+        x = M \ vcat(zeros(ComplexF64, nn), Es)
+        for (nd, gi) in lin.index
+            gi == 0 && continue
+            @test hr.V[nd] ≈ x[gi] atol=1e-8
+        end
+        @test abs(hr.V[("src", "n")]) > 1.0             # source neutral floats
+        # Phase-to-neutral source voltage exact; source currents conserve.
+        @test abs(hr.V[("src", "a")] - hr.V[("src", "n")]) ≈ 230.0 rtol=1e-12
+        @test abs(sum(values(hr.source_injection))) < 1e-9
+        # The default :earth reference still pins the source neutral at 0 V.
+        @test helm_series(net).V[("src", "n")] == 0.0
+
+        # With a perfectly grounded source neutral, both references coincide.
+        g = deepcopy(net)
+        g["bus"]["src"]["perfectly_grounded_terminals"] = ["n"]
+        he = helm_series(g); hn = helm_series(g; source_reference=:neutral)
+        @test hn.V[("ld", "n")] ≈ he.V[("ld", "n")] atol=1e-9
+        @test hn.source_injection[("src", "a")] ≈ he.source_injection[("src", "a")] atol=1e-8
+    end
+
+    @testset "ideal transformer keeps its neutral earthing and magnetising shunt" begin
+        # The LV side's only earth reference is the transformer's internal
+        # neutral-grounding resistor (plus a second earth electrode at the load
+        # so earth current actually flows). ybus_augmented drops the whole
+        # Yprim of a promoted ideal unit; HELM restores the shunt-only part.
+        function xnet(rs)
+            Dict{String,Any}(
+                "bus" => Dict{String,Any}(
+                    "hv" => Dict{String,Any}("terminal_names" => ["a", "n"],
+                                             "perfectly_grounded_terminals" => ["n"]),
+                    "lv" => Dict{String,Any}("terminal_names" => ["a", "n"]),
+                    "ld" => Dict{String,Any}("terminal_names" => ["a", "n"])),
+                "voltage_source" => Dict{String,Any}("vs" => Dict{String,Any}(
+                    "bus" => "hv", "terminal_map" => ["a"], "configuration" => "WYE",
+                    "v_magnitude" => [6350.0], "v_angle" => [0.0])),
+                "transformer" => Dict{String,Any}("single_phase" => Dict{String,Any}(
+                    "t1" => Dict{String,Any}(
+                        "bus_from" => "hv", "bus_to" => "lv",
+                        "terminal_map_from" => ["a", "n"], "terminal_map_to" => ["a", "n"],
+                        "v_nom_from" => 6350.0, "v_nom_to" => 230.0, "s_nom" => 50e3,
+                        "r_series_from" => rs, "x_series_from" => rs,
+                        "r_series_to" => 0.0, "x_series_to" => 0.0,
+                        "r_neutral_to" => 2.0, "x_neutral_to" => 0.0,
+                        "g_no_load" => 1e-4, "b_no_load" => -3e-4))),
+                "line" => Dict{String,Any}("l1" => _line("lv", "ld", ["a", "n"], 0.2, 0.1)),
+                "shunt" => Dict{String,Any}("e" => Dict{String,Any}(
+                    "bus" => "ld", "terminal_map" => ["n"], "G_1_1" => 0.5, "B_1_1" => 0.0)),
+                "load" => Dict{String,Any}("d1" => Dict{String,Any}(
+                    "bus" => "ld", "terminal_map" => ["a", "n"], "configuration" => "WYE",
+                    "p_nom" => [10e3], "q_nom" => [2e3])))
+        end
+        hi = helm_series(xnet(0.0))                     # promoted to a coupling
+        @test hi.status == :converged
+        @test length(hi.couplings) == 1
+        # Earth KCL: current into earth through the neutral resistor returns
+        # through the load electrode.
+        @test abs(hi.V[("lv", "n")] / 2.0 + 0.5 * hi.V[("ld", "n")]) < 1e-9
+        @test abs(hi.V[("ld", "n")]) > 0.1
+        # Same unit with a tiny (stamped, non-ideal) leakage: same answer.
+        hs = helm_series(xnet(1e-5))
+        @test isempty(hs.couplings)
+        for nd in (("lv", "a"), ("lv", "n"), ("ld", "a"), ("ld", "n"))
+            @test hi.V[nd] ≈ hs.V[nd] atol=1e-4
+        end
+    end
+
+    @testset "n-wire: 5-conductor feeder with separate N and PE" begin
+        tm5 = ["a", "b", "c", "n", "pe"]
+        R = [0.30 0.10 0.10 0.10 0.08; 0.10 0.30 0.10 0.10 0.08;
+             0.10 0.10 0.30 0.10 0.08; 0.10 0.10 0.10 0.30 0.08;
+             0.08 0.08 0.08 0.08 0.40]
+        l5 = Dict{String,Any}("bus_from" => "src", "bus_to" => "ld",
+                              "terminal_map_from" => tm5, "terminal_map_to" => tm5)
+        for i in 1:5, j in 1:5
+            l5["R_series_$(i)_$(j)"] = R[i, j]
+            l5["X_series_$(i)_$(j)"] = 0.6 * R[i, j]
+        end
+        net = Dict{String,Any}(
+            "bus" => Dict{String,Any}(
+                "src" => Dict{String,Any}("terminal_names" => tm5,
+                                          "perfectly_grounded_terminals" => ["n", "pe"]),
+                "ld"  => Dict{String,Any}("terminal_names" => tm5)),
+            "voltage_source" => Dict{String,Any}("vs" => _src3()),
+            "line" => Dict{String,Any}("l1" => l5),
+            "shunt" => Dict{String,Any}("pe_earth" => Dict{String,Any}(
+                "bus" => "ld", "terminal_map" => ["pe"], "G_1_1" => 1.0, "B_1_1" => 0.0)),
+            "load" => Dict{String,Any}(
+                "d1" => Dict{String,Any}("bus" => "ld", "terminal_map" => ["a", "b", "c", "n"],
+                    "configuration" => "WYE", "model" => "constant_current",
+                    "v_nom" => [230.0], "p_nom" => [7000.0, 3000.0, 1000.0],
+                    "q_nom" => [1000.0, 500.0, 0.0]),
+                "leak" => Dict{String,Any}("bus" => "ld", "terminal_map" => ["c", "pe"],
+                    "configuration" => "SINGLE_PHASE", "model" => "constant_impedance",
+                    "v_nom" => [230.0], "p_nom" => [500.0], "q_nom" => [0.0])))
+        hr = helm_series(net)
+        @test hr.status == :converged
+        @test _lin_res(net, hr) < 1e-8
+        # Mutual coupling + the c–PE leakage lift PE off earth at the load
+        # end, distinct from the neutral.
+        @test abs(hr.V[("ld", "pe")]) > 0.1
+        @test abs(hr.V[("ld", "n")] - hr.V[("ld", "pe")]) > 0.1
+    end
+
+    @testset "solve_pf_helm reports source injection and options" begin
+        res = solve_pf_helm(_feeder(5000.0; model="constant_current");
+                            embedding=:impedance_germ)
+        @test res["termination_status"] == "HELM_CONVERGED"
+        @test res["helm"]["embedding"] == "impedance_germ"
+        @test res["helm"]["source_reference"] == "earth"
+        dv = res["bus"]["ld"]["a"]["vr"] - res["bus"]["ld"]["n"]["vr"]
+        @test res["source_injection"]["src"]["a"]["im"] ≈ 5000.0 * dv / 230.0 / dv rtol=1e-9
+    end
+end
+
 # ── OpenDSS parity + 3-way oracle (gated) ────────────────────────────────────
 
 @testset "helm: OpenDSS parity" begin
@@ -613,14 +902,9 @@ end
         _helm_vs_ods("pf_yd_xfmr.dss", "hv"; atol=0.5)
         _helm_vs_ods("pf_dy_xfmr.dss", "hv"; atol=0.5)
 
-        # ZIP decks carry constant-current fractions — HELM v1 must refuse them
-        # loudly (documented limitation), not silently mis-solve.
-        @testset "constant-I ZIP deck raises the v1 validation error" begin
-            path = normpath(abspath(joinpath(@__DIR__, "data", "pf_comparison",
-                                             "pf_zip_1ph.dss")))
-            net = from_dss(path)
-            @test_throws ArgumentError helm_series(net)
-        end
+        # ZIP deck with constant-current fractions: the reflected-modulus
+        # recursion carries |ΔV| holomorphically, so it is solved, not refused.
+        _helm_vs_ods("pf_zip_1ph.dss", "src"; atol=1e-3)
     end
 end
 

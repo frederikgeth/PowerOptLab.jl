@@ -768,9 +768,10 @@ using SparseArrays
     current_pf = solve_pf(current_net; per_unit=false)
     current_report = check_opf_operability(current_net, current_pf;
         spec=OperabilitySpec(scaling_policy=SIUnitsScaling(), compute_helm=true))
-    @test current_report.checks["helm_reachability"].status == :not_applicable
-    @test any(occursin("constant_current", reason) for reason in
-        current_report.branch_evidence["reachability"]["reasons"])
+    # Constant-current laws are inside the HELM scope (reflected-modulus
+    # recursion), so the reachability cross-check now runs and agrees.
+    @test current_report.checks["helm_reachability"].status == :pass
+    @test current_report.branch_evidence["reachability"]["endpoint_mismatch"] < 1e-4
     current_certificate = check_opf_operability(current_net, current_pf;
         spec=OperabilitySpec(scaling_policy=SIUnitsScaling(),
             compute_fixed_point_certificate=true))

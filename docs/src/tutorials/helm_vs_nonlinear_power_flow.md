@@ -6,7 +6,7 @@
 
 The Holomorphic Embedding Load-flow Method (HELM) is not merely another nonlinear iteration. It constructs the branch connected to an energized no-load network and evaluates it by analytic continuation. This gives it useful, independent numerical evidence beside the Ipopt-based nonlinear `solve_pf`, but a finite-order divergent series is not a proof of voltage collapse.
 
-The trade-off is explicit: the present embedding supports constant-power and constant-impedance load components only. It cannot replace the nonlinear engine for arbitrary ZIP/exponential loads, IBRs, generators, controls, or OPF limits.
+The trade-off is explicit: the embedding covers the passive network and every BMOPF load law (constant power, current and impedance, ZIP, exponential). It cannot replace the nonlinear engine for IBRs, generators, controls, or OPF limits, and refuses networks that contain generators or IBRs rather than silently dropping them.
 
 From a checkout with [pinned dependencies installed](../getting_started.md),
 run `julia --project=. scripts/run_study_tutorials.jl`, or paste this page's
@@ -63,7 +63,7 @@ reference is conditional on the resistive, unity-power-factor circuit.
 | Branch | continuously connected to no-load state | feasible local point reached by the solve |
 | Failed solve | exposes Padé/coefficient diagnostics | exposes nonlinear solver status |
 | Collapse study | `singularity_estimate` is a heuristic | loading continuation is separate |
-| v1 load model | constant-P and constant-Z | full engine-supported operational model |
+| Load/device model | all static load laws; no generators, IBRs or controls | full engine-supported operational model |
 
 Agreement on common physics is strong cross-method evidence because the numerical mechanisms differ. Disagreement should trigger a model/branch audit, not a vote for a preferred solver.
 
@@ -166,31 +166,44 @@ Repository validation combines closed-form feeders, a separate `ybus_linearized`
 
 ### Pitfall: comparing different physics
 
-HELM cannot validate nonlinear PF when the latter includes constant-current ZIP fractions, IBR controls, or operational limits absent from HELM. Reduce to the common supported model first; otherwise the discrepancy is expected model mismatch, not solver evidence.
+HELM cannot validate nonlinear PF when the latter includes generators, IBR controls, or operational limits absent from HELM. Reduce to the common supported model first; otherwise the discrepancy is expected model mismatch, not solver evidence.
 
-## 6. The holomorphic load restriction is fundamental
+## 6. Voltage-dependent loads stay holomorphic
 
-The v1 embedding accepts constant-P and constant-Z components, including ZIP P/Z fractions. It rejects constant-current ZIP fractions and non-integer exponential loads because they involve ``|\Delta V|``, which is not holomorphic:
+Constant-current ZIP fractions and exponential loads involve ``|\Delta V|``,
+which is not holomorphic in ``\Delta V`` alone. HELM pairs each voltage series
+with its conjugate reflection ``\tilde{\Delta V}(s) = \overline{\Delta V(\bar s)}``,
+which is holomorphic and agrees with ``\overline{\Delta V}`` for real ``s``.
+Their product ``m(s) = \Delta V(s)\,\tilde{\Delta V}(s)`` equals
+``|\Delta V|^2`` on the real axis and is holomorphic, so
+``|\Delta V|^\gamma = m^{\gamma/2}`` has its own power series. The
+order-``n`` recursion still needs only lower-order coefficients. For a
+constant-current load on this feeder, ``P(U) = P_0 U / 230``, so the
+phase-to-neutral load voltage is exactly ``U = 230 - 0.10\,P_0/230``:
 
 ```julia
 net_with_constant_current = resistive_feeder(model="constant_current")
-rejected_current_load = try
-    solve_pf_helm(net_with_constant_current)
-    false
-catch err
-    err isa ArgumentError || rethrow()
-    true
-end
-@assert rejected_current_load
+current_helm = helm_series(net_with_constant_current)
+current_ref = vbase - loop_resistance * 2000.0 / vbase
+@assert current_helm.status == :converged
+@assert abs(current_helm.V[("loadbus", "1")] -
+            current_helm.V[("loadbus", "n")] - current_ref) < 1e-9
 ```
 
-It also needs an energized WYE/SINGLE_PHASE source and a linear path from every node to a reference at the no-load germ. Generators and IBRs are not injected in v1. Use nonlinear PF for operational devices and controls. The static
-`ybus_linearized` fixed-point map supports additional load laws within its own
-declared scope; it does not supply generator or IBR-control equations.
+HELM needs an energized WYE/SINGLE_PHASE source. With the default
+`embedding = :load_scaling`, every node also needs a linear path to a
+reference at the no-load germ. `embedding = :impedance_germ` represents the
+loads by equivalent admittances at the germ, which is enough for nodes held
+only by loads, such as an unearthed star point. Generators and IBRs raise an
+error, because their set-points are OPF variables or control-law outputs in
+the BMOPF model. Use nonlinear PF for operational devices and controls.
 
 ### Pitfall: treating rejection as a numerical weakness
 
-The rejection protects the embedding's mathematical scope. Forcing a non-holomorphic load into the recursion makes the resulting diagnostics hard to interpret. An explicit scope is more scientifically useful than silently solving a different model.
+The generator/IBR rejection protects the embedding's mathematical scope.
+Solving a network with those devices silently removed would be a different
+model with interpretable-looking diagnostics. An explicit scope is more
+scientifically useful than silently solving a different model.
 
 ## 7. Publication checklist
 

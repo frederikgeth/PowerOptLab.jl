@@ -1117,8 +1117,9 @@ function _operability_helm_preflight(net::Dict{String,Any})
     for (id_raw, load) in get(net, "load", Dict())
         id = String(id_raw)
         model = lowercase(string(get(load, "model", "constant_power")))
-        model in ("constant_power", "constant_impedance") || push!(reasons,
-            "load $(repr(id)) uses $(repr(model)); HELM currently supports only constant-power and constant-impedance parts")
+        model in ("constant_power", "constant_impedance", "constant_current",
+                  "zip", "exponential") || push!(reasons,
+            "load $(repr(id)) uses unsupported HELM load model $(repr(model))")
         cfg = uppercase(string(get(load, "configuration", "WYE")))
         cfg in ("WYE", "SINGLE_PHASE", "DELTA") || push!(reasons,
             "load $(repr(id)) uses unsupported HELM configuration $(repr(cfg))")
