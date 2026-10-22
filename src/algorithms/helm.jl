@@ -63,7 +63,10 @@
 # Scope: lines, shunts, capacitors, every transformer subtype the passive Ybus
 # stamps, ideal switches/transformers as constraint rows, and loads of every
 # BMOPF model (constant power / current / impedance, ZIP, exponential) in WYE,
-# DELTA and SINGLE_PHASE connections. Generators and IBRs have no fixed
+# DELTA and SINGLE_PHASE connections. Zero-leakage transformers of the subtypes
+# `ybus_augmented` cannot promote (center_tap, autotransformer, open-delta,
+# n-winding) raise an `ArgumentError` naming the unit instead of silently acting
+# as open circuits. Generators and IBRs have no fixed
 # power-flow law in the data model (their set-points are OPF variables or
 # control-law outputs) and raise an `ArgumentError` rather than being silently
 # dropped. Ideal transformers keep their no-load (magnetising) shunt and
@@ -229,6 +232,49 @@ function _helm_unsupported_devices(net::Dict{String,Any})
         devs = get(net, kind, nothing)
         devs isa AbstractDict && !isempty(devs) || continue
         push!(out, "$(length(devs)) $(kind)(s) ($(join(sort!(collect(String.(keys(devs)))), ", ")))")
+    end
+    out
+end
+
+# Zero-leakage transformers that the augmented matrix cannot represent. Only
+# `single_phase`, `wye_delta` and `delta_wye` have an ideal-coupling constraint
+# form in `ybus_augmented` (and only under `ideal_xfmrs = :constrain`); every
+# other zero-leakage unit falls back to a shunt-only Yprim — an open circuit —
+# or, for a singular n-winding leakage matrix, is skipped entirely. Leakage at
+# or below the `xfmr_z_min_ohm` threshold counts as zero, matching
+# `_xfmr_is_ideal`. Returns one "subtype/id (reason)" entry per unit.
+function _helm_unmodelled_ideal_xfmrs(net::Dict{String,Any}, config,
+                                      ideal_xfmrs::Symbol)
+    out = String[]
+    xfmrs = get(net, "transformer", Dict())
+    xfmrs isa AbstractDict || return out
+    zmin = _ybus_xfmr_z_min(_domain_thresholds(config))
+    arm(x, side) = max(abs(Float64(get(x, "r_series_$side", 0.0))),
+                       abs(Float64(get(x, "x_series_$side", 0.0))))
+    for subtype in sort!(collect(String.(keys(xfmrs))))
+        sub = xfmrs[subtype]
+        sub isa AbstractDict || continue
+        for xid in sort!(collect(String.(keys(sub))))
+            x = sub[xid]
+            reason = if subtype == "center_tap"
+                (arm(x, "from") <= zmin || arm(x, "to") <= zmin) ?
+                    "zero HV or LV star-arm leakage" : nothing
+            elseif subtype in ("single_phase_autotransformer", "open_delta_regulator")
+                _xfmr_is_ideal(x, zmin) ? "zero series impedance" : nothing
+            elseif subtype == "n_winding"
+                ZB = _nw_zb_matrix(x)
+                (!isempty(ZB) && minimum(svdvals(ZB)) <= zmin) ?
+                    "singular short-circuit impedance matrix: a winding pair has zero leakage" :
+                    nothing
+            elseif subtype in ("single_phase", "wye_delta", "delta_wye")
+                (ideal_xfmrs === :stamp && _xfmr_is_ideal(x, zmin) &&
+                 !isapprox(_xfmr_turns_ratio(x), 1.0; atol=1e-9)) ?
+                    "zero leakage with ideal_xfmrs = :stamp; use :constrain" : nothing
+            else
+                nothing
+            end
+            reason === nothing || push!(out, "$subtype/$xid ($reason)")
+        end
     end
     out
 end
@@ -572,7 +618,11 @@ Keywords:
 Supported loads: constant power, constant current, constant impedance, ZIP
 and exponential models in WYE, DELTA and SINGLE_PHASE connections. Networks
 with generators or IBRs raise an `ArgumentError`: they have no fixed
-power-flow law in the data model and are not silently dropped.
+power-flow law in the data model and are not silently dropped. So do
+zero-leakage `center_tap`, `single_phase_autotransformer`,
+`open_delta_regulator` and `n_winding` units (and, under `ideal_xfmrs =
+:stamp`, non-unity ideal two-winding units): the augmented matrix has no exact
+form for them, and the fallback stamp would be an open circuit.
 """
 function helm_series(net::Dict{String,Any}; config=_DEFAULT_CONFIG,
                      switches::Symbol=:alias, ideal_xfmrs::Symbol=:constrain,
@@ -591,6 +641,15 @@ function helm_series(net::Dict{String,Any}; config=_DEFAULT_CONFIG,
         ": generator and IBR set-points are OPF variables or control-law " *
         "outputs in the BMOPF model. Remove them (or model fixed injections as " *
         "negative loads) to solve the remaining network with HELM."))
+
+    unmodelled = _helm_unmodelled_ideal_xfmrs(net, config, ideal_xfmrs)
+    isempty(unmodelled) || throw(ArgumentError(
+        "HELM cannot represent zero-leakage transformer(s) " *
+        join(unmodelled, ", ") * ": an ideal coupling has no admittance form, " *
+        "and ybus_augmented has exact constraint rows only for single_phase, " *
+        "wye_delta and delta_wye units, so these would act as open circuits. " *
+        "Give each a finite leakage impedance above xfmr_z_min_ohm = " *
+        "$(_ybus_xfmr_z_min(_domain_thresholds(config))) Ω."))
 
     aug = ybus_augmented(net; config, switches, ideal_xfmrs)
     n = length(aug.nodes)

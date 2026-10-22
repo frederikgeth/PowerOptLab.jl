@@ -839,6 +839,97 @@ end
     end
 end
 
+# ── zero-leakage transformers the augmented matrix cannot represent ─────────
+
+@testset "helm: zero-leakage transformers outside the augmented model" begin
+    # Each builder takes the leakage (Ω) of every series term. At zero, upstream
+    # falls back to a shunt-only stamp (or skips an n-winding unit), so without
+    # the guard the downstream nodes are reported as "floating"; HELM must name
+    # the transformer instead. Small finite leakage must still solve.
+    _bus(t; g=String[]) = Dict{String,Any}("terminal_names" => t,
+                                           "perfectly_grounded_terminals" => g)
+    _vs(E, tm) = Dict{String,Any}("bus" => "hv", "terminal_map" => tm,
+        "configuration" => "WYE", "v_magnitude" => fill(E, length(tm)),
+        "v_angle" => [0.0, -2π/3, 2π/3][1:length(tm)])
+    _ld(b, tm, cfg, p) = Dict{String,Any}("d1" => Dict{String,Any}(
+        "bus" => b, "terminal_map" => tm, "configuration" => cfg,
+        "p_nom" => p, "q_nom" => 0.0 .* p))
+    _leak(z) = Dict{String,Any}("r_series_from" => z, "x_series_from" => z,
+                                "r_series_to" => z, "x_series_to" => z)
+    _two_bus(lv_bus, xfmrs, vs, load) = Dict{String,Any}(
+        "bus" => merge(Dict{String,Any}("hv" => _bus(vcat(vs["terminal_map"], "n"); g=["n"])),
+                       lv_bus),
+        "voltage_source" => Dict{String,Any}("vs" => vs),
+        "transformer" => xfmrs, "load" => load)
+
+    cases = Dict{String,Function}(
+        "center_tap/t1" => z -> _two_bus(
+            Dict{String,Any}("lv" => _bus(["1", "n", "2"]; g=["n"])),
+            Dict{String,Any}("center_tap" => Dict{String,Any}("t1" => merge(Dict{String,Any}(
+                "bus_from" => "hv", "terminal_map_from" => ["a", "n"],
+                "bus_to" => "lv", "terminal_map_to" => ["1", "n", "2"],
+                "v_nom_from" => 6350.0, "v_nom_to" => 120.0, "s_nom" => 25e3), _leak(z)))),
+            _vs(6350.0, ["a"]), _ld("lv", ["1", "2"], "SINGLE_PHASE", [3000.0])),
+        "single_phase_autotransformer/r1" => z -> _two_bus(
+            Dict{String,Any}("lv" => _bus(["a", "n"]; g=["n"])),
+            Dict{String,Any}("single_phase_autotransformer" => Dict{String,Any}(
+                "r1" => merge(Dict{String,Any}(
+                    "bus_from" => "hv", "terminal_map_from" => ["a", "n"],
+                    "bus_to" => "lv", "terminal_map_to" => ["a", "n"],
+                    "tap_ratio" => 1.05, "regulator_type" => "B"), _leak(z)))),
+            _vs(6350.0, ["a"]), _ld("lv", ["a", "n"], "WYE", [20e3])),
+        "open_delta_regulator/od1" => z -> _two_bus(
+            Dict{String,Any}("lv" => _bus(["a", "b", "c"])),
+            Dict{String,Any}("open_delta_regulator" => Dict{String,Any}(
+                "od1" => merge(Dict{String,Any}(
+                    "bus_from" => "hv", "terminal_map_from" => ["a", "b", "c"],
+                    "bus_to" => "lv", "terminal_map_to" => ["a", "b", "c"],
+                    "connection" => "ABBC", "tap_ratio" => [1.03, 1.02],
+                    "regulator_type" => "B"), _leak(z)))),
+            _vs(6350.0, ["a", "b", "c"]), _ld("lv", ["a", "b", "c"], "DELTA", [2e4, 2e4, 2e4])),
+        "n_winding/nw1" => z -> _two_bus(
+            Dict{String,Any}("lv" => _bus(["a", "b", "c", "n"]; g=["n"])),
+            Dict{String,Any}("n_winding" => Dict{String,Any}("nw1" => Dict{String,Any}(
+                "windings" => [
+                    Dict{String,Any}("bus" => "hv", "terminal_map" => ["a", "b", "c", "n"],
+                        "v_nom" => 6350.0, "configuration" => "WYE", "r_winding" => z),
+                    Dict{String,Any}("bus" => "lv", "terminal_map" => ["a", "b", "c", "n"],
+                        "v_nom" => 230.0, "configuration" => "WYE",
+                        "r_winding" => z * (230 / 6350)^2)],
+                "x_sc" => Dict{String,Any}("1_2" => z), "s_rating" => 100e3))),
+            _vs(6350.0, ["a", "b", "c"]), _ld("lv", ["a", "b", "c", "n"], "WYE", [5e3, 5e3, 5e3])),
+    )
+    for (id, build) in sort!(collect(cases); by=first)
+        @testset "$id" begin
+            for z in (0.0, 1e-9)                       # zero and sub-threshold
+                err = try helm_series(build(z)); nothing catch e; e end
+                @test err isa ArgumentError
+                @test occursin(id, sprint(showerror, err))
+                @test !occursin("floating", sprint(showerror, err))
+            end
+            # Just above xfmr_z_min_ohm the unit is stamped, not refused. (Its
+            # ~1e5 S admittance can leave a round-off floor of ~1e-6 A in the
+            # absolute current mismatch, so only refusal is asserted there.)
+            @test helm_series(build(1e-5)) isa HelmResult
+            @test helm_series(build(0.01)).status == :converged
+        end
+    end
+
+    @testset "non-unity ideal two-winding unit under ideal_xfmrs = :stamp" begin
+        net = _two_bus(Dict{String,Any}("lv" => _bus(["a", "n"]; g=["n"])),
+            Dict{String,Any}("single_phase" => Dict{String,Any}("t1" => merge(Dict{String,Any}(
+                "bus_from" => "hv", "terminal_map_from" => ["a", "n"],
+                "bus_to" => "lv", "terminal_map_to" => ["a", "n"],
+                "v_nom_from" => 6350.0, "v_nom_to" => 230.0, "s_nom" => 50e3), _leak(0.0)))),
+            _vs(6350.0, ["a"]), _ld("lv", ["a", "n"], "WYE", [10e3]))
+        err = try helm_series(net; ideal_xfmrs=:stamp); nothing catch e; e end
+        @test err isa ArgumentError
+        @test occursin("single_phase/t1", sprint(showerror, err))
+        @test occursin(":constrain", sprint(showerror, err))
+        @test helm_series(net).status == :converged    # exact constraint row
+    end
+end
+
 # ── OpenDSS parity + 3-way oracle (gated) ────────────────────────────────────
 
 @testset "helm: OpenDSS parity" begin

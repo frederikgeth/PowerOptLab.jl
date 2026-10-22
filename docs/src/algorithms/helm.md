@@ -178,6 +178,20 @@ at the data boundary, not in the solver:
 - **Generators and IBRs raise an `ArgumentError`.** The BMOPF model gives them
   bounds and control profiles, not fixed power-flow injections, so HELM
   refuses them rather than solving a network that silently omits them.
+- **Zero-leakage transformers outside the augmented model raise an
+  `ArgumentError` naming the unit.** `ybus_augmented` has exact constraint
+  rows only for `single_phase`, `wye_delta` and `delta_wye`. A
+  `center_tap` with a zero HV or LV star arm, a zero-impedance
+  `single_phase_autotransformer` or `open_delta_regulator`, or an `n_winding`
+  unit with a singular short-circuit matrix would otherwise fall back to a
+  shunt-only stamp (or be skipped) and act as an open circuit, which surfaces
+  as a misleading "floating nodes" error. The same applies to non-unity ideal
+  two-winding units under `ideal_xfmrs = :stamp`. Leakage at or below
+  `xfmr_z_min_ohm` (default 1e-6 Ω) counts as zero. Just above that threshold
+  the stamped admittance (~1e5 S) can leave a round-off floor of ~1e-6 A in
+  the absolute current mismatch, so near-ideal units may report
+  `HELM_MAX_ORDER` with accurate voltages; from about 1e-4 Ω they converge
+  normally.
 - **Every node needs a linear path to a reference at the germ.** Islands and
   floating ideal deltas are diagnosed with an error naming the floating
   `(bus, terminal)` nodes. Nodes held only by loads need
@@ -213,6 +227,9 @@ The test suite (`test/helm_tests.jl`) checks, always:
 - an ideal single-phase transformer whose secondary is earthed only through
   its neutral resistor, against a near-ideal stamped unit;
 - an unearthed star point (impedance germ) and a 5-conductor N + PE feeder;
+- zero-leakage `center_tap`, autotransformer, open-delta and n-winding units
+  (and an ideal unit under `ideal_xfmrs = :stamp`) are refused by name rather
+  than reported as floating nodes;
 - the `ybus_linearized` residual oracle
   ``\lVert \mathbf{Y}\mathbf{V} - \mathbf{i}_{\text{comp}}(\mathbf{V})\rVert_\infty \approx 0``
   at every returned solution (two independent code paths).
