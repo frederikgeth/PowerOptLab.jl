@@ -2,7 +2,8 @@
 
 > **Kind:** Bespoke algorithm · **Maturity:** prototype · **Direction:** forward · **Temporal:** single-snapshot
 
-PowerOptLab adds a deterministic, non-iterative 4-wire power-flow solver based
+PowerOptLab adds a deterministic, non-iterative multiconductor (4-wire and
+beyond) power-flow solver based
 on the **Holomorphic Embedding Load-flow Method** (HELM): [`solve_pf_helm`](@ref)
 (standard result dictionary) and [`helm_series`](@ref) (programmatic
 [`HelmResult`](@ref)). It is a *bespoke algorithm* — a new solution method built
@@ -56,24 +57,50 @@ row **and** column, preserving the module-wide reciprocity convention
 Constraint rows are scaled by a nominal admittance for conditioning; the
 physical coupling current is `coupling.scale * w`.
 
-!!! note "Promoted transformers are purely ideal"
-    A transformer promoted to an ideal coupling contributes *only* the ratio
-    identity: its no-load (magnetising) shunt and neutral-grounding branch are
-    dropped along with the singular series stamp.
+!!! note "Promoted transformers keep their shunt branches"
+    `ybus_augmented` drops the whole Yprim of a transformer it promotes to an
+    ideal coupling (or node-aliases at unity ratio), including its finite
+    no-load (magnetising) shunt and its neutral-grounding impedance
+    (`r/x_neutral_*`). HELM stamps that shunt-only part back on top of the
+    augmented matrix, so an ideal Dyn or single-phase unit whose secondary is
+    earthed only through its neutral resistor keeps that earth reference.
 
 ## The holomorphic embedding
 
-The power-flow equations are embedded in a complex parameter ``s``: voltage
-sources stay fixed for all ``s`` (a Dirichlet boundary, eliminated from the
-unknowns), and every load scales with ``s`` — constant-power draws ``s\,S``,
-constant-impedance admittances become ``s\,\mathbf{Y}_Z``.
+The power-flow equations are embedded in a complex parameter ``s``. Voltage
+sources stay fixed for all ``s``; loads enter through one of two embeddings:
 
-- ``s = 0`` is the **germ**: the energized no-load network — genuinely
-  unbalanced, floating neutrals at their equilibrium — obtained from one
-  linear solve.
-- ``s = 1`` is the actual problem.
+| `embedding` | germ (``s = 0``) | load at ``s`` |
+|---|---|---|
+| `:load_scaling` (default) | energized **no-load** network | every load part scaled by ``s`` — ``s`` is a load multiplier |
+| `:impedance_germ` | network loaded by **equivalent admittances** | constant-Z parts fixed in the matrix; other parts ``(1-s)\,y_g\Delta V + s\,I_{\text{law}}(\Delta V)`` |
 
-Every voltage and coupling current is a holomorphic function of ``s``, expanded
+In both cases the germ comes from one linear solve and ``s = 1`` is the
+actual problem. The impedance germ determines nodes that the no-load germ
+leaves undetermined (a star point held only by its loads); its ``s`` is not
+a load multiplier, so the singularity estimate is then only a series
+diagnostic.
+
+**Load laws.** A sub-load across ``(p, q)`` draws
+``I = \sum_\gamma \kappa_\gamma |\Delta V|^\gamma / \overline{\Delta V}``
+(``\gamma = 0`` constant power, ``1`` constant current, ``2`` constant
+impedance, any other exponent exponential). With the reflected series
+``\tilde{\Delta V}(s) = \overline{\Delta V(\bar s)}`` — holomorphic, and equal to
+``\overline{\Delta V}`` on the real axis — the product
+``m = \Delta V\,\tilde{\Delta V}`` is a holomorphic stand-in for ``|\Delta V|^2``,
+and ``|\Delta V|^\gamma = m^{\gamma/2}`` follows from J. C. P. Miller's
+power-series recursion. Every ZIP and exponential model is therefore inside
+the embedding; nothing is linearised.
+
+**Source reference.** `source_reference = :earth` (default) fixes source
+phase terminals to their phasors and the source-bus neutral to 0 V, as the
+OPF does — a Dirichlet boundary eliminated from the unknowns.
+`source_reference = :neutral` imposes each phasor between the phase and the
+source neutral as a bordered constraint row (with the source current as its
+unknown), so the source neutral floats with the network's actual earthing —
+a grounding resistor at the source is honoured instead of being shorted.
+
+Every voltage and coupling/source current is a holomorphic function of ``s``, expanded
 as a power series whose order-``n`` coefficients solve
 
 ```math
@@ -81,8 +108,8 @@ as a power series whose order-``n`` coefficients solve
 ```
 
 — **one LU factorization** serves the germ and every order. The nonlinear
-``S^*/\Delta V^*`` term uses the classic conjugate-reflection trick with an
-incremental inverse-series convolution; phase-to-phase and delta-connected
+terms use the conjugate-reflection trick with incremental inverse- and
+power-series convolutions; phase-to-phase and delta-connected
 loads come out of the same machinery (the load split is shared with
 `ybus_linearized`, so the load model is byte-equivalent to the OPF's).
 Constraint rows have identically zero right-hand side at every order: the
@@ -123,22 +150,60 @@ with continuation power flow or an analytically known system. `load_margin`
 remains a compatibility alias for this value, but its old name must not be read
 as a guarantee.
 
-## Requirements and v1 limitations
+## Four-wire and n-wire modelling
+
+Nothing is Kron-reduced: every declared `(bus, terminal)` is a node unless it
+is perfectly grounded or fused by an ideal unity coupling. Neutral, PE or any
+further conductor is an ordinary node with its own KCL row, coupled through
+the full ``n \times n`` line impedance matrices. The recursion is generic over
+node indices and terminal pairs, so the solver has no conductor-count
+assumption — the test suite solves a 5-conductor feeder with separate N and PE
+and a phase-to-PE leakage load. The remaining 4-wire-specific conventions live
+at the data boundary, not in the solver:
+
+- WYE loads and sources identify **one** neutral per bus by its label
+  (`_neutral_terminal` / `_neutral_labels`); a bus with two neutral-like
+  conductors needs `SINGLE_PHASE` per-pair loads to choose between them.
+- Voltage sources are WYE phase-to-reference phasors (the BMOPF schema has no
+  source configuration or internal impedance).
+- Connection configurations (`WYE`, `DELTA`, `SINGLE_PHASE`) are expanded to
+  terminal pairs by the shared `_load_subloads` decomposition. The solver
+  consumes only those pairs, so an explicit per-pair connection list in the
+  data model would make HELM fully n-wire with no solver change.
+
+## Requirements and limitations
 
 - **At least one voltage source** (WYE / SINGLE_PHASE; DELTA references raise
-  an error). Source phase terminals are fixed to their reference phasors and
-  the source-bus neutral to 0 V, mirroring the OPF's source semantics.
-- **Every node needs a linear path to a reference.** Islands, floating ideal
-  deltas, and nodes held only by loads (whose no-load germ voltage is
-  genuinely indeterminate) are diagnosed with an error naming the floating
-  `(bus, terminal)` nodes.
-- **Loads: constant-power + constant-impedance parts only** (including those
-  ZIP fractions). Constant-current fractions and non-integer exponential
-  models involve ``|\Delta V|``, which is not holomorphic in this embedding —
-  they raise a validation error naming the loads. Use the
-  `ybus_linearized` fixed-point map or the OPF power flow for those;
-  an outer-loop treatment is a planned follow-up.
-- Generators and IBRs are not yet injected (as in `ybus_linearized`).
+  an error).
+- **Generators and IBRs raise an `ArgumentError`.** The BMOPF model gives them
+  bounds and control profiles, not fixed power-flow injections, so HELM
+  refuses them rather than solving a network that silently omits them.
+- **Zero-leakage transformers outside the augmented model raise an
+  `ArgumentError` naming the unit.** `ybus_augmented` has exact constraint
+  rows only for `single_phase`, `wye_delta` and `delta_wye`. A
+  `center_tap` with a zero HV or LV star arm, a zero-impedance
+  `single_phase_autotransformer` or `open_delta_regulator`, or an `n_winding`
+  unit with a singular short-circuit matrix would otherwise fall back to a
+  shunt-only stamp (or be skipped) and act as an open circuit, which surfaces
+  as a misleading "floating nodes" error. The same applies to non-unity ideal
+  two-winding units under `ideal_xfmrs = :stamp`. Leakage at or below
+  `xfmr_z_min_ohm` (default 1e-6 Ω) counts as zero. Just above that threshold
+  the stamped admittance (~1e5 S) can leave a round-off floor of ~1e-6 A in
+  the absolute current mismatch, so near-ideal units may report
+  `HELM_MAX_ORDER` with accurate voltages; from about 1e-4 Ω they converge
+  normally.
+- **Every node needs a linear path to a reference at the germ.** Islands and
+  floating ideal deltas are diagnosed with an error naming the floating
+  `(bus, terminal)` nodes. Nodes held only by loads need
+  `embedding = :impedance_germ`.
+- **Unearthed star points with constant-power or constant-current loads are
+  often ill-posed.** Their neutral can be non-unique (balanced constant-power
+  stars admit a continuum of displaced neutrals) or non-existent (constant
+  current magnitudes that violate the triangle inequality cannot sum to zero).
+  HELM then reports `HELM_SERIES_DIVERGED` with a singularity estimate below
+  one instead of returning one branch arbitrarily.
+- Time series are not applied; HELM solves the snapshot values in the network
+  dictionary.
 
 ## Validation
 
@@ -155,12 +220,22 @@ The test suite (`test/helm_tests.jl`) checks, always:
   and series-divergence classifications;
 - switch `:alias ≡ :constrain` voltage identity with exact conductor currents;
 - delta and line-to-line loads against a rotated closed form;
+- constant-current, exponential and full-ZIP laws against closed forms on the
+  two-node feeder (`rtol 1e-11`, both embeddings);
+- `source_reference = :neutral` against an independent MNA solve with source
+  and load neutral earthing resistors;
+- an ideal single-phase transformer whose secondary is earthed only through
+  its neutral resistor, against a near-ideal stamped unit;
+- an unearthed star point (impedance germ) and a 5-conductor N + PE feeder;
+- zero-leakage `center_tap`, autotransformer, open-delta and n-winding units
+  (and an ideal unit under `ideal_xfmrs = :stamp`) are refused by name rather
+  than reported as floating nodes;
 - the `ybus_linearized` residual oracle
   ``\lVert \mathbf{Y}\mathbf{V} - \mathbf{i}_{\text{comp}}(\mathbf{V})\rVert_\infty \approx 0``
   at every returned solution (two independent code paths).
 
 Gated on OpenDSSDirect: node-to-earth voltage parity on the `pf_comparison`
-decks (sub-mV on line/delta/capacitor decks; a few mV through Yd/Dy
+decks (sub-mV on line/delta/capacitor/ZIP decks; a few mV through Yd/Dy
 transformers), and a 3-way HELM ≈ Ipopt `solve_pf` ≈ OpenDSS oracle.
 
 ## API reference

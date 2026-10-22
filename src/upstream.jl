@@ -11,6 +11,20 @@ using BMOPFTools: _Node, _SubLoad, _load_subloads, _subload_S, _subload_S_nz,
     _stamp_pair!, _neutral_terminal, _neutral_labels, _neutral_pos,
     _phase_positions, _DEFAULT_CONFIG
 
+# HELM additionally needs the ideal-transformer classification used by
+# `ybus_augmented`, so it can restore the shunt-only part (magnetising branch and
+# neutral grounding) of the transformers that `ybus_augmented` promotes to
+# constraint rows or node aliases, and refuse zero-leakage units it cannot
+# promote (`_nw_zb_matrix` is the n-winding leakage matrix `nwinding_yprim`
+# inverts). Kept separate from the operability adapter fingerprint below: these
+# imports do not widen the operability closure.
+using BMOPFTools: _xfmr_is_ideal, _xfmr_turns_ratio, _domain_thresholds,
+    _ybus_xfmr_z_min, _nw_zb_matrix
+
+const _HELM_UPSTREAM_PRIVATE_IMPORTS = (
+    "_xfmr_is_ideal", "_xfmr_turns_ratio", "_domain_thresholds",
+    "_ybus_xfmr_z_min", "_nw_zb_matrix")
+
 const _OPERABILITY_UPSTREAM_ADAPTER_VERSION =
     "bmopftools-0.1.0-private-load-decomposition/v1"
 const _OPERABILITY_UPSTREAM_PRIVATE_IMPORTS = (

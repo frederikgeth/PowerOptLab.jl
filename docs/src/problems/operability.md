@@ -23,8 +23,8 @@ The checker reports:
   complementary evidence rather than a replacement for per-phase checks; and
 * positive-, negative-, and zero-sequence voltages and VUF on complete
   three-phase buses; and
-* an opt-in HELM cross-check of the no-load-connected branch for supported
-  constant-power/constant-impedance cases; and
+* an opt-in HELM cross-check of the no-load-connected branch for networks
+  without generators or IBRs (every static load law is supported); and
 * an explicit natural-parameter load-scale continuation trace with corrector,
   residual, singular-value, and event history; and
 * an opt-in pseudo-arclength predictor/corrector trace for the same static
