@@ -166,7 +166,7 @@ and the PowerOptLab version becomes a thin re-export or is retired.
 ## BMOPFTools compatibility
 
 BMOPFTools is unregistered. The root and docs `Project.toml` source tables pin
-commit `b25c84df364a6646324dd144d60ce52a13d0c557`; package compatibility remains
+commit `9faedbfe8898ec4377c33b5d7be41aba93abfac7`; package compatibility remains
 0.1.0. Update both source pins together, then run the complete tests and
 documentation build on the Julia compatibility floor and current stable.
 
@@ -181,6 +181,14 @@ documentation dependencies.
 The current pin includes upstream's reactive capability enforcement alongside
 PF/Volt-var control, per-coil minimum-PF policy, device and connection-map
 validation, and corrected center-tap winding-terminal currents and ratings.
+It also includes finite transformer shunts, validated two-terminal DELTA load
+geometry, shared SI leakage thresholds, and bordered regulator, center-tap and
+n-winding ports from upstream PRs #456–#462. HELM consumes the complete public
+`ybus_augmented` matrix, including coupled finite leakage, with no private
+transformer classifier or shunt workaround. The adapter regressions check
+complex power, neutral references, port voltage drops, JSON currents, and
+upstream domain refusals before repinning.
+
 DOE connections use the public `opf_ibr_power_key` / `opf_object` API to bind
 their active-power envelopes to the native IBR power variables. Native reactive
 bounds and control laws remain enforced together; a contradictory minimum-PF

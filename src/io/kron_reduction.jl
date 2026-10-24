@@ -542,7 +542,10 @@ end
 
 `input` may be a BMOPF dictionary or JSON string. A dictionary input returns a
 new dictionary; a JSON input returns a dictionary unless `as_json=true`, in
-which case canonical JSON text is returned. The input is never mutated.
+which case strict-schema JSON text is returned. Bus coordinate extensions are
+omitted from JSON by default; `include_coordinates=true` preserves them as a
+non-strict extension. Dictionary output retains coordinates regardless of this
+serialization option. The input is never mutated.
 
 Only neutral terminals that are explicit (`neutral_terminal`) or use the
 conservative `n`/`N` convention are reduced. Series line matrices are
@@ -551,12 +554,13 @@ reduced exactly by a Schur complement with the neutral voltage fixed at zero;
 Active neutral-leg devices (for example IBR `FOUR_LEG`) and ambiguous maps are
 rejected with an `ArgumentError`.
 """
-function kron_reduce_bmopf(input; as_json::Bool=false, neutral_terminals=nothing)
+function kron_reduce_bmopf(input; as_json::Bool=false, neutral_terminals=nothing,
+                           include_coordinates::Bool=false)
     net = _kr_input(input)
     neutrals = _kr_neutral_map(net, neutral_terminals)
     if isempty(neutrals)
         if as_json
-            io = IOBuffer(); BMOPFTools.write_bmopf(net, io; indent=nothing); return String(take!(io))
+            io = IOBuffer(); BMOPFTools.write_bmopf(net, io; indent=nothing, include_coordinates); return String(take!(io))
         end
         return net
     end
@@ -745,7 +749,7 @@ function kron_reduce_bmopf(input; as_json::Bool=false, neutral_terminals=nothing
     get!(net, "extras", Dict{String,Any}())["kron_reduction"] = prov
     if as_json
         io = IOBuffer()
-        BMOPFTools.write_bmopf(net, io; indent=nothing)
+        BMOPFTools.write_bmopf(net, io; indent=nothing, include_coordinates)
         String(take!(io))
     else
         net

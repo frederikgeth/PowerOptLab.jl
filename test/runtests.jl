@@ -72,4 +72,5 @@ const _HAS_ODS = true
     include("battery_tests.jl")
     include("helm_tests.jl")
     include("kron_reduction_tests.jl")
+    include("upstream_adaptation_tests.jl")
 end

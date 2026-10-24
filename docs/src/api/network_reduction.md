@@ -8,13 +8,20 @@ places model reduction alongside the available solution and diagnostic methods.
 kron_reduce_bmopf
 ```
 
-`kron_reduce_bmopf(net; neutral_terminals=nothing, as_json=false)` returns a
+`kron_reduce_bmopf(net; neutral_terminals=nothing, as_json=false, include_coordinates=false)` returns a
 new BMOPF dictionary (or schema-valid JSON when `as_json=true`) and never
 mutates `net`. A JSON string is accepted as the first argument. Neutral labels
 come from `terminal_conventions.neutral` when that block is present; otherwise
 the conservative `n`/`N` naming convention is used. A
 `Dict("bus_id" => "label")` `neutral_terminals` override is available for
 datasets whose labels are not declared.
+
+Dictionary output preserves bus coordinates. JSON output omits the non-spec
+`longitude`/`latitude` fields by default to retain the strict-schema contract.
+Use `as_json=true, include_coordinates=true` for an explicit coordinate-preserving
+extension; that output is not strict-schema JSON when coordinates are present.
+The serialization choice applies both when neutrals are reduced and when the
+input already has no explicit neutral; it does not change the electrical model.
 
 For each affected line, the series impedance is reduced exactly with
 `Zᵣ = Zₚₚ − Zₚₙ Zₙₙ⁻¹ Zₙₚ`, with the explicit neutral voltage constrained to
@@ -41,7 +48,7 @@ entry because the neutral is now ideal ground.
 DC buses, DC terminal maps, and DC grounding are intentionally outside the
 transformation. Structural, matrix, or bound time-series targets are refused;
 ordinary snapshot data remains untouched. The reduced output is BMOPF JSON
-schema-valid when serialized with `as_json=true`; upstream 0.1.0 may still
+schema-valid when serialized with `as_json=true, include_coordinates=false`; upstream 0.1.0 may still
 report the known `WYE` arity warning for a grounded WYE whose implicit midpoint
 is no longer listed.
 
