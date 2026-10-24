@@ -246,3 +246,10 @@ and [`StateEstimationResult`](@ref).
 
 The [state estimation API](../api/state_estimation.md) lists the public types, functions and result fields
 for this guide.
+
+Transformer preflight delegates effective leakage referral, tap scaling and
+singular-mode checks to BMOPFTools public primitive APIs. A primitive refusal is
+reported as `:invalid_transformer` with its element path, including in the legacy
+solver via `SEUnsupportedNetwork`. This replaces the former raw-ohm
+`:ideal_transformer` heuristic; ideal and bordered transformers remain outside
+the estimator domain, while valid finite referred impedances are accepted.

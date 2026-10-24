@@ -394,7 +394,15 @@ function solve_state_estimation(net::Dict{String,Any}, measurements::AbstractVec
     _reject_operational(net, allow_operational)
     _check_references(net, measurements, neutral)
     zi = _zero_injection_set(net, zero_injection, neutral)
-    passive_index = _se_passive_ybus(net).index
+    passive_index = try
+        _se_passive_ybus(net).index
+    catch err
+        err isa ArgumentError || rethrow()
+        # Report unsupported primitives before legacy coverage checks need Ybus.
+        report = state_estimator_preflight(net)
+        report.supported || throw(SEUnsupportedNetwork(report))
+        rethrow()
+    end
     fixed_sources = _source_phasors(net, passive_index)
     fixed_nodes = Set(node for (node,i) in passive_index if i == 0 || haskey(fixed_sources,i))
     _check_coverage(net, measurements, neutral, zi;fixed_nodes)
