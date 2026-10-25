@@ -8,6 +8,9 @@ makedocs(
     format   = Documenter.HTML(
         prettyurls = get(ENV, "CI", nothing) == "true",
         edit_link  = "main",
+        # assets/logo.svg and assets/logo-dark.svg are picked up automatically as the
+        # sidebar logo; see scripts/logo/README.md for every logo variant.
+        assets     = ["assets/favicon.ico"],
     ),
     pages = [
         "Home" => "index.md",

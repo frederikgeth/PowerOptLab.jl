@@ -4,6 +4,12 @@
 [![Documentation](https://img.shields.io/badge/docs-dev-blue.svg)](https://frederikgeth.github.io/PowerOptLab.jl/dev/)
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue.svg)](LICENSE.md)
 
+<p align="center">
+  <img src="docs/src/assets/logo/poweroptlab-hero.svg"
+       alt="PowerOptLab.jl: models and methods for uncertain four-wire distribution networks, covering estimation, devices, inverters, operating envelopes and operability"
+       width="800">
+</p>
+
 PowerOptLab provides models and numerical methods for **four-wire distribution
 networks with uncertain states and parameters**. It supports state and parameter
 estimation, generator and inverter studies, battery and EV scheduling, dynamic
