@@ -1,3 +1,5 @@
+using Logging
+
 # Fixed POC voltage keeps the capability oracle independent of feeder feedback.
 _constraint_grid(v=207.0; magnitudes=fill(v, 3)) = parse_bmopf("""
 {"bus":{"poc":{"terminal_names":["a","b","c","n"],
@@ -26,6 +28,35 @@ end
 
 const _CONSTRAINT_REQUEST = InverterControlRequest(
     p_available=6000.0, p_rated=6000.0, q_scale=6000.0)
+
+@testset "Inverter operating constraints: SI validation on a per-unit context" begin
+    net = _constraint_grid(230.)
+    plant = _constraint_plant(r_filter=.05, x_filter=.15,
+        r_filter_grid=.03, x_filter_grid=.10, c_filter_mid=30e-6, r_filter_damping=.5)
+    device = ConstrainedInverter(plant,
+        InverterOperatingConstraints(reactive=FixedReactivePower(600.), p_max=3000.))
+    result = @test_logs min_level=Logging.Warn solve_constrained_inverter(
+        net, device, _CONSTRAINT_REQUEST; solver_options=("tol"=>1e-9,))
+    @test result.solve.publishable
+    @test minimum(result.plant.i_filter_shunt_mag) > 2.
+    hook! = ctx -> begin
+        working = PowerOptLab.BMOPFTools.opf_network(ctx)
+        before = deepcopy(working["bus"])
+        stamp_device!(ctx, device; request=_CONSTRAINT_REQUEST)
+        @test working["bus"] == before
+        @test maximum(working["bus"]["poc"]["v_max"]) < 2.
+    end
+    @test_logs min_level=Logging.Warn PowerOptLab.build_opf_model(net;
+        per_unit=true, s_base=1e6, add_objective=false, model_hook! = hook!, optimizer=Ipopt.Optimizer)
+
+    # A genuinely negligible branch must still warn after conversion to SI.
+    tiny = ConstrainedInverter(_constraint_plant(r_filter=.05, x_filter=.15,
+        r_filter_grid=.03, x_filter_grid=.10, c_filter_mid=1e-12),
+        InverterOperatingConstraints())
+    @test_logs (:warn, r"LCL midpoint branch is electrically negligible") PowerOptLab.build_opf_model(net;
+        per_unit=true, s_base=1e6, add_objective=false,
+        model_hook! = ctx -> stamp_device!(ctx, tiny; request=_CONSTRAINT_REQUEST), optimizer=Ipopt.Optimizer)
+end
 
 @testset "Inverter operating constraints: validation" begin
     policy = _constraint_policy()

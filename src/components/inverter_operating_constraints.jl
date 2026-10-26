@@ -262,10 +262,31 @@ function _stamp_current_allocation!(m, device, h)
     JuMP.@constraint(m, i2[2] == 0)
 end
 
+# Device validation uses SI parameters, including the voltage bounds used to
+# diagnose negligible filters. A staged context owns a per-unit working net.
+# Restore only this bus's diagnostic bounds in a shallow copy; never change
+# the network data or coordinates used by the electrical model.
+function _constrained_validation_network(ctx, inv)
+    net, bases = _opf_network(ctx), _opf_bases(ctx)
+    bases === nothing && return net
+    bus = get(get(net, "bus", Dict()), inv.bus, nothing)
+    bus === nothing && return net
+    physical_bus = copy(bus)
+    vb = get(bases.v_base, inv.bus, 1.0)
+    for field in ("v_min", "v_max")
+        bound = get(bus, field, nothing)
+        bound === nothing || (physical_bus[field] = bound .* vb)
+    end
+    validation_net = copy(net)
+    validation_net["bus"] = copy(net["bus"])
+    validation_net["bus"][inv.bus] = physical_bus
+    return validation_net
+end
+
 function stamp_device!(ctx, device::ConstrainedInverter;
                        request::InverterControlRequest)
-    validate_device(device, (_opf_network(ctx),); periods=1)
     inv, policy = device.device, device.policy
+    validate_device(device, (_constrained_validation_network(ctx, inv),); periods=1)
     # At large network s_base, an unnormalised squared per-unit bound can be
     # smaller than the solver's constraint-bound relaxation. Normalise to the
     # device rating rather than relying on a current-command backoff for safety.
