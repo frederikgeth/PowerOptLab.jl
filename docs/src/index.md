@@ -1,5 +1,7 @@
 # PowerOptLab.jl
 
+![PowerOptLab.jl: models and methods for uncertain four-wire distribution networks, covering estimation, devices, inverters, operating envelopes and operability](assets/logo/poweroptlab-hero.svg)
+
 PowerOptLab provides models and numerical methods for studying **four-wire
 distribution networks with uncertain states and parameters**.
 
