@@ -57,8 +57,13 @@ The voltage input and reference come from the declared positive policy and
 mean of the three RMS phase magnitudes. Curve encodings use the same smooth,
 flat-extended PWL functions as the existing controller. A missing Q curve imposes
 zero total POC Q in `VoltVarWattConstraints`. A missing watt curve gives a fraction
-of one in that policy. The general `InverterOperatingConstraints` policy leaves
-Q free by default and adds no watt ceiling when its watt curve is absent.
+of one in that policy, **and the ceiling is still imposed**: with the rated basis
+it caps P at ``P_{rated}``, as the forward controller's
+``\min(P_{rated}f_{VW},P_{available})`` command does. The general
+`InverterOperatingConstraints` policy leaves Q free by default and adds **no**
+watt ceiling when its watt curve is absent; add `p_max` for a rated cap. The same
+positive-sequence policy object therefore yields different ceilings in the two
+wrappers, by design.
 
 For `volt_watt_basis=:rated`,
 
@@ -72,6 +77,12 @@ availability and an optional DC source upper bound, and impose
 ``P_{POC}\le f_{VW}(V) A``. Together with the independent DC bound this is
 equivalent to ``P_{POC}\le\min(A,f_{VW}A)``. When ``A<0``, the full loss import
 is retained. DC availability is not incorrectly treated as lossless AC output.
+
+``A`` uses the **solved** losses, so the ceiling depends on the operating point:
+more reactive current raises filter and conduction losses and lowers it.
+Firmware that scales a separately measured or estimated available power can
+differ by those losses, and the product ``f_{VW}(V)\,(P_{DC}-P_{POC})`` adds a
+nonconvex term to the model.
 
 The plant retains per-conductor RMS current, converter apparent-power,
 switching-voltage, capacitor and DC ripple limits. There is no radial P/Q

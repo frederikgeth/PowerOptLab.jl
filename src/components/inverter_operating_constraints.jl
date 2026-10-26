@@ -89,9 +89,12 @@ end
 POC capability/dispatch relationships with an explicit reactive operating mode:
 [`FreeReactivePower`](@ref), [`FixedReactivePower`](@ref), or
 [`FixedPowerFactor`](@ref). Optional finite P/Q bounds are in W/var and compose
-with every mode. The positive policy may supply a volt-watt ceiling; no watt
-curve means no additional watt ceiling. A policy containing a volt-var curve is
-rejected: use [`VoltVarWattConstraints`](@ref) for that Q equality.
+with every mode. The positive policy may supply a volt-watt ceiling. **No watt
+curve means no watt ceiling at all**, even with `volt_watt_basis=:rated`; add
+`p_max=p_rated` for a rated cap. This differs deliberately from
+[`VoltVarWattConstraints`](@ref), which mirrors the forward controller. A policy
+containing a volt-var curve is rejected: use `VoltVarWattConstraints` for that
+Q equality.
 
 An objective selects the remaining freedom. Neither a PF relation nor balanced
 current is an implication of the hardware. DC source bounds and current
@@ -133,9 +136,22 @@ With `volt_watt_basis=:rated`, the watt ceiling is `p_rated * fraction`.
 With `:available`, it is `fraction * (available_dc - (p_dc - p_poc))`, where
 `available_dc` is the tighter of request availability and a DC source upper bound.
 An independent `p_dc <= p_available` bound accounts for all plant losses and
-preserves required loss imports at zero availability. No Q curve means Q = 0;
-no watt curve means fraction = 1. Curve encodings must currently be smooth.
-These relationships do not certify compliance with a regional standard.
+preserves required loss imports at zero availability. No Q curve means Q = 0.
+
+No watt curve means fraction = 1, and the ceiling is **still imposed**, matching
+the forward controller's `min(p_rated*fraction, available)` command: with
+`:rated` this caps P at `p_rated`; with `:available` it coincides with the DC
+availability bound. [`InverterOperatingConstraints`](@ref) instead imposes no
+ceiling without a watt curve.
+
+The `:available` ceiling subtracts the **solved** plant losses `p_dc - p_poc`,
+so it depends on the operating point: more reactive current raises filter and
+conduction losses and lowers the ceiling. Firmware that scales a separately
+measured or estimated available power can differ by those losses. The product
+of `fraction` and the losses is an additional nonconvex term.
+
+Curve encodings must currently be smooth. These relationships do not certify
+compliance with a regional standard.
 """
 struct VoltVarWattConstraints{P<:AbstractPositiveSequencePolicy} <: _AbstractInverterOperatingPolicy
     positive::P
