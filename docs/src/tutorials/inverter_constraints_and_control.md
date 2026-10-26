@@ -1,5 +1,9 @@
 # From current limits to operating rules
 
+For a step-by-step translation from sequential controller code, start with the
+[controller-to-equilibrium workbook](controller_program_to_equilibrium.md).
+Return here to apply that distinction to the inverter's P–Q capability region.
+
 Why can two inverter models obey the same current limit and deliver different
 watts and vars? Work through one balanced inverter, first at 230 V and then at
 207 V per phase. By the end you should be able to distinguish three choices:

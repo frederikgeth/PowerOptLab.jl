@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Equilibrium and numerical iteration</title>
+<style>
+:root {color-scheme:light dark;--bg:#fff;--fg:#243246;--muted:#607086;--grid:#d5dce5;--blue:#2463a6;--orange:#ba531b;--green:#08796b}
+@media(prefers-color-scheme:dark){:root{--bg:#171c24;--fg:#e5edf6;--muted:#b5c1d1;--grid:#3c485b;--blue:#8dbbff;--orange:#ffad79;--green:#6ed5c1}}
+*{box-sizing:border-box}body{margin:0;padding:24px;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,sans-serif}
+main{max-width:1100px;margin:auto}h1{font-size:1.6rem;line-height:1.2}h2{font-size:1.1rem}p{max-width:80ch}
+.controls,.charts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;margin:24px 0}
+label{display:block}input{display:block;width:100%;min-height:44px}output{font-variant-numeric:tabular-nums}
+.charts section{min-width:0}svg{display:block;width:100%;height:290px}.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:.9rem}
+.blue{color:var(--blue)}.orange{color:var(--orange)}.green{color:var(--green)}.readout{font-variant-numeric:tabular-nums}
+.note{color:var(--muted)}@media(max-width:700px){body{padding:16px}.controls,.charts{grid-template-columns:1fr;gap:12px}}
+</style>
+</head>
+<body><main id="feedback-explorer">
+<h1>Equilibrium and numerical iteration</h1>
+<p>The toy network is v = 1 + 0.1p. Its controller is C(v) = clip(1 − k(v − 1), 0, 1).
+Change the feedback gain b = 0.1k and the numerical relaxation α. The equilibrium solves p = C(v) simultaneously.</p>
+<div class="controls">
+<label for="gain">Feedback gain b: <output id="gain-value" for="gain">1.20</output>
+<input id="gain" type="range" min="0" max="2" step="0.05" value="1.2"></label>
+<label for="relaxation">Numerical relaxation α: <output id="relaxation-value" for="relaxation">0.50</output>
+<input id="relaxation" type="range" min="0.1" max="1" step="0.05" value="0.5"></label>
+</div>
+<p class="readout" id="readout" aria-live="polite"></p>
+<div class="charts">
+<section><h2>Intersection: the simultaneous solution</h2>
+<svg id="intersection" role="img" aria-label="Controller output and identity line intersect at the equilibrium"></svg>
+<div class="legend"><span class="blue">— Controller output</span><span class="orange">– – Trial power</span><span class="green">● Equilibrium</span></div></section>
+<section><h2>Iteration: a numerical solution method</h2>
+<svg id="iteration" role="img" aria-label="Direct and relaxed numerical iteration from zero power"></svg>
+<div class="legend"><span class="orange">— Direct iteration</span><span class="blue">— Chosen relaxation</span><span class="green">– – Equilibrium</span></div></section>
+</div>
+<p id="interpretation" aria-live="polite"></p>
+<p class="note">Both plots use dimensionless power in pu. The iteration index is not physical time.
+These plots establish no physical stability result. A physical sampled controller or continuous-time controller needs its own dynamics.</p>
+<noscript>This explorer requires JavaScript. The workbook includes static figures and Julia examples with the same formulas.</noscript>
+</main>
+<script>
+(() => {
+  const root = document.getElementById('feedback-explorer');
+  const byId = id => root.querySelector('#'+id);
+  const ns = 'http://www.w3.org/2000/svg';
+  function element(svg,name,attributes,text){
+    const e=document.createElementNS(ns,name);
+    Object.entries(attributes).forEach(([k,v])=>e.setAttribute(k,String(v)));
+    if(text!==undefined)e.textContent=text;
+    svg.appendChild(e);return e;
+  }
+  function chart(svg,xmax,xlabel){
+    svg.replaceChildren();
+    const width=Math.max(240,svg.getBoundingClientRect().width),height=290;
+    svg.setAttribute('viewBox',`0 0 ${width} ${height}`);
+    const left=44,right=12,top=16,bottom=48;
+    const x=v=>left+v/xmax*(width-left-right),y=v=>height-bottom-v*(height-top-bottom);
+    for(const value of [0,.5,1]){
+      element(svg,'line',{x1:left,x2:width-right,y1:y(value),y2:y(value),stroke:'var(--grid)'});
+      element(svg,'text',{x:left-8,y:y(value)+4,'text-anchor':'end',fill:'var(--fg)','font-size':12},value.toFixed(1));
+    }
+    const ticks=width<360?[0,xmax/2,xmax]:[0,xmax/4,xmax/2,3*xmax/4,xmax];
+    for(const value of ticks)element(svg,'text',{x:x(value),y:height-bottom+21,'text-anchor':'middle',fill:'var(--fg)','font-size':12},String(value));
+    element(svg,'text',{x:(left+width-right)/2,y:height-7,'text-anchor':'middle',fill:'var(--fg)','font-size':12},xlabel);
+    element(svg,'text',{x:12,y:(top+height-bottom)/2,transform:`rotate(-90 12 ${(top+height-bottom)/2})`,'text-anchor':'middle',fill:'var(--fg)','font-size':12},'Power (pu)');
+    return {x,y};
+  }
+  function path(svg,coords,color,dashed=false){
+    element(svg,'path',{d:coords.map(([x,y],i)=>(i?'L':'M')+x.toFixed(3)+','+y.toFixed(3)).join(' '),
+      fill:'none',stroke:color,'stroke-width':2,'stroke-dasharray':dashed?'6 4':'none'});
+  }
+  function render(){
+    const b=Number(byId('gain').value),alpha=Number(byId('relaxation').value),equilibrium=1/(1+b);
+    const command=p=>Math.max(0,Math.min(1,1-b*p));
+    byId('gain-value').textContent=b.toFixed(2);byId('relaxation-value').textContent=alpha.toFixed(2);
+    const factor=1-alpha*(1+b);
+    byId('readout').textContent=`Equilibrium p* = ${equilibrium.toFixed(4)} pu · v* = ${(1+.1*equilibrium).toFixed(4)} pu · relaxed local multiplier = ${factor.toFixed(3)}`;
+    const first=byId('intersection'),axes=chart(first,1,'Trial power p (pu)');
+    path(first,Array.from({length:151},(_,i)=>[axes.x(i/150),axes.y(command(i/150))]),'var(--blue)');
+    path(first,[[axes.x(0),axes.y(0)],[axes.x(1),axes.y(1)]],'var(--orange)',true);
+    element(first,'circle',{cx:axes.x(equilibrium),cy:axes.y(equilibrium),r:5,fill:'var(--green)'});
+    const second=byId('iteration'),other=chart(second,20,'Numerical iteration n');
+    for(const [relax,color] of [[1,'var(--orange)'],[alpha,'var(--blue)']]){
+      let p=0;const coords=[[other.x(0),other.y(p)]];
+      for(let n=1;n<=20;n++){p=(1-relax)*p+relax*command(p);coords.push([other.x(n),other.y(p)]);}
+      path(second,coords,color);
+    }
+    path(second,[[other.x(0),other.y(equilibrium)],[other.x(20),other.y(equilibrium)]],'var(--green)',true);
+    byId('interpretation').textContent=Math.abs(factor)<1-1e-10?
+      'The chosen relaxed iteration passes the local contraction test. The equilibrium is defined by the intersection, independently of this numerical method.':
+      'The chosen relaxed iteration fails the local contraction test. The unique equilibrium still exists; a cycling trace does not establish that the algebraic model is infeasible.';
+  }
+  byId('gain').addEventListener('input',render);byId('relaxation').addEventListener('input',render);
+  new ResizeObserver(render).observe(root);render();
+})();
+</script></body></html>

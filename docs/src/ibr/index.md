@@ -1,5 +1,10 @@
 # Inverter-based resources
 
+If you are accustomed to sequential simulation programs, begin with the
+[controller-to-equilibrium workbook](../tutorials/controller_program_to_equilibrium.md).
+Its prediction/run/explanation exercises distinguish operating equations,
+numerical iterations, optimisation choices and physical memory.
+
 Start with [From current limits to operating rules](../tutorials/inverter_constraints_and_control.md)
 for a graphical explanation of hardware constraints, operating relationships and
 objectives. See the [simulation/optimisation comparison table](../components/inverter_operating_constraints.md)
