@@ -271,12 +271,20 @@ end
 
 @testset "Inverter operating constraints: external objective and scale invariance" begin
     device = ConstrainedInverter(_constraint_plant(), _constraint_policy())
-    for base in (1e4, 1e6)
+    # 1e8 is the regime that motivates rating normalisation: there the
+    # unnormalised squared per-unit bounds fall below Ipopt's bound relaxation.
+    for base in (1e4, 1e6, 1e8)
         maximum_export = solve_constrained_inverter(_constraint_grid(), device,
             _CONSTRAINT_REQUEST; s_base=base, solver_options=("tol" => 1e-9,))
         @test maximum_export.solve.publishable
         @test maximum_export.plant.p_poc ≈ sqrt(5940.0^2-2640.0^2) atol=.05
         @test minimum(maximum_export.operation.converter_current_margin_A) >= -1e-6
+        # At 230 V the apparent-power rating binds instead of the current rating.
+        s_bound = solve_constrained_inverter(_constraint_grid(230.), device,
+            _CONSTRAINT_REQUEST; s_base=base, solver_options=("tol" => 1e-9,))
+        @test s_bound.solve.publishable
+        @test s_bound.plant.p_poc ≈ sqrt(6000.0^2-2640.0^2) atol=.05
+        @test s_bound.operation.converter_apparent_power_margin_VA ≈ 0. atol=.01
         handles = Ref{Any}()
         hook! = ctx -> begin
             m = PowerOptLab._opf_model(ctx)
