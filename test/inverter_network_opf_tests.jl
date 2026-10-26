@@ -68,6 +68,31 @@ end
         @test abs(matched.plant.q_poc) > 100.
     end
 
+    # The encoded Q equality is satisfied by construction; check the law itself
+    # at independently replayed voltages. Both models share the smooth encoding,
+    # so each is compared with (a) an independent re-derivation of that smoothing
+    # and (b) the exact PWL law, within the analytic smoothing bound.
+    for name in (:forward,:matched)
+        solution = getproperty(r,name)
+        law = audit_volt_var_law(r.case,solution,getproperty(r.audits,name).replay)
+        for (i,x) in enumerate(law)
+            @test x.breakpoint_distance_V > r.case.law.pwl_width
+            # The forward limiter's smooth common scale (1-s ≈ 2.6e-5 here)
+            # multiplies the whole command, so its Q is s times the law.
+            s = name === :forward ? solution.devices[i].control.current_scale : 1.0
+            @test abs(x.smooth_error_var-(s-1)*x.smooth_q_var) < 1e-5
+            if x.smoothing_bound_var == 0
+                @test abs(x.exact_error_var-(s-1)*x.exact_q_var) < 1e-5
+            else
+                @test abs(x.exact_error_var) <= x.smoothing_bound_var
+                # The worst-phase :net conflict smoothing is active here; keep
+                # the documented deviation visible rather than hidden by tolerance.
+                @test abs(x.exact_error_var) > 1.
+            end
+        end
+    end
+    @test r.agreement.exact_law_error_var ≈ maximum(abs(x.exact_error_var) for x in r.law_audit)
+
     # Same high availability as dispatch mode, but autonomous local controls
     # do not impose the new feeder-wide phase-to-neutral voltage requirement.
     @test [x.p_available for x in r.unmanaged.requests] == [x.p_available for x in r.dispatch.requests]

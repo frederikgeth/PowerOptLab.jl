@@ -58,12 +58,17 @@ function inverter_network_case()
         phase_terminals=["a","b","c"],neutral="n",s_max=rating,i_max=rating/500.,
         v_dc=800.,c_dc=.002,r_filter=.05,x_filter=.15,p_loss_fixed=10.0+5i,c_loss=.03)
         for (i,bus,rating) in ((1,"b2",6000.),(2,"b4",6000.),(3,"b6",5000.))]
-    vv = PiecewiseLinearLaw([230.,250.],[.3,-.3];formulation=LocalC2Formulation(.01))
+    # Control-law data is kept explicit so the replay audit can evaluate the
+    # laws without calling the package's controller evaluators.
+    law = (v=[230.,250.],q=[.3,-.3],pwl_width=.01,extrema_epsilon=.05,conflict_epsilon=.01,
+        sensing=(:average,:positive_sequence,:worst_phase_net))
+    vv = PiecewiseLinearLaw(law.v,law.q;formulation=LocalC2Formulation(law.pwl_width))
     policies = [AverageVoltageVoltVarWatt(volt_var=vv),
         PositiveSequenceVoltVarWatt(volt_var=vv),
-        WorstPhaseVoltVarWatt(volt_var=vv,conflict_policy=:net)]
+        WorstPhaseVoltVarWatt(volt_var=vv,conflict_policy=:net,
+            extrema_epsilon=law.extrema_epsilon,conflict_epsilon=law.conflict_epsilon)]
     availability = [3500.,4500.,3000.]
-    return (;net,buses,parents,impedances,loads,source,plants,policies,availability,
+    return (;net,buses,parents,impedances,loads,source,plants,policies,law,availability,
         inverter_bus=[findfirst(==(p.bus),buses) for p in plants])
 end
 
@@ -219,6 +224,59 @@ function replay_inverter_network(case,dispatch;tol=1e-10,max_iter=200)
         branch_current=_nopf_backward(case,_nopf_demand(case,voltages,dispatch)))
 end
 
+# Independent volt-var evaluation. The exact law uses hard extrema and hard
+# positive/negative parts; the smooth reference re-derives the algebraic
+# selector (a+b±sqrt((a-b)^2+eps^2))/2 used by the encoded law.
+_nopf_curve(law,v) = law.q[1]+(law.q[2]-law.q[1])*clamp((v-law.v[1])/(law.v[2]-law.v[1]),0,1)
+_nopf_smax(a,b,eps) = (a+b+sqrt((a-b)^2+eps^2))/2
+_nopf_smin(a,b,eps) = (a+b-sqrt((a-b)^2+eps^2))/2
+
+function _nopf_law_q(case,i,u;smooth)
+    law,rating = case.law,case.plants[i].s_max
+    magnitudes = abs.(u)
+    sensing = law.sensing[i]
+    sensing === :average && return rating*_nopf_curve(law,sum(magnitudes)/3)
+    sensing === :positive_sequence &&
+        return rating*_nopf_curve(law,abs((u[1]+_NOPF_A*u[2]+_NOPF_A^2*u[3])/3))
+    sensing === :worst_phase_net || throw(ArgumentError("unknown sensing $sensing"))
+    if smooth
+        e,c = law.extrema_epsilon,law.conflict_epsilon
+        vmin = _nopf_smin(_nopf_smin(magnitudes[1],magnitudes[2],e),magnitudes[3],e)
+        vmax = _nopf_smax(_nopf_smax(magnitudes[1],magnitudes[2],e),magnitudes[3],e)
+        return rating*(_nopf_smax(_nopf_curve(law,vmin),0.,c)+_nopf_smin(_nopf_curve(law,vmax),0.,c))
+    end
+    vmin,vmax = extrema(magnitudes)
+    return rating*(max(_nopf_curve(law,vmin),0.)+min(_nopf_curve(law,vmax),0.))
+end
+
+"""Analytic bound on |Q_smooth-Q_exact| away from PWL breakpoints: each smooth
+max/min of the conflict branches errs by at most eps_c/2 (opposite signs), and
+the two-stage smooth extrema err by at most eps_v in voltage."""
+function _nopf_smoothing_bound(case,i)
+    law = case.law
+    law.sensing[i] === :worst_phase_net || return 0.0
+    slope = abs(law.q[2]-law.q[1])/(law.v[2]-law.v[1])
+    return case.plants[i].s_max*(law.conflict_epsilon/2+slope*law.extrema_epsilon)
+end
+
+"""Check solved volt-var Q against the exact and smooth laws evaluated at the
+independently replayed voltages (sensing reference: local neutral)."""
+function audit_volt_var_law(case,solution,replay)
+    map(eachindex(case.plants)) do i
+        b = case.inverter_bus[i]
+        u = replay.voltages[b][1:3] .- replay.voltages[b][4]
+        q = solution.devices[i].plant.q_poc
+        exact,smooth = _nopf_law_q(case,i,u;smooth=false),_nopf_law_q(case,i,u;smooth=true)
+        # Smallest distance from any sensed quantity to a PWL breakpoint, which
+        # must exceed the LocalC2 width for the exact/smooth bound to apply.
+        sensed = (sum(abs,u)/3,abs((u[1]+_NOPF_A*u[2]+_NOPF_A^2*u[3])/3),abs.(u)...)
+        (;exact_q_var=exact,smooth_q_var=smooth,
+          exact_error_var=q-exact,smooth_error_var=q-smooth,
+          smoothing_bound_var=_nopf_smoothing_bound(case,i),
+          breakpoint_distance_V=minimum(abs(v-k) for v in sensed,k in case.law.v))
+    end
+end
+
 function audit_inverter_network(case,solution)
     solution.status.publishable || return nothing
     dispatch = [complex(r.plant.p_poc,r.plant.q_poc) for r in solution.devices]
@@ -255,14 +313,18 @@ function inverter_full_opf_validation(;s_base=1e6)
     dispatch = solve_inverter_network(case;mode=:dispatch,s_base)
     benchmark = solve_inverter_network(case;mode=:dispatch,s_base,
         fixed_dispatch=fill(2000.0+0im,3))
+    law_audit = audit_volt_var_law(case,matched,replay_inverter_network(case,
+        [complex(d.plant.p_poc,d.plant.q_poc) for d in matched.devices]))
     agreement = (
+        exact_law_error_var=maximum(abs(x.exact_error_var) for x in law_audit),
+        smooth_law_error_var=maximum(abs(x.smooth_error_var) for x in law_audit),
         p_error_W=maximum(abs(forward.devices[i].plant.p_poc-matched.devices[i].plant.p_poc) for i in 1:3),
         q_error_var=maximum(abs(forward.devices[i].plant.q_poc-matched.devices[i].plant.q_poc) for i in 1:3),
         voltage_error_V=maximum(maximum(abs.(forward.voltages[b]-matched.voltages[b])) for b in 1:7),
         converter_current_error_A=maximum(maximum(abs.(forward.devices[i].converter_terminal.phase_current .-
             matched.devices[i].converter_terminal.phase_current)) for i in 1:3),
         branch_current_error_A=maximum(maximum(abs.(forward.branch_current[e]-matched.branch_current[e])) for e in 1:6))
-    return (;case,forward,matched,unmanaged,dispatch,benchmark,agreement,
+    return (;case,forward,matched,unmanaged,dispatch,benchmark,agreement,law_audit,
         audits=(forward=audit_inverter_network(case,forward),matched=audit_inverter_network(case,matched),
             unmanaged=audit_inverter_network(case,unmanaged),
             dispatch=audit_inverter_network(case,dispatch),benchmark=audit_inverter_network(case,benchmark)))
@@ -270,6 +332,7 @@ end
 
 function print_inverter_network_validation(r)
     println("Matched-control agreement: ",r.agreement)
+    println("Volt-var law at replayed voltages: ",r.law_audit)
     for name in (:forward,:matched,:unmanaged,:dispatch,:benchmark)
         solution,audit = getproperty(r,name),getproperty(r.audits,name)
         println(name," status: ",solution.status)
