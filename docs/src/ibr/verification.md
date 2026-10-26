@@ -73,6 +73,9 @@ oracle. A solver returning `LOCALLY_SOLVED` is necessary, but not sufficient.
 | Independent feeder reproduction | separately solved forward/maximum-export equilibria at 215, 230, 259 V | matched unsaturated laws agree within 0.2 W/var, 1 mA and 1 mV |
 | Proportional limiter reproduction | current-ray maximum scale plus closed-form S/current oracle | optimiser scale agrees within `1e-7`; forward conservative backoff within 0.4 W and 0.2 var |
 | Sequence-priority reproduction | fixed reserved sequence, ray fill and independent disk intersection | both priorities preserve the reserved sequence and agree with exact local allocation within 1 µA; fixed measurement only |
+| P–Q teaching geometry | independently computed circle/ray intersections at 230/207 V | proportional, strict Q, signed fixed PF and free-Q solves match closed forms |
+| Unbalanced feeder/LCL reproduction | separate equilibria, feeder KVL and capacitor admittance | matching Q/current locations agrees within 0.2 W/var, 1 mA and 1 mV; unmatched locations deliberately differ |
+| Strict-service versus allocation infeasibility | apparent-power lower bound and zero-sequence KCL contradiction | impossible Q and incompatible balanced-grid allocation cannot publish; releasing grid balance yields the analytically predicted grid I0 |
 
 These tests live in `test/advanced_inverter_tests.jl` and
 `test/inverter_control_tests.jl`, with operating constraints in

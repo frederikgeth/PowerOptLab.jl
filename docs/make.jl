@@ -88,6 +88,7 @@ makedocs(
         ],
         "Inverter models and controls" => [
             "Inverter study overview" => "ibr/index.md",
+            "From current limits to operating rules" => "tutorials/inverter_constraints_and_control.md",
             "Scientific foundations" => "ibr/foundations.md",
             "Phase-aware control laws" => "ibr/phase_aware_control_laws.md",
             "Control-study methodology" => "ibr/control_study_methodology.md",

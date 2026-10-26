@@ -115,3 +115,52 @@ The conceptual comparison table is in
 `docs/src/components/inverter_operating_constraints.md`; the executable
 explanation is in `docs/src/ibr/formulation_reproductions.md`. Deferred variants
 remain explicitly identified rather than being inferred from plant support.
+
+## Follow-up: teaching and network reproduction plan
+
+Before implementation of the follow-up slice:
+
+1. Add a beginner tutorial that separates the physical P–Q region, an operating
+   relationship and a selection objective. Derive the balanced lossless circle,
+   compare 230/207 V graphically, and compute proportional, strict-Q, fixed-PF
+   and free-Q results with independent closed forms and executable solves.
+2. Lead the reference guide with that learning path and scope every volt-var
+   equality statement to `VoltVarWattConstraints`. Retain the comprehensive
+   feature table as a reference after the introductory material.
+3. Extend reproductions to independently solved unbalanced feeders, LCL grid
+   and converter targets, and current saturation. Classify agreement, a
+   deliberately different operating relationship, and physical infeasibility.
+   Include a three-leg/LCL zero-sequence incompatibility, with a circuit-based
+   explanation rather than treating a solver failure alone as its proof.
+4. Verify physical POC/converter power and current locations independently of
+   controller replay. Keep fixed-measurement sequence-priority checks labelled
+   as such; this slice does not add new optimisation priority APIs.
+5. Run the affected regression suites, the standalone examples/figure generator,
+   and the full documentation build; inspect the exported figures and commit.
+
+Follow-up completed:
+
+- Added `docs/src/tutorials/inverter_constraints_and_control.md`: the P–Q
+  region, operating relationships and objectives, followed by executable
+  proportional/strict-Q/fixed-PF/free-Q choices at 230/207 V. The reference
+  feature table now follows the introductory material, and strict volt-var
+  statements explicitly identify their policy.
+- Added reproducible matplotlib SVG/PDF figures with the analytical capability
+  boundaries. Both figures were visually inspected, including the close-up's
+  independent legend; Documenter copies of all four exports were verified.
+- Added separate unbalanced feeder solves for reduced and LCL filters. Matching
+  grid-target Q, or explicitly reproducing converter-target Q, agrees within
+  0.2 W/var, 1 mA and 1 mV. Imposing strict POC Q on the converter-target case
+  deliberately differs by about 1.5 kvar. Independent capacitor-current and
+  feeder KVL/power checks validate the locations used in that explanation.
+- Added current-saturated feeder comparisons and analytically justified
+  infeasible-service/allocation cases. Releasing balanced grid current restores
+  the predicted complex zero-sequence current in the grounded LCL case.
+- 3,467 targeted regression/quality checks passed, with one optional OpenDSS
+  check skipped. This adds 164 checks to the previous validated suite. The
+  standalone network script and full documentation build passed; executable
+  tutorial/network examples, reference order and links were checked in HTML.
+
+The new comparisons remain algebraic steady-state results. Fixed-measurement
+sequence priority is still distinguished from independently solved network
+equivalence; no new priority/objective APIs or controller defaults were changed.

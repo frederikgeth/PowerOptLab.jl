@@ -1,6 +1,8 @@
 # Inverter-based resources
 
-See the [simulation/optimisation comparison table](../components/inverter_operating_constraints.md)
+Start with [From current limits to operating rules](../tutorials/inverter_constraints_and_control.md)
+for a graphical explanation of hardware constraints, operating relationships and
+objectives. See the [simulation/optimisation comparison table](../components/inverter_operating_constraints.md)
 for formulations of each conceptual constraint, supported operating modes and
 remaining extensions. The [executable reproduction cases](formulation_reproductions.md)
 test when the two pathways select the same operation.

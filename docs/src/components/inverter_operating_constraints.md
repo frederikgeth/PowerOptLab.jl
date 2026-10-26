@@ -3,7 +3,9 @@
 [`ConstrainedInverter`](@ref) adds operating constraints to an
 [`AdvancedInverter`](@ref). It is an alternative to the forward
 [`SequenceController`](@ref), which retains its existing current limiters and
-defaults. Choose according to the question being studied:
+defaults. Start with [From current limits to operating rules](../tutorials/inverter_constraints_and_control.md)
+for a worked P–Q explanation, then use this page as a formulation reference.
+Choose according to the question being studied:
 
 | Formulation | Selects the operating point through | When a current limit binds |
 |:--|:--|:--|
@@ -13,39 +15,6 @@ defaults. Choose according to the question being studied:
 The second formulation is an OPF feasible set. Maximising export over a network
 does not establish that an autonomous local controller will select that point,
 or that it will be dynamically stable. Neither option is a certification model.
-
-## Simulation and optimisation formulations
-
-Here, **simulation** means the algebraic forward controller at a fundamental-frequency
-network equilibrium. It does not mean time-domain or switched EMT simulation.
-The physical plant is shared; operating relationships and the selection objective
-determine which feasible point is selected.
-
-| Concept | Forward simulation (`SequenceController`) | Optimisation (`ConstrainedInverter`) | Support / equivalence condition |
-|:--|:--|:--|:--|
-| Network, reduced filter, primitive matrices, LCL, POC shunt | Plant KCL/KVL and prescribed current | Same plant KCL/KVL and dispatchable current | Implemented; compare powers at the same location |
-| Three-leg zero sum | Plant requires converter `I0=0` | Same topology equality, including `:free` allocation | Implemented; topology does not require `I2=0` |
-| Current allocation | Positive/negative sequence commands at converter or grid target | `:balanced_converter`, `:balanced_grid`, or `:free` | Implemented; LCL capacitor current makes the two balance choices distinct |
-| Volt-var | Curve produces a Q command before limiting | `VoltVarWattConstraints` imposes total POC Q equality | Implemented; saturation can intentionally produce different Q |
-| No reactive curve | Zero Q command | `VoltVarWattConstraints`: Q=0; `InverterOperatingConstraints`: Q free | Explicitly different defaults |
-| Fixed Q / signed PF / free Q | No dedicated fixed-PF policy; a constant curve can prescribe Q | `FixedReactivePower`, `FixedPowerFactor`, `FreeReactivePower` | Implemented on total POC powers; PF does not select current sequences |
-| Volt-watt | Active command, rated or AC-available basis | Upper bound on POC P with the same curve/basis | Implemented; maximum export can reproduce an unsaturated command |
-| P/Q dispatch bounds | Request and controller prescribe operation | Optional `p_min`, `p_max`, `q_min`, `q_max` | Implemented; inconsistent bounds and service remain infeasible |
-| DC source availability and charging | Request availability with loss-aware command | Request upper bound plus signed `DCSourceBounds` | Implemented; `p_min=0` declares non-charging PV; default has no lower bound |
-| Converter/grid conductor current and neutral RMS | Command backoff plus hard plant inequalities | Hard plant inequalities | Implemented, including fixed switching RMS reserves |
-| Converter apparent power | P/Q allocation and plant-aware backoff | Hard converter S circle | Implemented; total POC Q can differ from converter Q |
-| Proportional current limiter | Scales both current sequences / P and Q together | No implicit limiter; optional explicit current-ray restriction plus maximise scale | Reproduction example provided; the ray is an extra operating assumption |
-| Sequence priority | Reserve one sequence, fill headroom with the other | Fix admissible reserved sequence and maximise other-sequence scale | Fixed-measurement reproduction provided; arbitrary network-equilibrium equivalence is not established |
-| Negative-sequence admittance / ripple cancellation | Prescribed negative-sequence current law | `:free` exposes sequence choices; physical sequence/ripple caps still apply | Law-specific optimal objectives or exact command graphs remain future work |
-| Internal voltage and switching utilisation | Same sampled switching hull and voltage boxes | Same hard bounds | Implemented; sampled hull is an outer approximation, audit `switching_margin` |
-| DC 2ω ripple and finite line-frequency source | Plant ripple circuit and backoff | Same hard circuit/capability constraints | Implemented; source impedance here differs from signed DC power bounds |
-| Four-leg / split-link neutral, midpoint, capacitor heating, ESR | Physical plant; controller wrapper remains three-leg | THREE_LEG, FOUR_LEG, SPLIT_DC plants; common/individual bank bounds compose | Implemented for three-phase optimisation; split midpoint balancing remains bounded by configured charge authority |
-| Semiconductor and capacitor losses | Same physical loss equations | Same physical loss equations under either power direction | Implemented; no objective-dependent inflatable loss epigraph |
-| Carrier PWM reserve closure | Plant solver has post-solve carrier iteration/audits | Fixed reserves supported; wrapper requires `pwm_strategy=:NONE` | Automatic optimisation closure remains future work |
-| Single phase / grid forming | Plant supports legacy single phase and fixed balanced internal EMF; not `SequenceController` | Wrapper rejects both | Dedicated operating laws remain future work; no GFM droop or dynamic-stability claim |
-| Curve encoding | Smooth local/global encodings and separate exact numeric evaluator | Same smooth voltage encodings, exact residual audit | Exact PWL graphs in complete inverter models remain future work |
-| Objective / fleet / time coupling | Objective should not change prescribed operation; forward fleet/study APIs exist | Caller chooses objective and can stamp devices in a shared model | Composition implemented; dedicated constrained-fleet/DOE/time APIs remain future work |
-| Hardware sizing / variable DC rail | Existing controller parameter/sizing studies | Fixed physical hardware in this wrapper | Continuous design variables and DC energy/rail dynamics remain future work |
 
 ## Select an operating mode
 
@@ -74,7 +43,8 @@ power bounds, not bounds on POC active power or a battery energy model.
 
 ## Physical and operating relationships
 
-With positive injection, the new formulation imposes total POC reactive power
+For `VoltVarWattConstraints`, positive injection and the declared voltage curve
+impose total POC reactive power
 
 ```math
 Q_{POC}=q_{scale} f_{VV}(V),\qquad P_{DC}\le P_{available}.
@@ -84,7 +54,9 @@ The voltage input and reference come from the declared positive policy and
 `sensing_reference`. For `sensing=:average_voltage`, the input is the arithmetic
 mean of the three RMS phase magnitudes. Curve encodings use the same smooth,
 flat-extended PWL functions as the existing controller. A missing Q curve imposes
-zero total POC Q. A missing watt curve gives a fraction of one.
+zero total POC Q in `VoltVarWattConstraints`. A missing watt curve gives a fraction
+of one in that policy. The general `InverterOperatingConstraints` policy leaves
+Q free by default and adds no watt ceiling when its watt curve is absent.
 
 For `volt_watt_basis=:rated`,
 
@@ -221,3 +193,36 @@ The executable [reproduction cases](../ibr/formulation_reproductions.md) compare
 independently solved feeder equilibria, saturated proportional limiting and
 sequence-priority allocation. They distinguish agreement under matched
 assumptions from the intentional saturation difference above.
+
+## Simulation and optimisation formulations
+
+Here, **simulation** means the algebraic forward controller at a fundamental-frequency
+network equilibrium. It does not mean time-domain or switched EMT simulation.
+The physical plant is shared; operating relationships and the selection objective
+determine which feasible point is selected.
+
+| Concept | Forward simulation (`SequenceController`) | Optimisation (`ConstrainedInverter`) | Support / equivalence condition |
+|:--|:--|:--|:--|
+| Network, reduced filter, primitive matrices, LCL, POC shunt | Plant KCL/KVL and prescribed current | Same plant KCL/KVL and dispatchable current | Implemented; compare powers at the same location |
+| Three-leg zero sum | Plant requires converter `I0=0` | Same topology equality, including `:free` allocation | Implemented; topology does not require `I2=0` |
+| Current allocation | Positive/negative sequence commands at converter or grid target | `:balanced_converter`, `:balanced_grid`, or `:free` | Implemented; LCL capacitor current makes the two balance choices distinct |
+| Volt-var | Curve produces a Q command before limiting | `VoltVarWattConstraints` imposes total POC Q equality | Implemented; saturation can intentionally produce different Q |
+| No reactive curve | Zero Q command | `VoltVarWattConstraints`: Q=0; `InverterOperatingConstraints`: Q free | Explicitly different defaults |
+| Fixed Q / signed PF / free Q | No dedicated fixed-PF policy; a constant curve can prescribe Q | `FixedReactivePower`, `FixedPowerFactor`, `FreeReactivePower` | Implemented on total POC powers; PF does not select current sequences |
+| Volt-watt | Active command, rated or AC-available basis | Upper bound on POC P with the same curve/basis | Implemented; maximum export can reproduce an unsaturated command |
+| P/Q dispatch bounds | Request and controller prescribe operation | Optional `p_min`, `p_max`, `q_min`, `q_max` | Implemented; inconsistent bounds and service remain infeasible |
+| DC source availability and charging | Request availability with loss-aware command | Request upper bound plus signed `DCSourceBounds` | Implemented; `p_min=0` declares non-charging PV; default has no lower bound |
+| Converter/grid conductor current and neutral RMS | Command backoff plus hard plant inequalities | Hard plant inequalities | Implemented, including fixed switching RMS reserves |
+| Converter apparent power | P/Q allocation and plant-aware backoff | Hard converter S circle | Implemented; total POC Q can differ from converter Q |
+| Proportional current limiter | Scales both current sequences / P and Q together | No implicit limiter; optional explicit current-ray restriction plus maximise scale | Reproduction example provided; the ray is an extra operating assumption |
+| Sequence priority | Reserve one sequence, fill headroom with the other | Fix admissible reserved sequence and maximise other-sequence scale | Fixed-measurement reproduction provided; arbitrary network-equilibrium equivalence is not established |
+| Negative-sequence admittance / ripple cancellation | Prescribed negative-sequence current law | `:free` exposes sequence choices; physical sequence/ripple caps still apply | Law-specific optimal objectives or exact command graphs remain future work |
+| Internal voltage and switching utilisation | Same sampled switching hull and voltage boxes | Same hard bounds | Implemented; sampled hull is an outer approximation, audit `switching_margin` |
+| DC 2ω ripple and finite line-frequency source | Plant ripple circuit and backoff | Same hard circuit/capability constraints | Implemented; source impedance here differs from signed DC power bounds |
+| Four-leg / split-link neutral, midpoint, capacitor heating, ESR | Physical plant; controller wrapper remains three-leg | THREE_LEG, FOUR_LEG, SPLIT_DC plants; common/individual bank bounds compose | Implemented for three-phase optimisation; split midpoint balancing remains bounded by configured charge authority |
+| Semiconductor and capacitor losses | Same physical loss equations | Same physical loss equations under either power direction | Implemented; no objective-dependent inflatable loss epigraph |
+| Carrier PWM reserve closure | Plant solver has post-solve carrier iteration/audits | Fixed reserves supported; wrapper requires `pwm_strategy=:NONE` | Automatic optimisation closure remains future work |
+| Single phase / grid forming | Plant supports legacy single phase and fixed balanced internal EMF; not `SequenceController` | Wrapper rejects both | Dedicated operating laws remain future work; no GFM droop or dynamic-stability claim |
+| Curve encoding | Smooth local/global encodings and separate exact numeric evaluator | Same smooth voltage encodings, exact residual audit | Exact PWL graphs in complete inverter models remain future work |
+| Objective / fleet / time coupling | Objective should not change prescribed operation; forward fleet/study APIs exist | Caller chooses objective and can stamp devices in a shared model | Composition implemented; dedicated constrained-fleet/DOE/time APIs remain future work |
+| Hardware sizing / variable DC rail | Existing controller parameter/sizing studies | Fixed physical hardware in this wrapper | Continuous design variables and DC energy/rail dynamics remain future work |
