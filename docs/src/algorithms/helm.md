@@ -27,29 +27,31 @@ Ideal elements — a closed switch, a zero-leakage transformer — have **no fin
 admittance**: stamping a huge `1/z` corrupts conditioning, and a singular
 zero-leakage block loses the coupling entirely. The engine's `ybus_augmented`
 extends the passive Ybus with one **constraint row and auxiliary current
-unknown per ideal coupling**:
+unknown per winding port or ideal coupling**:
 
 ```math
 \mathbf{K} = \begin{bmatrix} \mathbf{Y} & \mathbf{A}^{\mathsf T} \\
-\mathbf{A} & \mathbf{0} \end{bmatrix},
+\mathbf{A} & -\mathbf{D} \end{bmatrix},
 \qquad
 \mathbf{K} \begin{bmatrix} \mathbf{V} \\ \mathbf{w} \end{bmatrix}
 = \begin{bmatrix} \mathbf{I}_{\text{inj}} \\ \mathbf{0} \end{bmatrix}
 ```
 
-Each row of ``\mathbf{A}`` is one `IdealCoupling` — a linear identity
-``\mathbf{a}^{\mathsf T}\mathbf{V} = 0`` that holds *exactly*:
+Each `IdealCoupling` describes a row of ``\mathbf{A}``. With conditioning
+scale ``y_0``, physical current ``i=y_0w``, and winding incidence ``C``,
+``A=y_0C`` and ``D=y_0^2Z``. Thus the port law is ``CV=Zi``.
+The full leakage block can be nonzero and coupled; HELM preserves it in the
+germ, every series solve, and the final residual.
 
-- **closed switch**, per conductor: ``V_{\text{from}} - V_{\text{to}} = 0``
-  (with `switches = :constrain`; the default `:alias` keeps the node-fusion
-  model of `ybus_passive` — both give identical voltages, `:constrain`
-  additionally yields the switch current as a solution unknown);
-- **ideal transformer**, per winding core: ``u_{w1} - r\,u_{w2} = 0`` over the
-  coil voltages, with the ratio (tap included) from
-  `_xfmr_winding_incidence` — the *same* seam the `transformer_yprim`
-  builders use, so the admittance and constraint models cannot drift apart.
-  Covered subtypes: `single_phase`, `wye_delta`, `delta_wye`; unity-ratio
-  zero-leakage units stay node-aliased (an exact identity).
+- Closed switches impose ``V_{\text{from}}-V_{\text{to}}=0`` when
+  `switches=:constrain`; the default `:alias` fuses their nodes.
+- Zero-leakage winding cores impose exact coil-voltage ratios. Small finite
+  leakage is retained, including at the representation threshold.
+- Supported transformer subtypes are `single_phase`, `wye_delta`, `delta_wye`,
+  `single_phase_autotransformer`, `open_delta_regulator`, `center_tap` and
+  `n_winding`, within the upstream API's validated domains.
+- Unity-ratio isolated transformers still use winding equations. They do not
+  fuse neutral references (the upstream `PSK-000002` boundary).
 
 Because the constraint coefficients are real, the same vector is stamped as
 row **and** column, preserving the module-wide reciprocity convention
@@ -57,13 +59,10 @@ row **and** column, preserving the module-wide reciprocity convention
 Constraint rows are scaled by a nominal admittance for conditioning; the
 physical coupling current is `coupling.scale * w`.
 
-!!! note "Promoted transformers keep their shunt branches"
-    `ybus_augmented` drops the whole Yprim of a transformer it promotes to an
-    ideal coupling (or node-aliases at unity ratio), including its finite
-    no-load (magnetising) shunt and its neutral-grounding impedance
-    (`r/x_neutral_*`). HELM stamps that shunt-only part back on top of the
-    augmented matrix, so an ideal Dyn or single-phase unit whose secondary is
-    earthed only through its neutral resistor keeps that earth reference.
+!!! note "Finite shunts are included exactly once"
+    `ybus_augmented` retains magnetising/excitation and supported neutral-ground
+    branches when it promotes a transformer to winding ports. HELM consumes
+    that matrix directly; no downstream shunt reconstruction is needed.
 
 ## The holomorphic embedding
 
@@ -113,8 +112,8 @@ power-series convolutions; phase-to-phase and delta-connected
 loads come out of the same machinery (the load split is shared with
 `ybus_linearized`, so the load model is byte-equivalent to the OPF's).
 Constraint rows have identically zero right-hand side at every order: the
-ideal-element identities hold term-by-term, hence exactly in the summed
-solution.
+linear port equations hold term-by-term. The final physical residual also
+checks the evaluated voltages and port currents.
 
 The series is evaluated at ``s = 1`` by **Padé analytic continuation** (Wynn's
 epsilon algorithm). Convergence is judged *physically*: the returned voltages
@@ -153,7 +152,7 @@ as a guarantee.
 ## Four-wire and n-wire modelling
 
 Nothing is Kron-reduced: every declared `(bus, terminal)` is a node unless it
-is perfectly grounded or fused by an ideal unity coupling. Neutral, PE or any
+is perfectly grounded or aliased by a closed switch or negligible-impedance line. Neutral, PE or any
 further conductor is an ordinary node with its own KCL row, coupled through
 the full ``n \times n`` line impedance matrices. The recursion is generic over
 node indices and terminal pairs, so the solver has no conductor-count
@@ -178,20 +177,16 @@ at the data boundary, not in the solver:
 - **Generators and IBRs raise an `ArgumentError`.** The BMOPF model gives them
   bounds and control profiles, not fixed power-flow injections, so HELM
   refuses them rather than solving a network that silently omits them.
-- **Zero-leakage transformers outside the augmented model raise an
-  `ArgumentError` naming the unit.** `ybus_augmented` has exact constraint
-  rows only for `single_phase`, `wye_delta` and `delta_wye`. A
-  `center_tap` with a zero HV or LV star arm, a zero-impedance
-  `single_phase_autotransformer` or `open_delta_regulator`, or an `n_winding`
-  unit with a singular short-circuit matrix would otherwise fall back to a
-  shunt-only stamp (or be skipped) and act as an open circuit, which surfaces
-  as a misleading "floating nodes" error. The same applies to non-unity ideal
-  two-winding units under `ideal_xfmrs = :stamp`. Leakage at or below
-  `xfmr_z_min_ohm` (default 1e-6 Ω) counts as zero. Just above that threshold
-  the stamped admittance (~1e5 S) can leave a round-off floor of ~1e-6 A in
-  the absolute current mismatch, so near-ideal units may report
-  `HELM_MAX_ORDER` with accurate voltages; from about 1e-4 Ω they converge
-  normally.
+- **Transformer domains are validated upstream.** Nominal coil voltages must
+  be explicit, positive and finite. N-winding units need matching phase counts,
+  supported WYE or three-phase DELTA maps, every finite pairwise impedance,
+  and network shunts for grounding. Unsupported maps and missing terminals
+  raise `ArgumentError`. `ideal_xfmrs=:stamp` rejects any unit requiring a
+  border; use the default `:constrain` for small/singular leakage. The
+  `xfmr_z_min_ohm` threshold selects a representation, not a zero approximation.
+  Above it, a poorly conditioned primitive may still limit current-residual
+  accuracy. Redundant ideal cycles or floating references can make the germ
+  singular even when each individual transformer is supported.
 - **Every node needs a linear path to a reference at the germ.** Islands and
   floating ideal deltas are diagnosed with an error naming the floating
   `(bus, terminal)` nodes. Nodes held only by loads need
@@ -204,6 +199,11 @@ at the data boundary, not in the solver:
   one instead of returning one branch arbitrarily.
 - Time series are not applied; HELM solves the snapshot values in the network
   dictionary.
+
+Tracked follow-ups remain separate: [residual scaling (#64)](https://github.com/frederikgeth/PowerOptLab.jl/issues/64),
+[explicit DER injections (#65)](https://github.com/frederikgeth/PowerOptLab.jl/issues/65),
+[load-only star-point classification (#66)](https://github.com/frederikgeth/PowerOptLab.jl/issues/66),
+and [additional OpenDSS parity decks (#67)](https://github.com/frederikgeth/PowerOptLab.jl/issues/67).
 
 ## Validation
 
@@ -227,9 +227,10 @@ The test suite (`test/helm_tests.jl`) checks, always:
 - an ideal single-phase transformer whose secondary is earthed only through
   its neutral resistor, against a near-ideal stamped unit;
 - an unearthed star point (impedance germ) and a 5-conductor N + PE feeder;
-- zero-leakage `center_tap`, autotransformer, open-delta and n-winding units
-  (and an ideal unit under `ideal_xfmrs = :stamp`) are refused by name rather
-  than reported as floating nodes;
+- ideal and finite center-tap, autotransformer, open-delta and n-winding
+  ports, with finite-primitive comparisons, independent complex-power and
+  voltage-drop checks, partially singular three-winding leakage, and retained
+  domain refusals;
 - the `ybus_linearized` residual oracle
   ``\lVert \mathbf{Y}\mathbf{V} - \mathbf{i}_{\text{comp}}(\mathbf{V})\rVert_\infty \approx 0``
   at every returned solution (two independent code paths).

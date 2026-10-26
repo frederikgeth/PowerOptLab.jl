@@ -34,7 +34,7 @@ include("state_estimation_feeder_fixtures.jl")
     @test any(o->o.field=="tap_min",state_estimator_preflight(limited).omitted)
     ideal=deepcopy(net); t=ideal["transformer"]["single_phase_autotransformer"]["reg"]
     for key in ("r_series_from","r_series_to","x_series_from","x_series_to");t[key]=0.;end
-    @test any(f->f.code==:ideal_transformer,state_estimator_preflight(ideal).findings)
+    @test any(f->f.code==:invalid_transformer,state_estimator_preflight(ideal).findings)
     @test_throws SEUnsupportedNetwork compile_state_estimator(ideal)
     bad=_se_net_center_tap();bad["transformer"]["center_tap"]["ct"]["terminal_map_to"]=["1","n"]
     @test !state_estimator_preflight(bad).supported # exporter would otherwise skip it

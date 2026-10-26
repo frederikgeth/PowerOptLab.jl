@@ -2,7 +2,7 @@
 #
 # HELM — Holomorphic Embedding Load-flow Method — for unbalanced multiconductor
 # (4-wire and beyond) distribution power flow, on the augmented nodal admittance
-# matrix (`ybus_augmented`: ideal switches / ideal transformers as constraint
+# matrix (`ybus_augmented`: switches and transformer winding ports as bordered
 # rows). Nothing is Kron-reduced: every explicit neutral, PE or extra conductor
 # keeps its own node, and the recursion below is generic over node indices, so
 # the solver itself has no conductor-count assumption.
@@ -48,8 +48,8 @@
 # and the power m^{γ/2} both have incremental recursions (the latter J. C. P.
 # Miller's formula), so the order-n RHS needs only coefficients 0..n−1.
 # Constraint rows have zero RHS at every order above the germ — the
-# ideal-element identities hold term-by-term and therefore exactly in the
-# summed solution.
+# linear port equations hold term-by-term. The final physical residual also
+# checks the evaluated voltages and port currents.
 #
 # The series is evaluated at s = 1 by Padé analytic continuation (Wynn epsilon,
 # powerflow/pade.jl). Finite-order Padé spread, physical mismatch, and
@@ -60,18 +60,12 @@
 # as a voltage-collapse loading multiplier (and it is only a load multiplier
 # under `:load_scaling`).
 #
-# Scope: lines, shunts, capacitors, every transformer subtype the passive Ybus
-# stamps, ideal switches/transformers as constraint rows, and loads of every
-# BMOPF model (constant power / current / impedance, ZIP, exponential) in WYE,
-# DELTA and SINGLE_PHASE connections. Zero-leakage transformers of the subtypes
-# `ybus_augmented` cannot promote (center_tap, autotransformer, open-delta,
-# n-winding) raise an `ArgumentError` naming the unit instead of silently acting
-# as open circuits. Generators and IBRs have no fixed
-# power-flow law in the data model (their set-points are OPF variables or
-# control-law outputs) and raise an `ArgumentError` rather than being silently
-# dropped. Ideal transformers keep their no-load (magnetising) shunt and
-# neutral-grounding branch: those are restored on top of `ybus_augmented`,
-# which drops them together with the singular series stamp.
+# Scope: lines, shunts, capacitors, all transformer subtypes supported by
+# ybus_augmented, ideal switches, and every BMOPF load law in WYE, DELTA and
+# SINGLE_PHASE connections. The upstream matrix owns finite shunts and the
+# full (possibly coupled) leakage block, including small nonzero impedances.
+# Unsupported transformer domains raise upstream ArgumentErrors. Generators
+# and IBRs require control laws and are explicitly refused below.
 
 # The BMOPFTools compatibility imports used here are isolated in
 # `src/upstream.jl`; see the contributing guide for their upstream replacement.
@@ -236,49 +230,6 @@ function _helm_unsupported_devices(net::Dict{String,Any})
     out
 end
 
-# Zero-leakage transformers that the augmented matrix cannot represent. Only
-# `single_phase`, `wye_delta` and `delta_wye` have an ideal-coupling constraint
-# form in `ybus_augmented` (and only under `ideal_xfmrs = :constrain`); every
-# other zero-leakage unit falls back to a shunt-only Yprim — an open circuit —
-# or, for a singular n-winding leakage matrix, is skipped entirely. Leakage at
-# or below the `xfmr_z_min_ohm` threshold counts as zero, matching
-# `_xfmr_is_ideal`. Returns one "subtype/id (reason)" entry per unit.
-function _helm_unmodelled_ideal_xfmrs(net::Dict{String,Any}, config,
-                                      ideal_xfmrs::Symbol)
-    out = String[]
-    xfmrs = get(net, "transformer", Dict())
-    xfmrs isa AbstractDict || return out
-    zmin = _ybus_xfmr_z_min(_domain_thresholds(config))
-    arm(x, side) = max(abs(Float64(get(x, "r_series_$side", 0.0))),
-                       abs(Float64(get(x, "x_series_$side", 0.0))))
-    for subtype in sort!(collect(String.(keys(xfmrs))))
-        sub = xfmrs[subtype]
-        sub isa AbstractDict || continue
-        for xid in sort!(collect(String.(keys(sub))))
-            x = sub[xid]
-            reason = if subtype == "center_tap"
-                (arm(x, "from") <= zmin || arm(x, "to") <= zmin) ?
-                    "zero HV or LV star-arm leakage" : nothing
-            elseif subtype in ("single_phase_autotransformer", "open_delta_regulator")
-                _xfmr_is_ideal(x, zmin) ? "zero series impedance" : nothing
-            elseif subtype == "n_winding"
-                ZB = _nw_zb_matrix(x)
-                (!isempty(ZB) && minimum(svdvals(ZB)) <= zmin) ?
-                    "singular short-circuit impedance matrix: a winding pair has zero leakage" :
-                    nothing
-            elseif subtype in ("single_phase", "wye_delta", "delta_wye")
-                (ideal_xfmrs === :stamp && _xfmr_is_ideal(x, zmin) &&
-                 !isapprox(_xfmr_turns_ratio(x), 1.0; atol=1e-9)) ?
-                    "zero leakage with ideal_xfmrs = :stamp; use :constrain" : nothing
-            else
-                nothing
-            end
-            reason === nothing || push!(out, "$subtype/$xid ($reason)")
-        end
-    end
-    out
-end
-
 # ── boundary (fixed nodes / source rows) ─────────────────────────────────────
 
 function _helm_fix!(fixed::Dict{Int,ComplexF64}, aug::AugYbusResult,
@@ -385,47 +336,6 @@ function _helm_source_rows(net::Dict{String,Any}, aug::AugYbusResult)
         end
     end
     rows
-end
-
-# ── restored shunt branches of ideal transformers ───────────────────────────
-
-# `ybus_augmented` drops the whole Yprim of a zero-leakage two-winding
-# transformer it promotes to a constraint row (non-unity ratio) or node alias
-# (unity ratio) — including its magnetising shunt and its neutral-grounding
-# impedance, which are finite and physically present. Re-stamp exactly that
-# shunt-only part: the transformer's own Yprim with the series leakage zeroed.
-function _helm_ideal_xfmr_shunts(net::Dict{String,Any}, aug::AugYbusResult,
-                                 config, ideal_xfmrs::Symbol)
-    n = length(aug.nodes)
-    I = Int[]; J = Int[]; V = ComplexF64[]
-    xfmrs = get(net, "transformer", Dict())
-    xfmrs isa AbstractDict || return spzeros(ComplexF64, n, n)
-    zmin = _ybus_xfmr_z_min(_domain_thresholds(config))
-    for subtype in ("single_phase", "wye_delta", "delta_wye")
-        sub = get(xfmrs, subtype, Dict())
-        sub isa AbstractDict || continue
-        for xid in sort!(collect(String.(keys(sub))))
-            x = sub[xid]
-            _xfmr_is_ideal(x, zmin) || continue
-            unity = isapprox(_xfmr_turns_ratio(x), 1.0; atol=1e-9)
-            # Non-unity ideal units under `:stamp` already carry the shunt-only
-            # block from `ybus_passive`; restoring it again would double it.
-            (unity || ideal_xfmrs === :constrain) || continue
-            xs = copy(x)
-            for f in ("r_series_from", "x_series_from", "r_series_to", "x_series_to")
-                xs[f] = 0.0
-            end
-            nodes, Y = with_logger(NullLogger()) do
-                transformer_yprim(xs, subtype)
-            end
-            gi = [get(aug.index, nd, 0) for nd in nodes]
-            for a in eachindex(gi), b in eachindex(gi)
-                (gi[a] == 0 || gi[b] == 0 || iszero(Y[a, b])) && continue
-                push!(I, gi[a]); push!(J, gi[b]); push!(V, Y[a, b])
-            end
-        end
-    end
-    sparse(I, J, V, n, n)
 end
 
 # ── singular-system diagnosis ────────────────────────────────────────────────
@@ -618,11 +528,11 @@ Keywords:
 Supported loads: constant power, constant current, constant impedance, ZIP
 and exponential models in WYE, DELTA and SINGLE_PHASE connections. Networks
 with generators or IBRs raise an `ArgumentError`: they have no fixed
-power-flow law in the data model and are not silently dropped. So do
-zero-leakage `center_tap`, `single_phase_autotransformer`,
-`open_delta_regulator` and `n_winding` units (and, under `ideal_xfmrs =
-:stamp`, non-unity ideal two-winding units): the augmented matrix has no exact
-form for them, and the fallback stamp would be an open circuit.
+power-flow law in the data model and are not silently dropped. Transformer
+support and validation follow `ybus_augmented`: small or singular leakage is
+retained in bordered winding ports, finite shunts are included exactly once,
+and `ideal_xfmrs = :stamp` rejects units that require a border. Floating
+references and redundant ideal cycles may still make the germ singular.
 """
 function helm_series(net::Dict{String,Any}; config=_DEFAULT_CONFIG,
                      switches::Symbol=:alias, ideal_xfmrs::Symbol=:constrain,
@@ -642,15 +552,6 @@ function helm_series(net::Dict{String,Any}; config=_DEFAULT_CONFIG,
         "outputs in the BMOPF model. Remove them (or model fixed injections as " *
         "negative loads) to solve the remaining network with HELM."))
 
-    unmodelled = _helm_unmodelled_ideal_xfmrs(net, config, ideal_xfmrs)
-    isempty(unmodelled) || throw(ArgumentError(
-        "HELM cannot represent zero-leakage transformer(s) " *
-        join(unmodelled, ", ") * ": an ideal coupling has no admittance form, " *
-        "and ybus_augmented has exact constraint rows only for single_phase, " *
-        "wye_delta and delta_wye units, so these would act as open circuits. " *
-        "Give each a finite leakage impedance above xfmr_z_min_ohm = " *
-        "$(_ybus_xfmr_z_min(_domain_thresholds(config))) Ω."))
-
     aug = ybus_augmented(net; config, switches, ideal_xfmrs)
     n = length(aug.nodes)
     m = length(aug.couplings)
@@ -664,8 +565,7 @@ function helm_series(net::Dict{String,Any}; config=_DEFAULT_CONFIG,
     (isempty(fixed) && isempty(srows)) && throw(ArgumentError(
         "HELM needs at least one voltage source (no voltage reference found)"))
 
-    # ── base matrix: augmented Ybus + restored transformer shunts + source rows
-    Yxs = _helm_ideal_xfmr_shunts(net, aug, config, ideal_xfmrs)
+    # ── base matrix: complete augmented Ybus + source rows
     ntot = n + m + r
     y0 = m > 0 ? aug.couplings[1].scale :
          _helm_median_scale(abs.(Vector(diag(aug.K)))[1:n])
@@ -678,7 +578,6 @@ function helm_series(net::Dict{String,Any}; config=_DEFAULT_CONFIG,
         end
     end
     Kbase = blockdiag(aug.K, spzeros(ComplexF64, r, r)) +
-            blockdiag(Yxs, spzeros(ComplexF64, m + r, m + r)) +
             sparse(Is, Js, Vs, ntot, ntot)
 
     Fidx = sort!(collect(keys(fixed)))
@@ -806,8 +705,8 @@ function helm_series(net::Dict{String,Any}; config=_DEFAULT_CONFIG,
     end
 
     # ── physical convergence check: nonlinear current mismatch at s = 1 ──────
-    # Node rows: (Y + restored shunts)·V + coupling and source columns − load
-    # injection; constraint rows: a·V − (E for source rows). Dirichlet-fixed
+    # Node rows: Y·V + coupling and source columns − load injection;
+    # port rows: A·V − D·w; source rows: a·V − E. Dirichlet-fixed
     # nodes are the slack — excluded (their mismatch is the source injection).
     Kz = Kbase * z
     mis = Vector{ComplexF64}(Kz[1:n])

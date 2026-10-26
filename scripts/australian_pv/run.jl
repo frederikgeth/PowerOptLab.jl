@@ -191,9 +191,10 @@ end
 
 # Status quo (C3): each customer keeps a single-phase 6 kVA PV inverter on its
 # original phase with native BMOPFTools AS/NZS 4777.2 droops (phase-to-neutral
-# sensing). BMOPFTools' solve_pf strips IBR s_max and thereby zeroes S_MAX-based
-# droop bases (dev/notes/ibr_review_resolution.md, A10), so this uses the OPF
-# builder with bus voltage bounds removed and maximum PV export: P is the
+# sensing). Use the OPF builder with bus voltage bounds removed and a maximum
+# PV export objective: Volt-watt caps P but PF feasibility alone does not select
+# dispatch. The former solve_pf rating-base bug was fixed in BMOPFTools #448.
+# With this objective, P is the
 # tighter of availability and the Volt-watt cap, Q follows Volt-var.
 function single_phase_network(base, availability, source_pu; curves=AUS_A)
     net=study_network(base, availability, source_pu)

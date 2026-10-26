@@ -24,7 +24,7 @@ TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 PiecewiseLinearOpt = "0f51c51e-adfa-5141-8a04-d40246b8977c"
 
 [sources]
-BMOPFTools = {rev = "b25c84df364a6646324dd144d60ce52a13d0c557", url = "https://github.com/frederikgeth/BMOPFTools.jl"}
+BMOPFTools = {rev = "9faedbfe8898ec4377c33b5d7be41aba93abfac7", url = "https://github.com/frederikgeth/BMOPFTools.jl"}
 
 [extensions]
 PowerOptLabPiecewiseLinearOptExt = "PiecewiseLinearOpt"

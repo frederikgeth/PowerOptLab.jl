@@ -532,3 +532,8 @@ guess, not uniqueness or global reachability.
 
 The [operability API](../api/operability.md) lists snapshot checks, continuation,
 fold refinement, finite stress-study adapters and their result types.
+
+Transformer support is limited to complete finite-admittance primitives accepted
+by the pinned BMOPFTools public API. Ideal, near-zero and singular leakage that
+requires augmented current states returns `:not_applicable` in the scope audit,
+snapshot checker and continuation entry points. HELM supports a broader domain.

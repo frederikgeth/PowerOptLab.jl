@@ -348,6 +348,23 @@ function _operability_preflight(net::Dict{String,Any})
         cfg in ("WYE", "SINGLE_PHASE", "DELTA") || push!(reasons,
             "load $(repr(String(id))) uses unsupported configuration $(repr(cfg))")
     end
+    # This checker and its continuations have voltage states only. Delegate
+    # leakage referral, taps and singular-mode classification to the public
+    # primitive API; HELM's augmented-current support does not extend this seam.
+    for (kind, group) in sort!(collect(get(net, "transformer", Dict())); by=first),
+        (id, transformer) in sort!(collect(group); by=first)
+        try
+            nodes, Y = kind == "n_winding" ? BMOPFTools.nwinding_yprim(transformer) :
+                BMOPFTools.transformer_yprim(transformer, kind)
+            if isempty(nodes) || size(Y) != (length(nodes), length(nodes)) || !all(isfinite, Y)
+                push!(reasons, "transformer/$kind/$id has no complete finite-admittance primitive")
+            end
+        catch err
+            err isa ArgumentError || rethrow()
+            push!(reasons, "transformer/$kind/$id is outside the finite-admittance scope: " *
+                sprint(showerror, err))
+        end
+    end
     reasons
 end
 

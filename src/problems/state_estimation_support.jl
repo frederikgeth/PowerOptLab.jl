@@ -122,8 +122,8 @@ function _se_preflight(net, measurements; neutral="n", zero_injection=String[], 
                     length(phases) + (ref === nothing ? 0 : 1) == length(w.terminal_map) ||
                         issue(:error, :unsupported_terminal_name, label, "The n-winding exporter recognises only a/b/c/n conductor names.")
                     push!(phase_counts, length(phases))
-                    w.connection == "DELTA" && length(phases) < 2 &&
-                        issue(:error, :terminal_count, label, "A delta winding requires at least two phases.")
+                    w.connection == "DELTA" && length(phases) != 3 &&
+                        issue(:error, :terminal_count, label, "A delta winding requires exactly three phases.")
                     w.connection == "DELTA" && ref !== nothing &&
                         issue(:error, :invalid_connection, label, "A delta winding has no neutral; remove n from its terminal_map.")
                     w.connection == "DELTA" && !(w.delta_roll in (-1,1)) &&
@@ -160,13 +160,11 @@ function _se_preflight(net, measurements; neutral="n", zero_injection=String[], 
                 elseif !(taps isa Real)
                     issue(:error, :invalid_tap, label, "Supply one scalar fixed tap ratio.")
                 end
-                z = [Float64(get(x, key, 0.0)) for key in ("r_series_from", "x_series_from", "r_series_to", "x_series_to")]
-                all(isfinite, z) || issue(:error, :invalid_impedance, label, "Leakage impedances must be finite.")
-                if maximum(abs, z) <= 1e-6 || (kind == "center_tap" && (iszero(complex(z[1],z[2])) || iszero(complex(z[3],z[4]))))
-                    issue(:error, :ideal_transformer, label, "Ideal/degenerate coupling is outside the voltage-only support contract. Supply physical finite leakage or use an augmented-state formulation; do not invent a small impedance.")
-                    continue
-                end
+
             end
+            # The public primitive owns effective leakage/tap/rank policy. A
+            # refusal is reported as :invalid_transformer below; raw ohms do
+            # not establish whether this voltage-only model can represent it.
             (primitive, warnings) = _se_capture_primitive() do
                 kind == "n_winding" ? BMOPFTools.nwinding_yprim(x) : transformer_yprim(x, kind)
             end

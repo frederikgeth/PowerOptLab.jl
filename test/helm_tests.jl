@@ -7,9 +7,10 @@
 # parity, and numerical divergence diagnostics around known collapse points.
 #
 # HELM itself now lives in PowerOptLab (bespoke algorithm); it consumes the
-# BMOPFTools engine through its public exports only.
+# BMOPFTools engine through its public matrix API and isolated load adapter.
 
 using BMOPFTools
+import JSON3
 
 @testset "helm: pade layer" begin
 
@@ -429,6 +430,38 @@ end
         @test _lin_residual3(net, hr) < 1e-6
     end
 
+    @testset "two-terminal DELTA is one coil, with validated geometry" begin
+        for model in ("constant_power", "constant_current", "constant_impedance", "zip", "exponential")
+            load = Dict{String,Any}("bus"=>"ld", "terminal_map"=>["a","b"],
+                "configuration"=>"DELTA", "model"=>model,
+                "p_nom"=>[5000.], "q_nom"=>[750.], "v_nom"=>[230sqrt(3)],
+                "alpha_z"=>[0.2], "alpha_i"=>[0.3], "alpha_p"=>[0.5],
+                "beta_z"=>[0.3], "beta_i"=>[0.2], "beta_p"=>[0.5],
+                "gamma_p"=>[1.2], "gamma_q"=>[2.1])
+            net = _three_phase_net(;load)
+            h = helm_series(net)
+            @test h.converged
+            @test _lin_residual3(net,h) < 1e-7
+            net["load"]["d1"]["configuration"]="SINGLE_PHASE"
+            companion=helm_series(net)
+            @test companion.converged
+            for nd in keys(h.V)
+                @test h.V[nd] ≈ companion.V[nd] atol=1e-9
+            end
+            hjson = solve_pf_helm(net)
+            net["load"]["d1"]["configuration"]="DELTA"
+            @test solve_pf_helm(net)["bus"] == hjson["bus"]
+        end
+        for tm in (["a","a"], ["a","n"], ["a","missing"], ["a","b","c","d"])
+            net = _three_phase_net(load=Dict{String,Any}("bus"=>"ld",
+                "terminal_map"=>tm, "configuration"=>"DELTA", "p_nom"=>[5000.], "q_nom"=>[0.]))
+            @test_throws ArgumentError helm_series(net)
+        end
+        net = _three_phase_net(load=Dict{String,Any}("bus"=>"ld",
+            "terminal_map"=>["a","b"], "configuration"=>"DELTA", "p_nom"=>[2000.,3000.], "q_nom"=>[0.]))
+        @test_throws ArgumentError helm_series(net)
+    end
+
     @testset "balanced DELTA load: oracle residual + symmetry" begin
         P = 4000.0
         net = _three_phase_net(load=Dict{String,Any}(
@@ -748,8 +781,8 @@ end
     @testset "ideal transformer keeps its neutral earthing and magnetising shunt" begin
         # The LV side's only earth reference is the transformer's internal
         # neutral-grounding resistor (plus a second earth electrode at the load
-        # so earth current actually flows). ybus_augmented drops the whole
-        # Yprim of a promoted ideal unit; HELM restores the shunt-only part.
+        # so earth current actually flows). Upstream retains these finite shunts;
+        # HELM must neither omit them nor stamp them a second time.
         function xnet(rs)
             Dict{String,Any}(
                 "bus" => Dict{String,Any}(
@@ -783,6 +816,11 @@ end
         # through the load electrode.
         @test abs(hi.V[("lv", "n")] / 2.0 + 0.5 * hi.V[("ld", "n")]) < 1e-9
         @test abs(hi.V[("ld", "n")]) > 0.1
+        # Independent source-current balance: the reflected LV current and
+        # the LV-referred excitation current appear exactly once.
+        ilv = (hi.V[("lv", "a")] - hi.V[("ld", "a")]) / (0.2 + 0.1im)
+        @test hi.source_injection[("hv", "a")] ≈
+              (ilv + (1e-4 - 3e-4im) * 230) * (230 / 6350) atol=1e-9
         # Same unit with a tiny (stamped, non-ideal) leakage: same answer.
         hs = helm_series(xnet(1e-5))
         @test isempty(hs.couplings)
@@ -839,13 +877,9 @@ end
     end
 end
 
-# ── zero-leakage transformers the augmented matrix cannot represent ─────────
+# ── transformer ports from the public augmented matrix ─────────────────────
 
-@testset "helm: zero-leakage transformers outside the augmented model" begin
-    # Each builder takes the leakage (Ω) of every series term. At zero, upstream
-    # falls back to a shunt-only stamp (or skips an n-winding unit), so without
-    # the guard the downstream nodes are reported as "floating"; HELM must name
-    # the transformer instead. Small finite leakage must still solve.
+@testset "helm: upstream transformer ports" begin
     _bus(t; g=String[]) = Dict{String,Any}("terminal_names" => t,
                                            "perfectly_grounded_terminals" => g)
     _vs(E, tm) = Dict{String,Any}("bus" => "hv", "terminal_map" => tm,
@@ -901,17 +935,67 @@ end
     )
     for (id, build) in sort!(collect(cases); by=first)
         @testset "$id" begin
-            for z in (0.0, 1e-9)                       # zero and sub-threshold
-                err = try helm_series(build(z)); nothing catch e; e end
-                @test err isa ArgumentError
-                @test occursin(id, sprint(showerror, err))
-                @test !occursin("floating", sprint(showerror, err))
+            ideal = helm_series(build(0.0))
+            @test ideal.converged
+            @test !isempty(ideal.couplings)
+            # Ideal units conserve the complex power drawn by their loads.
+            pin = sum(ideal.V[nd] * conj(i) for (nd, i) in ideal.source_injection)
+            @test pin ≈ sum(sum(l["p_nom"]) for l in values(build(0.0)["load"])) atol=1e-6
+            for z in (1e-9, 0.01), embedding in (:load_scaling, :impedance_germ)
+                net = build(z)
+                # Force a border for the finite companion. The ordinary finite
+                # primitive supplies a separate representation for comparison.
+                cfg = Dict("domain_rules" => Dict("xfmr_z_min_ohm" => 1.0))
+                hr = helm_series(net; config=cfg, embedding)
+                @test hr.converged
+                @test !isempty(hr.couplings)
+                if z == 0.01
+                    stamped = helm_series(net; config=Dict("domain_rules" =>
+                        Dict("xfmr_z_min_ohm" => 0.0)), ideal_xfmrs=:stamp, embedding)
+                    @test stamped.converged
+                    for nd in keys(hr.V)
+                        @test hr.V[nd] ≈ stamped.V[nd] atol=1e-6
+                    end
+                    for nd in keys(hr.source_injection)
+                        @test hr.source_injection[nd] ≈ stamped.source_injection[nd] atol=1e-6
+                    end
+                else
+                    for nd in keys(hr.V)
+                        @test hr.V[nd] ≈ ideal.V[nd] atol=1e-5
+                    end
+                end
+                @test_throws ArgumentError helm_series(net; config=cfg, ideal_xfmrs=:stamp)
             end
-            # Just above xfmr_z_min_ohm the unit is stamped, not refused. (Its
-            # ~1e5 S admittance can leave a round-off floor of ~1e-6 A in the
-            # absolute current mismatch, so only refusal is asserted there.)
-            @test helm_series(build(1e-5)) isa HelmResult
-            @test helm_series(build(0.01)).status == :converged
+        end
+    end
+
+    @testset "ordinary port threshold and unity-ratio isolation" begin
+        for z in (0.0, 1e-6, nextfloat(1e-6))
+            net = _two_bus(Dict{String,Any}("lv"=>_bus(["a","n"];g=["n"])),
+                Dict{String,Any}("single_phase"=>Dict{String,Any}("t1"=>Dict{String,Any}(
+                    "bus_from"=>"hv", "terminal_map_from"=>["a","n"],
+                    "bus_to"=>"lv", "terminal_map_to"=>["a","n"],
+                    "v_nom_from"=>230., "v_nom_to"=>230.,
+                    "r_series_from"=>z, "x_series_from"=>0.))),
+                _vs(230.,["a"]),_ld("lv",["a","n"],"WYE",[2000.]))
+            # Force the finite case to remain bordered for a well-conditioned
+            # physical solve; separately check the exact default cutoff.
+            aug = ybus_augmented(net)
+            @test length(aug.couplings) == (z <= 1e-6 ? 1 : 0)
+            h = helm_series(net;config=Dict("domain_rules"=>Dict("xfmr_z_min_ohm"=>2e-6)))
+            @test h.converged
+            u = h.V[("lv","a")]
+            @test 230-u ≈ z*conj(2000/u) atol=1e-10
+            @test only(h.couplings).scale*only(h.w) ≈ conj(2000/u) atol=1e-9
+            # A unity ratio constrains coil voltages, not neutral potentials.
+            net["bus"]["lv"]["perfectly_grounded_terminals"] = String[]
+            net["transformer"]["single_phase"]["t1"]["r_neutral_to"] = 2.
+            net["shunt"] = Dict("g"=>Dict{String,Any}("bus"=>"lv", "terminal_map"=>["a"],
+                "G_1_1"=>0.01, "B_1_1"=>0.))
+            h = helm_series(net;config=Dict("domain_rules"=>Dict("xfmr_z_min_ohm"=>2e-6)))
+            @test h.converged
+            @test abs(h.V[("lv","n")]) > 1.
+            @test h.V[("lv","n")]/2 + 0.01h.V[("lv","a")] ≈ 0 atol=1e-9
         end
     end
 
@@ -924,10 +1008,76 @@ end
             _vs(6350.0, ["a"]), _ld("lv", ["a", "n"], "WYE", [10e3]))
         err = try helm_series(net; ideal_xfmrs=:stamp); nothing catch e; e end
         @test err isa ArgumentError
-        @test occursin("single_phase/t1", sprint(showerror, err))
-        @test occursin(":constrain", sprint(showerror, err))
         @test helm_series(net).status == :converged    # exact constraint row
     end
+    @testset "coupled center-tap voltage drops and opposite secondary orientation" begin
+        net = cases["center_tap/t1"](0.01)
+        net["load"] = Dict{String,Any}("legs" => Dict{String,Any}(
+            "bus"=>"lv", "terminal_map"=>["1", "2", "n"], "configuration"=>"WYE",
+            "p_nom"=>[1000., 2000.], "q_nom"=>[200., -100.]))
+        cfg = Dict("domain_rules"=>Dict("xfmr_z_min_ohm"=>1.))
+        h = helm_series(net; config=cfg)
+        @test h.converged
+        u1 = h.V[("lv","1")]; u2 = -h.V[("lv","2")]
+        i1 = conj((1000+200im)/u1); i2 = conj((2000-100im)/u2)
+        zh = (0.01+0.01im)/(6350/120)^2; zl = 0.01+0.01im
+        @test 120-u1 ≈ zh*(i1+i2)+zl*i1 atol=1e-9
+        @test 120-u2 ≈ zh*(i1+i2)+zl*i2 atol=1e-9
+        @test [c.scale*h.w[j] for (j,c) in enumerate(h.couplings)] ≈ [i1,i2] atol=1e-8
+    end
+
+    @testset "partially singular three-winding leakage" begin
+        for z12 in (0.0, 1e-9)
+            net = cases["n_winding/nw1"](0.0)
+            x = net["transformer"]["n_winding"]["nw1"]
+            push!(x["windings"], Dict{String,Any}("bus"=>"ter", "terminal_map"=>["a","b","c","n"],
+                "v_nom"=>115., "configuration"=>"WYE", "r_winding"=>0.))
+            x["x_sc"] = Dict("1_2"=>z12,"1_3"=>0.02,"2_3"=>0.02+z12)
+            net["bus"]["ter"] = _bus(["a","b","c","n"]; g=["n"])
+            net["load"]["terload"] = Dict{String,Any}("bus"=>"ter",
+                "terminal_map"=>["a","b","c","n"], "configuration"=>"WYE",
+                "p_nom"=>[900.,1200.,1500.], "q_nom"=>[100.,200.,300.])
+            h = helm_series(net)
+            @test h.converged
+            @test length(h.couplings) == 6
+            # ZB is diagonal in this fixture: the first port is ideal/small,
+            # while the second retains a finite winding-1-referred drop.
+            for (k,t) in enumerate(["a","b","c"])
+                u = h.V[("ter",t)]; n = 6350/115
+                i = conj(complex(300k+600,100k)/u)
+                @test h.V[("hv",t)]-n*u ≈ 0.02im*i/n atol=1e-8
+                ulv = h.V[("lv",t)]; nlv = 6350/230
+                @test h.V[("hv",t)]-nlv*ulv ≈ z12*im*conj(5000/ulv)/nlv atol=1e-8
+            end
+            serialized = solve_pf_helm(net)
+            @test serialized["termination_status"] == "HELM_CONVERGED"
+            @test serialized["bus"]["ter"]["a"]["vr"] ≈ real(h.V[("ter","a")])
+            # The public result preserves port kind, orientation and physical
+            # current scale through JSON, including the finite leakage ports.
+            ports = JSON3.read(JSON3.write(serialized["coupling"]), Dict{String,Any})
+            for (j,c) in enumerate(h.couplings)
+                port = ports[c.id][string(c.conductor)]
+                @test port["kind"] == string(c.kind)
+                @test complex(port["ir"],port["ii"]) ≈ c.scale*h.w[j] atol=1e-10
+            end
+        end
+    end
+
+    @testset "upstream domain refusals and floating references survive" begin
+        net = cases["n_winding/nw1"](0.0)
+        x = net["transformer"]["n_winding"]["nw1"]
+        for mutate! in (x->(x["windings"][2]["configuration"]="ZIGZAG"),
+                        x->(x["windings"][2]["terminal_map"][1]="missing"),
+                        x->delete!(x["x_sc"],"1_2"))
+            bad = deepcopy(net); mutate!(bad["transformer"]["n_winding"]["nw1"])
+            @test_throws ArgumentError helm_series(bad)
+        end
+        # No load or shunt can fix the secondary's common-mode reference.
+        net["bus"]["lv"]["perfectly_grounded_terminals"] = String[]
+        empty!(net["load"])
+        @test_throws ErrorException helm_series(net)
+    end
+
 end
 
 # ── OpenDSS parity + 3-way oracle (gated) ────────────────────────────────────
