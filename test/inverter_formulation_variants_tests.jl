@@ -133,6 +133,27 @@ end
         @test result.operation.reactive_lower_margin_var >= -.03
         @test result.operation.reactive_upper_margin_var >= -.03
     end
+    # Hard-coded operating points, independent of the coefficient formula:
+    # tan(acos(.9)) = 0.4843221, tan(acos(.95)) = 0.3286841.
+    for (law, p, q) in ((FixedPowerFactor(.9, :absorbing), 1000., -484.3221),
+                        (FixedPowerFactor(.9, :injecting), 1000., 484.3221),
+                        (FixedPowerFactor(.95, :absorbing), 2000., -657.3682),
+                        (FixedPowerFactor(.95, :injecting), -1000., -328.6841),
+                        (FixedPowerFactor(1., :injecting), 1500., 0.))
+        result = solve_constrained_inverter(_constraint_grid(230.),
+            ConstrainedInverter(_constraint_plant(), InverterOperatingConstraints(reactive=law);
+                dc_source=DCSourceBounds(p_min=-2000.)),
+            _CONSTRAINT_REQUEST; objective=:feasibility, p_set=p,
+            solver_options=("tol"=>1e-9,))
+        @test result.solve.publishable
+        @test result.plant.q_poc ≈ q atol=.03
+    end
+    @test FixedPowerFactor(.9, :absorbing).pf == .9
+    @test FixedPowerFactor(.9, :injecting).pf == -.9
+    for (pf, direction) in ((.9, :leading), (-.9, :absorbing), (0., :injecting),
+                            (1.1, :absorbing), (NaN, :injecting))
+        @test_throws ArgumentError FixedPowerFactor(pf, direction)
+    end
     impossible = solve_constrained_inverter(_constraint_grid(),
         ConstrainedInverter(_constraint_plant(),
             InverterOperatingConstraints(reactive=FixedPowerFactor(1e-8))),

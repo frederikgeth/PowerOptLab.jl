@@ -160,7 +160,7 @@ function ibr_pq_tutorial()
         choices = (
             (:strict_q,VoltVarWattConstraints(_repro_policy(constant_q=true)),
                 sqrt(capacity^2-2640^2),2640.),
-            (:fixed_pf,InverterOperatingConstraints(reactive=FixedPowerFactor(-.95)),
+            (:fixed_pf,InverterOperatingConstraints(reactive=FixedPowerFactor(.95,:injecting)),
                 .95capacity,sqrt(1-.95^2)*capacity),
             (:free_q,InverterOperatingConstraints(),capacity,0.))
         for (mode,policy,expected_p_W,expected_q_var) in choices

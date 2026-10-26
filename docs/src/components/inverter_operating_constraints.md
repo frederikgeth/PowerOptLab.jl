@@ -25,11 +25,13 @@ operating = InverterOperatingConstraints(p_min=0., p_max=4000.,
 device = ConstrainedInverter(plant, operating;
     current_allocation=:balanced_grid, dc_source=DCSourceBounds(p_min=0.))
 
-# Alternatives: FixedReactivePower(600.) or FixedPowerFactor(.95).
-operating = InverterOperatingConstraints(reactive=FixedPowerFactor(.95))
+# Alternatives: FixedReactivePower(600.) or FixedPowerFactor(.95, :absorbing).
+operating = InverterOperatingConstraints(reactive=FixedPowerFactor(.95, :absorbing))
 ```
 
-For positive P, positive PF absorbs Q and negative PF supplies Q. The relation
+Name the direction explicitly: `:absorbing` takes reactive power while
+exporting, `:injecting` supplies it. The single-argument form stores the
+signed value: for positive P, positive PF absorbs Q and negative PF supplies Q. The relation
 is ``|pf|Q+sign(pf)\sqrt{1-pf^2}P=0`` for either direction of active power.
 It imposes neither a direction nor a balanced-current assumption; PF at zero
 complex power is undefined. Zero PF is rejected. Optional P/Q bounds compose

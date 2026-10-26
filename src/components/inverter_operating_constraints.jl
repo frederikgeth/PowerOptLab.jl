@@ -27,10 +27,17 @@ struct FixedReactivePower <: _AbstractReactivePowerRelation
 end
 
 """
+    FixedPowerFactor(pf, direction)
     FixedPowerFactor(pf)
 
-Signed fixed power-factor relation on total POC powers. For positive P,
-positive pf absorbs Q and negative pf supplies Q. Requires `0 < abs(pf) <= 1`.
+Fixed power-factor relation on total POC powers. Prefer the explicit form:
+`direction` is `:absorbing` (Q < 0 while exporting P, under-excited) or
+`:injecting` (Q > 0 while exporting P, over-excited), with `0 < pf <= 1`.
+Standards and datasheets attach different signs and leading/lagging labels to
+the same operating point, so the direction is named rather than signed.
+
+The single-argument form is the stored signed value: for positive P, positive
+pf absorbs Q and negative pf supplies Q. Requires `0 < abs(pf) <= 1`.
 The relation uses bounded sine/cosine coefficients, including near zero PF,
 instead of an overflowing tangent. It also applies to negative P with the same
 algebraic ratio; it does not impose a generation or charging direction. At
@@ -44,6 +51,15 @@ struct FixedPowerFactor <: _AbstractReactivePowerRelation
             "fixed power factor must be finite with 0 < abs(pf) <= 1"))
         new(value)
     end
+end
+
+function FixedPowerFactor(pf::Real, direction::Symbol)
+    direction in (:absorbing, :injecting) || throw(ArgumentError(
+        "power-factor direction must be :absorbing or :injecting"))
+    value = Float64(pf)
+    isfinite(value) && 0 < value <= 1 || throw(ArgumentError(
+        "with an explicit direction, pf must satisfy 0 < pf <= 1"))
+    return FixedPowerFactor(direction === :absorbing ? value : -value)
 end
 
 """
