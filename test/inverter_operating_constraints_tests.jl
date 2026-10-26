@@ -36,7 +36,7 @@ const _CONSTRAINT_REQUEST = InverterControlRequest(
     @test sensing_terminal(policy, device.device) === nothing
     @test_throws ArgumentError VoltVarWattConstraints(policy.positive; sensing_reference=:bad)
     @test_throws ArgumentError validate_device(ConstrainedInverter(
-        _constraint_plant(topology=:FOUR_LEG, neutral="n"), policy))
+        _constraint_plant(topology=:SINGLE_PHASE, phase_terminals=["a"], neutral="n"), policy))
     @test_throws ArgumentError validate_device(ConstrainedInverter(
         _constraint_plant(grid_forming=true), policy))
     @test_throws ArgumentError validate_device(ConstrainedInverter(

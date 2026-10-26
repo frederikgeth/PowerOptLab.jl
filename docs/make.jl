@@ -96,6 +96,7 @@ makedocs(
             "Closed-loop evidence diagnostics" => "ibr/closed_loop_evidence.md",
             "Phase-aware control modelling guide" => "components/inverter_controls.md",
             "Constraint-based inverter operation" => "components/inverter_operating_constraints.md",
+            "Simulation/optimisation reproductions" => "ibr/formulation_reproductions.md",
             "Advanced inverter model guide" => "components/advanced_inverter.md",
             "Inverter model-selection guide" => "tutorials/advanced_inverter_modelling.md",
             "Topology under unbalance" => "tutorials/ibr_topology_under_unbalance.md",

@@ -65,9 +65,22 @@ oracle. A solver returning `LOCALLY_SOLVED` is necessary, but not sufficient.
 | Controller formulation units | raw-SI fail-fast check and SI-valued numeric evaluators | unsupported raw-SI stamping cannot silently yield a scientific result; controller parameters and extracted results retain SI semantics |
 | Balanced AC topology reduction | one four-leg model versus three independent 1φ models | aggregate `P,Q` and per-phase current/internal voltage agree; neutral and zero sequence vanish |
 | Volt-watt external oracle | OpenDSS `PVSystem`/`InvControl` | balanced slope/saturation and a partial-irradiance rated-basis point agree in POC voltage and active power |
+| Strict-Q feasible-set operation | independent `sqrt(min(Smax,3VImax)^2-Q^2)` oracle | current and S saturation curtail P while Q remains fixed; proportional forward backoff deliberately differs |
+| Operating modes and source direction | signed PF equation, fixed Q, external free-Q objective and charging/loss budget | PF signs work for import/export/zero; explicit PV DC bound forbids charging but permits AC loss import |
+| Operating-row scaling | contradictory dispatch at 6 kVA, 1 MVA and 100 MVA bases | incompatible fixed P / DC bounds cannot publish a false feasible result |
+| Current allocation | independent Fortescue transform and LCL arm phasors | `:free` permits I2; converter/grid balance differ with midpoint current; three-leg zero sum remains physical |
+| Four-leg / split capability optimisation | neutral-current, split-bank RMS and midpoint charge closed forms | tight neutral, individual bank and midpoint limits bind at predicted currents |
+| Independent feeder reproduction | separately solved forward/maximum-export equilibria at 215, 230, 259 V | matched unsaturated laws agree within 0.2 W/var, 1 mA and 1 mV |
+| Proportional limiter reproduction | current-ray maximum scale plus closed-form S/current oracle | optimiser scale agrees within `1e-7`; forward conservative backoff within 0.4 W and 0.2 var |
+| Sequence-priority reproduction | fixed reserved sequence, ray fill and independent disk intersection | both priorities preserve the reserved sequence and agree with exact local allocation within 1 µA; fixed measurement only |
 
 These tests live in `test/advanced_inverter_tests.jl` and
-`test/inverter_control_tests.jl`. They intentionally include balanced cases,
+`test/inverter_control_tests.jl`, with operating constraints in
+`test/inverter_operating_constraints_tests.jl`,
+`test/inverter_formulation_variants_tests.jl` and
+`test/inverter_formulation_reproduction_tests.jl`. The executable
+[reproduction cases](formulation_reproductions.md) state each equivalence
+condition and tolerance. They intentionally include balanced cases,
 pure sequence excitations, strong mixed unbalance, and binding
 limits. A balanced feeder alone cannot validate a four-wire topology because it
 removes the very neutral and ripple mechanisms being tested.

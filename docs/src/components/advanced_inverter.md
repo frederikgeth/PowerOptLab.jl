@@ -37,6 +37,11 @@ units via `opf_bases(ctx)` — the DC-side quantities (`v_dc`, `c_dc`, `In_max`)
 and the AC↔DC coupling scales through the POC bus's `v_base`/`i_base`/`s_base`.
 Results are returned in SI in both modes.
 
+Use [constraint-based inverter operation](inverter_operating_constraints.md)
+for free/fixed Q, fixed PF, voltage-law constraints and explicit source/current
+allocation in an OPF. Its comparison table separates these formulations from
+the forward controller and lists supported versus planned features.
+
 ## The five phases
 
 | Phase | Feature | Model |

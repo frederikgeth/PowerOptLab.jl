@@ -749,7 +749,9 @@ zero filter) it is a plain grid-following converter at the POC.
     removes them. The durable fix belongs in this layer — normalizing the
     constraint by the rating, `(p/s_pu)² + (q/s_pu)² ≤ 1`, restores a bound of
     exactly 1 and was measured to hold the rating to <0.1 VA at every base.
-    Until that lands: keep `s_base` within a couple of decades of the device
+    `ConstrainedInverter` enables rating-normalised capability rows; direct plant
+    and forward-controller stamping retain the legacy default. For those paths,
+    keep `s_base` within a couple of decades of the device
     ratings, or pass `bound_relax_factor=0` (as `solve_inverse_carson` already
     does, for the same underlying reason). Independent of the square-root
     smoothing above.
@@ -1703,8 +1705,16 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
         # sampled switching-polytope instead).
         if !inv.grid_forming
             vmag2 = JuMP.@expression(m, vrint[k]^2 + viint[k]^2)
-            inv.v_int_max !== nothing && JuMP.@constraint(m, vmag2 <= (inv.v_int_max / vb)^2)
-            inv.v_int_min !== nothing && JuMP.@constraint(m, vmag2 >= (inv.v_int_min / vb)^2)
+            if inv.v_int_max !== nothing
+                rating = (inv.v_int_max/vb)^2
+                scale = normalize_capability_constraints ? rating : 1.0
+                JuMP.@constraint(m, vmag2/scale <= rating/scale)
+            end
+            if inv.v_int_min !== nothing
+                rating = (inv.v_int_min/vb)^2
+                scale = normalize_capability_constraints && rating > 0 ? rating : 1.0
+                JuMP.@constraint(m, vmag2/scale >= rating/scale)
+            end
             if !is_3ph_topo && inv.modulation_max !== nothing && inv.v_dc !== nothing
                 cap = inv.modulation_max * inv.v_dc / _SQRT3
                 JuMP.@constraint(m, vmag2 <= (cap / vb)^2)
@@ -1856,7 +1866,8 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
             end
             n2ratio = _split_midpoint_2w_ratio(inv)
             if inv.dv_mid_max !== nothing
-                JuMP.@constraint(m, nre^2 + nim^2 <= inv.dv_mid_max^2)
+                scale = normalize_capability_constraints ? inv.dv_mid_max^2 : 1.0
+                JuMP.@constraint(m, (nre^2 + nim^2)/scale <= inv.dv_mid_max^2/scale)
             end
             natural_mean = v_dc * (cu - cl) / (2csum)
             if inv.q_mid_balance_max === nothing
@@ -1870,7 +1881,8 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
                 JuMP.set_start_value(nmean, natural_mean)
                 JuMP.@constraint(m, nmean == natural_mean + 2qbal/csum)
                 if inv.v_mid_mean_max !== nothing
-                    JuMP.@constraint(m, nmean^2 <= inv.v_mid_mean_max^2)
+                    scale = normalize_capability_constraints ? inv.v_mid_mean_max^2 : 1.0
+                    JuMP.@constraint(m, nmean^2/scale <= inv.v_mid_mean_max^2/scale)
                 end
             end
         end
@@ -1910,9 +1922,11 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
         elseif inv.In_max !== nothing
             # Standalone neutral rating. Optional for :SPLIT_DC, where i_cap_max
             # can bound |I_n| instead (via the capacitor thermal budget below).
-            JuMP.@constraint(m, sumcr^2 + sumci^2 +
-                                (inv.pwm_ac_neutral_reserve/ib)^2 <=
-                                (inv.In_max / ib)^2)
+            rating = (inv.In_max/ib)^2
+            scale = normalize_capability_constraints ? rating : 1.0
+            JuMP.@constraint(m, (sumcr^2 + sumci^2 +
+                                (inv.pwm_ac_neutral_reserve/ib)^2)/scale <=
+                                rating/scale)
         end
         # Neutral current (SI), for reporting: I_n = −Σ I_phase.
         in_re = JuMP.@expression(m, -sum(cri[k] for k in 1:3) * ib)
@@ -1968,16 +1982,19 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
             icap_thermal_lower_sq = JuMP.@expression(m,
                 w2*i2w_sq + wn*al2*neutral_sq + wsw*switching_sq)
             if inv.i_cap_max !== nothing
-                JuMP.@constraint(m, icap_thermal_upper_sq <= inv.i_cap_max^2)
+                scale = normalize_capability_constraints ? inv.i_cap_max^2 : 1.0
+                JuMP.@constraint(m, icap_thermal_upper_sq/scale <= inv.i_cap_max^2/scale)
                 if au2 != al2
-                    JuMP.@constraint(m, icap_thermal_lower_sq <= inv.i_cap_max^2)
+                    JuMP.@constraint(m, icap_thermal_lower_sq/scale <= inv.i_cap_max^2/scale)
                 end
             end
             if inv.i_cap_upper_max !== nothing
-                JuMP.@constraint(m, icap_thermal_upper_sq <= inv.i_cap_upper_max^2)
+                scale = normalize_capability_constraints ? inv.i_cap_upper_max^2 : 1.0
+                JuMP.@constraint(m, icap_thermal_upper_sq/scale <= inv.i_cap_upper_max^2/scale)
             end
             if inv.i_cap_lower_max !== nothing
-                JuMP.@constraint(m, icap_thermal_lower_sq <= inv.i_cap_lower_max^2)
+                scale = normalize_capability_constraints ? inv.i_cap_lower_max^2 : 1.0
+                JuMP.@constraint(m, icap_thermal_lower_sq/scale <= inv.i_cap_lower_max^2/scale)
             end
             P_cap_loss = JuMP.@expression(m,
                 (inv.esr_dc_upper*icap_thermal_upper_sq +

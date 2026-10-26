@@ -1,5 +1,10 @@
 # Inverter-based resources
 
+See the [simulation/optimisation comparison table](../components/inverter_operating_constraints.md)
+for formulations of each conceptual constraint, supported operating modes and
+remaining extensions. The [executable reproduction cases](formulation_reproductions.md)
+test when the two pathways select the same operation.
+
 PowerOptLab provides two inverter models:
 
 - a **POC injection model** for studies specified by active/reactive-power or current commands; and
