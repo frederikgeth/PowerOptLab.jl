@@ -1928,6 +1928,9 @@ struct _ControlledHandles
     control::_ControlHandles
 end
 
+inverter_handles(::ControlledDevice{<:AdvancedInverter}, handles::_ControlledHandles) =
+    handles.plant
+
 function stamp_device!(ctx, controlled::ControlledDevice{<:AdvancedInverter};
                        request::InverterControlRequest)
     inverter = inverter_spec(controlled)

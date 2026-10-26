@@ -163,6 +163,12 @@ stamp each device in the shared model; a sum-of-export objective represents
 coordinated fleet optimisation. The existing `ControlledInverterFleetSpec`
 continues to describe the forward-controller formulation.
 
+For a complete multi-device example, see [full network OPF and independent
+validation](../ibr/full_network_opf.md). It includes three inverters, floating
+neutrals, mutual line coupling, native and hook voltage-bound formulations,
+binding network limits and a separate four-wire power-flow replay. The public
+`solve_status(model)` overload supplies the extraction status for composed models.
+
 ## Read the diagnostics
 
 `result.plant` reports physical SI quantities. `result.operation` reports:

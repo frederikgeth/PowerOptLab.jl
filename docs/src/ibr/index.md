@@ -12,6 +12,10 @@ for formulations of each conceptual constraint, supported operating modes and
 remaining extensions. The [executable reproduction cases](formulation_reproductions.md)
 test when the two pathways select the same operation.
 
+[Full network OPF and independent validation](full_network_opf.md) demonstrates
+three jointly optimised inverters on a seven-bus four-wire feeder, with matched
+forward-control comparisons and an independent radial replay.
+
 PowerOptLab provides two inverter models:
 
 - a **POC injection model** for studies specified by active/reactive-power or current commands; and

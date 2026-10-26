@@ -98,6 +98,7 @@ makedocs(
             "Closed-loop evidence diagnostics" => "ibr/closed_loop_evidence.md",
             "Phase-aware control modelling guide" => "components/inverter_controls.md",
             "Constraint-based inverter operation" => "components/inverter_operating_constraints.md",
+            "Full network OPF and independent validation" => "ibr/full_network_opf.md",
             "Simulation/optimisation reproductions" => "ibr/formulation_reproductions.md",
             "Advanced inverter model guide" => "components/advanced_inverter.md",
             "Inverter model-selection guide" => "tutorials/advanced_inverter_modelling.md",

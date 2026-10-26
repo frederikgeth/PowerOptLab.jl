@@ -77,6 +77,7 @@ oracle. A solver returning `LOCALLY_SOLVED` is necessary, but not sufficient.
 | Unbalanced feeder/LCL reproduction | separate equilibria, feeder KVL and capacitor admittance | matching Q/current locations agrees within 0.2 W/var, 1 mA and 1 mV; unmatched locations deliberately differ |
 | Strict-service versus allocation infeasibility | apparent-power lower bound and zero-sequence KCL contradiction | impossible Q and incompatible balanced-grid allocation cannot publish; releasing grid balance yields the analytically predicted grid I0 |
 | Sequential-to-equilibrium workbook | guarded affine-branch enumeration, independent fixed-point formula and sequential energy replay | cycling numerical iteration can coexist with a unique equilibrium; ceilings change dispatch freedom; state and hysteresis examples preserve declared history |
+| Full multi-inverter network OPF | seven-bus four-wire feeder, three matched controls, native/hook voltage limits and independent SI radial replay | control agreement within 0.2 W / 0.1 var / 1 mV; coordinated 244 V and 12 A limits bind; KCL, KVL, power balance, base invariance and failed-output masking pass |
 
 These tests live in `test/advanced_inverter_tests.jl` and
 `test/inverter_control_tests.jl`, with operating constraints in
