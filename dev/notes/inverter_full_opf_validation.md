@@ -48,6 +48,16 @@ devices. Preserve existing result/status and raw-plant-handle behaviour.
 - Matched controls agree to maximum 0.1167 W, 0.0362 var, 0.000177 V,
   0.000166 A converter current and 0.000409 A branch current. Source budgets
   bind in the constrained comparison; hardware saturation is inactive there.
+  With saturation inactive both models reduce to the same equations, so this is
+  a code-path consistency check; the residual is the forward limiter's smooth
+  common scale (1-s ≈ 2.6e-5), which multiplies the whole command.
+- Follow-up review: the encoded Q equality holds by construction, so the solved
+  Q is now also audited against the volt-var law evaluated without package
+  controller code at the replayed voltages. Average and positive-sequence
+  sensing match the exact law (forward: exactly the factor s). Worst-phase
+  `:net` deviates by about 11.3 var from the exact law, inside the analytic
+  smoothing bound S(eps_c/2 + |dq/dV| eps_v) = 32.5 var, and matches an
+  independent re-derivation of the smoothing to about 1e-11 var.
 - Coordinated dispatch binds both 244 V phase-to-neutral and 12 A feeder-head
   limits, as well as converter S bounds. Unmanaged controls at the same high
   availability reach about 247.94 V / 13.29 A. The coordinated objective improves
@@ -56,7 +66,7 @@ devices. Preserve existing result/status and raw-plant-handle behaviour.
   agree, as do 10 kVA and 1 MVA coordinate bases. An independent SI radial sweep
   reproduces all five solutions' complex voltages/currents near floating-point
   precision. KCL, KVL and source/load/inverter/line power balance are checked.
-- Added 294 checks for public status integration and the full case, including
+- (Snapshot at commit 59e1334.) Added 294 checks for public status integration and the full case, including
   physical losses, capability margins, failed-solve masking, replay convergence,
   coordinate invariance and native/hook formulation agreement. The broader
   affected suite passed 3,974 checks with one optional OpenDSS skip.

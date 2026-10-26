@@ -19,7 +19,28 @@ The remote was refreshed during review; no newer main commits were present.
 No unresolved blocking findings remain in the reviewed formulation, public
 composition/extraction API, failure masking, examples or documentation.
 
-## Verification
+## Follow-up review (PR #73)
+
+1. The network test checked only the encoded smooth Q equality. It now audits
+   Q against exact and smoothed volt-var laws evaluated independently at the
+   replayed voltages, with an analytic bound on the worst-phase `:net`
+   smoothing deviation (about 11 var observed, 32.5 var bound). The guide
+   reports the deviation and reframes forward/matched agreement as a code-path
+   consistency check.
+2. The capability oracles now include `s_base=1e8` and an apparent-power-bound
+   case. Disabling normalisation fails the existing oracles already at 1e6.
+3. `FixedPowerFactor(pf, :absorbing | :injecting)` names the direction; tests
+   add hard-coded operating points independent of the coefficient formula.
+4. Docstrings and the component guide state that a missing watt curve keeps
+   the controller-matched ceiling in `VoltVarWattConstraints` but imposes none
+   in `InverterOperatingConstraints`, and that the `:available` ceiling uses the
+   solved, operating-point-dependent losses.
+
+Open question: forward-controller stamping still uses unnormalised squared
+capability rows (`normalize_capability_constraints=false`). Normalising leaves
+the feasible set unchanged but alters solver iterates and golden values.
+
+## Verification (snapshot at commit a122229)
 
 - Before these review fixes, the complete test harness passed on Julia 1.10.12
   and 1.12.6: 18,192 tests each, plus 10 and 11 Aqua package-quality checks
