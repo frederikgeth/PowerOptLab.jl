@@ -1,5 +1,10 @@
 # [Phase-aware control modeling guide](@id inverter-control-api)
 
+For a feasible-set formulation with a volt-var equality, volt-watt ceiling and
+hard physical current limits, see [constraint-based inverter operation](inverter_operating_constraints.md).
+That formulation selects dispatch through an explicit objective. This page
+describes the forward controller with its existing current-limiter policies.
+
 PowerOptLab implements the first manufacturer-facing law from the
 [phase-aware control design](@ref ibr-phase-aware-control-laws) as a closed-form
 controller around the existing [`AdvancedInverter`](@ref) plant. The

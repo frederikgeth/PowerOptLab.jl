@@ -1513,7 +1513,8 @@ end
 
 # Stamp the inverter's internal-node model into `ctx`. Returns `_InvHandles`.
 function _stamp_inverter!(ctx, inv::AdvancedInverter;
-        retain_lossless_magnitude_epigraph::Bool=true)
+        retain_lossless_magnitude_epigraph::Bool=true,
+        normalize_capability_constraints::Bool=false)
     m = _opf_model(ctx)
     vr, vi = _opf_voltage_maps(ctx)
     bus = inv.bus; phases = inv.phase_terminals; neutral = inv.neutral
@@ -1664,13 +1665,17 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
         isq = JuMP.@expression(m, cri[k]^2 + cii[k]^2)
         isq_sum += isq
         if inv.i_max !== nothing
-            JuMP.@constraint(m, isq + (inv.pwm_ac_converter_reserve[k]/ib)^2 <=
-                                (inv.i_max / ib)^2)
+            squared_rating = (inv.i_max/ib)^2
+            scale = normalize_capability_constraints ? squared_rating : 1.0
+            JuMP.@constraint(m, (isq + (inv.pwm_ac_converter_reserve[k]/ib)^2)/scale <=
+                                squared_rating/scale)
         end
         if inv.i_grid_max !== nothing
-            JuMP.@constraint(m, gri[k]^2 + gii[k]^2 +
-                                (inv.pwm_ac_grid_reserve[k]/ib)^2 <=
-                                (inv.i_grid_max / ib)^2)
+            squared_rating = (inv.i_grid_max/ib)^2
+            scale = normalize_capability_constraints ? squared_rating : 1.0
+            JuMP.@constraint(m, (gri[k]^2 + gii[k]^2 +
+                                (inv.pwm_ac_grid_reserve[k]/ib)^2)/scale <=
+                                squared_rating/scale)
         end
         if inv.a_loss != 0.0
             imag_terms = _push_magnitude(
@@ -1826,7 +1831,10 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
         kr, ki = reim(_dc_ripple_factor(inv))
         JuMP.@constraint(m, dre == -(kr*S2re_SI - ki*S2im_SI) / v_dc)
         JuMP.@constraint(m, dim == -(ki*S2re_SI + kr*S2im_SI) / v_dc)
-        inv.dv2_max !== nothing && JuMP.@constraint(m, dre^2 + dim^2 <= inv.dv2_max^2)
+        if inv.dv2_max !== nothing
+            scale = normalize_capability_constraints ? inv.dv2_max^2 : 1.0
+            JuMP.@constraint(m, (dre^2 + dim^2)/scale <= inv.dv2_max^2/scale)
+        end
 
         # Split-link midpoint fundamental ripple plus mean displacement. The
         # bridge return current J = ΣI divides between the half-banks and the
@@ -1922,7 +1930,9 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
                 sim = JuMP.@variable(m, base_name = "i$(name)_im_$(inv.id)")
                 JuMP.@constraint(m, sre == comp[1])
                 JuMP.@constraint(m, sim == comp[2])
-                JuMP.@constraint(m, sre^2 + sim^2 <= (limit / ib)^2)
+                squared_rating = (limit/ib)^2
+                scale = normalize_capability_constraints ? squared_rating : 1.0
+                JuMP.@constraint(m, (sre^2 + sim^2)/scale <= squared_rating/scale)
             end
         end
 
@@ -1976,7 +1986,8 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
             icap_sq = JuMP.@expression(m, i2w_sq + switching_sq)
             icap_thermal_sq = JuMP.@expression(m, w2*i2w_sq + wsw*switching_sq)
             if inv.i_cap_max !== nothing
-                JuMP.@constraint(m, icap_thermal_sq <= inv.i_cap_max^2)
+                scale = normalize_capability_constraints ? inv.i_cap_max^2 : 1.0
+                JuMP.@constraint(m, icap_thermal_sq/scale <= inv.i_cap_max^2/scale)
             end
             P_cap_loss = JuMP.@expression(m, inv.esr_dc*icap_thermal_sq / sb)
         end
@@ -1987,7 +1998,9 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
     qv = JuMP.@variable(m, base_name = "qconv_$(inv.id)")
     JuMP.@constraint(m, pv == Pconv)
     JuMP.@constraint(m, qv == Qconv)
-    JuMP.@constraint(m, pv^2 + qv^2 <= (inv.s_max / sb)^2)
+    squared_rating = (inv.s_max/sb)^2
+    scale = normalize_capability_constraints ? squared_rating : 1.0
+    JuMP.@constraint(m, (pv^2 + qv^2)/scale <= squared_rating/scale)
 
     # Converter loss and DC-link power (model units): each coeff scaled to per-unit.
     # The Σ|I| term is nonlinear and is omitted entirely when a_loss == 0, which
@@ -2021,13 +2034,15 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
 end
 
 function stamp_device!(ctx, inverter::AdvancedInverter;
-        retain_lossless_magnitude_epigraph::Bool=true, kwargs...)
+        retain_lossless_magnitude_epigraph::Bool=true,
+        normalize_capability_constraints::Bool=false, kwargs...)
     inverter.pwm_strategy == :NONE || throw(ArgumentError(
         "pwm_strategy=:$(inverter.pwm_strategy) uses the conservative outer " *
         "reserve iteration provided by solve_advanced_inverter; direct stamping " *
         "requires pwm_strategy=:NONE and explicitly calibrated DC/AC reserves"))
     return _stamp_inverter!(ctx, inverter;
-        retain_lossless_magnitude_epigraph=retain_lossless_magnitude_epigraph)
+        retain_lossless_magnitude_epigraph=retain_lossless_magnitude_epigraph,
+        normalize_capability_constraints=normalize_capability_constraints)
 end
 
 link_device!(model, inverter::AdvancedInverter, handles, sb, grid::TimeGrid) = nothing
