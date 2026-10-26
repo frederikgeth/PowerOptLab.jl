@@ -166,8 +166,18 @@ function _termination_summary(statuses)
     "MIXED[" * join(unique_statuses, ",") * "]"
 end
 
-"""Return the normalized [`SolveStatus`](@ref) for a structured solve result."""
+"""
+    solve_status(result)
+    solve_status(model::JuMP.Model)
+
+Return the normalized [`SolveStatus`](@ref) for a structured result or a composed
+JuMP model. Use the model overload after solving an external OPF and pass its
+status to [`extract_device`](@ref); unsuccessful or unstarted solves are not
+publishable. A publishable local optimum does not establish global optimality.
+"""
 function solve_status end
+
+solve_status(model::JuMP.Model) = SolveStatus(_solve_outcome(model))
 
 """Return result-specific numerical diagnostics as a named tuple."""
 solve_diagnostics(::AbstractSolveResult) = NamedTuple()

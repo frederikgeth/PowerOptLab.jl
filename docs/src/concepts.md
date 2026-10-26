@@ -88,6 +88,10 @@ termination and primal feasibility statuses. Check
 flag applies the solver-convergence criteria used by the package; physical
 residuals and operating limits still need to be checked for the study.
 
+When composing an external OPF, `solve_status(model)` applies the same contract
+to the solved JuMP model. Pass that status to `extract_device(device, handles,
+status)` so an unsuccessful solve cannot be presented as a valid dispatch.
+
 See [Contributing](contributing.md) for adding models and methods, documenting
 their validation and proposing established work for inclusion in BMOPFTools.
 

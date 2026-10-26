@@ -88,6 +88,8 @@ makedocs(
         ],
         "Inverter models and controls" => [
             "Inverter study overview" => "ibr/index.md",
+            "Controller-to-equilibrium workbook" => "tutorials/controller_program_to_equilibrium.md",
+            "From current limits to operating rules" => "tutorials/inverter_constraints_and_control.md",
             "Scientific foundations" => "ibr/foundations.md",
             "Phase-aware control laws" => "ibr/phase_aware_control_laws.md",
             "Control-study methodology" => "ibr/control_study_methodology.md",
@@ -95,6 +97,9 @@ makedocs(
             "Fleet and hardware studies" => "ibr/network_control_studies.md",
             "Closed-loop evidence diagnostics" => "ibr/closed_loop_evidence.md",
             "Phase-aware control modelling guide" => "components/inverter_controls.md",
+            "Constraint-based inverter operation" => "components/inverter_operating_constraints.md",
+            "Full network OPF and independent validation" => "ibr/full_network_opf.md",
+            "Simulation/optimisation reproductions" => "ibr/formulation_reproductions.md",
             "Advanced inverter model guide" => "components/advanced_inverter.md",
             "Inverter model-selection guide" => "tutorials/advanced_inverter_modelling.md",
             "Topology under unbalance" => "tutorials/ibr_topology_under_unbalance.md",
@@ -103,6 +108,7 @@ makedocs(
             "Identifying smart-inverter controls" => "tutorials/learning_smart_inverter_controls.md",
             "Advanced inverter API" => "api/advanced_inverter.md",
             "Phase-aware control API" => "api/inverter_controls.md",
+            "Inverter operating-constraint API" => "api/inverter_operating_constraints.md",
             "Bilevel PV and tap control" => [
                 "Bilevel control guide" => "problems/bilevel.md",
                 "Bilevel control API" => "api/bilevel.md",

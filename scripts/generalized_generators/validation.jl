@@ -98,7 +98,7 @@ function generator_validation_study()
         build_ms=(time_ns()-started)/1e6
         model=BMOPFTools.opf_model(built.context)
         started=time_ns();JuMP.optimize!(model);solve_ms=(time_ns()-started)/1e6
-        status=SolveStatus(PowerOptLab._solve_outcome(model))
+        status=solve_status(model)
         @assert status.publishable "$(case.label): $status"
         g=extract_device(case.device,built.handles["g"],status)
         verr=case.v===nothing ? NaN : maximum(abs.(g.terminal_voltage-case.v))

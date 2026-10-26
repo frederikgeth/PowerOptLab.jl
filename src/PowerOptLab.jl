@@ -123,6 +123,7 @@ include("components/generator_data.jl")
 include("components/advanced_inverter.jl")
 include("components/inverter_controls.jl")
 include("formulations/control_intent.jl")
+include("components/inverter_operating_constraints.jl")
 include("formulations/relations.jl")
 include("formulations/hull_bounds.jl")
 include("formulations/cases.jl")
@@ -291,6 +292,10 @@ export NoUnbalanceControl, NegativeSequenceAdmittanceDroop, CommonScaleLimiter,
 export SequenceController, InverterControlMeasurement, InverterControlRequest
 export InverterControlRatings, InverterControlResult, ConverterTerminalResult
 export ControlledDevice, ControlledInverterResult
+export VoltVarWattConstraints, ConstrainedInverter, ConstrainedInverterResult,
+    solve_constrained_inverter
+export InverterOperatingConstraints, FreeReactivePower, FixedReactivePower,
+    FixedPowerFactor, DCSourceBounds
 export evaluate_exact, evaluate_smooth, dc_power_offset, sensing_terminal, stamp_smooth_control!, solve_controlled_inverter
 export inverter_spec, inverter_handles
 export ControlledInverterFleetSpec, ControlledInverterFleetResult

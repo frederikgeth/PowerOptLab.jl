@@ -1,5 +1,21 @@
 # Inverter-based resources
 
+If you are accustomed to sequential simulation programs, begin with the
+[controller-to-equilibrium workbook](../tutorials/controller_program_to_equilibrium.md).
+Its prediction/run/explanation exercises distinguish operating equations,
+numerical iterations, optimisation choices and physical memory.
+
+Start with [From current limits to operating rules](../tutorials/inverter_constraints_and_control.md)
+for a graphical explanation of hardware constraints, operating relationships and
+objectives. See the [simulation/optimisation comparison table](../components/inverter_operating_constraints.md)
+for formulations of each conceptual constraint, supported operating modes and
+remaining extensions. The [executable reproduction cases](formulation_reproductions.md)
+test when the two pathways select the same operation.
+
+[Full network OPF and independent validation](full_network_opf.md) demonstrates
+three jointly optimised inverters on a seven-bus four-wire feeder, with matched
+forward-control comparisons and an independent radial replay.
+
 PowerOptLab provides two inverter models:
 
 - a **POC injection model** for studies specified by active/reactive-power or current commands; and

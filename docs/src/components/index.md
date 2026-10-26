@@ -8,6 +8,7 @@ storage and EV energy balances link successive operating points.
 | Family | Study question | Start here |
 |:--|:--|:--|
 | Generators | Study the effects of source impedance, voltage regulation, winding connection and grounding. | [Generator overview](generators.md) |
+| Inverters | Compare forward current control with voltage-dependent operating constraints. | [Constraint-based inverter operation](inverter_operating_constraints.md) |
 | Battery storage | Compare power-energy scheduling with a model of cell voltage and current limits. | [Battery storage overview](battery_storage.md) |
 | Electric vehicles | Calculate charging schedules subject to outlet ratings, availability and departure energy. | [Electric vehicle overview](../ev/index.md) |
 
