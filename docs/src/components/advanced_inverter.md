@@ -111,6 +111,12 @@ Internal voltage/modulation, ripple, losses, KCL and KVL remain active.
 explicit allocation for a study without phase-current ratings. Free allocation
 can leave large or undetermined internal currents despite bounded PCC power.
 
+With a `SequenceController`, PCC mode also selects a net-terminal P/Q
+saturation policy. Filter compensation is unscaled, P/Q priority is retained
+through supplied arm-current limits, and the commanded arm is selected only
+after terminal allocation. See [terminal controller allocation](inverter_controls.md).
+This is an idealised staged controller, not a claim about certified firmware.
+
 Results report `power_limit_location`, `apparent_power_rating_VA` and
 `apparent_power_margin_VA`. Named plant/operation results and `solve_diagnostics`
 also expose `converter_apparent_power_margin_VA` and

@@ -293,3 +293,14 @@ legacy converter circle with net PCC capability through reduced and LCL filters,
 including the PCC shunt. They check SI/per-unit behavior, optional current
 limits, exact/smooth controller replay at both current targets, and location-aware
 operating, fleet and hardware-sizing reports.
+
+### PCC terminal saturation regressions
+
+PCC mode is checked against independently calculated terminal-circle and
+arm-current intersections for watt, var and proportional priority. Both current
+targets must deliver the same net P/Q with filter compensation; positive and
+negative PCC shunts are included once. Exact replay includes the physical plant
+measurements and compares the quadratic segment law with its smooth interior
+approximation. A plant-backed network replay refreshes those measurements at
+each iteration. These checks validate the idealised policy, not manufacturer
+firmware or AS/NZS 4777.2 certification.

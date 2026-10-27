@@ -24,7 +24,7 @@ reference generation (Rodríguez et al.), and the negative-sequence
 virtual-admittance family (Savaghebi et al.); see [IBR
 references](@ref ibr-references). The contribution under study is a
 fixed-structure algebraic controller that can be stamped into a sparse network
-NLP while retaining a separate exact firmware oracle.
+NLP while retaining a separate exact reference evaluator.
 
 !!! warning "Assumptions and validity"
     All phasors are fundamental-frequency RMS quantities at one equilibrium.

@@ -386,7 +386,10 @@ function controlled_inverter_rows(result::ControlledInverterFleetResult)
             power_scale=control.power_scale,
             current_scale=control.current_scale,
             negative_sequence_scale=iszero(control.i2_request) ? 1.0 :
-                abs(control.i2)/abs(control.i2_request),
+                abs(inverter.power_limit_location === :poc ?
+                    _phasor_sequences(device.grid_phase_current)[3] : control.i2)/abs(control.i2_request),
+            control_power_basis=inverter.power_limit_location === :poc ? :net_poc : :current_target,
+            pq_priority=controlled.controller.limiter.pq_priority,
             power_limit_location=inverter.power_limit_location,
             apparent_power_rating_VA=inverter.s_max,
             apparent_power_margin_VA=plant.apparent_power_margin_VA,

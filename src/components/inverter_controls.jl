@@ -1,6 +1,6 @@
 # Local, phase-aware inverter control laws.
 #
-# The numeric evaluator is the firmware oracle: exact PWL corners, exact
+# The numeric evaluator is an idealised reference law: exact PWL corners, exact
 # min/max phase selection, and an algebraic common-scale limiter. The JuMP
 # evaluator stamps the same fixed computation graph with selectable PWL
 # smoothing (BMOPFTools softplus by default) and shared algebraic selectors.
@@ -310,9 +310,9 @@ Apply a common scalar to positive- and negative-sequence current commands so
 the reconstructed currents at the configured current target respect its
 declared per-leg limit. The physical plant independently retains every
 converter- and grid-side current constraint.
-The positive-sequence `P,Q` request is first allocated within the `s_max`
-command budget. The final plant-aware backoff enforces apparent power at the
-plant's `power_limit_location`, independently of the current target. The exact
+In converter mode the positive-sequence `P,Q` request is first allocated
+within the `s_max` command budget. The final plant-aware backoff enforces
+converter-terminal apparent power independently of the current target. The exact
 evaluator uses hard maxima. The smooth model represents
 capability magnitudes by smooth upper norms with excess at most one quarter
 of the stated SI width. Min/max selectors use that full width. Hard physical
@@ -321,9 +321,13 @@ capability inequalities remain exact. `pq_priority` is `:proportional`,
 By default, smoothing widths are rating-relative fractions, so heterogeneous
 fleets receive the same dimensionless regularization. Supplying
 `current_epsilon` or `power_epsilon` explicitly opts into an absolute SI width
-for that quantity. `priority_headroom_fraction` reserves a small declared fraction of `s_max`
+for that quantity. In converter mode, `priority_headroom_fraction` reserves a
+small declared fraction of `s_max`
 before a watt- or var-priority component reaches the axis of the capability
 circle. It is a control/protection margin, not a square-root regularization.
+In PCC mode the composed controller instead allocates net terminal services
+with the chosen P/Q priority, actual complex capability intersections, and
+unscaled filter compensation; `priority_headroom_fraction` is unused there.
 """
 struct CommonScaleLimiter <: AbstractLimiterPolicy
     current_epsilon::Union{Nothing,Float64}
@@ -435,7 +439,10 @@ Closed-form three-leg controller combining a positive-sequence Volt-var/Watt
 policy, a negative-sequence policy, and an algebraic feasibility limiter.
 `current_target` selects converter-leg or post-filter grid current.
 `power_voltage_floor` is the strictly positive SI voltage floor in the
-regularized `P,Q`-to-`I1` conversion; it is not a magnitude-smoothing epsilon.
+regularized standalone/converter `P,Q`-to-`I1` conversion; it is not a
+magnitude-smoothing epsilon. Composed PCC mode instead requires `|U1|` to be
+at least this floor and uses the unattenuated inverse for terminal delivery
+and filter compensation.
 
 `sensing_reference` declares the conductor the voltage sensors are referred
 to; it is part of the law, not of the power connection. The default `:device`
@@ -454,9 +461,8 @@ policies are not. Neither is the default maximum-phase Volt-watt guard of
 [phase-aware control design](@ref ibr-phase-aware-control-laws).
 
 The controller equalities themselves use only these voltage phasors, but the
-final plant-aware capability backoff in [`stamp_smooth_control!`](@ref)
-additionally reads converter-terminal internal voltage and both filter-arm
-currents. It is a protection surrogate, not part of the voltage-curve law.
+composed allocation in [`stamp_smooth_control!`](@ref) additionally reads
+converter-terminal internal voltage and both filter-arm currents. It is a protection surrogate, not part of the voltage-curve law.
 """
 struct SequenceController{P<:AbstractPositiveSequencePolicy,
                           U<:AbstractUnbalancePolicy,
@@ -635,7 +641,10 @@ extraction. `sequence_power`, `total_power`, and `ripple_power` are command-spac
 diagnostics formed from the POC voltage measurement and commanded current at the
 configured current target. They are not converter-terminal powers when an
 output filter separates those locations. Complex powers use the injection sign
-convention.
+convention. In composed PCC mode, `p_request`/`q_request` are net terminal
+requests before saturation. `power_scale` and the compatibility field
+`current_scale` both measure retained service-P/Q magnitude, excluding filter
+compensation and loss imports; they do not scale the full phase currents.
 """
 struct InverterControlResult
     phase_voltage::NTuple{3,ComplexF64}
@@ -1175,8 +1184,10 @@ end
     evaluate_exact(controller, measurement, request, ratings;
                    dc_power_offset=0)
 
-Evaluate the exact local controller without JuMP. This is the firmware oracle
-for regression tests and exact-versus-smooth residuals. It uses only local RMS
+Evaluate the exact standalone local controller without JuMP. This is an
+idealised reference law, not validated manufacturer firmware. Composed PCC
+control additionally requires plant measurements and uses terminal allocation;
+`evaluate_exact` alone does not include that allocation. It uses only local RMS
 phasors and fixed controller/rating data.
 
 The positive-sequence active-power command never exceeds the AC-available
@@ -1712,19 +1723,15 @@ function _plant_capability_scale!(m, inverter::AdvancedInverter, handles,
         end
     end
 
-    at_poc = inverter.power_limit_location === :poc
+    # PCC mode has its own terminal allocator; this is the legacy converter policy.
     power_offset = (0.0, 0.0)
     power_direction = (0.0, 0.0)
     for k in 1:3
-        vo = at_poc ? (handles.vrpoc[k], handles.vipoc[k]) :
-                      (handles.vrint[k], handles.viint[k])
-        io = at_poc ? grid_offset[k] : converter_offset[k]
+        vo = (handles.vrint[k], handles.viint[k])
+        io = converter_offset[k]
         so = _cmul(vo[1], vo[2], io[1], -io[2])
         sd = _cmul(vo[1], vo[2], direction[k][1], -direction[k][2])
-        # The PCC shunt is an unscaled part of net PCC exchange.
-        qsh = at_poc ? inverter.b_filter_shunt * handles.vb^2 / sb *
-            (vo[1]^2 + vo[2]^2) : 0.0
-        power_offset = (power_offset[1] + so[1], power_offset[2] + so[2] + qsh)
+        power_offset = (power_offset[1] + so[1], power_offset[2] + so[2])
         power_direction = (power_direction[1] + sd[1], power_direction[2] + sd[2])
     end
     power_candidate = _safe_direction_scale_implicit!(
@@ -1771,7 +1778,13 @@ uses local POC phasors referred to the plant's declared neutral (see
 [`SequenceController`](@ref)) and commands the configured converter- or
 grid-side phase currents.
 
-The subsequent plant-aware capability backoff is deliberately wider than
+In PCC mode the composed law interprets curve outputs as net terminal P/Q,
+allocates watt/var/proportional priority against the actual complex power circle
+and optional arm-current/ripple limits, then compensates the filter when
+translating to converter current. It uses the PCC-terminal loss offset
+`p_dc-p_poc`; the standalone evaluator does not perform this plant-aware stage.
+
+In converter mode the subsequent capability backoff is deliberately wider than
 [`evaluate_exact`](@ref): it also reads converter-terminal internal voltage and
 physical POC voltage and both filter-arm currents so that a declared per-leg,
 selected-location apparent-power, or `dv2_max` limit
@@ -1785,6 +1798,9 @@ function stamp_smooth_control!(ctx, controller::SequenceController,
                                handles::_InvHandles)
     inverter.topology == :THREE_LEG || throw(ArgumentError(
         "smooth SequenceController stamping currently supports THREE_LEG only"))
+    if inverter.power_limit_location === :poc
+        return _stamp_pcc_control!(ctx, controller, request, inverter, handles)
+    end
     ratings = InverterControlRatings(inverter, controller.current_target)
     m = _opf_model(ctx)
     sb, vb, ib = handles.sb, handles.vb, handles.ib
@@ -1956,7 +1972,8 @@ function stamp_device!(ctx, controlled::ControlledDevice{<:AdvancedInverter};
     # With four independent current commands, unused magnitude epigraphs add
     # free barrier directions at zero dispatch. Keep the legacy auxiliaries for
     # LCL grid targets, which also prescribe a separate zero-sequence channel.
-    retain_epigraph = controlled.controller.current_target isa GridCurrentTarget &&
+    retain_epigraph = inverter.power_limit_location !== :poc &&
+                      controlled.controller.current_target isa GridCurrentTarget &&
                       _lcl_active(inverter)
     plant = stamp_device!(ctx, inverter;
         retain_lossless_magnitude_epigraph=retain_epigraph)
@@ -2038,7 +2055,7 @@ function _safe_direction_scale_exact(offset, direction, limit)
 end
 
 function _plant_scale_exact(converter_voltage, converter_offset, grid_offset,
-                            direction, inverter::AdvancedInverter; poc_voltage=nothing)
+                            direction, inverter::AdvancedInverter)
     scale = 1.0
     if inverter.i_max !== nothing
         for k in 1:3
@@ -2056,15 +2073,8 @@ function _plant_scale_exact(converter_voltage, converter_offset, grid_offset,
                 grid_offset[k], direction[k], limit))
         end
     end
-    at_poc = inverter.power_limit_location === :poc
-    at_poc && poc_voltage === nothing && throw(ArgumentError(
-        "POC capability replay requires physical POC voltages"))
-    voltage = at_poc ? poc_voltage : converter_voltage
-    offset = at_poc ? grid_offset : converter_offset
-    power_offset = sum(voltage[k]*conj(offset[k]) for k in 1:3)
-    if at_poc
-        power_offset += im*inverter.b_filter_shunt*sum(abs2, voltage)
-    end
+    voltage = converter_voltage
+    power_offset = sum(voltage[k]*conj(converter_offset[k]) for k in 1:3)
     power_direction = sum(voltage[k]*conj(direction[k]) for k in 1:3)
     scale = min(scale, _safe_direction_scale_exact(
         power_offset, power_direction, inverter.s_max))
@@ -2089,7 +2099,6 @@ function _apply_plant_capability_exact(
         inverter::AdvancedInverter,
         target::AbstractCurrentTarget;
         i1_import::ComplexF64=0.0im,
-        poc_voltage=nothing,
         limiter::AbstractLimiterPolicy=CommonScaleLimiter())
     shunt = converter_current .- grid_current
     # The loss import is an unscaled offset at the target, like the stamp.
@@ -2099,7 +2108,7 @@ function _apply_plant_capability_exact(
     grid_offset = target isa ConverterCurrentTarget ? imported .- shunt : imported
     i1_service = result.i1 - i1_import
     plant_scale(offset_c, offset_g, direction) = _plant_scale_exact(
-        converter_voltage, offset_c, offset_g, direction, inverter; poc_voltage)
+        converter_voltage, offset_c, offset_g, direction, inverter)
     if limiter isa SequencePriorityLimiter
         power = limiter.priority === :power
         reserved = power ? _phase_from_sequences(i1_service, 0.0im) :
@@ -2137,6 +2146,13 @@ end
 function _exact_control_at_solution(
         controlled::ControlledDevice{<:AdvancedInverter},
         request::InverterControlRequest, extracted, grid_current)
+    if controlled.device.power_limit_location === :poc
+        return _evaluate_pcc_control_exact(controlled.controller, request, controlled.device,
+            extracted.control.phase_voltage, extracted.plant.poc_phase_voltage,
+            extracted.converter_terminal.phase_voltage,
+            extracted.converter_terminal.phase_current .- grid_current,
+            extracted.plant.p_dc - extracted.plant.p_poc)
+    end
     target = controlled.controller.current_target
     sensed = extracted.control.phase_voltage
     target_current = target isa ConverterCurrentTarget ?
@@ -2152,7 +2168,6 @@ function _exact_control_at_solution(
         exact, extracted.converter_terminal.phase_voltage,
         extracted.converter_terminal.phase_current, grid_current,
         controlled.device, target; i1_import=ComplexF64(i1_import),
-        poc_voltage=extracted.plant.poc_phase_voltage,
         limiter=controlled.controller.limiter)
 end
 
@@ -2182,6 +2197,7 @@ solve_diagnostics(result::ControlledInverterResult) = (
     current_scale=result.control.current_scale,
     power_scale=result.control.power_scale,
     power_limit_location=result.plant.power_limit_location,
+    control_power_basis=result.plant.power_limit_location === :poc ? :net_poc : :current_target,
     apparent_power_rating_VA=result.plant.apparent_power_rating_VA,
     apparent_power_margin_VA=result.plant.apparent_power_margin_VA,
     converter_apparent_power_margin_VA=result.plant.converter_apparent_power_margin_VA,

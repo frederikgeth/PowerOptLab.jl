@@ -118,18 +118,7 @@ end
         @test r.exact_smooth_current_residual < .01
         @test solve_diagnostics(r).power_limit_location === :poc
     end
-    # Exact boundary replay must use physical POC voltage, not converter voltage
-    # or the potentially different controller sensing reference. With a fixed
-    # shunt offset the conservative allocator has an independent scalar oracle.
-    inv = _power_location_plant(power_limit_location=:poc, b_filter_shunt=.01)
-    v = Tuple(ComplexF64[230, 230cis(-2pi/3), 230cis(2pi/3)])
-    vint = 1.3 .* v
-    direction = v ./ 10
-    zero = (0.0im, 0.0im, 0.0im)
-    scale = PowerOptLab._plant_scale_exact(vint, zero, zero, direction, inv; poc_voltage=v)
-    expected = (inv.s_max - inv.b_filter_shunt*sum(abs2, v)) / abs(sum(v .* conj.(direction)))
-    @test scale ≈ expected atol=1e-12
-    @test_throws ArgumentError PowerOptLab._plant_scale_exact(vint, zero, zero, direction, inv)
+
 end
 
 @testset "Inverter power boundary: standalone plant reporting and SI parity" begin
@@ -168,6 +157,10 @@ end
     @test solve_status(study).publishable
     row = only(controlled_inverter_rows(only(study.cases).result))
     @test row.power_limit_location === :poc
+    @test row.control_power_basis === :net_poc
+    @test row.pq_priority === :proportional
+    @test_throws ArgumentError controlled_inverter_fleet_loop_gain(
+        fleet, Dict(), zeros(4,4))
     @test row.converter_apparent_power_VA > inv.s_max + 100.
     @test row.poc_apparent_power_VA <= inv.s_max + .02
     @test row.apparent_power_margin_VA == inv.s_max - row.poc_apparent_power_VA
@@ -247,34 +240,14 @@ end
         @test snet ≈ complex(r.plant.p_poc, r.plant.q_poc) atol=1e-5
         @test imag(snet-sarm) ≈ b*sum(abs2, vpcc) atol=1e-5
         @test abs(snet) <= inv.s_max + .02
-        # No target-current limiter: independently replay the conservative
-        # physical PCC circle, using the unscaled firmware command.
-        offset = dc_power_offset(r.plant.p_dc, r.control.phase_voltage,
-            target === :converter ? r.converter_terminal.phase_current : r.grid_phase_current)
-        raw = evaluate_exact(controller, InverterControlMeasurement(collect(ground_voltage)),
-            _POWER_LOCATION_REQUEST, InverterControlRatings(inv, controller.current_target);
-            dc_power_offset=offset)
-        @test raw.current_scale == 1.
-        direction = sum(vpcc .* conj.(raw.phase_current))
-        expected = min(1., (inv.s_max - abs(b*sum(abs2, vpcc)))/abs(direction))
-        @test r.exact_control.current_scale ≈ expected atol=1e-10
+        # The terminal law compensates the signed shunt instead of reserving
+        # its magnitude against output kVA. At zero requested Q, all capacity
+        # is available for terminal active power.
+        @test r.plant.p_poc ≈ inv.s_max atol=.03
+        @test r.plant.q_poc ≈ 0. atol=.03
         @test r.exact_smooth_current_residual < .01
     end
-    # A reactive arm-current offset makes the sign of B matter to backoff,
-    # not just to reported Q. An unrelated internal voltage must not enter it.
-    vpcc = Tuple(ComplexF64[240, 220cis(-2pi/3), 230cis(2pi/3)])
-    offset_g = .01im .* vpcc
-    direction_i = vpcc ./ 10
-    for b in (-.003, .003)
-        inv = _power_location_plant(power_limit_location=:poc, b_filter_shunt=b)
-        offset_s = sum(vpcc .* conj.(offset_g .- im*b .* vpcc))
-        direction_s = sum(vpcc .* conj.(direction_i))
-        expected = (inv.s_max-abs(offset_s))/abs(direction_s)
-        actual = PowerOptLab._plant_scale_exact(1.5 .* vpcc, 2 .* offset_g,
-            offset_g, direction_i, inv; poc_voltage=vpcc)
-        @test actual ≈ expected atol=1e-12
-        @test abs(offset_s + actual*direction_s) <= inv.s_max
-    end
+
 end
 
 @testset "PCC review: omitted current limits preserve loss imports at night" begin
@@ -311,4 +284,176 @@ end
             @test real(result.total_power) ≈ -25. atol=.001
         end
     end
+end
+
+@testset "PCC terminal controller: exact service allocation" begin
+    voltage = Tuple(ComplexF64[230,230cis(-2pi/3),230cis(2pi/3)])
+    # Deliberately large internal and external capacitive offsets. Neither is
+    # an extra terminal VA budget; both must be compensated algebraically.
+    shunt = -.02im .* voltage
+    for target in (:converter,:grid), priority in (:var,:watt,:proportional), b in (-.08,.08), sign in (-1.,1.)
+        inv = _power_location_plant(power_limit_location=:poc,b_filter_shunt=b)
+        control = SequenceController(AverageVoltageVoltVarWatt(
+            volt_var=PiecewiseLinearLaw([0.,400.],sign .* [.6,.6];smoothing_epsilon=.01)), NoUnbalanceControl(),
+            CommonScaleLimiter(pq_priority=priority); current_target=target)
+        request = InverterControlRequest(p_available=12e3,p_rated=12e3,q_scale=10e3)
+        exact = PowerOptLab._evaluate_pcc_control_exact(control,request,inv,
+            voltage,voltage,1.2 .* voltage,shunt,0.)
+        grid = target === :converter ? exact.phase_current .- shunt : exact.phase_current
+        net = sum(voltage .* conj.(grid)) + im*b*sum(abs2,voltage)
+        expected = priority === :var ? 8000+sign*6000im : priority === :watt ?
+            10000+0im : 10000*(12000+sign*6000im)/hypot(12000,6000)
+        @test net ≈ expected atol=1e-7
+        @test abs(net) ≈ 10000. atol=1e-7
+    end
+    # Exact segment geometry admits an inward direction even at the boundary.
+    @test PowerOptLab._pcc_segment_exact((1.,0.),(-2.,0.),1.,0.) == 1.
+    @test PowerOptLab._pcc_segment_exact((0.,.6),(.9,0.),1.,0.) ≈ 8/9
+    @test_throws ArgumentError PowerOptLab._pcc_segment_exact((2.,0.),(0.,1.),1.,0.)
+end
+
+@testset "PCC terminal controller: priority through physical arm limits" begin
+    for priority in (:var,:watt,:proportional), target in (:converter,:grid)
+        inv = _power_location_plant(power_limit_location=:poc,
+            i_grid_max=10., b_filter_shunt=.003,
+            r_filter_grid=.1,x_filter_grid=.2,c_filter_mid=30e-6)
+        controller = SequenceController(AverageVoltageVoltVarWatt(
+            volt_var=PiecewiseLinearLaw([0.,400.],[.4,.4];smoothing_epsilon=.01)), NoUnbalanceControl(),
+            CommonScaleLimiter(pq_priority=priority);current_target=target)
+        request = InverterControlRequest(p_available=20e3,p_rated=20e3,q_scale=10e3)
+        r = solve_controlled_inverter(_power_location_grid(),ControlledDevice(inv,controller),request;
+            solver_options=_POWER_LOCATION_OPTIONS)
+        @test r.solve.publishable
+        if r.solve.publishable
+            qsh = inv.b_filter_shunt*3*230^2
+            arm_rating = 3*230*inv.i_grid_max
+            if priority === :var
+                @test r.plant.q_poc ≈ 4000. atol=.15
+                @test r.plant.p_poc ≈ sqrt(arm_rating^2-(4000-qsh)^2) atol=.15
+            elseif priority === :watt
+                @test r.plant.p_poc ≈ sqrt(arm_rating^2-qsh^2) atol=.15
+                # The remaining Q can move inward across the current circle:
+                # preserve P and retain as much of the requested Q as possible.
+                @test 0. <= r.plant.q_poc <= 4000.1
+            else
+                @test r.plant.q_poc/r.plant.p_poc ≈ r.control.q_request/r.control.p_request atol=1e-5
+            end
+            @test maximum(r.plant.i_grid_mag) ≈ 10. atol=1e-4
+            @test r.exact_smooth_current_residual < .02
+        end
+    end
+end
+
+@testset "PCC terminal controller: full terminal circle despite filter power" begin
+    for target in (:converter,:grid), priority in (:var,:watt,:proportional)
+        inv = _power_location_plant(power_limit_location=:poc,b_filter_shunt=.08,
+            r_filter_grid=.1,x_filter_grid=.2,c_filter_mid=30e-6)
+        controller = SequenceController(AverageVoltageVoltVarWatt(
+            volt_var=PiecewiseLinearLaw([0.,400.],[.6,.6];smoothing_epsilon=.01)),
+            NoUnbalanceControl(),CommonScaleLimiter(pq_priority=priority);current_target=target)
+        request = InverterControlRequest(p_available=20e3,p_rated=12e3,q_scale=10e3)
+        # Rated watt basis makes the unconstrained terminal request 12 kW.
+        controller = SequenceController(AverageVoltageVoltVarWatt(
+            volt_var=controller.positive.volt_var,volt_watt_basis=:rated),
+            NoUnbalanceControl(),controller.limiter;current_target=target)
+        r = solve_controlled_inverter(_power_location_grid(),ControlledDevice(inv,controller),request;
+            s_base=target === :converter ? 1e4 : 1e8,
+            # At the P-axis, Q error is proportional to sqrt(P headroom).
+            # Resolve that endpoint tightly rather than loosening P/Q assertions.
+            solver_options=("tol"=>1e-11,"bound_relax_factor"=>0.,"max_iter"=>1000))
+        @test r.solve.publishable
+        if r.solve.publishable
+            expected = priority === :var ? 8000+6000im : priority === :watt ?
+                10000+0im : 10000*(12000+6000im)/hypot(12000,6000)
+            @test complex(r.plant.p_poc,r.plant.q_poc) ≈ expected atol=.2
+            @test r.exact_smooth_current_residual < .02
+            @test solve_diagnostics(r).control_power_basis === :net_poc
+            @test maximum(abs, r.converter_terminal.phase_current .- r.grid_phase_current) > 1.
+        end
+    end
+end
+
+@testset "PCC terminal controller: converter current preserves var service" begin
+    v = Tuple(ComplexF64[230,230cis(-2pi/3),230cis(2pi/3)])
+    shunt = -.005im .* v
+    for target in (:converter,:grid)
+        inv = _power_location_plant(power_limit_location=:poc,b_filter_shunt=.003,i_max=10.)
+        controller = SequenceController(AverageVoltageVoltVarWatt(
+            volt_var=PiecewiseLinearLaw([0.,400.],[.4,.4];smoothing_epsilon=.01)),
+            NoUnbalanceControl(),CommonScaleLimiter(pq_priority=:var);current_target=target)
+        r = PowerOptLab._evaluate_pcc_control_exact(controller,_POWER_LOCATION_REQUEST,inv,v,v,v,shunt,0.)
+        grid = target === :converter ? r.phase_current .- shunt : r.phase_current
+        conv = grid .+ shunt
+        net = sum(v .* conj.(grid))+im*.003*sum(abs2,v)
+        @test imag(net) ≈ 4000. atol=1e-7
+        @test real(net) ≈ sqrt(6900^2-(4000-(.003-.005)*sum(abs2,v))^2) atol=1e-7
+        @test maximum(abs,conv) ≈ 10. atol=1e-7
+    end
+end
+
+@testset "PCC terminal controller: independent plant replay" begin
+    inv = _power_location_plant(power_limit_location=:poc,b_filter_shunt=.003,
+        r_filter_grid=.1,x_filter_grid=.2,c_filter_mid=30e-6)
+    controller = SequenceController(AverageVoltageVoltVarWatt(
+        volt_var=PiecewiseLinearLaw([0.,400.],[.4,.4];smoothing_epsilon=.01)),
+        NoUnbalanceControl(),CommonScaleLimiter(pq_priority=:var))
+    device = ControlledDevice(inv,controller)
+    request = InverterControlRequest(p_available=5e3,p_rated=5e3,q_scale=10e3)
+    result = solve_inverter_control_network_fixed_point(_power_location_grid(),device,request;
+        max_iterations=20,solver_options=_POWER_LOCATION_OPTIONS)
+    @test result.solve.publishable
+    @test result.converged
+    @test result.plant.q_poc ≈ 4000. atol=.1
+    net = _power_location_grid()
+    net["ibr"] = Dict("pv" => Dict{String,Any}(
+        "bus"=>"poc", "terminal_map"=>["a","b","c","n"],
+        "topology"=>"FOUR_LEG", "prime_mover"=>"PV", "s_max"=>ones(3),
+        "p_min"=>zeros(3), "p_max"=>zeros(3), "q_min"=>zeros(3), "q_max"=>zeros(3)))
+    fleet = ControlledInverterFleetSpec(Dict("pv"=>device),Dict("pv"=>request))
+    replay = solve_controlled_inverter_fleet_network_fixed_point(net,fleet;
+        max_iterations=20,solver_options=_POWER_LOCATION_OPTIONS)
+    @test replay.solve.publishable
+    @test replay.converged
+    @test replay.plants["pv"].q_poc ≈ 4000. atol=.1
+
+end
+
+@testset "PCC terminal controller: LCL zero-sequence compensation" begin
+    inv = _power_location_plant(power_limit_location=:poc,b_filter_shunt=-.003,
+        r_filter_grid=.1,x_filter_grid=.2,c_filter_mid=30e-6)
+    request = InverterControlRequest(p_available=5e3,p_rated=5e3,q_scale=0.)
+    results = []
+    for target in (:converter,:grid)
+        controller = SequenceController(AverageVoltageVoltVarWatt();
+            current_target=target,sensing_reference=:ground)
+        r = solve_controlled_inverter(inv_grid3_floating_neutral(),ControlledDevice(inv,controller),request;
+            solver_options=_POWER_LOCATION_OPTIONS)
+        @test r.solve.publishable
+        if r.solve.publishable
+            @test abs(sum(r.converter_terminal.phase_current)) < 1e-5
+            @test abs(sum(r.grid_phase_current)) > .01
+            @test r.plant.q_poc ≈ 0. atol=.02
+            @test r.plant.p_dc <= request.p_available+.02
+            @test r.exact_smooth_current_residual < .01
+            push!(results,complex(r.plant.p_poc,r.plant.q_poc))
+        end
+    end
+    @test length(results) == 2
+    length(results) == 2 && @test results[1] ≈ results[2] atol=.02
+end
+
+@testset "PCC terminal controller: operating-domain failures are explicit" begin
+    v = Tuple(ComplexF64[230,230cis(-2pi/3),230cis(2pi/3)])
+    z = (0.0im,0.0im,0.0im)
+    controller = SequenceController(AverageVoltageVoltVarWatt())
+    inv = _power_location_plant(power_limit_location=:poc,b_filter_shunt=.01,i_max=.1)
+    @test_throws ArgumentError PowerOptLab._evaluate_pcc_control_exact(controller,
+        _POWER_LOCATION_REQUEST,inv,v,v,v,z,0.)
+    inv = _power_location_plant(power_limit_location=:poc)
+    @test_throws ArgumentError PowerOptLab._evaluate_pcc_control_exact(controller,
+        _POWER_LOCATION_REQUEST,inv,z,z,z,z,0.)
+    night = InverterControlRequest(p_available=0.,p_rated=10e3,q_scale=0.)
+    @test_throws ArgumentError PowerOptLab._evaluate_pcc_control_exact(controller,
+        night,inv,v,v,v,z,11e3)
+    @test PowerOptLab._pcc_segment_exact((0.,0.),(1.,0.),0.,0.) == 0.
 end
