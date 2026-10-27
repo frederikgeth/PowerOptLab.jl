@@ -62,6 +62,7 @@ const _HAS_ODS = true
     include("generator_data_tests.jl")
     include("inverter_control_tests.jl")
     include("inverter_operating_constraints_tests.jl")
+    include("inverter_power_location_tests.jl")
     include("inverter_formulation_variants_tests.jl")
     include("inverter_formulation_reproduction_tests.jl")
     include("inverter_network_opf_tests.jl")

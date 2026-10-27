@@ -435,9 +435,11 @@ construction rather than becoming an invalid nameplate silently.
 The allowed ripple is a zero-to-peak sinusoidal amplitude: a fraction of 0.02
 means ±2% and therefore 4% peak-to-peak. Rows expose both the achieved `dv2`
 and the model's enforced `dv2_max`, plus binding flags for converter current,
-grid current, capacitor thermal current, DC ripple, and converter apparent
-power. Controller-command curtailment and power/current allocation activity are
-reported separately. A `missing` binding flag means that no corresponding
+grid current, capacitor thermal current, DC ripple, and apparent power at
+`power_limit_location`. Both converter and PCC powers are reported. The
+inactive location's installed apparent-power rating is `NaN`; the generic
+`apparent_power_binding` flag refers to the selected circle. Controller-command
+curtailment and power/current allocation activity are reported separately. A `missing` binding flag means that no corresponding
 installed limit was declared or the solve was not publishable. A `false` flag
 only rules out that named limiter: it is not evidence that the operating point
 is unconstrained. In particular, the table does not exhaustively classify

@@ -84,8 +84,11 @@ Firmware that scales a separately measured or estimated available power can
 differ by those losses, and the product ``f_{VW}(V)\,(P_{DC}-P_{POC})`` adds a
 nonconvex term to the model.
 
-The plant retains per-conductor RMS current, converter apparent-power,
-switching-voltage, capacitor and DC ripple limits. There is no radial P/Q
+The plant retains all declared per-conductor RMS current, capacitor and ripple
+limits, along with switching-voltage feasibility. `power_limit_location` selects
+its apparent-power circle: `:converter` by default or `:poc` for total PCC
+exchange, including the PCC shunt. Phase, neutral and capacitor current ratings
+may be omitted independently; their physical equations remain active. There is no radial P/Q
 allocation, common current scale, or automatic Q slack. An impossible reactive
 request gives an unsuccessful solve. Physical limits are not relaxed to make a
 voltage curve feasible.
@@ -191,7 +194,11 @@ binding network limits and a separate four-wire power-flow replay. The public
   solved voltage, separating curve approximation from electrical feasibility;
 - `volt_watt_margin_W` and `exact_volt_watt_margin_W`: encoded and exact cap slack;
 - `dc_availability_margin_W` and `ac_available_W`: the physical power budget;
-- current, converter apparent-power, switching-voltage and DC ripple margins.
+- current, selected-location apparent-power, switching-voltage and DC ripple margins.
+
+`power_limit_location`, `apparent_power_rating_VA` and `apparent_power_margin_VA`
+identify the enforced circle. `converter_apparent_power_margin_VA` and
+`poc_apparent_power_margin_VA` are `nothing` at the inactive location.
 
 General policies also report `reactive_mode`, `current_allocation`, source
 bounds and source/P/Q margins. Fixed PF has `fixed_pf_residual_VA`; free Q and PF
@@ -232,7 +239,7 @@ determine which feasible point is selected.
 | P/Q dispatch bounds | Request and controller prescribe operation | Optional `p_min`, `p_max`, `q_min`, `q_max` | Implemented; inconsistent bounds and service remain infeasible |
 | DC source availability and charging | Request availability with loss-aware command | Request upper bound plus signed `DCSourceBounds` | Implemented; `p_min=0` declares non-charging PV; default has no lower bound |
 | Converter/grid conductor current and neutral RMS | Command backoff plus hard plant inequalities | Hard plant inequalities | Implemented, including fixed switching RMS reserves |
-| Converter apparent power | P/Q allocation and plant-aware backoff | Hard converter S circle | Implemented; total POC Q can differ from converter Q |
+| Apparent power | P/Q command allocation and plant-aware backoff at the selected boundary | Hard S circle at `power_limit_location` | Converter default; `:poc` includes the whole filter and PCC shunt |
 | Proportional current limiter | Scales both current sequences / P and Q together | No implicit limiter; optional explicit current-ray restriction plus maximise scale | Reproduction example provided; the ray is an extra operating assumption |
 | Sequence priority | Reserve one sequence, fill headroom with the other | Fix admissible reserved sequence and maximise other-sequence scale | Fixed-measurement reproduction provided; arbitrary network-equilibrium equivalence is not established |
 | Negative-sequence admittance / ripple cancellation | Prescribed negative-sequence current law | `:free` exposes sequence choices; physical sequence/ripple caps still apply | Law-specific optimal objectives or exact command graphs remain future work |

@@ -231,7 +231,7 @@ only an aggregate apparent-power circle:
   available DC power, and net import is permitted only to cover losses the DC
   source cannot supply (implemented through the AC-available power cap
   described in the [control modelling guide](@ref inverter-control-api));
-- converter-side apparent-power and loss limits;
+- selected-location apparent-power limits and converter losses;
 - internal-voltage/filter KVL and the instantaneous switching hull;
 - negative-sequence policy limits; and
 - DC-bus 2ω voltage and capacitor RMS-current limits.

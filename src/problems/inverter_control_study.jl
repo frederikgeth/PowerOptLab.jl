@@ -387,7 +387,11 @@ function controlled_inverter_rows(result::ControlledInverterFleetResult)
             current_scale=control.current_scale,
             negative_sequence_scale=iszero(control.i2_request) ? 1.0 :
                 abs(control.i2)/abs(control.i2_request),
+            power_limit_location=inverter.power_limit_location,
             apparent_power_rating_VA=inverter.s_max,
+            apparent_power_margin_VA=plant.apparent_power_margin_VA,
+            converter_apparent_power_VA=hypot(plant.p_conv, plant.q_conv),
+            poc_apparent_power_VA=hypot(plant.p_poc, plant.q_poc),
             converter_current_rating_A=
                 inverter.i_max === nothing ? NaN : inverter.i_max,
             grid_current_rating_A=

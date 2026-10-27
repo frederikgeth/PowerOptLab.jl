@@ -59,7 +59,7 @@ oracle. A solver returning `LOCALLY_SOLVED` is necessary, but not sufficient.
 | PWL smoothing refinement | widths 0.1, 0.05, and 0.025 V at a knot | bias is positive, approximately first order, and below 0.5% at 0.05 V for the documented curve |
 | P/Q and Volt-watt bases | exact/smooth numeric policies plus partial-irradiance OpenDSS point | all priorities satisfy the capability circle; rated and available bases separate as specified |
 | PV oversizing with P/Q priority | exact/smooth local-law sweep at DC/AC ratios 0.9, 1.0, 1.1, 1.25, and 1.4; stamped ratio 1.1 for all priorities | the full local capability sweep respects rating and priority identities; each representative stamped solve is publishable |
-| Plant-aware saturation | binding converter `s_max` and binding `dv2_max` cases | the controller backs off to a publishable solution at the physical location rather than creating an infeasible equality |
+| Plant-aware saturation | binding selected-location `s_max` and binding `dv2_max` cases | the controller backs off to a publishable solution at the physical location rather than creating an infeasible equality |
 | Current-target phasors | converter- and grid-target LCL cases | full complex current phasors—not only magnitudes—equal the stamped target |
 | Selection objective | loss and zero objectives on the same controlled power flow | control requests and current phasors are invariant within solver tolerance |
 | Controller formulation units | raw-SI fail-fast check and SI-valued numeric evaluators | unsupported raw-SI stamping cannot silently yield a scientific result; controller parameters and extracted results retain SI semantics |
@@ -287,3 +287,9 @@ reported scalar `filter_resonance_hz` is only an initial screening number.
 
 The maintained sources behind these tests are listed in [IBR references](@ref
 ibr-references).
+
+PCC rating regressions in `test/inverter_power_location_tests.jl` compare the
+legacy converter circle with net PCC capability through reduced and LCL filters,
+including the PCC shunt. They check SI/per-unit behavior, optional current
+limits, exact/smooth controller replay at both current targets, and location-aware
+operating, fleet and hardware-sizing reports.

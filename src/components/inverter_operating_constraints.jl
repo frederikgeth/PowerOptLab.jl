@@ -177,7 +177,9 @@ Three-phase physical plant with explicit operating constraints. The default
 allocation to the optimisation within topology and capability constraints.
 The plant alone determines the three-leg zero-sum restriction. LCL grid and
 converter currents can differ. POC powers include the declared POC shunt.
-All hardware inequalities remain in the plant. An impossible Q request makes
+All declared hardware inequalities remain in the plant. Its
+`power_limit_location` selects converter or total POC apparent power;
+current/thermal ratings may be omitted independently. An impossible Q request makes
 the model infeasible rather than activating a limiter or a tracking slack.
 
 Use [`stamp_device!`](@ref) with an `InverterControlRequest` to compose this
@@ -422,7 +424,11 @@ function extract_device(device::ConstrainedInverter,
         dc_availability_margin_W=request.p_available-plant.p_dc,
         dc_lower_margin_W=device.dc_source.p_min === nothing ? nothing : plant.p_dc-device.dc_source.p_min,
         dc_upper_margin_W=device.dc_source.p_max === nothing ? nothing : device.dc_source.p_max-plant.p_dc,
-        converter_apparent_power_margin_VA=inv.s_max-hypot(plant.p_conv, plant.q_conv),
+        power_limit_location=inv.power_limit_location,
+        apparent_power_rating_VA=inv.s_max,
+        apparent_power_margin_VA=plant.apparent_power_margin_VA,
+        converter_apparent_power_margin_VA=plant.converter_apparent_power_margin_VA,
+        poc_apparent_power_margin_VA=plant.poc_apparent_power_margin_VA,
         converter_current_margin_A=current_margin(
             inv.i_max, plant.i_mag, inv.pwm_ac_converter_reserve),
         grid_current_margin_A=current_margin(

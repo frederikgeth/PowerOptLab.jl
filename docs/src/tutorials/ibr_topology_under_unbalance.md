@@ -119,7 +119,7 @@ Expected qualitative findings:
   no neutral current or double-frequency DC ripple;
 - the 3-leg bridge still serves an unbalanced voltage set, but enforces
   `Ia + Ib + Ic = 0` and therefore has no zero-sequence current;
-- the 4-leg bridge uses its semiconductor neutral leg and must respect `In_max`;
+- the 4-leg bridge uses its semiconductor neutral leg and respects `In_max` when supplied;
 - the split link returns neutral current through its two capacitors, coupling
   AC unbalance to midpoint and bank stress.
 

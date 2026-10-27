@@ -310,8 +310,10 @@ Apply a common scalar to positive- and negative-sequence current commands so
 the reconstructed currents at the configured current target respect its
 declared per-leg limit. The physical plant independently retains every
 converter- and grid-side current constraint.
-The positive-sequence `P,Q` request is first scaled to the converter apparent-
-power rating. The exact evaluator uses hard maxima. The smooth model represents
+The positive-sequence `P,Q` request is first allocated within the `s_max`
+command budget. The final plant-aware backoff enforces apparent power at the
+plant's `power_limit_location`, independently of the current target. The exact
+evaluator uses hard maxima. The smooth model represents
 capability magnitudes by smooth upper norms with excess at most one quarter
 of the stated SI width. Min/max selectors use that full width. Hard physical
 capability inequalities remain exact. `pq_priority` is `:proportional`,
@@ -383,7 +385,7 @@ The exact law uses the rationalised root of the per-phase quadratic,
 `c = Re(a conj(b))`. The smooth model overestimates the square root and the
 selector denominators, so its scale never exceeds the exact one. All other
 keywords and their defaults are those of [`CommonScaleLimiter`](@ref).
-The plant-aware protection (converter-terminal apparent power, both
+The plant-aware protection (selected-location apparent power, both
 filter-side ratings and `dv2_max`) honours the same priority. It first scales
 only the lower-priority sequence, holding the reserved one as an offset, and
 scales the reserved sequence only if that alone still violates a limit.
@@ -417,7 +419,7 @@ const _AlgebraicLimiter = Union{CommonScaleLimiter,SequencePriorityLimiter}
 
 _current_epsilon(limiter::_AlgebraicLimiter, ratings) =
     something(limiter.current_epsilon,
-              limiter.current_epsilon_fraction*ratings.i_max)
+              limiter.current_epsilon_fraction*ratings.i_scale)
 
 _power_epsilon(limiter::_AlgebraicLimiter, ratings) =
     something(limiter.power_epsilon,
@@ -570,53 +572,61 @@ function InverterControlRequest(; p_available::Real,
     InverterControlRequest(p_available, p_rated, q_scale)
 end
 
-"""Fundamental apparent-power and per-phase conductor-current ratings, in SI."""
+"""
+    InverterControlRatings(; s_max, i_max=nothing, i_scale=something(i_max, 1.0))
+
+Fundamental apparent-power command budget (VA) and optional per-phase current
+limit (A). With `i_max=nothing` the target-current limiter is bypassed.
+`i_scale` is a positive numerical current scale, not a capability bound; it
+sets rating-relative smoothing widths and starts. Plant-derived ratings use
+nominal power/voltage to choose it when no current rating is declared.
+"""
 struct InverterControlRatings
     s_max::Float64
-    i_max::Float64
-    function InverterControlRatings(s_max::Real, i_max::Real)
+    i_max::Union{Nothing,Float64}
+    i_scale::Float64
+    function InverterControlRatings(s_max::Real, i_max::Union{Nothing,Real};
+                                    i_scale::Real=something(i_max, 1.0))
         s = Float64(s_max)
-        i = Float64(i_max)
+        i = i_max === nothing ? nothing : Float64(i_max)
+        scale = Float64(i_scale)
         isfinite(s) && s > 0 || throw(ArgumentError(
             "s_max must be finite and > 0"))
-        isfinite(i) && i > 0 || throw(ArgumentError(
-            "i_max must be finite and > 0"))
-        new(s, i)
+        i === nothing || (isfinite(i) && i > 0) || throw(ArgumentError(
+            "i_max must be finite and > 0 when supplied"))
+        isfinite(scale) && scale > 0 || throw(ArgumentError(
+            "i_scale must be finite and > 0"))
+        new(s, i, scale)
     end
 end
 
-function InverterControlRatings(; s_max::Real, i_max::Real)
-    InverterControlRatings(s_max, i_max)
+InverterControlRatings(; s_max::Real, i_max::Union{Nothing,Real}=nothing,
+                        i_scale::Real=something(i_max, 1.0)) =
+    InverterControlRatings(s_max, i_max; i_scale)
+
+_effective_control_current(limit, reserve) = limit === nothing ? nothing :
+    minimum(sqrt(max(limit^2 - r^2, 0.0)) for r in reserve)
+
+function _control_ratings(inverter, limit)
+    # This reference only scales numerics. It never adds a current constraint.
+    vscale = something(_inverter_voltage_scale(inverter, ()), 230.0)
+    scale = limit === nothing ?
+        inverter.s_max / (length(inverter.phase_terminals)*vscale) : limit
+    return InverterControlRatings(inverter.s_max, limit; i_scale=scale)
 end
 
-function InverterControlRatings(inverter::AdvancedInverter)
-    inverter.i_max === nothing && throw(ArgumentError(
-        "a controlled AdvancedInverter requires a finite i_max"))
-    effective = minimum(sqrt(max(inverter.i_max^2 - reserve^2, 0.0))
-                        for reserve in inverter.pwm_ac_converter_reserve)
-    InverterControlRatings(s_max=inverter.s_max, i_max=effective)
-end
+InverterControlRatings(inverter::AdvancedInverter) = _control_ratings(inverter,
+    _effective_control_current(inverter.i_max, inverter.pwm_ac_converter_reserve))
 
-InverterControlRatings(
-    inverter::AdvancedInverter, ::ConverterCurrentTarget) =
+InverterControlRatings(inverter::AdvancedInverter, ::ConverterCurrentTarget) =
     InverterControlRatings(inverter)
 
-function InverterControlRatings(
-        inverter::AdvancedInverter, ::GridCurrentTarget)
-    converter_limit = inverter.i_max
-    converter_limit === nothing && throw(ArgumentError(
-        "a grid-current-controlled AdvancedInverter requires i_max"))
-    grid_limit = something(inverter.i_grid_max, converter_limit)
-    grid_limit === nothing && throw(ArgumentError(
-        "a grid-current-controlled AdvancedInverter requires i_grid_max or i_max"))
-    converter_effective = minimum(
-        sqrt(max(converter_limit^2 - reserve^2, 0.0))
-        for reserve in inverter.pwm_ac_converter_reserve)
-    grid_effective = minimum(
-        sqrt(max(grid_limit^2 - reserve^2, 0.0))
-        for reserve in inverter.pwm_ac_grid_reserve)
-    InverterControlRatings(
-        s_max=inverter.s_max, i_max=min(converter_effective, grid_effective))
+function InverterControlRatings(inverter::AdvancedInverter, ::GridCurrentTarget)
+    converter = _effective_control_current(inverter.i_max, inverter.pwm_ac_converter_reserve)
+    grid = _effective_control_current(inverter.i_grid_max, inverter.pwm_ac_grid_reserve)
+    # Preserve the established conservative target allocation when ratings exist.
+    limits = filter(!isnothing, (converter, grid))
+    return _control_ratings(inverter, isempty(limits) ? nothing : minimum(limits))
 end
 
 """
@@ -1126,12 +1136,17 @@ function evaluate_smooth(controller::SequenceController,
     i1_request = conj(complex(p, q)) * u1 / denominator
     i2v, i2r, i2_request, eta = _unbalance_numeric_smooth(
         controller.unbalance, u1, u2, i1_request)
-    ieps = _current_epsilon(controller.limiter, ratings)
-    import_magnitude = magnitude_value((real(i1_import), imag(i1_import)),
-        MagnitudeApproximation(ieps/4;direction=:upper,unit=:A))
-    i1, i2, current_scale = _target_limit_numeric_smooth(
-        controller.limiter, i1_request, i2_request,
-        max(ratings.i_max - import_magnitude, 0.0), ieps)
+    i1, i2, current_scale = if ratings.i_max === nothing
+        # Omission bypasses the whole current limiter, including its numerical
+        # norms. An unused current scale must not affect this standalone law.
+        (i1_request, i2_request, 1.0)
+    else
+        ieps = _current_epsilon(controller.limiter, ratings)
+        import_magnitude = magnitude_value((real(i1_import), imag(i1_import)),
+            MagnitudeApproximation(ieps/4;direction=:upper,unit=:A))
+        _target_limit_numeric_smooth(controller.limiter, i1_request, i2_request,
+            max(ratings.i_max - import_magnitude, 0.0), ieps)
+    end
     i1 += i1_import
     p += p_import
     phase_current = _phase_from_sequences(i1, i2)
@@ -1201,9 +1216,10 @@ function evaluate_exact(controller::SequenceController,
     i1_request = conj(complex(p, q)) * u1 / denominator
     i2v, i2r, i2_request, eta = _unbalance_exact(
         controller.unbalance, u1, u2, i1_request)
-    i1, i2, current_scale = _target_limit_exact(
-        controller.limiter, i1_request, i2_request,
-        max(ratings.i_max - abs(i1_import), 0.0))
+    i1, i2, current_scale = ratings.i_max === nothing ?
+        (i1_request, i2_request, 1.0) : _target_limit_exact(
+            controller.limiter, i1_request, i2_request,
+            max(ratings.i_max - abs(i1_import), 0.0))
     i1 += i1_import
     p += p_import
     phase_current = _phase_from_sequences(i1, i2)
@@ -1696,24 +1712,23 @@ function _plant_capability_scale!(m, inverter::AdvancedInverter, handles,
         end
     end
 
-    converter_direction = direction
-    converter_power_offset = (0.0, 0.0)
-    converter_power_direction = (0.0, 0.0)
+    at_poc = inverter.power_limit_location === :poc
+    power_offset = (0.0, 0.0)
+    power_direction = (0.0, 0.0)
     for k in 1:3
-        vo = (handles.vrint[k], handles.viint[k])
-        so = _cmul(
-            vo[1], vo[2], converter_offset[k][1], -converter_offset[k][2])
-        sd = _cmul(
-            vo[1], vo[2], converter_direction[k][1], -converter_direction[k][2])
-        converter_power_offset = (
-            converter_power_offset[1] + so[1],
-            converter_power_offset[2] + so[2])
-        converter_power_direction = (
-            converter_power_direction[1] + sd[1],
-            converter_power_direction[2] + sd[2])
+        vo = at_poc ? (handles.vrpoc[k], handles.vipoc[k]) :
+                      (handles.vrint[k], handles.viint[k])
+        io = at_poc ? grid_offset[k] : converter_offset[k]
+        so = _cmul(vo[1], vo[2], io[1], -io[2])
+        sd = _cmul(vo[1], vo[2], direction[k][1], -direction[k][2])
+        # The PCC shunt is an unscaled part of net PCC exchange.
+        qsh = at_poc ? inverter.b_filter_shunt * handles.vb^2 / sb *
+            (vo[1]^2 + vo[2]^2) : 0.0
+        power_offset = (power_offset[1] + so[1], power_offset[2] + so[2] + qsh)
+        power_direction = (power_direction[1] + sd[1], power_direction[2] + sd[2])
     end
     power_candidate = _safe_direction_scale_implicit!(
-        m, converter_power_offset, converter_power_direction, smax, seps;
+        m, power_offset, power_direction, smax, seps;
         magnitude_start=max(0.25smax, seps), scale=smax)
     capability_scale = _combine_safe_scale_implicit!(
         m, capability_scale, power_candidate, seps/smax)
@@ -1725,8 +1740,8 @@ function _plant_capability_scale!(m, inverter::AdvancedInverter, handles,
             ro = _cmul(
                 vo[1], vo[2], converter_offset[k][1], converter_offset[k][2])
             rd = _cmul(
-                vo[1], vo[2], converter_direction[k][1],
-                converter_direction[k][2])
+                vo[1], vo[2], direction[k][1],
+                direction[k][2])
             ripple_offset = (
                 ripple_offset[1] + ro[1], ripple_offset[2] + ro[2])
             ripple_direction = (
@@ -1758,7 +1773,8 @@ grid-side phase currents.
 
 The subsequent plant-aware capability backoff is deliberately wider than
 [`evaluate_exact`](@ref): it also reads converter-terminal internal voltage and
-both filter-arm currents so that a per-leg, apparent-power, or `dv2_max` limit
+physical POC voltage and both filter-arm currents so that a declared per-leg,
+selected-location apparent-power, or `dv2_max` limit
 saturates the command instead of making the controller equality infeasible.
 [`solve_controlled_inverter`](@ref) applies the same backoff to the exact law at
 the solved point, which is why the two commands are comparable.
@@ -1830,19 +1846,22 @@ function stamp_smooth_control!(ctx, controller::SequenceController,
     i2v, i2r, i2_request, eta = _unbalance_smooth(
         ctx, controller.unbalance, u1, u2, i1_request, vb, ib, voltage_start)
     ieps = _current_epsilon(controller.limiter, ratings) / ib
-    imax = ratings.i_max / ib
-    import_magnitude = _control_upper_magnitude!(m, i1_import, ieps/4;
-        scale=imax, start=ieps/4)
-    target_limit = _smooth_positive_expression!(
-        m, imax - import_magnitude, ieps; start=imax)
-    i1_pre, i2_pre, target_scale = _target_limit_smooth!(
-        m, controller.limiter, i1_request, i2_request, imax, ieps;
-        limit=target_limit)
+    imax = ratings.i_scale / ib
+    i1_pre, i2_pre, target_scale = if ratings.i_max === nothing
+        (i1_request, i2_request, 1.0)
+    else
+        import_magnitude = _control_upper_magnitude!(m, i1_import, ieps/4;
+            scale=imax, start=ieps/4)
+        target_limit = _smooth_positive_expression!(
+            m, ratings.i_max/ib - import_magnitude, ieps; start=imax)
+        _target_limit_smooth!(m, controller.limiter, i1_request, i2_request,
+            imax, ieps; limit=target_limit)
+    end
     phase_pre = _phase_pairs(i1_pre, i2_pre)
     import_phase = _phase_pairs(i1_import, (0.0, 0.0))
 
     # The current command is finally backed off against the physical currents at
-    # both filter locations and converter-terminal apparent power. For an LCL
+    # both filter locations and apparent power at the selected boundary. For an LCL
     # filter, I_conv = I_grid + I_shunt. Holding the solved local shunt phasor
     # fixed makes both currents affine in one scalar command. The triangle-bound
     # allocator below is conservative, continuous, and fixed-structure; it
@@ -2019,7 +2038,7 @@ function _safe_direction_scale_exact(offset, direction, limit)
 end
 
 function _plant_scale_exact(converter_voltage, converter_offset, grid_offset,
-                            direction, inverter::AdvancedInverter)
+                            direction, inverter::AdvancedInverter; poc_voltage=nothing)
     scale = 1.0
     if inverter.i_max !== nothing
         for k in 1:3
@@ -2037,10 +2056,16 @@ function _plant_scale_exact(converter_voltage, converter_offset, grid_offset,
                 grid_offset[k], direction[k], limit))
         end
     end
-    power_offset = sum(
-        converter_voltage[k]*conj(converter_offset[k]) for k in 1:3)
-    power_direction = sum(
-        converter_voltage[k]*conj(direction[k]) for k in 1:3)
+    at_poc = inverter.power_limit_location === :poc
+    at_poc && poc_voltage === nothing && throw(ArgumentError(
+        "POC capability replay requires physical POC voltages"))
+    voltage = at_poc ? poc_voltage : converter_voltage
+    offset = at_poc ? grid_offset : converter_offset
+    power_offset = sum(voltage[k]*conj(offset[k]) for k in 1:3)
+    if at_poc
+        power_offset += im*inverter.b_filter_shunt*sum(abs2, voltage)
+    end
+    power_direction = sum(voltage[k]*conj(direction[k]) for k in 1:3)
     scale = min(scale, _safe_direction_scale_exact(
         power_offset, power_direction, inverter.s_max))
     if inverter.dv2_max !== nothing && !iszero(_dc_ripple_factor(inverter))
@@ -2064,6 +2089,7 @@ function _apply_plant_capability_exact(
         inverter::AdvancedInverter,
         target::AbstractCurrentTarget;
         i1_import::ComplexF64=0.0im,
+        poc_voltage=nothing,
         limiter::AbstractLimiterPolicy=CommonScaleLimiter())
     shunt = converter_current .- grid_current
     # The loss import is an unscaled offset at the target, like the stamp.
@@ -2073,7 +2099,7 @@ function _apply_plant_capability_exact(
     grid_offset = target isa ConverterCurrentTarget ? imported .- shunt : imported
     i1_service = result.i1 - i1_import
     plant_scale(offset_c, offset_g, direction) = _plant_scale_exact(
-        converter_voltage, offset_c, offset_g, direction, inverter)
+        converter_voltage, offset_c, offset_g, direction, inverter; poc_voltage)
     if limiter isa SequencePriorityLimiter
         power = limiter.priority === :power
         reserved = power ? _phase_from_sequences(i1_service, 0.0im) :
@@ -2126,6 +2152,7 @@ function _exact_control_at_solution(
         exact, extracted.converter_terminal.phase_voltage,
         extracted.converter_terminal.phase_current, grid_current,
         controlled.device, target; i1_import=ComplexF64(i1_import),
+        poc_voltage=extracted.plant.poc_phase_voltage,
         limiter=controlled.controller.limiter)
 end
 
@@ -2154,6 +2181,11 @@ solve_status(result::ControlledInverterResult) = result.solve
 solve_diagnostics(result::ControlledInverterResult) = (
     current_scale=result.control.current_scale,
     power_scale=result.control.power_scale,
+    power_limit_location=result.plant.power_limit_location,
+    apparent_power_rating_VA=result.plant.apparent_power_rating_VA,
+    apparent_power_margin_VA=result.plant.apparent_power_margin_VA,
+    converter_apparent_power_margin_VA=result.plant.converter_apparent_power_margin_VA,
+    poc_apparent_power_margin_VA=result.plant.poc_apparent_power_margin_VA,
     converter_total_power=result.converter_terminal.total_power,
     converter_positive_sequence_power=
         result.converter_terminal.positive_sequence_power,

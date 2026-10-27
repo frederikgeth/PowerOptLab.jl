@@ -487,13 +487,33 @@ filters, where shunt current separates the two locations.
 The limiter reconstructs all three target currents and applies per-leg ratings,
 never a positive-sequence or aggregate-current proxy. Its final plant-aware
 backoff checks converter and grid currents separately, including LCL shunt
-current, and checks converter-terminal apparent power. If `dv2_max` is declared,
+current, and checks apparent power at `plant.power_limit_location`: converter
+terminals by default, or net PCC exchange for `:poc`. PCC protection uses the
+physical device voltage reference and includes the separate PCC shunt even if
+the controller senses a different reference. If `dv2_max` is declared,
 it also backs off against the corresponding 2ω-power allowance
 ``2\omega C_{dc}V_{dc}\Delta V_{2,max}``. This prevents ordinary saturation
 from becoming an infeasible command equality; the exact plant inequalities
 remain authoritative backstops.
 
-The plant-aware step uses a conservative triangle-bound scalar allocation. It
+`i_max` and `i_grid_max` can both be omitted. The target-current limiter is
+then bypassed; the selected apparent-power backoff and other declared plant
+limits remain active. With only one arm rating, that arm is still checked.
+`InverterControlRatings.i_scale` supplies finite numerical scaling and smoothing
+widths independently of the optional `i_max`; it never imposes a hidden current
+bound. Existing finite current ratings retain their previous scaling defaults.
+The preliminary positive-sequence P/Q allocation retains its `s_max` command
+budget and priority policy; command-space power is not a second converter-
+terminal capability circle. Current target and power-limit location are
+independent choices. Exact replay applies the same physical boundary and shunt
+offset as the smooth plant-aware backoff.
+
+The plant-aware step uses a conservative triangle-bound scalar allocation.
+In PCC mode it budgets the fixed shunt and command contributions separately,
+so it does not exploit cancellation between them. It can leave PCC headroom;
+a fixed offset outside the circle can make the controlled equilibrium infeasible
+even when a compensating dispatch exists. Use `ConstrainedInverter` to optimise
+over the full physical PCC circle without this controller allocation policy. It
 does not yet allocate switching-margin, PWM carrier-current, capacitor thermal,
 or modulation headroom inside the controller; those hard limits can still make
 a snapshot infeasible. Such runs must be retained and classified rather than
