@@ -301,8 +301,8 @@ The smoothing and regularisation parameters are:
 | `current_epsilon_fraction` | 1 | ``2.5\times10^{-5}`` | rating-relative current-selector width; refine around binding legs |
 | `power_epsilon_fraction` | 1 | ``5\times10^{-8}`` | rating-relative power-selector width; refine around the capability circle |
 | `current_epsilon`, `power_epsilon` | A, VA | `nothing` | optional absolute-SI overrides for legacy/calibrated studies |
-| `priority_headroom_fraction` | 1 | ``10^{-3}`` | declared watt/var-priority axis reserve; verify priority results across the intended DC/AC-ratio range |
-| `power_voltage_floor` | V | 1 | regularises ``P,Q\mapsto I_1``; report low-voltage sensitivity |
+| `priority_headroom_fraction` | 1 | ``10^{-3}`` | converter-mode watt/var-priority axis reserve; unused in PCC mode |
+| `power_voltage_floor` | V | 1 | regularises standalone/converter ``P,Q\mapsto I_1``; PCC mode requires ``|U_1|`` at least this floor |
 | `voltage_floor` | V | 1 | regularises unbalance/ripple ratios; report balanced and low-voltage sensitivity |
 | ``\kappa`` | A/V | study specific | size from expected negative-sequence impedance and required attenuation |
 | ``\phi_2`` | rad | study specific | align with the negative-sequence network impedance; sweep angle uncertainty |
@@ -339,6 +339,69 @@ refinement = map((1.0, 0.5, 0.1, 0.05, 0.01)) do epsilon
 end
 refinement
 ```
+
+### [Australia A curve corners](@id australia-a-curve-corners)
+
+For the Australia A curves listed in [parameter selection](../ibr/parameter_selection.md),
+the default softplus formulation rounds both sides of each corner. For an
+isolated corner with a slope change ``\Delta m``, its signed ordinate error is
+approximately ``\Delta m\,\epsilon\ln 2``; the other corners contribute
+exponentially small tails when separated by many smoothing widths. Multiply
+by `q_scale` for vars or `p_rated` for watts on the rated basis. This formula
+is specific to softplus, not every supported smoothing formulation.
+
+With `q_scale = p_rated = S` and `smoothing_epsilon=0.05` V:
+
+| Curve and voltage | Smooth minus exact (% of S) |
+| --- | ---: |
+| Volt-var, 220 V | +0.1173% |
+| Volt-var, 240 V | −0.1155% |
+| Volt-var, 258 V | +0.1155% |
+| Volt-watt, 253 V | −0.3961% |
+| Volt-watt, 260 V | +0.3961% |
+
+At 260 V the smooth volt-watt request is therefore about **20.3961% of rated
+power**, compared with the original curve's 20%. The deviation is 0.3961
+percentage points of rating, not 0.3961% of the curtailed output. The smooth
+request is not a guaranteed upper bound on the original piecewise-linear
+ceiling. Physical apparent-power and current limits remain separately enforced.
+Saturation or limited DC availability can mask these request deviations in the
+achieved terminal power.
+
+This executable refinement table isolates the curve requests with a deliberately
+nonbinding command rating. It does not evaluate composed PCC allocation:
+
+```@example australia_a_corners
+using PowerOptLab
+corner_rows = []
+for epsilon in (0.05, 0.025, 0.0125)
+    vv = PiecewiseLinearLaw([207.,220.,240.,258.], [.44,0.,0.,-.60];
+        smoothing_epsilon=epsilon)
+    vw = PiecewiseLinearLaw([253.,260.], [1.,.2]; smoothing_epsilon=epsilon)
+    request = InverterControlRequest(p_available=20_000., p_rated=10_000., q_scale=10_000.)
+    ratings = InverterControlRatings(s_max=100_000.)
+    for (quantity, policy, voltages) in (
+            (:Q, AverageVoltageVoltVarWatt(volt_var=vv), (220.,240.,258.)),
+            (:P, AverageVoltageVoltVarWatt(volt_watt=vw,volt_watt_basis=:rated), (253.,260.)))
+        controller = SequenceController(policy)
+        for v in voltages
+            measurement = InverterControlMeasurement([v+0im,v*cis(-2pi/3),v*cis(2pi/3)])
+            exact = evaluate_exact(controller,measurement,request,ratings)
+            smooth = evaluate_smooth(controller,measurement,request,ratings)
+            error = quantity === :Q ? smooth.q_request-exact.q_request :
+                                     smooth.p_request-exact.p_request
+            push!(corner_rows,(epsilon_V=epsilon,quantity=quantity,voltage_V=v,
+                               error_percent_rating=100error/10_000))
+        end
+    end
+end
+corner_rows
+```
+
+Halving the width approximately halves these corner errors. Select the width
+from the required power-error budget and verify refinement in the composed
+network model. These are numerical model checks, not an assessment of
+AS/NZS 4777.2 certification or dynamic response tolerances.
 
 The equal-severity conflict is also an intentional smooth control transition:
 

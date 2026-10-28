@@ -304,3 +304,13 @@ measurements and compares the quadratic segment law with its smooth interior
 approximation. A plant-backed network replay refreshes those measurements at
 each iteration. These checks validate the idealised policy, not manufacturer
 firmware or AS/NZS 4777.2 certification.
+
+The review-derived fixture in `test/inverter_pcc_review_tests.jl` specifies a
+neutral-connected LCL filter on an ideal balanced four-wire source. It checks
+the declared Australia A curves at knots, slopes and the analytic rating/volt-watt
+crossover, with DC availability at 1.2, 0.5 and zero times the rating. Independent
+softplus formulas separate curve bias from terminal saturation and component
+losses. Width-halving tests check the signed corner error, and separate arm
+ratings check feasible-Q priority and the absence of an implied grid-arm cap.
+These reproducible cases do not establish general unbalanced-grid behaviour,
+charging control, dynamic performance or certification.
