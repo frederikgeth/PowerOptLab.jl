@@ -27,10 +27,17 @@ struct FixedReactivePower <: _AbstractReactivePowerRelation
 end
 
 """
+    FixedPowerFactor(pf, direction)
     FixedPowerFactor(pf)
 
-Signed fixed power-factor relation on total POC powers. For positive P,
-positive pf absorbs Q and negative pf supplies Q. Requires `0 < abs(pf) <= 1`.
+Fixed power-factor relation on total POC powers. Prefer the explicit form:
+`direction` is `:absorbing` (Q < 0 while exporting P, under-excited) or
+`:injecting` (Q > 0 while exporting P, over-excited), with `0 < pf <= 1`.
+Standards and datasheets attach different signs and leading/lagging labels to
+the same operating point, so the direction is named rather than signed.
+
+The single-argument form is the stored signed value: for positive P, positive
+pf absorbs Q and negative pf supplies Q. Requires `0 < abs(pf) <= 1`.
 The relation uses bounded sine/cosine coefficients, including near zero PF,
 instead of an overflowing tangent. It also applies to negative P with the same
 algebraic ratio; it does not impose a generation or charging direction. At
@@ -44,6 +51,15 @@ struct FixedPowerFactor <: _AbstractReactivePowerRelation
             "fixed power factor must be finite with 0 < abs(pf) <= 1"))
         new(value)
     end
+end
+
+function FixedPowerFactor(pf::Real, direction::Symbol)
+    direction in (:absorbing, :injecting) || throw(ArgumentError(
+        "power-factor direction must be :absorbing or :injecting"))
+    value = Float64(pf)
+    isfinite(value) && 0 < value <= 1 || throw(ArgumentError(
+        "with an explicit direction, pf must satisfy 0 < pf <= 1"))
+    return FixedPowerFactor(direction === :absorbing ? value : -value)
 end
 
 """
@@ -73,9 +89,12 @@ end
 POC capability/dispatch relationships with an explicit reactive operating mode:
 [`FreeReactivePower`](@ref), [`FixedReactivePower`](@ref), or
 [`FixedPowerFactor`](@ref). Optional finite P/Q bounds are in W/var and compose
-with every mode. The positive policy may supply a volt-watt ceiling; no watt
-curve means no additional watt ceiling. A policy containing a volt-var curve is
-rejected: use [`VoltVarWattConstraints`](@ref) for that Q equality.
+with every mode. The positive policy may supply a volt-watt ceiling. **No watt
+curve means no watt ceiling at all**, even with `volt_watt_basis=:rated`; add
+`p_max=p_rated` for a rated cap. This differs deliberately from
+[`VoltVarWattConstraints`](@ref), which mirrors the forward controller. A policy
+containing a volt-var curve is rejected: use `VoltVarWattConstraints` for that
+Q equality.
 
 An objective selects the remaining freedom. Neither a PF relation nor balanced
 current is an implication of the hardware. DC source bounds and current
@@ -117,9 +136,22 @@ With `volt_watt_basis=:rated`, the watt ceiling is `p_rated * fraction`.
 With `:available`, it is `fraction * (available_dc - (p_dc - p_poc))`, where
 `available_dc` is the tighter of request availability and a DC source upper bound.
 An independent `p_dc <= p_available` bound accounts for all plant losses and
-preserves required loss imports at zero availability. No Q curve means Q = 0;
-no watt curve means fraction = 1. Curve encodings must currently be smooth.
-These relationships do not certify compliance with a regional standard.
+preserves required loss imports at zero availability. No Q curve means Q = 0.
+
+No watt curve means fraction = 1, and the ceiling is **still imposed**, matching
+the forward controller's `min(p_rated*fraction, available)` command: with
+`:rated` this caps P at `p_rated`; with `:available` it coincides with the DC
+availability bound. [`InverterOperatingConstraints`](@ref) instead imposes no
+ceiling without a watt curve.
+
+The `:available` ceiling subtracts the **solved** plant losses `p_dc - p_poc`,
+so it depends on the operating point: more reactive current raises filter and
+conduction losses and lowers the ceiling. Firmware that scales a separately
+measured or estimated available power can differ by those losses. The product
+of `fraction` and the losses is an additional nonconvex term.
+
+Curve encodings must currently be smooth. These relationships do not certify
+compliance with a regional standard.
 """
 struct VoltVarWattConstraints{P<:AbstractPositiveSequencePolicy} <: _AbstractInverterOperatingPolicy
     positive::P
@@ -145,7 +177,9 @@ Three-phase physical plant with explicit operating constraints. The default
 allocation to the optimisation within topology and capability constraints.
 The plant alone determines the three-leg zero-sum restriction. LCL grid and
 converter currents can differ. POC powers include the declared POC shunt.
-All hardware inequalities remain in the plant. An impossible Q request makes
+All declared hardware inequalities remain in the plant. Its
+`power_limit_location` selects converter or total POC apparent power;
+current/thermal ratings may be omitted independently. An impossible Q request makes
 the model infeasible rather than activating a limiter or a tracking slack.
 
 Use [`stamp_device!`](@ref) with an `InverterControlRequest` to compose this
@@ -390,7 +424,11 @@ function extract_device(device::ConstrainedInverter,
         dc_availability_margin_W=request.p_available-plant.p_dc,
         dc_lower_margin_W=device.dc_source.p_min === nothing ? nothing : plant.p_dc-device.dc_source.p_min,
         dc_upper_margin_W=device.dc_source.p_max === nothing ? nothing : device.dc_source.p_max-plant.p_dc,
-        converter_apparent_power_margin_VA=inv.s_max-hypot(plant.p_conv, plant.q_conv),
+        power_limit_location=inv.power_limit_location,
+        apparent_power_rating_VA=inv.s_max,
+        apparent_power_margin_VA=plant.apparent_power_margin_VA,
+        converter_apparent_power_margin_VA=plant.converter_apparent_power_margin_VA,
+        poc_apparent_power_margin_VA=plant.poc_apparent_power_margin_VA,
         converter_current_margin_A=current_margin(
             inv.i_max, plant.i_mag, inv.pwm_ac_converter_reserve),
         grid_current_margin_A=current_margin(

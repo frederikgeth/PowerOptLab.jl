@@ -88,8 +88,9 @@ solution follows the horizontal green line to
 It retains Q and curtails P. If the requested Q exceeds hardware capability,
 the strict relationship is infeasible; it does not silently weaken Q tracking.
 
-**Fixed PF with maximum export.** Choose `FixedPowerFactor(-.95)`. The negative
-sign means reactive injection for positive P. The orange ray has a different
+**Fixed PF with maximum export.** Choose `FixedPowerFactor(.95, :injecting)`,
+which supplies reactive power while exporting (stored as the signed value
+`-.95`). The orange ray has a different
 Q/P ratio: ``P=.95S_{effective}`` and
 ``Q=\sqrt{1-.95^2}S_{effective}``. Fixed PF is a declared operating relationship
 and applies below the current limit too.
@@ -127,7 +128,7 @@ Here is how the three general dispatch modes are declared:
 
 ```@example pq_lesson
 fixed_q = InverterOperatingConstraints(reactive=FixedReactivePower(2640.))
-fixed_pf = InverterOperatingConstraints(reactive=FixedPowerFactor(-.95))
+fixed_pf = InverterOperatingConstraints(reactive=FixedPowerFactor(.95, :injecting))
 free_q = InverterOperatingConstraints()
 plant = _repro_plant()  # 6 kVA, 9.5652 A; lossless fixed-voltage teaching fixture
 device = ConstrainedInverter(plant, fixed_q;

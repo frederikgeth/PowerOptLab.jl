@@ -72,19 +72,114 @@ filter is zero.
 
 ## Key modelling choices (from the design doc)
 
-- **Limits on the converter side.** The total apparent-power circle `s_max` and
-  optional per-phase current limit `i_max` are applied on converter quantities
-  (internal-node voltage × current), so an output filter reduces the power
-  delivered at the POC. Under unbalance, `s_max` alone is not a semiconductor
-  thermal limit: supply `i_max`, and `In_max` for the fourth leg, from hardware
-  ratings. In explicit LCL mode, `i_grid_max` separately protects the grid-side
-  arm because midpoint capacitor current makes `i_mag != i_grid_mag`.
+- **Apparent-power boundary.** `power_limit_location=:converter` (default)
+  applies `s_max` to total converter-terminal power. `:poc` applies it to total
+  PCC exchange after both filter arms and all declared shunts. Only the selected
+  circle is enforced; converter power may exceed `s_max` in PCC mode.
+- **Optional current ratings.** `i_max` bounds each converter-arm phase current;
+  `i_grid_max` bounds each grid-arm phase current, before the separate PCC shunt.
+  `In_max` and DC capacitor current ratings are also optional, including on
+  four-leg and split-link plants. Omitting a rating leaves its stress calculated
+  without enforcing a thermal bound. Explicit PWM reserves still require their
+  corresponding ratings. Under unbalance, neither aggregate apparent-power
+  circle bounds phase-redistribution currents. Use an explicit current allocation
+  or suitable current/sequence ratings when that freedom is unwanted.
 - **Non-branching losses.** With AC power positive = injected to grid and DC power
   positive = drawn from the DC source, the single equation `P_dc = P_ac + P_loss`
   (`P_loss ≥ 0`) holds for both discharge and charge — no direction `if`-branch.
 - **Grid-forming ≠ slack.** A grid-forming inverter holds a balanced, bounded
   internal EMF *behind the filter*, but does not replace the network's reference;
   the surrounding grid still needs a slack source.
+
+### Enforce the rating at the PCC
+
+```julia
+plant = AdvancedInverter(
+    id="pv", bus="poc", phase_terminals=["a", "b", "c"], neutral="n",
+    topology=:THREE_LEG, v_dc=800., c_dc=2e-3,
+    s_max=10_000., power_limit_location=:poc,
+    r_filter=.2, x_filter=.5,
+    i_max=nothing, i_grid_max=nothing)
+```
+
+The PCC circle uses `p_poc^2 + q_poc^2 <= s_max^2`, including the
+`b_filter_shunt` contribution. It is a fundamental-frequency aggregate circle
+`abs(sum(S_phase))`, not a per-phase or harmonic-inclusive rating. It is local
+to this device's connection bus, not an upstream shared connection point.
+Internal voltage/modulation, ripple, losses, KCL and KVL remain active.
+`ConstrainedInverter(...; current_allocation=:balanced_grid)` provides one
+explicit allocation for a study without phase-current ratings. Free allocation
+can leave large or undetermined internal currents despite bounded PCC power.
+
+With a `SequenceController`, PCC mode also selects a net-terminal P/Q
+saturation policy. Filter compensation is unscaled, P/Q priority is retained
+through supplied arm-current limits, and the commanded arm is selected only
+after terminal allocation. See [terminal controller allocation](inverter_controls.md).
+This is an idealised staged controller, not a claim about certified firmware.
+
+Results report `power_limit_location`, `apparent_power_rating_VA` and
+`apparent_power_margin_VA`. Named plant/operation results and `solve_diagnostics`
+also expose `converter_apparent_power_margin_VA` and
+`poc_apparent_power_margin_VA`; the inactive location has margin `nothing`.
+Both converter and PCC powers remain available for sizing and loss accounting.
+
+### Declare both filter-arm current ratings
+
+`i_max` and `i_grid_max` protect different currents. Since
+``I_\mathrm{converter}=I_\mathrm{grid}+I_\mathrm{capacitor}``, the grid-arm
+magnitude can exceed the converter-arm magnitude when their reactive components
+partly cancel. Neither arm rating implies the other. The grid-arm rating is
+also measured before any separate PCC shunt; it is not a limit on the total
+external conductor current including that shunt.
+
+The following example compares converter-only and dual-arm protection. The
+20 kVA terminal limit is deliberately loose so that current saturation is
+visible. The filter and 8 A / 7.5 A ratings are illustrative assumptions,
+not manufacturer data or recommended hardware sizes.
+
+```@example pcc_arm_ratings
+using PowerOptLab
+using BMOPFTools: parse_bmopf
+net = parse_bmopf("""
+{"bus":{"poc":{"terminal_names":["a","b","c","n"],
+ "perfectly_grounded_terminals":["n"],"v_min":[170,170,170],"v_max":[280,280,280]}},
+ "voltage_source":{"vs":{"bus":"poc","terminal_map":["a","b","c"],
+ "v_magnitude":[207,207,207],"v_angle":[0,-2.0943951023931953,2.0943951023931953]}}}
+"""; from_string=true)
+vv = PiecewiseLinearLaw([207.,220.,240.,258.],[.44,0.,0.,-.60];smoothing_epsilon=.05)
+controller = SequenceController(
+    AverageVoltageVoltVarWatt(volt_var=vv,volt_watt_basis=:rated),
+    NoUnbalanceControl(), CommonScaleLimiter(pq_priority=:var);
+    current_target=:converter,sensing_reference="n")
+# priority_headroom_fraction is unused with power_limit_location=:poc.
+request = InverterControlRequest(p_available=24_000.,p_rated=20_000.,q_scale=10_000.)
+rows = map((nothing,7.5)) do grid_rating
+    plant = AdvancedInverter(id="pv",bus="poc",phase_terminals=["a","b","c"],neutral="n",
+        topology=:THREE_LEG,v_dc=800.,c_dc=2e-3,
+        s_max=20_000.,power_limit_location=:poc,
+        r_filter=.2,x_filter=.5,r_filter_grid=.1,x_filter_grid=.2,c_filter_mid=30e-6,
+        p_loss_fixed=20.,i_max=8.,i_grid_max=grid_rating)
+    result = solve_controlled_inverter(net,ControlledDevice(plant,controller),request;
+        solver_options=("tol"=>1e-10,"bound_relax_factor"=>0.,"max_iter"=>1000))
+    @assert result.solve.publishable
+    p = result.plant
+    (grid_rating_A=grid_rating,converter_current_A=maximum(p.i_mag),
+     grid_current_A=maximum(p.i_grid_mag),p_poc_W=p.p_poc,q_poc_var=p.q_poc,
+     converter_VA=hypot(p.p_conv,p.q_conv),poc_VA=hypot(p.p_poc,p.q_poc))
+end
+rows
+```
+
+Without `i_grid_max`, the grid arm can exceed 8 A even though the converter arm
+respects `i_max=8`. Adding the grid rating reduces active output while retaining
+the feasible reactive request. Var priority cannot preserve the full Q request
+if Q alone exceeds a declared limit; it allocates the feasible Q first.
+
+In PCC mode, converter apparent power is **not constrained by `s_max`** and
+can exceed it. Likewise, omitting an arm rating removes that arm's explicit
+thermal bound. This does not remove the filter equations, voltage/modulation
+constraints or other supplied limits. Any percentage excess depends on the
+filter, voltage and operating point; it is not a universal allowance.
 
 ## Reduced series filter versus explicit LCL
 
@@ -342,11 +437,12 @@ utilisation factor on the ideal switching hull:
    \underbrace{|I_n| \le I_{n,\max}}_{\text{optional — see below}},
 ```
 
-Here the standalone `I_{n,\max}` bound is **optional**: the split link's neutral
-current flows through the capacitors, so supplying `i_cap_max` bounds it through
-the thermal budget instead (and then `|I_n| \le 2\,i_{cap,max}`). One of the two
-is required. (`:FOUR_LEG` always needs `I_{n,\max}` — its neutral goes through
-the fourth leg, which the capacitor budget says nothing about.)
+Here the standalone neutral-current bound and capacitor thermal ratings are
+independently optional. For the split link, a supplied `i_cap_max` also bounds
+neutral current through its simultaneous thermal budget. With neither rating,
+neutral current and capacitor ripple are still calculated, but no thermal
+capability is asserted. For `:FOUR_LEG`, capacitor ratings do not constrain the
+fourth semiconductor leg; supply `In_max` separately to enforce that rating.
 
 with `N_{re} = -I^{im}_n/(\omega C_\Sigma)`,
 `N_{im} = I^{re}_n/(\omega C_\Sigma)`. If the series banks have equal stored
@@ -523,9 +619,10 @@ compatibility element rather than a specified physical high-frequency branch.
 
 `i_cap_max` composes with `In_max`; whichever binds, binds. For `:SPLIT_DC` it
 may also be supplied *instead of* `In_max` — the bank rating bounds `|I_n|` on
-its own. (`:FOUR_LEG` always needs `In_max`: its neutral current flows through
-the fourth leg, whose device rating is unrelated to the capacitors.) The solved
-bank currents and thermal equivalents are reported, so you can see which limit governed:
+its own. For `:FOUR_LEG`, capacitor ratings do not protect the fourth leg:
+its optional `In_max` rating must be supplied separately when that protection
+is needed. The solved bank currents and thermal equivalents are reported,
+including when no thermal rating is enforced:
 
 ```julia
 r = solve_advanced_inverter(net, AdvancedInverter(; id="inv", bus="poc",

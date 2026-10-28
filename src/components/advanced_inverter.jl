@@ -566,8 +566,12 @@ zero filter) it is a plain grid-following converter at the POC.
 
 # Required
 - `id::String`, `bus::String` — identifier and point-of-connection bus.
-- `s_max::Float64` — converter apparent-power rating (VA), applied on the
-  converter side (internal-node voltage × current).
+- `s_max::Float64` — aggregate fundamental apparent-power rating (VA).
+- `power_limit_location=:converter` — apply `s_max` at converter terminals
+  (default), or `:poc` for net PCC exchange after the entire filter, including
+  `b_filter_shunt`. Exactly one circle is enforced. It bounds `abs(sum(S_phase))`,
+  not individual phase powers or harmonic apparent power. Filter and loss
+  equations remain active; converter power may exceed `s_max` in `:poc` mode.
 
 # Connection
 - `phase_terminals=["1"]`, `neutral="n"` — phase conductor(s) and return terminal
@@ -578,10 +582,10 @@ zero filter) it is a plain grid-following converter at the POC.
 - `topology=:SINGLE_PHASE` — one of `:SINGLE_PHASE` (internal-EMF model),
   `:THREE_LEG`, `:FOUR_LEG`, `:SPLIT_DC`. The three-phase topologies apply the
   time-sampled switching-polytope voltage feasibility on the internal-node
-  voltage and require `v_dc` and `c_dc`. The 4-wire topologies additionally need
-  their neutral current bounded: `:FOUR_LEG` requires `In_max` (the 4th-leg
-  rating), `:SPLIT_DC` requires `In_max` **or** `i_cap_max` (its neutral flows
-  through the capacitors, so a bank rating bounds it on its own).
+  voltage and require `v_dc` and `c_dc`. Current/thermal ratings are optional,
+  including `In_max` and capacitor ratings on four-wire topologies. Omission
+  removes the bound, not the neutral-path or capacitor-ripple equations.
+  Aggregate power alone does not bound phase-redistribution currents.
 - `v_dc` — DC-link voltage (V). `c_dc` — DC-link capacitance (F; per half for split).
 - `c_dc_upper`, `c_dc_lower` — optional split-link half-bank capacitances (F).
   Each defaults to `c_dc`; supplying either exposes unequal series capacitance,
@@ -769,6 +773,7 @@ Base.@kwdef struct AdvancedInverter <: AbstractDevice
     phase_terminals::Vector{String} = ["1"]
     neutral::Union{String,Nothing} = "n"
     s_max::Float64
+    power_limit_location::Symbol = :converter
     i_max::Union{Float64,Nothing} = nothing
     topology::Symbol = :SINGLE_PHASE
     v_dc::Union{Float64,Nothing} = nothing
@@ -914,6 +919,8 @@ function _validate_inverter(inv::AdvancedInverter, nets=())
     inv.pwm_strategy in (:NONE, :SPWM, :CENTERED) || throw(ArgumentError(
         "inverter '$(inv.id)' pwm_strategy must be :NONE, :SPWM, or :CENTERED"))
 
+    inv.power_limit_location in (:converter, :poc) || throw(ArgumentError(
+        "power_limit_location must be :converter or :poc"))
     isfinite(inv.s_max) && inv.s_max > 0 || throw(ArgumentError(
         "inverter '$(inv.id)' s_max must be finite and > 0"))
     for (name, value) in (("r_filter", inv.r_filter), ("x_filter", inv.x_filter),
@@ -1106,18 +1113,8 @@ function _validate_inverter(inv::AdvancedInverter, nets=())
                 throw(ArgumentError("inverter '$(inv.id)' pwm_ac_ripple requires " *
                                     "positive converter-side inductance in every active mode"))
         end
-        # The 4-leg's neutral current flows through its fourth leg, whose device
-        # rating is independent of anything on the DC side — so In_max is always
-        # required. The split link's neutral flows through the capacitors, so a
-        # bank rating (i_cap_max) bounds it on its own; either knob suffices.
-        if inv.topology == :FOUR_LEG && inv.In_max === nothing
-            throw(ArgumentError("topology :FOUR_LEG requires In_max (the 4th-leg rating)"))
-        elseif inv.topology == :SPLIT_DC && inv.In_max === nothing &&
-               inv.i_cap_max === nothing && inv.i_cap_upper_max === nothing &&
-               inv.i_cap_lower_max === nothing
-            throw(ArgumentError("topology :SPLIT_DC requires In_max or a capacitor-current rating " *
-                                "to bound the neutral current through the capacitors"))
-        end
+        # Neutral and capacitor thermal ratings are optional. Their omission
+        # removes protection bounds, not the topology or ripple equations.
         if inv.topology == :SPLIT_DC && inv.v_mid_mean_max !== nothing &&
            inv.q_mid_balance_max === nothing
             cu, cl = _split_capacitances(inv)
@@ -1291,6 +1288,9 @@ currents A.
 
 # Fields
 - `termination_status::String`, `topology::Symbol`
+- `power_limit_location`, `apparent_power_rating_VA`, `apparent_power_margin_VA`
+  identify the enforced circle and its signed headroom. `solve_diagnostics`
+  also reports location-specific margins (`nothing` for the inactive location).
 - `p_poc`, `q_poc` — active/reactive power injected at the POC (grid side).
 - `p_conv`, `q_conv` — converter-side power (at the internal node).
 - `p_loss`, `p_cap_loss`, `p_dc` — semiconductor loss, capacitor ESR loss,
@@ -1365,6 +1365,9 @@ currents A.
 struct InverterResult <: AbstractSolveResult
     termination_status::String
     topology::Symbol
+    power_limit_location::Symbol
+    apparent_power_rating_VA::Float64
+    apparent_power_margin_VA::Float64
     p_poc::Float64
     q_poc::Float64
     p_conv::Float64
@@ -1431,7 +1434,14 @@ end
 solve_status(result::InverterResult) = result.solve
 
 solve_diagnostics(result::InverterResult) =
-    (topology=result.topology, p_loss=result.p_loss,
+    (topology=result.topology, power_limit_location=result.power_limit_location,
+     apparent_power_rating_VA=result.apparent_power_rating_VA,
+     apparent_power_margin_VA=result.apparent_power_margin_VA,
+     converter_apparent_power_margin_VA=result.power_limit_location === :converter ?
+         result.apparent_power_margin_VA : nothing,
+     poc_apparent_power_margin_VA=result.power_limit_location === :poc ?
+         result.apparent_power_margin_VA : nothing,
+     p_loss=result.p_loss,
      p_cap_loss=result.p_cap_loss,
      p_filter_loss=result.p_filter_loss, ripple=result.ripple,
      neutral_current=result.i_neutral, zero_sequence=result.i_zero,
@@ -1467,6 +1477,7 @@ solve_diagnostics(result::InverterResult) =
 struct _InvHandles
     p_poc; q_poc; p_conv; q_conv; p_loss; p_cap_loss; p_dc; p_filter_loss
     vrint::Vector{Any}; viint::Vector{Any}
+    vrpoc::Vector{Any}; vipoc::Vector{Any}
     cri::Vector{Any}; cii::Vector{Any}
     vrmid::Vector{Any}; vimid::Vector{Any}
     gri::Vector{Any}; gii::Vector{Any}
@@ -2010,13 +2021,19 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
         end
     end
 
-    # Converter apparent-power circle P_conv²+Q_conv² ≤ s_max² (aux keeps it quadratic).
-    pv = JuMP.@variable(m, base_name = "pconv_$(inv.id)")
-    qv = JuMP.@variable(m, base_name = "qconv_$(inv.id)")
-    JuMP.@constraint(m, pv == Pconv)
-    JuMP.@constraint(m, qv == Qconv)
+    # Aggregate fundamental apparent power at the selected boundary. POC
+    # expressions already include the separate POC shunt. Lifts keep rows quadratic.
+    at_converter = inv.power_limit_location === :converter
+    plimit, qlimit = at_converter ? (Pconv, Qconv) : (Ppoc, Qpoc)
+    location_name = at_converter ? "conv" : "poc"
+    pv = JuMP.@variable(m, base_name = "p$(location_name)_$(inv.id)")
+    qv = JuMP.@variable(m, base_name = "q$(location_name)_$(inv.id)")
+    JuMP.@constraint(m, pv == plimit)
+    JuMP.@constraint(m, qv == qlimit)
     squared_rating = (inv.s_max/sb)^2
-    scale = normalize_capability_constraints ? squared_rating : 1.0
+    # New PCC rows are rating-normalised at every network base. Preserve the
+    # established converter-mode scaling unless normalisation was requested.
+    scale = (normalize_capability_constraints || !at_converter) ? squared_rating : 1.0
     JuMP.@constraint(m, (pv^2 + qv^2)/scale <= squared_rating/scale)
 
     # Converter loss and DC-link power (model units): each coeff scaled to per-unit.
@@ -2041,7 +2058,7 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
     end
 
     return _InvHandles(Ppoc, Qpoc, Pconv, Qconv, P_loss, P_cap_loss, P_dc, P_filter_loss,
-                       vrint, viint, cri, cii,
+                       vrint, viint, dvr, dvi, cri, cii,
                        vrmid, vimid, gri, gii, shre, shim, rip_re, rip_im,
                        in_re, in_im, seq, dre, dim, nre, nim, nmean, qbal,
                        icap_sq, icap_thermal_sq,
@@ -2093,7 +2110,19 @@ function extract_device(inverter::AdvancedInverter, h::_InvHandles,
         br, bi = _split_bus_ripple_value(inverter, h)
         _switching_margin(inverter, ure, uim, dr, di, nr, ni, nm; bre=br, bim=bi)
     end
+    selected_p, selected_q = inverter.power_limit_location === :converter ?
+        (h.p_conv, h.q_conv) : (h.p_poc, h.q_poc)
+    apparent_margin = inverter.s_max - hypot(scaled(selected_p, sb), scaled(selected_q, sb))
     return (
+        power_limit_location=inverter.power_limit_location,
+        apparent_power_rating_VA=inverter.s_max,
+        apparent_power_margin_VA=apparent_margin,
+        converter_apparent_power_margin_VA=inverter.power_limit_location === :converter ?
+            apparent_margin : nothing,
+        poc_apparent_power_margin_VA=inverter.power_limit_location === :poc ?
+            apparent_margin : nothing,
+        poc_phase_voltage=Tuple(complex(scaled(h.vrpoc[k], vb), scaled(h.vipoc[k], vb))
+            for k in 1:nph),
         p_poc=scaled(h.p_poc, sb), q_poc=scaled(h.q_poc, sb),
         p_conv=scaled(h.p_conv, sb), q_conv=scaled(h.q_conv, sb),
         p_loss=scaled(h.p_loss, sb), p_cap_loss=scaled(h.p_cap_loss, sb),
@@ -2241,6 +2270,8 @@ function _solve_advanced_inverter_once(net::Dict{String,Any}, inverter::Advanced
 
     result = _extract_result(ctx, outcome)
     return InverterResult(status, inverter.topology,
+                          inverter.power_limit_location, inverter.s_max,
+                          device_result.apparent_power_margin_VA,
                           device_result.p_poc, device_result.q_poc,
                           device_result.p_conv, device_result.q_conv,
                           device_result.p_loss, device_result.p_cap_loss,

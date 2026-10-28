@@ -5,7 +5,7 @@ hard physical current limits, see [constraint-based inverter operation](inverter
 That formulation selects dispatch through an explicit objective. This page
 describes the forward controller with its existing current-limiter policies.
 
-PowerOptLab implements the first manufacturer-facing law from the
+PowerOptLab implements an idealised reference law from the
 [phase-aware control design](@ref ibr-phase-aware-control-laws) as a closed-form
 controller around the existing [`AdvancedInverter`](@ref) plant. The
 voltage-curve law uses only the local three-phase RMS voltage phasor; the final
@@ -132,7 +132,7 @@ q=\bigl(wa-(1-w)b\bigr)\bigl(wq_+ +(1-w)q_-\bigr).
 ```
 
 The conflict measure ``\rho`` vanishes when only one branch is active, so the
-firmware law then reproduces the standard Volt-var curve exactly, including at
+reference control law then reproduces the standard Volt-var curve exactly, including at
 the deadband edge. Deep in a conflict (``\min(a,b)\gg\epsilon_c``) the transition
 width approaches ``\epsilon_c``. The smooth model uses a zero-preserving smooth
 minimum and adds a ``10^{-3}\epsilon_c`` floor inside the root.
@@ -268,7 +268,7 @@ This residual, rather than an assertion of exact zero, is the unit-test oracle.
 
 ## Exact and smooth evaluators
 
-Use [`evaluate_exact`](@ref) as the firmware oracle:
+Use [`evaluate_exact`](@ref) as the exact reference evaluator:
 
 ```@example phase_control
 measurement = InverterControlMeasurement(ComplexF64[
@@ -301,8 +301,8 @@ The smoothing and regularisation parameters are:
 | `current_epsilon_fraction` | 1 | ``2.5\times10^{-5}`` | rating-relative current-selector width; refine around binding legs |
 | `power_epsilon_fraction` | 1 | ``5\times10^{-8}`` | rating-relative power-selector width; refine around the capability circle |
 | `current_epsilon`, `power_epsilon` | A, VA | `nothing` | optional absolute-SI overrides for legacy/calibrated studies |
-| `priority_headroom_fraction` | 1 | ``10^{-3}`` | declared watt/var-priority axis reserve; verify priority results across the intended DC/AC-ratio range |
-| `power_voltage_floor` | V | 1 | regularises ``P,Q\mapsto I_1``; report low-voltage sensitivity |
+| `priority_headroom_fraction` | 1 | ``10^{-3}`` | converter-mode watt/var-priority axis reserve; unused in PCC mode |
+| `power_voltage_floor` | V | 1 | regularises standalone/converter ``P,Q\mapsto I_1``; PCC mode requires ``|U_1|`` at least this floor |
 | `voltage_floor` | V | 1 | regularises unbalance/ripple ratios; report balanced and low-voltage sensitivity |
 | ``\kappa`` | A/V | study specific | size from expected negative-sequence impedance and required attenuation |
 | ``\phi_2`` | rad | study specific | align with the negative-sequence network impedance; sweep angle uncertainty |
@@ -339,6 +339,69 @@ refinement = map((1.0, 0.5, 0.1, 0.05, 0.01)) do epsilon
 end
 refinement
 ```
+
+### [Australia A curve corners](@id australia-a-curve-corners)
+
+For the Australia A curves listed in [parameter selection](../ibr/parameter_selection.md),
+the default softplus formulation rounds both sides of each corner. For an
+isolated corner with a slope change ``\Delta m``, its signed ordinate error is
+approximately ``\Delta m\,\epsilon\ln 2``; the other corners contribute
+exponentially small tails when separated by many smoothing widths. Multiply
+by `q_scale` for vars or `p_rated` for watts on the rated basis. This formula
+is specific to softplus, not every supported smoothing formulation.
+
+With `q_scale = p_rated = S` and `smoothing_epsilon=0.05` V:
+
+| Curve and voltage | Smooth minus exact (% of S) |
+| --- | ---: |
+| Volt-var, 220 V | +0.1173% |
+| Volt-var, 240 V | −0.1155% |
+| Volt-var, 258 V | +0.1155% |
+| Volt-watt, 253 V | −0.3961% |
+| Volt-watt, 260 V | +0.3961% |
+
+At 260 V the smooth volt-watt request is therefore about **20.3961% of rated
+power**, compared with the original curve's 20%. The deviation is 0.3961
+percentage points of rating, not 0.3961% of the curtailed output. The smooth
+request is not a guaranteed upper bound on the original piecewise-linear
+ceiling. Physical apparent-power and current limits remain separately enforced.
+Saturation or limited DC availability can mask these request deviations in the
+achieved terminal power.
+
+This executable refinement table isolates the curve requests with a deliberately
+nonbinding command rating. It does not evaluate composed PCC allocation:
+
+```@example australia_a_corners
+using PowerOptLab
+corner_rows = []
+for epsilon in (0.05, 0.025, 0.0125)
+    vv = PiecewiseLinearLaw([207.,220.,240.,258.], [.44,0.,0.,-.60];
+        smoothing_epsilon=epsilon)
+    vw = PiecewiseLinearLaw([253.,260.], [1.,.2]; smoothing_epsilon=epsilon)
+    request = InverterControlRequest(p_available=20_000., p_rated=10_000., q_scale=10_000.)
+    ratings = InverterControlRatings(s_max=100_000.)
+    for (quantity, policy, voltages) in (
+            (:Q, AverageVoltageVoltVarWatt(volt_var=vv), (220.,240.,258.)),
+            (:P, AverageVoltageVoltVarWatt(volt_watt=vw,volt_watt_basis=:rated), (253.,260.)))
+        controller = SequenceController(policy)
+        for v in voltages
+            measurement = InverterControlMeasurement([v+0im,v*cis(-2pi/3),v*cis(2pi/3)])
+            exact = evaluate_exact(controller,measurement,request,ratings)
+            smooth = evaluate_smooth(controller,measurement,request,ratings)
+            error = quantity === :Q ? smooth.q_request-exact.q_request :
+                                     smooth.p_request-exact.p_request
+            push!(corner_rows,(epsilon_V=epsilon,quantity=quantity,voltage_V=v,
+                               error_percent_rating=100error/10_000))
+        end
+    end
+end
+corner_rows
+```
+
+Halving the width approximately halves these corner errors. Select the width
+from the required power-error budget and verify refinement in the composed
+network model. These are numerical model checks, not an assessment of
+AS/NZS 4777.2 certification or dynamic response tolerances.
 
 The equal-severity conflict is also an intentional smooth control transition:
 
@@ -487,19 +550,98 @@ filters, where shunt current separates the two locations.
 The limiter reconstructs all three target currents and applies per-leg ratings,
 never a positive-sequence or aggregate-current proxy. Its final plant-aware
 backoff checks converter and grid currents separately, including LCL shunt
-current, and checks converter-terminal apparent power. If `dv2_max` is declared,
+current, and checks apparent power at `plant.power_limit_location`: converter
+terminals by default, or net PCC exchange for `:poc`. PCC protection uses the
+physical device voltage reference and includes the separate PCC shunt even if
+the controller senses a different reference. If `dv2_max` is declared,
 it also backs off against the corresponding 2ω-power allowance
 ``2\omega C_{dc}V_{dc}\Delta V_{2,max}``. This prevents ordinary saturation
 from becoming an infeasible command equality; the exact plant inequalities
 remain authoritative backstops.
 
-The plant-aware step uses a conservative triangle-bound scalar allocation. It
-does not yet allocate switching-margin, PWM carrier-current, capacitor thermal,
-or modulation headroom inside the controller; those hard limits can still make
-a snapshot infeasible. Such runs must be retained and classified rather than
-dropped from penetration statistics. Positive/negative-sequence service
-priority is also future work; physical backoff can curtail both together after
-the requested P/Q priority has been applied.
+`i_max` and `i_grid_max` can both be omitted. The target-current limiter is
+then bypassed; the selected apparent-power backoff and other declared plant
+limits remain active. With only one arm rating, that arm is still checked.
+`InverterControlRatings.i_scale` supplies finite numerical scaling and smoothing
+widths independently of the optional `i_max`; it never imposes a hidden current
+bound. Existing finite current ratings retain their previous scaling defaults.
+In converter mode, the preliminary positive-sequence P/Q allocation retains
+its `s_max` command budget and priority policy; command-space power is not a
+second converter-terminal capability circle. Current target and power-limit location are
+independent choices. Exact replay applies the same physical boundary and shunt
+offset as the smooth plant-aware backoff.
+
+In default converter mode, the plant-aware step retains its conservative
+triangle-bound scalar allocation. In `power_limit_location=:poc` mode, a
+**terminal P/Q saturation policy** replaces both the preliminary command-space
+power/current caps and the final triangle backoff:
+
+1. Interpret the voltage-curve outputs as requests for **net terminal P and Q**.
+   DC availability uses `p_dc - p_poc`, so filter and converter losses are
+   accounted for once. Unavoidable loss imports remain unscaled.
+2. Construct the zero-service grid-current anchor that imports those losses
+   and compensates the separate PCC shunt. For a three-leg LCL plant,
+   `I0_grid = -I0_filter_capacitor`; the positive-sequence compensation also
+   accounts for that zero-sequence power. Net anchor Q is zero.
+3. Allocate services along affine current directions. `pq_priority=:var`
+   allocates Q first, then P without changing the retained Q; `:watt` allocates
+   P first, then Q without changing retained P. `:proportional` scales requested
+   service P and Q together. Each stage takes the largest fraction in `[0,1]`
+   satisfying the **actual complex** PCC circle, every supplied converter/grid
+   phase-current rating (including configured PWM reserves), and `dv2_max`.
+4. Negative-sequence support is defined on the grid side in PCC mode. Its
+   accompanying positive-sequence compensation keeps total terminal P/Q
+   unchanged. `SequencePriorityLimiter(priority=:balance)` allocates this
+   service first; `:power` allocates it after P/Q. `CommonScaleLimiter` with
+   proportional P/Q scales all three services together; with watt/var priority
+   it allocates negative-sequence support last.
+5. Translate grid commands to converter commands using
+   `I_converter = I_grid + I_filter_capacitor`. The choice of `current_target`
+   changes the commanded arm, not the terminal P/Q policy. Compensation is
+   never included in the scalable service request.
+
+The per-stage law is the largest `t` such that `|a+t*b|² <= limit²`, including
+its complex cross term. It admits inward motion from a saturated anchor and
+therefore retains cancellation that the old triangle bound discarded. This is
+an explicitly **staged** priority policy, not global optimisation over all P/Q
+and sequence choices: a higher-priority service is allocated with later
+services initially zero. It does not invent additional reactive service to
+increase the achievable active power.
+
+The smooth stamp approximates that scalar law in dimensionless coordinates.
+With `h=1-|a/limit|²`, `c=Re(a*conj(b))/limit²`, and `d=|b/limit|²`,
+it takes the nonnegative outer root of
+`(d+delta)*t² + 2*(c+delta)*t = h`, where `delta=epsilon²`, and smoothly
+clips it to one. Increasing the two coefficients makes the approximation
+conservative for nonnegative `t`; retaining the signed cross term allows
+inward motion. Exact replay uses the unperturbed quadratic boundary directly.
+Controller current equalities are normalised to a device current scale so
+changing the network power base does not dilute their physical accuracy.
+
+
+**Operating domain:** the compensated zero-service anchor must itself satisfy
+the declared current/ripple limits, and `|U1| >= power_voltage_floor`. Otherwise
+the controlled snapshot is infeasible (exact replay raises an error). A
+compensating dispatch elsewhere in the full physical capability region can
+still exist; use `ConstrainedInverter` to optimise that region. The controller
+does not allocate modulation, capacitor-thermal or switching-voltage headroom;
+those hard plant limits may also make a snapshot infeasible.
+
+`priority_headroom_fraction` remains a converter-mode setting; PCC mode
+uses the physical intersections without that fixed reserve. Its smoothing
+widths control only the interior approximation.
+
+In PCC mode, `p_request` and `q_request` are the pre-saturation net terminal
+requests. `power_scale` and the compatibility field `current_scale` both report
+the retained service-P/Q magnitude divided by its requested magnitude, excluding
+loss import and filter compensation. They are not a common multiplier on the
+actual phase currents. Fleet rows identify `control_power_basis=:net_poc` and
+`pq_priority`; their negative-sequence scale uses grid current, excluding LCL
+compensation. Command-space `sequence_power`/`total_power` remain diagnostics at
+the selected current target; `plant.p_poc`/`q_poc` are authoritative net powers.
+
+In converter mode, final physical backoff can still curtail both P and Q after
+the preliminary P/Q priority allocation.
 
 The plant remains responsible for filter KVL, internal voltage, modulation,
 apparent power, conductor currents, losses, negative-sequence limits, 2ω ripple,
@@ -523,8 +665,9 @@ objective semantics, tidy extraction, and verification obligations.
 - `bus` and `solve`: the network result and structured solve status.
 
 Result extraction reads the stamped JuMP graph directly. `exact_control`
-reevaluates the firmware law at the solved phasor and applies the same
-plant-aware backoff.
+reevaluates the idealised reference law at the solved phasor, including the
+selected terminal allocation or converter backoff. Agreement checks the
+implementation and smoothing; it is not validation against manufacturer firmware.
 
 !!! warning "What the exact/smooth residual does and does not bound"
     Both laws are evaluated at the **smooth model's own solved operating
@@ -646,3 +789,10 @@ ripple-current rating.
 
 The [phase-aware control API](../api/inverter_controls.md) lists the public types, functions and result fields
 for this guide.
+
+The voltage-only `evaluate_exact(controller, measurement, request, ratings)`
+remains the standalone current-target reference law. It lacks the filter and
+loss measurements required for composed PCC allocation. Likewise, standalone
+voltage-only Jacobians are not Jacobians of the PCC controller. The fleet
+loop-gain helper rejects PCC devices until plant-measurement sensitivities are
+provided; plant-backed fixed-point replay supports the composed PCC policy.

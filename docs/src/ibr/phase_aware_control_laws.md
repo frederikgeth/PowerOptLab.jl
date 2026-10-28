@@ -24,7 +24,7 @@ reference generation (Rodríguez et al.), and the negative-sequence
 virtual-admittance family (Savaghebi et al.); see [IBR
 references](@ref ibr-references). The contribution under study is a
 fixed-structure algebraic controller that can be stamped into a sparse network
-NLP while retaining a separate exact firmware oracle.
+NLP while retaining a separate exact reference evaluator.
 
 !!! warning "Assumptions and validity"
     All phasors are fundamental-frequency RMS quantities at one equilibrium.
@@ -231,7 +231,7 @@ only an aggregate apparent-power circle:
   available DC power, and net import is permitted only to cover losses the DC
   source cannot supply (implemented through the AC-available power cap
   described in the [control modelling guide](@ref inverter-control-api));
-- converter-side apparent-power and loss limits;
+- selected-location apparent-power limits and converter losses;
 - internal-voltage/filter KVL and the instantaneous switching hull;
 - negative-sequence policy limits; and
 - DC-bus 2ω voltage and capacitor RMS-current limits.

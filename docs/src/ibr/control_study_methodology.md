@@ -105,7 +105,7 @@ evaluate_exact(control, measurement, request, ratings)
 stamp_smooth_control!(ctx, control, request, inverter, inverter_handles)
 ```
 
-The exact evaluator is a pure numeric firmware oracle with exact PWL corners,
+The exact evaluator is a pure numeric reference evaluator with exact PWL corners,
 comparisons, and saturation. The stamping method adds the smooth JuMP expressions
 and equalities.
 [`evaluate_smooth`](@ref) evaluates the numeric surrogate, while extracted
@@ -216,7 +216,7 @@ piecewise_linear_value(input, breakpoints, values; epsilon=nothing)
 
 The context method reuses the context's selected `softplus` mode and operator
 cache, validates strictly increasing knots, and accepts inputs in working units.
-The numeric method provides the exact firmware oracle when `epsilon=nothing` and
+The numeric method provides the exact reference evaluator when `epsilon=nothing` and
 the corresponding smooth numerical oracle when a positive width is supplied.
 
 This removes downstream duplication and makes the intended extension use of

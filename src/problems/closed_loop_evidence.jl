@@ -100,9 +100,9 @@ function inverter_control_scaling_audit(
         ratings.s_max,
         ratings.s_max,
         capacity_start,
-        max(0.5ratings.i_max,
+        max(0.5ratings.i_scale,
             _current_epsilon(controller.limiter, ratings)),
-        ratings.i_max,
+        ratings.i_scale,
         controller.power_voltage_floor,
         _current_epsilon(controller.limiter, ratings),
         _power_epsilon(controller.limiter, ratings),
@@ -438,7 +438,9 @@ function _solve_exact_current_plant(
     h = handles[]
     plant = extract_device(inverter, h, status)
     network = _extract_result(ctx, outcome)
-    (status=status, plant=plant, network=network)
+    (status=status, plant=plant, network=network,
+     converter_terminal=_extract_converter_terminal(h, status),
+     grid_phase_current=_extract_grid_current(h, status))
 end
 
 """Finite-difference feeder voltage-sensitivity result with solve provenance."""
@@ -800,6 +802,9 @@ function controlled_inverter_fleet_loop_gain(
         relative_step::Bool=true,
         threshold::Real=1.0,
         dc_power_offsets::AbstractDict=Dict{String,Float64}())
+    any(inverter_spec(d).power_limit_location === :poc for d in values(spec.devices)) &&
+        throw(ArgumentError("PCC fleet loop gain requires filter/plant-measurement " *
+            "sensitivities; the standalone voltage-only law is not the composed controller"))
     validated, ids = _validated_fleet_measurements(spec, measurements)
     offset_of(id) = Float64(get(dc_power_offsets, id, 0.0))
     coordinate_systems = Set(_sensitivity_coordinate_system(
@@ -862,6 +867,22 @@ function controlled_inverter_fleet_loop_gain(
              atol=1e-7, rtol=1e-6) ||
         throw(ArgumentError("fleet loop-gain finite-difference inconsistency"))
     screen
+end
+
+# Refresh the composed PCC law from independently solved physical measurements.
+# Legacy converter-mode evidence retains its established standalone-law scope.
+function _measured_control_exact(controlled, request, sensed, measured, offset)
+    inverter = inverter_spec(controlled)
+    controller = controlled.controller
+    if inverter.power_limit_location === :poc
+        return _evaluate_pcc_control_exact(controller, request, inverter,
+            Tuple(sensed), measured.plant.poc_phase_voltage,
+            measured.converter_terminal.phase_voltage,
+            measured.converter_terminal.phase_current .- measured.grid_phase_current,
+            measured.plant.p_dc-measured.plant.p_poc)
+    end
+    evaluate_exact(controller, InverterControlMeasurement(sensed), request,
+        InverterControlRatings(inverter, controller.current_target); dc_power_offset=offset)
 end
 
 # DC-availability offset of a solved smooth controlled inverter. Non-publishable
@@ -982,9 +1003,8 @@ function solve_inverter_control_network_fixed_point(
     # The DC-availability offset is a plant measurement: start from the smooth
     # solution and refresh it from every exact-current plant re-solve.
     offset = _result_dc_power_offset(smooth, controlled.controller.current_target)
-    exact_control = evaluate_exact(
-        controlled.controller, InverterControlMeasurement(voltage),
-        request, ratings; dc_power_offset=offset)
+    measured = smooth
+    exact_control = _measured_control_exact(controlled, request, voltage, measured, offset)
     last_plant = nothing
     last_bus = Dict{String,Any}()
     last_status = smooth.solve
@@ -996,10 +1016,7 @@ function solve_inverter_control_network_fixed_point(
     residual_current = Inf
     for iteration in 1:Int(max_iterations)
         iterations = iteration
-        measurement = InverterControlMeasurement(voltage)
-        exact_control = evaluate_exact(
-            controlled.controller, measurement, request, ratings;
-            dc_power_offset=offset)
+        exact_control = _measured_control_exact(controlled, request, voltage, measured, offset)
         solved = _solve_exact_current_plant(
             net, inverter, exact_control.phase_current,
             controlled.controller.current_target;
@@ -1016,10 +1033,8 @@ function solve_inverter_control_network_fixed_point(
         next_voltage = _network_phase_state(last_bus, controlled)
         offset = dc_power_offset(
             last_plant.p_dc, next_voltage, exact_control.phase_current)
-        next_measurement = InverterControlMeasurement(next_voltage)
-        next_control = evaluate_exact(
-            controlled.controller, next_measurement, request, ratings;
-            dc_power_offset=offset)
+        measured = solved
+        next_control = _measured_control_exact(controlled, request, next_voltage, measured, offset)
         residual_voltage = maximum(abs, next_voltage .- voltage)
         residual_current = maximum(abs,
             next_control.phase_current .- exact_control.phase_current)
@@ -1116,7 +1131,10 @@ function _solve_exact_current_fleet_plant(
         plants[id] = extract_device(
             inverter_spec(spec.devices[id]), handles[id], status)
     end
-    (status=status, plants=plants, network=_extract_result(ctx, outcome))
+    measurements = Dict(id => (plant=plants[id],
+        converter_terminal=_extract_converter_terminal(handles[id], status),
+        grid_phase_current=_extract_grid_current(handles[id], status)) for id in keys(plants))
+    (status=status, plants=plants, network=_extract_result(ctx, outcome), measurements=measurements)
 end
 
 function _fleet_voltage_state(voltage_by_id::Dict{String,NTuple{3,ComplexF64}}, ids)
@@ -1199,6 +1217,7 @@ function solve_controlled_inverter_fleet_network_fixed_point(
         id => _result_dc_power_offset(
             smooth.devices[id], spec.devices[id].controller.current_target)
         for id in ids)
+    measured = Dict{String,Any}(id => smooth.devices[id] for id in ids)
     exact_controls = Dict{String,InverterControlResult}()
     plants = Dict{String,Any}()
     last_bus = Dict{String,Any}()
@@ -1216,10 +1235,8 @@ function solve_controlled_inverter_fleet_network_fixed_point(
             inverter = inverter_spec(spec.devices[id])
             ratings = InverterControlRatings(
                 inverter, spec.devices[id].controller.current_target)
-            control = evaluate_exact(
-                spec.devices[id].controller,
-                InverterControlMeasurement(voltage_by_id[id]),
-                spec.requests[id], ratings; dc_power_offset=offsets[id])
+            control = _measured_control_exact(spec.devices[id], spec.requests[id],
+                voltage_by_id[id], measured[id], offsets[id])
             exact_controls[id] = control
             currents[id] = control.phase_current
         end
@@ -1243,10 +1260,9 @@ function solve_controlled_inverter_fleet_network_fixed_point(
                 inverter, spec.devices[id].controller.current_target)
             offsets[id] = dc_power_offset(
                 plants[id].p_dc, next_voltage_by_id[id], currents[id])
-            next_controls[id] = evaluate_exact(
-                spec.devices[id].controller,
-                InverterControlMeasurement(next_voltage_by_id[id]),
-                spec.requests[id], ratings; dc_power_offset=offsets[id])
+            measured[id] = solved.measurements[id]
+            next_controls[id] = _measured_control_exact(spec.devices[id], spec.requests[id],
+                next_voltage_by_id[id], measured[id], offsets[id])
         end
         residual_voltage = maximum(abs,
             _fleet_voltage_state(next_voltage_by_id, ids) -

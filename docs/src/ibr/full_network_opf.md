@@ -11,7 +11,8 @@ to a circuit-aware model. It answers three separate validation questions:
 
 | Question | Comparison |
 |:--|:--|
-| Do matching operating laws select the same equilibrium? | Forward controls versus maximum export with matching constraints |
+| Do the two code paths encode the same equations when no limit binds? | Forward controls versus maximum export with matching constraints |
+| Does the solved Q follow the declared volt-var law? | Exact and smoothed laws evaluated independently at the replayed voltages |
 | Does coordinated dispatch meet the additional network requirements? | Free-Q OPF versus local controls at the same high availability and a feasible benchmark |
 | Is the electrical solution consistent with an independent implementation? | Exported P/Q replay through a four-wire radial power-flow solver |
 
@@ -122,10 +123,47 @@ validation.agreement
 
 Maximum per-inverter discrepancies are approximately **0.12 W and 0.04 var**;
 the largest complex bus-voltage difference is **0.00018 V**. Branch and converter
-currents also agree within the declared tolerances. The source budgets bind in
-the constrained solve. Small forward differences include its conservative
-smooth current backoff. These are separately built and solved network models,
-rather than a controller replay at the optimiser's voltage.
+currents also agree within the declared tolerances.
+
+Read this as a **consistency check between two code paths**, not as physical
+evidence. With saturation inactive, maximum export under `p_dc ≤ p_available`
+binds the source budget, which is exactly what the forward controller
+commands; both models then reduce to the same equations by construction. The
+residual is dominated by the forward limiter's smooth common scale
+(``1-s \approx 2.6\times10^{-5}`` here), which multiplies the whole command. The
+regime in which the formulations are meant to differ, saturation, is covered by
+the single-device oracles and the [reproduction cases](formulation_reproductions.md).
+
+### Does Q follow the declared law?
+
+Satisfying the encoded Q equality is automatic, so the audit evaluates the
+volt-var law **without the package's controller code**, at the independently
+replayed voltages (local-neutral reference). It reports two comparisons:
+
+- against a re-derivation of the smooth encoding: agreement to about
+  ``10^{-11}`` var for the optimisation model, and exactly the limiter scale
+  ``s`` for the forward model;
+- against the **exact** piecewise-linear law with hard extrema and hard
+  positive/negative parts.
+
+```@example full_inverter_opf
+[(inverter=i, Q_var=round(validation.matched.devices[i].plant.q_poc,digits=2),
+  exact_law_var=round(x.exact_q_var,digits=2),
+  deviation_var=round(x.exact_error_var,sigdigits=3),
+  analytic_bound_var=x.smoothing_bound_var)
+ for (i,x) in enumerate(validation.law_audit)]
+```
+
+The average-voltage and positive-sequence inverters follow the exact law,
+because their sensed voltages lie several volts from any curve breakpoint. The
+worst-phase `:net` inverter deviates by about **11 var (0.23% of rating)**. At
+this operating point its low-voltage branch requests only about 0.006 p.u.,
+inside the `conflict_epsilon = 0.01` width of the smooth positive part. The
+algebraic smooth max/min errs by at most ``\varepsilon_c/2`` per branch, and
+the two-stage smooth phase extrema by at most ``\varepsilon_v``, giving the
+bound ``S_{rated}(\varepsilon_c/2 + |\mathrm{d}q/\mathrm{d}V|\,\varepsilon_v)
+= 32.5`` var. The forward controller shares this deviation; reduce the widths
+when the exact firmware law matters more than solver robustness.
 
 ## Check 2: coordinate dispatch under binding network limits
 

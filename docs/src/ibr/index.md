@@ -53,7 +53,7 @@ line-frequency DC quantities from them. It includes:
 - an internal converter node behind either a reduced conductor-domain series
   primitive or an explicit LCL network with two primitive arms, a damped
   midpoint capacitor, distinct arm currents, and an optional POC shunt;
-- converter-side apparent-power and conductor-current limits;
+- selectable converter/PCC apparent-power and optional conductor-current limits;
 - 3-leg 3-wire, 3-leg split-DC 4-wire, and 4-leg 4-wire switching-feasibility
   regions;
 - Fortescue zero-, positive-, and negative-sequence current limits;

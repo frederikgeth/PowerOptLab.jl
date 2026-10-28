@@ -70,12 +70,12 @@ end
     inv = AdvancedInverter(id="inv", bus="poc", s_max=5000.0)
     @test_throws ArgumentError solve_advanced_inverter(inv_grid(), inv; objective=:min_loss)
     @test_throws ArgumentError solve_advanced_inverter(inv_grid(), inv; objective=:bogus)
-    # Three-phase topology requires 3 phases and v_dc/c_dc (and In_max for 4-wire).
+    # Three-phase topology requires 3 phases and v_dc/c_dc. Current ratings are optional.
     bad1 = AdvancedInverter(id="i", bus="poc", s_max=5e3, topology=:FOUR_LEG)  # 1 phase, no dc
     @test_throws ArgumentError solve_advanced_inverter(inv_grid(), bad1)
     bad2 = AdvancedInverter(id="i", bus="poc", phase_terminals=["a","b","c"], neutral="n",
                             s_max=5e3, topology=:FOUR_LEG, v_dc=700.0, c_dc=1e-3)  # no In_max
-    @test_throws ArgumentError solve_advanced_inverter(inv_grid3_bal(), bad2)
+    @test validate_device(bad2, (inv_grid3_bal(),)) === nothing
     @test_throws ArgumentError solve_advanced_inverter(inv_grid(),
         AdvancedInverter(id="i", bus="poc", s_max=5e3, topology=:BOGUS))
     @test_throws ArgumentError solve_advanced_inverter(inv_grid(),
@@ -339,15 +339,13 @@ end
     @test r.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
     @test r.i_cap <= 2.0 + 1e-3            # the bank rating alone governs …
     @test r.i_neutral > 0.1                # … and it is what bounds |I_n|
-    # The 4-leg still needs In_max: its neutral goes through the 4th leg, whose
-    # device rating has nothing to do with the capacitor bank.
-    @test_throws ArgumentError solve_advanced_inverter(net,
-        AdvancedInverter(; id="i", topology=:FOUR_LEG, v_dc=700.0, c_dc=1.1e-3,
-                         i_cap_max=5.0, _TOPO_COMMON...))
-    # And a split link with neither knob is still rejected.
-    @test_throws ArgumentError solve_advanced_inverter(net,
-        AdvancedInverter(; id="i", topology=:SPLIT_DC, v_dc=800.0, c_dc=2.8e-3,
-                         _TOPO_COMMON...))
+    # Omitting ratings now leaves these stresses calculated but unconstrained.
+    for topology in (:FOUR_LEG, :SPLIT_DC)
+        inv = AdvancedInverter(; id="i", topology, v_dc=800.0, c_dc=2.8e-3,
+                               _TOPO_COMMON...)
+        @test validate_device(inv, (net,)) === nothing
+    end
+
 end
 
 @testset "Advanced inverter: 2ω capacitor current pins the RMS convention" begin
@@ -1023,8 +1021,8 @@ end
               topology=:SPLIT_DC, s_max=20e3, i_max=50.0,
               v_dc=900.0, c_dc=3e-3, c_dc_upper=cu, c_dc_lower=cl,
               m_max=0.96, r_filter=0.05, x_filter=0.15)
-    # A lower-half rating alone bounds neutral current and therefore satisfies
-    # the topology's bounded-return-path requirement without In_max.
+    # A lower-half rating alone supplies a thermal bound on neutral current
+    # without an additional In_max rating.
     lower = solve_advanced_inverter(inv_grid3_unbal(), AdvancedInverter(; id="i",
         i_cap_lower_max=3.0, common...))
     @test lower.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")

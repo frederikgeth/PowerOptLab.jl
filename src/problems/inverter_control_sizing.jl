@@ -299,7 +299,9 @@ Non-publishable numerical requirements are NaN and compliance fields are
 `missing`.
 
 Binding diagnostics cover the installed converter/grid/capacitor/ripple
-ratings and the converter apparent-power circle. Separate controller flags
+ratings and the apparent-power circle at `power_limit_location`. Converter
+and POC achieved powers are both reported; the inactive location's installed
+apparent-power rating is NaN. Separate controller flags
 identify command curtailment and activation of its power/current allocation
 scales. A `false` value for one rating says only that particular rating is not
 active; it never proves that the operating point is free of other limits.
@@ -350,6 +352,9 @@ function inverter_control_hardware_requirement_rows(
             achieved_ripple = publishable ? plant.dv2 : NaN
             achieved_apparent_power = publishable ?
                 hypot(plant.p_conv, plant.q_conv) : NaN
+            achieved_poc_apparent_power = publishable ? hypot(plant.p_poc, plant.q_poc) : NaN
+            selected_apparent_power = inverter.power_limit_location === :converter ?
+                achieved_apparent_power : achieved_poc_apparent_power
             requested_power = publishable ?
                 device.control.p_request : NaN
             positive_current = publishable ? abs(device.control.i1) : NaN
@@ -398,7 +403,13 @@ function inverter_control_hardware_requirement_rows(
                 peak_phase_to_positive_current_ratio=peak_positive_current_ratio,
                 achieved_converter_apparent_power_VA=
                     achieved_apparent_power,
-                installed_converter_apparent_power_rating_VA=inverter.s_max,
+                achieved_poc_apparent_power_VA=achieved_poc_apparent_power,
+                power_limit_location=inverter.power_limit_location,
+                installed_apparent_power_rating_VA=inverter.s_max,
+                installed_converter_apparent_power_rating_VA=
+                    inverter.power_limit_location === :converter ? inverter.s_max : NaN,
+                installed_poc_apparent_power_rating_VA=
+                    inverter.power_limit_location === :poc ? inverter.s_max : NaN,
                 converter_current_requirement_A=converter_requirement,
                 grid_current_requirement_A=grid_requirement,
                 capacitor_thermal_current_requirement_A=
@@ -428,7 +439,7 @@ function inverter_control_hardware_requirement_rows(
                     publishable, enforced_ripple_limit, achieved_ripple,
                     tolerance),
                 apparent_power_binding=_sizing_binding(
-                    publishable, inverter.s_max, achieved_apparent_power,
+                    publishable, inverter.s_max, selected_apparent_power,
                     tolerance),
                 command_curtailment_active=_sizing_curtailment_active(
                     publishable,

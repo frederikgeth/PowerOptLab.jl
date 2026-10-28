@@ -143,6 +143,11 @@ applied to *available* power, or with an earlier or lower knee, curtails more
 than the standard at partial irradiance. Such curves are legitimate
 sensitivity cases but should not be labelled as the standard.
 
+For quantitative softplus corner deviations and width refinement, see the
+[Australia A corner example](@ref australia-a-curve-corners).
+In particular, smoothing can put the requested volt-watt power above the
+original piecewise-linear ceiling near its lower corner.
+
 ## Negative-sequence gain and angle
 
 The static attenuation result in [Phase-aware local control laws](@ref
@@ -187,8 +192,10 @@ displacement.
 
 Smoothing widths are approximation budgets, not tuning knobs. The defaults
 (extrema 0.05 V, curve corners 0.05 V, current widths ``2.5\times10^{-5}`` of the
-rating, power widths ``5\times10^{-8}`` of the rating) keep the exact-versus-smooth
-current residual far below 0.02 A in the regression suite. Use identical widths
+rating, power widths ``5\times10^{-8}`` of the rating) are starting values,
+not a universal current-error guarantee. Curve-corner error also depends on
+slope, power base and voltage; the Australia A corner example quantifies it.
+Use identical widths
 for every variant in a matched comparison, record them, and show that halving
 them does not change the conclusions.
 

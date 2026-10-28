@@ -43,7 +43,10 @@ The reduced circuit is
 POC bus ──[ r + jx, optional grid-side shunt ]── internal node ── converter ── DC link
 ```
 
-Converter current and apparent-power limits apply at the internal node. Therefore,
+By default, converter current and apparent-power limits apply at the internal
+node. Set `power_limit_location=:poc` to apply the apparent-power circle to net
+PCC exchange, including the output filter and PCC shunt; current ratings remain
+independently optional. With the default converter circle,
 the converter's rating is not necessarily the POC export rating. With a non-zero
 filter impedance, part of the converter power supplies filter losses and reactive
 exchange; the POC voltage can also differ materially from internal voltage.
