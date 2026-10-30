@@ -13,4 +13,6 @@ DCSourceBounds
 ConstrainedInverter
 ConstrainedInverterResult
 solve_constrained_inverter
+project_inverter_current
+InverterCurrentProjectionResult
 ```

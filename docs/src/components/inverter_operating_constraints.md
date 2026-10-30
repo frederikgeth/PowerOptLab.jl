@@ -96,7 +96,7 @@ voltage curve feasible.
 This path normalises capability rows and operating power rows by the
 device rating. This keeps the solver's constraint-bound relaxation small in
 physical units when a small inverter is embedded in a large network power base.
-Existing forward-controller stamping retains its original numerical defaults.
+Forward-controller stamping also normalises engineering capability rows.
 
 The wrapper supports three-phase THREE_LEG, FOUR_LEG and SPLIT_DC plants with
 `grid_forming=false`. The default `:balanced_converter` imposes zero and negative
@@ -109,6 +109,63 @@ Q tracking includes the filter and optional POC
 shunt through the plant's total POC exchange. `pwm_strategy=:NONE` is required;
 fixed calibrated RMS current reserves are supported, but automatic carrier
 reserve iteration is not part of this solve.
+
+## Offline voltage-aware current allocation
+
+[`project_inverter_current`](@ref) supplies an offline allocation reference at a
+fixed terminal voltage. It minimizes the sum of squared complex-current errors
+while retaining the physical plant, source bounds and full-cycle rail checks.
+The requested converter-arm or grid-arm current is independently reconstructed
+through the filter and audited before solving for an alternative.
+
+```julia
+allocation = project_inverter_current(plant, request;
+    grid_voltage=poc_rms_phasors, requested_current=command_rms_phasors,
+    target=:converter, dc_source=DCSourceBounds(p_min=0.))
+allocation.request_feasibility  # :feasible, :violated or :unresolved
+allocation.plant_feasibility    # :feasible or :unresolved
+solve_status(allocation)        # status of the local allocation solve
+```
+
+A violated request and an accepted alternative distinguish a command outside
+capability from an impossible operating boundary. An unsuccessful NLP establishes
+neither plant infeasibility nor controller-policy infeasibility. If the direct
+request audit passes, that point itself establishes conditional plant feasibility
+even if the allocation solver fails. A singular converter-to-grid filter transfer
+leaves the direct request audit unresolved; it is not labelled infeasible.
+The allocated point's report also independently verifies that the fixed voltage
+and balancing charge match the requested boundary in SI units.
+For continuous rails, a negative conservative lower enclosure alone also does not
+prove a violation: the direct diagnostic requires a violating sampled witness.
+
+Voltage feasibility can require changing the direction of current, rather than
+scaling it toward zero. For example, a synthetic balanced 253 V boundary with a
+620 V DC link rejects a 4.8 kW unity-PF command but admits a point near
+1.886 kW / -5.956 kvar on the same 6 kVA plant. These values are a regression
+fixture, not changes to the Australian study's 750 V hardware.
+Reproduce this case, a feasible nominal request and energized zero-PV operation
+with the same fixed plant:
+
+```sh
+julia --project=. scripts/formulations/inverter_current_projection.jl /tmp/current_projection.json
+```
+
+The optional JSON artifact records hardware, solver settings, source fingerprints,
+requested-point failures and the allocated point's individual physical checks.
+
+![A rail-infeasible unity-PF request and a feasible local allocation](../assets/ibr/generated-current-projection.svg)
+
+The left panel restricts the capability slice to balanced currents; it is not a
+projection of the full sequence-current feasible set. The right panel uses the
+saved requested and allocated phasors to show their instantaneous line-voltage
+envelopes. Regenerate with `scripts/formulations/plot_current_projection.py`.
+
+The reference uses a local nonconvex solve; it does not certify a globally nearest
+point or implement reactive-priority VV+VW. Voltage is fixed, so there is no
+feeder feedback or dynamic stability claim. For split links, the explicit
+`midpoint_charge` (default zero) is fixed in both the request audit and the solve;
+these results are conditional on that actuator state. PWM is disabled. Online
+voltage-aware allocation, optimized balancing charge and EMT remain separate work.
 
 ## [Compare saturation at a fixed 207 V POC](@id inverter-saturation-comparison)
 

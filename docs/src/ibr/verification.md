@@ -80,6 +80,7 @@ feasible. A separate common-mode case retains and tests that distinction.
 | 3-wire topology | KCL | the three phase-current phasors sum to zero under balanced and unbalanced voltage |
 | Balanced switching hull | closed form | `Vdc_min = sqrt(6) U/m` for 3-leg and `2sqrt(2) U/m` for split DC |
 | Sample resolution and audit | nested grids, full-cycle Taylor enclosure and adaptive separating cuts | a coarse-grid false optimum cannot publish; feasible dispatch remains available after refinement |
+| Offline current allocation | analytic VA-circle projection across bases; primitive LCL reconstruction; rail-conflict witness | accepted alternatives meet all declared bounds; a failed solve never establishes plant infeasibility; inconclusive rail enclosures remain unresolved |
 | 2ω power | Deakin et al. Table V | six prescribed current patterns produce `[0,1,1.5,3,0,1] Vph Iref` |
 | 2ω PLECS comparison | Deakin et al. Table VII | all six rows are retained; non-cancelling analytical powers agree with PLECS within 0.3% and reported currents within 1% |
 | Bus capacitance | capacitor energy balance | open line-frequency source: `dv2 = ripple/(2ω Ceq Vdc)`, with `Ceq=Cu Cl/(Cu+Cl)` for a split link; ideal stiff source: `dv2 = 0` |

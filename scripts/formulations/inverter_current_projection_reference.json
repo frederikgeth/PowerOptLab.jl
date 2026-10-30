@@ -1,0 +1,996 @@
+{
+    "scope": "Local offline current projection at fixed voltage; averaged model, PWM disabled. Synthetic fixed hardware; no global-nearest or dynamic claim.",
+    "julia": "1.12.6",
+    "Project_sha256": "2724f9784cf88c1b37a76368436c396b5d7ba9a05d19bb28a73bbbabc9eafb24",
+    "Manifest_sha256": "b61f2440eecd083978dd5bffb99893c75454a70aa2438d97e2b9b45aa0117e07",
+    "source_sha256": {
+        "src/formulations/experiments.jl": "aa8d24ef1b6b283c56ab7c32107d6e1be7afd4dd212494fd893ac4fea81de75d",
+        "src/interfaces.jl": "e940c50d72678d8597b112a2bc8abad7c2aae0314e8871c7bf8132b856ab1786",
+        "src/problems/bilevel.jl": "bd6956207345b46b2f21b3c3c9e2aa06095e8a15fea15e0781470217d552a207",
+        "src/components/inverter_operating_constraints.jl": "00c4f5240ff3c70f808be20c9c1444b968adad50fe449e6af5035400edfecaf1",
+        "src/problems/state_estimation_patterns.jl": "196e073470c207b4b991f0924cbc86d7f4ecfc7ae9f922f3b06a36092b8eec07",
+        "src/problems/operating_envelope.jl": "62b293c4870ed3f94d7cce67c2a2b79381b873d5cf1718bcd760534930f0a72e",
+        "src/components/generalized_generator.jl": "19e87be2a42f03a37e36a7c2c5fe61494312d32148724393305de83cbb3e9470",
+        "src/problems/inverter_control_experiments.jl": "2208b92c43f7e88df036ab879a64cf7d0078b9a0eabe41dcde8df5a2c022e147",
+        "src/problems/state_estimation.jl": "46e9087b01d54f1ddc55902baa333104822ef314c07a9f58e2abb27801be22a7",
+        "src/formulations/hull_bounds.jl": "84ee2f82ee0c80463f8babfdf99b465b56e133bc274410461d38deb80d843e89",
+        "src/components/inverter_pcc_control.jl": "f28efff574a3541b30ddcbe72cad264070e2d62ace1561733993876997bb4b8d",
+        "src/problems/multiperiod.jl": "f23022abe0f5536d0c121c1ffceeec258dc9d09cd5d0004cb0134ea75d0ab6ba",
+        "src/algorithms/pade.jl": "c0d89a18564a94f08b11098689371b705f313ffd9aecc71e3537422d2b772c29",
+        "src/components/generator_data.jl": "3caa922fc4941205fef9e17f48b8cb8b5d834d84f155509cbc84ce77deea6af8",
+        "src/algorithms/operability_continuation.jl": "a27fc6f1a7d6741858e3f38482a165f5628e72944d5c3ab26018861fc0f245e5",
+        "src/contracts.jl": "9d09adcd53e2e27fa4eedcd7976d95c391f2eb5b3bd3861d3ad054a23de7c95b",
+        "src/problems/operability.jl": "946802878ef44899c80c124474349fe13f7988fdd10b672c22fb261a6613e35f",
+        "src/problems/state_estimation_support.jl": "ee6226399e097fa6c4fa88c731377a27f1f8c908421baeee21c9c95a4d2b6bc9",
+        "src/algorithms/helm.jl": "601a68fb0148ba3f43dd8fbca99764b5c330ae23131bcd808db646462fde2dfb",
+        "src/formulations/selectors.jl": "5377fbd4669921dc792ec4d29c8c166efb931f8c9bfe658f38b92a29548a08eb",
+        "src/problems/closed_loop_evidence.jl": "5d9b94a6d99c60e055415e60ab59a97c8848dcd10983cb79c0aa903e1cbec057",
+        "src/io/kron_reduction.jl": "09134072501eba3434c2a08a0d8e3daaf14eec1e485ad106d304b5b4b726a830",
+        "src/problems/inverter_control_sizing.jl": "a39390cb83cb6d9c31155be2c72686f9c6cf5e3c4fc80a1c79ab6a9fa8eb4647",
+        "src/problems/state_estimation_injections.jl": "a5f04ef35308546b1673e23cf6a3e49874c2d12e764863264bc55378ae30c9ec",
+        "src/components/battery_chemistry.jl": "71ecea656c1d432c0460c2edcbe69fa9a4a538131d3249e129e00ba1263f1188",
+        "src/PowerOptLab.jl": "a7c7aa3e89d4a2c92ea06d9bd9c62666098276534511de89134074a4759bef0d",
+        "src/components/inverter_feasibility.jl": "7bbceb6c135595ee3d5b3be5f52b001cdad4d4e6b3eda799495eab80f64145d1",
+        "src/formulations/jump.jl": "8d1480ed914a90b20302cd7b495fc470e18697dc15083897bf1d1f1808991e26",
+        "src/components/devices.jl": "295ee2aed266b01165ccc0c1ea0238e7d22ed41d4a0fb5f77420d2d1792fe793",
+        "src/formulations/cases.jl": "eb901e45c2db22d0d331292019446b2767673000a454a5262d6bce41a135b7fc",
+        "src/formulations/control_intent.jl": "9429c437e8dea0ce4f50b227b7c5187395d28b404d127d0103a43805834b0664",
+        "src/problems/constrained_state_estimation.jl": "c2ed0c2541dfc9846244033e0c189d9a3b24f0da6bb569eb05c9298232d0ce08",
+        "src/components/advanced_inverter.jl": "fa151406d0484d838c56312451a0791d277c1e321cdf0c5f204e780759cd4382",
+        "src/formulations/error_tools.jl": "d4aebb519ea2c5f5aaac97a5f790a678fadff57158522a46eedb1c061fb135be",
+        "src/problems/generator_opf.jl": "b0540ace7f36b5c5fb5067b7a1efbc6af4db42e1623d5af403307060f6a782fb",
+        "src/formulations/primitives.jl": "d919b895117a6e1ae3e68c7bb1723dd57ba852bad679e96219d3ebb164040506",
+        "src/formulations/relations.jl": "d0846f193d6705ee59a83729cf0e8eb928294dcab0f9136e70a87070951f4d8c",
+        "src/upstream.jl": "313bf70a703b43b2134aef1f9f96c30bda4bc301e17b9f5f990244105d57b238",
+        "src/components/ivq_battery.jl": "2e3f74858ef64f95ce8b7ed125f1e19db739bb7843edbb35e9f3e3dfaa649c95",
+        "src/problems/inverter_control_study.jl": "3c10d89ec926f4b4700f1e18d2d23da47c03b91819f0455994943c3d75441cc4",
+        "src/problems/parameter_estimation.jl": "61c0cd98dd1c1dfe21be96000354d748cde3ad5ccb9c77e1da3a11848a032365",
+        "src/problems/inverse_carson.jl": "4fb49831f9ddc6339bec733c4399e3a979ed75ee9dae7ddde88296c820058d51",
+        "src/components/inverter_current_projection.jl": "a8da54e2d743fa8c09923d0a204f67749092c88a0950d94b2084c5b865a25091",
+        "src/problems/ipopt_state_estimation.jl": "3b7a42d19f65e9f9ebfe66d629d5d128b2bfcff4b6189d7abc422db1cf005464",
+        "src/components/evse.jl": "dfafe56bccafa827a7c80088a57a20cc25493c389f811a6db4a80fce8333d047",
+        "src/problems/state_estimation_measurements.jl": "bbf861c3106fe812f8f52c296588f2d8a2e4884c3dacb079739fa64667da958b",
+        "scripts/formulations/inverter_current_projection.jl": "c7b5505eef8a7d91878a02aa2f5d964d46fb511170aa60739a822efd9f9ec212",
+        "src/components/inverter_controls.jl": "7a8d2b3c1331ac5acf3f4f966f64f62f564d604e373af675be41144bbfd1ad40"
+    },
+    "hardware": {
+        "i_zero_max": null,
+        "phase_terminals": [
+            "a",
+            "b",
+            "c"
+        ],
+        "c_filter_mid": 0,
+        "power_limit_location": "converter",
+        "f_sw": null,
+        "i_positive_max": null,
+        "v_int_max": null,
+        "c_dc_upper": null,
+        "topology": "THREE_LEG",
+        "a_loss": 0,
+        "i_cap_max": 1,
+        "neutral": "n",
+        "i_negative_max": null,
+        "n_samples": 36,
+        "v_mid_mean_max": null,
+        "pwm_strategy": "NONE",
+        "i_cap_lower_max": null,
+        "x_filter_grid_neutral": 0,
+        "i_grid_max": null,
+        "bus": "poc",
+        "grid_forming": false,
+        "b_filter_shunt": 0,
+        "q_mid_balance_max": null,
+        "r_filter_neutral": 0,
+        "x_filter_grid_matrix": null,
+        "esr_dc_upper": 0,
+        "p_loss_fixed": 20,
+        "pwm_dc_source_l": 0,
+        "r_filter_grid_matrix": null,
+        "i_sw": 0,
+        "r_filter": 0.13225,
+        "pwm_ac_ripple": false,
+        "pwm_ac_harmonics": 64,
+        "f": 50,
+        "x_filter": 1.3225,
+        "dv_mid_max": null,
+        "esr_dc_lower": 0,
+        "dv2_max": 7.5,
+        "pwm_current_factor": 0,
+        "x_filter_matrix": null,
+        "pwm_dc_source_r": null,
+        "x_filter_grid": 0,
+        "cap_thermal_weights": [
+            1,
+            1,
+            1
+        ],
+        "id": "projection",
+        "r_filter_grid": 0,
+        "c_loss": 0.01,
+        "r_filter_grid_neutral": 0,
+        "c_dc": 0.0003,
+        "x_filter_neutral": 0,
+        "pwm_fundamental_samples": 360,
+        "i_cap_upper_max": null,
+        "r_filter_matrix": null,
+        "pwm_ac_neutral_reserve": 0,
+        "modulation_max": null,
+        "v_int_min": null,
+        "s_max": 6000,
+        "m_max": 0.96,
+        "dc_source_r": null,
+        "pwm_carrier_samples": 256,
+        "pwm_ac_grid_reserve": [
+            0,
+            0,
+            0
+        ],
+        "In_max": null,
+        "c_dc_lower": null,
+        "esr_dc": 0,
+        "pwm_ac_converter_reserve": [
+            0,
+            0,
+            0
+        ],
+        "r_filter_damping": 0,
+        "p_ripple_max": null,
+        "v_dc": 620,
+        "i_max": 10,
+        "pwm_dc_harmonics": 64,
+        "dc_source_l": 0
+    },
+    "target": "grid arm excluding POC shunt",
+    "dc_source": {
+        "p_min_W": 0
+    },
+    "s_base_VA": 100000,
+    "solver_options": {
+        "tol": 1.0e-9,
+        "nlp_scaling_method": "none",
+        "max_iter": 1000,
+        "mu_strategy": "adaptive"
+    },
+    "cases": [
+        {
+            "label": "nominal_request",
+            "voltage": 230,
+            "available": 5000,
+            "requested_p": 4800,
+            "grid_voltage_V": [
+                {
+                    "real": 230,
+                    "imag": 0
+                },
+                {
+                    "real": -114.99999999999994,
+                    "imag": -199.1858428704209
+                },
+                {
+                    "real": -114.99999999999994,
+                    "imag": 199.1858428704209
+                }
+            ],
+            "requested_grid_current_A": [
+                {
+                    "real": 6.956521739130435,
+                    "imag": 0
+                },
+                {
+                    "real": -3.478260869565216,
+                    "imag": -6.024524548065661
+                },
+                {
+                    "real": -3.478260869565216,
+                    "imag": 6.024524548065661
+                }
+            ],
+            "request_feasibility": "feasible",
+            "plant_feasibility": "feasible",
+            "requested_rail_upper_V": 29.11509612075135,
+            "requested_failed_checks": [
+            ],
+            "termination": "LOCALLY_SOLVED",
+            "accepted": true,
+            "distance_A": 1.9501033597261673e-8,
+            "p_poc_W": 4799.999992237889,
+            "q_poc_var": -3.1892266605382247e-7,
+            "p_dc_W": 4840.6517880123065,
+            "allocated_grid_current_A": [
+                {
+                    "real": 6.956521727880998,
+                    "imag": 4.622070324689615e-10
+                },
+                {
+                    "real": -3.478260863540217,
+                    "imag": -6.024524538554466
+                },
+                {
+                    "real": -3.4782608643407826,
+                    "imag": 6.024524538092261
+                }
+            ],
+            "rail_lower_V": 29.115095548675473,
+            "physical_checks": [
+                {
+                    "name": "converter_current_1",
+                    "unit": "A",
+                    "value": 6.956521727880998,
+                    "margin": 3.0434782721190023,
+                    "passed": true
+                },
+                {
+                    "name": "converter_current_2",
+                    "unit": "A",
+                    "value": 6.956521727880999,
+                    "margin": 3.0434782721190006,
+                    "passed": true
+                },
+                {
+                    "name": "converter_current_3",
+                    "unit": "A",
+                    "value": 6.956521727881,
+                    "margin": 3.0434782721189997,
+                    "passed": true
+                },
+                {
+                    "name": "three_leg_zero_current",
+                    "unit": "A",
+                    "value": 2.5121479338940403e-15,
+                    "margin": -2.5121479338940403e-15,
+                    "passed": true
+                },
+                {
+                    "name": "converter_filter_kvl_1",
+                    "unit": "V",
+                    "value": 2.2718103953473912e-14,
+                    "margin": -2.2718103953473912e-14,
+                    "passed": true
+                },
+                {
+                    "name": "converter_filter_kvl_2",
+                    "unit": "V",
+                    "value": 3.76822190084106e-15,
+                    "margin": -3.76822190084106e-15,
+                    "passed": true
+                },
+                {
+                    "name": "converter_filter_kvl_3",
+                    "unit": "V",
+                    "value": 1.0841599276764049e-14,
+                    "margin": -1.0841599276764049e-14,
+                    "passed": true
+                },
+                {
+                    "name": "grid_filter_kvl_1",
+                    "unit": "V",
+                    "value": 0,
+                    "margin": 0,
+                    "passed": true
+                },
+                {
+                    "name": "grid_filter_kvl_2",
+                    "unit": "V",
+                    "value": 0,
+                    "margin": 0,
+                    "passed": true
+                },
+                {
+                    "name": "grid_filter_kvl_3",
+                    "unit": "V",
+                    "value": 0,
+                    "margin": 0,
+                    "passed": true
+                },
+                {
+                    "name": "filter_kcl_1",
+                    "unit": "A",
+                    "value": 0,
+                    "margin": 0,
+                    "passed": true
+                },
+                {
+                    "name": "filter_kcl_2",
+                    "unit": "A",
+                    "value": 0,
+                    "margin": 0,
+                    "passed": true
+                },
+                {
+                    "name": "filter_kcl_3",
+                    "unit": "A",
+                    "value": 0,
+                    "margin": 0,
+                    "passed": true
+                },
+                {
+                    "name": "converter_apparent_power",
+                    "unit": "VA",
+                    "value": 4823.023176828641,
+                    "margin": 1176.9768231713588,
+                    "passed": true
+                },
+                {
+                    "name": "dc_voltage_ripple",
+                    "unit": "V",
+                    "value": 7.782289113067243e-15,
+                    "margin": 7.499999999999992,
+                    "passed": true
+                },
+                {
+                    "name": "capacitor_current",
+                    "unit": "A",
+                    "value": 1.0372739856078618e-15,
+                    "margin": 0.999999999999999,
+                    "passed": true
+                },
+                {
+                    "name": "dc_source_power_max",
+                    "unit": "VA",
+                    "value": 4840.6517880123065,
+                    "margin": 159.3482119876935,
+                    "passed": true
+                },
+                {
+                    "name": "dc_source_power_min",
+                    "unit": "VA",
+                    "value": 4840.6517880123065,
+                    "margin": 4840.6517880123065,
+                    "passed": true
+                },
+                {
+                    "name": "reported_p_conv_residual",
+                    "unit": "VA",
+                    "value": 0,
+                    "margin": 0,
+                    "passed": true
+                },
+                {
+                    "name": "reported_q_conv_residual",
+                    "unit": "VA",
+                    "value": 5.684341886080802e-14,
+                    "margin": -5.684341886080802e-14,
+                    "passed": true
+                },
+                {
+                    "name": "reported_p_poc_residual",
+                    "unit": "VA",
+                    "value": 0,
+                    "margin": 0,
+                    "passed": true
+                },
+                {
+                    "name": "reported_q_poc_residual",
+                    "unit": "VA",
+                    "value": 8.472891175461208e-14,
+                    "margin": -8.472891175461208e-14,
+                    "passed": true
+                },
+                {
+                    "name": "reported_p_dc_residual",
+                    "unit": "VA",
+                    "value": 0,
+                    "margin": 0,
+                    "passed": true
+                },
+                {
+                    "name": "reported_dc_ripple_residual",
+                    "unit": "V",
+                    "value": 1.7564818571941442e-15,
+                    "margin": -1.7564818571941442e-15,
+                    "passed": true
+                },
+                {
+                    "name": "reported_midpoint_ripple_residual",
+                    "unit": "V",
+                    "value": 0,
+                    "margin": 0,
+                    "passed": true
+                },
+                {
+                    "name": "reported_midpoint_mean_residual",
+                    "unit": "V",
+                    "value": 0,
+                    "margin": 0,
+                    "passed": true
+                },
+                {
+                    "name": "continuous_rail_headroom",
+                    "unit": "V",
+                    "value": 29.115095548675473,
+                    "margin": 29.115095548675473,
+                    "passed": true
+                },
+                {
+                    "name": "projection_fixed_voltage_1",
+                    "unit": "V",
+                    "value": 0,
+                    "margin": 0,
+                    "passed": true
+                },
+                {
+                    "name": "projection_fixed_voltage_2",
+                    "unit": "V",
+                    "value": 0,
+                    "margin": 0,
+                    "passed": true
+                },
+                {
+                    "name": "projection_fixed_voltage_3",
+                    "unit": "V",
+                    "value": 0,
+                    "margin": 0,
+                    "passed": true
+                },
+                {
+                    "name": "projection_fixed_midpoint_charge",
+                    "unit": "C",
+                    "value": 0,
+                    "margin": 0,
+                    "passed": true
+                }
+            ]
+        },
+        {
+            "label": "rail_conflict",
+            "voltage": 253,
+            "available": 5000,
+            "requested_p": 4800,
+            "grid_voltage_V": [
+                {
+                    "real": 253,
+                    "imag": 0
+                },
+                {
+                    "real": -126.49999999999994,
+                    "imag": -219.104427157463
+                },
+                {
+                    "real": -126.49999999999994,
+                    "imag": 219.104427157463
+                }
+            ],
+            "requested_grid_current_A": [
+                {
+                    "real": 6.324110671936759,
+                    "imag": 0
+                },
+                {
+                    "real": -3.162055335968378,
+                    "imag": -5.4768404982415095
+                },
+                {
+                    "real": -3.162055335968378,
+                    "imag": 5.4768404982415095
+                }
+            ],
+            "request_feasibility": "violated",
+            "plant_feasibility": "feasible",
+            "requested_rail_upper_V": -26.9069839657953,
+            "requested_failed_checks": [
+                "continuous_rail_headroom"
+            ],
+            "termination": "LOCALLY_SOLVED",
+            "accepted": true,
+            "distance_A": 15.131391773625092,
+            "p_poc_W": 1885.523588378437,
+            "q_poc_var": -5955.849259752212,
+            "p_dc_W": 1934.4343095745576,
+            "allocated_grid_current_A": [
+                {
+                    "real": 2.48422117484329,
+                    "imag": 7.846968866488158
+                },
+                {
+                    "real": 5.553563542840958,
+                    "imag": -6.074882432719182
+                },
+                {
+                    "real": -8.037784717684248,
+                    "imag": -1.7720864337689757
+                }
+            ],
+            "rail_lower_V": -1.7134380114885247e-6,
+            "physical_checks": [
+                {
+                    "name": "converter_current_1",
+                    "unit": "A",
+                    "value": 8.230812550239145,
+                    "margin": 1.7691874497608548,
+                    "passed": true
+                },
+                {
+                    "name": "converter_current_2",
+                    "unit": "A",
+                    "value": 8.230811903799792,
+                    "margin": 1.7691880962002084,
+                    "passed": true
+                },
+                {
+                    "name": "converter_current_3",
+                    "unit": "A",
+                    "value": 8.230812444503064,
+                    "margin": 1.769187555496936,
+                    "passed": true
+                },
+                {
+                    "name": "three_leg_zero_current",
+                    "unit": "A",
+                    "value": 4.440892098500626e-16,
+                    "margin": -4.440892098500626e-16,
+                    "passed": true
+                },
+                {
+                    "name": "converter_filter_kvl_1",
+                    "unit": "V",
+                    "value": 3.66205343881779e-15,
+                    "margin": -3.66205343881779e-15,
+                    "passed": true
+                },
+                {
+                    "name": "converter_filter_kvl_2",
+                    "unit": "V",
+                    "value": 1.0695084443661336e-14,
+                    "margin": -1.0695084443661336e-14,
+                    "passed": true
+                },
+                {
+                    "name": "converter_filter_kvl_3",
+                    "unit": "V",
+                    "value": 1.4567209187227738e-14,
+                    "margin": -1.4567209187227738e-14,
+                    "passed": true
+                },
+                {
+                    "name": "grid_filter_kvl_1",
+                    "unit": "V",
+                    "value": 0,
+                    "margin": 0,
+                    "passed": true
+                },
+                {
+                    "name": "grid_filter_kvl_2",
+                    "unit": "V",
+                    "value": 0,
+                    "margin": 0,
+                    "passed": true
+                },
+                {
+                    "name": "grid_filter_kvl_3",
+                    "unit": "V",
+                    "value": 0,
+                    "margin": 0,
+                    "passed": true
+                },
+                {
+                    "name": "filter_kcl_1",
+                    "unit": "A",
+                    "value": 0,
+                    "margin": 0,
+                    "passed": true
+                },
+                {
+                    "name": "filter_kcl_2",
+                    "unit": "A",
+                    "value": 0,
+                    "margin": 0,
+                    "passed": true
+                },
+                {
+                    "name": "filter_kcl_3",
+                    "unit": "A",
+                    "value": 0,
+                    "margin": 0,
+                    "passed": true
+                },
+                {
+                    "name": "converter_apparent_power",
+                    "unit": "VA",
+                    "value": 5999.999999277898,
+                    "margin": 7.221024134196341e-7,
+                    "passed": true
+                },
+                {
+                    "name": "dc_voltage_ripple",
+                    "unit": "V",
+                    "value": 2.3954629798982397e-6,
+                    "margin": 7.49999760453702,
+                    "passed": true
+                },
+                {
+                    "name": "capacitor_current",
+                    "unit": "A",
+                    "value": 3.1928284807139656e-7,
+                    "margin": 0.999999680717152,
+                    "passed": true
+                },
+                {
+                    "name": "dc_source_power_max",
+                    "unit": "VA",
+                    "value": 1934.4343095745573,
+                    "margin": 3065.565690425443,
+                    "passed": true
+                },
+                {
+                    "name": "dc_source_power_min",
+                    "unit": "VA",
+                    "value": 1934.4343095745573,
+                    "margin": 1934.4343095745573,
+                    "passed": true
+                },
+                {
+                    "name": "reported_p_conv_residual",
+                    "unit": "VA",
+                    "value": 2.2737367544323206e-13,
+                    "margin": -2.2737367544323206e-13,
+                    "passed": true
+                },
+                {
+                    "name": "reported_q_conv_residual",
+                    "unit": "VA",
+                    "value": 9.094947017729282e-13,
+                    "margin": -9.094947017729282e-13,
+                    "passed": true
+                },
+                {
+                    "name": "reported_p_poc_residual",
+                    "unit": "VA",
+                    "value": 0,
+                    "margin": 0,
+                    "passed": true
+                },
+                {
+                    "name": "reported_q_poc_residual",
+                    "unit": "VA",
+                    "value": 9.094947017729282e-13,
+                    "margin": -9.094947017729282e-13,
+                    "passed": true
+                },
+                {
+                    "name": "reported_p_dc_residual",
+                    "unit": "VA",
+                    "value": 2.2737367544323206e-13,
+                    "margin": -2.2737367544323206e-13,
+                    "passed": true
+                },
+                {
+                    "name": "reported_dc_ripple_residual",
+                    "unit": "V",
+                    "value": 2.4387493999421155e-15,
+                    "margin": -2.4387493999421155e-15,
+                    "passed": true
+                },
+                {
+                    "name": "reported_midpoint_ripple_residual",
+                    "unit": "V",
+                    "value": 0,
+                    "margin": 0,
+                    "passed": true
+                },
+                {
+                    "name": "reported_midpoint_mean_residual",
+                    "unit": "V",
+                    "value": 0,
+                    "margin": 0,
+                    "passed": true
+                },
+                {
+                    "name": "continuous_rail_headroom",
+                    "unit": "V",
+                    "value": -1.7134380114885247e-6,
+                    "margin": -1.7134380114885247e-6,
+                    "passed": true
+                },
+                {
+                    "name": "projection_fixed_voltage_1",
+                    "unit": "V",
+                    "value": 0,
+                    "margin": 0,
+                    "passed": true
+                },
+                {
+                    "name": "projection_fixed_voltage_2",
+                    "unit": "V",
+                    "value": 3.1776437161565096e-14,
+                    "margin": -3.1776437161565096e-14,
+                    "passed": true
+                },
+                {
+                    "name": "projection_fixed_voltage_3",
+                    "unit": "V",
+                    "value": 3.1776437161565096e-14,
+                    "margin": -3.1776437161565096e-14,
+                    "passed": true
+                },
+                {
+                    "name": "projection_fixed_midpoint_charge",
+                    "unit": "C",
+                    "value": 0,
+                    "margin": 0,
+                    "passed": true
+                }
+            ]
+        },
+        {
+            "label": "energized_zero_pv",
+            "voltage": 230,
+            "available": 0,
+            "requested_p": 0,
+            "grid_voltage_V": [
+                {
+                    "real": 230,
+                    "imag": 0
+                },
+                {
+                    "real": -114.99999999999994,
+                    "imag": -199.1858428704209
+                },
+                {
+                    "real": -114.99999999999994,
+                    "imag": 199.1858428704209
+                }
+            ],
+            "requested_grid_current_A": [
+                {
+                    "real": 0,
+                    "imag": 0
+                },
+                {
+                    "real": 0,
+                    "imag": 0
+                },
+                {
+                    "real": 0,
+                    "imag": 0
+                }
+            ],
+            "request_feasibility": "violated",
+            "plant_feasibility": "feasible",
+            "requested_rail_upper_V": 31.817359177869218,
+            "requested_failed_checks": [
+                "dc_source_power_max"
+            ],
+            "termination": "LOCALLY_SOLVED",
+            "accepted": true,
+            "distance_A": 0.05020527127316252,
+            "p_poc_W": -20.000358550166013,
+            "q_poc_var": -2.998904445763008e-7,
+            "p_dc_W": 8.1173926962673e-10,
+            "allocated_grid_current_A": [
+                {
+                    "real": -0.028986026884299014,
+                    "imag": 4.3462342875987963e-10
+                },
+                {
+                    "real": 0.014493013818545137,
+                    "imag": 0.02510263541926916
+                },
+                {
+                    "real": 0.01449301306575388,
+                    "imag": -0.02510263585389259
+                }
+            ],
+            "rail_lower_V": 31.8267403454534,
+            "physical_checks": [
+                {
+                    "name": "converter_current_1",
+                    "unit": "A",
+                    "value": 0.028986026884299017,
+                    "margin": 9.971013973115701,
+                    "passed": true
+                },
+                {
+                    "name": "converter_current_2",
+                    "unit": "A",
+                    "value": 0.0289860268842987,
+                    "margin": 9.971013973115701,
+                    "passed": true
+                },
+                {
+                    "name": "converter_current_3",
+                    "unit": "A",
+                    "value": 0.028986026884298,
+                    "margin": 9.971013973115703,
+                    "passed": true
+                },
+                {
+                    "name": "three_leg_zero_current",
+                    "unit": "A",
+                    "value": 4.9065389333867974e-18,
+                    "margin": -4.9065389333867974e-18,
+                    "passed": true
+                },
+                {
+                    "name": "converter_filter_kvl_1",
+                    "unit": "V",
+                    "value": 1.13090960207618e-14,
+                    "margin": -1.13090960207618e-14,
+                    "passed": true
+                },
+                {
+                    "name": "converter_filter_kvl_2",
+                    "unit": "V",
+                    "value": 9.713452709041459e-15,
+                    "margin": -9.713452709041459e-15,
+                    "passed": true
+                },
+                {
+                    "name": "converter_filter_kvl_3",
+                    "unit": "V",
+                    "value": 2.6707493457860774e-14,
+                    "margin": -2.6707493457860774e-14,
+                    "passed": true
+                },
+                {
+                    "name": "grid_filter_kvl_1",
+                    "unit": "V",
+                    "value": 0,
+                    "margin": 0,
+                    "passed": true
+                },
+                {
+                    "name": "grid_filter_kvl_2",
+                    "unit": "V",
+                    "value": 0,
+                    "margin": 0,
+                    "passed": true
+                },
+                {
+                    "name": "grid_filter_kvl_3",
+                    "unit": "V",
+                    "value": 0,
+                    "margin": 0,
+                    "passed": true
+                },
+                {
+                    "name": "filter_kcl_1",
+                    "unit": "A",
+                    "value": 0,
+                    "margin": 0,
+                    "passed": true
+                },
+                {
+                    "name": "filter_kcl_2",
+                    "unit": "A",
+                    "value": 0,
+                    "margin": 0,
+                    "passed": true
+                },
+                {
+                    "name": "filter_kcl_3",
+                    "unit": "A",
+                    "value": 0,
+                    "margin": 0,
+                    "passed": true
+                },
+                {
+                    "name": "converter_apparent_power",
+                    "unit": "VA",
+                    "value": 20.000025482628264,
+                    "margin": 5979.999974517372,
+                    "passed": true
+                },
+                {
+                    "name": "dc_voltage_ripple",
+                    "unit": "V",
+                    "value": 3.5374148869847294e-15,
+                    "margin": 7.4999999999999964,
+                    "passed": true
+                },
+                {
+                    "name": "capacitor_current",
+                    "unit": "A",
+                    "value": 4.714896073971558e-16,
+                    "margin": 0.9999999999999996,
+                    "passed": true
+                },
+                {
+                    "name": "dc_source_power_max",
+                    "unit": "VA",
+                    "value": 8.117382321870537e-10,
+                    "margin": -8.117382321870537e-10,
+                    "passed": true
+                },
+                {
+                    "name": "dc_source_power_min",
+                    "unit": "VA",
+                    "value": 8.117382321870537e-10,
+                    "margin": 8.117382321870537e-10,
+                    "passed": true
+                },
+                {
+                    "name": "reported_p_conv_residual",
+                    "unit": "VA",
+                    "value": 0,
+                    "margin": 0,
+                    "passed": true
+                },
+                {
+                    "name": "reported_q_conv_residual",
+                    "unit": "VA",
+                    "value": 2.0729945537922845e-16,
+                    "margin": -2.0729945537922845e-16,
+                    "passed": true
+                },
+                {
+                    "name": "reported_p_poc_residual",
+                    "unit": "VA",
+                    "value": 0,
+                    "margin": 0,
+                    "passed": true
+                },
+                {
+                    "name": "reported_q_poc_residual",
+                    "unit": "VA",
+                    "value": 6.0609739002313e-16,
+                    "margin": -6.0609739002313e-16,
+                    "passed": true
+                },
+                {
+                    "name": "reported_p_dc_residual",
+                    "unit": "VA",
+                    "value": 1.0374396763233984e-15,
+                    "margin": -1.0374396763233984e-15,
+                    "passed": true
+                },
+                {
+                    "name": "reported_dc_ripple_residual",
+                    "unit": "V",
+                    "value": 3.3868447745517954e-18,
+                    "margin": -3.3868447745517954e-18,
+                    "passed": true
+                },
+                {
+                    "name": "reported_midpoint_ripple_residual",
+                    "unit": "V",
+                    "value": 0,
+                    "margin": 0,
+                    "passed": true
+                },
+                {
+                    "name": "reported_midpoint_mean_residual",
+                    "unit": "V",
+                    "value": 0,
+                    "margin": 0,
+                    "passed": true
+                },
+                {
+                    "name": "continuous_rail_headroom",
+                    "unit": "V",
+                    "value": 31.8267403454534,
+                    "margin": 31.8267403454534,
+                    "passed": true
+                },
+                {
+                    "name": "projection_fixed_voltage_1",
+                    "unit": "V",
+                    "value": 0,
+                    "margin": 0,
+                    "passed": true
+                },
+                {
+                    "name": "projection_fixed_voltage_2",
+                    "unit": "V",
+                    "value": 0,
+                    "margin": 0,
+                    "passed": true
+                },
+                {
+                    "name": "projection_fixed_voltage_3",
+                    "unit": "V",
+                    "value": 0,
+                    "margin": 0,
+                    "passed": true
+                },
+                {
+                    "name": "projection_fixed_midpoint_charge",
+                    "unit": "C",
+                    "value": 0,
+                    "margin": 0,
+                    "passed": true
+                }
+            ]
+        }
+    ]
+}

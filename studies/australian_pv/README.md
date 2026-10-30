@@ -168,6 +168,15 @@ The product standard is AS/NZS 4777.2:2020 including Amendment 2:2024
 (effective August 2025). This source does not establish full conformity of
 our multiphase sensing, priority or negative-sequence laws.
 
+Checked 31 October 2026: Energex's
+[installer standards index](https://www.energex.com.au/our-services/connections/residential-and-commercial-connections/solar-connections-and-other-technologies/connection-information-for-installers)
+still lists the February 2025 STNW1170 release. Its Tables 8–9 retain the knots
+used here. Section 4.3.3 also requires balanced AC output for multiphase IES;
+the three-phase-inverter definition addresses simultaneous connection and
+disconnection. Negative-/zero-sequence support and future four-leg comparisons
+are research capability experiments. Using the sourced voltage curves does not
+establish that those operating modes meet the connection requirements.
+
 The two 2 mF sensitivities intentionally separate stored energy from thermal
 capability. At the baseline 300 µF/750 V, 7.5 V peak 2ω ripple corresponds to
 about 1.06 kW oscillating power and 1 A capacitor RMS current for the open source.

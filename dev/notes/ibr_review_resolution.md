@@ -1,5 +1,63 @@
 # Advanced IBR review: resolution plan
 
+## Australian source freshness check, 31 October 2026
+
+The [Energex installer standards index](https://www.energex.com.au/our-services/connections/residential-and-commercial-connections/solar-connections-and-other-technologies/connection-information-for-installers)
+still lists STNW1170 dated 21 February 2025. The
+[release-10 PDF](https://www.energex.com.au/__data/assets/pdf_file/0010/1072549/STNW1170-Standard-for-Small-IES-Connections.pdf)
+retains the VV/VW settings in Tables 8–9. Section 4.3.3 requires balanced AC
+output for multiphase IES, and the three-phase-inverter definition addresses
+simultaneous connection/disconnection. Preserve the distinction between sourced
+curve parameters and research sequence/neutral-control capability. Future
+disconnection and four-leg cases must state their connection assumptions;
+the present physical-model checks do not establish connection conformity.
+
+## Offline voltage-aware allocation reference
+
+`project_inverter_current` now provides the reusable fixed-POC-voltage reference.
+It minimizes squared converter-arm or grid-arm current error over the declared
+plant with free sequence allocation, non-charging PV bounds by default and
+adaptive full-cycle rail refinement. A separate SI reconstruction checks the
+requested point through the full primitive/LCL filter. Split-link balancing
+charge is explicitly fixed in both calculations. That conditional scope is
+part of the API, not an implicit assumption about an optimized balancing actuator.
+
+Request status is feasible, violated or unresolved. Plant status is feasible
+only with a direct requested-point witness or a physically accepted allocation;
+otherwise it is unresolved. A negative rail lower enclosure alone cannot prove
+a violation: a sampled violating witness is required. Singular filter inversion
+also remains unresolved. An unsuccessful local solve never becomes a physical
+infeasibility assertion. The result preserves allocation solver/physical diagnostics.
+
+The 91-assertion regression suite includes an analytic radial VA projection at
+three numerical bases, an omitted-current-rating case at 100 MVA, voltage-rail
+conflict and reference-angle invariance, primitive mutual/neutral LCL transfer in
+both arm directions, fixed split-link charge, zero-PV loss import, solver failures
+with/without a separate feasible witness, singular transfer and input contracts.
+The allocated point independently verifies fixed POC voltage and midpoint charge;
+a physically feasible point at a shifted boundary cannot publish as a projection.
+`scripts/formulations/inverter_current_projection.jl` reproduces three accepted
+operating points on one fixed synthetic plant. Its committed JSON snapshot
+contains complete hardware, source fingerprints and individual physical checks.
+The final frozen source passes the complete offline package suite:
+19,844/19,844 assertions (7m28.4s). An earlier mixed-source test run was discarded;
+this complete run includes the final boundary acceptance helper and its tests.
+The companion Matplotlib figure shows the balanced-current capability slice
+and the requested/allocated instantaneous line-voltage envelopes. It identifies
+the synthetic fixture separately from the unchanged Australian sizing.
+
+An additional optional-current-rating probe with an unbalanced LCL plant accepts
+SI, 1 MVA and 100 MVA runs, but returns `ALMOST_LOCALLY_SOLVED` at 10 kVA under
+the same tolerance profile. The relaxed result remains unpublishable; this probe
+does not resolve the outstanding optional-arm conditioning audit.
+
+This completes the offline reference step, not the full voltage-aware control
+requirement. Remaining work includes online reactive-priority voltage allocation,
+controller-domain handling, optional-arm SI conditioning/DC-source boundary audit,
+the controlled-unbalance/operating-mode/chronological Australian studies,
+coordinated Australian dispatch, four-leg control and representative EMT.
+The goal remains active and Australian inverter sizing is unchanged.
+
 ## Refreshed physical-acceptance checkpoint
 
 Source commit `c0226a3` passes the complete offline package suite: 19,753/19,753

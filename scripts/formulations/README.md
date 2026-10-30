@@ -72,3 +72,23 @@ recorded explicitly. Optional exports include `*-bounded.toml` and
 `*-bounded-mpcc.toml`; graph and relation observations keep their own residual
 semantics. See [bounds and relations](../../docs/src/formulations/bounds_and_relations.md)
 for the geometry and reproduction instructions for the figures.
+
+## Offline inverter current allocation
+
+```sh
+julia --project=. scripts/formulations/inverter_current_projection.jl /tmp/current_projection.json
+```
+
+This fixed-boundary physical reference tests a feasible current request, a
+rail-infeasible request with a feasible alternative, and energized zero-PV loss
+import on the same synthetic plant. It includes source bounds, independent
+per-bound checks and source fingerprints. The measured
+[`inverter_current_projection_reference.json`](inverter_current_projection_reference.json)
+snapshot accepts all three allocations. It is a local nonconvex reference,
+not a global nearest-point certificate, autonomous VV+VW law or EMT simulation.
+The hardware is a regression fixture and does not replace the Australian
+case-study parameters. See the
+[operating-constraint guide](../../docs/src/components/inverter_operating_constraints.md).
+`python3 scripts/formulations/plot_current_projection.py` uses Matplotlib/NumPy
+to regenerate the standalone capability-slice and full-cycle voltage figure
+from that saved reference.
