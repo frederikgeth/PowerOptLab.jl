@@ -31,7 +31,13 @@ The plot script needs Matplotlib and NumPy (`python3 -m pip install matplotlib`)
 PNG and SVG figures are generated locally and ignored by Git. `run.jl` also
 exposes `run(modes=..., levels=..., sources=..., curves=..., hw=...)` for smaller
 experiments; the plot script requires the complete 54-case main campaign.
-Outputs are overwritten on rerun.
+Outputs are overwritten on rerun. New campaigns also write
+`physical_reports.csv` and `physical_checks.csv`: one report per advanced
+inverter/base attempt and one row per independently recomputed bound/equality.
+Rejected attempts remain in these diagnostics. Native single-phase devices are
+outside the advanced-inverter certificate and have no entries in those files.
+Acceptance requires each advanced inverter's physical report as well as the
+existing network and exact/smooth checks.
 
 Zero PV availability keeps the inverters energized: the voltage controls and
 I₂ service remain active, and AC loss import supports them. This is a declared

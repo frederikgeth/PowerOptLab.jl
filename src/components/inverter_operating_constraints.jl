@@ -374,7 +374,8 @@ function extract_device(device::ConstrainedInverter,
     phase_voltage = ntuple(k -> ComplexF64(
         scalar(handles.phase_voltage[k][1], h.vb),
         scalar(handles.phase_voltage[k][2], h.vb)), 3)
-    plant = extract_device(inv, h, status)
+    plant = extract_device(inv, h, status;dc_min=device.dc_source.p_min,
+        dc_max=_available_dc(device,request))
     fraction_exact, curve_q_exact = if status.publishable
         u1 = _phasor_sequences(phase_voltage)[2]
         f, q, _, _ = _positive_exact(
@@ -399,6 +400,17 @@ function extract_device(device::ConstrainedInverter,
         nothing
     end
     bounds = _poc_operating_bounds(policy)
+    if status.has_primal
+        additional=InverterLimitCheck[]
+        for (label,quantity,lower,upper) in (("active",h.p_poc,bounds.p_min,bounds.p_max),
+                ("reactive",h.q_poc,bounds.q_min,bounds.q_max))
+            lower===nothing && upper===nothing && continue
+            push!(additional,_inverter_limit_check("operating_$(label)_power",:VA,
+                JuMP.value(quantity)*h.sb,something(lower,-Inf),something(upper,Inf)))
+        end
+        plant=merge(plant,(physical_feasibility=
+            _extend_inverter_feasibility(plant.physical_feasibility,additional),))
+    end
     current_margin(limit, current, reserve) = limit === nothing ? nothing :
         ntuple(k -> limit - hypot(current[k], reserve[k]), 3)
     operation = (
@@ -442,6 +454,10 @@ function extract_device(device::ConstrainedInverter,
         midpoint_ripple_margin_V=inv.dv_mid_max === nothing ? nothing : inv.dv_mid_max-plant.dv_mid,
         midpoint_mean_margin_V=inv.v_mid_mean_max === nothing ? nothing : inv.v_mid_mean_max-abs(plant.v_mid_mean),
         switching_margin_V=plant.switching_margin,
+        physical_feasible=plant.physical_feasibility.passed,
+        physical_failed_checks=[c.name for c in plant.physical_feasibility.checks if !c.passed],
+        continuous_rail_margin_lower_V=plant.physical_feasibility.rail.lower_V,
+        continuous_rail_margin_upper_V=plant.physical_feasibility.rail.upper_V,
     )
     return (; plant, operation,
         converter_terminal=_extract_converter_terminal(h, status),
@@ -468,6 +484,7 @@ struct ConstrainedInverterResult <: AbstractSolveResult
 end
 
 solve_status(result::ConstrainedInverterResult) = result.solve
+physical_feasibility(result::ConstrainedInverterResult) = result.plant.physical_feasibility
 solve_diagnostics(result::ConstrainedInverterResult) = result.operation
 
 """
@@ -490,7 +507,7 @@ function solve_constrained_inverter(net::Dict{String,Any},
         device::ConstrainedInverter, request::InverterControlRequest;
         objective::Symbol=:max_export, p_set::Union{Nothing,Real}=nothing,
         per_unit::Bool=true, s_base::Real=1e6, optimizer=Ipopt.Optimizer,
-        verbose::Bool=false, solver_options=())
+        verbose::Bool=false, solver_options=(),rail_refinement::Bool=true)
     objective in (:max_export, :feasibility) || throw(ArgumentError(
         "objective must be :max_export or :feasibility"))
     if objective === :feasibility
@@ -515,13 +532,14 @@ function solve_constrained_inverter(net::Dict{String,Any},
     end
     ctx = build_opf_model(net; per_unit=true, s_base=Float64(s_base),
         add_objective=false, model_hook! = hook!, optimizer, verbose)
-    _set_solver_options!(_opf_model(ctx), solver_options)
-    BMOPFTools.optimize_opf!(ctx)
+    _set_inverter_solver_options!(_opf_model(ctx),solver_options)
+    _optimize_inverter_rails!(ctx,((device.device,handles[].plant),);enabled=rail_refinement)
     outcome = _solve_outcome(_opf_model(ctx))
     status = SolveStatus(outcome)
     extracted = extract_device(device, handles[], status)
     network = _extract_result(ctx, outcome)
     return ConstrainedInverterResult(string(outcome.termination_status),
         extracted.plant, extracted.operation, extracted.converter_terminal,
-        extracted.grid_phase_current, network["bus"], status)
+        extracted.grid_phase_current, network["bus"],
+        _physical_solve_status(status,extracted.plant.physical_feasibility))
 end

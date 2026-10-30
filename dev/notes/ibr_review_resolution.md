@@ -1,5 +1,75 @@
 # Advanced IBR review: resolution plan
 
+## Active goal checkpoint: physical acceptance and continuous rails
+
+Work remains on `codex/ibr-pcc-apparent-power`; inverter sizing values are
+unchanged. The active objective still includes the full engineering audit,
+voltage-aware allocation, stronger case studies, coordinated dispatch, four-leg
+control and representative EMT validation. This checkpoint does not complete
+that objective.
+
+Implemented in this batch:
+
+- Independent SI reports recompute current/sequence limits, conductor-domain
+  filter equations, selected-boundary power, internal/GFM voltage, DC ripple,
+  split-bank midpoint/thermal budgets and reported-power consistency. Wrappers
+  add DC availability, POC P/Q bounds and actual command-current residuals.
+  Solver `feasible`/`optimal` evidence remains separate from the publication
+  gate. Failed candidates can retain diagnostic reports.
+- Capability and linking rows default to engineering normalization. Single-phase
+  ripple/modulation rows are included. Unsupported single-phase DC-bus/source
+  and neutral bounds now reject input rather than being silently ignored.
+  Ipopt wrappers default to zero bound relaxation, with explicit caller options
+  preserved and other optimizers' option vocabularies respected.
+- Full-cycle rail headroom is enclosed by adaptive Taylor bounds for each signed
+  degree-two trigonometric inequality. Standalone solves add separating angles
+  and repeat, for at most 12 refinements. The physical gate rejects an unresolved
+  rail violation. This is not yet a voltage-aware command allocator.
+- Filter starts satisfy linear KVL/KCL and the three-leg zero-current sum.
+  Constant-service and zero-availability PCC graphs initialize auxiliary
+  definitions and quadratic roots in dependency order. The balanced test fixture
+  now uses exact 120-degree angles; a separate common-mode case tests the strict
+  LCL balanced-grid incompatibility rather than accepting it through tolerance.
+- At zero DC availability, total-PCC loss accounting implies mandatory loss
+  import and identically zero active PV service. The smooth law now uses that
+  exact identity and leaves reactive/unbalance support active. The positive-
+  sequence legacy offset can contain signed I2 power and is not simplified by
+  the PCC identity.
+- New study runs save per-attempt `physical_reports.csv` and `physical_checks.csv`,
+  including rejected attempts and raw solver status. Source fingerprints include
+  new/untracked Julia files. Generated CSVs are cleared before a campaign so an
+  early rejection cannot leave stale accepted metrics.
+
+Validation at this checkpoint: 189 new certificate/enclosure/initialization
+assertions, the affected inverter suites, and 380 Australian replay-audit checks.
+The matched 18-point terminal sweep accepts all points with the fixed 100 kVA
+base/profile and no retries: 216 device reports and 6,264 individual checks pass.
+Publication artifacts will retain the exact source fingerprints used at runtime.
+Intermediate rejected runs remain diagnostics; none establishes physical
+infeasibility on its own.
+
+Remaining work, in dependency order:
+
+1. Complete the engineering ledger beyond this fundamental-model certificate:
+   test nonconverged/nonfinite PWM reserve closure publication, actual carrier
+   RMS versus declared bounds, optional-arm SI conditioning, and the DC-source
+   impedance/average-power boundary. Preserve the existing source-model oracles.
+2. Build the offline closest-feasible converter allocation reference, then add
+   voltage/modulation-aware allocation and explicit plant-versus-policy domain
+   diagnostics. Adaptive rail cuts only enforce the plant; they do not redesign
+   the local command when that command is infeasible.
+3. Refresh the complete main/sensitivity artifacts from a committed source
+   checkpoint. Extend matched studies with VUF angle/magnitude/common mode and
+   phase permutations, disconnected versus energized operation, and chronological
+   profiles before energy claims. Keep hardware fixed.
+4. Add coordinated dispatch using the same plant and engineering checks. A local
+   nonconvex OPF solution is a feasible benchmark, not a certified global upper
+   bound; any claimed upper bound needs separate relaxation/global evidence.
+5. Develop four-leg per-phase control and split-bank protection, then validate
+   representative binding cases with parameter-identical EMT. Retain the
+   distinctions between the fundamental certificate, carrier replay and EMT.
+
+
 ## 31 October 2026: engineering limits and next priorities
 
 The validated thermal/PCC study checkpoint is commit `80f6d8d` on

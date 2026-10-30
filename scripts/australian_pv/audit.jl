@@ -52,6 +52,12 @@ function audit()
         result=solve_controlled_inverter_fleet(net,fleet(net,mode,1.);
             s_base=first(SOLVE_BASES),solver_options=CONTROL_SOLVER_OPTIONS)
         @test solve_status(result).publishable
+        for device in values(result.devices)
+            certificate=physical_feasibility(device)
+            @test certificate.checked && certificate.passed
+            @test certificate.rail.converged
+            @test certificate.rail.lower_V >= -1e-5
+        end
         report[mode*"_fixed_PQ_replay_max_difference_V"]=replay(net,result)
     end
     for mode in TERMINAL_MODES
@@ -61,16 +67,16 @@ function audit()
         result=solve_controlled_inverter_fleet(net,spec;
             s_base=only(TERMINAL_SOLVE_BASES),solver_options=TERMINAL_SOLVER_OPTIONS)
         @test solve_status(result).publishable
+        for device in values(result.devices)
+            certificate=physical_feasibility(device)
+            @test certificate.checked && certificate.passed
+            @test certificate.rail.converged
+            @test certificate.rail.lower_V >= -1e-5
+        end
         @test accepted_control_rows(controlled_inverter_rows(result),HARDWARE)
         report["terminal_"*mode*"_fixed_PQ_replay_max_difference_V"]=replay(net,result)
     end
-    repo=normpath(joinpath(ROOT,"..",".."))
-    files=[joinpath(dir,f) for (dir,_,names) in walkdir(joinpath(repo,"src"))
-           for f in names if endswith(f,".jl")]
-    append!(files,[joinpath(@__DIR__,f) for f in ("prepare.jl","run.jl","audit.jl")])
-    push!(files,joinpath(@__DIR__,"..","enwl_advanced_ibr","common.jl"))
-    report["validated_source_sha256"]=Dict(relpath(f,repo)=>bytes2hex(sha256(read(f)))
-        for f in sort!(files))
+    report["validated_source_sha256"]=study_source_sha256()
     writejson(joinpath(ROOT,"results","modified_validation.json"),report)
 end
 if abspath(PROGRAM_FILE)==abspath(@__FILE__)

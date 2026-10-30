@@ -4,6 +4,61 @@ A circuit-aware optimisation model should be tested at four levels: algebraic
 identities, closed-form topology limits, published cases, and a higher-fidelity
 oracle. A solver returning `LOCALLY_SOLVED` is necessary, but not sufficient.
 
+## Independent physical acceptance
+
+Every standalone advanced, constrained or controlled inverter solve, including
+fleet devices, now produces `physical_feasibility(result)`. The report
+recomputes SI quantities from RMS voltage/current phasors, rather than trusting
+squared-current, sequence-power or ripple auxiliaries. It checks phase and
+neutral current reserves; converter sequence ratings; primitive/LCL KVL and
+KCL; internal/GFM voltage bounds; selected-boundary VA; source-dependent DC
+ripple; split midpoint charge/voltage; capacitor thermal budgets; and DC-source
+availability supplied by the wrapper. Reported power and ripple quantities are
+also checked against the independent calculation. Controlled-device reports
+add actual-versus-commanded current residuals in amperes; constrained-device
+reports add declared POC P/Q bounds. The exact fitted linear-loss
+norm is used in the audit, making the known one-sided smoothing deficit
+visible rather than hiding it in a reported auxiliary.
+
+`InverterFeasibilityTolerances` declares physical floors of 10 µA, 10 µV,
+0.01 VA and 1 nC, plus `1e-8` times the relevant rating. These do not depend on
+the network power base or silently grow with solver tolerances. The rail
+minimum is enclosed to 1 µV by default. All tolerances are inspectable in the
+individual `InverterLimitCheck` records.
+
+The full-cycle rail check bounds each signed inequality as a degree-two
+trigonometric polynomial. On each interval, Taylor's theorem supplies a lower
+bound using `abs(f′′) ≤ hypot(c₁,s₁) + 4 hypot(c₂,s₂)`; evaluated points supply
+upper bounds. Adaptive subdivision encloses the global minimum over the full
+electrical cycle, including split-link fundamental and 2ω displacement. Float64
+roundoff is padded. This is a numerical enclosure of the declared averaged
+waveform, not an interval-arithmetic proof of hardware behavior.
+
+The standalone solvers refine the sampled hull by adding violating angles and
+re-solving, for at most 12 refinements. `rail_refinement=false` retains the
+sampled research formulation; the physical acceptance gate still rejects a
+missed rail violation. Direct stamping remains composable: call
+`inverter_physical_feasibility(inv, handles, solve_status(model))` after an
+external solve and add/refine constraints in the host problem as appropriate.
+
+`solve_status(result).publishable` requires solver success **and** physical
+acceptance. MOI termination/primal statuses and the solver's `feasible` and
+`optimal` flags remain unchanged for diagnosis. Candidate quantities may remain present
+when a physically rejected solver-success point is returned; a termination
+string alone is insufficient to select study results. Candidate reports can
+also diagnose unsuccessful solves without promoting them to accepted results.
+No-primal outcomes have an unchecked, non-passing report.
+
+The report certifies the declared inverter fundamental model and calibrated
+RMS reserves. It does not certify the entire network, actual carrier-reserve
+closure, regional compliance, or transient/dynamic stability. Network replay,
+carrier audits and controller-policy residuals remain separate evidence.
+
+The balanced three-phase fixture uses exact ±120° angles. Rounded decimal
+angles introduce a small U₀ and can make a strict balanced-grid LCL controller
+incompatible with its passive shunt, even when a converter-target plant is
+feasible. A separate common-mode case retains and tests that distinction.
+
 ## Tests implemented in the package
 
 | Mechanism | Test oracle | Expected invariant |
@@ -18,7 +73,7 @@ oracle. A solver returning `LOCALLY_SOLVED` is necessary, but not sufficient.
 | Sequence limits | unbalanced voltage sources | each of `i_zero_max`, `i_positive_max`, `i_negative_max` bounds its reported component |
 | 3-wire topology | KCL | the three phase-current phasors sum to zero under balanced and unbalanced voltage |
 | Balanced switching hull | closed form | `Vdc_min = sqrt(6) U/m` for 3-leg and `2sqrt(2) U/m` for split DC |
-| Sample resolution and audit | nested sample grids plus independent dense evaluation | increasing `n_samples` tightens the outer approximation; `switching_margin < 0` reveals a missed between-sample peak |
+| Sample resolution and audit | nested grids, full-cycle Taylor enclosure and adaptive separating cuts | a coarse-grid false optimum cannot publish; feasible dispatch remains available after refinement |
 | 2ω power | Deakin et al. Table V | six prescribed current patterns produce `[0,1,1.5,3,0,1] Vph Iref` |
 | 2ω PLECS comparison | Deakin et al. Table VII | all six rows are retained; non-cancelling analytical powers agree with PLECS within 0.3% and reported currents within 1% |
 | Bus capacitance | capacitor energy balance | open line-frequency source: `dv2 = ripple/(2ω Ceq Vdc)`, with `Ceq=Cu Cl/(Cu+Cl)` for a split link; ideal stiff source: `dv2 = 0` |
@@ -79,7 +134,9 @@ oracle. A solver returning `LOCALLY_SOLVED` is necessary, but not sufficient.
 | Sequential-to-equilibrium workbook | guarded affine-branch enumeration, independent fixed-point formula and sequential energy replay | cycling numerical iteration can coexist with a unique equilibrium; ceilings change dispatch freedom; state and hysteresis examples preserve declared history |
 | Full multi-inverter network OPF | seven-bus four-wire feeder, three matched controls, native/hook voltage limits and independent SI radial replay | control agreement within 0.2 W / 0.1 var / 1 mV; coordinated 244 V and 12 A limits bind; KCL, KVL, power balance, base invariance and failed-output masking pass |
 
-These tests live in `test/advanced_inverter_tests.jl` and
+Physical certificate and full-cycle enclosure tests live in
+`test/inverter_feasibility_tests.jl`. The other tests live in
+`test/advanced_inverter_tests.jl` and
 `test/inverter_control_tests.jl`, with operating constraints in
 `test/inverter_operating_constraints_tests.jl`,
 `test/inverter_formulation_variants_tests.jl` and

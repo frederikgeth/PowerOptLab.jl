@@ -66,7 +66,7 @@ function _pcc_segment_exact(a, b, limit, epsilon)
     return clamp(t, 0.0, 1.0)
 end
 
-function _pcc_segment_smooth!(m, a, b, limit, epsilon; normalize::Bool=false)
+function _pcc_segment_smooth!(m, a, b, limit, epsilon; normalize::Bool=false,initialize::Bool=false)
     if iszero(limit)
         for value in a
             _is_identically_zero(value) || JuMP.@constraint(m, value == 0)
@@ -98,7 +98,14 @@ function _pcc_segment_smooth!(m, a, b, limit, epsilon; normalize::Bool=false)
     magnitude = normalize ? sqrt(d+delta) : 1.0
     coefficient = normalize ? 1.0 : d+delta
     projection = (c+delta)/magnitude
-    root = JuMP.@variable(m, lower_bound=0., start=normalize ? 1. : .5)
+    root_start=normalize ? 1. : .5
+    if initialize
+        p0=_control_expression_start(projection,0.)
+        h0=max(_control_expression_start(headroom,1.),0.)
+        d0=max(_control_expression_start(coefficient,1.),0.)
+        root_start=hypot(p0,sqrt(d0*h0))
+    end
+    root = JuMP.@variable(m, lower_bound=0., start=root_start)
     # A plain squared-root equality loses physical accuracy at a PQ-axis
     # endpoint: an O(tol) squared residual permits O(sqrt(tol)) output.
     # This positive denominator retains accuracy at that endpoint.
@@ -112,7 +119,7 @@ function _pcc_segment_smooth!(m, a, b, limit, epsilon; normalize::Bool=false)
     # Anchor the maximum at its strictly positive argument, avoiding the
     # cancellation in (a+b+sqrt((a-b)^2+width^2))/2 on infeasible trial points.
     denominator = cap + (difference+sqrt(difference^2+(delta/magnitude)^2))/2
-    return _defined_control_expression!(m, numerator/denominator; start=.9)
+    return _defined_control_expression!(m, numerator/denominator; start=.9,initialize=initialize)
 end
 
 function _pcc_allocate(limiter, base, pdir, qdir, ndir, vconv, shunt,
@@ -250,30 +257,45 @@ function _stamp_pcc_control!(ctx, controller, request, inverter, handles)
     lift_services = any(law -> law !== nothing && !all(==(first(law.values)),law.values),
                         _policy_laws(controller.positive)) ||
                     _control_needs_thermal_backoff(inverter)
+    # Constant-service and zero-availability graphs admit consistent staged
+    # starts. Nonlinear daytime curves keep their established spread of starts
+    # across inactive/active branches of the feedback graph.
+    initialize_graph = !lift_services || iszero(request.p_available)
     if lift_services
-        fraction = _defined_control_expression!(m,fraction;start=1.)
-        q = _defined_control_expression!(m,q;scale=smax,start=0.)
+        iszero(request.p_available) || (fraction = _defined_control_expression!(m,fraction;start=1.,initialize=initialize_graph))
+        q = _defined_control_expression!(m,q;scale=smax,start=0.,initialize=initialize_graph)
     end
     seps = _power_epsilon(controller.limiter, ratings)/sb
-    loss = _defined_control_expression!(m, handles.p_dc-handles.p_poc; scale=smax, start=0.)
+    loss = _defined_control_expression!(m, handles.p_dc-handles.p_poc; scale=smax, start=0.,initialize=initialize_graph)
     available = request.p_available/sb-loss
-    p = _volt_watt_basis(controller.positive) === :available ?
-        available-(1-fraction)*_smooth_positive_expression!(m,available,seps) :
-        _smooth_min_expression!(m,request.p_rated/sb*fraction,available,seps)
-    p_import = _defined_control_expression!(m,
-        _smooth_negative_expression!(m,available,_IMPORT_WIDTH_FRACTION*smax); scale=smax,start=0.)
-    p_service = _defined_control_expression!(m,p-p_import; scale=smax)
+    if iszero(request.p_available)
+        # At the PCC, Pdc-Ppoc is the sum of passive filter, converter and
+        # capacitor losses, hence nonnegative at every physical point. With
+        # zero DC availability the exact law has mandatory loss import and no
+        # active PV service. Do not create a fictitious positive service from
+        # the tails of two smooth selectors, or evaluate an inactive VW lift.
+        p_import=available
+        p_service=0.
+        p=p_import
+    else
+        p = _volt_watt_basis(controller.positive) === :available ?
+            available-(1-fraction)*_smooth_positive_expression!(m,available,seps) :
+            _smooth_min_expression!(m,request.p_rated/sb*fraction,available,seps)
+        p_import = _defined_control_expression!(m,
+            _smooth_negative_expression!(m,available,_IMPORT_WIDTH_FRACTION*smax); scale=smax,start=0.,initialize=initialize_graph)
+        p_service = _defined_control_expression!(m,p-p_import; scale=smax,initialize=initialize_graph)
+    end
     i1request = _pcc_i1((p_service,q),u1)
     i2v,i2r,i2request,eta = _unbalance_smooth(ctx,controller.unbalance,u1,u2,i1request,vb,ib,vstart)
     command_scale = ratings.i_scale/ib
     if lift_services
         i2request = ntuple(j -> _defined_control_expression!(m,i2request[j];
-            scale=command_scale,start=0.),2)
+            scale=command_scale,start=0.,initialize=initialize_graph),2)
     end
     base,pd,qd,nd = _pcc_geometry(voltage,shunt,inverter.b_filter_shunt*vb^2/sb,
         p_import,p_service,q,i2request)
     lift_phase(x) = ntuple(k -> ntuple(j -> _defined_control_expression!(m,x[k][j];
-        scale=command_scale,start=0.),2),3)
+        scale=command_scale,start=0.,initialize=initialize_graph),2),3)
     if lift_services
         base,pd,qd,nd = map(lift_phase,(base,pd,qd,nd))
     end
@@ -282,8 +304,8 @@ function _stamp_pcc_control!(ctx, controller, request, inverter, handles)
     # Normalize the larger lifted curve/thermal graph. Simple constant-service
     # policies retain their established root coordinates at binding endpoints.
     grid,tp,tq,tn = _pcc_allocate(controller.limiter,base,pd,qd,nd,vconv,shunt,(p_import,p_service,q),
-        inverter,ib,sb,(a,b,l,e)->_pcc_segment_smooth!(m,a,b,l,e;normalize=lift_services),
-        (a,b)->_combine_safe_scale_implicit!(m,a,b,min(peps,ieps)),peps,ieps;
+        inverter,ib,sb,(a,b,l,e)->_pcc_segment_smooth!(m,a,b,l,e;normalize=lift_services,initialize=initialize_graph),
+        (a,b)->_combine_safe_scale_implicit!(m,a,b,min(peps,ieps);initialize=initialize_graph),peps,ieps;
         current_scale=ratings.i_scale)
     target = controller.current_target isa ConverterCurrentTarget ? _pcphadd(grid,shunt) : grid
     _,i1,i2 = _pcsequences(target)

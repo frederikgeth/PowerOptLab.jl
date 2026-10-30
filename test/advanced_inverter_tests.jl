@@ -1130,7 +1130,7 @@ end
             AdvancedInverter(; id="i", topology=:THREE_LEG, v_dc=vdc, c_dc=50e-3,
                 bus="poc", phase_terminals=["a","b","c"], neutral="n",
                 s_max=20e3, m_max=0.96, n_samples=N, c_loss=0.01);
-            objective=:min_loss, p_set=0.0)
+            objective=:min_loss, p_set=0.0,rail_refinement=false)
     loose = coarse(550.0, 6)
     fine_bad = coarse(550.0, 36)
     fine_good = coarse(650.0, 36)

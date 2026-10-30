@@ -97,6 +97,14 @@ rating before imposing the target equality. The thermal allocator uses the
 source-dependent 2ω current and declared fixed/current-dependent carrier
 allowances. Capacitor rating is independent of capacitance.
 
+At zero DC availability, the PCC law uses its exact loss-import identity:
+`p_import = -(p_dc-p_poc)` and active PV service is identically zero. Passive
+filter, converter and capacitor losses are nonnegative, so the Volt-watt
+ceiling cannot bind the negative import. Reactive and negative-sequence support
+remain enabled. This avoids fictitious positive service created by the tails
+of two smooth sign selectors. It is specific to total PCC loss accounting;
+the legacy positive-sequence target offset can include signed I₂ power.
+
 The controller also honours converter-arm positive- and negative-sequence
 ratings, including the LCL offset at either current target. Hard sequence
 constraints use auxiliaries and linking rows normalized by their engineering
@@ -114,8 +122,19 @@ The current limit-coverage distinction is:
 | Apparent power | Selected converter or PCC total-P/Q magnitude | Same selected boundary; distinct profile semantics |
 | 2ω DC voltage ripple | Physical source-dependent ripple | Included |
 | Capacitor thermal RMS current | Frequency-weighted budget | Included for the three-leg controller |
-| Instantaneous rail feasibility | Sampled switching constraints and dense audit | No modulation/voltage command allocator yet |
+| Instantaneous rail feasibility | Sampled constraints, full-cycle enclosure and adaptive separating cuts | No modulation/voltage command allocator yet |
 | Split midpoint and individual half-banks | Split-link plant constraints | No split-link controller yet |
+
+Independent SI-model reports are attached after each standalone solve; a fleet
+publishes only when every replaced inverter passes. The report and per-bound
+margins distinguish a solver outcome from physical acceptance. See
+[verification](verification.md) for coverage, tolerances, refinement and the
+remaining network/carrier/policy checks. Hard-bound normalization and controller
+current-target equalities use physical engineering scales; changing `s_base`
+must not dilute their acceptance accuracy. Constant-service and zero-availability PCC auxiliary definitions and
+allocator roots initialize in dependency order from the same equations;
+priority stages start from the previously allocated feasible anchor. These
+starts change neither the control law nor its engineering limits.
 
 `s_max` bounds the magnitude of total complex power, not each phase's current
 or each sequence's current. These engineering limits remain distinct under

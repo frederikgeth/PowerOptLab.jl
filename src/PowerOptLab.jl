@@ -120,6 +120,7 @@ include("components/devices.jl")
 include("components/evse.jl")
 include("components/generalized_generator.jl")
 include("components/generator_data.jl")
+include("components/inverter_feasibility.jl")
 include("components/advanced_inverter.jl")
 include("components/inverter_controls.jl")
 include("components/inverter_pcc_control.jl")
@@ -280,6 +281,8 @@ export BilevelPVResult, BilevelPVResponse, SingleLevelPVResult,
 
 # Advanced inverter (prototype internal-node IBR)
 export AdvancedInverter, solve_advanced_inverter, InverterResult
+export InverterFeasibilityTolerances, InverterLimitCheck, InverterFeasibilityReport,
+    inverter_physical_feasibility, physical_feasibility, continuous_rail_margin
 
 # Local phase-aware inverter controls
 export AbstractInverterControlLaw, AbstractPositiveSequencePolicy

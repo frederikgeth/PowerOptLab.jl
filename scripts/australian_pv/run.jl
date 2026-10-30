@@ -295,12 +295,22 @@ function accepted_control_rows(rows, hw)
         :apparent_power_margin_VA,:capacitor_thermal_current_A,:filter_loss_W,
         :exact_smooth_current_residual_A,:dc_availability_margin_W)
     !isempty(rows) && all(isfinite(getproperty(r,k)) for r in rows for k in fields) &&
-        all(r.exact_smooth_current_residual_A < .02 && r.dc_availability_margin_W > -.01 &&
+        all(r.physical_feasible && r.exact_smooth_current_residual_A < .02 && r.dc_availability_margin_W > -.01 &&
             r.maximum_converter_current_A <= hw.i_max+1e-5 &&
             r.dc_ripple_voltage_V <= hw.dv2_max+1e-4 &&
             r.apparent_power_margin_VA >= -.01 && r.switching_margin_V >= -1e-5 &&
             (hw.i_cap_max === nothing || r.capacitor_thermal_current_A <= hw.i_cap_max+1e-5)
             for r in rows)
+end
+
+# Include new/untracked source files as well as committed ones in provenance.
+function study_source_sha256()
+    repo=normpath(joinpath(ROOT,"..",".."))
+    files=[joinpath(dir,f) for (dir,_,names) in walkdir(joinpath(repo,"src"))
+           for f in names if endswith(f,".jl")]
+    append!(files,[joinpath(@__DIR__,f) for f in ("prepare.jl","run.jl","audit.jl")])
+    push!(files,joinpath(@__DIR__,"..","enwl_advanced_ibr","common.jl"))
+    Dict(relpath(f,repo)=>bytes2hex(sha256(read(f))) for f in sort!(files))
 end
 
 function run(; modes=MODES, levels=[0.0,0.5,1.0], sources=[1.0,1.03],
@@ -312,13 +322,18 @@ function run(; modes=MODES, levels=[0.0,0.5,1.0], sources=[1.0,1.03],
         throw(ArgumentError("solve_bases must contain positive finite values"))
     base=parse_bmopf(joinpath(ROOT,"networks","LV3_55bus.bmopf.json"))
     rows=NamedTuple[]; devices=NamedTuple[]; cases=NamedTuple[]
+    physical_reports=NamedTuple[]; physical_checks=NamedTuple[]
     mkpath(output)
+    for name in ("cases.csv","customers.csv","devices.csv","physical_reports.csv","physical_checks.csv")
+        path=joinpath(output,name)
+        isfile(path) && rm(path)
+    end
     design=negative_sequence_design()
     writejson(joinpath(output,"negative_sequence_design.json"), design_json(design))
     repo=normpath(joinpath(ROOT,"..",".."))
     git_read(args...)=read(Cmd(["git","-C",repo,args...]),String)
     writejson(joinpath(output,"environment.json"), Dict(
-        "label"=>label,
+        "label"=>label,"source_sha256"=>study_source_sha256(),
         "julia"=>string(VERSION),"PowerOptLab"=>string(Base.pkgversion(PowerOptLab)),
         "BMOPFTools"=>string(Base.pkgversion(BMOPFTools)),
         "Ipopt"=>string(Base.pkgversion(Ipopt)),
@@ -365,6 +380,23 @@ function run(; modes=MODES, levels=[0.0,0.5,1.0], sources=[1.0,1.03],
                 result=solve_controlled_inverter_fleet(net, spec;
                     s_base=s_base, solver_options=solver_options)
                 used_base=s_base
+                for id in sort!(collect(keys(result.devices)))
+                    report=physical_feasibility(result.devices[id])
+                    key=(mode=mode,availability=level,source_pu=source,s_base_VA=s_base,device_id=id)
+                    push!(physical_reports,merge(key,(termination=result.termination_status,
+                        checked=report.checked,passed=report.passed,
+                        raw_solver_status=result.network["raw_solver_status"],
+                        continuous_rail_lower_V=report.rail.lower_V,
+                        continuous_rail_upper_V=report.rail.upper_V,
+                        rail_enclosure_converged=report.rail.converged)))
+                    for c in report.checks
+                        push!(physical_checks,merge(key,(name=c.name,unit=string(c.unit),
+                            value=c.value,lower=c.lower,upper=c.upper,
+                            tolerance=c.tolerance,margin=c.margin,passed=c.passed)))
+                    end
+                end
+                write_csv(joinpath(output,"physical_reports.csv"),physical_reports)
+                write_csv(joinpath(output,"physical_checks.csv"),physical_checks)
                 valid=solve_status(result).publishable &&
                     accepted_control_rows(controlled_inverter_rows(result),hw)
                 println("  base=",s_base," status=",result.termination_status," physical_gate=",valid)

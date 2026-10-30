@@ -678,7 +678,8 @@ zero filter) it is a plain grid-following converter at the POC.
   component current limits at the converter arm (A). These are useful for grid-code limits and for
   separating zero-sequence neutral stress from negative-sequence 2ω stress.
 - `n_samples=36` — time-sampling grid for an outer approximation of continuous-
-  time voltage feasibility. Increase it for boundary-sensitive studies.
+  time voltage feasibility. Standalone solvers refine violating angles using
+  the independent continuous-time rail oracle.
 - `f=50.0` — fundamental frequency (Hz).
 
 # Output filter
@@ -732,33 +733,19 @@ zero filter) it is a plain grid-following converter at the POC.
   With `a_loss == 0` no magnitude term is stamped at all. Reported currents
   are recomputed exactly after the solve and carry none of this bias.
 
-!!! note "Rating constraints and the per-unit base"
-    Ratings are stamped as squared per-unit inequalities (`p² + q² ≤
-    (s_max/s_base)²` and similar). Ipopt relaxes bounds before solving by
-    `bound_relax_factor · max(1, |bound|)` (default `1e-8`; Eqn 35 of Wächter
-    & Biegler 2006). The `max(1, ·)` floor is the problem: once the per-unit
-    squared bound `(s_max/s_base)²` falls below 1 — which it always does — the
-    relaxation stops scaling with it and becomes a fixed `1e-8` ABSOLUTE
-    slackening of a bound that keeps shrinking as `1/s_base²`. The admissible
-    physical violation is therefore
+!!! note "Engineering scaling and physical acceptance"
+    Capability inequalities use their engineering ratings as scales by default,
+    including the power/sequence linking rows and current-balance equations.
+    `normalize_capability_constraints=false` is retained for numerical research;
+    it does not bypass the independent physical publication gate. Single-phase
+    ripple and scalar modulation limits are normalized as well.
 
-        δ|S| ≈ bound_relax_factor · s_base² / (2·s_max),
-
-    quadratic in the base. A 20 kVA rating is honoured to ~0.25 VA at
-    `s_base=1e6`, but exceeded by ~2.4 kVA (12 %) at `s_base=1e8`.
-
-    This is Ipopt's documented behaviour meeting a modelling choice made here,
-    not a defect in either: a minimal `max p s.t. p² ≤ (s_max/s_base)²` in
-    plain JuMP reproduces the numbers exactly, and `bound_relax_factor=0`
-    removes them. The durable fix belongs in this layer — normalizing the
-    constraint by the rating, `(p/s_pu)² + (q/s_pu)² ≤ 1`, restores a bound of
-    exactly 1 and was measured to hold the rating to <0.1 VA at every base.
-    `ConstrainedInverter` enables rating-normalised capability rows; direct plant
-    and forward-controller stamping retain the legacy default. For those paths,
-    keep `s_base` within a couple of decades of the device
-    ratings, or pass `bound_relax_factor=0` (as `solve_inverse_carson` already
-    does, for the same underlying reason). Independent of the square-root
-    smoothing above.
+    Standalone inverter solvers default `bound_relax_factor=0` before applying
+    caller options. A caller can override that numerical setting, but the SI
+    feasibility tolerances do not change. `physical_feasibility(result)` checks
+    the solved phasors independently, including a full-cycle rail enclosure.
+    `solve_status(result).publishable` requires both a successful solver outcome
+    and a passing physical report. The original MOI statuses remain available.
 
 # Double-frequency ripple / current
 - `p_ripple_max` — SINGLE_PHASE only: bound on the 2ω power-ripple amplitude
@@ -1127,6 +1114,11 @@ function _validate_inverter(inv::AdvancedInverter, nets=())
         throw(ArgumentError(
             "inverter '$(inv.id)' modulation_max requires v_dc"))
     end
+    if !is_3ph && (inv.dv2_max!==nothing || inv.In_max!==nothing ||
+                   inv.dc_source_r!==nothing || inv.dc_source_l!=0.)
+        throw(ArgumentError("inverter '$(inv.id)' DC-bus voltage/source and neutral " *
+            "ratings require a three-phase topology; :SINGLE_PHASE supports p_ripple_max"))
+    end
     if !is_3ph && inv.pwm_strategy != :NONE
         throw(ArgumentError("inverter '$(inv.id)' pwm_strategy requires a " *
                             "three-phase topology"))
@@ -1429,9 +1421,11 @@ struct InverterResult <: AbstractSolveResult
     filter_resonance_hz::Float64
     bus::Dict{String,Any}
     solve::SolveStatus
+    physical::InverterFeasibilityReport
 end
 
 solve_status(result::InverterResult) = result.solve
+physical_feasibility(result::InverterResult) = result.physical
 
 solve_diagnostics(result::InverterResult) =
     (topology=result.topology, power_limit_location=result.power_limit_location,
@@ -1470,6 +1464,10 @@ solve_diagnostics(result::InverterResult) =
      grid_total_current=result.i_grid_total_rms,
      neutral_total_current=result.i_neutral_total_rms,
      switching_margin=result.switching_margin,
+     physical_feasible=result.physical.passed,
+     physical_failed_checks=[c.name for c in result.physical.checks if !c.passed],
+     continuous_rail_margin_lower_V=result.physical.rail.lower_V,
+     continuous_rail_margin_upper_V=result.physical.rail.upper_V,
      filter_resonance_hz=result.filter_resonance_hz)
 
 # Handles the hook publishes for post-solve reporting. Power/current/voltage
@@ -1495,6 +1493,91 @@ struct _InvHandles
 end
 
 _start_or(v, default) = (s = JuMP.start_value(v); s === nothing ? default : s)
+
+function _set_inverter_solver_options!(model,options)
+    # Other nonlinear optimizers retain their own option vocabulary.
+    JuMP.solver_name(model)=="Ipopt" && JuMP.set_attribute(model,"bound_relax_factor",0.)
+    _set_solver_options!(model,options)
+end
+
+"""Audit a stamped plant candidate without promoting unsuccessful solver outcomes."""
+function inverter_physical_feasibility(inv::AdvancedInverter,h::_InvHandles,status::SolveStatus;
+        tolerances=InverterFeasibilityTolerances(),dc_min=nothing,dc_max=nothing)
+    status.has_primal || return _unchecked_inverter_feasibility()
+    phasors(re,im,scale) = complex.(JuMP.value.(re),JuMP.value.(im)).*scale
+    scalar(e,scale=1.) = e===nothing ? 0. : JuMP.value(e)*scale
+    inverter_physical_feasibility(inv;
+        converter_voltage=phasors(h.vrint,h.viint,h.vb),
+        converter_current=phasors(h.cri,h.cii,h.ib),
+        grid_voltage=phasors(h.vrpoc,h.vipoc,h.vb),
+        grid_current=phasors(h.gri,h.gii,h.ib),
+        filter_voltage=phasors(h.vrmid,h.vimid,h.vb),
+        midpoint_charge=scalar(h.qbal),tolerances=tolerances,dc_min=dc_min,dc_max=dc_max,
+        reported=(p_conv=scalar(h.p_conv,h.sb),q_conv=scalar(h.q_conv,h.sb),
+            p_poc=scalar(h.p_poc,h.sb),q_poc=scalar(h.q_poc,h.sb),p_dc=scalar(h.p_dc,h.sb),
+            dc_ripple=complex(scalar(h.dre),scalar(h.dim)),
+            midpoint_ripple=complex(scalar(h.nre),scalar(h.nim)),midpoint_mean=scalar(h.nmean)))
+end
+
+# Add a separating sample of the same averaged switching hull. The independent
+# numerical oracle above selects the angle; no current/PQ objective is changed.
+function _add_inverter_rail_cut!(ctx,inv,h,theta)
+    inv.topology in _THREE_PHASE_TOPOLOGIES || return
+    m=_opf_model(ctx)
+    ure=h.vrint.*h.vb; uim=h.viint.*h.vb
+    nr=h.nre===nothing ? 0. : h.nre; ni=h.nim===nothing ? 0. : h.nim
+    mean=h.nmean===nothing ? 0. : h.nmean
+    c1,s1=cos(theta),sin(theta); c2,s2=cos(2theta),sin(2theta)
+    rail=inv.m_max*(inv.v_dc+h.dre*c2-h.dim*s2)
+    if inv.topology in (:THREE_LEG,:FOUR_LEG)
+        for (a,b) in _PAIRS_IDX,sg in (-1.,1.)
+            JuMP.@constraint(m,sg*sqrt(2)*((ure[a]-ure[b])*c1-(uim[a]-uim[b])*s1)<=rail)
+        end
+    end
+    if inv.topology===:FOUR_LEG
+        for k in 1:3,sg in (-1.,1.)
+            JuMP.@constraint(m,sg*sqrt(2)*(ure[k]*c1-uim[k]*s1)<=rail)
+        end
+    elseif inv.topology===:SPLIT_DC
+        kb=_split_fundamental_coefficients(inv).bus
+        jr=sum(h.cri)*h.ib; ji=sum(h.cii)*h.ib
+        br=real(kb)*jr-imag(kb)*ji; bi=imag(kb)*jr+real(kb)*ji
+        half=(rail+inv.m_max*sqrt(2)*(br*c1-bi*s1))/2
+        n2=_split_midpoint_2w_ratio(inv)*(h.dre*c2-h.dim*s2)
+        for k in 1:3,sg in (-1.,1.)
+            JuMP.@constraint(m,sg*(sqrt(2)*((ure[k]+nr)*c1-(uim[k]+ni)*s1)+n2+mean)<=half)
+        end
+    end
+end
+
+# Exchange algorithm for the semi-infinite voltage constraints. A finite NLP
+# cannot certify all angles; solve, separate by the full-cycle oracle, then add
+# violating angles. A failed solve or exhausted refinement budget is retained
+# and never overrides the independent physical publication gate.
+function _optimize_inverter_rails!(ctx,plants;enabled=true,max_refinements=12)
+    m=_opf_model(ctx)
+    for refinement in 0:max_refinements
+        BMOPFTools.optimize_opf!(ctx)
+        status=SolveStatus(_solve_outcome(m))
+        (!enabled || !status.publishable || refinement==max_refinements) && return
+        violations=Tuple{Any,Any,Float64}[]
+        for (inv,h) in plants
+            inv.topology in _THREE_PHASE_TOPOLOGIES || continue
+            report=inverter_physical_feasibility(inv,h,status)
+            if report.rail.converged && report.rail.lower_V < -InverterFeasibilityTolerances().voltage_V
+                push!(violations,(inv,h,report.rail.angle_rad))
+            end
+        end
+        isempty(violations) && return
+        starts=[(v,JuMP.value(v)) for v in JuMP.all_variables(m)]
+        for (inv,h,angle) in violations
+            _add_inverter_rail_cut!(ctx,inv,h,angle)
+        end
+        for (v,value) in starts
+            isfinite(value) && JuMP.set_start_value(v,value)
+        end
+    end
+end
 
 # True when the objective carries no decision variable, i.e. every feasible
 # point is optimal. `p_loss_fixed` deliberately does not count: it is an additive
@@ -1527,7 +1610,7 @@ end
 # Stamp the inverter's internal-node model into `ctx`. Returns `_InvHandles`.
 function _stamp_inverter!(ctx, inv::AdvancedInverter;
         retain_lossless_magnitude_epigraph::Bool=true,
-        normalize_capability_constraints::Bool=false)
+        normalize_capability_constraints::Bool=true)
     m = _opf_model(ctx)
     vr, vi = _opf_voltage_maps(ctx)
     bus = inv.bus; phases = inv.phase_terminals; neutral = inv.neutral
@@ -1539,6 +1622,8 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
     vb = bs === nothing ? 1.0 : get(bs.v_base, bus, 1.0)
     ib = bs === nothing ? 1.0 : get(bs.i_base, bus, 1.0)
     zb = bs === nothing ? 1.0 : get(bs.z_base, bus, 1.0)
+    current_scale = normalize_capability_constraints ?
+        something(inv.i_max, inv.s_max/(nph*vb))/ib : 1.0
 
     Rf, Xf = _series_filter_matrices(inv, nph, zb; side=:converter)
     Rg, Xg = _series_filter_matrices(inv, nph, zb; side=:grid)
@@ -1576,7 +1661,7 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
         cri[k]   = JuMP.@variable(m, base_name = "cri_$(inv.id)_$(ph)")
         cii[k]   = JuMP.@variable(m, base_name = "cii_$(inv.id)_$(ph)")
         JuMP.set_start_value(vrint[k], vseedr)
-        JuMP.set_start_value(viint[k], has_lcl ? vseedi : 0.0)
+        JuMP.set_start_value(viint[k], vseedi)
         if has_lcl
             vrmid[k] = JuMP.@variable(m, base_name = "vrmid_$(inv.id)_$(ph)")
             vimid[k] = JuMP.@variable(m, base_name = "vimid_$(inv.id)_$(ph)")
@@ -1618,6 +1703,42 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
             end
         end
     end
+    # Initialize the full linear filter circuit consistently, including the
+    # three-leg zero-sum condition. An all-real internal-voltage start or a
+    # phasewise current seed on unbalanced voltages can send capability-root
+    # graphs through very distant infeasible trial points.
+    phase_matrix(R,X) = begin
+        Z=complex.(R,X)
+        neutral===nothing ? Z :
+            [Z[k,j]-Z[end,j]-Z[k,end]+Z[end,end] for k in 1:nph,j in 1:nph]
+    end
+    Zc=phase_matrix(Rf,Xf); Zg=phase_matrix(Rg,Xg)
+    value_start(e)=JuMP.value(v->something(JuMP.start_value(v),0.),e)
+    vp=complex.(value_start.(dvr),value_start.(dvi))
+    igseed=complex.(_start_or.(gri,0.),_start_or.(gii,0.))
+    Y=complex(gmid,bmid)
+    M=Matrix{ComplexF64}(I,nph,nph)+Y*Zg
+    if inv.topology===:THREE_LEG
+        response=sum(M*ones(nph))
+        if abs(response)>eps(Float64)
+            igseed .-= sum(M*igseed+Y*vp)/response
+        end
+    end
+    vmseed=vp+Zg*igseed
+    icseed=igseed+Y*vmseed
+    useed=vmseed+Zc*icseed
+    for k in 1:nph
+        JuMP.set_start_value(cri[k],real(icseed[k]))
+        JuMP.set_start_value(cii[k],imag(icseed[k]))
+        JuMP.set_start_value(vrint[k],real(useed[k]))
+        JuMP.set_start_value(viint[k],imag(useed[k]))
+        if has_lcl
+            JuMP.set_start_value(gri[k],real(igseed[k]))
+            JuMP.set_start_value(gii[k],imag(igseed[k]))
+            JuMP.set_start_value(vrmid[k],real(vmseed[k]))
+            JuMP.set_start_value(vimid[k],imag(vmseed[k]))
+        end
+    end
     for k in 1:nph
         if has_lcl
             shre[k] = JuMP.@expression(m, gmid*vrmid[k] - bmid*vimid[k])
@@ -1650,8 +1771,8 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
             JuMP.@constraint(m, viint[k] - vimid[k] == filter_di[k])
             JuMP.@constraint(m, vrmid[k] - dvr[k] == grid_dr[k])
             JuMP.@constraint(m, vimid[k] - dvi[k] == grid_di[k])
-            JuMP.@constraint(m, cri[k] == gri[k] + shre[k])
-            JuMP.@constraint(m, cii[k] == gii[k] + shim[k])
+            JuMP.@constraint(m, (cri[k] - gri[k] - shre[k])/current_scale == 0)
+            JuMP.@constraint(m, (cii[k] - gii[k] - shim[k])/current_scale == 0)
         else
             JuMP.@constraint(m, vrint[k] - dvr[k] == filter_dr[k])
             JuMP.@constraint(m, viint[k] - dvi[k] == filter_di[k])
@@ -1728,7 +1849,8 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
             end
             if !is_3ph_topo && inv.modulation_max !== nothing && inv.v_dc !== nothing
                 cap = inv.modulation_max * inv.v_dc / _SQRT3
-                JuMP.@constraint(m, vmag2 <= (cap / vb)^2)
+                scale = normalize_capability_constraints ? (cap/vb)^2 : 1.0
+                JuMP.@constraint(m, vmag2/scale <= (cap / vb)^2/scale)
             end
         end
     end
@@ -1928,8 +2050,8 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
 
         # Neutral current: 3-wire carries none; 4-wire limited by In_max.
         if inv.topology == :THREE_LEG
-            JuMP.@constraint(m, sum(cri[k] for k in 1:3) == 0)
-            JuMP.@constraint(m, sum(cii[k] for k in 1:3) == 0)
+            JuMP.@constraint(m, sum(cri[k] for k in 1:3)/current_scale == 0)
+            JuMP.@constraint(m, sum(cii[k] for k in 1:3)/current_scale == 0)
         elseif inv.In_max !== nothing
             # Standalone neutral rating. Optional for :SPLIT_DC, where i_cap_max
             # can bound |I_n| instead (via the capacitor thermal budget below).
@@ -2029,13 +2151,17 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
     location_name = at_converter ? "conv" : "poc"
     pv = JuMP.@variable(m, base_name = "p$(location_name)_$(inv.id)")
     qv = JuMP.@variable(m, base_name = "q$(location_name)_$(inv.id)")
-    JuMP.@constraint(m, pv == plimit)
-    JuMP.@constraint(m, qv == qlimit)
+    # Normalize the linking rows as well as the circle: a small per-unit
+    # linking residual must not hide VA. Retain model-unit lift coordinates
+    # because the controller's larger nonlinear graphs are conditioned for them.
+    power_scale = (normalize_capability_constraints || !at_converter) ? inv.s_max/sb : 1.0
+    JuMP.@constraint(m, (pv-plimit)/power_scale == 0)
+    JuMP.@constraint(m, (qv-qlimit)/power_scale == 0)
     squared_rating = (inv.s_max/sb)^2
-    # New PCC rows are rating-normalised at every network base. Preserve the
-    # established converter-mode scaling unless normalisation was requested.
-    scale = (normalize_capability_constraints || !at_converter) ? squared_rating : 1.0
-    JuMP.@constraint(m, (pv^2 + qv^2)/scale <= squared_rating/scale)
+    JuMP.@constraint(m, (pv^2 + qv^2)/power_scale^2 <= squared_rating/power_scale^2)
+    at_start(v)=something(JuMP.start_value(v),0.)
+    JuMP.set_start_value(pv,JuMP.value(at_start,plimit))
+    JuMP.set_start_value(qv,JuMP.value(at_start,qlimit))
 
     # Converter loss and DC-link power (model units): each coeff scaled to per-unit.
     # The Σ|I| term is nonlinear and is omitted entirely when a_loss == 0, which
@@ -2053,9 +2179,10 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
     if inv.p_ripple_max !== nothing && !is_3ph_topo
         rr = JuMP.@variable(m, base_name = "rip_re_$(inv.id)")
         ri = JuMP.@variable(m, base_name = "rip_im_$(inv.id)")
-        JuMP.@constraint(m, rr == rip_re)
-        JuMP.@constraint(m, ri == rip_im)
-        JuMP.@constraint(m, rr^2 + ri^2 <= (inv.p_ripple_max / sb)^2)
+        ripple_scale = normalize_capability_constraints ? inv.p_ripple_max/sb : 1.0
+        JuMP.@constraint(m, rr == rip_re/ripple_scale)
+        JuMP.@constraint(m, ri == rip_im/ripple_scale)
+        JuMP.@constraint(m, rr^2 + ri^2 <= (inv.p_ripple_max / sb/ripple_scale)^2)
     end
 
     return _InvHandles(Ppoc, Qpoc, Pconv, Qconv, P_loss, P_cap_loss, P_dc, P_filter_loss,
@@ -2070,7 +2197,7 @@ end
 
 function stamp_device!(ctx, inverter::AdvancedInverter;
         retain_lossless_magnitude_epigraph::Bool=true,
-        normalize_capability_constraints::Bool=false, kwargs...)
+        normalize_capability_constraints::Bool=true, kwargs...)
     inverter.pwm_strategy == :NONE || throw(ArgumentError(
         "pwm_strategy=:$(inverter.pwm_strategy) uses the conservative outer " *
         "reserve iteration provided by solve_advanced_inverter; direct stamping " *
@@ -2083,7 +2210,7 @@ end
 link_device!(model, inverter::AdvancedInverter, handles, sb, grid::TimeGrid) = nothing
 
 function extract_device(inverter::AdvancedInverter, h::_InvHandles,
-                        status::SolveStatus)
+                        status::SolveStatus; dc_min=nothing,dc_max=nothing)
     solved = status.publishable
     sb = h.sb; vb = h.vb; ib = h.ib
     scaled(e, scale) = solved ? JuMP.value(e) * scale : NaN
@@ -2115,6 +2242,7 @@ function extract_device(inverter::AdvancedInverter, h::_InvHandles,
         (h.p_conv, h.q_conv) : (h.p_poc, h.q_poc)
     apparent_margin = inverter.s_max - hypot(scaled(selected_p, sb), scaled(selected_q, sb))
     return (
+        physical_feasibility=inverter_physical_feasibility(inverter,h,status;dc_min=dc_min,dc_max=dc_max),
         power_limit_location=inverter.power_limit_location,
         apparent_power_rating_VA=inverter.s_max,
         apparent_power_margin_VA=apparent_margin,
@@ -2165,7 +2293,8 @@ function _solve_advanced_inverter_once(net::Dict{String,Any}, inverter::Advanced
                                        verbose::Bool=false,
                                        solver_options=(),
                                        pwm_audit_inverter::AdvancedInverter=inverter,
-                                       pwm_iterations::Int=0)
+                                       pwm_iterations::Int=0,
+                                       rail_refinement::Bool=true)
     objective in (:max_export, :min_loss) ||
         throw(ArgumentError("objective must be :max_export or :min_loss, got :$objective"))
     objective == :min_loss && p_set === nothing &&
@@ -2179,19 +2308,23 @@ function _solve_advanced_inverter_once(net::Dict{String,Any}, inverter::Advanced
     hook! = ctx -> begin
         h = stamp_device!(ctx, inverter)
         handles[] = h
-        q_set === nothing || JuMP.@constraint(_opf_model(ctx), h.q_poc == q_set / h.sb)
+        power_scale=inverter.s_max/h.sb
+        q_set === nothing || JuMP.@constraint(_opf_model(ctx), h.q_poc/power_scale == q_set/inverter.s_max)
         if objective == :max_export
-            JuMP.@objective(_opf_model(ctx), Max, h.p_poc)
+            JuMP.@objective(_opf_model(ctx), Max, h.p_poc/power_scale)
         else
-            JuMP.@constraint(_opf_model(ctx), h.p_poc == p_set / h.sb)
-            JuMP.@objective(_opf_model(ctx), Min, h.p_loss + h.p_cap_loss)
+            JuMP.@constraint(_opf_model(ctx), h.p_poc/power_scale == p_set/inverter.s_max)
+            # Loss is often orders of magnitude smaller than the VA rating.
+            # Keep a base-invariant watt objective so its dispatch gradient is
+            # not lost against the NLP stationarity tolerance.
+            JuMP.@objective(_opf_model(ctx), Min, (h.p_loss + h.p_cap_loss)*h.sb)
         end
     end
 
     ctx = build_opf_model(net; per_unit=per_unit, s_base=s_base,
                           add_objective=false, model_hook! = hook!,
                           optimizer=optimizer, verbose=verbose)
-    _set_solver_options!(_opf_model(ctx), solver_options)
+    _set_inverter_solver_options!(_opf_model(ctx),solver_options)
     enforce_kcl!(ctx)
     # A pinned q_set already determines the operating point, so a constant
     # objective is harmless there; only a free reactive axis is a problem.
@@ -2205,7 +2338,7 @@ function _solve_advanced_inverter_once(net::Dict{String,Any}, inverter::Advanced
               "the result is not reproducible across platforms or solver " *
               "versions. Declare loss coefficients, or pin q_set."
     end
-    BMOPFTools.optimize_opf!(ctx)
+    _optimize_inverter_rails!(ctx,((inverter,handles[]),);enabled=rail_refinement)
 
     outcome = _solve_outcome(_opf_model(ctx))
     status = string(outcome.termination_status)
@@ -2306,7 +2439,9 @@ function _solve_advanced_inverter_once(net::Dict{String,Any}, inverter::Advanced
                           neutral_total,
                           device_result.switching_margin,
                           device_result.filter_resonance_hz,
-                          result["bus"], SolveStatus(outcome))
+                          result["bus"],
+                          _physical_solve_status(SolveStatus(outcome),device_result.physical_feasibility),
+                          device_result.physical_feasibility)
 end
 
 """
@@ -2353,7 +2488,8 @@ function solve_advanced_inverter(net::Dict{String,Any}, inverter::AdvancedInvert
                                  solver_options=(),
                                  pwm_tolerance::Float64=1e-3,
                                  pwm_max_iterations::Int=16,
-                                 pwm_reserve_factor::Float64=1.01)
+                                 pwm_reserve_factor::Float64=1.01,
+                                 rail_refinement::Bool=true)
     validate_device(inverter, (net,); periods=1)
     isfinite(pwm_tolerance) && pwm_tolerance >= 0 || throw(ArgumentError(
         "pwm_tolerance must be finite and >= 0"))
@@ -2363,7 +2499,7 @@ function solve_advanced_inverter(net::Dict{String,Any}, inverter::AdvancedInvert
         "pwm_reserve_factor must be finite and >= 1"))
 
     common = (; objective, p_set, q_set, per_unit, s_base, optimizer,
-               verbose, solver_options)
+               verbose, solver_options, rail_refinement)
     if inverter.pwm_strategy == :NONE
         return _solve_advanced_inverter_once(net, inverter; common...)
     end

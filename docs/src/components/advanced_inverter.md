@@ -657,6 +657,15 @@ certificate. Every per-sample voltage constraint is linear in the phasor
 variables and ripple auxiliary `D`, while the ripple link and other optional
 device features make the full model a smooth NLP (Ipopt).
 
+`physical_feasibility(r).rail` additionally encloses the minimum headroom over
+the full electrical cycle, using an adaptive Taylor bound for the declared
+fundamental/2ω waveform. Standalone solvers add violating angles and re-solve
+by default. `rail_refinement=false` keeps the original sampled formulation for
+research, while the independent physical gate still rejects missed violations.
+Use `solve_status(r).publishable`, rather than the termination string, to select
+accepted results. See [verification](../ibr/verification.md) for scope and
+tolerances.
+
 ## API reference
 
 The [advanced inverter API](../api/advanced_inverter.md) lists the public types, functions and result fields

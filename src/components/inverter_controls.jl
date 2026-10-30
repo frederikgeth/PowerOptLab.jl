@@ -1300,9 +1300,19 @@ _smooth_symmetric_clip(a, limit, epsilon) = symmetric_clip_value(a,limit,Algebra
 # defining row has derivative 1 with respect to its normalized output, even
 # when the physical quantity is zero. This also avoids exponential expression
 # expansion when a scale is reused in successive capability checks.
-function _defined_control_expression!(m, expression; scale=1.0, start=scale)
+function _control_expression_start(expression,fallback)
+    value=try
+        JuMP.value(v->something(JuMP.start_value(v),0.),expression)
+    catch
+        fallback
+    end
+    isfinite(value) ? Float64(value) : Float64(fallback)
+end
+
+function _defined_control_expression!(m, expression; scale=1.0, start=scale,initialize::Bool=false)
     expression isa Real && return expression
-    output = JuMP.@variable(m, start=Float64(start/scale))
+    initial=initialize ? _control_expression_start(expression,start) : start
+    output = JuMP.@variable(m, start=Float64(initial/scale))
     JuMP.@constraint(m, output == expression/scale)
     return scale*output
 end
@@ -1517,12 +1527,13 @@ function _limit_positive_power_smooth!(
     return p_limited, q_limited, scale
 end
 
-function _combine_safe_scale_implicit!(m, scale, candidate, epsilon)
+function _combine_safe_scale_implicit!(m, scale, candidate, epsilon;initialize::Bool=false)
     # For nonnegative inputs this stays in [0, min(scale, candidate)], including
     # at zero. The ordinary smooth minimum can be negative there. Its deficit
     # from the hard minimum is <= epsilon/2; epsilon is dimensionless.
     return _defined_control_expression!(m,
-        selector_expression(m,scale,candidate,AlgebraicFormulation(epsilon);kind=:nonnegative_min))
+        selector_expression(m,scale,candidate,AlgebraicFormulation(epsilon);kind=:nonnegative_min);
+        initialize=initialize)
 end
 
 function _worst_phase_smooth(ctx, policy::WorstPhaseVoltVarWatt,
@@ -2050,14 +2061,17 @@ function stamp_smooth_control!(ctx, controller::SequenceController,
         # equalities would repeat those two rows and make the Jacobian rank
         # deficient, especially at zero dispatch. Command only I1 and I2.
         for (target, command) in ((target_i1, i1), (target_i2, i2)), j in 1:2
-            JuMP.@constraint(m, target[j] == command[j])
+            JuMP.@constraint(m, (target[j] - command[j])/(ratings.i_scale/ib) == 0)
         end
     else
         # An LCL shunt can carry zero sequence, so a grid-current target must
         # also enforce the controller's zero grid-current sum explicitly.
-        for k in 1:3
-            JuMP.@constraint(m, target_re[k] == phase_current[k][1])
-            JuMP.@constraint(m, target_im[k] == phase_current[k][2])
+        target_i0,_,_=_sequence_pair(collect(target_re),collect(target_im))
+        for (target,command) in ((target_i1,i1),(target_i2,i2)),j in 1:2
+            JuMP.@constraint(m,(target[j]-command[j])/(ratings.i_scale/ib)==0)
+        end
+        for j in 1:2
+            JuMP.@constraint(m,target_i0[j]/(ratings.i_scale/ib)==0)
         end
     end
 
@@ -2319,10 +2333,23 @@ end
 
 function extract_device(controlled::ControlledDevice{<:AdvancedInverter},
                         handles::_ControlledHandles, status::SolveStatus)
-    return (plant=extract_device(controlled.device, handles.plant, status),
-            control=_extract_control(handles.control, status),
-            converter_terminal=_extract_converter_terminal(
-                handles.plant, status))
+    plant=extract_device(controlled.device,handles.plant,status;
+        dc_max=handles.control.request.p_available)
+    if status.has_primal
+        h=handles.plant
+        re,im=controlled.controller.current_target isa ConverterCurrentTarget ?
+            (h.cri,h.cii) : (h.gri,h.gii)
+        # Evaluate the hard target equality in amperes, independently of its
+        # model-unit residual. Failed candidates remain diagnostic evidence.
+        value_or_nan(e)=try Float64(JuMP.value(e)) catch; NaN end
+        tracking=[_inverter_limit_check("command_current_$k",:A,
+            hypot(value_or_nan(re[k]-handles.control.phase_current[k][1]),
+                  value_or_nan(im[k]-handles.control.phase_current[k][2]))*h.ib,0.,0.) for k in 1:3]
+        plant=merge(plant,(physical_feasibility=
+            _extend_inverter_feasibility(plant.physical_feasibility,tracking),))
+    end
+    return (plant=plant,control=_extract_control(handles.control,status),
+        converter_terminal=_extract_converter_terminal(handles.plant,status))
 end
 
 """Result of [`solve_controlled_inverter`](@ref)."""
@@ -2339,6 +2366,7 @@ struct ControlledInverterResult <: AbstractSolveResult
 end
 
 solve_status(result::ControlledInverterResult) = result.solve
+physical_feasibility(result::ControlledInverterResult) = result.plant.physical_feasibility
 solve_diagnostics(result::ControlledInverterResult) = (
     current_scale=result.control.current_scale,
     power_scale=result.control.power_scale,
@@ -2352,6 +2380,10 @@ solve_diagnostics(result::ControlledInverterResult) = (
     converter_positive_sequence_power=
         result.converter_terminal.positive_sequence_power,
     exact_smooth_current_residual=result.exact_smooth_current_residual,
+    physical_feasible=result.plant.physical_feasibility.passed,
+    physical_failed_checks=[c.name for c in result.plant.physical_feasibility.checks if !c.passed],
+    continuous_rail_margin_lower_V=result.plant.physical_feasibility.rail.lower_V,
+    continuous_rail_margin_upper_V=result.plant.physical_feasibility.rail.upper_V,
 )
 
 """
@@ -2384,7 +2416,7 @@ function solve_controlled_inverter(
         optimizer=Ipopt.Optimizer,
         verbose::Bool=false,
         selection_objective::Symbol=:loss,
-        solver_options=())
+        solver_options=(),rail_refinement::Bool=true)
     selection_objective in (:loss, :zero) || throw(ArgumentError(
         "selection_objective must be :loss or :zero"))
     per_unit || throw(ArgumentError(
@@ -2404,8 +2436,8 @@ function solve_controlled_inverter(
     ctx = build_opf_model(net; per_unit=per_unit, s_base=Float64(s_base),
                           add_objective=false, model_hook! = hook!,
                           optimizer=optimizer, verbose=verbose)
-    _set_solver_options!(_opf_model(ctx), solver_options)
-    BMOPFTools.optimize_opf!(ctx)
+    _set_inverter_solver_options!(_opf_model(ctx),solver_options)
+    _optimize_inverter_rails!(ctx,((controlled.device,handles[].plant),);enabled=rail_refinement)
     outcome = _solve_outcome(_opf_model(ctx))
     status = SolveStatus(outcome)
     extracted = extract_device(controlled, handles[], status)
@@ -2419,5 +2451,6 @@ function solve_controlled_inverter(
                                     extracted.plant, extracted.control,
                                     extracted.converter_terminal,
                                     grid_current,
-                                    exact_control, residual, result["bus"], status)
+                                    exact_control, residual, result["bus"],
+                                    _physical_solve_status(status,extracted.plant.physical_feasibility))
 end

@@ -174,6 +174,10 @@ Return the normalized [`SolveStatus`](@ref) for a structured result or a compose
 JuMP model. Use the model overload after solving an external OPF and pass its
 status to [`extract_device`](@ref); unsuccessful or unstarted solves are not
 publishable. A publishable local optimum does not establish global optimality.
+Standalone inverter results additionally require an independent SI-model
+feasibility report; their solver status strings and `feasible`/`optimal` flags remain
+available even when physical acceptance rejects publication. The model overload
+reports solver evidence only.
 """
 function solve_status end
 
