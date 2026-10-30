@@ -7,6 +7,11 @@ _pcsub(a, b) = (a[1]-b[1], a[2]-b[2])
 _pcscale(t, a) = (t*a[1], t*a[2])
 _pcabs2(a) = a[1]^2+a[2]^2
 _pcdot(a, b) = a[1]*b[1]+a[2]*b[2]
+# Thermal geometry has additional orthogonal RMS channels. Keep the fixed
+# complex-pair path explicit to avoid specializing generator reductions over
+# the many heterogeneous JuMP expression tuples in a fleet model.
+_pcabs2(a::AbstractVector) = sum(x^2 for x in a)
+_pcdot(a::AbstractVector,b::AbstractVector) = sum(x*y for (x,y) in zip(a,b))
 _pcpair(z::Complex) = (real(z), imag(z))
 _pcsum(a) = reduce(_pcadd, a; init=(0.0, 0.0))
 _pcpower(v, i) = _pcsum(_cmul(v[k][1], v[k][2], i[k][1], -i[k][2]) for k in 1:3)
@@ -61,7 +66,7 @@ function _pcc_segment_exact(a, b, limit, epsilon)
     return clamp(t, 0.0, 1.0)
 end
 
-function _pcc_segment_smooth!(m, a, b, limit, epsilon)
+function _pcc_segment_smooth!(m, a, b, limit, epsilon; normalize::Bool=false)
     if iszero(limit)
         for value in a
             _is_identically_zero(value) || JuMP.@constraint(m, value == 0)
@@ -69,12 +74,15 @@ function _pcc_segment_smooth!(m, a, b, limit, epsilon)
         return all(_is_identically_zero, b) ? 1.0 : 0.0
     end
     all(_is_identically_zero, b) && return 1.0
-    h = _defined_control_expression!(m, 1-_pcabs2(a)/limit^2)
+    # Keep squared norms in the expression graph. Lifting d to an unrestricted
+    # variable admits negative trial coefficients and badly conditioned root
+    # rows when a requested service vanishes.
+    h = 1-_pcabs2(a)/limit^2
     # An inverter unable to sustain its compensated zero-service anchor is
     # outside this controller's operating domain, not silently re-dispatched.
     JuMP.@constraint(m, h >= 0)
-    d = _defined_control_expression!(m, _pcabs2(b)/limit^2; start=.25)
-    c = _defined_control_expression!(m, _pcdot(a, b)/limit^2; start=0.)
+    d = _pcabs2(b)/limit^2
+    c = _pcdot(a, b)/limit^2
     # Use a slightly stricter quadratic, then smoothly clip its positive
     # root to one. Positive coefficients remain separated from zero even
     # when a requested direction vanishes at the solved point. The root's
@@ -82,24 +90,33 @@ function _pcc_segment_smooth!(m, a, b, limit, epsilon)
     # inward motion from a saturated anchor.
     delta = epsilon^2
     headroom = h
-    coefficient = d+delta
-    projection = c+delta
-    root = JuMP.@variable(m, lower_bound=0., start=.5)
+    # Optionally reparameterize the original root r as magnitude*root. As b
+    # tends to zero, root tends to sqrt(h+delta) instead of epsilon*sqrt(h+delta).
+    # Scale both the residual
+    # denominator and the smooth maximum's width by the same magnitude; this
+    # changes conditioning, not the quadratic, smoothing law or service order.
+    magnitude = normalize ? sqrt(d+delta) : 1.0
+    coefficient = normalize ? 1.0 : d+delta
+    projection = (c+delta)/magnitude
+    root = JuMP.@variable(m, lower_bound=0., start=normalize ? 1. : .5)
     # A plain squared-root equality loses physical accuracy at a PQ-axis
     # endpoint: an O(tol) squared residual permits O(sqrt(tol)) output.
-    # This positive denominator changes only the residual scaling, keeping
-    # both the root and the requested smoothing law unchanged.
+    # This positive denominator retains accuracy at that endpoint.
     JuMP.@constraint(m,
-        (root^2-projection^2-coefficient*headroom)/(root+epsilon) == 0)
+        (root^2-projection^2-coefficient*headroom)/(root+epsilon/magnitude) == 0)
     JuMP.@constraint(m, root >= projection)
     JuMP.@constraint(m, root >= -projection)
-    numerator = _defined_control_expression!(m, root-projection; start=.5)
-    denominator = _smooth_max_expression!(m, coefficient, numerator, delta)
+    numerator = root-projection
+    cap = normalize ? magnitude : coefficient
+    difference = numerator-cap
+    # Anchor the maximum at its strictly positive argument, avoiding the
+    # cancellation in (a+b+sqrt((a-b)^2+width^2))/2 on infeasible trial points.
+    denominator = cap + (difference+sqrt(difference^2+(delta/magnitude)^2))/2
     return _defined_control_expression!(m, numerator/denominator; start=.9)
 end
 
 function _pcc_allocate(limiter, base, pdir, qdir, ndir, vconv, shunt,
-                       power_request, inverter, ib, sb, segment, combine, peps, ieps)
+                       power_request, inverter, ib, sb, segment, combine, peps, ieps; current_scale=ib)
     p_import, p_service, q = power_request
     function scale_at(anchor, direction, power_anchor, power_direction)
         t = all(_is_identically_zero, power_direction) ? 1.0 :
@@ -120,6 +137,13 @@ function _pcc_allocate(limiter, base, pdir, qdir, ndir, vconv, shunt,
             b = _pcsum(_cmul(vconv[k]..., direction[k]...) for k in 1:3)
             limit = inverter.dv2_max*inverter.v_dc/abs(_dc_ripple_factor(inverter))/sb
             t = combine(t, segment(a, b, limit, peps))
+        end
+        if _control_needs_thermal_backoff(inverter)
+            geometry = _control_capacitor_geometry(inverter, vconv,
+                _pcphadd(anchor, shunt), direction;
+                current_scale=ib, power_scale=sb)
+            t = combine(t, segment(geometry.offset, geometry.direction,
+                inverter.i_cap_max, ieps*current_scale/inverter.i_cap_max))
         end
         return t
     end
@@ -206,6 +230,16 @@ function _stamp_pcc_control!(ctx, controller, request, inverter, handles)
     magnitudes = [_implicit_sqrt!(m, _pcabs2(v); start=vstart, scale=vstart) for v in sensed]
     fraction,q,vmin,vmax = _positive_smooth(ctx, controller.positive, magnitudes,u1,request,sb,vb)
     smax = inverter.s_max/sb
+    # Worst-phase conflict selection is a substantial nonlinear graph. Cut it
+    # once before reusing it in the power and arm-current intersections; MOI
+    # copies nonlinear expression trees rather than preserving shared DAG nodes.
+    lift_services = any(law -> law !== nothing && !all(==(first(law.values)),law.values),
+                        _policy_laws(controller.positive)) ||
+                    _control_needs_thermal_backoff(inverter)
+    if lift_services
+        fraction = _defined_control_expression!(m,fraction;start=1.)
+        q = _defined_control_expression!(m,q;scale=smax,start=0.)
+    end
     seps = _power_epsilon(controller.limiter, ratings)/sb
     loss = _defined_control_expression!(m, handles.p_dc-handles.p_poc; scale=smax, start=0.)
     available = request.p_available/sb-loss
@@ -217,13 +251,26 @@ function _stamp_pcc_control!(ctx, controller, request, inverter, handles)
     p_service = _defined_control_expression!(m,p-p_import; scale=smax)
     i1request = _pcc_i1((p_service,q),u1)
     i2v,i2r,i2request,eta = _unbalance_smooth(ctx,controller.unbalance,u1,u2,i1request,vb,ib,vstart)
+    command_scale = ratings.i_scale/ib
+    if lift_services
+        i2request = ntuple(j -> _defined_control_expression!(m,i2request[j];
+            scale=command_scale,start=0.),2)
+    end
     base,pd,qd,nd = _pcc_geometry(voltage,shunt,inverter.b_filter_shunt*vb^2/sb,
         p_import,p_service,q,i2request)
+    lift_phase(x) = ntuple(k -> ntuple(j -> _defined_control_expression!(m,x[k][j];
+        scale=command_scale,start=0.),2),3)
+    if lift_services
+        base,pd,qd,nd = map(lift_phase,(base,pd,qd,nd))
+    end
     peps = seps/smax
     ieps = _current_epsilon(controller.limiter,ratings)/ratings.i_scale
+    # Normalize the larger lifted curve/thermal graph. Simple constant-service
+    # policies retain their established root coordinates at binding endpoints.
     grid,tp,tq,tn = _pcc_allocate(controller.limiter,base,pd,qd,nd,vconv,shunt,(p_import,p_service,q),
-        inverter,ib,sb,(a,b,l,e)->_pcc_segment_smooth!(m,a,b,l,e),
-        (a,b)->_combine_safe_scale_implicit!(m,a,b,min(peps,ieps)),peps,ieps)
+        inverter,ib,sb,(a,b,l,e)->_pcc_segment_smooth!(m,a,b,l,e;normalize=lift_services),
+        (a,b)->_combine_safe_scale_implicit!(m,a,b,min(peps,ieps)),peps,ieps;
+        current_scale=ratings.i_scale)
     target = controller.current_target isa ConverterCurrentTarget ? _pcphadd(grid,shunt) : grid
     _,i1,i2 = _pcsequences(target)
     # Stamp the same physical equalities for both actuator representations.
@@ -231,7 +278,6 @@ function _stamp_pcc_control!(ctx, controller, request, inverter, handles)
     _,command1,command2 = _pcsequences(grid)
     _,actual1,actual2 = _sequence_pair(collect(handles.gri),collect(handles.gii))
     # Converter I0=0 and LCL KCL already supply the zero-sequence equation.
-    command_scale = ratings.i_scale/ib
     for (actual,command) in ((actual1,command1),(actual2,command2)), j in 1:2
         JuMP.@constraint(m,(actual[j]-command[j])/command_scale == 0)
     end

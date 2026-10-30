@@ -1,0 +1,33 @@
+{
+  "mode": "gfm_virtual_impedance",
+  "availability": 0.5,
+  "source_pu": 1.0,
+  "s_base_VA": 100000.0,
+  "tol": 1e-08,
+  "max_iter": 250,
+  "bound_relax_factor": 0.0,
+  "profiles": [
+    {
+      "name": "zero_adaptive",
+      "selection_objective": "zero",
+      "mu_strategy": "adaptive",
+      "status": "ITERATION_LIMIT",
+      "physical_gate": false
+    },
+    {
+      "name": "zero_monotone",
+      "selection_objective": "zero",
+      "mu_strategy": "monotone",
+      "status": "ITERATION_LIMIT",
+      "physical_gate": false
+    },
+    {
+      "name": "limited_memory",
+      "selection_objective": "loss",
+      "mu_strategy": "adaptive",
+      "hessian_approximation": "limited-memory",
+      "status": "ITERATION_LIMIT",
+      "physical_gate": false
+    }
+  ]
+}

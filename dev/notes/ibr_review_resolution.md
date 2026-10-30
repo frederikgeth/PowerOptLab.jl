@@ -1,5 +1,74 @@
 # Advanced IBR review: resolution plan
 
+## 31 October 2026: terminal-profile fleet conditioning
+
+Work continues on `codex/ibr-pcc-apparent-power`. The three stressed positive
+voltage-control cases now pass, together with an 18-case sweep covering all
+three sensing policies, both source levels and zero/half/full PV. Every case
+uses the same 100 kVA base, adaptive/no-automatic-scaling Ipopt profile and
+300-iteration cap, without retries.
+
+The scalar capability allocator now keeps squared norms as expressions and
+normalizes the root of larger lifted curve/thermal graphs by service magnitude.
+It rescales the residual and smooth-maximum width together, preserving the
+quadratic, requested smoothing and service order. The maximum is evaluated
+from a strictly positive anchor to prevent cancellation on trial points.
+Constant-service graphs retain their established root coordinates. No curves,
+ratings, protection bounds, P/Q priority or acceptance tolerances were relaxed.
+
+Validation: 2,127 assertions across 102 model/controller testsets, including the
+18 operating points and stressed selection-objective invariance. The network
+audit passes 128 checks, including independent fixed-PQ replay of all three
+terminal equilibria (maximum voltage difference below 0.2 µV).
+
+Earlier rejected positive-profile runs are retained under
+`results/experimental_terminal_var_priority_before_fix`. Conditioning remains
+sensitive to numerical configuration: the 1 MVA adaptive-profile sequence case
+still fails and is retained in `results/experimental_terminal_numerical_scaling`.
+The full negative-sequence-controller PCC fleet has not been revalidated by
+this positive-voltage-control campaign. Neither historical nor current failed
+probes establish physical infeasibility.
+
+## 30 October 2026 follow-up: terminal semantics and thermal allocation
+
+Historical status before the 31 October conditioning fix:
+
+Mean and worst-phase equivalence fixtures now share reactive priority,
+converter-current actuation and PCC apparent-power limiting. This is a named
+Australian voltage-control comparison. The established proportional-PQ/grid-
+target/converter-VA full-controller baseline is retained: attempted promotion
+of PCC semantics to negative-sequence fleet cases exposed unresolved numerical
+failures, preserved in `results/experimental_pcc_fleet`. They are not evidence
+of physical infeasibility. The stressed terminal-profile sensitivity also fails
+for mean VV+VW; sequence VV+VW converges with the default solver but fails the
+selected adaptive profile. Both profiles are retained as numerical diagnostics,
+and no partial matched comparison is published. Under PCC reactive priority, common and power-priority
+constructors share Q→P→I₂ ordering; names alone are not distinct policies.
+
+Three-leg controller backoff now includes the plant's capacitor thermal budget:
+source-dependent 2ω sharing, frequency weights and fixed/current-dependent
+carrier allowances. An implied looser thermal bound needs no additional
+controller intersection, while the plant continues enforcing both bounds.
+PCC curve outputs and service directions are lifted for the larger nonlinear
+graphs to prevent repeated expression-tree expansion in fleet solves.
+
+The campaign adds independent capacitor ratings, balanced-source/load controls,
+half-width smoothing and a matched-gain/angle passive-admittance comparison.
+It records runtime provenance and checks dense switching, VA and thermal
+margins. Australia A curve values now cite public Energex tables; the capacitor
+paper's author list and public two-stage-model reference are corrected.
+
+Still open: manufacturer-calibrated losses/filter/DC-source data, full
+gain/angle/source-VUF sweeps, phase permutations, mixed fleets, loaded MV+LV
+integration, coordinated OPF bounds and parameter-identical EMT validation.
+These updates do not establish certification, dynamic GFM performance or
+representative Australian daily energy outcomes.
+
+Validation: 2,013 targeted model/controller assertions across 101 testsets;
+80 network/provenance audit checks. The main 54-case campaign and 77 cases in
+ten completed sensitivity campaigns pass their physical gates. The separate
+three-case terminal-profile diagnostic accepts one case and rejects two.
+
 Branch: `ibr-review-fixes` (from `main` @ `2c49436`). This note tracks every
 finding of the October 2026 critical review of the advanced IBR model, the
 phase-aware controllers and the two network studies. Each item stays here until

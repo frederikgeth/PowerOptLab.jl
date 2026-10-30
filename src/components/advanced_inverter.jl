@@ -727,7 +727,7 @@ zero filter) it is a plain grid-following converter at the POC.
   `sqrt(|I|² + ε²) − ε`, which underestimates the exact norm by at most `ε`.
   The modelled loss is therefore biased LOW by at most `a_loss·ε` per
   conducting leg — a closed-form, one-sided budget, not a tuning knob. `ε` is
-  `1e-6` of the leg's own current rating, so the relative bias is identical
+  `1e-9` of the leg's own current rating, so the relative bias is identical
   for every device in a heterogeneous fleet and identical in SI and per-unit.
   With `a_loss == 0` no magnitude term is stamped at all. Reported currents
   are recomputed exactly after the solve and carry none of this bias.

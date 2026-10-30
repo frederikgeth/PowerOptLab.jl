@@ -25,19 +25,21 @@ appearing here does not imply that every mechanism in it is implemented.
    [doi:10.48550/arXiv.2512.18293](https://doi.org/10.48550/arXiv.2512.18293).
    Primary basis for ``\widetilde S``, the small-ripple DC-link relation, and the
    six equation/PLECS benchmark cases.
-3. **M. Deakin, R. Heidari, and X. Deng**, “DC link capacitor ripple constraints
-   limit benefits of utility-owned four-wire power converters,” arXiv:2606.21934,
-   2026. [arXiv:2606.21934](https://arxiv.org/abs/2606.21934).
+3. **M. Deakin, X. Deng, S. Odhano, and R. Heidari**, “DC link capacitor ripple constraints
+   limit the benefits of utility-owned four-wire power converters,” arXiv:2606.21934,
+   2026 (accepted for PowerUp 2026). [arXiv:2606.21934](https://arxiv.org/abs/2606.21934).
    Primary basis for simultaneous capacitor ripple allocation and the distinction
    among 3-leg, 4-leg, and reconfigurable split-link return paths.
 4. **E. O. Badmus and A. Pandey**, “Two-stage bidirectional inverter equivalent
    circuit model for distribution grid steady-state analysis and optimization,”
-   *IEEE Transactions on Power Systems*, in press, 2026. Follow this work for
-   two-stage DC/DC-plus-DC/AC coupling when the public final article is available.
+   arXiv:2506.03430, 2025 (v3, January 2026).
+   [public preprint](https://arxiv.org/abs/2506.03430).
+   Follow this work for two-stage DC/DC-plus-DC/AC coupling and large-network
+   validation; check final publication metadata before manuscript submission.
 
-Items 2, 3, and 21 are cited from preprints. Replace each with its published
-version, and update the table/figure numbers used by the regression tests, before
-any of them supports a manuscript claim.
+Items 2 and 3 are cited from preprints. Check for published versions before
+submission and keep regression fixtures pinned to the version whose tables
+were actually transcribed; update fixture provenance when changing versions.
 
 ## Split link, ripple, and switching physics
 
@@ -323,12 +325,14 @@ converter-side control.
     behaviour normatively. It is a bulk-system document and is not an LV
     controller specification, but a discussion of unbalance control that omits
     it is incomplete.
-47. **AS/NZS 4777.2**, *Grid connection of energy systems via inverters,
+47. **AS/NZS 4777.2:2020, including Amendment 2:2024**, *Grid connection of energy systems via inverters,
     Part 2: Inverter requirements*.
     [AEMO standards overview](https://www.aemo.com.au/initiatives/major-programs/nem-distributed-energy-resources-der-program/standards-and-connections/as-nzs-4777-2-inverter-requirements-standard).
     The licensed clause specifying which voltage a multi-phase inverter observes
     for Volt-var and Volt-watt has **not** been read; see the open novelty check
     in [Phase-aware local control laws](@ref ibr-phase-aware-control-laws).
+    Australia A curve knots and bases are publicly confirmed in
+    [Energex STNW1170 v10 (2025), Tables 8–9](https://www.energex.com.au/__data/assets/pdf_file/0010/1072549/STNW1170-Standard-for-Small-IES-Connections.pdf).
 48. **† EN 50549-1 and EN 50549-2**, *Requirements for generating plants to be
     connected in parallel with distribution networks*. European connection-code
     comparator. Designation and edition unverified here.
@@ -406,6 +410,15 @@ the conductance-like admittance droop; item 59 is the grid-code context for
 negative-sequence current injection.
 
 ## Literature watch list
+
+For current-limited GFM comparison, **Q. Liu, M. Wang, M. Nick, C. Chen, and
+X. Zhao**, “Current-limiting control design for grid-forming capability
+enhancement of IBRs under asymmetric grid disturbances,” *IEEE Transactions on
+Power Electronics*, 41(4), 6430–6448, 2026,
+[doi:10.1109/TPEL.2025.3632684](https://doi.org/10.1109/TPEL.2025.3632684),
+studies impedance-angle alignment with dynamic and controller-HIL validation.
+A passive `I2=-U2/Z` snapshot with an untuned filter impedance is therefore a
+specific comparator, not evidence of a general GFM performance ranking.
 
 The highest-value additions are:
 

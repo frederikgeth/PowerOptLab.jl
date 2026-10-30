@@ -1,0 +1,25 @@
+
+******************************************************************************
+This program contains Ipopt, a library for large-scale nonlinear optimization.
+ Ipopt is released as open source code under the Eclipse Public License (EPL).
+         For more information visit https://github.com/coin-or/Ipopt
+******************************************************************************
+
+Solving ("terminal_numerical_scaling", 1.03, 1.0, "mean_vv_vw")
+  base=1.0e6 status=LOCALLY_SOLVED physical_gate=true
+Solving ("terminal_numerical_scaling", 1.03, 1.0, "worst_vv_vw")
+  base=1.0e6 status=LOCALLY_SOLVED physical_gate=true
+Solving ("terminal_numerical_scaling", 1.03, 1.0, "sequence_vv_vw")
+  base=1.0e6 status=ITERATION_LIMIT physical_gate=false
+ERROR: AssertionError: Rejected cases recorded; omitted from scientific plots
+Stacktrace:
+ [1] run(; modes::Vector{String}, levels::Vector{Float64}, sources::Vector{Float64}, curves::@NamedTuple{vv_v::Vector{Float64}, vv_q::Vector{Float64}, vw_v::Vector{Float64}, vw_p::Vector{Float64}, vw_basis::Symbol}, hw::@NamedTuple{s_max::Float64, v_nom::Float64, i_max::Float64, v_dc::Float64, m_max::Float64, c_dc::Float64, dv2_max::Float64, i_cap_max::Float64, x_pu::Float64, x_over_r::Float64, p_loss_fixed::Float64, a_loss::Float64, c_loss::Float64, single_phase_i_max::Float64}, output::String, label::String, settings::@NamedTuple{pq_priority::Symbol, current_target::Symbol, power_limit_location::Symbol}, source_vuf::Float64, phase_shares::Tuple{Float64, Float64, Float64}, smoothing_scale::Float64, solver_options::Tuple{Pair{String, Float64}, Pair{String, Int64}, Pair{String, Float64}, Pair{String, String}, Pair{String, String}}, solve_bases::Tuple{Float64})
+   @ Main ~/Documents/GitHub/PowerOptLab.jl/scripts/australian_pv/run.jl:397
+ [2] top-level scope
+   @ none:1
+ [3] eval(m::Module, e::Any)
+   @ Core ./boot.jl:489
+ [4] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:283
+ [5] _start()
+   @ Base ./client.jl:550

@@ -1,0 +1,13 @@
+TRY zero_adaptive
+
+******************************************************************************
+This program contains Ipopt, a library for large-scale nonlinear optimization.
+ Ipopt is released as open source code under the Eclipse Public License (EPL).
+         For more information visit https://github.com/coin-or/Ipopt
+******************************************************************************
+
+zero_adaptive ITERATION_LIMIT gate=false
+TRY zero_monotone
+zero_monotone ITERATION_LIMIT gate=false
+TRY limited_memory
+limited_memory ITERATION_LIMIT gate=false

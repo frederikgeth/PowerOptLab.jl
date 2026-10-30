@@ -50,10 +50,27 @@ function audit()
     for mode in ["unity","worst_vv_vw","sequence_droop","sequence_droop_power"]
         net=study_network(base,1.,1.03)
         result=solve_controlled_inverter_fleet(net,fleet(net,mode,1.);
-            s_base=100000.,solver_options=OPTIONS)
+            s_base=first(SOLVE_BASES),solver_options=CONTROL_SOLVER_OPTIONS)
         @test solve_status(result).publishable
         report[mode*"_fixed_PQ_replay_max_difference_V"]=replay(net,result)
     end
+    for mode in TERMINAL_MODES
+        net=study_network(base,1.,1.03)
+        spec=fleet(net,mode,1.;settings=TERMINAL_CONTROL_SETTINGS,
+            design=(kappa=0.,phi2=0.))
+        result=solve_controlled_inverter_fleet(net,spec;
+            s_base=only(TERMINAL_SOLVE_BASES),solver_options=TERMINAL_SOLVER_OPTIONS)
+        @test solve_status(result).publishable
+        @test accepted_control_rows(controlled_inverter_rows(result),HARDWARE)
+        report["terminal_"*mode*"_fixed_PQ_replay_max_difference_V"]=replay(net,result)
+    end
+    repo=normpath(joinpath(ROOT,"..",".."))
+    files=[joinpath(dir,f) for (dir,_,names) in walkdir(joinpath(repo,"src"))
+           for f in names if endswith(f,".jl")]
+    append!(files,[joinpath(@__DIR__,f) for f in ("prepare.jl","run.jl","audit.jl")])
+    push!(files,joinpath(@__DIR__,"..","enwl_advanced_ibr","common.jl"))
+    report["validated_source_sha256"]=Dict(relpath(f,repo)=>bytes2hex(sha256(read(f)))
+        for f in sort!(files))
     writejson(joinpath(ROOT,"results","modified_validation.json"),report)
 end
 if abspath(PROGRAM_FILE)==abspath(@__FILE__)

@@ -296,6 +296,35 @@ operating, fleet and hardware-sizing reports.
 
 ### PCC terminal saturation regressions
 
+The Australian terminal-profile fleet regression covers mean, worst-phase and
+sequence VV+VW at both source levels and zero/half/full PV. It uses a single
+100 kVA base, adaptive Ipopt profile and 300-iteration cap without retries,
+then checks that a zero selection objective preserves the stressed dispatch.
+The network audit replays all three stressed equilibria with fixed phase P/Q.
+The larger PCC graph retains squared-norm coefficients as expressions and
+normalizes its scalar root by `sqrt(d + epsilon^2)`. The quadratic, smoothing
+width and service order are unchanged; the root stays scaled to headroom for
+vanishing service. Simple constant-service graphs retain their prior root
+coordinates. The smooth maximum is anchored at a positive argument to prevent
+cancellation in its denominator on trial points. Convergence at other network
+bases remains a separate conditioning question, with failed probes retained.
+
+The Australia A review fixture also checks mean and worst-phase sensing with
+the same reactive-priority allocator, converter-arm current limit and PCC
+apparent-power circle, under separately binding current and power limits.
+Capacitor thermal regressions independently reconstruct weighted RMS stress
+from physical 2ω and declared carrier currents, cover both power boundaries,
+both current targets and common/power-priority sequence allocation, and compare
+the exact and smooth controller commands. These tests protect allocation
+semantics; they do not imply that the sensing policies agree under unbalance.
+They also do not establish equivalence to an optimisation that retains a hard
+Q-curve equality when that Q request itself exceeds the available capability:
+the forward reactive-priority allocator clips infeasible Q before allocating P.
+The PCC stamp lifts the curve outputs and phase-current service directions
+once before reusing them in capability intersections. This preserves the
+equations while avoiding repeated copies of the worst-phase conflict graph
+when exporting a fleet model to the nonlinear solver.
+
 PCC mode is checked against independently calculated terminal-circle and
 arm-current intersections for watt, var and proportional priority. Both current
 targets must deliver the same net P/Q with filter compensation; positive and

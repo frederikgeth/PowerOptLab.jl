@@ -390,7 +390,7 @@ The exact law uses the rationalised root of the per-phase quadratic,
 selector denominators, so its scale never exceeds the exact one. All other
 keywords and their defaults are those of [`CommonScaleLimiter`](@ref).
 The plant-aware protection (selected-location apparent power, both
-filter-side ratings and `dv2_max`) honours the same priority. It first scales
+filter-side ratings, `dv2_max` and `i_cap_max`) honours the same priority. It first scales
 only the lower-priority sequence, holding the reserved one as an offset, and
 scales the reserved sequence only if that alone still violates a limit.
 
@@ -1629,8 +1629,8 @@ function _unbalance_smooth(ctx, policy::NegativeSequenceAdmittanceDroop,
     product = _cmul(ratio[1], ratio[2], i1[1], i1[2])
     i2r = (-product[1], -product[2])
     blend = policy.ripple_blend
-    i2 = ((1-blend)*i2v[1] + blend*i2r[1],
-          (1-blend)*i2v[2] + blend*i2r[2])
+    i2 = iszero(blend) ? i2v : blend == 1 ? i2r :
+        ((1-blend)*i2v[1] + blend*i2r[1], (1-blend)*i2v[2] + blend*i2r[2])
     return i2v, i2r, i2, eta
 end
 
@@ -1686,6 +1686,44 @@ function _target_limit_smooth!(
     return power ?
         (_scale_pair(s, i1), _scale_pair(t, i2), s) :
         (_scale_pair(t, i1), _scale_pair(s, i2), t)
+end
+
+# A voltage-ripple bound can already imply a looser thermal bound when no
+# carrier allowance is declared. Avoid duplicating the same controller
+# intersection; the plant still enforces both physical inequalities.
+function _control_needs_thermal_backoff(inv)
+    inv.i_cap_max === nothing && return false
+    inv.dv2_max === nothing && return true
+    (inv.i_sw > 0 || inv.pwm_current_factor > 0) && return true
+    _,w2,_ = inv.cap_thermal_weights
+    implied = sqrt(w2)*2*(2pi*inv.f)*_dc_link_capacitance(inv)*inv.dv2_max/sqrt(2)
+    return implied > inv.i_cap_max
+end
+
+_control_has_carrier_budget(inv) = inv.cap_thermal_weights[3] > 0 &&
+    (inv.i_sw > 0 || inv.pwm_current_factor > 0)
+
+# Three-leg capacitor thermal geometry in amperes. The 2ω and declared carrier
+# allowances occupy orthogonal RMS channels, exactly as in the physical plant.
+# Retain the fixed carrier allowance in the anchor so no limiter scales it away.
+function _control_capacitor_geometry(inv, voltage, offset, direction;
+                                     current_scale=1.0, power_scale=1.0)
+    _, w2, wsw = inv.cap_thermal_weights
+    factor = sqrt(w2)*2*(2pi*inv.f)*_dc_link_capacitance(inv)*
+             abs(_dc_ripple_factor(inv))/(sqrt(2)*inv.v_dc)*power_scale
+    ripple(i) = (sum(voltage[k][1]*i[k][1]-voltage[k][2]*i[k][2] for k in 1:3),
+                 sum(voltage[k][1]*i[k][2]+voltage[k][2]*i[k][1] for k in 1:3))
+    carrier = sqrt(wsw)*inv.pwm_current_factor*current_scale
+    a = iszero(factor) ? Any[0.,0.] : Any[factor*x for x in ripple(offset)]
+    b = iszero(factor) ? Any[0.,0.] : Any[factor*x for x in ripple(direction)]
+    if !iszero(carrier)
+        append!(a, [carrier*offset[k][j] for k in 1:3 for j in 1:2])
+        append!(b, [carrier*direction[k][j] for k in 1:3 for j in 1:2])
+    end
+    if !iszero(wsw*inv.i_sw)
+        push!(a, sqrt(wsw)*inv.i_sw); push!(b, 0.0)
+    end
+    return (offset=a, direction=b)
 end
 
 # Plant-aware capability scale for one command direction. `converter_offset`
@@ -1766,6 +1804,27 @@ function _plant_capability_scale!(m, inverter::AdvancedInverter, handles,
             seps/smax)
     end
 
+    if _control_needs_thermal_backoff(inverter)
+        voltage = ntuple(k -> (handles.vrint[k], handles.viint[k]), 3)
+        geometry = _control_capacitor_geometry(inverter, voltage,
+            converter_offset, direction; current_scale=ib, power_scale=sb)
+        width = ieps*ib
+        # Joint carrier/ripple budgets need the RMS sphere: adding orthogonal
+        # channels as magnitudes would unnecessarily curtail reserved power.
+        candidate = if _control_has_carrier_budget(inverter)
+            _pcc_segment_smooth!(m, geometry.offset, geometry.direction,
+                inverter.i_cap_max, width/inverter.i_cap_max)
+        else
+            # A pure 2ω current cap is the same protection geometry as dv2_max.
+            # Reuse its conservative scale instead of adding a second quadratic
+            # segment graph even when this extra protection is inactive.
+            _safe_direction_scale_implicit!(m,geometry.offset,geometry.direction,
+                inverter.i_cap_max,width;magnitude_start=inverter.i_cap_max/2,
+                scale=inverter.i_cap_max)
+        end
+        capability_scale = _combine_safe_scale_implicit!(
+            m, capability_scale, candidate, width/inverter.i_cap_max)
+    end
     return capability_scale
 end
 
@@ -1787,10 +1846,14 @@ translating to converter current. It uses the PCC-terminal loss offset
 In converter mode the subsequent capability backoff is deliberately wider than
 [`evaluate_exact`](@ref): it also reads converter-terminal internal voltage and
 physical POC voltage and both filter-arm currents so that a declared per-leg,
-selected-location apparent-power, or `dv2_max` limit
+selected-location apparent-power, `dv2_max`, or capacitor thermal-current limit
 saturates the command instead of making the controller equality infeasible.
 [`solve_controlled_inverter`](@ref) applies the same backoff to the exact law at
 the solved point, which is why the two commands are comparable.
+The three-leg capacitor budget includes the source-dependent 2ω current,
+frequency weights, fixed `i_sw` and current-dependent `pwm_current_factor`
+allowances. It does not infer a thermal rating from capacitance. An infeasible
+mandatory loss-import or fixed-ripple anchor still lies outside the controller domain.
 """
 function stamp_smooth_control!(ctx, controller::SequenceController,
                                request::InverterControlRequest,
@@ -1820,6 +1883,12 @@ function stamp_smooth_control!(ctx, controller::SequenceController,
     p_fraction, q_raw, vmin, vmax = _positive_smooth(
         ctx, controller.positive, magnitudes, u1, request, sb, vb)
     smax = ratings.s_max / sb
+    if controller.positive isa WorstPhaseVoltVarWatt &&
+            get(m.ext,:PowerOptLabCompactController,false)
+        # Fleet export otherwise copies the conflict-selection tree into every
+        # current and capability expression. One equality preserves the law.
+        q_raw = _defined_control_expression!(m,q_raw;scale=smax,start=0.)
+    end
     power_epsilon = _power_epsilon(controller.limiter, ratings)
     seps = power_epsilon / sb
 
@@ -1910,12 +1979,21 @@ function stamp_smooth_control!(ctx, controller::SequenceController,
                            _phase_pairs((0.0, 0.0), i2_pre)
         other = power ? _phase_pairs((0.0, 0.0), i2_pre) :
                         _phase_pairs(i1_pre, (0.0, 0.0))
+        thermal_reserved_scale = 1.0
+        if _control_needs_thermal_backoff(inverter) && _control_has_carrier_budget(inverter)
+            voltage = ntuple(k -> (handles.vrint[k],handles.viint[k]),3)
+            geometry = _control_capacitor_geometry(inverter,voltage,
+                converter_offset,reserved;current_scale=ib,power_scale=sb)
+            thermal_reserved_scale = _pcc_segment_smooth!(m,geometry.offset,
+                geometry.direction,inverter.i_cap_max,ieps*ib/inverter.i_cap_max)
+            reserved = scale_phase(thermal_reserved_scale,reserved)
+        end
         other_scale = plant_scale(add_phase(converter_offset, reserved),
             add_phase(grid_offset, reserved), other)
         capability_scale = plant_scale(converter_offset, grid_offset,
             add_phase(reserved, scale_phase(other_scale, other)))
-        s1, s2 = power ? (capability_scale, capability_scale*other_scale) :
-                         (capability_scale*other_scale, capability_scale)
+        s1, s2 = power ? (capability_scale*thermal_reserved_scale, capability_scale*other_scale) :
+                         (capability_scale*other_scale, capability_scale*thermal_reserved_scale)
     else
         capability_scale = plant_scale(converter_offset, grid_offset, phase_pre)
         s1 = s2 = capability_scale
@@ -2088,6 +2166,17 @@ function _plant_scale_exact(converter_voltage, converter_offset, grid_offset,
         scale = min(scale, _safe_direction_scale_exact(
             ripple_offset, ripple_direction, ripple_limit))
     end
+    if _control_needs_thermal_backoff(inverter)
+        geometry = _control_capacitor_geometry(inverter,
+            reim.(converter_voltage), reim.(converter_offset), reim.(direction))
+        candidate = if _control_has_carrier_budget(inverter)
+            _pcc_segment_exact(geometry.offset,geometry.direction,inverter.i_cap_max,0.0)
+        else
+            _safe_direction_scale_exact(complex(geometry.offset...),
+                complex(geometry.direction...),inverter.i_cap_max)
+        end
+        scale = min(scale,candidate)
+    end
     return scale
 end
 
@@ -2115,11 +2204,20 @@ function _apply_plant_capability_exact(
                            _phase_from_sequences(0.0im, result.i2)
         other = power ? _phase_from_sequences(0.0im, result.i2) :
                         _phase_from_sequences(i1_service, 0.0im)
+        thermal_reserved_scale = 1.0
+        if _control_needs_thermal_backoff(inverter) && _control_has_carrier_budget(inverter)
+            geometry = _control_capacitor_geometry(inverter,reim.(converter_voltage),
+                reim.(converter_offset),reim.(reserved))
+            thermal_reserved_scale = _pcc_segment_exact(geometry.offset,
+                geometry.direction,inverter.i_cap_max,0.0)
+            reserved = thermal_reserved_scale .* reserved
+        end
         other_scale = plant_scale(converter_offset .+ reserved,
                                   grid_offset .+ reserved, other)
         scale = plant_scale(converter_offset, grid_offset,
                             reserved .+ other_scale .* other)
-        s1, s2 = power ? (scale, scale*other_scale) : (scale*other_scale, scale)
+        s1, s2 = power ? (scale*thermal_reserved_scale, scale*other_scale) :
+                         (scale*other_scale, scale*thermal_reserved_scale)
     else
         scale = plant_scale(converter_offset, grid_offset,
                             result.phase_current .- imported)

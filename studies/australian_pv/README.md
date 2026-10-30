@@ -3,9 +3,10 @@
 This is the Australian successor to the ENWL showcase. It starts with a small
 real feeder, preserves a converted reference, and makes the teaching experiment's
 changes explicit. The campaign compares **local control laws for 12 PV systems at
-12 three-phase customer connections, with unbalanced loading**. Every variant
-uses the same network, loads, hardware and available solar power. The status-quo
-case keeps a single-phase PV inverter at each customer instead.
+12 three-phase customer connections, with unbalanced loading**. Every three-phase variant
+uses the same network, loads, hardware and available solar power. The single-phase
+counterfactual keeps PV on each customer's original phase, with the same modified
+three-phase loading.
 
 ## Reproduce
 
@@ -13,7 +14,7 @@ From the PowerOptLab repository root, with its pinned Julia environment installe
 
 ```sh
 julia --project=. scripts/australian_pv/prepare.jl
-julia --project=. scripts/australian_pv/run.jl        # main campaign + sensitivities
+julia --project=. scripts/australian_pv/run.jl        # main, sensitivities, terminal validation
 julia --project=. scripts/australian_pv/summarize.jl  # summary.csv and the tables below
 julia --project=. scripts/australian_pv/audit.jl
 python3 scripts/australian_pv/plot.py                 # optional figures
@@ -32,6 +33,12 @@ exposes `run(modes=..., levels=..., sources=..., curves=..., hw=...)` for smalle
 experiments; the plot script requires the complete 54-case main campaign.
 Outputs are overwritten on rerun.
 
+The terminal comparison and its 18-case validation sweep use one fixed 100 kVA
+base and solver profile, with no per-case retries. Earlier rejected runs are
+retained separately under `results/experimental_*`. Any future rejected campaign
+still raises an assertion after saving its results; `summarize.jl` prints its
+status table and withholds a partial matched metric comparison.
+
 - [Feeder schematic](figures/feeder.png), [phase voltages](figures/phase_voltages.png)
   and [benefits and effort](figures/tradeoffs.png) (generated locally).
 - [Numerical summary](results/summary.csv), [case acceptance](results/cases.csv),
@@ -39,6 +46,8 @@ Outputs are overwritten on rerun.
   [baseline validation](results/validation.json),
   [modified-network validation](results/modified_validation.json), and the
   `results/sensitivity_*` directories.
+- [Terminal-profile validation sweep](results/terminal_profile_validation/cases.csv)
+  and its [solver/environment settings](results/terminal_profile_validation/environment.json).
 
 ## Source and deliberate changes
 
@@ -100,7 +109,8 @@ as an MV voltage-impact study.
 ## Parameter assumptions
 
 Each value is *derived* from the model and a stated requirement, *sourced*, or
-*assumed*; assumed values that can change a conclusion have a sensitivity run.
+*assumed*. Sensitivities cover selected influential assumptions; the remaining
+unswept assumptions are limitations, not calibrated product values.
 The derivations are in the [parameter-selection guide](../../docs/src/ibr/parameter_selection.md).
 
 | Parameter | Value | Kind | Basis | Sensitivity |
@@ -110,25 +120,65 @@ The derivations are in the [parameter-selection guide](../../docs/src/ibr/parame
 | DC-link voltage | 750 V | derived | ≥ √6·266 V/0.96 = 679 V for the three-leg hull | — |
 | Modulation limit | 0.96 | assumed | utilisation margin | — |
 | Series filter | X = 1.32 Ω (5%), R = 0.132 Ω | assumed | Liserre et al.: total L ≤ 0.1 pu; X/R = 10 | — |
-| DC-link capacitance | 300 µF (50 µF/kVA) | assumed | film link sized for near-balanced operation | 150 µF and 2 mF |
+| DC-link capacitance | 300 µF (50 µF/kVA) | assumed | illustrative link | 150 µF and 2 mF, with independent thermal ratings |
+| Capacitor thermal rating `i_cap_max` | 1 A RMS | assumed | independent line-frequency thermal budget; PWM disabled | 0.5 A; 2 mF at 1 A and 3 A |
 | 2ω ripple limit `dv2_max` | 7.5 V peak (1%) | assumed | ripple allowance | via capacitance |
 | Loss curve | 15 W + 2.0 W/A·Σ\|I\| + 0.3 W/A²·Σ\|I\|² | assumed | ≈ 2.2% at rated, ≈ 3.5% at 10% load | — |
-| Volt-var | 207/220/240/258 V → +44/0/0/−60% of VA | sourced (verify) | AS/NZS 4777.2:2020 Australia A; BMOPFTools `Aus_A` preset | — |
-| Volt-watt | 253/260 V → 100/20% of rating | sourced (verify) | same; rated basis | earlier 250/260 V → 100/0% of available |
+| Volt-var | 207/220/240/258 V → +44/0/0/−60% of VA | sourced | Energex STNW1170 v10 (2025), Table 8 | — |
+| Volt-watt | 253/260 V → 100/20% of rating | sourced | same, Table 9; rated basis | earlier 250/260 V → 100/0% of available |
 | Sensing reference | phase-to-neutral (`"n"`) | assumed | three-wire power stage with neutral sensing lead | — |
 | Negative-sequence angle φ₂ | median measured fleet Z₂ angle | derived | `results/negative_sequence_design.json` | — |
 | Negative-sequence gain κ | for 20% aligned fleet attenuation | derived | same file; per-unit value recorded | — |
-| Grid-forming virtual impedance | equal to the series filter | assumed | passive comparator | — |
-| Status-quo single-phase inverter | 6 kVA, 28.7 A, native Australia A droops, phase-to-neutral | assumed/sourced | same curves; original customer phase | — |
+| Passive negative-sequence impedance | equal to the series filter | assumed | specific untuned comparator | matched droop gain and angle |
+| Single-phase hardware counterfactual | 6 kVA, 28.7 A, native Australia A droops, phase-to-neutral | assumed/sourced | same curves; original customer phase | — |
+
+Australia A knots and bases are confirmed in
+[Energex STNW1170 v10 (2025), Tables 8–9](https://www.energex.com.au/__data/assets/pdf_file/0010/1072549/STNW1170-Standard-for-Small-IES-Connections.pdf).
+The product standard is AS/NZS 4777.2:2020 including Amendment 2:2024
+(effective August 2025). This source does not establish full conformity of
+our multiphase sensing, priority or negative-sequence laws.
+
+The two 2 mF sensitivities intentionally separate stored energy from thermal
+capability. At the baseline 300 µF/750 V, 7.5 V peak 2ω ripple corresponds to
+about 1.06 kW oscillating power and 1 A capacitor RMS current for the open source.
+Increasing C while retaining a 1 A rating reduces voltage ripple but cannot
+remove the thermal constraint. These are hardware counterfactuals, not a
+capacitor product recommendation. `pwm_strategy=:NONE`, zero capacitor ESR and
+an open line-frequency DC source remain explicit limitations.
+The controller's protection geometry matters too: the research profile uses a
+conservative triangle bound for voltage ripple and pure 2ω thermal current.
+Joint carrier/ripple budgets use an RMS-sphere intersection to preserve their
+orthogonal channels. A coordinated capability optimum remains a useful future
+bound on utilisation.
 
 ## Matched controller experiment
 
-The modes distinguish sensing, positive-sequence response, negative-sequence
-actuation and current priority. Comparing `sequence_vv_vw` with
-`sequence_droop` changes only the negative-sequence policy, and comparing
-`sequence_droop` with `sequence_droop_power` changes only the limiter.
+The full-controller research baseline explicitly retains
+`pq_priority=:proportional`, `current_target=:grid` and
+`power_limit_location=:converter`. This preserves the matched common-scale versus
+power-priority sequence comparison. It is an experimental controller profile,
+not a claim about certified residential firmware.
 
-| Mode | Reactive-power voltage input | Active-power voltage input | Negative-sequence current | Current limiting |
+The proposed equivalence-demo profile is named `TERMINAL_CONTROL_SETTINGS`:
+`pq_priority=:var`, `current_target=:converter`, `power_limit_location=:poc`.
+It allocates feasible Q before P and compares mean, worst-phase and
+sequence-voltage VV+VW in `sensitivity_terminal_var_priority`. All three cases
+pass, and `terminal_profile_validation` additionally covers both source levels
+and zero, half and full PV with the same profile. The mean and
+worst-phase regression demos use the same profile and check separately binding
+current and apparent-power limits against independent oracles.
+This profile also changes the interpretation of the 6 kVA boundary; it is not
+a pure sensing-policy comparison. Equivalence to a hard Q-curve equality requires
+that the requested reactive service is feasible.
+
+Changing `current_target` changes the commanded arm. `i_max` always protects
+converter-arm current; `i_grid_max` would separately protect grid-arm current.
+The series-only filter here makes those currents equal, while converter and PCC
+powers remain different. In PCC/var-priority mode, the common and power-priority
+constructors both allocate Q→P→I₂, so constructor names alone must not be used
+as evidence of different service priorities.
+
+| Mode | Reactive-power voltage input | Active-power voltage input | Negative-sequence current | Research-baseline sequence limiting |
 |---|---|---|---|---|
 | `unity` | none; Q command zero | available PV | none | common scale |
 | `mean_vv` | mean phase magnitude | available PV | none | common scale |
@@ -138,9 +188,11 @@ actuation and current priority. Comparing `sequence_vv_vw` with
 | `sequence_droop` | as above | as above | designed admittance droop | common scale |
 | `sequence_droop_power` | as above | as above | designed admittance droop | power priority |
 | `gfm_virtual_impedance` | as above | as above | passive −U₂/Z_f | power priority |
-| `single_phase_native` | per-phase magnitude (native) | per-phase magnitude (native) | n/a (single-phase) | native current limit |
+| `single_phase_native` | per-phase magnitude (native) | per-phase magnitude (native) | n/a (single-phase) | native capability |
 
-All three-phase controls target grid current and sense phase-to-neutral voltage.
+Baseline three-phase controls target grid current and sense phase-to-neutral
+voltage. Their curves use target-current power semantics; the terminal profile
+instead uses net PCC P/Q. Read cross-profile differences with that distinction.
 Three-leg currents sum to zero, so these converters cannot inject zero-sequence
 current. At zero PV availability the three-phase inverters remain energised and
 may supply reactive and negative-sequence current. Their DC source then supplies
@@ -152,9 +204,10 @@ The negative-sequence design follows the parameter guide. The fleet's
 negative-sequence voltage sensitivity is measured at zero current; φ₂ is the
 median aggregate impedance angle; and κ gives a 20% aligned attenuation for the
 median aggregate impedance shared by the 12 inverters. The single-phase status
-quo uses native BMOPFTools droops. Because BMOPFTools `solve_pf` currently strips ([BMOPFTools.jl#447](https://github.com/frederikgeth/BMOPFTools.jl/issues/447))
-IBR `s_max`, which zeroes S_MAX-based droops, that case is solved with the OPF
-builder, bus voltage bounds removed and maximum PV export. P is then the tighter
+quo uses native BMOPFTools droops. That case is solved with the OPF
+builder, bus voltage bounds removed and maximum PV export. The earlier
+`solve_pf` rating-base bug was fixed upstream in BMOPFTools #448; the explicit
+export objective also resolves dispatch beneath the Volt-watt ceiling. P is the tighter
 of availability and the Volt-watt cap.
 
 VUF is `100 |V₂|/|V₁|`, with a/b/c sequence order. Subtracting a common neutral
@@ -166,101 +219,214 @@ At full PV, source positive-sequence voltage 1.03 pu and source VUF 1%, maxima
 across the 12 customer buses and totals across the 12 inverters:
 
 <!-- results:start -->
-| Control | Max PN voltage (V) | Max VUF (%) | Max neutral (V) | PV delivered (kW) | Q absorbed (kvar) | Converter loss (kW) | Peak converter current (A) | Peak I₂ (A) | Peak 2ω ripple (V) |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Unity PF | 253.52 | 0.984 | 0.249 | 58.70 | 0.00 | 1.099 | 6.48 | 0.00 | 0.34 |
-| Mean VV | 253.27 | 0.987 | 0.233 | 58.50 | 28.05 | 1.249 | 7.17 | 0.00 | 0.38 |
-| Mean VV+VW | 253.27 | 0.987 | 0.233 | 58.50 | 28.05 | 1.249 | 7.17 | 0.00 | 0.38 |
-| Worst-phase VV+VW | 253.23 | 0.988 | 0.231 | 58.46 | 31.43 | 1.287 | 7.34 | 0.00 | 0.39 |
-| Sequence VV+VW | 253.27 | 0.987 | 0.233 | 58.50 | 28.04 | 1.249 | 7.17 | 0.00 | 0.38 |
-| Sequence + I₂ droop (common scale) | 252.58 | 0.925 | 0.287 | 23.57 | 10.77 | 0.510 | 4.18 | 1.44 | 7.50 |
-| Sequence + I₂ droop (power priority) | 253.11 | 0.933 | 0.232 | 58.47 | 28.10 | 1.275 | 8.23 | 1.36 | 6.84 |
-| Grid-forming virtual impedance | 253.37 | 0.967 | 0.217 | 58.47 | 28.17 | 1.275 | 8.52 | 1.41 | 7.45 |
-| Single-phase PV, native AS/NZS 4777.2 | 254.54 | 1.099 | 1.310 | 59.93 | 30.58 | — | 22.56 | — | — |
+| Control | Max PN voltage (V) | Max VUF (%) | Max neutral (V) | PV delivered (kW) | Q absorbed (kvar) | Converter loss (kW) | Max phase RMS current (A) | Max I₂ RMS (A) | Peak 2ω ripple (V) | Filter loss (kW) | Max capacitor thermal RMS (A) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Unity PF | 253.52 | 0.984 | 0.249 | 58.70 | -0.00 | 1.099 | 6.48 | 0.00 | 0.34 | 0.200 | 0.045 |
+| Mean VV | 253.27 | 0.987 | 0.233 | 58.50 | 28.05 | 1.249 | 7.17 | 0.00 | 0.38 | 0.244 | 0.050 |
+| Mean VV+VW | 253.27 | 0.987 | 0.233 | 58.50 | 28.05 | 1.249 | 7.17 | 0.00 | 0.38 | 0.244 | 0.050 |
+| Worst-phase VV+VW | 253.23 | 0.988 | 0.231 | 58.46 | 31.43 | 1.287 | 7.34 | 0.00 | 0.39 | 0.255 | 0.051 |
+| Sequence VV+VW | 253.27 | 0.987 | 0.233 | 58.50 | 28.04 | 1.249 | 7.17 | 0.00 | 0.38 | 0.244 | 0.050 |
+| Sequence + I₂ droop (common scale) | 252.58 | 0.925 | 0.287 | 23.57 | 10.77 | 0.510 | 4.18 | 1.44 | 7.50 | 0.049 | 1.000 |
+| Sequence + I₂ droop (power priority) | 253.11 | 0.933 | 0.232 | 58.47 | 28.10 | 1.275 | 8.23 | 1.36 | 6.84 | 0.253 | 0.911 |
+| Passive I₂ admittance (filter Z) | 253.37 | 0.967 | 0.217 | 58.47 | 28.17 | 1.275 | 8.52 | 1.41 | 7.45 | 0.253 | 0.993 |
+| Single-phase PV, native AS/NZS 4777.2 | 254.54 | 1.099 | 1.310 | 59.93 | 30.58 | — | 22.56 | — | — | — | — |
 <!-- results:end -->
 
 <!-- interpretation:start -->
-Read the table with the sensitivity blocks below. Six observations hold for
-this case:
+Read these as conditional results for this feeder, tuning and hardware:
 
-1. **Standard Volt-watt hardly curtails on this feeder.** With the Australia A
-   curve (253 V knee, rated basis), every three-phase law delivers about
-   58.5 kW of the 60 kW available. Most of the remainder is the converter loss
-   that the plant now draws from the DC side. The pedagogical curve (250 V knee,
-   available basis) curtails to about 42 kW. The earlier headline that
-   worst-phase guards curtail heavily was a property of that curve, not of
-   worst-phase sensing.
-2. **Positive-sequence policies barely move the maximum voltage.** The feeder is
-   short and stiff: about 28 kvar of absorption lowers the highest customer
-   voltage by about 0.25 V, and all three-phase laws end within 0.3 V of 253 V.
-   With phase-to-neutral sensing and a small phase spread, mean, worst-phase and
-   sequence sensing give almost the same response.
-3. **Negative-sequence support is limited by the DC link, not by the
-   controller.** The measured design asks for 20% attenuation (κ = 1.63 A/V,
-   φ₂ = 19°). With the 300 µF link the 2ω ripple limit binds and maximum VUF
-   falls from 0.987% to 0.933%; with 150 µF to 0.961%; with 2 mF it is current
-   limited at 0.873%. Capacitance buys unbalance attenuation.
-4. **The limiter decides who pays.** Under the same ripple limit, common scaling
-   delivers 23.6 kW because it cuts active power to reduce a ripple that comes
-   mostly from I₂. Power priority, which now extends to the plant-aware ripple
-   backoff, delivers 58.5 kW for almost the same VUF benefit.
-5. **The passive grid-forming law is a weaker unbalance actuator here.** A
-   balanced EMF behind the series filter gives about 0.75 A/V at 84°, far from
-   the feeder's 19° impedance angle, so it attenuates less (0.967%) for a
-   similar I₂.
-6. **The single-phase status quo is worse on every unbalance measure.** Single-
-   phase PV on the original phases raises maximum VUF to 1.10%, neutral
-   displacement to 1.31 V (more than five times any three-phase case) and the
-   highest customer voltage to 254.5 V. Its delivered power is not comparable:
-   the native single-phase model carries no converter loss.
+1. **The ordinary voltage-control benefit is small.** Worst-phase VV+VW changes
+   maximum voltage from 253.52 to 253.23 V while absorbing
+   31.43 kvar. The short, stiff feeder limits the voltage benefit.
+2. **Sequence support has a hardware cost.** With power-priority sequence allocation,
+   maximum VUF changes from 0.987% to
+   0.933%, with 58.47 kW delivered
+   and 0.911 A maximum capacitor thermal RMS current.
+3. **Capacitance and thermal rating are independent.** Compare `large_dc_link_2mF`
+   (1 A) with `large_dc_link_3A` (3 A). Increasing capacitance alone cannot remove
+   the thermal constraint; the unchanged 7.5 V peak allowance is a separate limit.
+4. **The limiter decides how support is paid for.** In the matched research
+   baseline, common scaling delivers 23.57 kW versus
+   58.47 kW with power priority. Those cases retain the old
+   converter-power/grid-current/proportional-PQ semantics. They do not describe
+   the separate reactive-priority PCC voltage-control comparison.
+5. **A passive law is only as well tuned as its impedance.** The filter-Z case
+   differs in both gain and angle from the designed droop. The matched virtual
+   impedance sensitivity removes those differences at this operating point;
+   neither comparison establishes dynamic grid-forming performance.
+6. **The single-phase case is a connection/hardware counterfactual.** Its phase allocation,
+   native control implementation and absent converter losses differ from the
+   three-phase experiment. Read voltage quality separately from delivered power.
+
+Removing the imposed source negative-sequence voltage reduces maximum VUF for
+sequence VV+VW to 0.059%;
+balancing the loads while retaining that source gives
+1.022%.
+The headline unbalance result therefore depends strongly on the assumed source;
+site representativeness requires measured source conditions.
+The half-smoothing case changes curve, extrema and conflict widths; it
+does not halve every numerical width in the controller. Available-minus-delivered
+power includes converter/filter losses and limiting; these snapshots do not
+measure daily energy or certify feeder compliance.
+
+`terminal_var_priority` compares mean, worst-phase and sequence-voltage VV+VW
+with reactive priority, converter-current actuation and a PCC VA circle. It records
+3/3 accepted cases using one 100 kVA base and the same solver
+profile. The separate `terminal_profile_validation` sweep covers the same three
+laws at zero, half and full PV and both source levels
+(18/18 accepted snapshots).
+The regression also checks that a zero selection objective preserves dispatch.
+
+The scalar capability root is normalized by service magnitude, preserving the
+quadratic and smoothing law as service tends to zero. Earlier failed runs are
+archived in `experimental_terminal_var_priority_before_fix` and
+`experimental_pcc_fleet`. Numerical conditioning remains sensitive to other
+solver/base configurations; `experimental_terminal_numerical_scaling` records
+the remaining 1 MVA sequence-case failure with the same adaptive profile.
+These diagnostics establish no physical infeasibility or hardware-sizing limit.
 <!-- interpretation:end -->
 
 ### Sensitivity to assumptions
 
-Each block changes one assumption at the same operating point.
+Each block uses the same stressed operating point with the named parameter or
+controller-comparison changes. The 2 mF/3 A case changes both hardware values
+relative to the main case; compare it with 2 mF/1 A to isolate the rating effect.
 
 <!-- sensitivity:start -->
+**balanced_load**
+
+| Control | Max PN voltage (V) | Max VUF (%) | Max neutral (V) | PV delivered (kW) | Q absorbed (kvar) | Converter loss (kW) | Max phase RMS current (A) | Max I₂ RMS (A) | Peak 2ω ripple (V) | Filter loss (kW) | Max capacitor thermal RMS (A) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Unity PF | 253.37 | 1.015 | 0.066 | 58.70 | -0.00 | 1.099 | 6.48 | 0.00 | 0.35 | 0.200 | 0.047 |
+| Mean VV | 253.17 | 1.022 | 0.079 | 58.50 | 28.01 | 1.249 | 7.17 | 0.00 | 0.39 | 0.244 | 0.052 |
+| Mean VV+VW | 253.17 | 1.022 | 0.079 | 58.50 | 28.01 | 1.249 | 7.17 | 0.00 | 0.39 | 0.244 | 0.052 |
+| Worst-phase VV+VW | 253.15 | 1.023 | 0.082 | 58.46 | 31.27 | 1.285 | 7.33 | 0.00 | 0.40 | 0.255 | 0.053 |
+| Sequence VV+VW | 253.17 | 1.022 | 0.079 | 58.50 | 27.99 | 1.249 | 7.17 | 0.00 | 0.39 | 0.244 | 0.052 |
+| Sequence + I₂ droop (common scale) | 252.43 | 0.944 | 0.040 | 22.75 | 10.37 | 0.497 | 4.01 | 1.44 | 7.50 | 0.047 | 1.000 |
+| Sequence + I₂ droop (power priority) | 253.07 | 0.953 | 0.088 | 58.47 | 28.06 | 1.275 | 8.19 | 1.36 | 6.81 | 0.253 | 0.908 |
+| Passive I₂ admittance (filter Z) | 253.09 | 0.986 | 0.097 | 58.47 | 28.13 | 1.275 | 8.53 | 1.40 | 7.44 | 0.253 | 0.992 |
+| Single-phase PV, native AS/NZS 4777.2 | 254.46 | 1.138 | 1.380 | 59.98 | 30.51 | — | 22.64 | — | — | — | — |
+
+**balanced_source**
+
+| Control | Max PN voltage (V) | Max VUF (%) | Max neutral (V) | PV delivered (kW) | Q absorbed (kvar) | Converter loss (kW) | Max phase RMS current (A) | Max I₂ RMS (A) | Peak 2ω ripple (V) | Filter loss (kW) | Max capacitor thermal RMS (A) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Unity PF | 252.31 | 0.051 | 0.254 | 58.70 | -0.00 | 1.099 | 6.48 | 0.00 | 0.02 | 0.200 | 0.002 |
+| Mean VV | 252.11 | 0.059 | 0.239 | 58.50 | 28.03 | 1.249 | 7.17 | 0.00 | 0.02 | 0.244 | 0.003 |
+| Mean VV+VW | 252.11 | 0.059 | 0.239 | 58.50 | 28.03 | 1.249 | 7.17 | 0.00 | 0.02 | 0.244 | 0.003 |
+| Worst-phase VV+VW | 252.10 | 0.059 | 0.238 | 58.50 | 28.69 | 1.256 | 7.21 | 0.00 | 0.02 | 0.246 | 0.003 |
+| Sequence VV+VW | 252.11 | 0.059 | 0.239 | 58.50 | 28.03 | 1.249 | 7.17 | 0.00 | 0.02 | 0.244 | 0.003 |
+| Sequence + I₂ droop (common scale) | 252.11 | 0.059 | 0.239 | 58.50 | 28.03 | 1.249 | 7.18 | 0.01 | 0.06 | 0.244 | 0.008 |
+| Sequence + I₂ droop (power priority) | 252.11 | 0.059 | 0.239 | 58.50 | 28.03 | 1.249 | 7.18 | 0.01 | 0.06 | 0.244 | 0.008 |
+| Passive I₂ admittance (filter Z) | 252.12 | 0.056 | 0.239 | 58.50 | 28.03 | 1.249 | 7.27 | 0.11 | 0.56 | 0.244 | 0.074 |
+| Single-phase PV, native AS/NZS 4777.2 | 253.45 | 0.212 | 1.332 | 60.00 | 30.55 | — | 22.40 | — | — | — | — |
+
+**half_smoothing**
+
+| Control | Max PN voltage (V) | Max VUF (%) | Max neutral (V) | PV delivered (kW) | Q absorbed (kvar) | Converter loss (kW) | Max phase RMS current (A) | Max I₂ RMS (A) | Peak 2ω ripple (V) | Filter loss (kW) | Max capacitor thermal RMS (A) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Worst-phase VV+VW | 253.23 | 0.988 | 0.231 | 58.46 | 31.42 | 1.287 | 7.34 | 0.00 | 0.39 | 0.255 | 0.051 |
+| Sequence + I₂ droop (power priority) | 253.11 | 0.933 | 0.232 | 58.47 | 28.10 | 1.275 | 8.23 | 1.36 | 6.84 | 0.253 | 0.911 |
+
 **large_dc_link_2mF**
 
-| Control | Max PN voltage (V) | Max VUF (%) | Max neutral (V) | PV delivered (kW) | Q absorbed (kvar) | Converter loss (kW) | Peak converter current (A) | Peak I₂ (A) | Peak 2ω ripple (V) |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Unity PF | 253.52 | 0.984 | 0.249 | 58.70 | -0.00 | 1.099 | 6.48 | 0.00 | 0.05 |
-| Mean VV | 253.27 | 0.987 | 0.233 | 58.50 | 28.05 | 1.249 | 7.17 | 0.00 | 0.06 |
-| Mean VV+VW | 253.27 | 0.987 | 0.233 | 58.50 | 28.05 | 1.249 | 7.17 | 0.00 | 0.06 |
-| Worst-phase VV+VW | 253.23 | 0.988 | 0.231 | 58.46 | 31.43 | 1.287 | 7.34 | 0.00 | 0.06 |
-| Sequence VV+VW | 253.27 | 0.987 | 0.233 | 58.50 | 28.04 | 1.249 | 7.17 | 0.00 | 0.06 |
-| Sequence + I₂ droop (common scale) | 252.89 | 0.855 | 0.232 | 58.30 | 28.16 | 1.387 | 10.00 | 3.49 | 2.70 |
-| Sequence + I₂ droop (power priority) | 252.93 | 0.873 | 0.232 | 58.36 | 28.15 | 1.356 | 9.46 | 2.84 | 2.19 |
-| Grid-forming virtual impedance | 253.39 | 0.962 | 0.213 | 58.45 | 28.20 | 1.291 | 8.91 | 1.82 | 1.44 |
-| Single-phase PV, native AS/NZS 4777.2 | 254.54 | 1.099 | 1.310 | 59.93 | 30.58 | — | 22.56 | — | — |
+| Control | Max PN voltage (V) | Max VUF (%) | Max neutral (V) | PV delivered (kW) | Q absorbed (kvar) | Converter loss (kW) | Max phase RMS current (A) | Max I₂ RMS (A) | Peak 2ω ripple (V) | Filter loss (kW) | Max capacitor thermal RMS (A) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Unity PF | 253.52 | 0.984 | 0.249 | 58.69 | -0.00 | 1.099 | 6.48 | 0.00 | 0.05 | 0.200 | 0.045 |
+| Mean VV | 253.27 | 0.987 | 0.233 | 58.50 | 28.05 | 1.249 | 7.17 | 0.00 | 0.06 | 0.244 | 0.050 |
+| Mean VV+VW | 253.27 | 0.987 | 0.233 | 58.50 | 28.05 | 1.249 | 7.17 | 0.00 | 0.06 | 0.244 | 0.050 |
+| Worst-phase VV+VW | 253.23 | 0.988 | 0.231 | 58.45 | 31.43 | 1.287 | 7.34 | 0.00 | 0.06 | 0.255 | 0.051 |
+| Sequence VV+VW | 253.27 | 0.987 | 0.233 | 58.50 | 28.03 | 1.249 | 7.17 | 0.00 | 0.06 | 0.244 | 0.050 |
+| Sequence + I₂ droop (common scale) | 252.58 | 0.925 | 0.287 | 23.58 | 10.77 | 0.510 | 4.18 | 1.44 | 1.13 | 0.049 | 1.000 |
+| Sequence + I₂ droop (power priority) | 253.11 | 0.933 | 0.232 | 58.46 | 28.09 | 1.275 | 8.23 | 1.36 | 1.03 | 0.253 | 0.912 |
+| Passive I₂ admittance (filter Z) | 253.37 | 0.967 | 0.217 | 58.46 | 28.17 | 1.275 | 8.52 | 1.41 | 1.12 | 0.253 | 0.993 |
+| Single-phase PV, native AS/NZS 4777.2 | 254.54 | 1.099 | 1.310 | 59.93 | 30.58 | — | 22.56 | — | — | — | — |
+
+**large_dc_link_3A**
+
+| Control | Max PN voltage (V) | Max VUF (%) | Max neutral (V) | PV delivered (kW) | Q absorbed (kvar) | Converter loss (kW) | Max phase RMS current (A) | Max I₂ RMS (A) | Peak 2ω ripple (V) | Filter loss (kW) | Max capacitor thermal RMS (A) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Unity PF | 253.52 | 0.984 | 0.249 | 58.70 | -0.00 | 1.099 | 6.48 | 0.00 | 0.05 | 0.200 | 0.045 |
+| Mean VV | 253.27 | 0.987 | 0.233 | 58.50 | 28.05 | 1.249 | 7.17 | 0.00 | 0.06 | 0.244 | 0.050 |
+| Mean VV+VW | 253.27 | 0.987 | 0.233 | 58.50 | 28.05 | 1.249 | 7.17 | 0.00 | 0.06 | 0.244 | 0.050 |
+| Worst-phase VV+VW | 253.23 | 0.988 | 0.231 | 58.45 | 31.43 | 1.287 | 7.34 | 0.00 | 0.06 | 0.255 | 0.051 |
+| Sequence VV+VW | 253.27 | 0.987 | 0.233 | 58.50 | 28.03 | 1.249 | 7.17 | 0.00 | 0.06 | 0.244 | 0.050 |
+| Sequence + I₂ droop (common scale) | 252.89 | 0.855 | 0.232 | 58.30 | 28.16 | 1.387 | 10.00 | 3.49 | 2.70 | 0.294 | 2.396 |
+| Sequence + I₂ droop (power priority) | 252.93 | 0.873 | 0.232 | 58.36 | 28.15 | 1.355 | 9.46 | 2.84 | 2.19 | 0.283 | 1.943 |
+| Passive I₂ admittance (filter Z) | 253.39 | 0.962 | 0.213 | 58.45 | 28.20 | 1.291 | 8.91 | 1.82 | 1.44 | 0.259 | 1.280 |
+| Single-phase PV, native AS/NZS 4777.2 | 254.54 | 1.099 | 1.310 | 59.93 | 30.58 | — | 22.56 | — | — | — | — |
+
+**legacy_allocation**
+
+| Control | Max PN voltage (V) | Max VUF (%) | Max neutral (V) | PV delivered (kW) | Q absorbed (kvar) | Converter loss (kW) | Max phase RMS current (A) | Max I₂ RMS (A) | Peak 2ω ripple (V) | Filter loss (kW) | Max capacitor thermal RMS (A) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Unity PF | 253.52 | 0.984 | 0.249 | 58.70 | -0.00 | 1.099 | 6.48 | 0.00 | 0.34 | 0.200 | 0.045 |
+| Mean VV | 253.27 | 0.987 | 0.233 | 58.50 | 28.05 | 1.249 | 7.17 | 0.00 | 0.38 | 0.244 | 0.050 |
+| Mean VV+VW | 253.27 | 0.987 | 0.233 | 58.50 | 28.05 | 1.249 | 7.17 | 0.00 | 0.38 | 0.244 | 0.050 |
+| Worst-phase VV+VW | 253.23 | 0.988 | 0.231 | 58.46 | 31.43 | 1.287 | 7.34 | 0.00 | 0.39 | 0.255 | 0.051 |
+| Sequence VV+VW | 253.27 | 0.987 | 0.233 | 58.50 | 28.04 | 1.249 | 7.17 | 0.00 | 0.38 | 0.244 | 0.050 |
+| Sequence + I₂ droop (common scale) | 252.58 | 0.925 | 0.287 | 23.57 | 10.77 | 0.510 | 4.18 | 1.44 | 7.50 | 0.049 | 1.000 |
+| Sequence + I₂ droop (power priority) | 253.11 | 0.933 | 0.232 | 58.47 | 28.10 | 1.275 | 8.23 | 1.36 | 6.84 | 0.253 | 0.911 |
+| Passive I₂ admittance (filter Z) | 253.37 | 0.967 | 0.217 | 58.47 | 28.17 | 1.275 | 8.52 | 1.41 | 7.45 | 0.253 | 0.993 |
+| Single-phase PV, native AS/NZS 4777.2 | 254.54 | 1.099 | 1.310 | 59.93 | 30.58 | — | 22.56 | — | — | — | — |
+
+**matched_virtual_impedance**
+
+| Control | Max PN voltage (V) | Max VUF (%) | Max neutral (V) | PV delivered (kW) | Q absorbed (kvar) | Converter loss (kW) | Max phase RMS current (A) | Max I₂ RMS (A) | Peak 2ω ripple (V) | Filter loss (kW) | Max capacitor thermal RMS (A) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Sequence + I₂ droop (power priority) | 253.11 | 0.933 | 0.232 | 58.47 | 28.10 | 1.275 | 8.23 | 1.36 | 6.84 | 0.253 | 0.911 |
+| Passive I₂ admittance (filter Z) | 253.37 | 0.967 | 0.217 | 58.47 | 28.17 | 1.275 | 8.52 | 1.41 | 7.45 | 0.253 | 0.993 |
+| Passive I₂ admittance (matched gain/angle) | 253.11 | 0.933 | 0.232 | 58.47 | 28.10 | 1.275 | 8.23 | 1.36 | 6.84 | 0.253 | 0.911 |
 
 **pedagogical_volt_watt**
 
-| Control | Max PN voltage (V) | Max VUF (%) | Max neutral (V) | PV delivered (kW) | Q absorbed (kvar) | Converter loss (kW) | Peak converter current (A) | Peak I₂ (A) | Peak 2ω ripple (V) |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Unity PF | 253.52 | 0.984 | 0.249 | 58.70 | 0.00 | 1.099 | 6.48 | 0.00 | 0.34 |
-| Mean VV | 253.27 | 0.987 | 0.233 | 58.50 | 28.05 | 1.249 | 7.17 | 0.00 | 0.38 |
-| Mean VV+VW | 253.09 | 0.986 | 0.245 | 49.64 | 27.72 | 1.058 | 6.32 | 0.00 | 0.33 |
-| Worst-phase VV+VW | 252.92 | 0.986 | 0.254 | 42.14 | 30.83 | 0.955 | 5.81 | 0.00 | 0.31 |
-| Sequence VV+VW | 252.95 | 0.985 | 0.256 | 42.06 | 27.42 | 0.912 | 5.60 | 0.00 | 0.29 |
-| Sequence + I₂ droop (common scale) | 252.47 | 0.925 | 0.295 | 17.73 | 10.67 | 0.438 | 3.52 | 1.44 | 7.50 |
-| Sequence + I₂ droop (power priority) | 252.80 | 0.930 | 0.254 | 42.64 | 27.51 | 0.950 | 6.61 | 1.38 | 6.98 |
-| Grid-forming virtual impedance | 253.04 | 0.966 | 0.241 | 41.55 | 27.54 | 0.932 | 6.97 | 1.41 | 7.47 |
-| Single-phase PV, native AS/NZS 4777.2 | 253.66 | 1.053 | 1.284 | 45.98 | 29.52 | — | 20.46 | — | — |
+| Control | Max PN voltage (V) | Max VUF (%) | Max neutral (V) | PV delivered (kW) | Q absorbed (kvar) | Converter loss (kW) | Max phase RMS current (A) | Max I₂ RMS (A) | Peak 2ω ripple (V) | Filter loss (kW) | Max capacitor thermal RMS (A) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Unity PF | 253.52 | 0.984 | 0.249 | 58.70 | -0.00 | 1.099 | 6.48 | 0.00 | 0.34 | 0.200 | 0.045 |
+| Mean VV | 253.27 | 0.987 | 0.233 | 58.50 | 28.05 | 1.249 | 7.17 | 0.00 | 0.38 | 0.244 | 0.050 |
+| Mean VV+VW | 253.09 | 0.986 | 0.245 | 49.64 | 27.72 | 1.058 | 6.32 | 0.00 | 0.33 | 0.188 | 0.044 |
+| Worst-phase VV+VW | 252.92 | 0.986 | 0.254 | 42.14 | 30.83 | 0.955 | 5.81 | 0.00 | 0.31 | 0.158 | 0.041 |
+| Sequence VV+VW | 252.95 | 0.985 | 0.256 | 42.06 | 27.42 | 0.912 | 5.60 | 0.00 | 0.29 | 0.147 | 0.039 |
+| Sequence + I₂ droop (common scale) | 252.47 | 0.925 | 0.295 | 17.73 | 10.67 | 0.438 | 3.52 | 1.44 | 7.50 | 0.035 | 1.000 |
+| Sequence + I₂ droop (power priority) | 252.80 | 0.930 | 0.254 | 42.64 | 27.51 | 0.950 | 6.61 | 1.38 | 6.98 | 0.159 | 0.931 |
+| Passive I₂ admittance (filter Z) | 253.04 | 0.966 | 0.241 | 41.55 | 27.54 | 0.932 | 6.97 | 1.41 | 7.47 | 0.154 | 0.996 |
+| Single-phase PV, native AS/NZS 4777.2 | 253.66 | 1.053 | 1.284 | 45.98 | 29.52 | — | 20.46 | — | — | — | — |
 
 **small_dc_link_150uF**
 
-| Control | Max PN voltage (V) | Max VUF (%) | Max neutral (V) | PV delivered (kW) | Q absorbed (kvar) | Converter loss (kW) | Peak converter current (A) | Peak I₂ (A) | Peak 2ω ripple (V) |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Unity PF | 253.52 | 0.984 | 0.249 | 58.70 | 0.00 | 1.099 | 6.48 | 0.00 | 0.68 |
-| Mean VV | 253.27 | 0.987 | 0.233 | 58.50 | 28.05 | 1.249 | 7.17 | 0.00 | 0.75 |
-| Mean VV+VW | 253.27 | 0.987 | 0.233 | 58.50 | 28.05 | 1.249 | 7.17 | 0.00 | 0.75 |
-| Worst-phase VV+VW | 253.23 | 0.988 | 0.231 | 58.46 | 31.43 | 1.287 | 7.34 | 0.00 | 0.77 |
-| Sequence VV+VW | 253.27 | 0.987 | 0.233 | 58.50 | 28.04 | 1.249 | 7.17 | 0.00 | 0.75 |
-| Sequence + I₂ droop (common scale) | 252.47 | 0.953 | 0.307 | 11.27 | 5.06 | 0.311 | 2.01 | 0.72 | 7.50 |
-| Sequence + I₂ droop (power priority) | 253.19 | 0.961 | 0.232 | 58.50 | 28.07 | 1.256 | 7.67 | 0.65 | 6.25 |
-| Grid-forming virtual impedance | 253.32 | 0.977 | 0.225 | 58.50 | 28.10 | 1.255 | 7.81 | 0.67 | 7.19 |
-| Single-phase PV, native AS/NZS 4777.2 | 254.54 | 1.099 | 1.310 | 59.93 | 30.58 | — | 22.56 | — | — |
+| Control | Max PN voltage (V) | Max VUF (%) | Max neutral (V) | PV delivered (kW) | Q absorbed (kvar) | Converter loss (kW) | Max phase RMS current (A) | Max I₂ RMS (A) | Peak 2ω ripple (V) | Filter loss (kW) | Max capacitor thermal RMS (A) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Unity PF | 253.52 | 0.984 | 0.249 | 58.70 | -0.00 | 1.099 | 6.48 | 0.00 | 0.68 | 0.200 | 0.045 |
+| Mean VV | 253.27 | 0.987 | 0.233 | 58.50 | 28.05 | 1.249 | 7.17 | 0.00 | 0.75 | 0.244 | 0.050 |
+| Mean VV+VW | 253.27 | 0.987 | 0.233 | 58.50 | 28.05 | 1.249 | 7.17 | 0.00 | 0.75 | 0.244 | 0.050 |
+| Worst-phase VV+VW | 253.23 | 0.988 | 0.231 | 58.46 | 31.43 | 1.287 | 7.34 | 0.00 | 0.77 | 0.255 | 0.051 |
+| Sequence VV+VW | 253.27 | 0.987 | 0.233 | 58.50 | 28.04 | 1.249 | 7.17 | 0.00 | 0.75 | 0.244 | 0.050 |
+| Sequence + I₂ droop (common scale) | 252.47 | 0.953 | 0.307 | 11.27 | 5.06 | 0.311 | 2.01 | 0.72 | 7.50 | 0.011 | 0.500 |
+| Sequence + I₂ droop (power priority) | 253.19 | 0.961 | 0.232 | 58.50 | 28.07 | 1.256 | 7.67 | 0.65 | 6.25 | 0.246 | 0.417 |
+| Passive I₂ admittance (filter Z) | 253.32 | 0.977 | 0.225 | 58.50 | 28.10 | 1.255 | 7.81 | 0.67 | 7.19 | 0.246 | 0.479 |
+| Single-phase PV, native AS/NZS 4777.2 | 254.54 | 1.099 | 1.310 | 59.93 | 30.58 | — | 22.56 | — | — | — | — |
+
+**terminal_var_priority**
+
+| Control | Max PN voltage (V) | Max VUF (%) | Max neutral (V) | PV delivered (kW) | Q absorbed (kvar) | Converter loss (kW) | Max phase RMS current (A) | Max I₂ RMS (A) | Peak 2ω ripple (V) | Filter loss (kW) | Max capacitor thermal RMS (A) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Mean VV+VW | 253.27 | 0.987 | 0.233 | 58.51 | 28.05 | 1.249 | 7.17 | 0.00 | 0.38 | 0.244 | 0.050 |
+| Worst-phase VV+VW | 253.23 | 0.988 | 0.231 | 58.46 | 31.43 | 1.287 | 7.34 | 0.00 | 0.39 | 0.256 | 0.051 |
+| Sequence VV+VW | 253.27 | 0.987 | 0.233 | 58.51 | 28.04 | 1.249 | 7.17 | 0.00 | 0.38 | 0.244 | 0.050 |
+
+**thermal_0p5A**
+
+| Control | Max PN voltage (V) | Max VUF (%) | Max neutral (V) | PV delivered (kW) | Q absorbed (kvar) | Converter loss (kW) | Max phase RMS current (A) | Max I₂ RMS (A) | Peak 2ω ripple (V) | Filter loss (kW) | Max capacitor thermal RMS (A) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Unity PF | 253.52 | 0.984 | 0.249 | 58.69 | -0.00 | 1.099 | 6.48 | 0.00 | 0.34 | 0.199 | 0.045 |
+| Mean VV | 253.27 | 0.987 | 0.233 | 58.49 | 28.05 | 1.249 | 7.17 | 0.00 | 0.38 | 0.244 | 0.050 |
+| Mean VV+VW | 253.27 | 0.987 | 0.233 | 58.49 | 28.05 | 1.249 | 7.17 | 0.00 | 0.38 | 0.244 | 0.050 |
+| Worst-phase VV+VW | 253.23 | 0.988 | 0.231 | 58.44 | 31.42 | 1.287 | 7.34 | 0.00 | 0.39 | 0.255 | 0.051 |
+| Sequence VV+VW | 253.27 | 0.987 | 0.233 | 58.49 | 28.03 | 1.249 | 7.17 | 0.00 | 0.38 | 0.244 | 0.050 |
+| Sequence + I₂ droop (common scale) | 252.47 | 0.953 | 0.307 | 11.27 | 5.06 | 0.311 | 2.01 | 0.72 | 3.75 | 0.011 | 0.500 |
+| Sequence + I₂ droop (power priority) | 253.19 | 0.961 | 0.232 | 58.48 | 28.06 | 1.255 | 7.66 | 0.65 | 3.13 | 0.246 | 0.417 |
+| Passive I₂ admittance (filter Z) | 253.32 | 0.977 | 0.225 | 58.48 | 28.09 | 1.255 | 7.81 | 0.67 | 3.60 | 0.246 | 0.479 |
+| Single-phase PV, native AS/NZS 4777.2 | 254.54 | 1.099 | 1.310 | 59.93 | 30.58 | — | 22.56 | — | — | — | — |
 
 <!-- sensitivity:end -->
 
@@ -286,7 +452,7 @@ regulatory compliance.
    can cost substantial curtailment. Available-minus-delivered P includes any
    converter losses/limiting; it is not an energy figure. These are snapshots,
    not a daily yield calculation.
-5. **Compare with the status quo and with hardware.** The single-phase case
+5. **Compare connection hardware.** The single-phase case
    shows how much of the unbalance problem is created by single-phase PV in
    the first place. The capacitance sensitivities show when the DC link, not the
    controller, sets the limit.
@@ -318,16 +484,35 @@ Preparation validates serialized/reparsed BMOPF JSON using determined power flow
 with no elastic KCL slack, in SI and per-unit scaling. It requires solved status,
 finite voltage phasors and less than 0.01 V cross-scaling disagreement. The modified
 three-phase demand case receives the same check. A second check fixes solved
-phase P/Q injections from three representative controller cases and replays them
+phase P/Q injections from four representative controller cases and replays them
 through BMOPFTools power flow; it requires less than 0.01 V disagreement and
 verifies each three-wire inverter's phase-current sum is below 1 µA.
+The campaign records Git revision/dirty state, tracked-source diff hash,
+Project/Manifest hashes and all control settings in `environment.json`.
+The final replay audit records per-file hashes of the model and study sources in
+`modified_validation.json`, so the validated equations can be checked independently
+of the dirty-checkout snapshot recorded at campaign start.
 
-The controlled sweep uses Ipopt, tolerance 1e-8, `bound_relax_factor=0`, and a
-100 kVA numerical power base. A solve that stops at a relaxed (acceptable) tolerance
-is retried at 1 MVA and then 10 kVA bases; the base that produced each accepted
+The terminal-profile audit independently replays each of its three stressed
+equilibria with fixed phase P/Q injections. The regression covers all 18 source/
+availability/policy combinations and checks selection-objective invariance.
+
+The terminal runs fix a 100 kVA base, adaptive Ipopt barrier, automatic NLP
+scaling disabled, tolerance 1e-8, `bound_relax_factor=0` and a 300-iteration cap.
+All three policies use this same profile. Other numerical bases can still
+fail to converge: the 1 MVA sequence-case diagnostic is retained separately in
+`results/experimental_terminal_numerical_scaling`. Physical unit equivalence
+does not imply identical nonlinear-solver convergence.
+
+The baseline controlled sweep uses Ipopt, tolerance 1e-8,
+`bound_relax_factor=0`, and a 100 kVA numerical power base. A non-publishable solve
+or failed physical gate is retried at 1 MVA and then 10 kVA bases; the base that produced each accepted
 equilibrium is recorded in `cases.csv`. Accepted cases must have a publishable inner solve,
 finite customer metrics, exact-versus-smooth current residual below 0.02 A,
-converter current no more than 10 A plus 10 µA, 2ω ripple within `dv2_max`, and
+converter current no more than 10 A plus 10 µA, 2ω ripple within `dv2_max`,
+capacitor thermal current within its independent rating (10 µA tolerance),
+selected-location apparent power within 0.01 VA and dense switching margin
+nonnegative to 10 µV, and
 DC draw no more than the available PV power (10 mW tolerance). Rejected cases remain
 in `cases.csv` and are excluded from customer/device result tables. These are
 local nonlinear equilibria: convergence does not prove uniqueness or dynamic
@@ -339,8 +524,20 @@ not validate switching ripple, harmonic emissions, thermal lifetime, certified
 firmware, or PWM reserve closure. Hardware values follow the assumptions table
 above; they are not a specific product.
 
-Next experiments should add a balanced-load/source control, phase permutation,
-load and source-VUF sweeps, objective-invariance and smoothing sensitivity checks,
+The committed sensitivities now include separately balanced source and load,
+half-width curve/extrema/conflict smoothing, the unrated legacy reference and terminal-var-priority comparison, independent
+capacitor thermal ratings and a matched-gain/angle passive admittance.
+The incomplete `results/experimental_pcc_fleet` diagnostic retains accepted and
+rejected attempts from promoting the terminal profile across the full fleet
+campaign. Its metadata declares the completed subset. This historical run
+predates the scalar-root normalization fix. The earlier three-policy failures
+are archived in `results/experimental_terminal_var_priority_before_fix`.
+The present validation covers the three positive voltage-control policies;
+promoting the terminal profile across the full negative-sequence-controller
+benchmark still requires its own matched campaign.
+
+Next experiments should add phase permutation, load and source-VUF sweeps,
+broader objective-invariance checks,
 a gain/angle sweep around the measured design, and a four-leg per-phase
 comparator. Preserve matched hardware and input scenarios. Then add mixed
 single-/three-phase fleets, larger

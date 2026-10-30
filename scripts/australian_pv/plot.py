@@ -10,15 +10,17 @@ OUT = ROOT/'figures'; OUT.mkdir(exist_ok=True)
 def read(name):
     with (ROOT/'results'/name).open() as f: return list(csv.DictReader(f))
 rows, devices, cases = read('customers.csv'),read('devices.csv'),read('cases.csv')
-NCASES=9*3*2
+environment=json.load((ROOT/'results/environment.json').open())
+NCASES=len(environment['modes'])*len(environment['availability'])*len(environment['source_positive_sequence_pu'])
 assert len(cases)==NCASES and all(c['accepted']=='true' for c in cases), 'Complete accepted campaign required'
 assert len(rows)==NCASES*12 and len(devices)==NCASES*12
 net=json.load((ROOT/'networks/LV3_55bus.bmopf.json').open())
 labels={'unity':'Unity PF','mean_vv':'Mean VV','mean_vv_vw':'Mean VV+VW',
         'worst_vv_vw':'Worst-phase VV+VW','sequence_vv_vw':'Sequence VV+VW',
         'sequence_droop':'Sequence + I₂ (common scale)','sequence_droop_power':'Sequence + I₂ (power priority)',
-        'gfm_virtual_impedance':'Grid-forming virtual Z','single_phase_native':'Single-phase PV (status quo)'}
+        'gfm_virtual_impedance':'Passive I₂ admittance (filter Z)','single_phase_native':'Single-phase PV (counterfactual)'}
 colors=dict(zip(labels,['#555555','#d89000','#ac4875','#0072b2','#009e73','#7246a0','#cc79a7','#56b4e9','#000000']))
+labels={mode:labels[mode] for mode in environment['modes']}
 plt.rcParams.update({'font.size':10,'axes.spines.top':False,'axes.spines.right':False,'savefig.dpi':180})
 def save(fig,name):
     for ext in ['png','svg']:fig.savefig(OUT/f'{name}.{ext}',bbox_inches='tight')
@@ -52,10 +54,11 @@ for ax,mode in zip(axs.flat,labels):
         ax.scatter([dist[r['bus']] for r in rr],values(rr,f'v{phase}_pn_V'),color=color,label=phase.upper(),s=27)
     ax.axhline(253,color='black',ls='--',lw=1);ax.set_title(labels[mode]);ax.grid(alpha=.15)
     ax.set_ylim(247,257)
+for ax in list(axs.flat)[len(labels):]:ax.set_visible(False)
 axs[0,0].legend(title='Phase',ncol=3,fontsize=9)
 for ax in axs[-1]:ax.set_xlabel('Path length from LV transformer (m)')
 for ax in axs[:,0]:ax.set_ylabel('Customer phase–neutral voltage (V)')
-fig.suptitle('Same feeder, loading and PV availability; only controller changes\n12 three-phase customers • 60 kW available PV • 11 kV source at 1.03 pu, 1% VUF',y=1.03)
+fig.suptitle('Matched three-phase controls; the single-phase panel is a hardware counterfactual\n12 customer connections • 60 kW available PV • 11 kV source at 1.03 pu, 1% VUF',y=1.03)
 fig.text(.5,-.02,'Upper LV supply limit: 253 V. Lower limit: 207 V (outside this zoom). Points on different branches are not connected.',ha='center')
 fig.tight_layout();save(fig,'phase_voltages')
 fig,axs=plt.subplots(2,3,figsize=(14,7))
@@ -69,13 +72,15 @@ for mode in labels:
          [max(values(r,'maximum_converter_current_A')) for r in dr]]
     for ax,y in zip(axs.flat,ys):ax.plot(xx,y,'o-',color=colors[mode],label=labels[mode],ms=4)
 for ax,title in zip(axs.flat,['Maximum customer voltage (V)','Maximum VUF (%)','Maximum neutral displacement (V)',
-                            'Available P − delivered P (kW)','Reactive power absorbed (kvar)','Maximum converter current (A)']):
+                            'Available P − delivered P (kW)','Reactive power absorbed (kvar)','Maximum phase RMS current (A)']):
     ax.set_title(title);ax.set_xlabel('PV availability fraction');ax.grid(alpha=.2)
 axs[0,0].axhline(253,color='black',ls='--',lw=1)
 axs[1,2].axhline(10,color='black',ls='--',lw=1)
-fig.legend(*axs[0,0].get_legend_handles_labels(),loc='lower center',ncol=3,bbox_to_anchor=(.5,-.07))
+fig.text(.5,-.03,'Current limits: 10 A per leg (three-phase); 28.7 A (single-phase).',
+         ha='center',fontsize=9)
+fig.legend(*axs[0,0].get_legend_handles_labels(),loc='lower center',ncol=3,bbox_to_anchor=(.5,.005))
 fig.suptitle('Voltage benefit and inverter effort must be read together • source 1.03 pu, 1% VUF',y=1.02)
-fig.tight_layout();save(fig,'tradeoffs')
+fig.tight_layout(rect=(0,.15,1,.96));save(fig,'tradeoffs')
 # Schematic tree: y is layout only, x is route distance (not geographic position).
 children={b:[] for b in dist}
 for b,p in parent.items():children[p].append(b)

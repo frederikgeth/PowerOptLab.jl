@@ -6,6 +6,7 @@ using JuMP
 const MODES = ["unity", "mean_vv", "mean_vv_vw", "worst_vv_vw", "sequence_vv_vw",
                "sequence_droop", "sequence_droop_power", "gfm_virtual_impedance",
                "single_phase_native"]
+const LEGACY_MODES = copy(MODES)
 
 # Hardware and control parameters. Every value is derived, sourced or assumed as
 # documented in docs/src/ibr/parameter_selection.md and the study README.
@@ -17,6 +18,7 @@ const HARDWARE = (
     m_max=0.96,          # assumed: modulation utilisation
     c_dc=300e-6,         # assumed: 50 µF/kVA film link; swept in sensitivity
     dv2_max=7.5,         # assumed: 1% of v_dc peak 2ω ripple allowance (V)
+    i_cap_max=1.0,       # assumed: RMS thermal budget, independent of capacitance
     x_pu=0.05,           # assumed: 5% series filter reactance (Liserre et al. ≤ 10%)
     x_over_r=10.0,       # assumed: inductor X/R at 50 Hz
     p_loss_fixed=15.0,   # assumed loss curve: ~2.2% at rated, ~3.5% at 10% load
@@ -29,20 +31,31 @@ z_base(hw=HARDWARE) = hw.v_nom/i_rated(hw)
 filter_x(hw=HARDWARE) = hw.x_pu*z_base(hw)
 filter_r(hw=HARDWARE) = filter_x(hw)/hw.x_over_r
 
-# AS/NZS 4777.2:2020 Australia A (BMOPFTools Aus_A preset; to be verified against
-# the licensed text). Volt-watt is a fraction of the rating (p_ref = S_MAX).
+# Australia A curve values: Energex STNW1170 v10 (2025), Tables 8–9.
+# This verifies knots and bases, not complete AS/NZS 4777.2 conformance.
 const AUS_A = (vv_v=[207.0, 220.0, 240.0, 258.0], vv_q=[0.44, 0.0, 0.0, -0.60],
                vw_v=[253.0, 260.0], vw_p=[1.0, 0.2], vw_basis=:rated)
 # The earlier pedagogical curve, kept as a named sensitivity case only.
 const PEDAGOGICAL = (vv_v=AUS_A.vv_v, vv_q=AUS_A.vv_q,
                      vw_v=[250.0, 260.0], vw_p=[1.0, 0.0], vw_basis=:available)
 const SOLVE_BASES = (1e5, 1e6, 1e4)   # numerical per-unit bases, tried in order
+const CONTROL_SOLVER_OPTIONS = OPTIONS
+const TERMINAL_SOLVER_OPTIONS = ("tol"=>1e-8,"max_iter"=>300,"bound_relax_factor"=>0.,
+    "mu_strategy"=>"adaptive","nlp_scaling_method"=>"none")
+const TERMINAL_SOLVE_BASES = (1e5,)
+const TERMINAL_MODES = ["mean_vv_vw","worst_vv_vw","sequence_vv_vw"]
 const SENSING_REFERENCE = "n"   # assumed: three-wire power stage, neutral sensing lead
 const TARGET_ATTENUATION = 0.8  # design: |U2|/|E2| for the aligned fleet response
+const LEGACY_CONTROL_SETTINGS = (pq_priority=:proportional, current_target=:grid,
+                                 power_limit_location=:converter)
+const CONTROL_SETTINGS = LEGACY_CONTROL_SETTINGS
+const TERMINAL_CONTROL_SETTINGS = (pq_priority=:var,current_target=:converter,
+                                   power_limit_location=:poc)
 
-function controller(mode; curves=AUS_A, design)
-    vv = PiecewiseLinearLaw(curves.vv_v, curves.vv_q; smoothing_epsilon=0.05)
-    vw = PiecewiseLinearLaw(curves.vw_v, curves.vw_p; smoothing_epsilon=0.05)
+function controller(mode; curves=AUS_A, design, hw=HARDWARE,
+                    settings=CONTROL_SETTINGS, smoothing_scale=1.0)
+    vv = PiecewiseLinearLaw(curves.vv_v, curves.vv_q; smoothing_epsilon=0.05smoothing_scale)
+    vw = PiecewiseLinearLaw(curves.vw_v, curves.vw_p; smoothing_epsilon=0.05smoothing_scale)
     basis = curves.vw_basis
     positive = if mode == "unity"
         AverageVoltageVoltVarWatt(volt_watt_basis=basis)
@@ -51,37 +64,48 @@ function controller(mode; curves=AUS_A, design)
     elseif mode == "mean_vv_vw"
         AverageVoltageVoltVarWatt(volt_var=vv, volt_watt=vw, volt_watt_basis=basis)
     elseif mode == "worst_vv_vw"
-        WorstPhaseVoltVarWatt(volt_var=vv, volt_watt=vw, volt_watt_basis=basis)
+        WorstPhaseVoltVarWatt(volt_var=vv, volt_watt=vw, volt_watt_basis=basis,
+                             extrema_epsilon=0.05smoothing_scale,
+                             conflict_epsilon=0.01smoothing_scale)
     elseif mode in ("sequence_vv_vw", "sequence_droop", "sequence_droop_power",
-                    "gfm_virtual_impedance")
-        PositiveSequenceVoltVarWatt(volt_var=vv, volt_watt=vw, volt_watt_basis=basis)
+                    "gfm_virtual_impedance", "tuned_virtual_impedance")
+        PositiveSequenceVoltVarWatt(volt_var=vv, volt_watt=vw, volt_watt_basis=basis,
+                                    guard_epsilon=0.05smoothing_scale)
     else
         error("Unknown controlled mode $mode")
     end
     unbalance = if mode in ("sequence_droop", "sequence_droop_power")
         NegativeSequenceAdmittanceDroop(
             PiecewiseLinearLaw([0.0, 0.0005, 0.002], [0.0, 0.0, design.kappa];
-                               smoothing_epsilon=2.5e-5);
+                               smoothing_epsilon=2.5e-5smoothing_scale);
             impedance_angle=design.phi2, ripple_blend=0.0)
     elseif mode == "gfm_virtual_impedance"
-        negative_sequence_virtual_impedance(filter_r(), filter_x())
+        negative_sequence_virtual_impedance(filter_r(hw), filter_x(hw))
+    elseif mode == "tuned_virtual_impedance"
+        z = cis(design.phi2)/design.kappa
+        negative_sequence_virtual_impedance(real(z), imag(z))
     else
         NoUnbalanceControl()
     end
-    limiter = mode in ("sequence_droop_power", "gfm_virtual_impedance") ?
-        SequencePriorityLimiter(priority=:power) : CommonScaleLimiter()
+    limiter = mode in ("sequence_droop_power", "gfm_virtual_impedance", "tuned_virtual_impedance") ?
+        SequencePriorityLimiter(priority=:power,pq_priority=settings.pq_priority) :
+        CommonScaleLimiter(pq_priority=settings.pq_priority)
     SequenceController(positive, unbalance, limiter;
-                       current_target=:grid, sensing_reference=SENSING_REFERENCE)
+                       current_target=settings.current_target, sensing_reference=SENSING_REFERENCE)
 end
 
-function study_network(base, availability, source_pu)
+function study_network(base, availability, source_pu; source_vuf=0.01,
+                       phase_shares=(0.60,0.25,0.15))
+    0 <= source_vuf < 1 || throw(ArgumentError("source_vuf must be in [0,1)"))
+    length(phase_shares) == 3 && all(>=(0),phase_shares) &&
+        isapprox(sum(phase_shares),1.) || throw(ArgumentError("phase shares must be nonnegative and sum to one"))
     net = deepcopy(base)
     for source in values(net["voltage_source"])
         # Controlled 1% upstream negative-sequence voltage; no zero sequence.
         # This is an explicit study perturbation, not a measured site condition.
         v=Float64.(source["v_magnitude"]) .* cis.(Float64.(source["v_angle"]))
         a=cis(2pi/3); u1=(v[1]+a*v[2]+a^2*v[3])/3*source_pu
-        v[1:3] = u1 .* [1,a^2,a] .+ 0.01u1 .* [1,a,a^2]
+        v[1:3] = u1 .* [1,a^2,a] .+ source_vuf*u1 .* [1,a,a^2]
         source["v_magnitude"]=abs.(v); source["v_angle"]=angle.(v)
     end
     # Upgrade the supply connection at each of the 12 customers. Three
@@ -92,7 +116,7 @@ function study_network(base, availability, source_pu)
     for (customer,ld) in base["load"]
         bus=ld["bus"]
         @assert all(t in net["bus"][bus]["terminal_names"] for t in ["a","b","c","n"])
-        for (phase,share) in zip(["a","b","c"],[0.60,0.25,0.15])
+        for (phase,share) in zip(["a","b","c"],phase_shares)
             record=deepcopy(ld)
             record["terminal_map"]=[phase,"n"]
             record["p_nom"]=[1500.0*share]
@@ -107,20 +131,23 @@ function study_network(base, availability, source_pu)
     net
 end
 
-function plant(id, bus; hw=HARDWARE)
+function plant(id, bus; hw=HARDWARE, settings=CONTROL_SETTINGS)
     AdvancedInverter(id=id, bus=bus, topology=:THREE_LEG,
         phase_terminals=["a","b","c"], neutral=nothing, s_max=hw.s_max,
+        power_limit_location=settings.power_limit_location, i_cap_max=hw.i_cap_max,
         i_max=hw.i_max, v_dc=hw.v_dc, c_dc=hw.c_dc, dv2_max=hw.dv2_max,
         m_max=hw.m_max, r_filter=filter_r(hw), x_filter=filter_x(hw),
         p_loss_fixed=hw.p_loss_fixed, a_loss=hw.a_loss, c_loss=hw.c_loss)
 end
 
 function fleet(net, mode, availability; curves=AUS_A, hw=HARDWARE,
-               design=negative_sequence_design())
+               design=negative_sequence_design(), settings=CONTROL_SETTINGS,
+               smoothing_scale=1.0)
     devices=Dict{String,ControlledDevice}(); requests=Dict{String,InverterControlRequest}()
     for (id,record) in net["ibr"]
-        devices[id]=ControlledDevice(plant(id, record["bus"]; hw=hw),
-                                     controller(mode; curves=curves, design=design))
+        devices[id]=ControlledDevice(plant(id, record["bus"]; hw=hw,settings=settings),
+            controller(mode; curves=curves,design=design,hw=hw,settings=settings,
+                       smoothing_scale=smoothing_scale))
         requests[id]=InverterControlRequest(p_available=5000.0*availability,
             p_rated=hw.s_max, q_scale=hw.s_max)
     end
@@ -173,13 +200,13 @@ function design_json(design)
              for (id,z,za) in zip(design.ids,design.self_impedance,design.aggregate_impedance)])
 end
 
-function customer_rows(base, buses, mode, availability, source_pu)
+function customer_rows(base, buses, mode, availability, source_pu; source_vuf=0.01)
     a=cis(2pi/3)
     [begin
         ts=buses[ld["bus"]]; v=[phasor(ts[p]) for p in ("a","b","c")]
         vn=phasor(ts["n"]); phase=first(ld["terminal_map"])
         v1=(v[1]+a*v[2]+a^2*v[3])/3; v2=(v[1]+a^2*v[2]+a*v[3])/3
-        (mode=mode,availability=availability,source_pu=source_pu,source_vuf_percent=1.0,customer=id,bus=ld["bus"],phase=phase,
+        (mode=mode,availability=availability,source_pu=source_pu,source_vuf_percent=100source_vuf,customer=id,bus=ld["bus"],phase=phase,
          original_phase_voltage_V=abs(phasor(ts[phase])-vn),
          customer_voltage_V=maximum(abs.(v .- vn)),
          customer_vmin_V=minimum(abs.(v .- vn)),
@@ -196,8 +223,9 @@ end
 # dispatch. The former solve_pf rating-base bug was fixed in BMOPFTools #448.
 # With this objective, P is the
 # tighter of availability and the Volt-watt cap, Q follows Volt-var.
-function single_phase_network(base, availability, source_pu; curves=AUS_A)
-    net=study_network(base, availability, source_pu)
+function single_phase_network(base, availability, source_pu; curves=AUS_A,
+                              source_vuf=0.01,phase_shares=(0.60,0.25,0.15))
+    net=study_network(base, availability, source_pu;source_vuf=source_vuf,phase_shares=phase_shares)
     net["ibr"]=Dict{String,Any}()
     for b in values(net["bus"]); delete!(b,"v_min"); delete!(b,"v_max"); end
     net["control_profile"]=Dict{String,Any}("as4777_a"=>Dict{String,Any}(
@@ -248,7 +276,8 @@ function single_phase_device_rows(net, result, mode, availability, source_pu)
         merge((mode=mode, availability=availability, source_pu=source_pu,
                device_id=id),
               NamedTuple{DEVICE_COLUMNS}((rec["p_avail"], p, q, rec["p_avail"]-p,
-                  NaN, i, i, NaN, NaN, NaN, NaN, NaN, 0.0)))
+                  NaN, i, i, NaN, NaN, NaN, NaN, NaN, 0.0,
+                  NaN, rec["s_max"][1]-hypot(p,q), NaN, NaN, NaN)))
     end for id in sort!(collect(keys(net["ibr"])))]
 end
 
@@ -256,23 +285,55 @@ const DEVICE_COLUMNS = (:p_available_W, :p_poc_W, :q_poc_var,
     :poc_active_power_shortfall_W, :converter_loss_W, :maximum_converter_current_A,
     :maximum_grid_current_A, :negative_sequence_current_A, :negative_sequence_scale,
     :dc_availability_margin_W, :dc_ripple_voltage_V, :capacitor_current_A,
-    :exact_smooth_current_residual_A)
+    :exact_smooth_current_residual_A, :filter_loss_W, :apparent_power_margin_VA,
+    :switching_margin_V, :capacitor_thermal_current_A, :capacitor_current_rating_A)
+
+function accepted_control_rows(rows, hw)
+    fields=(:p_poc_W,:q_poc_var,:converter_loss_W,:maximum_converter_current_A,
+        :maximum_grid_current_A,:ripple_power_VA,:dc_ripple_voltage_V,
+        :capacitor_current_A,:power_scale,:current_scale,:switching_margin_V,
+        :apparent_power_margin_VA,:capacitor_thermal_current_A,:filter_loss_W,
+        :exact_smooth_current_residual_A,:dc_availability_margin_W)
+    !isempty(rows) && all(isfinite(getproperty(r,k)) for r in rows for k in fields) &&
+        all(r.exact_smooth_current_residual_A < .02 && r.dc_availability_margin_W > -.01 &&
+            r.maximum_converter_current_A <= hw.i_max+1e-5 &&
+            r.dc_ripple_voltage_V <= hw.dv2_max+1e-4 &&
+            r.apparent_power_margin_VA >= -.01 && r.switching_margin_V >= -1e-5 &&
+            (hw.i_cap_max === nothing || r.capacitor_thermal_current_A <= hw.i_cap_max+1e-5)
+            for r in rows)
+end
 
 function run(; modes=MODES, levels=[0.0,0.5,1.0], sources=[1.0,1.03],
              curves=AUS_A, hw=HARDWARE, output=joinpath(ROOT,"results"),
-             label="main")
+             label="main", settings=CONTROL_SETTINGS, source_vuf=0.01,
+             phase_shares=(0.60,0.25,0.15), smoothing_scale=1.0,
+             solver_options=CONTROL_SOLVER_OPTIONS,solve_bases=SOLVE_BASES)
+    !isempty(solve_bases) && all(x->isfinite(x) && x>0,solve_bases) ||
+        throw(ArgumentError("solve_bases must contain positive finite values"))
     base=parse_bmopf(joinpath(ROOT,"networks","LV3_55bus.bmopf.json"))
     rows=NamedTuple[]; devices=NamedTuple[]; cases=NamedTuple[]
     mkpath(output)
     design=negative_sequence_design()
     writejson(joinpath(output,"negative_sequence_design.json"), design_json(design))
+    repo=normpath(joinpath(ROOT,"..",".."))
+    git_read(args...)=read(Cmd(["git","-C",repo,args...]),String)
     writejson(joinpath(output,"environment.json"), Dict(
         "label"=>label,
         "julia"=>string(VERSION),"PowerOptLab"=>string(Base.pkgversion(PowerOptLab)),
         "BMOPFTools"=>string(Base.pkgversion(BMOPFTools)),
         "Ipopt"=>string(Base.pkgversion(Ipopt)),
         "Project_sha256"=>bytes2hex(sha256(read(joinpath(ROOT,"..","..","Project.toml")))),
-        "source_vuf_percent"=>1.0,"modes"=>modes,"availability"=>levels,
+        "Manifest_sha256"=>bytes2hex(sha256(read(joinpath(repo,"Manifest.toml")))),
+        "git_revision"=>strip(git_read("rev-parse","HEAD")),
+        "git_status"=>git_read("status","--porcelain"),
+        "tracked_source_diff_sha256"=>bytes2hex(sha256(git_read("diff","HEAD","--",
+            "src","scripts"))),
+        "control_settings"=>Dict(String(k)=>v for (k,v) in pairs(settings)),
+        "smoothing_scale"=>smoothing_scale,"phase_shares"=>phase_shares,
+        "controlled_solver_options"=>Dict(solver_options),
+        "native_solver_options"=>Dict(OPTIONS),"solve_bases_VA"=>solve_bases,
+        "dc_source_model"=>"open at line frequency; no PWM ripple",
+        "source_vuf_percent"=>100source_vuf,"modes"=>modes,"availability"=>levels,
         "source_positive_sequence_pu"=>sources,
         "hardware"=>Dict(String(k)=>v for (k,v) in pairs(hw)),
         "filter_r_ohm"=>filter_r(hw), "filter_x_ohm"=>filter_x(hw),
@@ -281,49 +342,48 @@ function run(; modes=MODES, levels=[0.0,0.5,1.0], sources=[1.0,1.03],
     for source in sources, level in levels, mode in modes
         println("Solving ", (label,source,level,mode)); flush(stdout)
         if mode == "single_phase_native"
-            net=single_phase_network(base,level,source; curves=curves)
+            net=single_phase_network(base,level,source; curves=curves,
+                source_vuf=source_vuf,phase_shares=phase_shares)
             solved=solve_single_phase(net)
             dr=single_phase_device_rows(net,solved.result,mode,level,source)
-            cr=customer_rows(base,solved.result["bus"],mode,level,source)
+            cr=customer_rows(base,solved.result["bus"],mode,level,source;source_vuf=source_vuf)
             accepted=solved.publishable &&
                 all(isfinite(r.vmax_pn_V) && isfinite(r.vuf_percent) for r in cr)
             push!(cases,(mode=mode,availability=level,source_pu=source,
-                source_vuf_percent=1.0,termination=solved.status,accepted=accepted,
+                source_vuf_percent=100source_vuf,termination=solved.status,accepted=accepted,
                 exact_residual_A=0.0,min_dc_availability_margin_W=NaN,
                 s_base_VA=100000.))
         else
-            net=study_network(base,level,source)
-            spec=fleet(net,mode,level; curves=curves, hw=hw, design=design)
+            net=study_network(base,level,source;source_vuf=source_vuf,phase_shares=phase_shares)
+            spec=fleet(net,mode,level;curves=curves,hw=hw,design=design,
+                settings=settings,smoothing_scale=smoothing_scale)
             # Numerical policy: the per-unit base changes units, not physics.
             # Retry a non-publishable solve at the next base and record which
             # base produced the accepted equilibrium.
             result=nothing; used_base=NaN
-            for s_base in SOLVE_BASES
+            for s_base in solve_bases
                 result=solve_controlled_inverter_fleet(net, spec;
-                    s_base=s_base, solver_options=OPTIONS)
+                    s_base=s_base, solver_options=solver_options)
                 used_base=s_base
-                solve_status(result).publishable && break
+                valid=solve_status(result).publishable &&
+                    accepted_control_rows(controlled_inverter_rows(result),hw)
+                println("  base=",s_base," status=",result.termination_status," physical_gate=",valid)
+                flush(stdout)
+                valid && break
             end
             full=controlled_inverter_rows(result)
             dr=[merge((mode=mode, availability=level, source_pu=source,
                        device_id=r.device_id),
                       NamedTuple{DEVICE_COLUMNS}(Tuple(getproperty(r,k)
                           for k in DEVICE_COLUMNS))) for r in full]
-            cr=customer_rows(base,result.network["bus"],mode,level,source)
+            cr=customer_rows(base,result.network["bus"],mode,level,source;source_vuf=source_vuf)
             finite=all(isfinite(getproperty(r,k)) for r in cr for k in
                 (:customer_voltage_V,:neutral_V,:vuf_percent,:vmax_pn_V))
-            finite &= all(isfinite(getproperty(r,k)) for r in full for k in
-                (:p_poc_W,:q_poc_var,:converter_loss_W,:maximum_converter_current_A,
-                 :maximum_grid_current_A,:ripple_power_VA,:dc_ripple_voltage_V,
-                 :capacitor_current_A,:power_scale,:current_scale))
             residual=maximum(r.exact_smooth_current_residual_A for r in full)
             margin=minimum(r.dc_availability_margin_W for r in full)
-            accepted=solve_status(result).publishable && finite && isfinite(residual) &&
-                residual<0.02 && margin > -1e-2 &&
-                all(r.maximum_converter_current_A <= hw.i_max+1e-5 for r in full) &&
-                all(r.dc_ripple_voltage_V <= hw.dv2_max+1e-4 for r in full)
+            accepted=solve_status(result).publishable && finite && accepted_control_rows(full,hw)
             push!(cases,(mode=mode,availability=level,source_pu=source,
-                source_vuf_percent=1.0,termination=result.termination_status,
+                source_vuf_percent=100source_vuf,termination=result.termination_status,
                 accepted=accepted,exact_residual_A=residual,
                 min_dc_availability_margin_W=margin,s_base_VA=used_base))
         end
@@ -339,11 +399,25 @@ function run(; modes=MODES, levels=[0.0,0.5,1.0], sources=[1.0,1.03],
 end
 
 # Sensitivity campaigns at the stressed operating point (full PV, 1.03 pu
-# source). They change one assumption each and write to results/sensitivity_*.
+# source). Overrides declare each parameter/comparison change explicitly and
+# write to results/sensitivity_*.
 const SENSITIVITIES = [
     ("pedagogical_volt_watt", (curves=PEDAGOGICAL,)),
     ("large_dc_link_2mF", (hw=merge(HARDWARE, (c_dc=2e-3,)),)),
     ("small_dc_link_150uF", (hw=merge(HARDWARE, (c_dc=150e-6,)),)),
+    ("large_dc_link_3A", (hw=merge(HARDWARE, (c_dc=2e-3,i_cap_max=3.0)),)),
+    ("legacy_allocation", (settings=LEGACY_CONTROL_SETTINGS,modes=LEGACY_MODES,
+        hw=merge(HARDWARE,(i_cap_max=nothing,)),)),
+    ("thermal_0p5A", (hw=merge(HARDWARE,(i_cap_max=0.5,)),)),
+    ("balanced_source", (source_vuf=0.0,)),
+    ("balanced_load", (phase_shares=(1/3,1/3,1/3),)),
+    ("half_smoothing", (modes=["worst_vv_vw","sequence_droop_power"],
+        smoothing_scale=0.5,)),
+    ("matched_virtual_impedance", (modes=["sequence_droop_power",
+        "gfm_virtual_impedance","tuned_virtual_impedance"],)),
+    ("terminal_var_priority", (settings=TERMINAL_CONTROL_SETTINGS,
+        modes=TERMINAL_MODES,solve_bases=TERMINAL_SOLVE_BASES,
+        solver_options=TERMINAL_SOLVER_OPTIONS,)),
 ]
 function run_sensitivities()
     for (name, override) in SENSITIVITIES
@@ -352,7 +426,15 @@ function run_sensitivities()
     end
 end
 
+function run_terminal_validation()
+    run(;modes=TERMINAL_MODES,levels=[0.,.5,1.],sources=[1.,1.03],
+        label="terminal_profile_validation",settings=TERMINAL_CONTROL_SETTINGS,
+        solve_bases=TERMINAL_SOLVE_BASES,solver_options=TERMINAL_SOLVER_OPTIONS,
+        output=joinpath(ROOT,"results","terminal_profile_validation"))
+end
+
 if abspath(PROGRAM_FILE)==abspath(@__FILE__)
     run()
     run_sensitivities()
+    run_terminal_validation()
 end

@@ -1,0 +1,92 @@
+{
+    "label": "terminal_default_solver_probe",
+    "Manifest_sha256": "b61f2440eecd083978dd5bffb99893c75454a70aa2438d97e2b9b45aa0117e07",
+    "source_vuf_percent": 1,
+    "source_positive_sequence_pu": [
+        1.03
+    ],
+    "filter_x_ohm": 1.3225000000000002,
+    "phase_shares": [
+        0.6,
+        0.25,
+        0.15
+    ],
+    "curves": {
+        "vv_q": [
+            0.44,
+            0.0,
+            0.0,
+            -0.6
+        ],
+        "vv_v": [
+            207,
+            220,
+            240,
+            258
+        ],
+        "vw_basis": "rated",
+        "vw_p": [
+            1,
+            0.2
+        ],
+        "vw_v": [
+            253,
+            260
+        ]
+    },
+    "PowerOptLab": "0.1.0",
+    "Ipopt": "1.15.0",
+    "modes": [
+        "mean_vv_vw",
+        "sequence_vv_vw"
+    ],
+    "tracked_source_diff_sha256": "635658513e449223b68f79185270585cad813842709d13c7a4b3d250fa705be0",
+    "git_status": " M dev/notes/ibr_review_resolution.md\n M docs/src/ibr/control_study_methodology.md\n M docs/src/ibr/parameter_selection.md\n M docs/src/ibr/references.md\n M docs/src/ibr/verification.md\n M scripts/australian_pv/audit.jl\n M scripts/australian_pv/plot.py\n M scripts/australian_pv/run.jl\n M scripts/australian_pv/summarize.jl\n M src/components/advanced_inverter.jl\n M src/components/inverter_controls.jl\n M src/components/inverter_pcc_control.jl\n M src/problems/inverter_control_study.jl\n M studies/australian_pv/README.md\n M studies/australian_pv/results/cases.csv\n M studies/australian_pv/results/customers.csv\n M studies/australian_pv/results/devices.csv\n M studies/australian_pv/results/environment.json\n M studies/australian_pv/results/modified_validation.json\n M studies/australian_pv/results/negative_sequence_design.json\n M studies/australian_pv/results/sensitivity_large_dc_link_2mF/cases.csv\n M studies/australian_pv/results/sensitivity_large_dc_link_2mF/customers.csv\n M studies/australian_pv/results/sensitivity_large_dc_link_2mF/devices.csv\n M studies/australian_pv/results/sensitivity_large_dc_link_2mF/environment.json\n M studies/australian_pv/results/sensitivity_large_dc_link_2mF/negative_sequence_design.json\n M studies/australian_pv/results/sensitivity_pedagogical_volt_watt/cases.csv\n M studies/australian_pv/results/sensitivity_pedagogical_volt_watt/customers.csv\n M studies/australian_pv/results/sensitivity_pedagogical_volt_watt/devices.csv\n M studies/australian_pv/results/sensitivity_pedagogical_volt_watt/environment.json\n M studies/australian_pv/results/sensitivity_pedagogical_volt_watt/negative_sequence_design.json\n M studies/australian_pv/results/sensitivity_small_dc_link_150uF/cases.csv\n M studies/australian_pv/results/sensitivity_small_dc_link_150uF/customers.csv\n M studies/australian_pv/results/sensitivity_small_dc_link_150uF/devices.csv\n M studies/australian_pv/results/sensitivity_small_dc_link_150uF/environment.json\n M studies/australian_pv/results/sensitivity_small_dc_link_150uF/negative_sequence_design.json\n M test/inverter_pcc_review_tests.jl\n?? studies/australian_pv/results/experimental_pcc_fleet/\n?? studies/australian_pv/results/sensitivity_balanced_load/\n?? studies/australian_pv/results/sensitivity_balanced_source/\n?? studies/australian_pv/results/sensitivity_half_smoothing/\n?? studies/australian_pv/results/sensitivity_large_dc_link_3A/\n?? studies/australian_pv/results/sensitivity_legacy_allocation/\n?? studies/australian_pv/results/sensitivity_matched_virtual_impedance/\n?? studies/australian_pv/results/sensitivity_terminal_var_priority/\n?? studies/australian_pv/results/sensitivity_thermal_0p5A/\n",
+    "git_revision": "816cf931fe21f65ffd7b966b89424863b96ef837",
+    "control_settings": {
+        "current_target": "converter",
+        "pq_priority": "var",
+        "power_limit_location": "poc"
+    },
+    "dc_source_model": "open at line frequency; no PWM ripple",
+    "Project_sha256": "2724f9784cf88c1b37a76368436c396b5d7ba9a05d19bb28a73bbbabc9eafb24",
+    "controlled_solver_options": {
+        "tol": 1.0e-8,
+        "bound_relax_factor": 0,
+        "max_iter": 1000
+    },
+    "filter_r_ohm": 0.13225000000000003,
+    "sensing_reference": "n",
+    "julia": "1.12.6",
+    "smoothing_scale": 1,
+    "solve_bases_VA": [
+        100000,
+        1000000,
+        10000
+    ],
+    "BMOPFTools": "0.1.0",
+    "availability": [
+        1
+    ],
+    "native_solver_options": {
+        "tol": 1.0e-8,
+        "bound_relax_factor": 0,
+        "max_iter": 3000
+    },
+    "hardware": {
+        "x_over_r": 10,
+        "v_nom": 230,
+        "a_loss": 2,
+        "s_max": 6000,
+        "m_max": 0.96,
+        "i_cap_max": 1,
+        "p_loss_fixed": 15,
+        "v_dc": 750,
+        "i_max": 10,
+        "dv2_max": 7.5,
+        "x_pu": 0.05,
+        "c_dc": 0.0003,
+        "c_loss": 0.3,
+        "single_phase_i_max": 28.7
+    }
+}

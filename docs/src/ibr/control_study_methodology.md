@@ -90,8 +90,11 @@ The implemented policies include:
 `ConverterCurrentTarget` and `GridCurrentTarget` select which physical current
 the algebraic command constrains. In both cases the plant retains converter- and
 grid-side per-leg ratings. The final plant-aware backoff includes the solved LCL
-shunt-current offset and checks both locations, converter-terminal apparent
-power, and a configured `dv2_max` before imposing the target equality.
+shunt-current offset and checks both locations, selected-location apparent
+power, configured `dv2_max`, and the three-leg capacitor thermal-current
+rating before imposing the target equality. The thermal allocator uses the
+source-dependent 2ω current and declared fixed/current-dependent carrier
+allowances. Capacitor rating is independent of capacitance.
 
 Watt/var/proportional P/Q priority and power-versus-balance sequence priority
 are implemented. Virtual-delta and closest-feasible projection policies can be

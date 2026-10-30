@@ -267,6 +267,7 @@ function solve_controlled_inverter_fleet(
 
     handles = Dict{String,_ControlledHandles}()
     builder = BMOPFTools.OpfDeviceBuilder(:PowerOptLab, function (ctx, ids)
+        _opf_model(ctx).ext[:PowerOptLabCompactController] = true
         for id in ids
             _disable_native_ibr_port!(ctx, id)
             handles[id] = stamp_device!(
@@ -370,6 +371,8 @@ function controlled_inverter_rows(result::ControlledInverterFleetResult)
             p_converter_W=plant.p_conv,
             q_converter_var=plant.q_conv,
             converter_loss_W=plant.p_loss + plant.p_cap_loss,
+            filter_loss_W=plant.p_filter_loss,
+            switching_margin_V=plant.switching_margin,
             p_dc_W=plant.p_dc,
             dc_availability_margin_W=request.p_available-plant.p_dc,
             voltage_min_V=control.voltage_min,
@@ -421,6 +424,7 @@ function controlled_inverter_rows(result::ControlledInverterFleetResult)
                 inverter.v_dc === nothing ? NaN : inverter.v_dc,
             dc_stored_energy_J=stored_energy,
             capacitor_current_A=plant.i_cap,
+            capacitor_current_rating_A=inverter.i_cap_max === nothing ? NaN : inverter.i_cap_max,
             capacitor_thermal_current_A=plant.i_cap_thermal,
             capacitor_current_utilization=
                 inverter.i_cap_max === nothing ? NaN :
