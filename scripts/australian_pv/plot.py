@@ -101,3 +101,5 @@ ax.set_xlabel('Path length from LV transformer (m)');ax.set_title('LV3: 12 custo
 ax.text(.01,.02,'Schematic layout; not a geographic map.\nOriginal lines, neutral, grounding and transformer retained.',transform=ax.transAxes)
 save(fig,'feeder')
 # The aggregate tables are written by scripts/australian_pv/summarize.jl.
+from plot_teaching import main as plot_teaching
+plot_teaching()

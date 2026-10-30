@@ -296,6 +296,14 @@ operating, fleet and hardware-sizing reports.
 
 ### PCC terminal saturation regressions
 
+`inverter_sequence_limit_tests.jl` separately forces known converter-sequence
+currents and compares contradictory and feasible ratings at 10 kVA, 1 MVA and
+100 MVA numerical bases. This checks the plant's hard bounds independently of
+controller backoff. Controller cases cover I₁/I₂ saturation, both targets and
+power boundaries, common/power/balance allocation, LCL shunt offsets, equal
+positive/negative ratings and fleet margin reporting. Physical Fortescue sums,
+DC availability and exact/smooth command agreement are checked independently.
+
 The Australian terminal-profile fleet regression covers mean, worst-phase and
 sequence VV+VW at both source levels and zero/half/full PV. It uses a single
 100 kVA base, adaptive Ipopt profile and 300-iteration cap without retries,

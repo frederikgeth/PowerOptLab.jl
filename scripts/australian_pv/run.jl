@@ -433,8 +433,32 @@ function run_terminal_validation()
         output=joinpath(ROOT,"results","terminal_profile_validation"))
 end
 
+function write_teaching_fixture()
+    # An illustrative local-voltage input, not another feeder equilibrium.
+    # Keep it separate from accepted network results and evaluate the public
+    # exact laws rather than transcribing their conflict/guard logic in Python.
+    a=cis(2pi/3)
+    voltage=230 .* [1,a^2,a] .+ 15 .* [1,a,a^2] .+ 10
+    request=InverterControlRequest(p_available=5000.,p_rated=6000.,q_scale=6000.)
+    ratings=InverterControlRatings(s_max=6000.,i_max=10.)
+    policies=Dict{String,Any}()
+    for mode in TERMINAL_MODES
+        ctrl=controller(mode;design=(kappa=0.,phi2=0.),settings=TERMINAL_CONTROL_SETTINGS)
+        r=evaluate_exact(ctrl,InverterControlMeasurement(voltage),request,ratings)
+        policies[mode]=Dict("p_request_W"=>r.p_request,"q_request_var"=>r.q_request)
+    end
+    writejson(joinpath(ROOT,"results","teaching_fixture.json"),Dict(
+        "description"=>"Exact local-law requests; illustrative phasors, not a feeder or converter-plant solve",
+        "positive_sequence_V"=>230.,"negative_sequence_V"=>15.,"zero_sequence_V"=>10.,
+        "phase_voltage_re_V"=>real.(voltage),"phase_voltage_im_V"=>imag.(voltage),
+        "phase_voltage_magnitude_V"=>abs.(voltage),"mean_magnitude_V"=>sum(abs,voltage)/3,
+        "p_available_W"=>5000.,"p_rated_W"=>6000.,"q_scale_var"=>6000.,
+        "curves"=>Dict(String(k)=>v for (k,v) in pairs(AUS_A)),"policies"=>policies))
+end
+
 if abspath(PROGRAM_FILE)==abspath(@__FILE__)
     run()
     run_sensitivities()
     run_terminal_validation()
+    write_teaching_fixture()
 end

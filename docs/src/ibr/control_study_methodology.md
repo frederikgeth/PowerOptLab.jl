@@ -36,8 +36,9 @@ Primary response variables are:
 - negative-sequence voltage ratio `|U2|/|U1|`, stating which unbalance
   definition is used, and the zero-sequence voltage `|U0|`. `|U0|` is mandatory
   for any phase-magnitude comparator: those laws respond to it, a three-leg
-  bridge cannot control it, and its measured value depends on the voltage-sensing
-  reference;
+  bridge cannot inject an independent I₀, and its measured value depends on the
+  voltage-sensing reference. Network asymmetry and load responses can still
+  make U₀ change indirectly when I₁ or I₂ changes;
 - PV energy exported and curtailed;
 - converter-terminal total and zero/positive/negative-sequence complex power;
 - converter and filter losses;
@@ -95,6 +96,32 @@ power, configured `dv2_max`, and the three-leg capacitor thermal-current
 rating before imposing the target equality. The thermal allocator uses the
 source-dependent 2ω current and declared fixed/current-dependent carrier
 allowances. Capacitor rating is independent of capacitance.
+
+The controller also honours converter-arm positive- and negative-sequence
+ratings, including the LCL offset at either current target. Hard sequence
+constraints use auxiliaries and linking rows normalized by their engineering
+ratings, so a large per-unit power base cannot hide a physical violation in a
+small squared-current residual. Fleet rows expose each declared sequence rating
+and its remaining margin in amperes.
+
+The current limit-coverage distinction is:
+
+| Quantity | Physical plant | Command allocation |
+|---|---|---|
+| Converter/grid phase RMS current | Both arm ratings | Both arms, including shunt/import offsets |
+| Converter I₁ and I₂ RMS current | Separate declared ratings | Sequence disks, with explicit service priority |
+| Neutral and I₀ current | Four-wire ratings; three-leg I₀ fixed to zero | Present controller is three-leg only |
+| Apparent power | Selected converter or PCC total-P/Q magnitude | Same selected boundary; distinct profile semantics |
+| 2ω DC voltage ripple | Physical source-dependent ripple | Included |
+| Capacitor thermal RMS current | Frequency-weighted budget | Included for the three-leg controller |
+| Instantaneous rail feasibility | Sampled switching constraints and dense audit | No modulation/voltage command allocator yet |
+| Split midpoint and individual half-banks | Split-link plant constraints | No split-link controller yet |
+
+`s_max` bounds the magnitude of total complex power, not each phase's current
+or each sequence's current. These engineering limits remain distinct under
+unbalance. A physical plant can also be feasible while a particular local law
+or its mandatory-offset anchor is infeasible; solver failure alone does not
+distinguish those cases.
 
 Watt/var/proportional P/Q priority and power-versus-balance sequence priority
 are implemented. Virtual-delta and closest-feasible projection policies can be

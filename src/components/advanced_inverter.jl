@@ -675,7 +675,7 @@ zero filter) it is a plain grid-following converter at the POC.
 - `dv_mid_max` — `:SPLIT_DC` only: optional cap on the RMS fundamental
   midpoint-to-ideal-midpoint voltage ripple (V).
 - `i_zero_max`, `i_positive_max`, `i_negative_max` — optional RMS symmetrical-
-  component current limits (A). These are useful for grid-code limits and for
+  component current limits at the converter arm (A). These are useful for grid-code limits and for
   separating zero-sequence neutral stress from negative-sequence 2ω stress.
 - `n_samples=36` — time-sampling grid for an outer approximation of continuous-
   time voltage feasibility. Increase it for boundary-sensitive studies.
@@ -1953,11 +1953,12 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
             if limit !== nothing
                 sre = JuMP.@variable(m, base_name = "i$(name)_re_$(inv.id)")
                 sim = JuMP.@variable(m, base_name = "i$(name)_im_$(inv.id)")
-                JuMP.@constraint(m, sre == comp[1])
-                JuMP.@constraint(m, sim == comp[2])
-                squared_rating = (limit/ib)^2
-                scale = normalize_capability_constraints ? squared_rating : 1.0
-                JuMP.@constraint(m, (sre^2 + sim^2)/scale <= squared_rating/scale)
+                # Keep both the auxiliaries and their defining rows relative to
+                # the engineering rating. Raw per-unit squared residuals can be
+                # tiny despite a multi-amp violation at a large power base.
+                JuMP.@constraint(m, sre == comp[1]/(limit/ib))
+                JuMP.@constraint(m, sim == comp[2]/(limit/ib))
+                JuMP.@constraint(m, sre^2 + sim^2 <= 1)
             end
         end
 

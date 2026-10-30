@@ -118,7 +118,8 @@ end
 function _pcc_allocate(limiter, base, pdir, qdir, ndir, vconv, shunt,
                        power_request, inverter, ib, sb, segment, combine, peps, ieps; current_scale=ib)
     p_import, p_service, q = power_request
-    function scale_at(anchor, direction, power_anchor, power_direction)
+    function scale_at(anchor, direction, power_anchor, power_direction;
+                      negative_direction::Bool=true)
         t = all(_is_identically_zero, power_direction) ? 1.0 :
             segment(power_anchor, power_direction, inverter.s_max/sb, peps)
         for (rating, reserves, offset) in (
@@ -129,6 +130,18 @@ function _pcc_allocate(limiter, base, pdir, qdir, ndir, vconv, shunt,
                 a = offset === nothing ? anchor[k] : _pcadd(anchor[k], offset[k])
                 limit = sqrt(max(rating^2-reserves[k]^2, 0.0))/ib
                 t = combine(t, segment(a, direction[k], limit, ieps))
+            end
+        end
+        if _control_has_sequence_limits(inverter)
+            _,a1,a2=_pcsequences(_pcphadd(anchor,shunt))
+            _,b1,b2=_pcsequences(direction)
+            for (sequence,a,b,rating) in ((1,a1,b1,inverter.i_positive_max),(2,a2,b2,inverter.i_negative_max))
+                rating === nothing && continue
+                # P/Q service directions are analytically positive sequence.
+                # Do not create a zero-direction intersection against an I₂
+                # anchor already on its limit after balance-first allocation.
+                sequence == 2 && !negative_direction && continue
+                t=combine(t,segment(a,b,rating/ib,ieps*current_scale/rating))
             end
         end
         if inverter.dv2_max !== nothing && !iszero(_dc_ripple_factor(inverter))
@@ -152,7 +165,8 @@ function _pcc_allocate(limiter, base, pdir, qdir, ndir, vconv, shunt,
     priority = limiter.pq_priority
     if limiter isa CommonScaleLimiter && priority === :proportional
         direction = _pcphadd(_pcphadd(pdir, qdir), ndir)
-        t = scale_at(base, direction, (p_import,0.), (p_service,q))
+        has_negative=any(!_is_identically_zero(x) for phase in ndir for x in phase)
+        t = scale_at(base, direction, (p_import,0.), (p_service,q);negative_direction=has_negative)
         return _pcphadd(base, _pcphscale(t, direction)), t, t, t
     end
     anchor = base
@@ -165,17 +179,17 @@ function _pcc_allocate(limiter, base, pdir, qdir, ndir, vconv, shunt,
     end
     if priority === :proportional
         direction = _pcphadd(pdir, qdir)
-        tp = tq = scale_at(anchor, direction, power_anchor, (p_service,q))
+        tp = tq = scale_at(anchor, direction, power_anchor, (p_service,q);negative_direction=false)
         anchor = _pcphadd(anchor, _pcphscale(tp, direction))
         power_anchor = _pcadd(power_anchor, _pcscale(tp,(p_service,q)))
     else
         first, second = priority === :watt ? (pdir, qdir) : (qdir, pdir)
         first_power, second_power = priority === :watt ?
             ((p_service,0.), (0.,q)) : ((0.,q), (p_service,0.))
-        t1 = scale_at(anchor, first, power_anchor, first_power)
+        t1 = scale_at(anchor, first, power_anchor, first_power;negative_direction=false)
         anchor = _pcphadd(anchor, _pcphscale(t1, first))
         power_anchor = _pcadd(power_anchor, _pcscale(t1,first_power))
-        t2 = scale_at(anchor, second, power_anchor, second_power)
+        t2 = scale_at(anchor, second, power_anchor, second_power;negative_direction=false)
         power_anchor = _pcadd(power_anchor, _pcscale(t2,second_power))
         anchor = _pcphadd(anchor, _pcphscale(t2, second))
         tp, tq = priority === :watt ? (t1, t2) : (t2, t1)

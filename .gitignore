@@ -19,3 +19,6 @@ docs/build/
 
 # Scratch
 /scratch/
+
+# Python bytecode from the plotting helpers
+__pycache__/

@@ -106,7 +106,7 @@ severity and is part of both the firmware and JuMP laws. `volt_watt_basis` is
 `:available` or `:rated`.
 
 Both curve inputs are phase magnitudes and therefore move with the local
-zero-sequence voltage — a component a three-leg bridge cannot control, and one
+zero-sequence voltage — a component without an independent three-leg current actuator, and one
 whose measured value depends on the sensing reference documented in
 [`SequenceController`](@ref).
 """
@@ -1703,6 +1703,37 @@ end
 _control_has_carrier_budget(inv) = inv.cap_thermal_weights[3] > 0 &&
     (inv.i_sw > 0 || inv.pwm_current_factor > 0)
 
+_control_has_sequence_limits(inv) =
+    inv.i_positive_max !== nothing || inv.i_negative_max !== nothing
+
+# The plant's sequence ratings refer to converter current, including mandatory
+# loss import and the LCL shunt offset. Limit the independent sequence services
+# before applying coupled phase-current/power/ripple protection. A common-scale
+# policy retains its ray; a sequence-priority policy clips each sequence alone.
+function _sequence_service_scales_smooth!(m,inv,limiter,offset,i1,i2,ib,ieps)
+    _,o1,o2=_sequence_pair([x[1] for x in offset],[x[2] for x in offset])
+    scales=map(((o1,i1,inv.i_positive_max),(o2,i2,inv.i_negative_max))) do (a,b,rating)
+        rating === nothing && return 1.0
+        limit=rating/ib
+        _pcc_segment_smooth!(m,a,b,limit,ieps/limit)
+    end
+    if limiter isa CommonScaleLimiter
+        width=ieps/maximum(x/ib for x in (inv.i_positive_max,inv.i_negative_max) if x!==nothing)
+        t=_combine_safe_scale_implicit!(m,scales[1],scales[2],width)
+        return t,t
+    end
+    return scales
+end
+
+function _sequence_service_scales_exact(inv,limiter,offset,i1,i2)
+    _,o1,o2=_phasor_sequences(offset)
+    s1=inv.i_positive_max===nothing ? 1. :
+        _pcc_segment_exact(reim(o1),reim(i1),inv.i_positive_max,0.)
+    s2=inv.i_negative_max===nothing ? 1. :
+        _pcc_segment_exact(reim(o2),reim(i2),inv.i_negative_max,0.)
+    return limiter isa CommonScaleLimiter ? (min(s1,s2),min(s1,s2)) : (s1,s2)
+end
+
 # Three-leg capacitor thermal geometry in amperes. The 2ω and declared carrier
 # allowances occupy orthogonal RMS channels, exactly as in the physical plant.
 # Retain the fixed carrier allowance in the anchor so no limiter scales it away.
@@ -1965,6 +1996,15 @@ function stamp_smooth_control!(ctx, controller::SequenceController,
                      import_phase[k][2] - shunt[k][2]), 3) :
         import_phase
 
+    if _control_has_sequence_limits(inverter)
+        sequence_s1,sequence_s2=_sequence_service_scales_smooth!(m,inverter,
+            controller.limiter,converter_offset,i1_pre,i2_pre,ib,ieps)
+        i1_pre=_scale_pair(sequence_s1,i1_pre)
+        i2_pre=_scale_pair(sequence_s2,i2_pre)
+        phase_pre=_phase_pairs(i1_pre,i2_pre)
+        target_scale=sequence_s1*target_scale
+    end
+
     plant_scale(offset_c, offset_g, dir) = _plant_capability_scale!(m, inverter,
         handles, offset_c, offset_g, dir, ib, ieps, imax, smax, seps, sb)
     add_phase(a, b) = ntuple(k -> (a[k][1] + b[k][1], a[k][2] + b[k][2]), 3)
@@ -2196,13 +2236,21 @@ function _apply_plant_capability_exact(
         shunt .+ imported
     grid_offset = target isa ConverterCurrentTarget ? imported .- shunt : imported
     i1_service = result.i1 - i1_import
+    i2_service = result.i2
+    sequence_s1=1.0
+    if _control_has_sequence_limits(inverter)
+        sequence_s1,sequence_s2=_sequence_service_scales_exact(inverter,limiter,
+            converter_offset,i1_service,i2_service)
+        i1_service=sequence_s1*i1_service
+        i2_service=sequence_s2*i2_service
+    end
     plant_scale(offset_c, offset_g, direction) = _plant_scale_exact(
         converter_voltage, offset_c, offset_g, direction, inverter)
     if limiter isa SequencePriorityLimiter
         power = limiter.priority === :power
         reserved = power ? _phase_from_sequences(i1_service, 0.0im) :
-                           _phase_from_sequences(0.0im, result.i2)
-        other = power ? _phase_from_sequences(0.0im, result.i2) :
+                           _phase_from_sequences(0.0im, i2_service)
+        other = power ? _phase_from_sequences(0.0im, i2_service) :
                         _phase_from_sequences(i1_service, 0.0im)
         thermal_reserved_scale = 1.0
         if _control_needs_thermal_backoff(inverter) && _control_has_carrier_budget(inverter)
@@ -2220,19 +2268,19 @@ function _apply_plant_capability_exact(
                          (scale*other_scale, scale*thermal_reserved_scale)
     else
         scale = plant_scale(converter_offset, grid_offset,
-                            result.phase_current .- imported)
+                            _phase_from_sequences(i1_service,i2_service))
         s1 = s2 = scale
     end
 
     i1 = s1*i1_service + i1_import
-    i2 = s2*result.i2
+    i2 = s2*i2_service
     u1, u2 = result.voltage_sequence[2], result.voltage_sequence[3]
     return InverterControlResult(
         result.phase_voltage, result.voltage_sequence,
         result.voltage_min, result.voltage_max, result.eta,
         result.p_request, result.q_request, result.power_scale,
         result.i1_request, result.i2_voltage, result.i2_ripple,
-        result.i2_request, result.current_scale*s1,
+        result.i2_request, result.current_scale*sequence_s1*s1,
         i1, i2, _phase_from_sequences(i1, i2),
         3u1*conj(i1), 3(u1*conj(i1) + u2*conj(i2)), 3(u1*i2 + u2*i1))
 end

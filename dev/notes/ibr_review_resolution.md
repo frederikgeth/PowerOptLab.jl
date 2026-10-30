@@ -1,5 +1,74 @@
 # Advanced IBR review: resolution plan
 
+## 31 October 2026: engineering limits and next priorities
+
+The validated thermal/PCC study checkpoint is commit `80f6d8d` on
+`codex/ibr-pcc-apparent-power`. Subsequent work deliberately leaves inverter
+sizing values unchanged.
+
+The next audit found a real hard-bound counterexample: a declared 0.4 A
+negative-sequence rating returned about 2.19 A with `LOCALLY_SOLVED`. Raw
+per-unit squared-current rows and their auxiliary links were not sufficient
+physical acceptance evidence. Sequence auxiliaries and linking rows now use
+their engineering ratings as scales. Independent fixed-current tests reject
+contradictory I₀/I₁/I₂ ratings and accept feasible counterparts at 10 kVA,
+1 MVA and 100 MVA numerical bases.
+
+Both controller backends now allocate converter-arm I₁/I₂ limits, including
+loss import and LCL shunt offsets. Common scaling retains its ray; legacy
+sequence priority clips the independent sequence services before coupled
+protection. PCC allocation retains its service order and avoids an artificial
+I₂ intersection on analytically balanced P/Q directions after balance-first
+saturation. Equal-valued ratings are tested by sequence identity, not value.
+Fleet rows expose the declared ratings and remaining margins in amperes.
+
+The new teaching figures distinguish exact local-law illustrations from
+accepted feeder equilibria, separate losses from unused PV power, show physical
+headroom utilization, and present the three matched reactive-priority terminal
+controls together. Hardware sizing and benchmark inputs remain unchanged.
+
+Validation: 225 new engineering-limit assertions; 2,352 assertions across 106
+affected model/controller testsets in total. The Australian replay audit passes
+128 checks. Earlier rejected solver/base probes remain diagnostic evidence.
+
+Recommended order for further work:
+
+1. **Complete the bound/acceptance ledger.** Audit every engineering quantity,
+   its terminal and RMS/peak convention, stamping scale, allocator coverage and
+   independent post-solve residual. Extend the sequence-bound scaling lesson to
+   all optional current, voltage, capacitor-bank and DC-source constraints.
+   Treat a solver status as necessary evidence rather than a physical certificate.
+2. **Close voltage-protection and controller-domain gaps.** Certify continuous
+   rail feasibility with an analytical peak/separation oracle or adaptive cuts.
+   Build an offline closest-feasible allocation reference before extending
+   voltage/modulation protection: reducing Q is not always protective because
+   reactive absorption can reduce internal voltage. Distinguish a physically
+   infeasible plant from an infeasible strict service or mandatory-offset anchor.
+3. **Strengthen numerical and feedback screening.** Guard auxiliary-scale
+   domains, test independent starts and unit bases, and retain failed probes.
+   Extend the reduced loop screen to include U₀ voltage response: the three-wire
+   actuator has four real current coordinates, but phase-magnitude sensors see
+   all six voltage coordinates. This remains an equilibrium/iteration screen,
+   not proof of dynamic converter stability.
+4. **Make the study more causal.** Keep hardware fixed while crossing source
+   VUF magnitude/angle, common-mode voltage and load-phase permutations. Add
+   explicit disconnected versus energized zero-PV operating modes; availability
+   alone does not encode inverter status. Then add chronological quasi-static
+   profiles before making energy claims. Add
+   a matched single-phase baseline with consistent losses, filter and terminal
+   semantics before using mixed-fleet adoption cohorts as a realistic comparison.
+   Then test additional real LV feeders and loaded MV+LV coupling.
+5. **Add useful capability comparators.** Use the same physical plant to compute
+   a coordinated OPF upper bound, with a clearly stated objective and service
+   constraints. Add four-leg per-phase control for independent I₀ actuation,
+   followed by split-link midpoint/bank protection. Derive LCL/asymmetric passive
+   sequence admittances from the full circuit rather than assuming a scalar Z.
+6. **Validate higher-fidelity mechanisms.** Use parameter-identical EMT cases
+   for representative binding limits. Two-stage DC/DC source coupling, DC input
+   current/voltage envelopes and explicit PV/no-charging semantics are useful
+   model extensions after the preceding contracts are clear. Parameter fitting
+   and hardware sizing optimization are outside this batch.
+
 ## 31 October 2026: terminal-profile fleet conditioning
 
 Work continues on `codex/ibr-pcc-apparent-power`. The three stressed positive

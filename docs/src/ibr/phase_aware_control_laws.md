@@ -198,6 +198,11 @@ voltage, but it cannot inject zero-sequence current or directly correct a
 zero-sequence voltage. This is a physical boundary, not a control-design
 limitation.
 
+This does not imply that network ``U_0`` is invariant to the controller. In an
+asymmetric sequence-impedance matrix, ``Z_{01}I_1`` and ``Z_{02}I_2`` can change
+it even with ``I_0=0``; voltage-dependent changes in other loads add another
+indirect path. The missing degree of freedom is independent I₀ actuation.
+
 That four-real-degree budget is the organising constraint. Two complex current
 references consume it completely; constant active power, constant reactive
 power, balanced current, and a prescribed negative-sequence attenuation cannot
@@ -638,9 +643,19 @@ Watt/var/proportional priority is applied before this final protection scale.
 `SequencePriorityLimiter` replaces the target-side common scale with the
 reserved-sequence limit and the per-phase quadratic fill above. Its smooth
 model overestimates the square root by at most a quarter of its width and uses
-upper selector denominators, so the smooth fill never exceeds the exact one. Switching-hull, modulation,
-and capacitor thermal allocation are not yet inside the controller; their plant
-constraints can still make a snapshot infeasible and must be reported. The
+upper selector denominators, so the smooth fill never exceeds the exact one.
+Declared `i_positive_max` and `i_negative_max` limit converter-arm sequence
+currents, including the mandatory loss-import and LCL shunt offsets. The legacy
+profile clips the independent sequence services first: common scaling retains
+one ray, while sequence priority clips each sequence independently before its
+coupled phase-current, VA and ripple protection. PCC mode includes those same
+physical sequence disks in its declared service order. A balanced P/Q direction
+does not consume I₂ headroom, including after balance-first I₂ saturation.
+
+Three-leg capacitor thermal allocation is included in the composed controller.
+Switching-hull, internal-voltage and modulation protection are still plant
+constraints without a corresponding command allocator; they can make a local
+controller equilibrium infeasible and must be reported. The
 common-scale law is the first large-network implementation because it has fixed
 structure, no active-set logic, and an obvious firmware counterpart.
 

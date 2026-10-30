@@ -33,6 +33,11 @@ exposes `run(modes=..., levels=..., sources=..., curves=..., hw=...)` for smalle
 experiments; the plot script requires the complete 54-case main campaign.
 Outputs are overwritten on rerun.
 
+Zero PV availability keeps the inverters energized: the voltage controls and
+I₂ service remain active, and AC loss import supports them. This is a declared
+operating-mode assumption, not a disconnected-inverter reference or a claim
+about every product's night-time behaviour.
+
 The terminal comparison and its 18-case validation sweep use one fixed 100 kVA
 base and solver profile, with no per-case retries. Earlier rejected runs are
 retained separately under `results/experimental_*`. Any future rejected campaign
@@ -41,6 +46,17 @@ status table and withholds a partial matched metric comparison.
 
 - [Feeder schematic](figures/feeder.png), [phase voltages](figures/phase_voltages.png)
   and [benefits and effort](figures/tradeoffs.png) (generated locally).
+- [Sensing and requests](figures/sensing_and_requests.png) explains a deliberately
+  unbalanced local-voltage input using the public exact laws. It is a teaching
+  fixture, not a feeder equilibrium. Its inputs and requests are saved in
+  [teaching_fixture.json](results/teaching_fixture.json).
+- [Power budget and headroom](figures/power_budget_and_headroom.png) separates
+  delivered power, converter/filter losses and unused PV power, then shows
+  physical limit utilization. Nearness to a limit alone does not identify a
+  binding controller constraint.
+- [Matched terminal controls](figures/terminal_control_comparison.png) shows the
+  accepted mean/worst/sequence cases with reactive priority and a common PCC
+  power boundary. This figure is separate from the research-profile comparison.
 - [Numerical summary](results/summary.csv), [case acceptance](results/cases.csv),
   [negative-sequence design](results/negative_sequence_design.json),
   [baseline validation](results/validation.json),

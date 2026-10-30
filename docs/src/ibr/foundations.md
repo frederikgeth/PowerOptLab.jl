@@ -668,16 +668,16 @@ U_b=\alpha^2U_a,\qquad U_c=\alpha U_a,
 \qquad V_{min}\le |U_a|\le V_{max}.
 ```
 
-For `:THREE_LEG` the bridge has no zero-sequence path (``I_0=0``), so
-zero-sequence KVL across the filter gives ``U_0=V_{p,0}``: the converter cannot
+For `:THREE_LEG` the bridge has no zero-sequence path (``I_0=0``). For a
+sequence-decoupled series filter, zero-sequence KVL gives ``U_0=V_{p,0}``: the converter cannot
 set its own zero-sequence EMF. The constraint is then ``U_2=0`` with
 ``V_{min}\le|U_1|\le V_{max}``, and ``U_0`` follows the network. (Imposing the
 ground-referred balanced set above on a three-leg bridge would also force the
 POC zero-sequence voltage to zero, which is infeasible on any network with
 zero-sequence unbalance.)
 
-Because the internal negative-sequence EMF is zero, the negative-sequence
-current of a grid-forming plant is fixed by the filter,
+For a sequence-decoupled series filter, zero internal negative-sequence EMF
+fixes the grid-forming plant's negative-sequence current as
 
 ```math
 I_2=-\frac{V_{p,2}}{Z_{f,2}},
@@ -689,6 +689,11 @@ same law is available to the local controllers as
 need not equal the physical filter. With realistic filters ``|Z_f|`` is small,
 so this current can exceed the converter rating even at modest unbalance; real
 grid-forming controls must limit it.
+
+Asymmetric conductor primitives and an LCL shunt require the full coupled
+circuit. Their converter- and grid-current sequence admittances need not equal
+the scalar series-filter expression above. Derive the appropriate terminal
+admittance before treating a virtual-impedance comparator as an equivalent.
 
 This is the steady-state voltage-source property used in algebraic power flow.
 It has no PLL, droop state, virtual impedance dynamics, current-priority state
