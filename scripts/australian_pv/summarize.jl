@@ -158,9 +158,12 @@ The scalar capability root is normalized by service magnitude, preserving the
 quadratic and smoothing law as service tends to zero. Earlier failed runs are
 archived in `experimental_terminal_var_priority_before_fix` and
 `experimental_pcc_fleet`. Numerical conditioning remains sensitive to other
-solver/base configurations; `experimental_terminal_numerical_scaling` records
-the remaining 1 MVA sequence-case failure with the same adaptive profile.
-These diagnostics establish no physical infeasibility or hardware-sizing limit.
+solver/base configurations. The current `experimental_terminal_scaling_current`
+diagnostic rejects mean VV+VW at the 300-iteration limit at 1 MVA, while worst-phase
+and sequence VV+VW pass. No partial matched metric comparison is published for
+that group. `experimental_terminal_numerical_scaling` retains an older sequence-case
+failure; its source checkpoint differs. These diagnostics establish no physical
+infeasibility or hardware-sizing limit.
 """
 end
 

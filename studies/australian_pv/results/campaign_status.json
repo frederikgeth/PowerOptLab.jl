@@ -1,0 +1,58 @@
+{
+    "half_smoothing": {
+        "passed": true,
+        "cases": 2
+    },
+    "matched_virtual_impedance": {
+        "passed": true,
+        "cases": 3
+    },
+    "terminal_scaling_1MVA": {
+        "passed": false,
+        "error": "AssertionError: Rejected cases recorded; omitted from scientific plots"
+    },
+    "balanced_source": {
+        "passed": true,
+        "cases": 9
+    },
+    "balanced_load": {
+        "passed": true,
+        "cases": 9
+    },
+    "thermal_0p5A": {
+        "passed": true,
+        "cases": 9
+    },
+    "terminal_var_priority": {
+        "passed": true,
+        "cases": 3
+    },
+    "small_dc_link_150uF": {
+        "passed": true,
+        "cases": 9
+    },
+    "terminal_profile_validation": {
+        "passed": true,
+        "cases": 18
+    },
+    "legacy_allocation": {
+        "passed": true,
+        "cases": 9
+    },
+    "large_dc_link_3A": {
+        "passed": true,
+        "cases": 9
+    },
+    "main": {
+        "passed": true,
+        "cases": 54
+    },
+    "pedagogical_volt_watt": {
+        "passed": true,
+        "cases": 9
+    },
+    "large_dc_link_2mF": {
+        "passed": true,
+        "cases": 9
+    }
+}

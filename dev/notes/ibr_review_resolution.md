@@ -1,5 +1,29 @@
 # Advanced IBR review: resolution plan
 
+## Refreshed physical-acceptance checkpoint
+
+Source commit `c0226a3` passes the complete offline package suite: 19,753/19,753
+assertions (7m30.8s). Fresh main (54), sensitivity (80) and matched terminal (18)
+snapshots all pass. All 14 campaign environments, including the separate diagnostic,
+match the same 50 source hashes. Per-attempt physical reports/checks are retained.
+The independently replayed modified-network audit passes 380/380 checks.
+
+`experimental_terminal_scaling_current` separately records the current 1 MVA,
+300-iteration profile: mean VV+VW reaches `ITERATION_LIMIT`, while worst-phase
+and sequence VV+VW pass. No selected-subset scientific comparison is published.
+Historical diagnostics retain their original source metadata; an older sequence
+failure must not be described as the current failure. Neither implies physical
+infeasibility.
+
+A preliminary fixed-terminal offline allocation experiment also found a feasible
+plant behind an infeasible current request. At balanced 253 V, a synthetic 620 V
+DC-link plant cannot deliver the requested 4.8 kW unity-PF point (rail margin
+-26.907 V), but a local physical projection delivers about 1.886 kW / -5.956 kvar
+within the same hardware limits. This is a feasible witness, not a globally nearest
+projection or a production allocator. The Australian 750 V hardware is unchanged.
+The next implementation step is a reusable offline voltage-aware allocation
+reference with explicit request-versus-plant diagnostics.
+
 ## PWM publication gate follow-up
 
 The fundamental/continuous-rail checkpoint is commit `6eb7ee9`. Its complete
