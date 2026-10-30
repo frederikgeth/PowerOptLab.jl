@@ -1,5 +1,39 @@
 # Advanced IBR review: resolution plan
 
+## PWM publication gate follow-up
+
+The fundamental/continuous-rail checkpoint is commit `6eb7ee9`. Its complete
+package suite passes 19,723 tests. Its matched terminal data and 380-check replay
+audit retain their exact source fingerprints.
+
+The next audit reproduced a distinct carrier-closure bug: with a one-iteration
+budget, a 20 kVA three-leg plant declared a 0.5 A capacitor rating, reserved
+0 A carrier current and predicted 16.763 A switching RMS, yet still published
+its successful fundamental NLP. The outer loop returned its last point without
+certifying the carrier model.
+
+PWM-enabled publication now requires a closed reserve, finite predictions and
+modulation headroom, and the actual predicted capacitor-thermal and AC total-RMS
+bounds. Capacitor checks replace the allocated carrier channel with the predicted
+one while preserving fixed allowances, source-dependent 2omega current and
+split-bank fundamental shares. Nonfinite harmonic networks and iteration-budget
+exhaustion retain the candidate/MOI diagnostics and reject publication. If the
+numerical closure tolerance is met but a physical rating is still violated,
+reserve updates continue; the tolerance cannot relax an engineering bound.
+
+Regressions cover the one-iteration counterexample, converged dispatch with the
+same hardware, a lossless harmonic antiresonance, and a tight thermal rating
+below the numerical closure floor. Existing four-leg, split-bank, finite-source
+and AC-current reserve tests now assert physical publication. The affected
+plant/certificate/PWM suite passes 741 assertions.
+
+Still pending: optional-arm SI conditioning and the DC-source average-power
+boundary; voltage-aware command allocation and its offline reference; refreshed
+complete campaign artifacts; controlled unbalance/operating-mode/chronological
+studies; coordinated dispatch; four-leg control; and representative EMT. The
+active goal remains open and sizing parameters remain unchanged.
+
+
 ## Active goal checkpoint: physical acceptance and continuous rails
 
 Work remains on `codex/ibr-pcc-apparent-power`; inverter sizing values are

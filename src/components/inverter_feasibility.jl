@@ -11,7 +11,7 @@ Base.@kwdef struct InverterFeasibilityTolerances
     rail_enclosure_V::Float64 = 1e-6
 end
 
-"""One independently recomputed engineering bound/equality; positive margin is feasible."""
+"""One independently recomputed bound, equality or closure check; positive margin is feasible."""
 struct InverterLimitCheck
     name::String
     unit::Symbol
@@ -38,8 +38,10 @@ Return the independent inverter SI-model report (a dictionary for a fleet).
 Solver success and physical acceptance are separate evidence. A rejected
 candidate can retain diagnostic quantities; only `solve_status(result).publishable`
 permits using it as an accepted result. The certificate covers the declared
-fundamental model and calibrated reserves, not network-wide feasibility,
-unmodeled harmonics, regional compliance or dynamic converter stability.
+fundamental model and calibrated reserves. Standalone PWM results additionally
+check finite carrier predictions, reserve closure and actual thermal/total RMS
+ratings. Network feasibility, unmodeled harmonics, regional compliance and
+dynamic converter stability require separate evidence.
 """
 function physical_feasibility end
 

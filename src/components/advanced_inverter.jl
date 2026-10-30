@@ -2444,6 +2444,49 @@ function _solve_advanced_inverter_once(net::Dict{String,Any}, inverter::Advanced
                           device_result.physical_feasibility)
 end
 
+# Final PWM acceptance uses the independently predicted carrier currents,
+# rather than the allowance in the last fundamental NLP. Closure and the
+# physical equipment bounds are separate checks, both required to publish.
+function _pwm_physical_result(inv,result::InverterResult,closed::Bool)
+    checks=InverterLimitCheck[
+        InverterLimitCheck("pwm_reserve_closure",:bool,closed ? 1. : 0.,1.,1.,0.,
+            closed ? 0. : -1.,closed),
+        _inverter_limit_check("pwm_capacitor_prediction",:A,result.i_cap_switching,0.,Inf),
+        _inverter_limit_check("pwm_modulation_headroom",:V,result.pwm_modulation_margin,0.,Inf),
+    ]
+    upper(name,value,rating)=rating===nothing ? nothing :
+        push!(checks,_inverter_limit_check(name,:A,value,0.,rating))
+    # Replace only the calibrated carrier channel. The fixed i_sw allowance,
+    # source-dependent 2ω share and split-link fundamental shares remain.
+    delta=inv.cap_thermal_weights[3]*(result.i_cap_switching^2-result.i_cap_switching_reserved^2)
+    actual_thermal(allocated)=sqrt(max(allocated^2+delta,0.))
+    if inv.topology===:SPLIT_DC
+        upper_current=actual_thermal(result.i_cap_thermal_upper)
+        lower_current=actual_thermal(result.i_cap_thermal_lower)
+        upper("pwm_actual_upper_thermal_current",upper_current,inv.i_cap_max)
+        upper("pwm_actual_lower_thermal_current",lower_current,inv.i_cap_max)
+        upper("pwm_actual_upper_own_rating",upper_current,inv.i_cap_upper_max)
+        upper("pwm_actual_lower_own_rating",lower_current,inv.i_cap_lower_max)
+    else
+        upper("pwm_actual_capacitor_thermal_current",actual_thermal(result.i_cap_thermal),inv.i_cap_max)
+    end
+    if inv.pwm_ac_ripple
+        prediction=maximum([result.i_ac_total_rms;result.i_grid_total_rms;result.i_neutral_total_rms])
+        push!(checks,_inverter_limit_check("pwm_ac_prediction",:A,prediction,0.,Inf))
+        for k in 1:3
+            upper("pwm_actual_converter_current_$k",result.i_ac_total_rms[k],inv.i_max)
+            upper("pwm_actual_grid_current_$k",result.i_grid_total_rms[k],inv.i_grid_max)
+        end
+        upper("pwm_actual_neutral_current",result.i_neutral_total_rms,inv.In_max)
+    end
+    physical=_extend_inverter_feasibility(result.physical,checks)
+    status=_physical_solve_status(result.solve,physical)
+    # Keep raw MOI status and candidate diagnostics, including the final
+    # iteration and predicted/reserved currents, when publication is rejected.
+    InverterResult((name===:physical ? physical : name===:solve ? status : getfield(result,name)
+        for name in fieldnames(InverterResult))...)
+end
+
 """
     solve_advanced_inverter(net, inverter; objective=:max_export, kwargs...)
         -> InverterResult
@@ -2462,8 +2505,9 @@ are covered by any supplied `i_max`, `i_grid_max`, and `In_max` ratings.
 PWM closure keywords are `pwm_tolerance=1e-3` (relative current tolerance),
 `pwm_max_iterations=16`, and `pwm_reserve_factor=1.01`. A cold start reaches
 its fixed point in a handful of solves, so the cap sits well clear of it: a
-closure reported at the iteration limit is a genuine non-convergence, not a
-budget that ran out. Inspect
+closure that has not converged at the iteration limit is not publishable.
+Nonfinite carrier predictions and actual capacitor/AC RMS bound violations
+also prevent publication, even when the final fundamental NLP solved. Inspect
 `result.pwm_reserve_margin`, `result.pwm_modulation_margin`, and
 `result.pwm_iterations` for every publishable PWM-enabled solve.
 
@@ -2516,7 +2560,7 @@ function solve_advanced_inverter(net::Dict{String,Any}, inverter::AdvancedInvert
             pwm_audit_inverter=inverter, pwm_iterations=iteration)
         last_result = result
         solve_status(result).publishable || return result
-        isfinite(result.i_cap_switching) || return result
+        isfinite(result.i_cap_switching) || return _pwm_physical_result(inverter,result,false)
         target = result.i_cap_switching
         tolerance = pwm_tolerance * max(target, 1.0)
         excess = result.i_cap_switching_reserved - target
@@ -2537,21 +2581,33 @@ function solve_advanced_inverter(net::Dict{String,Any}, inverter::AdvancedInvert
                 result.i_neutral_switching_reserved,
                 result.i_neutral_switching_rms)))
         if dc_closed && ac_closed
-            return result
+            candidate=_pwm_physical_result(inverter,result,true)
+            solve_status(candidate).publishable && return candidate
+            # The numerical closure tolerance cannot relax a hardware rating.
+            # A small under-allocation at a binding limit needs another reserve
+            # update even when the relative closure test has already passed.
+            failed=[c.name for c in candidate.physical.checks if !c.passed]
+            dc_bound(name)=any(prefix->startswith(name,prefix),
+                ("pwm_actual_capacitor_","pwm_actual_upper_","pwm_actual_lower_"))
+            ac_bound(name)=any(prefix->startswith(name,prefix),
+                ("pwm_actual_converter_","pwm_actual_grid_","pwm_actual_neutral_"))
+            all(name->dc_bound(name)||ac_bound(name),failed) || return candidate
+            dc_closed=!any(dc_bound,failed)
+            ac_closed=!any(ac_bound,failed)
         end
         blend(old_value, predicted) = _PWM_RELAX*old_value +
             (1 - _PWM_RELAX)*pwm_reserve_factor*predicted
         if !dc_closed
             leg_norm = sqrt(sum(abs2, result.i_mag) +
                 (inverter.topology == :FOUR_LEG ? result.i_neutral^2 : 0.0))
-            leg_norm > 1e-9 || return result
+            leg_norm > 1e-9 || return _pwm_physical_result(inverter,result,false)
             factor = max(inverter.pwm_current_factor,
                          blend(factor, target / leg_norm))
         end
         if inverter.pwm_ac_ripple
             all(isfinite, result.i_ac_switching_rms) &&
                 all(isfinite, result.i_grid_switching_rms) &&
-                isfinite(result.i_neutral_switching_rms) || return result
+                isfinite(result.i_neutral_switching_rms) || return _pwm_physical_result(inverter,result,false)
             if inverter.i_max !== nothing
                 converter_reserve = ntuple(k -> max(
                     inverter.pwm_ac_converter_reserve[k],
@@ -2570,5 +2626,5 @@ function solve_advanced_inverter(net::Dict{String,Any}, inverter::AdvancedInvert
             end
         end
     end
-    return last_result
+    return _pwm_physical_result(inverter,last_result,false)
 end

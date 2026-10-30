@@ -49,10 +49,16 @@ string alone is insufficient to select study results. Candidate reports can
 also diagnose unsuccessful solves without promoting them to accepted results.
 No-primal outcomes have an unchecked, non-passing report.
 
-The report certifies the declared inverter fundamental model and calibrated
-RMS reserves. It does not certify the entire network, actual carrier-reserve
-closure, regional compliance, or transient/dynamic stability. Network replay,
-carrier audits and controller-policy residuals remain separate evidence.
+The report checks the declared inverter fundamental model and calibrated RMS
+reserves. Standalone PWM-enabled solves additionally require finite carrier
+predictions, converged reserves and actual predicted capacitor-thermal and
+AC total-RMS ratings. A numerical closure tolerance cannot relax those ratings;
+under-allocation at a binding rating triggers another update. Nonconvergence,
+nonfinite harmonic networks and modulation violations prevent publication while
+retaining the final candidate for diagnosis. These are model audits, not EMT.
+Network-wide feasibility, regional compliance and transient/dynamic stability
+remain outside this report; network replay and controller-policy checks still
+provide separate evidence.
 
 The balanced three-phase fixture uses exact ±120° angles. Rounded decimal
 angles introduce a small U₀ and can make a strict balanced-grid LCL controller

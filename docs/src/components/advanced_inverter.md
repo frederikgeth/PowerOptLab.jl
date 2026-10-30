@@ -648,8 +648,8 @@ KCL. `dv_mid_max` can additionally cap the split-link RMS midpoint ripple
 `|I_n|/(ω(C_u+C_l))`; `v_mid_mean_max` separately limits the unequal-bank mean
 offset after any bounded `q_mid_balance_max` correction.
 The sampling makes these **outer** approximations and converges as `N→∞`.
-There is no documented uniform error certificate for the endogenous-ripple case;
-repeat boundary studies with a denser grid. `result.switching_margin` is the
+A finite sample count alone gives no a priori uniform feasibility guarantee
+with endogenous ripple; use the point-specific enclosure below. `result.switching_margin` is the
 minimum rail headroom in volts on a separate post-solve grid of at least 3600
 angles. A negative value is a concrete between-sample violation and should reject
 the point; a positive value is a dense numerical audit, not a formal global
@@ -665,6 +665,13 @@ research, while the independent physical gate still rejects missed violations.
 Use `solve_status(r).publishable`, rather than the termination string, to select
 accepted results. See [verification](../ibr/verification.md) for scope and
 tolerances.
+
+For active PWM closure, publication also requires finite carrier predictions,
+validated reserve convergence and actual predicted thermal/total RMS limits.
+`physical_feasibility(r).checks` exposes the `pwm_actual_*` values and margins.
+Reaching `pwm_max_iterations` with an unclosed reserve never publishes the last
+fundamental optimum. An actual bound violation triggers further reserve updates
+even when the numerical closure tolerance has been met.
 
 ## API reference
 
