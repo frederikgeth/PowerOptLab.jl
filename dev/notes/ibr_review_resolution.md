@@ -1,5 +1,41 @@
 # Advanced IBR review: resolution plan
 
+## Validated coupling and expanded Australian campaigns
+
+At core checkpoint `11a9723`, the complete offline suite passes
+20,119/20,119 assertions (7m46.0s), including all 102 new fleet-coupling assertions.
+The study setup at `e1f7327` passes 186 separate source-sequence/profile/analytic
+energy-accounting assertions. All 41 predeclared snapshots and all 36 synthetic
+chronology intervals are accepted without per-case retries. Each environment
+records the same 55 executed source/setup hashes. The saved-record audit checks
+22,356 physical inequalities, terminal phasors, case completeness and independently
+recomputes duration-weighted per-device energy. Four record-regression cases
+cover incomplete plans, nonfinite failed candidates and false physical success.
+
+The new `voltage_aware_snapshots` and `voltage_aware_chronology` campaigns are
+distinct from the earlier fixed-structure scaling controller. They preserve the
+same hardware and terminal reactive-priority boundary settings. Source U₂
+magnitude/angle and load phase allocation vary independently. The largest
+fixed-PQ cross-formulation phasor difference is 65.1 nV; this replay still uses
+the same network engine and is not an independent external circuit oracle.
+Standalone PNG/SVG figures and generated tables explain numerical iteration,
+unbalance-angle dependence and operating-mode energy costs.
+
+The synthetic day uses essentially all 405 kWh of DC availability within the
+physical tolerance. Its POC energy shortfall is modeled converter/filter loss,
+not material DC curtailment. Energized night operation imports 6.18–6.93 kWh
+across the fixed 12-inverter fleet while retaining reactive absorption. Opening
+the grid-side contactors removes AC services/losses; disconnected DC standby
+remains undefined and excluded. These are hypothetical quasi-static profiles,
+not measured yield or dynamic trajectories. Mean and sequence sensing nearly
+coincide here; sequence sensing does not itself request I₂ compensation.
+
+The goal remains active. Outstanding work includes the optional-arm SI and
+upstream/bridge DC-source boundary audit, coordinated Australian OPF, deliberate
+four-leg control and representative EMT validation. The retained earlier
+1 MVA/300-iteration fixed-structure mean-controller failure remains diagnostic;
+the separate common 1,000-iteration comparison is documented below.
+
 ## Voltage-aware feeder coupling and contactor modes
 
 `solve_voltage_aware_inverter_fleet` now couples the local Q→P→I₂ allocator to
@@ -23,7 +59,7 @@ The 102 new assertions pass: three numerical bases, independent diagonal-feeder
 Ohm/KCL and loss identities, native-device retention, warm starts/damping, mixed
 operating modes, LCL passive I₀/neutral sensing, controller-domain failures,
 allocation failures and explicit iteration exhaustion. Full-suite validation and
-reproducible expanded Australian campaigns are separate pending checks. This is
+expanded campaigns are recorded at the validated checkpoints above. This is
 a quasi-static local fixed point, not a dynamic stability or uniqueness proof.
 
 The broader goal remains active: controlled-unbalance/chronological studies,

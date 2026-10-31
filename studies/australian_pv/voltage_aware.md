@@ -23,6 +23,8 @@ From the repository root, with the project environment installed:
 julia --project=. scripts/australian_pv/test_voltage_aware.jl
 julia --project=. scripts/australian_pv/voltage_aware.jl snapshots
 julia --project=. scripts/australian_pv/voltage_aware.jl chronology
+python3 scripts/australian_pv/test_voltage_aware_records.py
+python3 scripts/australian_pv/plot_voltage_aware.py
 ```
 
 An optional second argument selects an empty output directory. Existing nonempty
@@ -30,6 +32,12 @@ outputs are rejected to prevent mixing campaigns. Each case gets one 100 kVA
 base and a common 1,000-iteration Ipopt profile per NLP, with at most 30 feeder
 iterations. There are no per-case retries. Chronological warm starts are numerical
 current seeds from the last accepted interval, not physical state transitions.
+
+The plotting command needs Matplotlib and NumPy. It audits both saved campaigns
+and their source hashes before generating the [result tables](voltage_aware_results.md)
+and standalone PNG/SVG figures. Failed or incomplete campaigns retain their audit
+report but withhold the matched figures. Four saved-record regressions cover
+complete, missing, nonfinite failed and falsely successful physical records.
 
 Every candidate is audited at its actual feeder voltage. Publication requires
 local allocation success, continuous full-cycle rails, independently recomputed

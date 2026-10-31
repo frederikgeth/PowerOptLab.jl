@@ -1,0 +1,14 @@
+{
+  "source_hashes_verified": 55,
+  "planned": 41,
+  "record_audit_code_sha256": "8f25a4947484620e642b84d0dd0fe20b93221b0605389758e2b50048502c90bc",
+  "completed": 41,
+  "accepted": 41,
+  "all_planned_accepted": true,
+  "physical_check_rows": 12636,
+  "device_rows": 492,
+  "energy_groups": 0,
+  "unresolved_case_ids": [],
+  "missing_case_ids": [],
+  "audit_scope": "saved-record consistency, source freshness, physical inequalities, terminal phasors and independent duration-weighted energy recomputation"
+}

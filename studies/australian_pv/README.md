@@ -1,5 +1,12 @@
 # Australian LV photovoltaic control study
 
+The [voltage-aware allocation extension](voltage_aware.md) adds controlled
+unbalance magnitude/angle/load experiments, explicit energized/disconnected
+operation and a synthetic 24-hour comparison using unchanged hardware. Its
+[generated results and pedagogical figures](voltage_aware_results.md) cover 77
+accepted cases. It uses staged Q→P→I₂ allocation and retains its own campaign
+labels, distinct from the fixed-structure controller results below.
+
 This is the Australian successor to the ENWL showcase. It starts with a small
 real feeder, preserves a converted reference, and makes the teaching experiment's
 changes explicit. The campaign compares **local control laws for 12 PV systems at
