@@ -1,6 +1,6 @@
 # Generated coordinated OPF comparison
 
-Executed benchmark source revision: `67f3ed8f57ec47622448ce4964f861e22a14e9dc`.
+Executed benchmark source revision: `4128f8bfc2709c5178b212b2e7f51abfb3d7724a`.
 
 All 24 predeclared cases pass the independent physical/policy, native SI equation, additional customer-voltage and fixed-PQ replay gates. Saved phasors are independently re-audited. These are feasible local nonconvex results, not global upper bounds.
 
