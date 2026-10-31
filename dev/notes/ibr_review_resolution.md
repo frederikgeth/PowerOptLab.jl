@@ -1,5 +1,30 @@
 # Advanced IBR review: resolution plan
 
+## Green integration and coordinated Australian capability reference
+
+At `2ead3b4`, the complete offline suite passes 20,431/20,431 assertions
+(7m42.5s). The LCL current-scale regression is fixed and the independent-write
+serialization fixture has deterministic provenance. All 77 extended Australian
+cases also pass again at the matching physical-model source hashes; their
+reported powers, currents and voltages are unchanged from the preceding source.
+
+The coordinated Australian driver is validated separately with 163 assertions
+covering balanced/free sequence allocation, optional customer voltage bounds,
+three numerical bases, input preservation and rejection of a raw-success point
+with failed native SI equations. Its 24 predeclared candidate cases pass physical,
+policy, native SI, voltage and fixed-PQ replay gates. Saved-point reconstruction
+passes 1,148 checks and recomputes 5,472 physical inequalities across 288 devices.
+Eight Julia record tests and four Python CSV tests reject modified currents,
+missing records, stale source hashes, changed metrics and false success flags.
+
+The benchmark releases autonomous VV+VW Q laws, and distinguishes balanced
+converter currents from additional free I₂ actuation on unchanged three-leg
+hardware. A 253 V upper phase-neutral bound is an illustrative extra planning
+criterion, not regional conformity. Source/table/figure publication follows
+the committed-driver rerun; local feasible solutions are not global upper bounds.
+The full goal remains active; four-leg control and representative EMT follow
+completion and commit of this benchmark.
+
 The full suite at `2b6d4de` clears the LCL regression (20,422 passing assertions)
 but exposed an unrelated clock-sensitive Kron serialization fixture. Two writes
 crossed a UTC second and differed only in automatically generated `meta.created`.
@@ -18,8 +43,8 @@ grid-arm rating. The grid current constraint itself remains unchanged.
 All six priority/target reproductions now publish and pass physical checks,
 along with the engineering and complete PCC power-boundary regressions. A
 metamorphic regression checks that changing only a grid-arm rating cannot
-change the converter-current characteristic. The final frozen-source full
-suite and refreshed study provenance remain the integration gates. Sizing and
+change the converter-current characteristic. The final integration and refreshed
+study provenance are recorded above. Sizing and
 physical acceptance tolerances are unchanged.
 
 ## Optional-current scaling, loss error budget and operating-policy acceptance
