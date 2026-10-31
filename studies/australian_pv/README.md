@@ -1,5 +1,10 @@
 # Australian LV photovoltaic control study
 
+The [mixed-controller thermal/energy extension](thermal_energy.md) adds
+dispatch-dependent PWM capacitor limits and nonlinear DC-energy bounds with
+fixed sizing. Mean, worst-phase, sequence and four-leg controls operate together
+in each feeder case, with independent saved-point and EMT validation.
+
 The [voltage-aware allocation extension](voltage_aware.md) adds controlled
 unbalance magnitude/angle/load experiments, explicit energized/disconnected
 operation and a synthetic 24-hour comparison using unchanged hardware. Its

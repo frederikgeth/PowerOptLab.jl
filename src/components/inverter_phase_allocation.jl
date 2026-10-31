@@ -8,7 +8,8 @@
 Four-leg voltage-aware local policy. Each phase uses its own sensed RMS voltage;
 Q and rated P bases are one third of the total request bases. Reactive priority
 maximizes one common [0,1] service coordinate for the three Q requests, then holds
-it while maximizing total P. POC active powers are equal across phases; that is
+it while maximizing total P (100 µvar preservation budget in PWM/nonlinear mode).
+POC active powers are equal across phases; that is
 not balanced current under unbalanced voltage. Available-basis VW uses one third
 of shared AC availability, including total solved losses. No separate phase PV
 sources or per-phase VA ratings are introduced. Zero/negative sequence and the
@@ -117,8 +118,9 @@ Four-leg local Q-vector-ray → equal-phase-P allocation at fixed physical POC
 phase-neutral phasors. Hardware/source/continuous rails and phase-policy checks
 gate every stage. A failed stage issues no command and proves no global plant or
 policy infeasibility. A separate unrestricted projection may supply a physical
-witness without replacing the failed policy. Current limits are RMS; carrier
-stress and dynamic/EMT behavior are outside this averaged allocation.
+witness without replacing the failed policy. Current limits are RMS. The
+optional centered-PWM term uses frozen fundamental currents; full switching
+dynamics still require representative EMT validation.
 """
 function allocate_phase_inverter_services(inv::AdvancedInverter,request::InverterControlRequest;
         grid_voltage,reactive_request,active_fraction=(1.,1.,1.),volt_watt_basis::Symbol=:rated,

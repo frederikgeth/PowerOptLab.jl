@@ -66,7 +66,7 @@ also remains a hard bound. Default source bounds prevent DC charging and allow
 AC loss imports at zero PV. `grid_voltage` refers to the plant neutral or earth
 when absent, in phase-terminal order. Supports THREE_LEG, non-grid-forming
 plants, including centered-PWM thermal allocation with an open carrier-frequency
-source. PWM stages preserve prior service within an explicit 0.0001 var/W SI
+source. PWM/nonlinear-energy stages preserve service within a 0.0001 var/W SI
 budget to avoid a singular tangent lock, without relaxing hardware constraints.
 Four-leg phase service uses `allocate_phase_inverter_services`.
 

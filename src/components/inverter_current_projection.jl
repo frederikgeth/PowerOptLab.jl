@@ -134,7 +134,7 @@ charge is fixed to the explicit `midpoint_charge` in **both** the requested-poin
 audit and the allocation. This is a conditional capability test, not optimization
 over that actuator. Non-split topologies require zero charge.
 
-Supports the same three-phase, non-grid-forming, PWM-disabled plants as
+Supports the same three-phase, non-grid-forming plants and centered-PWM scope as
 [`ConstrainedInverter`](@ref). The requested point is reconstructed and audited
 independently. A violated request together with a feasible allocation demonstrates
 a command/capability conflict under these conditions. Failure to find an allocation
