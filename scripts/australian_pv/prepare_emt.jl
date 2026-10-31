@@ -1,9 +1,9 @@
 # Export averaged reference points for the separately coded EMT circuit.
 include("four_leg.jl")
 
-function emt_reference(inv,voltage,current,converter_voltage,pdc;id,scope)
+function emt_reference(inv,voltage,current,converter_voltage,pdc;id,scope,dc_max=5000.)
     report=inverter_physical_feasibility(inv;grid_voltage=voltage,grid_current=current,
-        converter_voltage,converter_current=current,dc_min=0.,dc_max=5000.,
+        converter_voltage,converter_current=current,dc_min=0.,dc_max,
         pwm_thermal_headroom=inv.pwm_strategy===:NONE ? nothing : PowerOptLab._PWM_ALLOCATION_HEADROOM)
     report.checked && report.passed || error("unaccepted EMT reference: $id")
     PowerOptLab._lcl_active(inv) && error("this representative EMT matrix covers L filters only")

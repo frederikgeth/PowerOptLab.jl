@@ -41,10 +41,9 @@ function prepare_engineering_benchmark_emt(folder,output)
                     pwm_thermal_headroom=PowerOptLab._PWM_ALLOCATION_HEADROOM)
                 actual.passed || error("actual source-availability reference rejected")
                 reference=EngineeringBenchmarkEMTReferences.emt_reference(inv,v,i,u,selected.p_dc_W;
-                    id=key*"_"*label*"_"*id,
+                    id=key*"_"*label*"_"*id,dc_max=request.p_available,
                     scope="matched Australian fixed-POC snapshot; highest capacitor model stress in this controller group and mode")
-                # The older generic helper uses a 5000 W fixture source. This
-                # campaign validates and preserves each actual site availability.
+                # Each reference keeps its actual site availability (up to 8 kW in oversized_dc).
                 reference["p_available_W"]=request.p_available
                 reference["reference_physical_check_count"]=length(actual.checks)
                 reference["parent_case_id"]=condition.case_id
