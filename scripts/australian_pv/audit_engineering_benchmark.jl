@@ -119,7 +119,8 @@ function audit_engineering_benchmark(output;python="python3")
             "environment_sha256"=>bytes2hex(sha256(read(joinpath(output,"environment.json")))),
             "audit_code_sha256"=>bytes2hex(sha256(read(@__FILE__))),
             "audit_runtime"=>Dict("julia_version"=>string(VERSION),
-                "Manifest_sha256"=>bytes2hex(sha256(read(joinpath(repo,"Manifest.toml"))))),
+                "Project_sha256"=>bytes2hex(sha256(read(Base.active_project()))),
+                "Manifest_sha256"=>bytes2hex(sha256(read(joinpath(dirname(Base.active_project()),"Manifest.toml"))))),
             "scope"=>"saved-phasor SI hardware/current-capability/local-policy reconstruction, independent Python SI feeder oracle and same-engine fixed-PQ replay; free-Q OPF trades away VV/VW obligations; no global optimality or transient guarantee")
         write_engineering_json(target,report);report
     catch err

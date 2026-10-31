@@ -1,10 +1,16 @@
 # Australian LV photovoltaic control study
 
+The [evidence index](evidence/README.md) identifies the current coupled thermal
+campaign and gives checksum-verified restoration commands. Earlier result
+tables below are pinned historical experiments; their source hashes have not
+been changed to match the updated model.
+
 The [matched switching-aware PF/OPF benchmark](engineering_benchmark.md)
 compares all four local controller families with coordinated dispatch under
 unchanged hardware and network limits. Its figures show per-inverter limits,
-export recovery, the reactive-service tradeoff and the retained low-current
-thermal-prediction discrepancy from 32 representative EMT references.
+export recovery, the reactive-service tradeoff and thermal prediction coverage
+from 32 representative EMT references. The former low-current prediction
+failures remain in the historical archive.
 
 The [combined switching/DC-voltage boundary experiment](engineering_boundary.md)
 adds phase/neutral peak witnesses and compares averaged and switched voltage
