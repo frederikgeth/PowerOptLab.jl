@@ -57,6 +57,52 @@ function _switching_current_bound_coefficients(inv)
         neutral_rms=neutral/(8inv.f_sw),neutral_peak=neutral/(4inv.f_sw))
 end
 
+function _inverter_current_envelope(inv)
+    phase=zeros(3);neutral=0.;peak=zeros(3);npeak=0.
+    if inv.pwm_current_envelope
+        bounds=_switching_current_bound_coefficients(inv)
+        phase=bounds.phase_rms.*inv.v_dc_max;neutral=bounds.neutral_rms*inv.v_dc_max
+        peak=bounds.phase_peak.*inv.v_dc_max;npeak=bounds.neutral_peak*inv.v_dc_max
+    end
+    # Expert reserves may occupy the same frequency band: sum their RMS
+    # bounds by Minkowski, rather than assuming quadrature independence.
+    (converter_rms=collect(inv.pwm_ac_converter_reserve).+phase,
+        grid_rms=collect(inv.pwm_ac_grid_reserve).+phase,
+        neutral_rms=inv.pwm_ac_neutral_reserve+neutral,
+        phase_peak=peak,neutral_peak=npeak,
+        rms_resolved=inv.pwm_strategy===:NONE || inv.pwm_current_envelope,
+        peak_resolved=(inv.pwm_strategy===:NONE || inv.pwm_current_envelope) &&
+            all(iszero,[inv.pwm_ac_converter_reserve...;inv.pwm_ac_grid_reserve...;inv.pwm_ac_neutral_reserve]))
+end
+
+function _validate_switching_current_limits(inv)
+    peaks=(inv.i_peak_max,inv.i_grid_peak_max,inv.In_peak_max)
+    for limit in peaks
+        limit===nothing || isfinite(limit) && limit>0 ||
+            throw(ArgumentError("declared peak-current limits must be positive and finite"))
+    end
+    inv.topology===:SINGLE_PHASE && inv.In_peak_max!==nothing &&
+        throw(ArgumentError("neutral peak-current limit requires a three-phase topology"))
+    if any(!isnothing,peaks)
+        if inv.pwm_strategy!==:NONE && !inv.pwm_current_envelope
+            throw(ArgumentError("PWM peak-current limits require pwm_current_envelope=true"))
+        end
+        any(!iszero,[inv.pwm_ac_converter_reserve...;inv.pwm_ac_grid_reserve...;inv.pwm_ac_neutral_reserve]) &&
+            throw(ArgumentError("manual RMS reserves do not specify a peak waveform; cannot certify a peak limit"))
+    end
+    if inv.pwm_current_envelope
+        inv.v_dc_max!==nothing || throw(ArgumentError("current envelope requires a declared v_dc_max"))
+        !inv.pwm_ac_ripple || throw(ArgumentError("choose current envelope or harmonic AC closure, not both"))
+        _switching_envelope_geometry(inv)
+    end
+    reserve=_inverter_current_envelope(inv)
+    for (limit,allowance) in ((inv.i_peak_max,maximum(reserve.phase_peak)),
+            (inv.i_grid_peak_max,maximum(reserve.phase_peak)),(inv.In_peak_max,reserve.neutral_peak))
+        limit===nothing || limit>allowance || throw(ArgumentError("carrier peak bound exhausts the declared peak-current limit"))
+    end
+    nothing
+end
+
 # Integrate exact centered-PWM events, not sampled gate states or harmonics.
 # AC is the lossless inductive carrier response. DC uses frozen leg currents.
 # Neither result is a complete coupled switched-circuit solution.

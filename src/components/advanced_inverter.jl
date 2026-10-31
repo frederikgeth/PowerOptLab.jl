@@ -818,6 +818,9 @@ Base.@kwdef struct AdvancedInverter <: AbstractDevice
     s_max::Float64
     power_limit_location::Symbol = :converter
     i_max::Union{Float64,Nothing} = nothing
+    i_peak_max::Union{Float64,Nothing} = nothing
+    i_grid_peak_max::Union{Float64,Nothing} = nothing
+    In_peak_max::Union{Float64,Nothing} = nothing
     topology::Symbol = :SINGLE_PHASE
     v_dc::Union{Float64,Nothing} = nothing
     dc_energy_model::Symbol = :linearized
@@ -847,6 +850,7 @@ Base.@kwdef struct AdvancedInverter <: AbstractDevice
     dc_source_l::Float64 = 0.0
     pwm_current_factor::Float64 = 0.0
     pwm_ac_ripple::Bool = false
+    pwm_current_envelope::Bool = false
     pwm_ac_harmonics::Int = 64
     pwm_ac_converter_reserve::NTuple{3,Float64} = (0.0, 0.0, 0.0)
     pwm_ac_grid_reserve::NTuple{3,Float64} = (0.0, 0.0, 0.0)
@@ -1304,6 +1308,7 @@ function _validate_inverter(inv::AdvancedInverter, nets=())
     inv.grid_forming && length(inv.phase_terminals) != 3 && throw(ArgumentError(
         "grid-forming inverter '$(inv.id)' requires 3 phase_terminals"))
     _warn_if_filter_negligible(inv, nets)
+    _validate_switching_current_limits(inv)
     return nothing
 end
 
@@ -1740,6 +1745,7 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
     ib = bs === nothing ? 1.0 : get(bs.i_base, bus, 1.0)
     zb = bs === nothing ? 1.0 : get(bs.z_base, bus, 1.0)
     characteristic_current = _inverter_current_characteristic_at_start(ctx,inv)
+    current_envelope = _inverter_current_envelope(inv)
     current_scale = normalize_capability_constraints ? characteristic_current/ib : 1.0
 
     Rf, Xf = _series_filter_matrices(inv, nph, zb; side=:converter)
@@ -1918,15 +1924,23 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
         if inv.i_max !== nothing
             squared_rating = (inv.i_max/ib)^2
             scale = normalize_capability_constraints ? squared_rating : 1.0
-            JuMP.@constraint(m, (isq + (inv.pwm_ac_converter_reserve[k]/ib)^2)/scale <=
+            JuMP.@constraint(m, (isq + (current_envelope.converter_rms[k]/ib)^2)/scale <=
                                 squared_rating/scale)
         end
         if inv.i_grid_max !== nothing
             squared_rating = (inv.i_grid_max/ib)^2
             scale = normalize_capability_constraints ? squared_rating : 1.0
             JuMP.@constraint(m, (gri[k]^2 + gii[k]^2 +
-                                (inv.pwm_ac_grid_reserve[k]/ib)^2)/scale <=
+                                (current_envelope.grid_rms[k]/ib)^2)/scale <=
                                 squared_rating/scale)
+        end
+        if inv.i_peak_max!==nothing
+            headroom=inv.i_peak_max-current_envelope.phase_peak[k]
+            JuMP.@constraint(m,2isq/(headroom/ib)^2<=1.)
+        end
+        if inv.i_grid_peak_max!==nothing
+            headroom=inv.i_grid_peak_max-current_envelope.phase_peak[k]
+            JuMP.@constraint(m,2*(gri[k]^2+gii[k]^2)/(headroom/ib)^2<=1.)
         end
         if inv.a_loss != 0.0
             imag_terms = _push_magnitude(
@@ -2191,8 +2205,12 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
             rating = (inv.In_max/ib)^2
             scale = normalize_capability_constraints ? rating : 1.0
             JuMP.@constraint(m, (sumcr^2 + sumci^2 +
-                                (inv.pwm_ac_neutral_reserve/ib)^2)/scale <=
+                                (current_envelope.neutral_rms/ib)^2)/scale <=
                                 rating/scale)
+        end
+        if inv.In_peak_max!==nothing
+            headroom=inv.In_peak_max-current_envelope.neutral_peak
+            JuMP.@constraint(m,2*(sumcr^2+sumci^2)/(headroom/ib)^2<=1.)
         end
         # Neutral current (SI), for reporting: I_n = −Σ I_phase.
         in_re = JuMP.@expression(m, -sum(cri[k] for k in 1:3) * ib)
@@ -2396,7 +2414,20 @@ function extract_device(inverter::AdvancedInverter, h::_InvHandles,
     selected_p, selected_q = inverter.power_limit_location === :converter ?
         (h.p_conv, h.q_conv) : (h.p_poc, h.q_poc)
     apparent_margin = inverter.s_max - hypot(scaled(selected_p, sb), scaled(selected_q, sb))
+    current_envelope=_inverter_current_envelope(inverter)
     return (
+        pwm_current_envelope=inverter.pwm_current_envelope,
+        i_converter_ripple_bound=current_envelope.rms_resolved ? current_envelope.converter_rms : nothing,
+        i_grid_ripple_bound=current_envelope.rms_resolved ? current_envelope.grid_rms : nothing,
+        i_neutral_ripple_bound=current_envelope.rms_resolved ? current_envelope.neutral_rms : nothing,
+        i_total_rms_bound=current_envelope.rms_resolved ?
+            [hypot(mag(h.cri[k],h.cii[k],ib),current_envelope.converter_rms[k]) for k in 1:nph] : nothing,
+        i_grid_total_rms_bound=current_envelope.rms_resolved ?
+            [hypot(mag(h.gri[k],h.gii[k],ib),current_envelope.grid_rms[k]) for k in 1:nph] : nothing,
+        i_total_peak_bound=current_envelope.peak_resolved ?
+            [sqrt(2)*mag(h.cri[k],h.cii[k],ib)+current_envelope.phase_peak[k] for k in 1:nph] : nothing,
+        i_grid_total_peak_bound=current_envelope.peak_resolved ?
+            [sqrt(2)*mag(h.gri[k],h.gii[k],ib)+current_envelope.phase_peak[k] for k in 1:nph] : nothing,
         physical_feasibility=inverter_physical_feasibility(inverter,h,status;dc_min=dc_min,dc_max=dc_max),
         power_limit_location=inverter.power_limit_location,
         apparent_power_rating_VA=inverter.s_max,
@@ -2550,9 +2581,10 @@ function _solve_advanced_inverter_once(net::Dict{String,Any}, inverter::Advanced
          grid_rms=zeros(3), grid_pp=zeros(3),
          shunt_rms=zeros(3), neutral_rms=0.0, neutral_pp=0.0)
     end
-    ac_converter_reserved = collect(inverter.pwm_ac_converter_reserve)
-    ac_grid_reserved = collect(inverter.pwm_ac_grid_reserve)
-    ac_neutral_reserved = inverter.pwm_ac_neutral_reserve
+    current_envelope=_inverter_current_envelope(inverter)
+    ac_converter_reserved = current_envelope.converter_rms
+    ac_grid_reserved = current_envelope.grid_rms
+    ac_neutral_reserved = current_envelope.neutral_rms
     ac_total = hypot.(device_result.i_mag, acpwm.converter_rms)
     grid_total = hypot.(device_result.i_grid_mag, acpwm.grid_rms)
     neutral_total = hypot(device_result.i_neutral, acpwm.neutral_rms)

@@ -535,6 +535,29 @@ restrictions are described under [embedded thermal allocation](../ibr/foundation
 
 ### Carrier-level PWM closure
 
+`pwm_current_envelope=true` instead enables an all-duty analytical AC-current
+reserve in the shared plant constraints. It requires a declared `v_dc_max`,
+nonlinear DC energy and a monolithic three/four-leg L filter with proportional
+passive R/L. The maximum bus voltage is used in the carrier approximation.
+Both phase arms and the physical neutral receive total RMS bounds. This option
+is separate from the truncated harmonic audit `pwm_ac_ripple`; they cannot be
+enabled together. Additional manual RMS reserves are added conservatively.
+
+`i_peak_max`, `i_grid_peak_max` and `In_peak_max` optionally declare peak-current
+limits in amperes. No peak rating is inferred from an RMS rating. With PWM,
+these limits require the current envelope and include its peak bound plus the
+fundamental sinusoidal peak. With PWM disabled they constrain the fundamental
+waveform. An expert RMS reserve alone does not specify a peak waveform and
+cannot be combined with a declared peak limit. Extracted plant records expose
+`i_total_rms_bound`, `i_grid_total_rms_bound`, `i_total_peak_bound` and
+`i_grid_total_peak_bound`; these are bounds, not predicted switched waveforms.
+Unavailable bounds are `nothing`; an RMS reserve does not imply a known peak.
+
+The analytical reserve assumes periodic carrier ripple and frozen slow
+quantities. Its conservative inequalities within that approximation are
+separate from the calibrated DC thermal allowance. Coupled circuit/feeder
+transients still require time-domain validation.
+
 Set `pwm_strategy=:SPWM` or `:CENTERED` and provide `f_sw` to reconstruct all
 leg switch states against one shared triangular carrier. The audit subtracts
 the carrier-period average from the instantaneous DC current, so correlation

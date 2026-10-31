@@ -477,7 +477,9 @@ function extract_device(device::ConstrainedInverter,
     end
     current_margin(limit, current, reserve) = limit === nothing ? nothing :
         ntuple(k -> limit - hypot(current[k], reserve[k]), 3)
+    current_envelope=_inverter_current_envelope(inv)
     operation = (
+        pwm_current_envelope=inv.pwm_current_envelope,
         pwm_strategy=inv.pwm_strategy,
         pwm_thermal_headroom=inv.pwm_strategy===:NONE ? nothing : device.pwm_thermal_headroom,
         reactive_mode=_reactive_mode(policy),
@@ -508,12 +510,16 @@ function extract_device(device::ConstrainedInverter,
         converter_apparent_power_margin_VA=plant.converter_apparent_power_margin_VA,
         poc_apparent_power_margin_VA=plant.poc_apparent_power_margin_VA,
         converter_current_margin_A=current_margin(
-            inv.i_max, plant.i_mag, inv.pwm_ac_converter_reserve),
+            inv.i_max, plant.i_mag, current_envelope.converter_rms),
         grid_current_margin_A=current_margin(
-            inv.i_grid_max, plant.i_grid_mag, inv.pwm_ac_grid_reserve),
+            inv.i_grid_max, plant.i_grid_mag, current_envelope.grid_rms),
+        converter_peak_current_margin_A=inv.i_peak_max===nothing ? nothing : inv.i_peak_max .- plant.i_total_peak_bound,
+        grid_peak_current_margin_A=inv.i_grid_peak_max===nothing ? nothing : inv.i_grid_peak_max .- plant.i_grid_total_peak_bound,
         dc_ripple_margin_V=inv.dv2_max === nothing ? nothing : inv.dv2_max-plant.dv2,
         neutral_current_margin_A=inv.In_max === nothing ? nothing :
-            inv.In_max-hypot(plant.i_neutral, inv.pwm_ac_neutral_reserve),
+            inv.In_max-hypot(plant.i_neutral, current_envelope.neutral_rms),
+        neutral_peak_current_margin_A=inv.In_peak_max===nothing ? nothing :
+            inv.In_peak_max-(sqrt(2)*plant.i_neutral+current_envelope.neutral_peak),
         capacitor_current_margin_A=inv.i_cap_max === nothing ? nothing : inv.i_cap_max-plant.i_cap_thermal,
         upper_capacitor_margin_A=inv.i_cap_upper_max === nothing ? nothing : inv.i_cap_upper_max-plant.i_cap_thermal_upper,
         lower_capacitor_margin_A=inv.i_cap_lower_max === nothing ? nothing : inv.i_cap_lower_max-plant.i_cap_thermal_lower,

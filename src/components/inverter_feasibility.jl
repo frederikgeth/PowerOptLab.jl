@@ -208,13 +208,17 @@ function inverter_physical_feasibility(inv; converter_voltage,converter_current,
     end
     upper(name,unit,value,rating)=rating===nothing ? nothing : check(name,unit,value,-Inf,rating)
     zero(name,unit,value)=check(name,unit,abs(value),0.,0.)
+    current_envelope=_inverter_current_envelope(inv)
     for k in 1:n
-        upper("converter_current_$k",:A,hypot(abs(ic[k]),inv.pwm_ac_converter_reserve[k]),inv.i_max)
-        upper("grid_current_$k",:A,hypot(abs(ig[k]),inv.pwm_ac_grid_reserve[k]),inv.i_grid_max)
+        upper("converter_current_$k",:A,hypot(abs(ic[k]),current_envelope.converter_rms[k]),inv.i_max)
+        upper("grid_current_$k",:A,hypot(abs(ig[k]),current_envelope.grid_rms[k]),inv.i_grid_max)
+        upper("converter_peak_current_$k",:A,sqrt(2)*abs(ic[k])+current_envelope.phase_peak[k],inv.i_peak_max)
+        upper("grid_peak_current_$k",:A,sqrt(2)*abs(ig[k])+current_envelope.phase_peak[k],inv.i_grid_peak_max)
     end
     ineutral=-sum(ic)
     if inv.topology!==:SINGLE_PHASE
-        upper("neutral_current",:A,hypot(abs(ineutral),inv.pwm_ac_neutral_reserve),inv.In_max)
+        upper("neutral_current",:A,hypot(abs(ineutral),current_envelope.neutral_rms),inv.In_max)
+        upper("neutral_peak_current",:A,sqrt(2)*abs(ineutral)+current_envelope.neutral_peak,inv.In_peak_max)
         a=cis(2pi/3)
         i0=sum(ic)/3; i1=(ic[1]+a*ic[2]+a^2*ic[3])/3; i2=(ic[1]+a^2*ic[2]+a*ic[3])/3
         for (name,value,rating) in (("zero",i0,inv.i_zero_max),("positive",i1,inv.i_positive_max),("negative",i2,inv.i_negative_max))
