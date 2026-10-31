@@ -2389,6 +2389,7 @@ solve_diagnostics(result::ControlledInverterResult) = (
     exact_smooth_current_residual=result.exact_smooth_current_residual,
     physical_feasible=result.plant.physical_feasibility.passed,
     physical_failed_checks=[c.name for c in result.plant.physical_feasibility.checks if !c.passed],
+    numerical_attempts=get(result.plant,:numerical_attempts,()),
     continuous_rail_margin_lower_V=result.plant.physical_feasibility.rail.lower_V,
     continuous_rail_margin_upper_V=result.plant.physical_feasibility.rail.upper_V,
 )
@@ -2407,6 +2408,16 @@ SI. This is a controlled power flow: the controller equalities determine the
 command, while `selection_objective` only selects remaining plant allocation
 freedom (`:loss`, the default, or `:zero` for an objective-invariance check).
 
+`initialization=:automatic` permits one cold rebuild with a consistently
+initialized controller graph after a numerical termination. `:spread` and
+`:consistent` select one start policy explicitly. Failed primals/duals are
+never transferred. Each attempt uses the supplied iteration budget; zero-iteration
+and time-limit terminations are not retried. Use `:spread` for one attempt. Every
+attempt's raw status is retained in `solve_diagnostics(result).numerical_attempts`.
+Ipopt uses the already scaled equations without additional gradient scaling
+unless `solver_options` overrides that choice. Final raw and physical gates
+are unchanged.
+
 `exact_smooth_current_residual` compares the exact law with the stamped smooth
 law **at the smooth model's own solved operating point**, using the same solved
 plant phasors for both. It therefore bounds the smoothing error of the
@@ -2423,7 +2434,8 @@ function solve_controlled_inverter(
         optimizer=Ipopt.Optimizer,
         verbose::Bool=false,
         selection_objective::Symbol=:loss,
-        solver_options=(),rail_refinement::Bool=true)
+        solver_options=(),rail_refinement::Bool=true,initialization::Symbol=:automatic)
+    _validate_inverter_initialization(initialization)
     selection_objective in (:loss, :zero) || throw(ArgumentError(
         "selection_objective must be :loss or :zero"))
     per_unit || throw(ArgumentError(
@@ -2432,6 +2444,7 @@ function solve_controlled_inverter(
     validate_device(controlled, (net,); periods=1)
     handles = Ref{_ControlledHandles}()
     hook! = ctx -> begin
+        _opf_model(ctx).ext[:PowerOptLabConsistentControllerStart]=initialization===:consistent
         handles[] = stamp_device!(ctx, controlled; request=request)
         if selection_objective === :loss
             JuMP.@objective(_opf_model(ctx), Min,
@@ -2443,7 +2456,7 @@ function solve_controlled_inverter(
     ctx = build_opf_model(net; per_unit=per_unit, s_base=Float64(s_base),
                           add_objective=false, model_hook! = hook!,
                           optimizer=optimizer, verbose=verbose)
-    _set_inverter_solver_options!(_opf_model(ctx),solver_options)
+    _set_inverter_solver_options!(_opf_model(ctx),solver_options;controller_graph=true)
     _optimize_inverter_rails!(ctx,((controlled.device,handles[].plant),);enabled=rail_refinement)
     outcome = _solve_outcome(_opf_model(ctx))
     status = SolveStatus(outcome)
@@ -2454,10 +2467,24 @@ function solve_controlled_inverter(
         controlled, request, extracted, grid_current) : extracted.control
     residual = status.publishable ? maximum(abs,
         exact_control.phase_current .- extracted.control.phase_current) : NaN
-    return ControlledInverterResult(string(outcome.termination_status),
-                                    extracted.plant, extracted.control,
+    attempt=(initialization=initialization===:consistent ? :consistent : :spread,
+        raw=status,raw_solver_status=JuMP.raw_status(_opf_model(ctx)),
+        physical_accepted=extracted.plant.physical_feasibility.passed)
+    plant=merge(extracted.plant,(numerical_attempts=(attempt,),))
+    solved=ControlledInverterResult(string(outcome.termination_status),
+                                    plant, extracted.control,
                                     extracted.converter_terminal,
                                     grid_current,
                                     exact_control, residual, result["bus"],
                                     _physical_solve_status(status,extracted.plant.physical_feasibility))
+    if initialization===:automatic && _inverter_numerical_restart(status,solver_options)
+        # Rebuild cold: failed primals/duals never become continuation starts.
+        retry=solve_controlled_inverter(net,controlled,request;per_unit,s_base,optimizer,verbose,
+            selection_objective,solver_options,rail_refinement,initialization=:consistent)
+        retry_plant=merge(retry.plant,(numerical_attempts=(attempt,retry.plant.numerical_attempts...),))
+        return ControlledInverterResult(retry.termination_status,retry_plant,retry.control,
+            retry.converter_terminal,retry.grid_phase_current,retry.exact_control,
+            retry.exact_smooth_current_residual,retry.bus,retry.solve)
+    end
+    solved
 end

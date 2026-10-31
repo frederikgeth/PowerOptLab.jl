@@ -9,6 +9,7 @@ import hashlib
 import io
 import json
 from pathlib import Path, PurePosixPath
+import re
 import subprocess
 import tarfile
 
@@ -27,6 +28,8 @@ def safe_path(name):
 
 
 def git_files(repo, revision, roots):
+    if not re.fullmatch(r"[0-9a-f]{40}", revision):
+        raise ValueError("evidence revision must be a full Git commit SHA")
     for root in roots:
         safe_path(root)
     raw = subprocess.check_output(["git", "-C", str(repo), "archive", "--format=tar", revision, "--", *roots])
@@ -81,6 +84,10 @@ def restore(repo, manifest_path, output):
     manifest = json.loads(manifest_path.read_text())
     if manifest["format"] != 1:
         raise ValueError("unsupported evidence format")
+    if not re.fullmatch(r"[0-9a-f]{64}", manifest["bundle_sha256"]):
+        raise ValueError("invalid bundle digest")
+    if not re.fullmatch(r"[0-9a-f]{40}", manifest["source_revision"]):
+        raise ValueError("evidence revision must be a full Git commit SHA")
     cache = repo/".evidence-cache"/(manifest["bundle_sha256"]+".tar.gz")
     if cache.exists():
         data = cache.read_bytes()

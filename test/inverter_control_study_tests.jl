@@ -112,6 +112,7 @@ end
     limited = solve_controlled_inverter_fleet(
         net, spec; solver_options=("max_iter" => 0,))
     @test !solve_status(limited).publishable
+    @test length(limited.network["numerical_attempts"])==1
     @test isnan(limited.devices["pv"].plant.p_poc)
     @test all(isnan(phase["vm"])
               for phase in values(limited.network["bus"]["poc"]))

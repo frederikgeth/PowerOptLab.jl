@@ -73,6 +73,18 @@ class EvidenceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unsafe archive path"):
             restore(self.repo, self.manifest, self.output)
 
+    def test_revision_cannot_inject_git_options(self):
+        self.meta["source_revision"] = "--remote=unexpected"
+        self.manifest.write_text(json.dumps(self.meta))
+        with self.assertRaisesRegex(ValueError, "full Git commit"):
+            restore(self.repo, self.manifest, self.output)
+
+    def test_cache_digest_cannot_escape_cache(self):
+        self.meta["bundle_sha256"] = "../unexpected"
+        self.manifest.write_text(json.dumps(self.meta))
+        with self.assertRaisesRegex(ValueError, "invalid bundle digest"):
+            restore(self.repo, self.manifest, self.output)
+
 
 if __name__ == "__main__":
     unittest.main()

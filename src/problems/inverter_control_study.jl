@@ -259,7 +259,8 @@ function solve_controlled_inverter_fleet(
         optimizer=Ipopt.Optimizer,
         verbose::Bool=false,
         selection_objective::Symbol=:loss,
-        solver_options=(),rail_refinement::Bool=true)
+        solver_options=(),rail_refinement::Bool=true,initialization::Symbol=:automatic)
+    _validate_inverter_initialization(initialization)
     selection_objective in (:loss, :zero, :network_cost) || throw(ArgumentError(
         "selection_objective must be :loss, :zero, or :network_cost"))
     per_unit || throw(ArgumentError(
@@ -272,6 +273,7 @@ function solve_controlled_inverter_fleet(
     handles = Dict{String,_ControlledHandles}()
     builder = BMOPFTools.OpfDeviceBuilder(:PowerOptLab, function (ctx, ids)
         _opf_model(ctx).ext[:PowerOptLabCompactController] = true
+        _opf_model(ctx).ext[:PowerOptLabConsistentControllerStart]=initialization===:consistent
         for id in ids
             _disable_native_ibr_port!(ctx, id)
             handles[id] = stamp_device!(
@@ -297,7 +299,7 @@ function solve_controlled_inverter_fleet(
         net; per_unit=true, s_base=Float64(s_base), add_objective=false,
         build_spec=build_spec, model_hook! = hook!, optimizer=optimizer,
         verbose=verbose)
-    _set_inverter_solver_options!(_opf_model(ctx),solver_options)
+    _set_inverter_solver_options!(_opf_model(ctx),solver_options;controller_graph=true)
     _optimize_inverter_rails!(ctx,[(spec.devices[id].device,handles[id].plant)
         for id in sort!(collect(keys(spec.devices)))];enabled=rail_refinement)
 
@@ -319,12 +321,23 @@ function solve_controlled_inverter_fleet(
         extracted_network, keys(spec.devices))
     network["bus"] = bus
     network["raw_solver_status"] = JuMP.raw_status(_opf_model(ctx))
+    attempt=(initialization=initialization===:consistent ? :consistent : :spread,
+        raw=status,raw_solver_status=network["raw_solver_status"],
+        physical_accepted=all(physical_feasibility(device).passed for device in values(devices)))
+    network["numerical_attempts"]=(attempt,)
     physical_pass=all(physical_feasibility(device).passed for device in values(devices))
     fleet_status=SolveStatus(status.termination_status,status.primal_status,status.has_primal,
         status.feasible,status.optimal,status.publishable && physical_pass)
-    ControlledInverterFleetResult(
+    solved=ControlledInverterFleetResult(
         string(outcome.termination_status), devices, deepcopy(spec), network,
         BMOPFTools.opf_build_manifest(ctx), fleet_status)
+    if initialization===:automatic && _inverter_numerical_restart(status,solver_options)
+        retry=solve_controlled_inverter_fleet(net,spec;per_unit,s_base,optimizer,verbose,
+            selection_objective,solver_options,rail_refinement,initialization=:consistent)
+        retry.network["numerical_attempts"]=(attempt,retry.network["numerical_attempts"]...)
+        return retry
+    end
+    solved
 end
 
 """

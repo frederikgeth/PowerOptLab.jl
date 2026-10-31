@@ -30,3 +30,17 @@ end
         solve_stage! = (name,w)->error("retained numerical failure"),accepted=r->true)
     @test !is_valid(m,cut)
 end
+
+@testset "Controller numerical policy: bounded cold starts and caller options" begin
+    limit=SolveStatus("ITERATION_LIMIT","INFEASIBLE_POINT",true,false,false,false)
+    timed=SolveStatus("TIME_LIMIT","INFEASIBLE_POINT",true,false,false,false)
+    @test PowerOptLab._inverter_numerical_restart(limit,("max_iter"=>300,))
+    @test !PowerOptLab._inverter_numerical_restart(limit,("max_iter"=>0,))
+    @test !PowerOptLab._inverter_numerical_restart(timed,())
+    @test_throws ArgumentError PowerOptLab._validate_inverter_initialization(:unknown)
+    m=Model(Ipopt.Optimizer)
+    PowerOptLab._set_inverter_solver_options!(m,();controller_graph=true)
+    @test get_attribute(m,"nlp_scaling_method")=="none"
+    PowerOptLab._set_inverter_solver_options!(m,("nlp_scaling_method"=>"gradient-based",);controller_graph=true)
+    @test get_attribute(m,"nlp_scaling_method")=="gradient-based"
+end

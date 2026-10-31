@@ -22,7 +22,12 @@ end
             r=solve_controlled_inverter_fleet(net,spec;s_base=s_base,
                 selection_objective=objective,solver_options=options)
             @test solve_status(r).publishable
+            attempts=r.network["numerical_attempts"]
+            @test 1<=length(attempts)<=2
+            @test first(attempts).initialization===:spread
+            @test length(attempts)==1 || last(attempts).initialization===:consistent
             if solve_status(r).publishable
+                @test last(attempts).raw.publishable && last(attempts).physical_accepted
                 rows=controlled_inverter_rows(r)
                 @test length(rows)==12
                 @test study.accepted_control_rows(rows,study.HARDWARE)

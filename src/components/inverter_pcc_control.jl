@@ -260,7 +260,8 @@ function _stamp_pcc_control!(ctx, controller, request, inverter, handles)
     # Constant-service and zero-availability graphs admit consistent staged
     # starts. Nonlinear daytime curves keep their established spread of starts
     # across inactive/active branches of the feedback graph.
-    initialize_graph = !lift_services || iszero(request.p_available)
+    initialize_graph = !lift_services || iszero(request.p_available) ||
+        get(m.ext,:PowerOptLabConsistentControllerStart,false)
     if lift_services
         iszero(request.p_available) || (fraction = _defined_control_expression!(m,fraction;start=1.,initialize=initialize_graph))
         q = _defined_control_expression!(m,q;scale=smax,start=0.,initialize=initialize_graph)

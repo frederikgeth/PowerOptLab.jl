@@ -1,6 +1,19 @@
 # Numerical continuation infrastructure. Dispatch objectives, temporary-row
 # policy and physical acceptance belong to the caller. A residual check never
 # replaces the caller's raw solver gate.
+function _validate_inverter_initialization(initialization)
+    initialization in (:automatic,:spread,:consistent) ||
+        throw(ArgumentError("initialization must be :automatic, :spread or :consistent"))
+end
+
+function _inverter_numerical_restart(status,options)
+    for (name,value) in (options isa NamedTuple ? pairs(options) : options)
+        string(name)=="max_iter" && value isa Real && value<=0 && return false
+    end
+    status.termination_status in ("OTHER_ERROR","NUMERICAL_ERROR",
+        "ALMOST_LOCALLY_SOLVED","SLOW_PROGRESS","ITERATION_LIMIT")
+end
+
 function _inverter_start_snapshot(m)
     variables=JuMP.all_variables(m)
     constraints=JuMP.has_duals(m) ?
