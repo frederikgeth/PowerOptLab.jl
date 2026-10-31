@@ -188,3 +188,38 @@ physical gates. Releasing all fleet neutral rows simultaneously still fails;
 sequential release in decreasing availability is being tested. No temporary
 neutral equality may survive the final benchmark solve. The full goal remains
 active; no accepted coordinated export recovery is claimed at this checkpoint.
+
+## Coordinated solver continuation checkpoint
+
+Sequential neutral release with accepted primal **and dual** warm starts now
+solves the full daytime fleet export problem. Higher-availability four-leg
+channels are released first; the nearly cancelling low-availability channel is
+released last. Every temporary neutral equality is deleted before the final
+solve. Only raw/physically accepted stages can provide warm-start multipliers.
+The final objective is unchanged maximum total POC active injection, with all
+original neutral and reactive degrees of freedom available.
+
+Night operation needed a separate approximate loss-import initial state rather
+than the high-Q autonomous-controller state. The seed estimates only fixed
+mean loss; the actual NLP still enforces nonlinear losses, zero DC availability,
+full physical bounds and all network limits. No source or hardware constraint
+is relaxed. A raw Ipopt objective-sign override is rejected; optional positive
+scaling applies to the model expression instead. Failed raw candidates retain
+finite SI voltages/currents alongside rejected status, and strict JSON maps
+unbounded/non-finite diagnostic fields to null without promoting them.
+
+A fresh-process solver regression passes **75 assertions**, covering 1250 W
+and 5000 W availability at 10/100 kVA numerical bases, full neutral release,
+raw/physical/replay gates, objective-sign protection, rejected-candidate retention
+and the night seed. The core source remains unchanged from the full
+**22,100/22,100** package-suite pass.
+
+Development coupled cases at the common 100 kVA base all now pass raw solver,
+physical and fixed-PQ replay gates. Independent SI audits pass 826 conditions
+per returned PF/OPF point. Nominal local/coordinated P is
+10495.832967/14013.308298 W; high source -1.306350/14814.550244 W; rotated
+unbalance 5788.740504/14006.838375 W; night -359.976157/-181.451519 W. The first
+night attempt remains rejected and saved. These are development probes, not
+publication artifacts: committed-source reproduction, matched-case/source
+manifests, saved-point/corruption gates, representative mixed-case EMT, service
+tradeoff tables and the final binding/recovery figures remain required.
