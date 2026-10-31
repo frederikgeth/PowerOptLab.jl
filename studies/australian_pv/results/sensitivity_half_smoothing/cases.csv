@@ -1,3 +1,3 @@
 mode,availability,source_pu,source_vuf_percent,termination,accepted,exact_residual_A,min_dc_availability_margin_W,s_base_VA
 worst_vv_vw,1.0,1.03,1.0,LOCALLY_SOLVED,true,0.0002245977116608669,0.2044459412491051,100000.0
-sequence_droop_power,1.0,1.03,1.0,LOCALLY_SOLVED,true,0.00021559899720969354,0.2048266197070916,100000.0
+sequence_droop_power,1.0,1.03,1.0,LOCALLY_SOLVED,true,0.0002155989972102532,0.2048266197052726,100000.0

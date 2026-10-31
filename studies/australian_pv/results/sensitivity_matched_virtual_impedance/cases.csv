@@ -1,4 +1,4 @@
 mode,availability,source_pu,source_vuf_percent,termination,accepted,exact_residual_A,min_dc_availability_margin_W,s_base_VA
-sequence_droop_power,1.0,1.03,1.0,LOCALLY_SOLVED,true,0.00021559899720373197,0.2048266197061821,100000.0
+sequence_droop_power,1.0,1.03,1.0,LOCALLY_SOLVED,true,0.00021559899721244026,0.2048266197052726,100000.0
 gfm_virtual_impedance,1.0,1.03,1.0,LOCALLY_SOLVED,true,0.0002230535097834399,0.20451399983539886,100000.0
-tuned_virtual_impedance,1.0,1.03,1.0,LOCALLY_SOLVED,true,0.00021559899720238442,0.2048266197061821,100000.0
+tuned_virtual_impedance,1.0,1.03,1.0,LOCALLY_SOLVED,true,0.00021559899720986504,0.2048266197043631,100000.0

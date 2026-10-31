@@ -1,5 +1,27 @@
 # Advanced IBR review: resolution plan
 
+## Validated source checkpoint e19cbae
+
+The frozen source passes the full offline package suite: 20,017/20,017 assertions
+(7m53.2s), including the 56 replay and 117 service-allocation regressions. All 152
+canonical Australian main/sensitivity/terminal cases pass again, as does the
+380-check independent replay audit. The 14 campaign environments match the same
+52 source-file fingerprints at source commit `e19cbae`.
+
+The retained 1 MVA diagnostic still reaches its 300-iteration limit for mean
+VV+VW. An additional predeclared common 1,000-iteration profile accepts all three
+laws at that base. Against the 100 kVA reference, maximum per-device differences
+are 4.29 µW P, 23.31 µvar Q and 6.95 nA maximum phase-current magnitude; maximum
+phase-neutral voltage difference is 0.275 µV (neutral-to-ground differs by up to
+5.34 µV). Both the failed 300-iteration and accepted 1,000-iteration profiles are
+preserved. This demonstrates a stopping-budget failure for that original case,
+not a physical infeasibility or hardware-sizing requirement. It does not claim
+robustness at every base/operating point or change the default 100 kVA campaign.
+
+The goal remains active: local allocation is implemented, but its network
+coupling and the unbalance/disconnection/chronological/OPF/four-leg/EMT program
+are not complete.
+
 ## Local voltage-aware Q→P→I₂ allocation
 
 `allocate_inverter_services` now supplies staged physical allocation at a fixed

@@ -50,13 +50,17 @@ retained separately under `results/experimental_*`. Any future rejected campaign
 still raises an assertion after saving its results; `summarize.jl` prints its
 status table and withholds a partial matched metric comparison.
 
-The refreshed checkpoint uses source commit `c0226a3`: all 152 canonical
-main/sensitivity/terminal snapshots pass. Each environment records 50 source-file
+The refreshed checkpoint uses source commit `e19cbae`: all 152 canonical
+main/sensitivity/terminal snapshots pass. Each environment records 52 source-file
 hashes, and the advanced-device reports independently check declared physical
 bounds. The modified-network replay audit passes 380 checks. These checks cover
 the declared averaged model; this campaign disables PWM and is not EMT validation.
-The separate current 1 MVA scaling diagnostic retains a mean-control iteration
-limit and is excluded from matched scientific comparisons.
+The separate 300-iteration 1 MVA scaling diagnostic retains a mean-control
+iteration limit and is excluded from matched scientific comparisons. A
+[separate 1 MVA repeat](results/experimental_terminal_common1000/cases.csv) with
+one common 1,000-iteration budget accepts all three laws. Its
+[comparison with the 100 kVA reference](results/experimental_terminal_common1000/base_comparison.json)
+retains the numerical differences; this additional repeat changes no hardware.
 
 A separate [local voltage-aware allocation reference](../../scripts/formulations/inverter_service_allocation_reference.json)
 uses these unchanged three-leg hardware parameters at a fixed unbalanced terminal
@@ -334,6 +338,13 @@ and sequence VV+VW pass. No partial matched metric comparison is published for
 that group. `experimental_terminal_numerical_scaling` retains an older sequence-case
 failure; its source checkpoint differs. These diagnostics establish no physical
 infeasibility or hardware-sizing limit.
+
+A separate `experimental_terminal_common1000` repeat uses one common
+1,000-iteration budget for all three laws at 1 MVA. All three pass; the maximum
+device P/Q difference from the 100 kVA reference is below 0.00003 W/var and the
+maximum phase-neutral voltage difference below 0.3 µV. The 300-iteration failure
+remains recorded. This is a separately declared numerical profile, not a per-case
+retry or a change to the inverter hardware.
 <!-- interpretation:end -->
 
 ### Sensitivity to assumptions

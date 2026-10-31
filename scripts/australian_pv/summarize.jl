@@ -164,6 +164,13 @@ and sequence VV+VW pass. No partial matched metric comparison is published for
 that group. `experimental_terminal_numerical_scaling` retains an older sequence-case
 failure; its source checkpoint differs. These diagnostics establish no physical
 infeasibility or hardware-sizing limit.
+
+A separate `experimental_terminal_common1000` repeat uses one common
+1,000-iteration budget for all three laws at 1 MVA. All three pass; the maximum
+device P/Q difference from the 100 kVA reference is below 0.00003 W/var and the
+maximum phase-neutral voltage difference below 0.3 µV. The 300-iteration failure
+remains recorded. This is a separately declared numerical profile, not a per-case
+retry or a change to the inverter hardware.
 """
 end
 

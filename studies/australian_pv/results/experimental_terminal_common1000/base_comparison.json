@@ -1,0 +1,18 @@
+{
+  "reference": "terminal_profile_validation, 100 kVA, 300 common iterations",
+  "diagnostic": "1 MVA, 1000 common iterations, all three laws",
+  "maximum_absolute_difference": {
+    "devices.csv": {
+      "p_poc_W": 4.285979230189696e-06,
+      "q_poc_var": 2.330412553419592e-05,
+      "maximum_converter_current_A": 6.943393415781429e-09
+    },
+    "customers.csv": {
+      "va_pn_V": 1.261008719666279e-07,
+      "vb_pn_V": 1.2223810585965111e-07,
+      "vc_pn_V": 2.7425949156167917e-07,
+      "neutral_V": 5.337508094130361e-06,
+      "vuf_percent": 3.543743853917647e-08
+    }
+  }
+}
