@@ -15,7 +15,7 @@ function prepare_engineering_domain(output)
         fixture=Dict{String,Any}("ibr"=>Dict{String,Any}("pv"=>Dict{String,Any}("bus"=>"poc")))
         base=four ? first(values(four_leg_fleet(fixture,1.).devices)).device :
             plant("pv","poc";settings=TERMINAL_CONTROL_SETTINGS)
-        inv=engineering_plant(base)
+        inv=engineering_plant(base;limits=ENGINEERING_LEGACY_LIMITS)
         geometry=PowerOptLab._switching_envelope_geometry(inv)
         bounds=PowerOptLab._inverter_current_envelope(inv)
         for p in ENGINEERING_DOMAIN.p_W,q in ENGINEERING_DOMAIN.q_var,
@@ -67,7 +67,7 @@ function prepare_engineering_domain(output)
     end
     mkpath(dirname(output))
     writejson(output,Dict("domain"=>ENGINEERING_DOMAIN,"cases"=>refs,"source_sha256"=>source,
-        "hardware"=>HARDWARE,"operating_limits"=>ENGINEERING_OPERATING_LIMITS,"sizing_changed"=>false,
+        "hardware"=>HARDWARE,"operating_limits"=>ENGINEERING_LEGACY_LIMITS,"fixture_limits"=>"legacy","sizing_changed"=>false,
         "julia_version"=>string(VERSION),"git_revision"=>strip(read(Cmd(["git","-C",repo,"rev-parse","HEAD"]),String)),
         "git_status"=>read(Cmd(["git","-C",repo,"status","--porcelain"]),String),
         "Project_sha256"=>bytes2hex(sha256(read(joinpath(repo,"Project.toml")))),

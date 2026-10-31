@@ -11,7 +11,7 @@ function engineering_boundary_references(output)
         fixture=Dict{String,Any}("ibr"=>Dict{String,Any}("pv"=>Dict{String,Any}("bus"=>"poc")))
         base=four ? first(values(four_leg_fleet(fixture,1.).devices)).device :
             plant("pv","poc";settings=TERMINAL_CONTROL_SETTINGS)
-        inv=engineering_plant(base;dc_min=747.,dc_max=753.,dc_guard=guard)
+        inv=engineering_plant(base;limits=ENGINEERING_LEGACY_LIMITS,dc_min=747.,dc_max=753.,dc_guard=guard)
         r=four ? allocate_phase_inverter_services(inv,request;grid_voltage=v,reactive_request=[-600.,0.,0.],active_fraction=fill(.1,3),solver_options=ENGINEERING_OPTIONS) :
             allocate_inverter_services(inv,request;grid_voltage=v,reactive_request=-300.,active_fraction=.1,
                 negative_sequence_request=1.0+0im,solver_options=ENGINEERING_OPTIONS)
@@ -36,7 +36,7 @@ function engineering_boundary_references(output)
     end
     mkpath(dirname(output))
     writejson(output,Dict("cases"=>cases,"source_sha256"=>source,"hardware"=>HARDWARE,
-        "operating_limits"=>merge(ENGINEERING_OPERATING_LIMITS,(dc_min_V=747.,dc_max_V=753.)),
+        "operating_limits"=>merge(ENGINEERING_LEGACY_LIMITS,(dc_min_V=747.,dc_max_V=753.)),"fixture_limits"=>"legacy",
         "solver_options"=>ENGINEERING_OPTIONS,"julia_version"=>string(VERSION),"sizing_changed"=>false,
         "Project_sha256"=>bytes2hex(sha256(read(joinpath(repo,"Project.toml")))),
         "Manifest_sha256"=>bytes2hex(sha256(read(joinpath(repo,"Manifest.toml")))),

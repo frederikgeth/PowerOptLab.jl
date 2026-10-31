@@ -1,4 +1,4 @@
-"""Independent time-stepping L-filter/bridge/DC-capacitor circuit; no OPF imports."""
+"""Separately coded time-stepping L-filter/bridge/DC-capacitor circuit; no OPF imports."""
 module IBREMT
 using JSON3, SHA
 

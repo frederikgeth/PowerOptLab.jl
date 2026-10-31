@@ -363,8 +363,8 @@ prescribed measurement and response-time procedures.
 
 ## Additions from the 2026 IBR review
 
-These entries close gaps identified in the October 2026 review
-(`dev/notes/ibr_review_resolution.md`). They are kept in one block so the
+These entries close gaps identified in the October 2026 review. They are
+kept in one block so the
 numbering of the topical sections above stays stable.
 
 54. **† F. Wang, J. L. Duarte, and M. A. M. Hendrix**, “Pliant active and
