@@ -1,0 +1,57 @@
+{
+    "night": {
+        "max_voltage_difference_V": 1.4270443117825405e-8,
+        "max_site_P_difference_W": 9.950971104899509e-7,
+        "accepted": true,
+        "max_site_Q_difference_var": 5.4257435749605065e-5,
+        "tolerance": {
+            "reactive_var": 0.5,
+            "power_W": 0.5,
+            "voltage_V": 0.001
+        }
+    },
+    "nominal": {
+        "max_voltage_difference_V": 3.1864228423952034e-8,
+        "max_site_P_difference_W": 7.815860953996889e-7,
+        "accepted": true,
+        "max_site_Q_difference_var": 5.107284437144699e-5,
+        "tolerance": {
+            "reactive_var": 0.5,
+            "power_W": 0.5,
+            "voltage_V": 0.001
+        }
+    },
+    "oversized_dc": {
+        "max_voltage_difference_V": 5.898535776044629e-8,
+        "max_site_P_difference_W": 4.71001394544146e-5,
+        "accepted": true,
+        "max_site_Q_difference_var": 9.898045664158417e-5,
+        "tolerance": {
+            "reactive_var": 0.5,
+            "power_W": 0.5,
+            "voltage_V": 0.001
+        }
+    },
+    "high_source": {
+        "max_voltage_difference_V": 5.4231914130090766e-8,
+        "max_site_P_difference_W": 1.1416141205700114e-6,
+        "accepted": true,
+        "max_site_Q_difference_var": 5.192856042413041e-5,
+        "tolerance": {
+            "reactive_var": 0.5,
+            "power_W": 0.5,
+            "voltage_V": 0.001
+        }
+    },
+    "rotated_unbalance": {
+        "max_voltage_difference_V": 2.6672404171231292e-8,
+        "max_site_P_difference_W": 1.245972043761867e-6,
+        "accepted": true,
+        "max_site_Q_difference_var": 5.192866183278966e-5,
+        "tolerance": {
+            "reactive_var": 0.5,
+            "power_W": 0.5,
+            "voltage_V": 0.001
+        }
+    }
+}

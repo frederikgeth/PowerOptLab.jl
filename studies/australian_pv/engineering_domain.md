@@ -1,6 +1,6 @@
 # Declared switching-envelope validation domain
 
-The independent NumPy oracle passes **36,033 checks over 972 operating points**. The domain is declared in the preparation script and independently checked by the oracle; publication cannot shrink it to accepted points.
+Checks the carrier-ripple approximations used for phase-current, peak and DC-charge bounds against sampled carrier integration in a separately coded NumPy script, over 972 predeclared operating points. The domain is declared in the preparation script; publication cannot shrink it to accepted points. Fixture limits are the legacy ones (1 A capacitor, 14 A peak); they only decide which points are labelled infeasible, not whether the approximations hold. Current study fixture and results: [study README](README.md).
 
 | Dimension | Declared values |
 |---|---|
@@ -13,17 +13,17 @@ The independent NumPy oracle passes **36,033 checks over 972 operating points**.
 | Fraction of 0.96 modulation ceiling | 0.30, 0.70, 0.98 |
 | Carrier/line angle | 0°, 60°, 120° |
 | Four-leg zero-sequence current | 0.1 A RMS |
-| Independent meshes | 8192, 16384 samples per carrier |
+| Sampling meshes | 8192, 16384 samples per carrier |
 
 ![Conservatism of phase-current and coupled DC-charge bounds](figures/engineering_domain.png)
 
 The figure shows the largest ratio over P/Q, sequence and carrier-angle variations in each topology/modulation group. A ratio below one means the sampled waveform stays within its analytical carrier envelope; it does not measure total inverter utilization. The frozen bus is 750 V; AC reserves use the declared 765 V upper bound. Bounds retain their original all-duty derivation and are not fitted to this sweep.
 
-The largest exact-event versus sampled phase-RMS difference is 0.000222 A; the largest frozen-current DC-extremum difference is 0.000150 V. Across meshes, the largest RMS difference is 0.000554 A and the largest coupled-charge peak difference is 0.000251 V. The independent passive R/L orbit checks also enforce periodic closure and phase/neutral RMS and peak envelopes.
+The largest exact-event versus sampled phase-RMS difference is 0.000222 A; the largest frozen-current DC-extremum difference is 0.000150 V. Across meshes, the largest RMS difference is 0.000554 A and the largest coupled-charge peak difference is 0.000251 V. The passive R/L orbit checks also enforce periodic closure and phase/neutral RMS and peak envelopes.
 
-**855 points are rejected by at least one modeled engineering constraint and retain their failure names.** These include intentionally stressed power/current combinations and conservative sufficient bounds. Rejection by such a bound does not prove physical hardware infeasibility. Carrier-domain agreement does not establish an acceptable dispatch. The engineering-feasibility labels are Julia SI-model diagnostics; the independent oracle validates carrier mechanisms, bounds, coverage and retention, not all those feasibility labels.
+855 points are rejected by at least one modelled limit under the legacy fixture and keep their failure names. These include intentionally stressed power/current combinations and conservative sufficient bounds. Rejection by such a bound does not prove physical hardware infeasibility. Carrier-domain agreement does not establish an acceptable dispatch. The engineering-feasibility labels are Julia SI-model diagnostics; the NumPy check validates carrier mechanisms, bounds, coverage and retention, not all those feasibility labels.
 
-The hardware remains 6 kVA, 10 A, 750 V, 300 µF, a 1 A capacitor budget and the same filter. This is a frozen-bus/frozen-reference, inductive carrier approximation with periodic mean-subtracted charge. It does not establish coupled nonlinear transient bounds, cumulative DC-energy drift, LCL validity or closed-loop stability. The calibrated 10% capacitor thermal allowance is separate and is not validated or retuned by this carrier sweep. Representative averaged/switched EMT is documented in the [boundary experiment](engineering_boundary.md); the [matched mixed-feeder PF/OPF benchmark](engineering_benchmark.md) separately validates the coupled thermal allocator.
+Hardware: 6 kVA, 10 A, 750 V, 300 µF, legacy 1 A capacitor budget, same filter. This is a frozen-bus/frozen-reference, inductive carrier approximation with periodic mean-subtracted charge. It does not establish coupled nonlinear transient bounds, cumulative DC-energy drift, LCL validity or closed-loop stability. The calibrated 10% capacitor thermal allowance is separate and is not validated or retuned by this carrier sweep. Representative averaged/switched EMT is documented in the [boundary experiment](engineering_boundary.md); the [matched benchmark](engineering_benchmark.md) checks the coupled thermal bound against switched EMT.
 
 Reproduce from the repository root:
 
@@ -34,4 +34,4 @@ python3 scripts/australian_pv/test_engineering_domain.py
 python3 scripts/australian_pv/plot_engineering_domain.py
 ```
 
-Restore the full committed inputs using [the evidence index](evidence/README.md) before these saved-record commands; the plot reruns the complete independent audit. Eight tests cover full-domain acceptance and corrupted coverage, bounds, currents, gates, sources and failure flags.
+Restore the full committed inputs using [the evidence index](evidence/README.md) before these saved-record commands; the plot reruns the complete audit. Eight tests cover full-domain acceptance and corrupted coverage, bounds, currents, gates, sources and failure flags.

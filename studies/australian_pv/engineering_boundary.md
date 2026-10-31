@@ -1,6 +1,6 @@
 # Combined switching and nonlinear DC-voltage boundary
 
-This boundary experiment compares the existing LF-only voltage guard with the combined LF/carrier guard, and exercises the four-leg implementation. It is separate from the matched feeder PF/OPF benchmark. All three retain 6 kVA, 10 A phase RMS, 750 V, 300 µF and the 1 A capacitor RMS budget. The shared 747–753 V validation band and 14 A peak ceilings are declared operating assumptions, not inferred manufacturer ratings.
+This boundary experiment compares the existing LF-only voltage guard with the combined LF/carrier guard, and exercises the four-leg implementation. It is separate from the matched feeder PF/OPF benchmark. All three use 6 kVA, 10 A phase RMS, 750 V, 300 µF and the legacy 1 A capacitor / 14 A peak limits, with a deliberately narrow 747–753 V band so the DC-voltage bound binds. The legacy limits do not affect the DC-voltage comparison; the current study fixture is in the [study README](README.md).
 
 ![DC extrema, capacitor RMS and phase/neutral peaks](figures/engineering_boundary.png)
 
@@ -14,7 +14,7 @@ The grey rows show averaged integration; blue rows show switched integration. Re
 
 The three-leg references request the same 600 W active power, −300 var reactive power and 1 A negative-sequence current. Q and P have priority; the combined guard reduces the remaining sequence service to leave voltage headroom. The four-leg reference has a different declared request (600 W total and per-phase Q of [−600, 0, 0] var); its row demonstrates that topology and is not a matched controller performance comparison.
 
-The independent record audit passes **749 checks** covering provenance, mechanism agreement, energy, mesh convergence, extrema witnesses and engineering flags. The LF-only switched reference fails only the upper DC-voltage check; its failure remains in the results and is not accepted as hardware-feasible.
+The record audit covers provenance, mechanism agreement, energy, mesh convergence, extrema witnesses and engineering flags. The LF-only switched reference fails only the upper DC-voltage check; its failure remains in the results and is not accepted as hardware-feasible.
 
 These are fixed-POC, feedforward L-filter circuits with a constant-power DC input and fixed mean converter loss. Finite-window DC mean drift is retained: the switched extrema include both carrier ripple and that drift. This experiment does not isolate a carrier-only error or establish periodic steady state, closed-loop regulation, feeder dynamics, LCL validity or all-time transient bounds. The 10% frozen-current validation allowance remains separate from the coupled thermal bound.
 

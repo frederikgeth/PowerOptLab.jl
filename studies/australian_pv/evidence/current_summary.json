@@ -10,36 +10,101 @@
   },
   "emt": {
     "all_thermal_predictions_enclose": true,
-    "capacitor_rating_A": 1.0,
-    "circuit_checks": 7276,
-    "integrations": 192,
-    "maximum_switched_capacitor_A": 0.8802103611626132,
-    "minimum_prediction_margin_A": 0.11943679604887886,
-    "reference_checks": 391,
-    "references": 32,
+    "capacitor_rating_A": 7,
+    "circuit_checks": 13578,
+    "integrations": 360,
+    "maximum_switched_capacitor_A": 4.647896418060189,
+    "minimum_prediction_margin_A": 0.11943679604888041,
+    "reference_checks": 727,
+    "references": 60,
     "thermal_prediction_failures": []
   },
+  "fixture_limits": "declared",
   "generation_julia": "1.12.6",
-  "generation_revision": "35d5cacf58ca377cd2c3783ab2479a6f81110877",
+  "generation_revision": "4f616ca4358eb31c8ead9086354d8454f46476c2",
   "input_sha256": {
-    "results/engineering_benchmark/audit.json": "5e88b92b4941d34f6edf95e3bc761021c2be1382fad1a25be50912bfebe52680",
-    "results/engineering_benchmark/environment.json": "700ec17df4a8334c56e4abab991e7ca0c526c64acd04d226d337e4605c066540",
-    "results/engineering_benchmark_emt/matched_audit.json": "09c32b37c98c2e3561f6dbc67e064378901b4794373f5675f2448724e9d5fa8d",
-    "results/engineering_benchmark_emt_inputs.json": "9c85659f030dc9eefb42c6b2c3c958133533efc03455bc4af59bdf8b166111a0",
-    "results/engineering_boundary_emt/audit.json": "057a55b703496e95be40e842b0d75e7f854e7cc60ea9125500eedfa2de77c3f7",
-    "results/engineering_boundary_emt_inputs.json": "1e428eed8d7f0659b2e5165300b062e2c9b31623bff468ff172de02ce625bcb9",
-    "results/engineering_domain_audit.json": "dc59170cc0124694cec2f1751a2ddc8efd23d50802bd31672b239972b8f87fc2",
-    "results/engineering_domain_inputs.json": "07fac408761a1cc13c1c98f5075adc2b66e3e011bab7fdd905eedaeb80299b31"
+    "results/engineering_benchmark/audit.json": "a5b6c405aa2751c61dad4a459ed3404915ace90cb2eb260e75c7188a5a9c572e",
+    "results/engineering_benchmark/environment.json": "83ee88fc2287af14a36aaa9fac559342fc359746bbf47207f3ee7f99c9f49888",
+    "results/engineering_benchmark_emt/matched_audit.json": "26850327c18acf46f462dc835bbc5615d011e9643d8ea0ecb35de2f464fbbb17",
+    "results/engineering_benchmark_emt_inputs.json": "cc4d2c45c989cfef19b6fa1ba2e2a78921ee0791896943afebfbfff6b0fdc2a5",
+    "results/engineering_boundary_emt/audit.json": "c02a9156c62900de73de101ee5b33b8e9ca8bb13f26ae42c009ef01725525e75",
+    "results/engineering_boundary_emt_inputs.json": "9cfa9c7f78440d5db5d2b68a672ca0872f21e22ec8b4514475c1f91508044ea1",
+    "results/engineering_domain_audit.json": "b59f76b9f602e77e1f7f2452213d0da66033426c411b48193ca36b6eb1a9adc2",
+    "results/engineering_domain_inputs.json": "c2c81b7cfa10ba5c964b19898abc25cf05849260e350d9a7860d554232dbe97f"
+  },
+  "operating_limits": {
+    "capacitor_rms_A": 7,
+    "dc_max_V": 765,
+    "dc_min_V": 735,
+    "neutral_peak_A": 23,
+    "phase_peak_A": 23
   },
   "pf_opf": {
-    "independent_network_checks": 6608,
-    "inverter_rows": 96,
-    "physical_checks": 3960,
-    "points": 8,
-    "record_checks": 375
+    "agreement": {
+      "high_source": {
+        "accepted": true,
+        "max_site_P_difference_W": 1.1416141205700114e-06,
+        "max_site_Q_difference_var": 5.192856042413041e-05,
+        "max_voltage_difference_V": 5.4231914130090766e-08,
+        "tolerance": {
+          "power_W": 0.5,
+          "reactive_var": 0.5,
+          "voltage_V": 0.001
+        }
+      },
+      "night": {
+        "accepted": true,
+        "max_site_P_difference_W": 9.950971104899509e-07,
+        "max_site_Q_difference_var": 5.4257435749605065e-05,
+        "max_voltage_difference_V": 1.4270443117825405e-08,
+        "tolerance": {
+          "power_W": 0.5,
+          "reactive_var": 0.5,
+          "voltage_V": 0.001
+        }
+      },
+      "nominal": {
+        "accepted": true,
+        "max_site_P_difference_W": 7.815860953996889e-07,
+        "max_site_Q_difference_var": 5.107284437144699e-05,
+        "max_voltage_difference_V": 3.1864228423952034e-08,
+        "tolerance": {
+          "power_W": 0.5,
+          "reactive_var": 0.5,
+          "voltage_V": 0.001
+        }
+      },
+      "oversized_dc": {
+        "accepted": true,
+        "max_site_P_difference_W": 4.71001394544146e-05,
+        "max_site_Q_difference_var": 9.898045664158417e-05,
+        "max_voltage_difference_V": 5.898535776044629e-08,
+        "tolerance": {
+          "power_W": 0.5,
+          "reactive_var": 0.5,
+          "voltage_V": 0.001
+        }
+      },
+      "rotated_unbalance": {
+        "accepted": true,
+        "max_site_P_difference_W": 1.245972043761867e-06,
+        "max_site_Q_difference_var": 5.192866183278966e-05,
+        "max_voltage_difference_V": 2.6672404171231292e-08,
+        "tolerance": {
+          "power_W": 0.5,
+          "reactive_var": 0.5,
+          "voltage_V": 0.001
+        }
+      }
+    },
+    "inverter_rows": 180,
+    "physical_checks": 7425,
+    "points": 15,
+    "record_checks": 582,
+    "separately_coded_network_checks": 11565
   },
-  "scope": "Service choices differ: free-Q OPF releases VV/VW. Periodic frozen-slow-quantity carrier bounds and fixed-POC EMT; no global optimality, regional conformity, feeder/controller dynamic or all-time transient certificate.",
-  "sizing_changed": false,
+  "rated_capability_accepted": true,
+  "scope": "Local control, same-service OPF and volt-var-released OPF under identical hardware; carrier-domain and DC-boundary validations use the legacy fixture limits. Periodic frozen-slow-quantity carrier bounds and fixed-POC EMT; no global optimality, regional conformity, feeder/controller dynamic or all-time transient certificate.",
   "status": "current",
   "thermal_model": "coupled_inductive_all_duty_v1"
 }

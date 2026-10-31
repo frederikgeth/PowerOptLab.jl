@@ -1,8 +1,8 @@
 {
   "cases": [
     {
-      "capacitor_current_rating_A": 1,
-      "case_id": "night_coordinated_mean_vv_vw_pv_ld1970_load_c",
+      "capacitor_current_rating_A": 7,
+      "case_id": "night_opf_vv_released_mean_vv_vw_pv_ld1970_load_c",
       "converter_voltage": [
         [
           127.69002039642194,
@@ -10,7 +10,7 @@
         ],
         [
           -252.25175185088077,
-          2.275787934344837
+          2.2757879343448337
         ],
         [
           124.30467643997362,
@@ -19,16 +19,16 @@
       ],
       "current": [
         [
-          -0.010045135318781416,
-          0.017401971197121755
+          -0.010045135318776056,
+          0.01740197119712485
         ],
         [
           0.020093116792023247,
-          -1.6432280438760633e-06
+          -1.6432280500638067e-06
         ],
         [
-          -0.010047981473241832,
-          -0.01740032796907788
+          -0.01004798147324719,
+          -0.017400327969074782
         ]
       ],
       "dc_2omega_peak_rating_V": 7.5,
@@ -44,15 +44,15 @@
       "frequency_Hz": 50,
       "fundamental_reference_accepted": true,
       "grid_current_rating_A": null,
-      "grid_peak_rating_A": 14,
+      "grid_peak_rating_A": 23,
       "grid_voltage": [
         [
           127.71436297247605,
-          -216.88545012462944
+          -216.88545012462941
         ],
         [
           -252.2544113387456,
-          2.249215004704295
+          2.249215004704293
         ],
         [
           124.28299335178434,
@@ -67,51 +67,51 @@
       "neutral_current_rating_A": null,
       "neutral_peak_rating_A": null,
       "p_available_W": 0,
-      "p_dc_W": 9.995852643918113e-05,
+      "p_dc_W": 9.995852643740477e-05,
       "parent_capacitor_model_A": 0.39513920392661356,
       "parent_case_id": "night",
-      "parent_mode": "coordinated",
-      "parent_point_sha256": "1a44bd9d8c1f81e7b196513f504c1637aad08e9ea5f67b310319ddaebf17f6a4",
+      "parent_mode": "opf_vv_released",
+      "parent_point_sha256": "e3a74708a51f3e3bf8ed9a751da165684e243cecfc50977fea756608d105804a",
       "phase_L_H": 0.004209648244780632,
       "phase_R_ohm": 0.13225000000000003,
       "phase_current_rating_A": 10,
-      "phase_peak_rating_A": 14,
+      "phase_peak_rating_A": 23,
       "pwm_current_envelope": true,
       "pwm_dc_voltage_envelope": true,
       "reference_physical_check_count": 41,
       "reference_pwm_strategy": "CENTERED",
-      "scope": "matched Australian fixed-POC snapshot; highest capacitor model stress in this controller group; released VV/VW commands in coordinated mode",
+      "scope": "matched Australian fixed-POC snapshot; highest capacitor model stress in this controller group and mode",
       "topology": "THREE_LEG"
     },
     {
-      "capacitor_current_rating_A": 1,
-      "case_id": "night_coordinated_phase_vv_vw_pv_ld1895_load_b",
+      "capacitor_current_rating_A": 7,
+      "case_id": "night_opf_vv_released_phase_vv_vw_pv_ld1895_load_b",
       "converter_voltage": [
         [
-          127.60258165094939,
-          -216.67754504620967
+          127.60258165094938,
+          -216.67754504620964
         ],
         [
-          -252.36988509338192,
-          2.5416722456327085
+          -252.3698850933819,
+          2.5416722456327046
         ],
         [
-          124.21172504563138,
-          215.56397496481028
+          124.21172504563137,
+          215.56397496481026
         ]
       ],
       "current": [
         [
-          -0.009878955412151877,
-          0.01744390541498975
+          -0.009878955412135298,
+          0.017443905414999513
         ],
         [
-          0.01997303057117704,
-          0.00012127268341137663
+          0.019973030571176855,
+          0.00012127268339293863
         ],
         [
-          -0.010094206212392603,
-          -0.01756537896471552
+          -0.01009420621240836,
+          -0.017565378964706446
         ]
       ],
       "dc_2omega_peak_rating_V": 7.5,
@@ -127,7 +127,7 @@
       "frequency_Hz": 50,
       "fundamental_reference_accepted": true,
       "grid_current_rating_A": null,
-      "grid_peak_rating_A": 14,
+      "grid_peak_rating_A": 23,
       "grid_voltage": [
         [
           127.62695745940006,
@@ -135,7 +135,7 @@
         ],
         [
           -252.37236639186506,
-          2.515242074272595
+          2.5152420742725923
         ],
         [
           124.18982954240823,
@@ -143,30 +143,30 @@
         ]
       ],
       "local_controller": "phase_vv_vw",
-      "mean_converter_loss_W": 15.1209231404944,
+      "mean_converter_loss_W": 15.120923140494398,
       "modulation_utilization": 0.96,
       "neutral_L_H": 0.004209648244780632,
       "neutral_R_ohm": 0.13225000000000003,
       "neutral_current_rating_A": 10,
-      "neutral_peak_rating_A": 14,
+      "neutral_peak_rating_A": 23,
       "p_available_W": 0,
-      "p_dc_W": 7.545174501011331e-05,
+      "p_dc_W": 7.545174500833696e-05,
       "parent_capacitor_model_A": 0.6029973671383387,
       "parent_case_id": "night",
-      "parent_mode": "coordinated",
-      "parent_point_sha256": "1a44bd9d8c1f81e7b196513f504c1637aad08e9ea5f67b310319ddaebf17f6a4",
+      "parent_mode": "opf_vv_released",
+      "parent_point_sha256": "e3a74708a51f3e3bf8ed9a751da165684e243cecfc50977fea756608d105804a",
       "phase_L_H": 0.004209648244780632,
       "phase_R_ohm": 0.13225000000000003,
       "phase_current_rating_A": 10,
-      "phase_peak_rating_A": 14,
+      "phase_peak_rating_A": 23,
       "pwm_current_envelope": true,
       "pwm_dc_voltage_envelope": true,
       "reference_physical_check_count": 42,
       "reference_pwm_strategy": "CENTERED",
-      "scope": "matched Australian fixed-POC snapshot; highest capacitor model stress in this controller group; released VV/VW commands in coordinated mode",
+      "scope": "matched Australian fixed-POC snapshot; highest capacitor model stress in this controller group and mode",
       "topology": "FOUR_LEG"
     }
   ],
   "description": "Fixed-size three/four-leg night references; full records restored from current.json",
-  "inputs_sha256": "9c85659f030dc9eefb42c6b2c3c958133533efc03455bc4af59bdf8b166111a0"
+  "inputs_sha256": "cc4d2c45c989cfef19b6fa1ba2e2a78921ee0791896943afebfbfff6b0fdc2a5"
 }

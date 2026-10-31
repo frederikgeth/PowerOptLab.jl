@@ -1,0 +1,741 @@
+{
+  "accepted": true,
+  "checks": 13578,
+  "cases": {
+    "nominal_local_mean_vv_vw_pv_ld24_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.04537608530418654,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 3.8108456284158327,
+        "failed_engineering_checks": []
+      }
+    },
+    "nominal_local_worst_vv_vw_pv_ld2050_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.04588742584742563,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 3.8526620173868285,
+        "failed_engineering_checks": []
+      }
+    },
+    "nominal_local_sequence_vv_vw_pv_ld1668_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.045816728629103555,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 3.8108671034817325,
+        "failed_engineering_checks": []
+      }
+    },
+    "nominal_local_phase_vv_vw_pv_ld868_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.20328299831807956,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 3.8276714815589776,
+        "failed_engineering_checks": []
+      }
+    },
+    "nominal_opf_equal_service_mean_vv_vw_pv_ld24_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.04537608532086305,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 3.8108456352211575,
+        "failed_engineering_checks": []
+      }
+    },
+    "nominal_opf_equal_service_worst_vv_vw_pv_ld2050_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.045887425868817014,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 3.8526620259638804,
+        "failed_engineering_checks": []
+      }
+    },
+    "nominal_opf_equal_service_sequence_vv_vw_pv_ld1668_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.0458167286701149,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 3.810867110118689,
+        "failed_engineering_checks": []
+      }
+    },
+    "nominal_opf_equal_service_phase_vv_vw_pv_ld868_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.2032830103958358,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 3.827671490310142,
+        "failed_engineering_checks": []
+      }
+    },
+    "nominal_opf_vv_released_mean_vv_vw_pv_ld24_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.044712062475324506,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 3.73922497525407,
+        "failed_engineering_checks": []
+      }
+    },
+    "nominal_opf_vv_released_worst_vv_vw_pv_ld2050_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.04468571759753231,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 3.7362774469806537,
+        "failed_engineering_checks": []
+      }
+    },
+    "nominal_opf_vv_released_sequence_vv_vw_pv_ld1668_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.04518135621226549,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 3.741609640039004,
+        "failed_engineering_checks": []
+      }
+    },
+    "nominal_opf_vv_released_phase_vv_vw_pv_ld868_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.010642803139301984,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 3.73915314746637,
+        "failed_engineering_checks": []
+      }
+    },
+    "high_source_local_mean_vv_vw_pv_ld24_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.04952193090054221,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 3.900279201587572,
+        "failed_engineering_checks": []
+      }
+    },
+    "high_source_local_worst_vv_vw_pv_ld2050_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.0507163225178584,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 3.9869161290055732,
+        "failed_engineering_checks": []
+      }
+    },
+    "high_source_local_sequence_vv_vw_pv_ld1668_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.04990108071194778,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 3.8997208174001905,
+        "failed_engineering_checks": []
+      }
+    },
+    "high_source_local_phase_vv_vw_pv_ld868_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.2220770401461175,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 3.920774604878258,
+        "failed_engineering_checks": []
+      }
+    },
+    "high_source_opf_equal_service_mean_vv_vw_pv_ld24_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.04952193097365184,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 3.900279216424192,
+        "failed_engineering_checks": []
+      }
+    },
+    "high_source_opf_equal_service_worst_vv_vw_pv_ld2050_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.05071632257297005,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 3.986916145325486,
+        "failed_engineering_checks": []
+      }
+    },
+    "high_source_opf_equal_service_sequence_vv_vw_pv_ld1668_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.04990108083864585,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 3.8997208320843293,
+        "failed_engineering_checks": []
+      }
+    },
+    "high_source_opf_equal_service_phase_vv_vw_pv_ld868_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.22207704478352536,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 3.920774620477155,
+        "failed_engineering_checks": []
+      }
+    },
+    "high_source_opf_vv_released_mean_vv_vw_pv_ld24_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.04481633009010504,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 3.5171229352678544,
+        "failed_engineering_checks": []
+      }
+    },
+    "high_source_opf_vv_released_worst_vv_vw_pv_ld2050_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.04504990100675297,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 3.5640198637486997,
+        "failed_engineering_checks": []
+      }
+    },
+    "high_source_opf_vv_released_sequence_vv_vw_pv_ld1668_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.04525931150158746,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 3.5194293109443087,
+        "failed_engineering_checks": []
+      }
+    },
+    "high_source_opf_vv_released_phase_vv_vw_pv_ld868_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.5086290804193359,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 3.657867272318957,
+        "failed_engineering_checks": []
+      }
+    },
+    "rotated_unbalance_local_mean_vv_vw_pv_ld24_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.09543386873374562,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 3.810746343716171,
+        "failed_engineering_checks": []
+      }
+    },
+    "rotated_unbalance_local_worst_vv_vw_pv_ld2050_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.0996813759630171,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 3.9715554851577535,
+        "failed_engineering_checks": []
+      }
+    },
+    "rotated_unbalance_local_sequence_vv_vw_pv_ld1668_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.09476463130786879,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 3.8103321132227506,
+        "failed_engineering_checks": []
+      }
+    },
+    "rotated_unbalance_local_phase_vv_vw_pv_ld868_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.48069593090180107,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 3.902035695269829,
+        "failed_engineering_checks": []
+      }
+    },
+    "rotated_unbalance_opf_equal_service_mean_vv_vw_pv_ld24_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.09543386895003997,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 3.810746350529423,
+        "failed_engineering_checks": []
+      }
+    },
+    "rotated_unbalance_opf_equal_service_worst_vv_vw_pv_ld2050_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.09968137634553433,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 3.9715554969820333,
+        "failed_engineering_checks": []
+      }
+    },
+    "rotated_unbalance_opf_equal_service_sequence_vv_vw_pv_ld1668_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.09476463149460378,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 3.8103321198552367,
+        "failed_engineering_checks": []
+      }
+    },
+    "rotated_unbalance_opf_equal_service_phase_vv_vw_pv_ld868_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.4806959586597137,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 3.902035712180848,
+        "failed_engineering_checks": []
+      }
+    },
+    "rotated_unbalance_opf_vv_released_mean_vv_vw_pv_ld24_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.09405677145181494,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 3.7387052436338184,
+        "failed_engineering_checks": []
+      }
+    },
+    "rotated_unbalance_opf_vv_released_worst_vv_vw_pv_ld2050_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.09405361917271718,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 3.735767158997534,
+        "failed_engineering_checks": []
+      }
+    },
+    "rotated_unbalance_opf_vv_released_sequence_vv_vw_pv_ld1668_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.09345740036170808,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 3.741079497752723,
+        "failed_engineering_checks": []
+      }
+    },
+    "rotated_unbalance_opf_vv_released_phase_vv_vw_pv_ld868_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.014522758879098086,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 3.741000114674638,
+        "failed_engineering_checks": []
+      }
+    },
+    "night_local_mean_vv_vw_pv_ld1291_load_b": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.020289693923020925,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 1.5029099075518013,
+        "failed_engineering_checks": []
+      }
+    },
+    "night_local_worst_vv_vw_pv_ld1446_load_c": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.022541536465065362,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 1.6725230094987285,
+        "failed_engineering_checks": []
+      }
+    },
+    "night_local_sequence_vv_vw_pv_ld1668_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.020180340483819306,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 1.4988150597026144,
+        "failed_engineering_checks": []
+      }
+    },
+    "night_local_phase_vv_vw_pv_ld248_load_b": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.23013025008032476,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 1.5476932877517025,
+        "failed_engineering_checks": []
+      }
+    },
+    "night_opf_equal_service_mean_vv_vw_pv_ld1291_load_b": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.020289694403410847,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 1.502909941588009,
+        "failed_engineering_checks": []
+      }
+    },
+    "night_opf_equal_service_worst_vv_vw_pv_ld1446_load_c": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.02254153695383915,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 1.6725230443844037,
+        "failed_engineering_checks": []
+      }
+    },
+    "night_opf_equal_service_sequence_vv_vw_pv_ld1668_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.020180340963710665,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 1.4988150937873035,
+        "failed_engineering_checks": []
+      }
+    },
+    "night_opf_equal_service_phase_vv_vw_pv_ld248_load_b": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.23013025457063263,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 1.5476933224755574,
+        "failed_engineering_checks": []
+      }
+    },
+    "night_opf_vv_released_mean_vv_vw_pv_ld1970_load_c": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.0001363318497881154,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.27569663076441325,
+        "failed_engineering_checks": []
+      }
+    },
+    "night_opf_vv_released_worst_vv_vw_pv_ld2050_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.0001371317957572639,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.27570226857009167,
+        "failed_engineering_checks": []
+      }
+    },
+    "night_opf_vv_released_sequence_vv_vw_pv_ld626_load_c": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.00013599850371746978,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.2756949189412749,
+        "failed_engineering_checks": []
+      }
+    },
+    "night_opf_vv_released_phase_vv_vw_pv_ld1895_load_b": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 2.9040258534666104e-05,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.3163609974247276,
+        "failed_engineering_checks": []
+      }
+    },
+    "oversized_dc_local_mean_vv_vw_pv_ld24_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.0553738527577071,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 4.350159848685515,
+        "failed_engineering_checks": []
+      }
+    },
+    "oversized_dc_local_worst_vv_vw_pv_ld2050_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.05541902382423634,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 4.343261046968319,
+        "failed_engineering_checks": []
+      }
+    },
+    "oversized_dc_local_sequence_vv_vw_pv_ld1668_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.05573053838727286,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 4.352280968999627,
+        "failed_engineering_checks": []
+      }
+    },
+    "oversized_dc_local_phase_vv_vw_pv_ld868_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.2250530064280489,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 4.363888359126361,
+        "failed_engineering_checks": []
+      }
+    },
+    "oversized_dc_opf_equal_service_mean_vv_vw_pv_ld24_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.05537463864140224,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 4.350363831781593,
+        "failed_engineering_checks": []
+      }
+    },
+    "oversized_dc_opf_equal_service_worst_vv_vw_pv_ld2050_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.0528289326192548,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 4.1419119989038755,
+        "failed_engineering_checks": []
+      }
+    },
+    "oversized_dc_opf_equal_service_sequence_vv_vw_pv_ld1668_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.05573139936212466,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 4.352486609463451,
+        "failed_engineering_checks": []
+      }
+    },
+    "oversized_dc_opf_equal_service_phase_vv_vw_pv_ld868_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.22419093167234802,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 4.197116484204384,
+        "failed_engineering_checks": []
+      }
+    },
+    "oversized_dc_opf_vv_released_mean_vv_vw_pv_ld24_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.05468903667373842,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 4.301473394591803,
+        "failed_engineering_checks": []
+      }
+    },
+    "oversized_dc_opf_vv_released_worst_vv_vw_pv_ld2050_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.054649651470430806,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 4.305235444394429,
+        "failed_engineering_checks": []
+      }
+    },
+    "oversized_dc_opf_vv_released_sequence_vv_vw_pv_ld1668_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.055329181975931,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 4.303460510894753,
+        "failed_engineering_checks": []
+      }
+    },
+    "oversized_dc_opf_vv_released_phase_vv_vw_pv_ld868_load_a": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.9996611540173977,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 4.647896418060189,
+        "failed_engineering_checks": [
+          "dc_2omega_peak"
+        ]
+      }
+    }
+  },
+  "expectation_failures": [
+    {
+      "case_id": "oversized_dc_opf_vv_released_phase_vv_vw_pv_ld868_load_a",
+      "mode": "switched",
+      "expected": true,
+      "failed_engineering_checks": [
+        "dc_2omega_peak"
+      ]
+    }
+  ],
+  "scope": "independent metric, energy, RMS-limit, coverage and provenance reconstruction; mechanism agreement does not certify failed hardware bounds",
+  "input_sha256": "cc4d2c45c989cfef19b6fa1ba2e2a78921ee0791896943afebfbfff6b0fdc2a5",
+  "results_sha256": "cb3638659aa6f2b22df49d67c3255839f54cdb69af45cd258f54e8d6ae18b055"
+}
