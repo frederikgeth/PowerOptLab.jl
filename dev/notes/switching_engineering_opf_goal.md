@@ -146,3 +146,28 @@ initialization can achieve raw `LOCALLY_SOLVED`; it is not substituted for the
 intended final export objective. Failed/ALMOST/iteration-limit candidates remain
 rejected. Investigation now includes primal/dual continuation and independent
 candidate-voltage retention (native failed extraction masks those voltages).
+
+## Declared carrier-domain validation checkpoint
+
+The new preparation/oracle pair covers a predeclared Cartesian domain of 972
+points: three P levels, both Q signs and zero Q, two I2 magnitudes, three
+sequence angles, three modulation levels and three carrier/line angles for
+both three- and four-leg bridges. Four-leg points also carry 0.1 A of I0.
+The independent NumPy oracle constructs the inductance map, triangular gates,
+lossless current/charge primitives and periodic passive R/L orbits at 8192 and
+16384 samples/carrier. It independently reconstructs analytical bounds rather
+than trusting the saved envelopes.
+
+The development input passes **36,031 checks**. All 831 physical engineering
+limit failures remain labeled separately; carrier-domain agreement is not a
+feasibility certificate for those dispatches. Eight coverage, bound-inflation,
+phasor, gate, source and failed-flag corruption tests pass. Committed-source
+reference generation and final publication remain required.
+
+The OPF failure is reproducible for the low-availability four-leg inverter
+alone at fixed terminal voltage. Numerical scaling probes do not yet resolve
+the intended max-export solve. In particular, a positive Ipopt raw
+`obj_scaling_factor` overrides the MAX objective sign; those diagnostic results
+are not max-export benchmarks and must never be published as such. Further
+work targets an equivalent coordinate formulation, with the loss bias budget,
+engineering constraints and final objective preserved.
