@@ -16,15 +16,15 @@ function audit_engineering_benchmark(output;python="python3")
         for (file,digest) in env["source_sha256"]
             require(bytes2hex(sha256(read(joinpath(repo,file))))==digest,"stale source: $file")
         end
-        for name in ("Project","Manifest")
-            require(bytes2hex(sha256(read(joinpath(repo,name*".toml"))))==env[name*"_sha256"],"$name mismatch")
-        end
+        require(bytes2hex(sha256(read(joinpath(repo,"Project.toml"))))==env["Project_sha256"],"Project mismatch")
+        require(bytes2hex(sha256(read(joinpath(output,"dependency_manifest.toml"))))==env["Manifest_sha256"],"recorded Manifest mismatch")
         require(bytes2hex(sha256(read(joinpath(ROOT,"networks","LV3_55bus.bmopf.json"))))==env["network_sha256"],"network mismatch")
         require(!env["sizing_changed"] && env["s_base_VA"]==VA_BASE,"sizing/base metadata changed")
         require(env["controllers"]==collect(MIXED_CONTROLLERS),"controller coverage changed")
         require(env["planned_modes"]==["local","coordinated"],"mode plan changed")
         require(env["site_availability_fractions"]==collect(MIXED_PV_FRACTIONS),"site availability metadata changed")
         require(env["pwm_thermal_allowance"]==PowerOptLab._PWM_ALLOCATION_HEADROOM,"thermal allowance changed")
+        require(env["pwm_thermal_model"]==String(PowerOptLab._PWM_ALLOCATION_MODEL),"thermal model changed")
         canonical(x)=JSON3.read(JSON3.write(_engineering_json_safe(x)),Dict{String,Any})
         require(env["control_settings"]==canonical(TERMINAL_CONTROL_SETTINGS),"controller settings changed")
         require(env["local_solver_options"]==canonical(ENGINEERING_OPTIONS),"local solver profile changed")
@@ -118,6 +118,8 @@ function audit_engineering_benchmark(output;python="python3")
             "cases"=>evidence,"record_sha256"=>hashes,
             "environment_sha256"=>bytes2hex(sha256(read(joinpath(output,"environment.json")))),
             "audit_code_sha256"=>bytes2hex(sha256(read(@__FILE__))),
+            "audit_runtime"=>Dict("julia_version"=>string(VERSION),
+                "Manifest_sha256"=>bytes2hex(sha256(read(joinpath(repo,"Manifest.toml"))))),
             "scope"=>"saved-phasor SI hardware/current-capability/local-policy reconstruction, independent Python SI feeder oracle and same-engine fixed-PQ replay; free-Q OPF trades away VV/VW obligations; no global optimality or transient guarantee")
         write_engineering_json(target,report);report
     catch err

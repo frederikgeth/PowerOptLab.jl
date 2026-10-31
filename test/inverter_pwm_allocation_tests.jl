@@ -22,6 +22,10 @@ _pwm_alloc_inv(;kwargs...)=AdvancedInverter(;id="pv",bus="poc",topology=:THREE_L
     end
     inv=_pwm_alloc_inv()
     @test PowerOptLab._allocation_pwm_variance(inv,zeros(3),zeros(3),zeros(3),zeros(3),0.,0.,0.,0.,0.)>0.
+    invalid=PowerOptLab._allocation_pwm_carrier(inv,_pwm_alloc_bal(1000.),zeros(ComplexF64,3),0im)
+    @test isnan(invalid.rms) && isnan(invalid.ac_lossless_rms)
+    @test !all(c.passed for c in PowerOptLab._allocation_pwm_checks(inv,
+        _pwm_alloc_bal(1000.),zeros(ComplexF64,3),0im,0.,0.))
 end
 
 @testset "PWM allocation: fixed sizing, staged reactive priority and coordinate invariance" begin

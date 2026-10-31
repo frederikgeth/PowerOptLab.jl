@@ -6,7 +6,7 @@ function run_study_tutorials(; root=dirname(@__DIR__), filenames=[
         "battery_storage_models.md", "constrained_nlls_state_estimation.md",
         "ibr_topology_under_unbalance.md", "ibr_dc_source_and_split_link.md",
         "ibr_ac_harmonics_lcl.md", "helm_vs_nonlinear_power_flow.md",
-        "post_opf_operability_study.md"], on_page=nothing)
+        "post_opf_operability_study.md", "ibr_mixed_controller_fleet.md"], on_page=nothing)
     isempty(filenames) && error("no study tutorials requested")
     for filename in filenames
         path = joinpath(root, "docs", "src", "tutorials", filename)
@@ -16,7 +16,7 @@ function run_study_tutorials(; root=dirname(@__DIR__), filenames=[
         fences = collect(eachmatch(r"(?ms)^```julia[ \t]*\n(.*?)^```[ \t]*$", source))
         isempty(fences) && error("executable study has no Julia blocks: $filename")
         sandbox = Module(gensym(:StudyTutorial))
-        Core.eval(sandbox, :(include(path) = Base.include(@__MODULE__, abspath(path))))
+        Core.eval(sandbox, :(include(path) = Base.include(@__MODULE__, path)))
         println("Running $filename ($(length(fences)) Julia blocks)")
         cd(root) do
             for fence in fences

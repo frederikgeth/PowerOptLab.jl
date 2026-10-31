@@ -26,7 +26,10 @@ function rejected_engineering_fixture(mutate!)
 end
 
 @testset "Matched engineering campaign evidence and corruption gates" begin
-    report=audit_engineering_benchmark(BENCHMARK_TEST_INPUT;python=BENCHMARK_TEST_PYTHON)
+    report=mktempdir() do temp
+        folder=joinpath(temp,"campaign");cp(BENCHMARK_TEST_INPUT,folder)
+        audit_engineering_benchmark(folder;python=BENCHMARK_TEST_PYTHON)
+    end
     @test report["all_planned_accepted"]
     @test report["accepted"]==report["planned"]==8
     @test report["network_conditions"]==8*826
@@ -68,6 +71,13 @@ end
             record=JSON3.read(read(path,String),Dict{String,Any})
             record["source_sha256"][first(keys(record["source_sha256"]))]="0"^64
             write_engineering_json(path,record)
+        end
+    end
+    @testset "recorded dependency environment corrupted" begin
+        rejected_engineering_fixture() do folder
+            open(joinpath(folder,"dependency_manifest.toml"),"a") do io
+                write(io,"\n# corrupted fixture\n")
+            end
         end
     end
 end

@@ -42,9 +42,10 @@ def audited_records(folder):
         raise ValueError("stale saved-point audit")
     if env["network_sha256"] != digest(ROOT/"networks/LV3_55bus.bmopf.json"):
         raise ValueError("network input changed")
-    for name in ("Project", "Manifest"):
-        if env[name+"_sha256"] != digest(REPO/(name+".toml")):
-            raise ValueError(f"{name} changed")
+    if env["Project_sha256"] != digest(REPO/"Project.toml"):
+        raise ValueError("Project changed")
+    if env["Manifest_sha256"] != digest(folder/"dependency_manifest.toml"):
+        raise ValueError("recorded Manifest changed")
     for file, sha in env["source_sha256"].items():
         if digest(REPO/file) != sha:
             raise ValueError(f"stale benchmark source: {file}")

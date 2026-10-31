@@ -19,6 +19,7 @@ function run_engineering_benchmark(output;python="python3")
     revision=strip(read(Cmd(["git","-C",repo,"rev-parse","HEAD"]),String))
     status=read(Cmd(["git","-C",repo,"status","--porcelain"]),String)
     mkpath(joinpath(output,"points"));mkpath(joinpath(output,"network_audits"))
+    cp(joinpath(repo,"Manifest.toml"),joinpath(output,"dependency_manifest.toml"))
     write_engineering_json(joinpath(output,"environment.json"),Dict("source_sha256"=>source,
         "planned_cases"=>planned,"planned_modes"=>["local","coordinated"],"hardware"=>HARDWARE,
         "operating_limits"=>ENGINEERING_OPERATING_LIMITS,"controllers"=>MIXED_CONTROLLERS,
@@ -26,6 +27,7 @@ function run_engineering_benchmark(output;python="python3")
         "local_solver_options"=>ENGINEERING_OPTIONS,"coordinated_solver_options"=>ENGINEERING_COORDINATED_OPTIONS,
         "s_base_VA"=>VA_BASE,"planning_voltage_max_V"=>253.,"sizing_changed"=>false,
         "pwm_thermal_allowance"=>PowerOptLab._PWM_ALLOCATION_HEADROOM,
+        "pwm_thermal_model"=>String(PowerOptLab._PWM_ALLOCATION_MODEL),
         "git_revision"=>revision,"git_status"=>status,"julia_version"=>string(VERSION),
         "Project_sha256"=>bytes2hex(sha256(read(joinpath(repo,"Project.toml")))),
         "Manifest_sha256"=>bytes2hex(sha256(read(joinpath(repo,"Manifest.toml")))),

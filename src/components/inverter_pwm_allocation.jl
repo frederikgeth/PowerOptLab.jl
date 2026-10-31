@@ -1,6 +1,7 @@
 # Shared-carrier DC-current variance, embedded in local allocation objectives.
 # No point-calibrated current factor is transferred between dispatches.
 const _PWM_ALLOCATION_HEADROOM = 0.10
+const _PWM_ALLOCATION_MODEL = :coupled_inductive_all_duty_v1
 const _PWM_ALLOCATION_VOLTAGE_EPS = 1e-3 # V; explicit analytic error enclosure
 const _PWM_ALLOCATION_BUS_EPS = 1e-2 # V; conservative ripple enclosure at balance
 const _PWM_SERVICE_PRESERVATION_VA = 1e-4 # SI Q/P budget, not a hardware tolerance
@@ -55,6 +56,8 @@ end
 # Common-mode injection cancels because all bridge-leg currents sum to zero.
 function _allocation_pwm_carrier(inv,u,i,d;angles=2048,energy=nothing)
     total=0.;ac_total=0.;bus_max=0.;margin=Inf
+    invalid(margin)=(rms=NaN,frozen_rms=NaN,ac_lossless_rms=NaN,
+        damping_reserve=NaN,modulation_margin=margin)
     geometry=_switching_envelope_geometry(inv)
     K=inv.topology===:THREE_LEG ? geometry.gate_map :
         [geometry.gate_map;geometry.neutral_gate_map']
@@ -62,7 +65,7 @@ function _allocation_pwm_carrier(inv,u,i,d;angles=2048,energy=nothing)
         th=2pi*(k+.5)/angles;rot=cis(th)
         v=energy===nothing ? inv.v_dc+real(d*rot^2) :
             sqrt(max(0.,energy.center_V2+2inv.v_dc*real(energy.energy_coordinate*rot^2)))
-        v>0 || return (rms=NaN,modulation_margin=-Inf)
+        v>0 || return invalid(-Inf)
         voltage=sqrt(2).*real.(u.*rot);current=sqrt(2).*real.(i.*rot)
         if inv.topology===:FOUR_LEG
             voltage=[voltage;0.];current=[current;-sum(current)]
@@ -70,7 +73,7 @@ function _allocation_pwm_carrier(inv,u,i,d;angles=2048,energy=nothing)
         common=(maximum(voltage)+minimum(voltage))/2
         duties=.5 .+(voltage.-common)./v
         margin=min(margin,inv.m_max*v-(maximum(voltage)-minimum(voltage)))
-        all(x->0<=x<=1,duties) || return (rms=NaN,modulation_margin=margin)
+        all(x->0<=x<=1,duties) || return invalid(margin)
         average=sum(duties.*current)
         moment=sum(min(duties[j],duties[l])*current[j]*current[l]
             for j in eachindex(current),l in eachindex(current))
