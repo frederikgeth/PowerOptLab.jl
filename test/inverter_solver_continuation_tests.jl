@@ -43,4 +43,7 @@ end
     @test get_attribute(m,"nlp_scaling_method")=="none"
     PowerOptLab._set_inverter_solver_options!(m,("nlp_scaling_method"=>"gradient-based",);controller_graph=true)
     @test get_attribute(m,"nlp_scaling_method")=="gradient-based"
+    PowerOptLab._set_inverter_solver_options!(m,("nlp_scaling_method"=>"none",);
+        controller_graph=true,controller_scaling="gradient-based")
+    @test get_attribute(m,"nlp_scaling_method")=="none"
 end

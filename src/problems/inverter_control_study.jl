@@ -273,7 +273,8 @@ function solve_controlled_inverter_fleet(
     handles = Dict{String,_ControlledHandles}()
     builder = BMOPFTools.OpfDeviceBuilder(:PowerOptLab, function (ctx, ids)
         _opf_model(ctx).ext[:PowerOptLabCompactController] = true
-        _opf_model(ctx).ext[:PowerOptLabConsistentControllerStart]=initialization===:consistent
+        _opf_model(ctx).ext[:PowerOptLabConsistentControllerStart]=
+            initialization===:consistent && selection_objective!==:zero
         for id in ids
             _disable_native_ibr_port!(ctx, id)
             handles[id] = stamp_device!(
@@ -299,9 +300,19 @@ function solve_controlled_inverter_fleet(
         net; per_unit=true, s_base=Float64(s_base), add_objective=false,
         build_spec=build_spec, model_hook! = hook!, optimizer=optimizer,
         verbose=verbose)
-    _set_inverter_solver_options!(_opf_model(ctx),solver_options;controller_graph=true)
-    _optimize_inverter_rails!(ctx,[(spec.devices[id].device,handles[id].plant)
-        for id in sort!(collect(keys(spec.devices)))];enabled=rail_refinement)
+    m=_opf_model(ctx)
+    plants=[(spec.devices[id].device,handles[id].plant) for id in sort!(collect(keys(spec.devices)))]
+    _set_inverter_solver_options!(m,solver_options;controller_graph=true,
+        controller_scaling=initialization===:consistent ? "gradient-based" : "none")
+    seed=(attempts=(),continue_final=true)
+    if initialization===:consistent && selection_objective===:zero &&
+            _inverter_positive_iteration_budget(solver_options)
+        seed=_inverter_zero_objective_seed!(ctx,plants,
+            sum(h.plant.p_loss+h.plant.p_cap_loss for h in values(handles)),
+            s->all(extract_device(spec.devices[id],handles[id],s).plant.physical_feasibility.passed
+                for id in keys(handles));rail_refinement)
+    end
+    seed.continue_final && _optimize_inverter_rails!(ctx,plants;enabled=rail_refinement)
 
     outcome = _solve_outcome(_opf_model(ctx))
     status = SolveStatus(outcome)
@@ -321,10 +332,9 @@ function solve_controlled_inverter_fleet(
         extracted_network, keys(spec.devices))
     network["bus"] = bus
     network["raw_solver_status"] = JuMP.raw_status(_opf_model(ctx))
-    attempt=(initialization=initialization===:consistent ? :consistent : :spread,
-        raw=status,raw_solver_status=network["raw_solver_status"],
-        physical_accepted=all(physical_feasibility(device).passed for device in values(devices)))
-    network["numerical_attempts"]=(attempt,)
+    attempt=_inverter_numerical_attempt(m,status,initialization,selection_objective,
+        all(physical_feasibility(device).passed for device in values(devices)))
+    network["numerical_attempts"]=seed.continue_final ? (seed.attempts...,attempt) : seed.attempts
     physical_pass=all(physical_feasibility(device).passed for device in values(devices))
     fleet_status=SolveStatus(status.termination_status,status.primal_status,status.has_primal,
         status.feasible,status.optimal,status.publishable && physical_pass)
@@ -334,7 +344,7 @@ function solve_controlled_inverter_fleet(
     if initialization===:automatic && _inverter_numerical_restart(status,solver_options)
         retry=solve_controlled_inverter_fleet(net,spec;per_unit,s_base,optimizer,verbose,
             selection_objective,solver_options,rail_refinement,initialization=:consistent)
-        retry.network["numerical_attempts"]=(attempt,retry.network["numerical_attempts"]...)
+        retry.network["numerical_attempts"]=(network["numerical_attempts"]...,retry.network["numerical_attempts"]...)
         return retry
     end
     solved

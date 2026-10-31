@@ -423,7 +423,11 @@ validate the optional small-signal source impedance, LCL/split-link dynamics,
 service-controller response, semiconductor losses or feeder stability. Measured
 stress at one point is not a conservative reserve over other dispatches.
 
-### PWM-aware allocation and nonlinear energy extension
+### Earlier PWM-aware allocation and nonlinear energy extension
+
+This earlier frozen-current campaign is retained in the pinned historical
+archive described in `studies/australian_pv/evidence/README.md`. It does not
+validate the current coupled thermal allocator; current evidence follows below.
 
 The fixed-sizing follow-up (`studies/australian_pv/thermal_energy.md`) embeds
 shared-carrier switching stress in dispatch and introduces nonlinear monolithic
@@ -440,11 +444,10 @@ nonlinear boundary's averaged trajectory separately checks the actual 2ω
 voltage limit. This remains fixed-POC circuit validation with the source, loss
 and dynamics restrictions above.
 
-`inverter_pwm_allocation_tests.jl` adds 87 assertions for analytic variance
-bounds, independent carrier integration, supported configurations, dispatch and
-service preservation. `inverter_dc_energy_tests.jl` adds 155 assertions for
-energy integration, mean/Fourier voltage, complete rail bounds, active voltage
-extrema, capacitor RMS, PWM composition, night operation and numerical bases.
+The package regression files cover analytic variance bounds, independent carrier
+integration, supported configurations, dispatch/service preservation, energy
+integration, mean/Fourier voltage, complete rails, active voltage extrema,
+capacitor RMS, PWM composition, night operation and numerical bases.
 Separate study tests reject corrupted metrics, missing meshes and false
 engineering acceptance. The calibrated 10% allowance is explicit model
 headroom; neither it nor these tests establish a universal switching-error bound.
@@ -454,26 +457,30 @@ headroom; neither it nor these tests establish a universal switching-error bound
 `studies/australian_pv/engineering_domain.md` declares 972 P/Q, sequence and
 modulation points for analytical AC-current and combined DC-voltage envelopes.
 Independent sampled carrier integration and periodic passive R/L orbits pass
-36,031 checks. The 831 engineering-infeasible dispatches remain in that domain
+36,033 checks. The 855 dispatches rejected by engineering constraints remain in that domain
 record; carrier agreement does not make them feasible operating points.
 
 The matched benchmark in `studies/australian_pv/engineering_benchmark.md`
 accepts eight coupled PF/OPF points with identical physical models and network
-ceilings. It records 372 saved-point conditions, 3,672 SI inverter checks and
+ceilings. It records 375 saved-point conditions, 3,960 SI inverter checks and
 6,608 independent SI feeder checks. Coordination releases the local VV/VW
 commands, so export recovery is reported alongside the lost reactive support.
 Temporary neutral initialization equalities are removed before the final
-full-capability export solve; a source-traceable iteration-limit ablation stays
-rejected even when its independent feeder residuals pass.
+full-capability export solve. A source-pinned historical iteration-limit ablation
+stays rejected even when its independent feeder residuals pass.
 
 Thirty-two maximum-capacitor-stress representatives cover all four controller
 groups, conditions and modes. All 192 averaged/switched integrations pass the
 declared mechanism, mesh and hardware checks, with a largest switched
-capacitor RMS of 0.972793 A against 1 A. The four coordinated night references
-also retain a thermal-prediction failure: approximately 0.012 A predicted versus
-0.276–0.316 A measured. The calibrated allowance is not an all-duty thermal
-bound. These are fixed-POC snapshots with finite-window DC drift, rather than
-feeder/controller dynamic or periodic-steady-state validation.
+capacitor RMS of 0.880211 A against 1 A. All 32 coupled thermal predictions
+enclose the switched measurements within the predeclared 0.01 A mesh band.
+Night coordinated reserves are about 0.395 A for three-leg and 0.603 A for
+four-leg, versus 0.276 A and 0.316 A measured. The former frozen-current
+predictions near 0.012 A and their failures remain in the historical archive.
+The new all-duty AC-induced DC-current bound and passive-damping residual are
+separate from the 10% frozen-current allowance. These are fixed-POC snapshots
+with finite-window DC drift; they do not validate feeder/controller dynamics,
+periodic steady state or all-time transients.
 
 ## Further higher-fidelity validation
 

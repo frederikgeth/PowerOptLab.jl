@@ -546,7 +546,7 @@ See the [thermal derivation](../ibr/foundations.md).
 
 ### Carrier-level PWM closure
 
-`pwm_current_envelope=true` instead enables an all-duty analytical AC-current
+`pwm_current_envelope=true` enables an all-duty analytical AC-current
 reserve in the shared plant constraints. It requires a declared `v_dc_max`,
 nonlinear DC energy and a monolithic three/four-leg L filter with proportional
 passive R/L. The maximum bus voltage is used in the carrier approximation.
@@ -566,7 +566,7 @@ Unavailable bounds are `nothing`; an RMS reserve does not imply a known peak.
 
 The analytical reserve assumes periodic carrier ripple and frozen slow
 quantities. Its conservative inequalities within that approximation are
-separate from the calibrated DC thermal allowance. Coupled circuit/feeder
+distinct from the coupled DC thermal bound and its frozen-current allowance. Coupled circuit/feeder
 transients still require time-domain validation.
 
 `pwm_dc_voltage_envelope=true` combines that AC-current envelope with nonlinear

@@ -1616,14 +1616,15 @@ end
 
 _start_or(v, default) = (s = JuMP.start_value(v); s === nothing ? default : s)
 
-function _set_inverter_solver_options!(model,options;controller_graph::Bool=false)
+function _set_inverter_solver_options!(model,options;controller_graph::Bool=false,
+        controller_scaling::String="none")
     # Other nonlinear optimizers retain their own option vocabulary.
     if JuMP.solver_name(model)=="Ipopt"
         JuMP.set_attribute(model,"bound_relax_factor",0.)
         # Device/controller rows already use declared physical coordinate
         # scales. Extra gradient scaling can distort sharp service/root rows.
         # Explicit caller options below still take precedence.
-        controller_graph && JuMP.set_attribute(model,"nlp_scaling_method","none")
+        controller_graph && JuMP.set_attribute(model,"nlp_scaling_method",controller_scaling)
     end
     _set_solver_options!(model,options)
 end

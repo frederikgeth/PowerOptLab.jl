@@ -1,7 +1,7 @@
 """Content-addressed evidence bundles reproducible from immutable Git commits.
 
-No source hashes are changed. Bundles live in an ignored local cache; the
-manifest and the pinned Git tree are sufficient to reproduce every byte.
+No source hashes are changed. Distributed bundles survive squash merges and
+branch deletion; an ignored local cache and pinned Git tree are fallbacks.
 """
 import argparse
 import gzip
@@ -73,6 +73,11 @@ def pack(repo, revision, roots, manifest_path):
         raise ValueError("conflicting content-addressed bundle")
     cache.write_bytes(data)
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    distributed = manifest_path.parent/"bundles"/cache.name
+    distributed.parent.mkdir(exist_ok=True)
+    if distributed.exists() and distributed.read_bytes() != data:
+        raise ValueError("conflicting distributed bundle")
+    distributed.write_bytes(data)
     encoded = json.dumps(manifest, indent=2, sort_keys=True)+"\n"
     if manifest_path.exists() and manifest_path.read_text() != encoded:
         raise ValueError("manifest is immutable; choose a new name")
@@ -89,8 +94,11 @@ def restore(repo, manifest_path, output):
     if not re.fullmatch(r"[0-9a-f]{40}", manifest["source_revision"]):
         raise ValueError("evidence revision must be a full Git commit SHA")
     cache = repo/".evidence-cache"/(manifest["bundle_sha256"]+".tar.gz")
+    distributed = manifest_path.parent/"bundles"/cache.name
     if cache.exists():
         data = cache.read_bytes()
+    elif distributed.exists():
+        data = distributed.read_bytes()
     else:
         data = bundle_bytes(git_files(repo, manifest["source_revision"], manifest["roots"]))
     if digest(data) != manifest["bundle_sha256"] or len(data) != manifest["bundle_bytes"]:

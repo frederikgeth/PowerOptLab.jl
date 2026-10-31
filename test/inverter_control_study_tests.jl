@@ -117,6 +117,19 @@ end
     @test all(isnan(phase["vm"])
               for phase in values(limited.network["bus"]["poc"]))
 
+    seeded=solve_controlled_inverter_fleet(net,spec;
+        initialization=:consistent,selection_objective=:zero)
+    @test solve_status(seeded).publishable
+    attempts=seeded.network["numerical_attempts"]
+    @test length(attempts)==2
+    @test first(attempts).stage===:loss_initialization
+    @test first(attempts).raw.publishable && first(attempts).physical_accepted
+    @test last(attempts).stage===:final && last(attempts).selection_objective===:zero
+    zero_budget=solve_controlled_inverter_fleet(net,spec;initialization=:consistent,
+        selection_objective=:zero,solver_options=("max_iter"=>0,))
+    @test !solve_status(zero_budget).publishable
+    @test length(zero_budget.network["numerical_attempts"])==1
+
     # BMOPFTools resolves neutral labels when declaring native IBR variables.
     # Rename the grounded neutral to an intentionally non-conventional label:
     # BMOPFTools then declares four semantic current pairs for the selected

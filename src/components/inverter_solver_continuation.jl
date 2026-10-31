@@ -6,12 +6,39 @@ function _validate_inverter_initialization(initialization)
         throw(ArgumentError("initialization must be :automatic, :spread or :consistent"))
 end
 
-function _inverter_numerical_restart(status,options)
+function _inverter_positive_iteration_budget(options)
     for (name,value) in (options isa NamedTuple ? pairs(options) : options)
         string(name)=="max_iter" && value isa Real && value<=0 && return false
     end
+    true
+end
+
+function _inverter_numerical_restart(status,options)
+    _inverter_positive_iteration_budget(options) || return false
     status.termination_status in ("OTHER_ERROR","NUMERICAL_ERROR",
         "ALMOST_LOCALLY_SOLVED","SLOW_PROGRESS","ITERATION_LIMIT")
+end
+
+function _inverter_numerical_attempt(m,status,initialization,objective,physical;stage=:final)
+    (initialization=initialization===:consistent ? :consistent : :spread,
+        stage=stage,selection_objective=objective,raw=status,
+        raw_solver_status=JuMP.raw_status(m),physical_accepted=physical,
+        nlp_scaling_method=JuMP.solver_name(m)=="Ipopt" ? JuMP.get_attribute(m,"nlp_scaling_method") : nothing)
+end
+
+function _inverter_zero_objective_seed!(ctx,plants,loss,accepted;rail_refinement=true)
+    m=_opf_model(ctx)
+    JuMP.@objective(m,Min,loss)
+    _optimize_inverter_rails!(ctx,plants;enabled=rail_refinement)
+    status=SolveStatus(_solve_outcome(m))
+    physical=status.has_primal && accepted(status)
+    attempt=_inverter_numerical_attempt(m,status,:consistent,:loss,physical;stage=:loss_initialization)
+    # Time limits end this solve path. Other failed seeds supply no starts.
+    status.termination_status=="TIME_LIMIT" && return (attempts=(attempt,),continue_final=false)
+    start=status.publishable && physical ? _inverter_start_snapshot(m) : nothing
+    JuMP.@objective(m,Min,0.)
+    _restore_inverter_start!(m,start)
+    (attempts=(attempt,),continue_final=true)
 end
 
 function _inverter_start_snapshot(m)

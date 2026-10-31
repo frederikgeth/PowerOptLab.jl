@@ -35,9 +35,26 @@ class EvidenceTests(unittest.TestCase):
     def test_rebuild_from_pinned_git_without_cache(self):
         for file in (self.repo/".evidence-cache").iterdir():
             file.unlink()
+        for file in (self.manifest.parent/"bundles").iterdir():
+            file.unlink()
         (self.repo/"results/point.json").write_text("changed working copy")
         self.assertEqual(restore(self.repo, self.manifest, self.output), 1)
         self.assertIn('"accepted": false', (self.output/"results/point.json").read_text())
+
+    def test_distributed_bundle_without_git_history(self):
+        for file in (self.repo/".evidence-cache").iterdir():
+            file.unlink()
+        (self.repo/".git").rename(self.repo/"original-git")
+        self.assertEqual(restore(self.repo, self.manifest, self.output), 1)
+        self.assertIn('"accepted": false', (self.output/"results/point.json").read_text())
+
+    def test_distributed_bundle_corruption(self):
+        for file in (self.repo/".evidence-cache").iterdir():
+            file.unlink()
+        next((self.manifest.parent/"bundles").iterdir()).write_bytes(b"corrupt")
+        with self.assertRaisesRegex(ValueError, "bundle checksum"):
+            restore(self.repo, self.manifest, self.output)
+        self.assertFalse(self.output.exists())
 
     def test_bundle_corrupted(self):
         next((self.repo/".evidence-cache").iterdir()).write_bytes(b"corrupt")

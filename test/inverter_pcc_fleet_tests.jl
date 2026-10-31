@@ -23,11 +23,13 @@ end
                 selection_objective=objective,solver_options=options)
             @test solve_status(r).publishable
             attempts=r.network["numerical_attempts"]
-            @test 1<=length(attempts)<=2
+            @test 1<=length(attempts)<=3
             @test first(attempts).initialization===:spread
             @test length(attempts)==1 || last(attempts).initialization===:consistent
             if solve_status(r).publishable
                 @test last(attempts).raw.publishable && last(attempts).physical_accepted
+                @test last(attempts).stage===:final
+                @test last(attempts).selection_objective===objective
                 rows=controlled_inverter_rows(r)
                 @test length(rows)==12
                 @test study.accepted_control_rows(rows,study.HARDWARE)

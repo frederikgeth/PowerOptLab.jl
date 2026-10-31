@@ -82,13 +82,15 @@ def publish():
         "This is a frozen-bus/frozen-reference, inductive carrier approximation with periodic mean-subtracted charge. "
         "It does not establish coupled nonlinear transient bounds, cumulative DC-energy drift, LCL validity or closed-loop stability. "
         "The calibrated 10% capacitor thermal allowance is separate and is not validated or retuned by this carrier sweep. "
-        "Representative averaged/switched EMT is documented in the [boundary experiment](engineering_boundary.md); mixed-feeder OPF/EMT validation remains a separate deliverable.", "",
+        "Representative averaged/switched EMT is documented in the [boundary experiment](engineering_boundary.md); "
+        "the [matched mixed-feeder PF/OPF benchmark](engineering_benchmark.md) separately validates the coupled thermal allocator.", "",
         "Reproduce from the repository root:", "", "```sh",
         "julia --project=. scripts/australian_pv/prepare_engineering_domain.jl /tmp/domain_inputs.json",
         "python3 scripts/australian_pv/audit_engineering_domain.py /tmp/domain_inputs.json /tmp/domain_audit.json",
         "python3 scripts/australian_pv/test_engineering_domain.py",
         "python3 scripts/australian_pv/plot_engineering_domain.py", "```", "",
-        "The tests and plot use committed inputs; the plot reruns the complete independent audit. "
+        "Restore the full committed inputs using [the evidence index](evidence/README.md) before these saved-record commands; "
+        "the plot reruns the complete independent audit. "
         "Eight tests cover full-domain acceptance and corrupted coverage, bounds, currents, gates, sources and failure flags.", ""]
     (ROOT/"engineering_domain.md").write_text("\n".join(lines))
     print(f"Published {report['cases']} points and {report['checks']} independent checks")

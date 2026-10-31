@@ -20,7 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          fetch-depth: 0 # content-addressed evidence is rebuilt from pinned trees
+          fetch-depth: 1 # distributed evidence survives squash merges and branch deletion
       - uses: julia-actions/setup-julia@v3
         with:
           version: ${{ matrix.julia }}
@@ -44,6 +44,7 @@ jobs:
           python scripts/australian_pv/test_engineering_domain.py
           python scripts/australian_pv/test_engineering_benchmark_emt.py
           python scripts/australian_pv/test_plot_engineering_benchmark.py
+          python scripts/australian_pv/summarize_evidence.py --check
       - name: Independent EMT circuit regression
         run: julia --project=. scripts/australian_pv/test_emt_circuit.jl
   full-emt:

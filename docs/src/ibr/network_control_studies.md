@@ -11,12 +11,16 @@ network snapshots.
 For numerical reproducibility, implicit controller rows retain their physical
 coordinate scaling by default (`nlp_scaling_method="none"` for Ipopt). Explicit
 solver options take precedence. `initialization=:automatic` makes at most two
-cold solves: the existing spread starts, then consistent graph starts after a
-numerical/iteration-limit termination. Each uses the supplied iteration budget;
-zero-iteration and time-limit outcomes are not retried. `:spread` or `:consistent`
-selects one attempt. The fleet retains every raw outcome in
-`result.network["numerical_attempts"]`. A successful final raw solve and all
-physical checks are still required; failed primals/duals are never transferred.
+cold model builds: spread starts first, then consistent graph starts and an
+alternate default gradient scaling after a numerical/iteration-limit outcome.
+For a zero objective, the fallback solves a loss objective from spread starts
+and transfers only an accepted seed into the final zero objective. This gives
+at most three recorded objective stages, each with the supplied iteration
+budget; zero-iteration and time-limit outcomes are not retried. `:spread`
+disables the rebuild and `:consistent` selects the fallback directly. The fleet
+retains every raw outcome, stage, objective and actual scaling in
+`result.network["numerical_attempts"]`. Final raw success and physical checks
+are mandatory; failed primals/duals never transfer between cold models.
 
 The solver answers a deliberately narrow question: given one network state,
 one physical inverter design per selected IBR, one locally measured

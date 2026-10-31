@@ -185,7 +185,7 @@ end
         r = solve_controlled_inverter(_pcc_review_grid(250.),ControlledDevice(inv,ctrl),req;
             solver_options=_PCC_REVIEW_OPTIONS)
         @test r.solve.publishable
-        @test 1<=length(solve_diagnostics(r).numerical_attempts)<=2
+        @test 1<=length(solve_diagnostics(r).numerical_attempts)<=3
         if r.solve.publishable
             @test r.plant.q_poc ≈ -2000. atol=.1
             @test hypot(r.plant.p_poc,r.plant.q_poc) <= 6000.01
