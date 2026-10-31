@@ -75,8 +75,9 @@ def publish():
         f"the largest frozen-current DC-extremum difference is {maximum('event_dc_error_V'):.6f} V. "
         f"Across meshes, the largest RMS difference is {maximum('mesh_rms_error_A'):.6f} A and the largest coupled-charge peak difference is "
         f"{maximum('mesh_dc_error_V'):.6f} V. The independent passive R/L orbit checks also enforce periodic closure and phase/neutral RMS and peak envelopes.", "",
-        f"**{report['engineering_limit_failures']} points violate at least one physical engineering limit and are retained with their failure names.** "
-        "These include intentionally stressed power/current combinations. Carrier-domain agreement does not turn them into acceptable dispatches. "
+        f"**{report['engineering_limit_failures']} points are rejected by at least one modeled engineering constraint and retain their failure names.** "
+        "These include intentionally stressed power/current combinations and conservative sufficient bounds. "
+        "Rejection by such a bound does not prove physical hardware infeasibility. Carrier-domain agreement does not establish an acceptable dispatch. "
         "The engineering-feasibility labels are Julia SI-model diagnostics; the independent oracle validates carrier mechanisms, bounds, coverage and retention, not all those feasibility labels.", "",
         "The hardware remains 6 kVA, 10 A, 750 V, 300 µF, a 1 A capacitor budget and the same filter. "
         "This is a frozen-bus/frozen-reference, inductive carrier approximation with periodic mean-subtracted charge. "

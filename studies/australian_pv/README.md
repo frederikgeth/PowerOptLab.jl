@@ -21,6 +21,8 @@ The [declared carrier validation domain](engineering_domain.md) covers 972
 P/Q, sequence and modulation points with independent current/charge integration
 and passive R/L orbit checks. Engineering-limit failures remain in the records.
 
+## Historical extensions and fundamental comparison
+
 The [mixed-controller thermal/energy extension](thermal_energy.md) adds
 dispatch-dependent PWM capacitor limits and nonlinear DC-energy bounds with
 fixed sizing. Mean, worst-phase, sequence and four-leg controls operate together
@@ -57,7 +59,11 @@ uses the same network, loads, hardware and available solar power. The single-pha
 counterfactual keeps PV on each customer's original phase, with the same modified
 three-phase loading.
 
-## Reproduce
+## Reproduce historical experiments
+
+These commands use the checked-out implementation. For replay of an archived
+claim, use its recorded revision, environment and source hashes as described in
+the [evidence index](evidence/README.md).
 
 From the PowerOptLab repository root, with its pinned Julia environment installed:
 

@@ -1,5 +1,7 @@
 # Coordinated three-leg capability benchmark
 
+> **Historical campaign.** These results describe a pinned earlier model revision. See the [current benchmark](engineering_benchmark.md) and [evidence/replay index](evidence/README.md).
+
 This benchmark maximizes total net POC active injection using the existing
 Australian plants and DC-link availability. It releases the local VV+VW laws
 and optimizes Q jointly with P. It is a feasible local nonconvex OPF reference,

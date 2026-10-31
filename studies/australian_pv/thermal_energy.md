@@ -1,5 +1,7 @@
 # Mixed-controller PWM thermal and nonlinear DC-energy study
 
+> **Historical campaign.** These results describe a pinned earlier model revision. See the [current benchmark](engineering_benchmark.md) and [evidence/replay index](evidence/README.md).
+
 This extension keeps the phase/DC sizing fixed and adds thermal allocation and
 nonlinear capacitor-energy bounds. Every coupled feeder contains three each of
 mean, worst-phase, sequence and four-leg per-phase VV+VW controllers. Sorted

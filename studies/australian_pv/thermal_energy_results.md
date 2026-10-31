@@ -1,5 +1,7 @@
 # Mixed-controller PWM and nonlinear-energy results
 
+> **Historical campaign.** These results describe a pinned earlier model revision. See the [current benchmark](engineering_benchmark.md) and [evidence/replay index](evidence/README.md).
+
 All eight predeclared coupled cases are accepted. Each feeder contains mean, worst-phase, sequence and four-leg controllers simultaneously. Phase/DC sizing is unchanged. Each controller group receives the same 25/60/100% availability pattern; locations differ, so these mixed cases do not establish a causal ranking of controller laws.
 
 | Case | POC net P (kW) | POC Q (kvar) | Maximum PN voltage (V) | Maximum capacitor model (A RMS) |

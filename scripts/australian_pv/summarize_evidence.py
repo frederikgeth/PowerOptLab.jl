@@ -66,7 +66,7 @@ def summarize(*, check=False):
         scope="Service choices differ: free-Q OPF releases VV/VW. Periodic frozen-slow-quantity carrier bounds and fixed-POC EMT; no global optimality, regional conformity, feeder/controller dynamic or all-time transient certificate.")
     artifacts["current_summary.json"] = summary
     for name, value in artifacts.items():
-        encoded = json.dumps(value, indent=2, sort_keys=True)+"\n"
+        encoded = json.dumps(value, indent=2, sort_keys=True, allow_nan=False)+"\n"
         target = output/name
         if check:
             if not target.is_file() or target.read_text() != encoded:

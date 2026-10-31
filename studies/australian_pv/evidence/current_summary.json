@@ -1,0 +1,45 @@
+{
+  "boundary": {
+    "checks": 749,
+    "retained_lf_only_hardware_failure": true
+  },
+  "carrier_domain": {
+    "checks": 36033,
+    "points": 972,
+    "retained_engineering_failures": 855
+  },
+  "emt": {
+    "all_thermal_predictions_enclose": true,
+    "capacitor_rating_A": 1.0,
+    "circuit_checks": 7276,
+    "integrations": 192,
+    "maximum_switched_capacitor_A": 0.8802103611626132,
+    "minimum_prediction_margin_A": 0.11943679604887886,
+    "reference_checks": 391,
+    "references": 32,
+    "thermal_prediction_failures": []
+  },
+  "generation_julia": "1.12.6",
+  "generation_revision": "35d5cacf58ca377cd2c3783ab2479a6f81110877",
+  "input_sha256": {
+    "results/engineering_benchmark/audit.json": "5e88b92b4941d34f6edf95e3bc761021c2be1382fad1a25be50912bfebe52680",
+    "results/engineering_benchmark/environment.json": "700ec17df4a8334c56e4abab991e7ca0c526c64acd04d226d337e4605c066540",
+    "results/engineering_benchmark_emt/matched_audit.json": "09c32b37c98c2e3561f6dbc67e064378901b4794373f5675f2448724e9d5fa8d",
+    "results/engineering_benchmark_emt_inputs.json": "9c85659f030dc9eefb42c6b2c3c958133533efc03455bc4af59bdf8b166111a0",
+    "results/engineering_boundary_emt/audit.json": "057a55b703496e95be40e842b0d75e7f854e7cc60ea9125500eedfa2de77c3f7",
+    "results/engineering_boundary_emt_inputs.json": "1e428eed8d7f0659b2e5165300b062e2c9b31623bff468ff172de02ce625bcb9",
+    "results/engineering_domain_audit.json": "dc59170cc0124694cec2f1751a2ddc8efd23d50802bd31672b239972b8f87fc2",
+    "results/engineering_domain_inputs.json": "07fac408761a1cc13c1c98f5075adc2b66e3e011bab7fdd905eedaeb80299b31"
+  },
+  "pf_opf": {
+    "independent_network_checks": 6608,
+    "inverter_rows": 96,
+    "physical_checks": 3960,
+    "points": 8,
+    "record_checks": 375
+  },
+  "scope": "Service choices differ: free-Q OPF releases VV/VW. Periodic frozen-slow-quantity carrier bounds and fixed-POC EMT; no global optimality, regional conformity, feeder/controller dynamic or all-time transient certificate.",
+  "sizing_changed": false,
+  "status": "current",
+  "thermal_model": "coupled_inductive_all_duty_v1"
+}

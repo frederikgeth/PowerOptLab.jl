@@ -4,9 +4,9 @@
   "references": 32,
   "circuit_checks": 7276,
   "integrations": 192,
-  "input_sha256": "6aa60bf7c87497dde5e2a7012e5faf73b733525389187110e149ea102d5e63d5",
-  "parent_audit_sha256": "5e5aa32a852bf59c4d347e6681d347ca6f6c1c3f125c459220ff5660d33b8077",
-  "results_sha256": "cda9ee3fc54443f22775e350a635b10dec6879f4bc4b6c3eb07288fe4596df33",
+  "input_sha256": "9c85659f030dc9eefb42c6b2c3c958133533efc03455bc4af59bdf8b166111a0",
+  "parent_audit_sha256": "5e88b92b4941d34f6edf95e3bc761021c2be1382fad1a25be50912bfebe52680",
+  "results_sha256": "75259bd08ab7103e1fe3b470540fad50d9b2186cb322976c8630ab340de2d81b",
   "audit_code_sha256": "86d968978a762ed3d22541c82b9926e7c10279e114dfafc3c2b47c1f01630f34",
   "thermal_prediction_coverage": {
     "nominal_local_mean_vv_vw_pv_ld1970_load_c": {

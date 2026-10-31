@@ -1,5 +1,7 @@
 # Four-leg per-phase control counterfactual
 
+> **Historical campaign.** These results describe a pinned earlier model revision. See the [current benchmark](engineering_benchmark.md) and [evidence/replay index](evidence/README.md).
+
 This study changes the three-wire bridge into an explicitly connected four-wire
 bridge. It asks what independent phase reactive requests do when a physical
 neutral return is available. It is a separate research-control scenario, not a

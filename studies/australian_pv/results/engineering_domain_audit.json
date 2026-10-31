@@ -21236,7 +21236,7 @@
     }
   ],
   "engineering_limit_failures": 855,
-  "input_sha256": "288e6fdc11499826bf75d0866f2c4e33e71464cd877f06d897edbece98220c52",
+  "input_sha256": "07fac408761a1cc13c1c98f5075adc2b66e3e011bab7fdd905eedaeb80299b31",
   "audit_code_sha256": "389a9b704b07b1472a2dbbcf7b2cb23aba61f4a8b165de07e268eadd747af984",
   "numpy_version": "2.5.4",
   "scope": "frozen-bus, frozen-reference centered carrier with inductive AC ripple; periodic mean-subtracted gate-current charge; not a transient or thermal-calibration certificate; analytical carrier-domain validation is separate from engineering feasibility and coupled EMT"

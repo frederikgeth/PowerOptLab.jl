@@ -124,7 +124,7 @@ def publish(root=ROOT):
         "These are fixed-POC, feedforward L-filter circuits with a constant-power DC input and fixed mean converter loss. "
         "Finite-window DC mean drift is retained: the switched extrema include both carrier ripple and that drift. "
         "This experiment does not isolate a carrier-only error or establish periodic steady state, closed-loop regulation, "
-        "feeder dynamics, LCL validity or all-time transient bounds. Analytical carrier bounds and the calibrated 10% capacitor thermal allowance remain distinct.", "",
+        "feeder dynamics, LCL validity or all-time transient bounds. The 10% frozen-current validation allowance remains separate from the coupled thermal bound.", "",
         "Reproduce from the repository root:", "", "```sh",
         "julia --project=. scripts/australian_pv/prepare_engineering_boundary_emt.jl /tmp/boundary_inputs.json",
         "julia --project=. scripts/australian_pv/emt_circuit.jl /tmp/boundary_inputs.json /tmp/boundary_emt",

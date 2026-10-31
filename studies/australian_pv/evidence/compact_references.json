@@ -1,0 +1,172 @@
+{
+  "cases": [
+    {
+      "capacitor_current_rating_A": 1,
+      "case_id": "night_coordinated_mean_vv_vw_pv_ld1970_load_c",
+      "converter_voltage": [
+        [
+          127.69002039642194,
+          -216.8964334053977
+        ],
+        [
+          -252.25175185088077,
+          2.275787934344837
+        ],
+        [
+          124.30467643997362,
+          215.29446756409956
+        ]
+      ],
+      "current": [
+        [
+          -0.010045135318781416,
+          0.017401971197121755
+        ],
+        [
+          0.020093116792023247,
+          -1.6432280438760633e-06
+        ],
+        [
+          -0.010047981473241832,
+          -0.01740032796907788
+        ]
+      ],
+      "dc_2omega_peak_rating_V": 7.5,
+      "dc_capacitance_F": 0.0003,
+      "dc_energy_model": "nonlinear",
+      "dc_switching_voltage_bound_V": 1.5179303060733245,
+      "dc_voltage_V": 750,
+      "dc_voltage_max_rating_V": 765,
+      "dc_voltage_min_rating_V": 735,
+      "device_id": "pv_ld1970_load_c",
+      "expect_averaged_hardware_accepted": true,
+      "expect_switched_hardware_accepted": true,
+      "frequency_Hz": 50,
+      "fundamental_reference_accepted": true,
+      "grid_current_rating_A": null,
+      "grid_peak_rating_A": 14,
+      "grid_voltage": [
+        [
+          127.71436297247605,
+          -216.88545012462944
+        ],
+        [
+          -252.2544113387456,
+          2.249215004704295
+        ],
+        [
+          124.28299335178434,
+          215.31005721297186
+        ]
+      ],
+      "local_controller": "mean_vv_vw",
+      "mean_converter_loss_W": 15.1209220611659,
+      "modulation_utilization": 0.96,
+      "neutral_L_H": 0,
+      "neutral_R_ohm": 0,
+      "neutral_current_rating_A": null,
+      "neutral_peak_rating_A": null,
+      "p_available_W": 0,
+      "p_dc_W": 9.995852643918113e-05,
+      "parent_capacitor_model_A": 0.39513920392661356,
+      "parent_case_id": "night",
+      "parent_mode": "coordinated",
+      "parent_point_sha256": "1a44bd9d8c1f81e7b196513f504c1637aad08e9ea5f67b310319ddaebf17f6a4",
+      "phase_L_H": 0.004209648244780632,
+      "phase_R_ohm": 0.13225000000000003,
+      "phase_current_rating_A": 10,
+      "phase_peak_rating_A": 14,
+      "pwm_current_envelope": true,
+      "pwm_dc_voltage_envelope": true,
+      "reference_physical_check_count": 41,
+      "reference_pwm_strategy": "CENTERED",
+      "scope": "matched Australian fixed-POC snapshot; highest capacitor model stress in this controller group; released VV/VW commands in coordinated mode",
+      "topology": "THREE_LEG"
+    },
+    {
+      "capacitor_current_rating_A": 1,
+      "case_id": "night_coordinated_phase_vv_vw_pv_ld1895_load_b",
+      "converter_voltage": [
+        [
+          127.60258165094939,
+          -216.67754504620967
+        ],
+        [
+          -252.36988509338192,
+          2.5416722456327085
+        ],
+        [
+          124.21172504563138,
+          215.56397496481028
+        ]
+      ],
+      "current": [
+        [
+          -0.009878955412151877,
+          0.01744390541498975
+        ],
+        [
+          0.01997303057117704,
+          0.00012127268341137663
+        ],
+        [
+          -0.010094206212392603,
+          -0.01756537896471552
+        ]
+      ],
+      "dc_2omega_peak_rating_V": 7.5,
+      "dc_capacitance_F": 0.0003,
+      "dc_energy_model": "nonlinear",
+      "dc_switching_voltage_bound_V": 2.275119493018905,
+      "dc_voltage_V": 750,
+      "dc_voltage_max_rating_V": 765,
+      "dc_voltage_min_rating_V": 735,
+      "device_id": "pv_ld1895_load_b",
+      "expect_averaged_hardware_accepted": true,
+      "expect_switched_hardware_accepted": true,
+      "frequency_Hz": 50,
+      "fundamental_reference_accepted": true,
+      "grid_current_rating_A": null,
+      "grid_peak_rating_A": 14,
+      "grid_voltage": [
+        [
+          127.62695745940006,
+          -216.66678688428559
+        ],
+        [
+          -252.37236639186506,
+          2.515242074272595
+        ],
+        [
+          124.18982954240823,
+          215.57964777377688
+        ]
+      ],
+      "local_controller": "phase_vv_vw",
+      "mean_converter_loss_W": 15.1209231404944,
+      "modulation_utilization": 0.96,
+      "neutral_L_H": 0.004209648244780632,
+      "neutral_R_ohm": 0.13225000000000003,
+      "neutral_current_rating_A": 10,
+      "neutral_peak_rating_A": 14,
+      "p_available_W": 0,
+      "p_dc_W": 7.545174501011331e-05,
+      "parent_capacitor_model_A": 0.6029973671383387,
+      "parent_case_id": "night",
+      "parent_mode": "coordinated",
+      "parent_point_sha256": "1a44bd9d8c1f81e7b196513f504c1637aad08e9ea5f67b310319ddaebf17f6a4",
+      "phase_L_H": 0.004209648244780632,
+      "phase_R_ohm": 0.13225000000000003,
+      "phase_current_rating_A": 10,
+      "phase_peak_rating_A": 14,
+      "pwm_current_envelope": true,
+      "pwm_dc_voltage_envelope": true,
+      "reference_physical_check_count": 42,
+      "reference_pwm_strategy": "CENTERED",
+      "scope": "matched Australian fixed-POC snapshot; highest capacitor model stress in this controller group; released VV/VW commands in coordinated mode",
+      "topology": "FOUR_LEG"
+    }
+  ],
+  "description": "Fixed-size three/four-leg night references; full records restored from current.json",
+  "inputs_sha256": "9c85659f030dc9eefb42c6b2c3c958133533efc03455bc4af59bdf8b166111a0"
+}

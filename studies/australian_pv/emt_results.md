@@ -1,5 +1,7 @@
 # Representative switched-circuit validation
 
+> **Historical campaign.** These results describe a pinned earlier model revision. See the [current benchmark](engineering_benchmark.md) and [evidence/replay index](evidence/README.md).
+
 All three representative cases pass the predeclared mechanism and time-step convergence bands. All three switched cases fail the unchanged 1 A capacitor RMS budget. Agreement with a fundamental-frequency model therefore does not certify switching thermal feasibility.
 
 | Case | Maximum fundamental-current error (A RMS) | 2ω voltage phasor error (V peak) | Averaged capacitor (A RMS) | Switched capacitor (A RMS) |

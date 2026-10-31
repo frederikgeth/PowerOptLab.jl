@@ -1,5 +1,7 @@
 # Generated coordinated OPF comparison
 
+> **Historical campaign.** These results describe a pinned earlier model revision. See the [current benchmark](engineering_benchmark.md) and [evidence/replay index](evidence/README.md).
+
 Executed benchmark source revision: `ffbec9999270ea082a418bec265bb62acf4b9a97`.
 
 All 24 predeclared cases pass the independent physical/policy, native SI equation, additional customer-voltage and fixed-PQ replay gates. Saved phasors are independently re-audited. These are feasible local nonconvex results, not global upper bounds.

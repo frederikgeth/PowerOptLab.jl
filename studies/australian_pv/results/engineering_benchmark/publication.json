@@ -7,6 +7,6 @@
     "figures/engineering_coordination_emt.svg": "b25dccaf3fe2d6e828209ba89bbdf1dccc296130f9d2e6454e6b04e8ed669c3c"
   },
   "plot_code_sha256": "08484f4e1cdd173073cff76198474345f6adecf2cccefbf562487081bb081e8f",
-  "audit_sha256": "5e5aa32a852bf59c4d347e6681d347ca6f6c1c3f125c459220ff5660d33b8077",
-  "matched_emt_audit_sha256": "d179ee835b1f24bbaf97aaa91289ae56fcd2b2600788f1884dbfca8d643c0738"
+  "audit_sha256": "5e88b92b4941d34f6edf95e3bc761021c2be1382fad1a25be50912bfebe52680",
+  "matched_emt_audit_sha256": "09c32b37c98c2e3561f6dbc67e064378901b4794373f5675f2448724e9d5fa8d"
 }

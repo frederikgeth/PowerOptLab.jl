@@ -1,5 +1,7 @@
 # Australian four-leg research-control results
 
+> **Historical campaign.** These results describe a pinned earlier model revision. See the [current benchmark](engineering_benchmark.md) and [evidence/replay index](evidence/README.md).
+
 Generated from eleven accepted saved-point audits. This is an explicit four-wire topology and policy counterfactual; phase and DC sizing are unchanged. Neutral rating is 10 A RMS and neutral filter R/X equals the phase arm. These assumptions do not establish Australian connection conformity or dynamic stability.
 
 | Case | POC P (kW) | POC Q (kvar) | Maximum PN voltage (V) | Maximum neutral (A RMS) |

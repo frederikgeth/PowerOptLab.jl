@@ -1,5 +1,7 @@
 # Representative time-domain circuit validation
 
+> **Historical campaign.** These results describe a pinned earlier model revision. See the [current benchmark](engineering_benchmark.md) and [evidence/replay index](evidence/README.md).
+
 This extension integrates a physical bridge, L-filter currents and DC-capacitor
 voltage. It complements the frozen-phasor carrier audits in the package. Three
 fixed-boundary cases use the unchanged Australian phase/DC sizing:

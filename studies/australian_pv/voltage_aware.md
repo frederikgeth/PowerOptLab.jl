@@ -1,5 +1,7 @@
 # Voltage-aware allocation experiments
 
+> **Historical campaign.** These results describe a pinned earlier model revision. See the [current benchmark](engineering_benchmark.md) and [evidence/replay index](evidence/README.md).
+
 These experiments couple the local Q→P→I₂ physical allocator to the Australian
 LV3 feeder. They use the existing 6 kVA / 10 A / 750 V / 300 µF plant unchanged,
 the sourced Australia A VV/VW knots, converter-arm current limiting, POC apparent
