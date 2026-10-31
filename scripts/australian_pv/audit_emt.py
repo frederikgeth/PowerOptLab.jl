@@ -73,6 +73,20 @@ def audit(input_path, folder):
                     close(r["capacitor_2omega_error_A"], abs(ic2-1j*omega2*c["dc_capacitance_F"]*expected_d))
                     window = (timing["cycles"]-timing["discard_cycles"])/c["frequency_Hz"]
                     close(r["window_s"], window)
+                    extrema = r["extrema_witnesses"]
+                    for witness in [*extrema["phase_current"], extrema["neutral_current"], extrema["dc_min"], extrema["dc_max"]]:
+                        require(timing["discard_cycles"]/c["frequency_Hz"]-1e-12 <= witness["time_s"] <= timing["cycles"]/c["frequency_Hz"]+1e-12,
+                                "extremum witness lies outside the measurement window")
+                        require(len(witness["state"]) == 4 and all(math.isfinite(x) for x in witness["state"]) and witness["state"][3] > 0,
+                                "invalid extremum witness state")
+                    for phase, witness in enumerate(extrema["phase_current"]):
+                        close(abs(witness["state"][phase]), r["current_peak_A"][phase])
+                        require(r["current_peak_A"][phase]+1e-8 >= r["current_total_rms_A"][phase], "peak smaller than RMS")
+                    close(abs(sum(extrema["neutral_current"]["state"][:3])), r["neutral_peak_A"])
+                    close(extrema["dc_min"]["state"][3], r["v_dc_min_V"])
+                    close(extrema["dc_max"]["state"][3], r["v_dc_max_V"])
+                    require(r["v_dc_min_V"] <= r["v_dc_mean_V"] <= r["v_dc_max_V"], "inconsistent voltage extrema")
+                    require(r["neutral_peak_A"]+1e-8 >= r["neutral_total_rms_A"], "neutral peak smaller than RMS")
                     def energy(state):
                         magnetic = c["phase_L_H"]*sum(i*i for i in state[:3])/2
                         if c["topology"] == "FOUR_LEG":
@@ -93,6 +107,15 @@ def audit(input_path, folder):
                                 "dc_2omega_peak": abs(d) <= c["dc_2omega_peak_rating_V"]+1e-5,
                                 "mean_dc_source": c["p_dc_W"] <= c["p_available_W"]+.01,
                                 "modulation": r["minimum_modulation_margin"] >= -1e-8}
+                    for name, key, value in (("phase_peak", "phase_peak_rating_A", max(r["current_peak_A"])),
+                                             ("grid_peak", "grid_peak_rating_A", max(r["current_peak_A"])),
+                                             ("grid_rms", "grid_current_rating_A", max(r["current_total_rms_A"])),
+                                             ("neutral_peak", "neutral_peak_rating_A", r["neutral_peak_A"]),
+                                             ("dc_voltage_max", "dc_voltage_max_rating_V", r["v_dc_max_V"])):
+                        if c.get(key) is not None:
+                            hardware[name] = value <= c[key]+1e-5
+                    if c.get("dc_voltage_min_rating_V") is not None:
+                        hardware["dc_voltage_min"] = r["v_dc_min_V"] >= c["dc_voltage_min_rating_V"]-1e-5
                     require(hardware == r["engineering_checks"], "engineering flags mismatch")
                     require(all(hardware.values()) == r["all_engineering_checks_passed"], "hardware acceptance mismatch")
                     require(r["capacitor_total_rms_A"] >= abs(ic2)/math.sqrt(2)-1e-4, "RMS spectrum inconsistency")
@@ -101,16 +124,22 @@ def audit(input_path, folder):
                 mesh_i = max(abs(complex(*a)-complex(*b)) for a, b in zip(fine["current_fundamental"], coarse["current_fundamental"]))
                 mesh_d = abs(complex(*fine["dc_2omega_peak"])-complex(*coarse["dc_2omega_peak"]))
                 mesh_cap = abs(fine["capacitor_total_rms_A"]-coarse["capacitor_total_rms_A"])
+                mesh_peak = max(max(abs(a-b) for a, b in zip(fine["current_peak_A"], coarse["current_peak_A"])),
+                                abs(fine["neutral_peak_A"]-coarse["neutral_peak_A"]))
+                mesh_extrema = max(abs(fine["v_dc_min_V"]-coarse["v_dc_min_V"]), abs(fine["v_dc_max_V"]-coarse["v_dc_max_V"]))
                 saved = result["cases"][ident]["modes"][mode]
                 require(saved["finest"] == fine, "finest result mismatch")
-                for key, value in (("mesh_current_difference_A", mesh_i), ("mesh_dc_difference_V", mesh_d), ("mesh_capacitor_rms_difference_A", mesh_cap)):
+                for key, value in (("mesh_current_difference_A", mesh_i), ("mesh_dc_difference_V", mesh_d), ("mesh_capacitor_rms_difference_A", mesh_cap),
+                                   ("mesh_peak_current_difference_A", mesh_peak), ("mesh_dc_extrema_difference_V", mesh_extrema)):
                     close(value, saved[key])
                 dband = bands["dc_2omega_absolute_V"]+bands["dc_2omega_relative"]*abs(expected_d)
                 accepted = (fine["fundamental_current_max_error_A"] <= bands["fundamental_absolute_A"]+bands["fundamental_relative"]*max(abs(i) for i in ir)
                             and fine["dc_2omega_error_V"] <= dband
                             and fine["capacitor_2omega_error_A"] <= omega2*c["dc_capacitance_F"]*dband
                             and fine["energy_relative_residual"] <= bands["energy_relative"]
-                            and mesh_i <= bands["mesh_current_A"] and mesh_d <= bands["mesh_dc_2omega_V"] and mesh_cap <= bands["mesh_current_A"])
+                            and mesh_i <= bands["mesh_current_A"] and mesh_d <= bands["mesh_dc_2omega_V"] and mesh_cap <= bands["mesh_current_A"]
+                            and mesh_peak <= bands.get("mesh_peak_current_A", bands["mesh_current_A"])
+                            and mesh_extrema <= bands.get("mesh_dc_extrema_V", bands["mesh_dc_2omega_V"]))
                 require(accepted == saved["mechanisms_accepted"], "mechanism acceptance mismatch")
                 all_mechanisms.append(accepted)
                 if mode == "switched":

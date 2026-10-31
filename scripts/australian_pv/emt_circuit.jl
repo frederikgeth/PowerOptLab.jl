@@ -106,8 +106,10 @@ function simulate(c;switching_Hz=10000.,cycles=10,discard_cycles=6,steps_per_car
     end
     x=(ntuple(k->SQRT2*real(p.iref[k]),3)...,initial_v)
     initial=NaN;initial_state=x;energy_input=0.;fund=zeros(ComplexF64,3);isq=zeros(3);ipeak=zeros(3)
-    vmean=0.;v2=0im;icmean=0.;ic2=0im;icsq=0.;icpeak=0.;nsq=0.;pgrid=0.;minmargin=Inf
+    vmean=0.;v2=0im;icmean=0.;ic2=0im;icsq=0.;icpeak=0.;nsq=0.;npeak=0.;pgrid=0.;minmargin=Inf
     trace=NamedTuple[];carrier=NamedTuple[];voltage_min=Inf;voltage_max=-Inf
+    peak_witness=[Dict{String,Any}() for _ in 1:3]
+    neutral_witness=Dict{String,Any}();minimum_witness=Dict{String,Any}();maximum_witness=Dict{String,Any}()
     for index in 0:n-1
         start=index*period;active=index>=discard
         index==discard && (initial=energy(p,x);initial_state=x)
@@ -134,13 +136,24 @@ function simulate(c;switching_Hz=10000.,cycles=10,discard_cycles=6,steps_per_car
                     ic=(p.psource-p.loss-sum(bridge[k]*ii[k] for k in 1:3))/mid[4]
                     for k in 1:3
                         fund[k]+=weight*SQRT2*ii[k]*cis(-p.w*tm)
-                        isq[k]+=weight*ii[k]^2;ipeak[k]=max(ipeak[k],abs(ii[k]))
+                        isq[k]+=weight*ii[k]^2
+                        if abs(ii[k])>ipeak[k] || isempty(peak_witness[k])
+                            ipeak[k]=abs(ii[k]);peak_witness[k]=Dict("time_s"=>tm,"state"=>collect(mid))
+                        end
                     end
                     vmean+=weight*mid[4];v2+=2weight*mid[4]*cis(-2p.w*tm)
                     icmean+=weight*ic;ic2+=2weight*ic*cis(-2p.w*tm);icsq+=weight*ic^2
                     icpeak=max(icpeak,abs(ic))
                     nsq+=weight*sum(ii)^2;pgrid+=weight*sum(vg[k]*ii[k] for k in 1:3)
-                    voltage_min=min(voltage_min,mid[4]);voltage_max=max(voltage_max,mid[4])
+                    if abs(sum(ii))>npeak || isempty(neutral_witness)
+                        npeak=abs(sum(ii));neutral_witness=Dict("time_s"=>tm,"state"=>collect(mid))
+                    end
+                    if mid[4]<voltage_min
+                        voltage_min=mid[4];minimum_witness=Dict("time_s"=>tm,"state"=>collect(mid))
+                    end
+                    if mid[4]>voltage_max
+                        voltage_max=mid[4];maximum_witness=Dict("time_s"=>tm,"state"=>collect(mid))
+                    end
                     index>=n-2 && push!(trace,(time_s=tm,v_dc_V=mid[4],capacitor_current_A=ic,
                         i_a_A=ii[1],i_b_A=ii[2],i_c_A=ii[3],neutral_return_A=-sum(ii)))
                   end
@@ -160,9 +173,20 @@ function simulate(c;switching_Hz=10000.,cycles=10,discard_cycles=6,steps_per_car
         "capacitor_total_rms"=>sqrt(icsq/window)<=c["capacitor_current_rating_A"]+1e-5,
         "dc_2omega_peak"=>abs(actual_d)<=c["dc_2omega_peak_rating_V"]+1e-5,
         "mean_dc_source"=>p.psource<=c["p_available_W"]+.01,"modulation"=>minmargin>=-1e-8)
+    for (name,key,value) in (("phase_peak","phase_peak_rating_A",maximum(ipeak)),
+            ("grid_peak","grid_peak_rating_A",maximum(ipeak)),
+            ("grid_rms","grid_current_rating_A",maximum(sqrt.(isq./window))),
+            ("neutral_peak","neutral_peak_rating_A",npeak),
+            ("dc_voltage_max","dc_voltage_max_rating_V",voltage_max))
+        get(c,key,nothing)===nothing || (engineering[name]=value<=c[key]+1e-5)
+    end
+    get(c,"dc_voltage_min_rating_V",nothing)===nothing ||
+        (engineering["dc_voltage_min"]=voltage_min>=c["dc_voltage_min_rating_V"]-1e-5)
     metric=Dict("case_id"=>c["case_id"],"mode"=>String(mode),"steps_per_carrier"=>steps_per_carrier,
         "current_fundamental"=>[[real(i),imag(i)] for i in fund],"current_total_rms_A"=>sqrt.(isq./window),
-        "current_peak_A"=>ipeak,"neutral_total_rms_A"=>sqrt(nsq/window),
+        "current_peak_A"=>ipeak,"neutral_total_rms_A"=>sqrt(nsq/window),"neutral_peak_A"=>npeak,
+        "extrema_witnesses"=>Dict("phase_current"=>peak_witness,"neutral_current"=>neutral_witness,
+            "dc_min"=>minimum_witness,"dc_max"=>maximum_witness),
         "capacitor_total_rms_A"=>sqrt(icsq/window),"capacitor_peak_A"=>icpeak,"capacitor_mean_A"=>icmean/window,
         "capacitor_2omega_peak"=>[real(actual_ic2),imag(actual_ic2)],
         "capacitor_2omega_error_A"=>abs(actual_ic2-expected_ic2),
@@ -220,9 +244,15 @@ function run(input,output)
             mesh_i=maximum(abs.(collect(phasors(fine["current_fundamental"])).-collect(phasors(coarse["current_fundamental"]))))
             mesh_d=abs(complex(fine["dc_2omega_peak"]...)-complex(coarse["dc_2omega_peak"]...))
             mesh_cap=abs(fine["capacitor_total_rms_A"]-coarse["capacitor_total_rms_A"])
-            converged=mesh_i<=bands["mesh_current_A"] && mesh_d<=bands["mesh_dc_2omega_V"] && mesh_cap<=bands["mesh_current_A"]
+            mesh_peak=max(maximum(abs.(fine["current_peak_A"].-coarse["current_peak_A"])),
+                abs(fine["neutral_peak_A"]-coarse["neutral_peak_A"]))
+            mesh_extrema=max(abs(fine["v_dc_min_V"]-coarse["v_dc_min_V"]),abs(fine["v_dc_max_V"]-coarse["v_dc_max_V"]))
+            converged=mesh_i<=bands["mesh_current_A"] && mesh_d<=bands["mesh_dc_2omega_V"] && mesh_cap<=bands["mesh_current_A"] &&
+                mesh_peak<=get(bands,"mesh_peak_current_A",bands["mesh_current_A"]) &&
+                mesh_extrema<=get(bands,"mesh_dc_extrema_V",bands["mesh_dc_2omega_V"])
             details[mode]=Dict("mechanisms_accepted"=>physical && converged,"mesh_current_difference_A"=>mesh_i,
-                "mesh_dc_difference_V"=>mesh_d,"mesh_capacitor_rms_difference_A"=>mesh_cap,"finest"=>fine)
+                "mesh_dc_difference_V"=>mesh_d,"mesh_capacitor_rms_difference_A"=>mesh_cap,
+                "mesh_peak_current_difference_A"=>mesh_peak,"mesh_dc_extrema_difference_V"=>mesh_extrema,"finest"=>fine)
             push!(accepted,physical && converged)
         end
         results[c["case_id"]]=Dict("mechanisms_accepted"=>all(accepted),"modes"=>details)

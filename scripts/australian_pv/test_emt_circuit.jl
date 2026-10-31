@@ -80,3 +80,32 @@ end
     @test r.metrics["energy_relative_residual"]<1e-9
     @test r.metrics["engineering_checks"]["three_wire_kcl"]
 end
+
+@testset "Independent EMT circuit: declared peaks, voltage extrema and witnesses" begin
+    c=emt_fixture()
+    merge!(c,Dict("phase_peak_rating_A"=>6.,"grid_peak_rating_A"=>6.,
+        "neutral_peak_rating_A"=>.1,"dc_voltage_min_rating_V"=>749.,"dc_voltage_max_rating_V"=>751.))
+    r=IBREMT.simulate(c;cycles=2,discard_cycles=1,steps_per_carrier=64,mode=:averaged).metrics
+    for name in ("phase_peak","grid_peak","neutral_peak","dc_voltage_min","dc_voltage_max")
+        @test r["engineering_checks"][name]
+    end
+    for k in 1:3
+        w=r["extrema_witnesses"]["phase_current"][k]
+        @test abs(w["state"][k])==r["current_peak_A"][k]
+        @test r["current_peak_A"][k] ≈ sqrt(2)*4 atol=1e-5
+        @test .02<=w["time_s"]<=.04+1e-12
+    end
+    @test r["extrema_witnesses"]["dc_min"]["state"][4]==r["v_dc_min_V"]
+    @test r["extrema_witnesses"]["dc_max"]["state"][4]==r["v_dc_max_V"]
+    a=cis(2pi/3);i=4 .* ComplexF64[1,a^2,a].+1.5.*[1,a,a^2]
+    u=230 .* ComplexF64[1,a^2,a].+(.2+im*2pi*50*.004).*i
+    c["current"]=[[real(z),imag(z)] for z in i]
+    c["converter_voltage"]=[[real(z),imag(z)] for z in u]
+    c["p_dc_W"]=real(sum(u.*conj.(i)));c["dc_energy_model"]="nonlinear"
+    r=IBREMT.simulate(c;cycles=2,discard_cycles=1,steps_per_carrier=64,mode=:averaged).metrics
+    @test r["engineering_checks"]["phase_rms"]
+    @test !r["engineering_checks"]["phase_peak"]
+    @test !r["engineering_checks"]["grid_peak"]
+    @test !r["engineering_checks"]["dc_voltage_min"]
+    @test !r["engineering_checks"]["dc_voltage_max"]
+end

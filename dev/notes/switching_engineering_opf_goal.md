@@ -79,3 +79,52 @@ Benchmark audit finding: `_voltage_aware_network_checks` reconstructs native
 zero-equality rows; it is not a network-inequality certificate. The matched OPF
 work must explicitly reconstruct the same voltage/conductor inequalities in
 SI for local and coordinated records, in addition to network balance and replay.
+
+## Combined DC guard checkpoint
+
+`pwm_dc_voltage_envelope=true` adds the carrier charge reserve to nonlinear
+voltage extrema, full-cycle modulation and the capacitor thermal denominators.
+It rejects finite carrier-source sharing and unresolved RMS-only allowances.
+The reserve separates frozen fundamental leg current from the variation of
+gate/AC-ripple-current products. Its inequalities are conditional on the
+periodic carrier approximation; no transient or cumulative-drift claim is made.
+
+The first 243 DC-guard assertions pass, with 2,055 affected assertions passing
+in a fresh Julia process. Tight four-leg per-phase service exposed an adaptive
+barrier cycle at the 100 kVA coordinate base. Positive voltage lifts replace
+nearly dependent squared energy gaps. Combined-voltage service defaults use
+monotone continuation; caller overrides remain effective. One-sided voltage and
+current-norm padding and the existing 100 µW fitted-loss error budget remain
+explicit. Engineering limits, source acceptance and raw solver gates are not
+relaxed. Tests cover 10/100/1000 kVA coordinates.
+
+Three development references complete 18 averaged/switched integrations and
+742 independent record conditions. The LF-only 747–753 V boundary reaches
+753.170120 V in the switched circuit and fails its upper limit. The combined
+three-leg point stays between 748.697633 and 751.504819 V; the combined four-leg
+point between 749.354610 and 750.869469 V. Their capacitor RMS currents stay
+below the unchanged 1 A rating. These are development probes in `/tmp`, not the
+final committed campaign or the full goal's acceptance evidence.
+
+The circuit now retains current/neutral peaks, DC extrema and their sampled
+state/time witnesses. Its record audit reconstructs optional peak/absolute-
+voltage flags and checks mesh convergence of extrema as well as RMS/Fourier
+quantities. The original 32 circuit assertions pass. Formal reproduction,
+expanded EMT/domain sweeps and the matched OPF benchmark still remain.
+
+The integrated package suite passes **22,100/22,100** assertions (8m14.5s) and
+the documentation build passes. The independent circuit now passes 53 analytic,
+engineering-flag and extremum-witness assertions. The new SI network oracle
+passes eight corruption/coverage tests and reconstructs all seven fully
+energized historical mixed points (826 conditions each), including line and
+switch limits, ground-shunt losses, delta-wye KVL, source voltage and total
+active-power balance. These archived phasors are input fixtures, not relabeled
+new-model studies. Maximum active-power mismatch is below 0.7 mW.
+
+`switching_engineering.jl` centralizes fixed-hardware templates. New declared
+operating ceilings are common 735–765 V DC and 14 A phase/neutral peak limits,
+with a narrower 747–753 V band for boundary validation. These are explicit
+study operating assumptions, not manufacturer ratings or sizing choices. Its
+constructor checks every other physical field remains unchanged. The boundary
+preparation driver records all stages, requests, source hashes and runtime
+fingerprints. The full-domain and coordinated campaigns remain outstanding.
