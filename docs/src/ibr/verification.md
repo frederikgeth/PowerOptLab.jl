@@ -49,6 +49,24 @@ string alone is insufficient to select study results. Candidate reports can
 also diagnose unsuccessful solves without promoting them to accepted results.
 No-primal outcomes have an unchecked, non-passing report.
 
+The fixed-current single-device/fleet replays used by network sensitivities and
+fixed-point comparisons use the same publication gate, full-cycle rail refinement
+and independently checked command residuals. A coarse six-angle zero-current
+replay once returned publishable `LOCALLY_SOLVED` with roughly -35 V rail
+headroom; that candidate now fails physical acceptance even when refinement is
+explicitly disabled for diagnosis. One rejected device rejects the fleet.
+
+Sensitivity perturbations and intermediate fixed-point iterates are virtual
+imposed-current capability probes. They enforce the declared plant limits but
+do not assert a PV availability bound. The returned fixed-point plant additionally
+audits request availability using an upper enclosure of independently recomputed
+DC power. An overdrawn final point cannot publish or report convergence. This
+distinction permits perturbed-voltage numerical starts without calling their
+virtual injections transient PV dispatch. Explicit source bounds can also be
+applied to an individual current replay. `physical_feasibility` exposes the final
+single-device or per-device reports; equilibrium use requires both `converged`
+and a publishable final solve.
+
 The report checks the declared inverter fundamental model and calibrated RMS
 reserves. Standalone PWM-enabled solves additionally require finite carrier
 predictions, converged reserves and actual predicted capacitor-thermal and

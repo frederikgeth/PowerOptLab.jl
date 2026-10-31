@@ -1,5 +1,32 @@
 # Advanced IBR review: resolution plan
 
+## Fixed-current replay acceptance
+
+The replay helpers underpinning the fixed-point and network-sensitivity oracles
+still used raw solver acceptance. A direct reproduction returned publishable
+`LOCALLY_SOLVED` at zero current with a full-cycle rail margin near -35.38 V.
+Both single and fleet paths now refine rails, normalize command equalities,
+use a base-invariant watt objective/default zero Ipopt bound relaxation, and gate
+publication on each independent physical/current report. Raw MOI fields and solver
+messages remain visible, and unused selected native IBR outputs are removed.
+
+Fixed-point iterations use virtual imposed-current capability probes. Applying
+PV availability to a deliberately perturbed starting voltage prematurely prevents
+evaluation of otherwise convergent maps, so the returned point independently
+audits request availability instead. Its Pdc upper enclosure uses the reported
+value plus the independent auditor's absolute reported-Pdc residual. An overdrawn
+returned point cannot publish or report convergence. Individual internal replays
+also accept explicit signed DC source bounds. Sensitivity probes remain capability
+experiments and do not imply available PV generation. These are quasi-static
+calculations, not transient response simulations.
+
+Validation: all 115 existing closed-loop assertions and 56 new acceptance/source/
+cross-base assertions pass. The new cases cover single/fleet false rail successes,
+one rejected device in a mixed fleet, source-limited and non-charging replays,
+rejected sensitivity bases, and overdrawn returned points after a virtual iterate.
+The full goal remains active; the priority-aware allocation layer and the
+Australian scenario/OPF/four-leg/EMT work remain pending.
+
 ## Australian source freshness check, 31 October 2026
 
 The [Energex installer standards index](https://www.energex.com.au/our-services/connections/residential-and-commercial-connections/solar-connections-and-other-technologies/connection-information-for-installers)
