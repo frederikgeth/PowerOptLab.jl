@@ -8,7 +8,8 @@ from pathlib import Path
 from audit_emt import audit as audit_circuit
 
 CONTROLLERS = {"mean_vv_vw", "worst_vv_vw", "sequence_vv_vw", "phase_vv_vw"}
-CONDITIONS = {"nominal", "high_source", "rotated_unbalance", "night"}
+CONDITIONS = {"nominal", "high_source", "rotated_unbalance", "night", "oversized_dc"}
+MODES = ("local", "opf_equal_service", "opf_vv_released")
 
 
 def validate_references(inputs, benchmark):
@@ -23,15 +24,16 @@ def validate_references(inputs, benchmark):
         if not test:
             raise ValueError(message)
     digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
-    require(truth["all_planned_accepted"] and truth["accepted"] == 8, "incomplete parent benchmark")
+    require(truth["all_planned_accepted"] and truth["accepted"] == len(CONDITIONS)*len(MODES), "incomplete parent benchmark")
     require(env["benchmark_environment_sha256"] == digest(parent_env) == truth["environment_sha256"], "parent environment changed")
     require(env["benchmark_audit_sha256"] == digest(parent_audit), "parent audit changed")
     require(env["benchmark_record_sha256"] == truth["record_sha256"], "parent point plan changed")
-    plan = set(itertools.product(CONDITIONS, ("local", "coordinated"), CONTROLLERS))
+    plan = set(itertools.product(CONDITIONS, MODES, CONTROLLERS))
     seen = {(c["parent_case_id"], c["parent_mode"], c["local_controller"]) for c in env["cases"]}
     require(seen == plan and len(env["cases"]) == len(plan), "missing or duplicated EMT selection")
-    require(len({c["case_id"] for c in env["cases"]}) == 32, "duplicate EMT IDs")
-    require(not env["sizing_changed"], "EMT sizing changed")
+    require(len({c["case_id"] for c in env["cases"]}) == len(plan), "duplicate EMT IDs")
+    limits = env["operating_limits"]
+    require(env["fixture_limits"] == "declared", "EMT campaign must use the declared fixture")
     for c in env["cases"]:
         key = c["parent_case_id"]+"_"+c["parent_mode"]
         parent_path = "points/"+key+".json"
@@ -48,7 +50,8 @@ def validate_references(inputs, benchmark):
         require(c["pwm_current_envelope"] and c["pwm_dc_voltage_envelope"], "engineering guard disabled")
         require((c["dc_voltage_V"], c["dc_capacitance_F"], c["phase_current_rating_A"], c["capacitor_current_rating_A"],
                  c["phase_peak_rating_A"], c["dc_voltage_min_rating_V"], c["dc_voltage_max_rating_V"]) ==
-                (750., .0003, 10., 1., 14., 735., 765.), "EMT hardware or operating ceiling changed")
+                (750., .0003, 10., limits["capacitor_rms_A"], limits["phase_peak_A"], limits["dc_min_V"], limits["dc_max_V"]),
+                "EMT hardware or operating ceiling changed")
         saved = point["devices"][c["device_id"]]
         require(c["current"] == saved["grid_current"] and c["converter_voltage"] == saved["converter_voltage"], "reference current/voltage changed")
         bus = point["bus"][row["bus"]]

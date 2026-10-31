@@ -1,5 +1,5 @@
 using Test
-include("coordinated_engineering.jl")
+include("rated_capability.jl")
 
 function engineering_solver_fixture(available)
     fixture=Dict{String,Any}("ibr"=>Dict{String,Any}("pv"=>Dict{String,Any}("bus"=>"poc")))
@@ -34,7 +34,7 @@ end
             @test r.devices["pv"].plant.physical_feasibility.passed
             @test r.devices["pv"].plant.p_dc<=available+1e-4
             @test r.devices["pv"].plant.p_poc>500.
-            @test r.devices["pv"].plant.i_cap_thermal<=1.00001
+            @test r.devices["pv"].plant.i_cap_thermal<=mixed.spec.devices["pv"].device.i_cap_max+1e-5
             @test JuMP.objective_sense(PowerOptLab._opf_model(r.model_context))===JuMP.MOI.MAX_SENSE
             reference===nothing || @test r.devices["pv"].plant.p_poc≈reference atol=.005
             reference=r.devices["pv"].plant.p_poc
@@ -66,4 +66,42 @@ end
     power=voltage.*conj.(current)
     @test maximum(abs.(real.(power).+inv.p_loss_fixed/3))<1e-10
     @test abs(sum(current))<1e-12
+end
+
+@testset "Rated-capability gate: declared fixture passes, legacy fixture fails" begin
+    net,mixed=engineering_solver_fixture(5000.)
+    base=mixed.spec.devices["pv"].device
+    declared=rated_capability(base)
+    @test all(r.accepted for r in declared)
+    @test all(isempty(r.internal_limits) for r in declared)
+    @test all(r.capacitor_A<=ENGINEERING_OPERATING_LIMITS.capacitor_rms_A for r in declared)
+    legacy=rated_capability(engineering_plant(base;limits=ENGINEERING_LEGACY_LIMITS))
+    @test !any(r.accepted for r in legacy)
+    @test all(occursin("capacitor_current",r.limiting) for r in legacy)
+    @test maximum(r.s_poc_VA for r in legacy)<1500.
+end
+
+@testset "Equal-service OPF reproduces the local fixed point on the LV feeder" begin
+    base=parse_bmopf(joinpath(ROOT,"networks","LV3_55bus.bmopf.json"))
+    for condition in engineering_conditions()
+        condition.case_id in ("nominal","oversized_dc") || continue
+        net=voltage_aware_network(base,condition);mixed=engineering_fleet(net,condition)
+        local_result=solve_voltage_aware_inverter_fleet(net,mixed.spec;operating_modes=mixed.modes,
+            s_base=VA_BASE,solver_options=ENGINEERING_OPTIONS)
+        @test local_result.solve.publishable
+        local_point=engineering_point(local_result,condition;voltage_max=nothing)
+        r=solve_engineering_equal_service(net,mixed;local_point,voltage_max=nothing)
+        @test r.model_candidate_accepted
+        @test r.service_converged
+        agree=engineering_agreement(local_point,engineering_point(r,condition;coordinated=true),mixed)
+        @test agree["accepted"]
+        @test agree["max_voltage_difference_V"]<=ENGINEERING_AGREEMENT_TOL.voltage_V
+        # With the planning row, equal service must curtail where local control exceeds 253 V.
+        if condition.case_id=="oversized_dc"
+            limited=solve_engineering_equal_service(net,mixed;local_point)
+            @test limited.model_candidate_accepted
+            @test sum(JuMP.value(h.plant.p_poc)*h.plant.sb for h in values(limited.handles)) <
+                sum(JuMP.value(h.plant.p_poc)*h.plant.sb for h in values(r.handles))
+        end
+    end
 end

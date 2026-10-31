@@ -4,7 +4,26 @@ include("coordinated_engineering.jl")
 engineering_hardware_fields(inv)=[[string(k),_engineering_json_safe(getfield(inv,k))] for k in fieldnames(AdvancedInverter)]
 engineering_hardware_sha256(inv)=bytes2hex(sha256(JSON3.write(engineering_hardware_fields(inv))))
 
-function engineering_record_metrics(point,mixed;mode,validate_local=mode=="local")
+const ENGINEERING_LIMIT_NAMES=Set(["capacitor_current","dc_voltage_min","dc_voltage_max","dc_voltage_ripple",
+    "dc_source_power_min","dc_source_power_max","poc_apparent_power","converter_apparent_power",
+    "neutral_current","neutral_peak_current"])
+
+"""Names of hardware/source limits within their activity threshold in a physical report."""
+function engineering_active_limits(report)
+    bound(c)=c.name in ENGINEERING_LIMIT_NAMES || any(startswith(c.name,prefix) for prefix in
+        ("converter_current_","grid_current_","converter_peak_current_","grid_peak_current_"))
+    active=String[]
+    for c in report.checks
+        bound(c) || continue
+        threshold=c.unit===:A ? .001 : c.unit===:V ? .01 : .05
+        c.margin<=threshold && push!(active,c.name)
+    end
+    report.rail.lower_V<=.01 && push!(active,"modulation")
+    active
+end
+
+# Local control and the equal-service OPF must both satisfy the local VV/VW policy.
+function engineering_record_metrics(point,mixed;mode,validate_local=mode in ("local","opf_equal_service"))
     phasors(x)=ComplexF64[complex(z...) for z in x]
     case_id=point["case"] isa NamedTuple ? point["case"].case_id : point["case"]["case_id"]
     rows=NamedTuple[];reports=Dict{String,Any}();policies=Dict{String,Bool}()
@@ -49,19 +68,9 @@ function engineering_record_metrics(point,mixed;mode,validate_local=mode=="local
         phase_peak=maximum(sqrt(2).*abs.(current).+envelope.phase_peak)
         neutral_rms=hypot(abs(sum(current)),envelope.neutral_rms)
         neutral_peak=sqrt(2)*abs(sum(current))+envelope.neutral_peak
-        names=Set(["capacitor_current","dc_voltage_min","dc_voltage_max","dc_voltage_ripple",
-            "dc_source_power_min","dc_source_power_max","poc_apparent_power","converter_apparent_power",
-            "neutral_current","neutral_peak_current"])
-        bound(c)=c.name in names || any(startswith(c.name,prefix) for prefix in
-            ("converter_current_","grid_current_","converter_peak_current_","grid_peak_current_"))
-        active=String[]
-        for c in report.checks
-            bound(c) || continue
-            threshold=c.unit===:A ? .001 : c.unit===:V ? .01 : .05
-            c.margin<=threshold && push!(active,c.name)
-        end
-        report.rail.lower_V<=.01 && push!(active,"modulation")
-        maximum(abs,sensed)>=point["planning_voltage_max_V"]-.01 && push!(active,"planning_voltage")
+        active=engineering_active_limits(report)
+        planning=point["planning_voltage_max_V"]
+        planning!==nothing && maximum(abs,sensed)>=planning-.01 && push!(active,"planning_voltage")
         push!(rows,(case_id=case_id,mode=mode,device_id=id,bus=inv.bus,
             local_controller=mixed.labels[id],topology=inv.topology,
             hardware_sha256=engineering_hardware_sha256(inv),

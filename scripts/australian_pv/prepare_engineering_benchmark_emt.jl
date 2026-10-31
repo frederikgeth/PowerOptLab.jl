@@ -1,4 +1,4 @@
-include("engineering_records.jl")
+include("run_engineering_benchmark.jl")
 module EngineeringBenchmarkEMTReferences
     include("prepare_emt.jl")
 end
@@ -20,9 +20,10 @@ function prepare_engineering_benchmark_emt(folder,output)
     cases=Dict{String,Any}[]
     base=parse_bmopf(joinpath(ROOT,"networks","LV3_55bus.bmopf.json"))
     phasors(x)=ComplexF64[complex(z...) for z in x]
+    env["fixture_limits"]=="declared" || error("EMT references use the declared fixture only")
     for condition in engineering_conditions()
         net=voltage_aware_network(base,condition);mixed=engineering_fleet(net,condition)
-        for mode in ("local","coordinated")
+        for mode in ENGINEERING_MODES
             key=condition.case_id*"_"*mode
             point=read_record(joinpath(folder,"points",key*".json"))
             metrics=engineering_record_metrics(point,mixed;mode)
@@ -41,7 +42,7 @@ function prepare_engineering_benchmark_emt(folder,output)
                 actual.passed || error("actual source-availability reference rejected")
                 reference=EngineeringBenchmarkEMTReferences.emt_reference(inv,v,i,u,selected.p_dc_W;
                     id=key*"_"*label*"_"*id,
-                    scope="matched Australian fixed-POC snapshot; highest capacitor model stress in this controller group; released VV/VW commands in coordinated mode")
+                    scope="matched Australian fixed-POC snapshot; highest capacitor model stress in this controller group and mode")
                 # The older generic helper uses a 5000 W fixture source. This
                 # campaign validates and preserves each actual site availability.
                 reference["p_available_W"]=request.p_available
@@ -58,13 +59,14 @@ function prepare_engineering_benchmark_emt(folder,output)
     end
     source=study_source_sha256()
     for file in ("thermal_energy.jl","four_leg.jl","voltage_aware.jl","switching_engineering.jl",
-            "coordinated_engineering.jl","engineering_records.jl","prepare_emt.jl","emt_circuit.jl",
+            "coordinated_engineering.jl","engineering_records.jl","rated_capability.jl","run_engineering_benchmark.jl",
+            "prepare_emt.jl","emt_circuit.jl",
             "prepare_engineering_benchmark_emt.jl")
         path=joinpath(@__DIR__,file);source[relpath(path,repo)]=bytes2hex(sha256(read(path)))
     end
     mkpath(dirname(output))
     write_engineering_json(output,Dict("cases"=>cases,"source_sha256"=>source,"hardware"=>HARDWARE,
-        "operating_limits"=>ENGINEERING_OPERATING_LIMITS,"sizing_changed"=>false,
+        "operating_limits"=>ENGINEERING_OPERATING_LIMITS,"fixture_limits"=>"declared",
         "benchmark_environment_sha256"=>audit["environment_sha256"],
         "benchmark_audit_sha256"=>bytes2hex(sha256(read(joinpath(folder,"audit.json")))),
         "benchmark_record_sha256"=>audit["record_sha256"],

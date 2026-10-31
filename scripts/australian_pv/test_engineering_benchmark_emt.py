@@ -34,8 +34,8 @@ class MatchedEMTReferenceTests(unittest.TestCase):
 
     def test_complete_matched_selection(self):
         result = self.check()
-        self.assertEqual(result["references"], 32)
-        self.assertGreater(result["checks"], 350)
+        self.assertEqual(result["references"], 60)
+        self.assertGreater(result["checks"], 600)
 
     def test_missing_representative(self):
         self.env["cases"].pop()

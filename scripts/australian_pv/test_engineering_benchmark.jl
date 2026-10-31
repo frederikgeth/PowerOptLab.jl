@@ -31,10 +31,13 @@ end
         audit_engineering_benchmark(folder;python=BENCHMARK_TEST_PYTHON)
     end
     @test report["all_planned_accepted"]
-    @test report["accepted"]==report["planned"]==8
-    @test report["network_conditions"]==8*826
-    @test report["physical_checks"]>3500
-    @test length(report["record_sha256"])==8
+    plan=length(engineering_conditions());points=plan*length(ENGINEERING_MODES)
+    @test report["accepted"]==report["planned"]==points
+    # Local points carry no planning-voltage rows (165 = 55 LV buses x 3 phases).
+    @test report["network_conditions"]==points*826-plan*165
+    @test report["physical_checks"]>points*400
+    @test length(report["record_sha256"])==points
+    @test all(a["accepted"] for a in values(report["agreement"]))
     for (label,mutate!) in (
         "current corruption"=>(folder->mutate_engineering_record!(folder,"nominal_local",
             p->(p["devices"][first(sort!(collect(keys(p["devices"]))))]["grid_current"][1][1]+=.02))),
@@ -49,7 +52,13 @@ end
         "wrong operating condition"=>(folder->mutate_engineering_record!(folder,"nominal_local",
             p->(p["case"]["source_pu"]=1.03))),
         "failed local stage"=>(folder->mutate_engineering_record!(folder,"nominal_local",
-            p->(first(values(p["allocation_stages"]))[1]["solve"]["publishable"]=false))))
+            p->(first(values(p["allocation_stages"]))[1]["solve"]["publishable"]=false))),
+        "agreement broken"=>(folder->begin
+            path=joinpath(folder,"agreement.json")
+            record=JSON3.read(read(path,String),Dict{String,Any})
+            record["nominal"]["max_voltage_difference_V"]=.5
+            write_engineering_json(path,record)
+        end))
         @testset "$label" begin
             rejected_engineering_fixture(mutate!)
         end
@@ -58,7 +67,7 @@ end
             ("final objective changed","weight",.1))
         @testset "$label" begin
             rejected_engineering_fixture() do folder
-                path=joinpath(folder,"nominal_coordinated_status.json")
+                path=joinpath(folder,"nominal_opf_vv_released_status.json")
                 record=JSON3.read(read(path,String),Dict{String,Any})
                 key=="weight" ? (record["attempts"][end][key]=value) : (record[key]=value)
                 write_engineering_json(path,record)
