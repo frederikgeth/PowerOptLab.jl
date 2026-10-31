@@ -86,7 +86,8 @@ end
         reference===nothing ? (reference=actual) : (@test actual ≈ reference rtol=1e-12)
     end
     @test PowerOptLab._inverter_current_characteristic(_engineering_plant(i_max=10.),[0im,0im,0im])==10.
-    @test PowerOptLab._inverter_current_characteristic(_engineering_plant(i_grid_max=7.),[0im,0im,0im])==7.
+    @test PowerOptLab._inverter_current_characteristic(_engineering_plant(i_grid_max=7.),_engineering_balanced(230.)) ==
+        PowerOptLab._inverter_current_characteristic(_engineering_plant(i_grid_max=70.),_engineering_balanced(230.))
     @test PowerOptLab._inverter_current_characteristic(inv,[0im,0im,0im])>0
     for topology in (:THREE_LEG,:FOUR_LEG),rating in (nothing,10.),coefficient in (2.,100.,1e5)
         plant=_engineering_plant(;topology,i_max=rating,a_loss=coefficient)

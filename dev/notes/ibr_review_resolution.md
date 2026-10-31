@@ -1,5 +1,21 @@
 # Advanced IBR review: resolution plan
 
+## LCL numerical-scale regression
+
+The first full run after `0874954` passed 20,418 assertions with one failure:
+the watt-priority, converter-target LCL test returned `OTHER_ERROR`. The new
+converter-current characteristic had used `i_grid_max` when `i_max` was omitted.
+Those arm currents differ across the LCL shunt. The characteristic now uses a
+declared converter rating or physical voltage/power data, independently of the
+grid-arm rating. The grid current constraint itself remains unchanged.
+
+All six priority/target reproductions now publish and pass physical checks,
+along with the engineering and complete PCC power-boundary regressions. A
+metamorphic regression checks that changing only a grid-arm rating cannot
+change the converter-current characteristic. The final frozen-source full
+suite and refreshed study provenance remain the integration gates. Sizing and
+physical acceptance tolerances are unchanged.
+
 ## Optional-current scaling, loss error budget and operating-policy acceptance
 
 The engineering audit reproduced raw `LOCALLY_SOLVED` DC demand understated by

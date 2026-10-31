@@ -80,7 +80,8 @@ end
 # physical terminal voltage when no conductor rating was supplied.
 function _inverter_current_characteristic(inv,voltage_SI)
     inv.i_max===nothing || return inv.i_max
-    inv.i_grid_max===nothing || return inv.i_grid_max
+    # The converter and grid arms can carry different LCL currents. A grid-arm
+    # rating must not replace the omitted converter rating in this characteristic.
     voltage=maximum(abs,voltage_SI;init=0.)
     if !(isfinite(voltage) && voltage>0)
         voltage=something(_inverter_voltage_scale(inv,()),inv.v_int_max,inv.v_int_min,0.)
