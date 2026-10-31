@@ -1,5 +1,35 @@
 # Advanced IBR review: resolution plan
 
+## Voltage-aware feeder coupling and contactor modes
+
+`solve_voltage_aware_inverter_fleet` now couples the local Q→P→I₂ allocator to
+native feeder power flows. Grid-arm currents and the POC shunt enter KCL exactly
+once. Numerical feeder probes omit inverter hardware constraints so a saturated
+rail does not prevent evaluating a perturbed voltage map. Returned physical
+states are reconstructed and independently audited at the actual feeder voltage;
+acceptance additionally requires local allocation success, current/power/policy
+closure, voltage-map convergence and native SI equality residual checks. The
+native residual audit evaluates registered equations, not an independent circuit
+implementation or all native operational inequalities.
+
+Explicit energized and grid-side-disconnected modes support complete per-device
+mode maps. Energized zero-PV operation retains Q support and modeled AC loss
+imports. Disconnection removes the complete converter/filter/POC-shunt AC model;
+DC standby consumption is outside that model. Unselected native devices remain
+native. Failures retain explicit reasons and cannot publish; a failed local NLP
+does not establish physical or policy infeasibility. Sizing is unchanged.
+
+The 102 new assertions pass: three numerical bases, independent diagonal-feeder
+Ohm/KCL and loss identities, native-device retention, warm starts/damping, mixed
+operating modes, LCL passive I₀/neutral sensing, controller-domain failures,
+allocation failures and explicit iteration exhaustion. Full-suite validation and
+reproducible expanded Australian campaigns are separate pending checks. This is
+a quasi-static local fixed point, not a dynamic stability or uniqueness proof.
+
+The broader goal remains active: controlled-unbalance/chronological studies,
+coordinated Australian OPF, four-leg control, representative EMT and the remaining
+optional-arm SI/DC-source boundary audit are not yet complete.
+
 ## Validated source checkpoint e19cbae
 
 The frozen source passes the full offline package suite: 20,017/20,017 assertions

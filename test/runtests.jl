@@ -82,6 +82,7 @@ const _HAS_ODS = true
     include("inverter_control_sizing_tests.jl")
     include("closed_loop_evidence_tests.jl")
     include("inverter_replay_acceptance_tests.jl")
+    include("voltage_aware_inverter_fleet_tests.jl")
     include("operability_tests.jl")
     include("battery_tests.jl")
     include("helm_tests.jl")

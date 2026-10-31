@@ -149,6 +149,7 @@ include("problems/inverter_control_study.jl")
 include("problems/inverter_control_experiments.jl")
 include("problems/inverter_control_sizing.jl")
 include("problems/closed_loop_evidence.jl")
+include("problems/voltage_aware_inverter_fleet.jl")
 include("problems/operability.jl")
 
 # Bespoke algorithms — new solution methods (custom solve loops)
@@ -304,6 +305,8 @@ export InverterOperatingConstraints, FreeReactivePower, FixedReactivePower,
     FixedPowerFactor, DCSourceBounds
 export project_inverter_current, InverterCurrentProjectionResult
 export allocate_inverter_services, evaluate_voltage_aware, InverterServiceAllocationResult
+export solve_voltage_aware_inverter_fleet, VoltageAwareInverterFleetResult
+export voltage_aware_inverter_rows
 export evaluate_exact, evaluate_smooth, dc_power_offset, sensing_terminal, stamp_smooth_control!, solve_controlled_inverter
 export inverter_spec, inverter_handles
 export ControlledInverterFleetSpec, ControlledInverterFleetResult

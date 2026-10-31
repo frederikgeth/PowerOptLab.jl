@@ -83,6 +83,42 @@ angles introduce a small U₀ and can make a strict balanced-grid LCL controller
 incompatible with its passive shunt, even when a converter-target plant is
 feasible. A separate common-mode case retains and tests that distinction.
 
+## Voltage-aware feeder coupling
+
+`solve_voltage_aware_inverter_fleet(net, spec)` couples the local staged
+Q→P→I₂ allocator to the native network equations. Every local allocation uses
+separate sensed and physical terminal voltages. The feeder map imposes grid-arm
+currents and the declared POC shunt exactly once. Intermediate feeder solves
+are virtual numerical probes without inverter hardware constraints; they are
+not transient dispatch samples. Returned phasors are reconstructed through the
+full primitive/LCL filter and independently audited against hardware, source,
+volt-watt and current-command limits. Publication also requires convergence of
+the voltage/current map and successful local allocation stages.
+
+Native zero-equality rows are checked in SI with physical tolerances independent
+of the power base. This residual audit evaluates registered model rows; it is
+not an independent circuit implementation or an independent audit of all native
+operational inequalities. Small-feeder regressions separately calculate Ohm's
+law and KCL from returned phasors. A failed network solve, local allocation,
+controller voltage-domain check or iteration budget remains unpublishable and
+retains its explicit diagnostic reason. Failure of a local NLP does not prove
+plant or policy infeasibility.
+
+`operating_modes=:energized` retains reactive control and AC loss imports at
+zero PV. `:disconnected` represents an open grid-side contactor, removing the
+entire converter/filter/POC-shunt AC model. A complete per-device dictionary
+supports mixed fleets. Disconnected devices have zero AC injections and no
+inverter physical report or modeled DC standby power. Unselected native IBRs
+keep their native physics. `voltage_aware_inverter_rows(result)` records modes,
+acceptance, powers, losses, current/ripple/rail quantities and sensed voltages.
+Only accepted rows support equilibrium comparisons.
+
+The current implementation supports three-leg reactive-priority local control,
+with Q→P→I₂ ordering and optional voltage-admittance negative-sequence requests.
+Four-leg control, current-dependent ripple blending, dynamic stability, global
+uniqueness and real-time computational guarantees are outside this capability.
+Warm starts and damping are numerical choices, not a transient inverter model.
+
 ## Tests implemented in the package
 
 | Mechanism | Test oracle | Expected invariant |
