@@ -89,8 +89,14 @@ function simulate(c;switching_Hz=10000.,cycles=10,discard_cycles=6,steps_per_car
     isinteger(ratio) || error("integer carrier/line ratio required for declared Fourier window")
     period=1/switching_Hz;n=round(Int,cycles*ratio);discard=round(Int,discard_cycles*ratio)
     window=(cycles-discard_cycles)/p.f
-    s2=sum(p.uc[k]*p.iref[k] for k in 1:3);expected_d=im*s2/(2p.w*p.capacitance*p.vdc)
-    x=(ntuple(k->SQRT2*real(p.iref[k]),3)...,initial_dc_voltage(p,expected_d))
+    s2=sum(p.uc[k]*p.iref[k] for k in 1:3);linear_d=im*s2/(2p.w*p.capacitance*p.vdc)
+    initial_v=initial_dc_voltage(p,linear_d);expected_d=linear_d
+    if get(c,"dc_energy_model","linearized")=="nonlinear" && abs(linear_d)>1e-12
+        center=initial_v^2-2p.vdc*real(linear_d);amplitude=2p.vdc*abs(linear_d)
+        coefficient=2sum(sqrt(center+amplitude*cos(2pi*k/2048))*cos(2pi*k/2048) for k in 0:2047)/2048
+        expected_d=coefficient*linear_d/abs(linear_d)
+    end
+    x=(ntuple(k->SQRT2*real(p.iref[k]),3)...,initial_v)
     initial=NaN;initial_state=x;energy_input=0.;fund=zeros(ComplexF64,3);isq=zeros(3);ipeak=zeros(3)
     vmean=0.;v2=0im;icmean=0.;ic2=0im;icsq=0.;icpeak=0.;nsq=0.;pgrid=0.;minmargin=Inf
     trace=NamedTuple[];carrier=NamedTuple[];voltage_min=Inf;voltage_max=-Inf

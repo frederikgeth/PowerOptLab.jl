@@ -46,6 +46,20 @@ def audit(input_path, folder):
             ir = [complex(*p) for p in c["current"]]
             omega2 = 4*math.pi*c["frequency_Hz"]
             expected_d = 1j*sum(v*i for v, i in zip(uc, ir))/(omega2*c["dc_capacitance_F"]*c["dc_voltage_V"])
+            if c.get("dc_energy_model", "linearized") == "nonlinear" and abs(expected_d) > 1e-12:
+                nominal = c["dc_voltage_V"]
+                amplitude = 2*nominal*abs(expected_d)
+                lo, hi = nominal**2, nominal**2+amplitude
+                for _ in range(55):
+                    center = (lo+hi)/2
+                    mean = sum(math.sqrt(center+amplitude*math.cos(2*math.pi*k/512)) for k in range(512))/512
+                    if mean < nominal:
+                        lo = center
+                    else:
+                        hi = center
+                center = (lo+hi)/2
+                coefficient = 2*sum(math.sqrt(center+amplitude*math.cos(2*math.pi*k/4096))*math.cos(2*math.pi*k/4096) for k in range(4096))/4096
+                expected_d *= coefficient/abs(expected_d)
             case_modes = {}
             for mode in ("averaged", "switched"):
                 for n in timing["steps_per_carrier"]:

@@ -207,7 +207,7 @@ function allocate_inverter_services(inv::AdvancedInverter,request::InverterContr
             # almost coincident with an active Q interval bound. The latter
             # produces a spurious infeasibility at ordinary Australian requests.
             if reactive_scale[]!==nothing
-                inv.pwm_strategy===:NONE ? JuMP.fix(reactive_scale[],qscale;force=true) :
+                inv.pwm_strategy===:NONE && inv.dc_energy_model===:linearized ? JuMP.fix(reactive_scale[],qscale;force=true) :
                     _lock_pwm_service!(m,reactive_scale[],qscale,abs(q))
             end
         else
@@ -224,7 +224,7 @@ function allocate_inverter_services(inv::AdvancedInverter,request::InverterContr
     if solve_status(result).publishable && !iszero(i2)
         plock=real(sum(result.plant.poc_phase_voltage.*conj.(result.grid_phase_current)))
         starts=[(x,JuMP.value(x)) for x in JuMP.all_variables(m)]
-        if inv.pwm_strategy===:NONE
+        if inv.pwm_strategy===:NONE && inv.dc_energy_model===:linearized
             JuMP.@constraint(m,h.p_poc/(inv.s_max/h.sb)==plock/inv.s_max)
         else
             JuMP.@constraint(m,(plock-_PWM_SERVICE_PRESERVATION_VA)/inv.s_max<=

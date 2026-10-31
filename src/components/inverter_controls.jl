@@ -1907,6 +1907,7 @@ function stamp_smooth_control!(ctx, controller::SequenceController,
                                request::InverterControlRequest,
                                inverter::AdvancedInverter,
                                handles::_InvHandles)
+    inverter.dc_energy_model===:linearized || throw(ArgumentError("nonlinear capacitor energy uses the voltage-aware allocator; implicit controller backoff is linearized"))
     inverter.topology == :THREE_LEG || throw(ArgumentError(
         "smooth SequenceController stamping currently supports THREE_LEG only"))
     if inverter.power_limit_location === :poc

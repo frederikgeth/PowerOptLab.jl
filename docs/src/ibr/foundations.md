@@ -299,6 +299,39 @@ This derivation is first order. It neglects products of ripple quantities,
 higher harmonics, ESR/ESL, and controller response. A practical small-ripple
 audit should report ``|D|/V_{dc}``.
 
+### Nonlinear energy option
+
+The optional `dc_energy_model=:nonlinear` applies to monolithic THREE_LEG and
+FOUR_LEG links with constant input power and fixed mean converter loss. It
+integrates capacitor energy for the fundamental AC power waveform:
+
+```math
+v_{dc}^2(t)=A+2V_{dc}\Re\{D_Ee^{j2\omega t}\},\qquad
+D_E=\frac{j\widetilde S}{2\omega CV_{dc}}.
+```
+
+The offset `A` is selected from `mean(vdc)=Vdc`; it is not set to `Vdc²`.
+Voltage has higher even harmonics. The actual Fourier 2ω coefficient retains
+the meaning of `dv2_max`, while optional `v_dc_min` / `v_dc_max` bound the
+complete low-frequency waveform. Total low-frequency capacitor RMS is
+
+```math
+I_{C,LF}^2=\frac{|\widetilde S|^2}{A+\sqrt{A^2-(2V_{dc}|D_E|)^2}}.
+```
+
+The solver uses positive voltage lifts at 64 angles, and independently
+reconstructed energy/Fourier integrals gate publication. The numerical domain
+excludes vanishing DC voltage; this is not a DC-collapse or protection model.
+Squaring each modulation inequality gives a degree-two trigonometric polynomial
+in energy coordinates, so its full-cycle minimum is checked without assuming a
+sinusoidal bus voltage. Nonlinear extrema also bound the denominators in
+embedded PWM thermal allocation.
+
+`dc_link_energy_diagnostics` exposes the energy offset, actual voltage extrema,
+2ω coefficient and total low-frequency RMS. Finite small-signal DC source
+branches and split banks are explicitly outside this nonlinear option; they
+need their separate energy/source dynamics.
+
 ## 6. Split-link midpoint motion
 
 In `:SPLIT_DC`, neutral current moves the capacitor midpoint. Let

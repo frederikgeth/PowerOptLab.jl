@@ -52,3 +52,18 @@ end
     @test_throws ArgumentError IBREMT.simulate(emt_fixture();mode=:unknown)
     @test_throws ArgumentError IBREMT.simulate(emt_fixture();cycles=2,discard_cycles=2)
 end
+
+@testset "Independent EMT circuit: nonlinear voltage reference" begin
+    c=emt_fixture();a=cis(2pi/3)
+    i=4 .* ComplexF64[1,a^2,a].+1.5.*[1,a,a^2]
+    u=230 .* ComplexF64[1,a^2,a].+(.2+im*2pi*50*.004).*i
+    c["current"]=[[real(z),imag(z)] for z in i]
+    c["converter_voltage"]=[[real(z),imag(z)] for z in u]
+    c["p_dc_W"]=real(sum(u.*conj.(i)))
+    c["dc_energy_model"]="nonlinear"
+    r=IBREMT.simulate(c;cycles=2,discard_cycles=1,steps_per_carrier=64,mode=:averaged)
+    @test r.metrics["fundamental_current_max_error_A"]<1e-6
+    @test r.metrics["dc_2omega_error_V"]<1e-7
+    @test r.metrics["v_dc_mean_V"] ≈ 750. atol=1e-6
+    @test r.metrics["energy_relative_residual"]<1e-9
+end

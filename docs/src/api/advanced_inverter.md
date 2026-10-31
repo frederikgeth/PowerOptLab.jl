@@ -17,4 +17,5 @@ physical_feasibility
 inverter_physical_feasibility
 continuous_rail_margin
 dc_source_line_frequency_diagnostics
+dc_link_energy_diagnostics
 ```

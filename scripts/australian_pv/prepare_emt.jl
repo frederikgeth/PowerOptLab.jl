@@ -3,13 +3,15 @@ include("four_leg.jl")
 
 function emt_reference(inv,voltage,current,converter_voltage,pdc;id,scope)
     report=inverter_physical_feasibility(inv;grid_voltage=voltage,grid_current=current,
-        converter_voltage,converter_current=current,dc_min=0.,dc_max=5000.)
+        converter_voltage,converter_current=current,dc_min=0.,dc_max=5000.,
+        pwm_thermal_headroom=inv.pwm_strategy===:NONE ? nothing : PowerOptLab._PWM_ALLOCATION_HEADROOM)
     report.checked && report.passed || error("unaccepted EMT reference: $id")
     PowerOptLab._lcl_active(inv) && error("this representative EMT matrix covers L filters only")
     pairs(v)=[[real(z),imag(z)] for z in v]
     losses=inv.p_loss_fixed+inv.a_loss*(sum(abs,current)+(inv.topology===:FOUR_LEG ? abs(sum(current)) : 0.))+
         inv.c_loss*(sum(abs2,current)+(inv.topology===:FOUR_LEG ? abs2(sum(current)) : 0.))
     Dict("case_id"=>id,"scope"=>scope,"topology"=>String(inv.topology),
+        "dc_energy_model"=>String(inv.dc_energy_model),"reference_pwm_strategy"=>String(inv.pwm_strategy),
         "grid_voltage"=>pairs(voltage),"converter_voltage"=>pairs(converter_voltage),"current"=>pairs(current),
         "p_dc_W"=>pdc,"p_available_W"=>5000.,"mean_converter_loss_W"=>losses,
         "phase_R_ohm"=>inv.r_filter,"phase_L_H"=>inv.x_filter/(2pi*inv.f),

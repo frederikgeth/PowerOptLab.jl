@@ -416,6 +416,7 @@ function voltage_aware_inverter_rows(result::VoltageAwareInverterFleetResult)
         vuf=sensed===nothing ? NaN : (u=_phasor_sequences(sensed);iszero(abs(u[2])) ? NaN : 100abs(u[3])/abs(u[2]))
         power(name)=!active ? 0. : point===nothing ? NaN : getproperty(point,name)
         push!(rows,(device_id=id,bus=inv.bus,operating_mode=result.operating_modes[id],model_present=active,
+            pwm_strategy=inv.pwm_strategy,dc_energy_model=inv.dc_energy_model,
             accepted=result.solve.publishable,reason=result.reason,iterations=result.iterations,
             physical_checked=report===nothing ? nothing : report.checked,
             physical_feasible=report===nothing ? nothing : report.passed,
@@ -430,6 +431,11 @@ function voltage_aware_inverter_rows(result::VoltageAwareInverterFleetResult)
             neutral_current_rating_A=inv.In_max,
             converter_negative_sequence_A=!active ? 0. : current===nothing ? NaN : abs(_phasor_sequences(Tuple(current))[3]),
             capacitor_thermal_current_A=check_value("capacitor_current"),
+            capacitor_carrier_audit_current_A=check_value("allocation_pwm_actual_capacitor_current"),
+            capacitor_low_frequency_current_A=check_value("capacitor_low_frequency_current"),
+            capacitor_switching_current_A=check_value("allocation_pwm_carrier_prediction"),
+            dc_minimum_voltage_V=check_value("dc_energy_positive_voltage"),
+            dc_maximum_voltage_V=check_value("dc_energy_maximum_voltage"),
             dc_ripple_voltage_V=check_value("dc_voltage_ripple"),
             continuous_rail_lower_V=report===nothing ? nothing : report.rail.lower_V,
             vmin_sensed_V=sensed===nothing ? NaN : minimum(abs,sensed),

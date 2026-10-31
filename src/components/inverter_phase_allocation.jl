@@ -188,7 +188,7 @@ function allocate_phase_inverter_services(inv::AdvancedInverter,request::Inverte
     if solve_status(result).publishable
         starts=[(x,JuMP.value(x)) for x in JuMP.all_variables(m)]
         if !(coordinate[] isa Real)
-            if inv.pwm_strategy===:NONE
+            if inv.pwm_strategy===:NONE && inv.dc_energy_model===:linearized
                 JuMP.fix(coordinate[],lambda_value;force=true)
             else
                 _lock_pwm_service!(m,coordinate[],lambda_value,sum(abs,q))

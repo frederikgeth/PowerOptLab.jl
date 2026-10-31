@@ -404,8 +404,14 @@ function stamp_device!(ctx, device::ConstrainedInverter;
     end
     source = device.dc_source
     upper = _available_dc(device, request)
-    JuMP.@constraint(m, h.p_dc/power_scale <= upper/inv.s_max)
-    source.p_min === nothing || JuMP.@constraint(m, h.p_dc/power_scale >= source.p_min/inv.s_max)
+    if source.p_min!==nothing && source.p_min==upper
+        # Night PV has one fixed zero-power boundary, not two coincident
+        # active inequality rows with dependent gradients.
+        JuMP.@constraint(m,h.p_dc/power_scale==upper/inv.s_max)
+    else
+        JuMP.@constraint(m, h.p_dc/power_scale <= upper/inv.s_max)
+        source.p_min === nothing || JuMP.@constraint(m, h.p_dc/power_scale >= source.p_min/inv.s_max)
+    end
     cap = if !_has_watt_cap(policy)
         nothing
     elseif _volt_watt_basis(policy.positive) === :rated

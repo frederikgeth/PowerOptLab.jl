@@ -27,7 +27,7 @@ end
 # (|z| Re(Ij conj(Ik)) + Re(Ij conj(z))*Re(Ik conj(z))/|z|).
 # Regularizing |z| to R=sqrt(|z|²+eps²) changes this by at most
 # K*eps*(|Ij|²+|Ik|²). Adding that bound after negation encloses M2.
-function _allocation_pwm_variance(inv,ur,ui,ir,ii,dr,di,pconv,s2r,s2i;headroom=_PWM_ALLOCATION_HEADROOM)
+function _allocation_pwm_variance(inv,ur,ui,ir,ii,dr,di,pconv,s2r,s2i;headroom=_PWM_ALLOCATION_HEADROOM,voltage_bounds=nothing)
     er=collect(ur);ei=collect(ui);ar=collect(ir);ai=collect(ii)
     if inv.topology===:FOUR_LEG
         push!(er,0.);push!(ei,0.);push!(ar,-sum(ir));push!(ai,-sum(ii))
@@ -45,17 +45,19 @@ function _allocation_pwm_variance(inv,ur,ui,ir,ii,dr,di,pconv,s2r,s2i;headroom=_
     ripple=sqrt(dr^2+di^2+_PWM_ALLOCATION_BUS_EPS^2)
     # M2 is nonnegative. Bound its denominator downwards and the subtracted
     # mean-square denominator upwards over the complete line cycle.
-    upper=second/(inv.v_dc-ripple)-(pconv^2+(s2r^2+s2i^2)/2)/(inv.v_dc+ripple)^2
+    lo,hi=voltage_bounds===nothing ? (inv.v_dc-ripple,inv.v_dc+ripple) : voltage_bounds
+    upper=second/lo-(pconv^2+(s2r^2+s2i^2)/2)/hi^2
     (1+headroom)^2*upper
 end
 
 # Independent numerical integration of exact carrier dwell probabilities.
 # Common-mode injection cancels because all bridge-leg currents sum to zero.
-function _allocation_pwm_carrier(inv,u,i,d;angles=2048)
+function _allocation_pwm_carrier(inv,u,i,d;angles=2048,energy=nothing)
     total=0.;margin=Inf
     for k in 0:angles-1
         th=2pi*(k+.5)/angles;rot=cis(th)
-        v=inv.v_dc+real(d*rot^2)
+        v=energy===nothing ? inv.v_dc+real(d*rot^2) :
+            sqrt(max(0.,energy.center_V2+2inv.v_dc*real(energy.energy_coordinate*rot^2)))
         v>0 || return (rms=NaN,modulation_margin=-Inf)
         voltage=sqrt(2).*real.(u.*rot);current=sqrt(2).*real.(i.*rot)
         if inv.topology===:FOUR_LEG
@@ -73,9 +75,9 @@ function _allocation_pwm_carrier(inv,u,i,d;angles=2048)
     (rms=sqrt(total/angles),modulation_margin=margin)
 end
 
-function _allocation_pwm_checks(inv,u,i,d,i2sq,base_switching;headroom=_PWM_ALLOCATION_HEADROOM)
-    carrier=_allocation_pwm_carrier(inv,u,i,d)
-    coarse=_allocation_pwm_carrier(inv,u,i,d;angles=1024)
+function _allocation_pwm_checks(inv,u,i,d,i2sq,base_switching;headroom=_PWM_ALLOCATION_HEADROOM,energy=nothing)
+    carrier=_allocation_pwm_carrier(inv,u,i,d;energy)
+    coarse=_allocation_pwm_carrier(inv,u,i,d;angles=1024,energy)
     wn,w2,ws=inv.cap_thermal_weights
     actual=sqrt(max(0.,w2*i2sq+ws*(base_switching+carrier.rms^2)))
     checks=InverterLimitCheck[

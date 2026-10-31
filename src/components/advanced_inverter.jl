@@ -629,6 +629,13 @@ zero filter) it is a plain grid-following converter at the POC.
   removes the bound, not the neutral-path or capacitor-ripple equations.
   Aggregate power alone does not bound phase-redistribution currents.
 - `v_dc` — DC-link voltage (V). `c_dc` — DC-link capacitance (F; per half for split).
+- `dc_energy_model=:linearized` — retain the first-order ripple model by default.
+  `:nonlinear` selects monolithic constant-input-power capacitor energy with
+  exactly the declared cycle-mean `v_dc`; `dv2_max` bounds the actual Fourier
+  coefficient. Optional `v_dc_min` / `v_dc_max` bound voltage extrema in this
+  mode. Finite source branches, split links and implicit forward-controller
+  backoff are outside the nonlinear option. Use constrained/voltage-aware
+  allocation when combining it with embedded PWM thermal limits.
 - `c_dc_upper`, `c_dc_lower` — optional split-link half-bank capacitances (F).
   Each defaults to `c_dc`; supplying either exposes unequal series capacitance,
   a mean midpoint offset, and (for a finite or open line-frequency DC source,
@@ -813,6 +820,9 @@ Base.@kwdef struct AdvancedInverter <: AbstractDevice
     i_max::Union{Float64,Nothing} = nothing
     topology::Symbol = :SINGLE_PHASE
     v_dc::Union{Float64,Nothing} = nothing
+    dc_energy_model::Symbol = :linearized
+    v_dc_min::Union{Float64,Nothing} = nothing
+    v_dc_max::Union{Float64,Nothing} = nothing
     c_dc::Union{Float64,Nothing} = nothing
     c_dc_upper::Union{Float64,Nothing} = nothing
     c_dc_lower::Union{Float64,Nothing} = nothing
@@ -999,6 +1009,7 @@ _split_midpoint_2w_ratio(inv) = inv.topology == :SPLIT_DC ?
     (c -> (c[1] - c[2])/(2(c[1] + c[2])))(_split_capacitances(inv)) : 0.0
 
 function _validate_inverter(inv::AdvancedInverter, nets=())
+    _validate_dc_energy_model(inv)
     _validate_connection(inv.id, inv.bus, inv.phase_terminals, inv.neutral, nets)
     inv.topology in (:SINGLE_PHASE, _THREE_PHASE_TOPOLOGIES...) ||
         throw(ArgumentError("unknown topology :$(inv.topology)"))
@@ -1589,6 +1600,7 @@ struct _InvHandles
     icap_upper_sq; icap_lower_sq
     icap_thermal_upper_sq; icap_thermal_lower_sq
     pwm_thermal_headroom::Union{Nothing,Float64}
+    dc_energy
     sb::Float64; vb::Float64; ib::Float64
 end
 
@@ -1629,6 +1641,10 @@ function _add_inverter_rail_cut!(ctx,inv,h,theta)
     nr=h.nre===nothing ? 0. : h.nre; ni=h.nim===nothing ? 0. : h.nim
     mean=h.nmean===nothing ? 0. : h.nmean
     c1,s1=cos(theta),sin(theta); c2,s2=cos(2theta),sin(2theta)
+    if h.dc_energy!==nothing
+        _stamp_dc_energy_rail!(m,inv,ure,uim,h.dc_energy,theta)
+        return
+    end
     rail=inv.m_max*(inv.v_dc+h.dre*c2-h.dim*s2)
     if inv.topology in (:THREE_LEG,:FOUR_LEG)
         for (a,b) in _PAIRS_IDX,sg in (-1.,1.)
@@ -2051,6 +2067,7 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
     icap_upper_sq = nothing; icap_lower_sq = nothing
     icap_thermal_upper_sq = nothing; icap_thermal_lower_sq = nothing
     P_cap_loss = 0.0
+    dc_energy=nothing
     if is_3ph_topo
         w = 2pi * inv.f
         v_dc = inv.v_dc; c_dc = inv.c_dc
@@ -2076,8 +2093,16 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
         dre = JuMP.@variable(m, base_name = "dre_$(inv.id)")
         dim = JuMP.@variable(m, base_name = "dim_$(inv.id)")
         kr, ki = reim(_dc_ripple_factor(inv))
-        JuMP.@constraint(m, dre == -(kr*S2re_SI - ki*S2im_SI) / v_dc)
-        JuMP.@constraint(m, dim == -(ki*S2re_SI + kr*S2im_SI) / v_dc)
+        er,ei=dre,dim
+        if inv.dc_energy_model===:nonlinear
+            er=JuMP.@variable(m,base_name="energy_re_$(inv.id)",start=0.)
+            ei=JuMP.@variable(m,base_name="energy_im_$(inv.id)",start=0.)
+            dc_energy=_stamp_dc_energy!(m,inv,er,ei)
+            JuMP.@constraint(m,dre==dc_energy.real2)
+            JuMP.@constraint(m,dim==dc_energy.imag2)
+        end
+        JuMP.@constraint(m, er == -(kr*S2re_SI - ki*S2im_SI) / v_dc)
+        JuMP.@constraint(m, ei == -(ki*S2re_SI + kr*S2im_SI) / v_dc)
         if inv.dv2_max !== nothing
             scale = normalize_capability_constraints ? inv.dv2_max^2 : 1.0
             JuMP.@constraint(m, (dre^2 + dim^2)/scale <= inv.dv2_max^2/scale)
@@ -2126,6 +2151,10 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
 
         # Sampled instantaneous rail constraints (linear per sample in dre/dim).
         for th in _sample_grid(inv.n_samples)
+            if dc_energy!==nothing
+                _stamp_dc_energy_rail!(m,inv,UreSI,UimSI,dc_energy,th)
+                continue
+            end
             c1, s1 = cos(th), sin(th)
             c2, s2 = cos(2th), sin(2th)
             rail = JuMP.@expression(m, inv.m_max * (v_dc + dre*c2 - dim*s2))
@@ -2203,6 +2232,10 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
         # that already exist, rather than quartic in the bilinear S̃.
         k2w = denom / (sqrt(2) * v_dc)
         i2w_sq = JuMP.@expression(m, k2w^2 * (dre^2 + dim^2))
+        if dc_energy!==nothing
+            i2w_sq=JuMP.@expression(m,(S2re_SI^2+S2im_SI^2)/
+                (v_dc^2*(dc_energy.center+dc_energy.radius)))
+        end
         wn, w2, wsw = inv.cap_thermal_weights
         pwm_model_sq = JuMP.@expression(m,
             inv.pwm_current_factor^2 * ib^2 * isq_sum)
@@ -2212,7 +2245,8 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
             JuMP.@constraint(m,(dre^2+dim^2)/(inv.v_dc^2)<=.99^2)
             extra=_allocation_pwm_variance(inv,UreSI,UimSI,
                 [cri[k]*ib for k in 1:3],[cii[k]*ib for k in 1:3],
-                dre,dim,Pconv*sb,S2re_SI,S2im_SI;headroom=pwm_thermal_headroom)
+                dre,dim,Pconv*sb,S2re_SI,S2im_SI;headroom=pwm_thermal_headroom,
+                voltage_bounds=dc_energy===nothing ? nothing : (v_dc*dc_energy.pwm_min,v_dc*dc_energy.pwm_max))
             pwm_model_sq=JuMP.@expression(m,pwm_model_sq+extra)
         end
         switching_sq = JuMP.@expression(m, inv.i_sw^2 + pwm_model_sq)
@@ -2306,6 +2340,7 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
                        icap_upper_sq, icap_lower_sq,
                        icap_thermal_upper_sq, icap_thermal_lower_sq,
                        pwm_thermal_headroom,
+                       dc_energy,
                        sb, vb, ib)
 end
 
@@ -2350,7 +2385,13 @@ function extract_device(inverter::AdvancedInverter, h::_InvHandles,
         ni = h.nim === nothing ? nothing : JuMP.value(h.nim)
         nm = h.nmean === nothing ? 0.0 : JuMP.value(h.nmean)
         br, bi = _split_bus_ripple_value(inverter, h)
-        _switching_margin(inverter, ure, uim, dr, di, nr, ni, nm; bre=br, bim=bi)
+        if h.dc_energy===nothing
+            _switching_margin(inverter, ure, uim, dr, di, nr, ni, nm; bre=br, bim=bi)
+        else
+            current=complex.(JuMP.value.(h.cri),JuMP.value.(h.cii)).*ib
+            u=complex.(ure,uim)
+            _dc_energy_rail_margin(inverter,u,_dc_energy_state(inverter,sum(u.*current))).lower_V
+        end
     end
     selected_p, selected_q = inverter.power_limit_location === :converter ?
         (h.p_conv, h.q_conv) : (h.p_poc, h.q_poc)
@@ -2649,6 +2690,8 @@ function solve_advanced_inverter(net::Dict{String,Any}, inverter::AdvancedInvert
                                  pwm_reserve_factor::Float64=1.01,
                                  rail_refinement::Bool=true)
     validate_device(inverter, (net,); periods=1)
+    inverter.dc_energy_model===:nonlinear && inverter.pwm_strategy!==:NONE &&
+        throw(ArgumentError("nonlinear energy with PWM uses ConstrainedInverter or the voltage-aware allocator, not standalone reserve closure"))
     isfinite(pwm_tolerance) && pwm_tolerance >= 0 || throw(ArgumentError(
         "pwm_tolerance must be finite and >= 0"))
     pwm_max_iterations >= 1 || throw(ArgumentError(

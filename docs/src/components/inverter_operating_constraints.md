@@ -307,6 +307,24 @@ acceptance tolerances are unchanged; raw `ALMOST_LOCALLY_SOLVED` points remain
 unpublishable. This is bounded numerical lexicographic preservation, not a
 weighted objective or a hidden protective-Q override.
 
+## Nonlinear capacitor energy
+
+Set `dc_energy_model=:nonlinear` on a monolithic three/four-leg plant to keep
+the specified mean DC voltage while bounding the actual nonlinear capacitor
+waveform. `dv2_max` still means the peak Fourier 2ω voltage coefficient.
+Optional `v_dc_min` and `v_dc_max` independently bound voltage extrema. Total
+low-frequency capacitor current includes the waveform's higher even harmonics;
+the declared low-frequency ESR weight applies to this group.
+
+The nonlinear option composes with embedded centered PWM in constrained models
+and voltage-aware allocation. It assumes constant input power and a fixed mean
+loss. Finite small-signal source branches and split links are rejected. Implicit
+forward-controller backoff and standalone PWM reserve closure retain their
+linearized scope; use the voltage-aware allocator for the nonlinear option.
+Both PWM and nonlinear-energy stages use the explicit 100 µvar/W service
+preservation budget. See the energy equations in the foundations chapter and
+[`dc_link_energy_diagnostics`](@ref) for independently reconstructed quantities.
+
 ## [Compare saturation at a fixed 207 V POC](@id inverter-saturation-comparison)
 
 This ideal, lossless example fixes POC voltage to isolate capability allocation

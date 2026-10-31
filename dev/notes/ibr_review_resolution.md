@@ -1,5 +1,28 @@
 # Advanced IBR review: resolution plan
 
+## Nonlinear monolithic DC energy implementation (31 October 2026)
+
+The opt-in `dc_energy_model=:nonlinear` selects constant-input-power capacitor
+energy while preserving the specified cycle-mean voltage. Actual Fourier 2ω
+voltage, total low-frequency capacitor RMS, optional `v_dc_min` / `v_dc_max`
+and full-cycle squared modulation bounds are enforced. It composes with the
+embedded PWM model; finite small-signal source branches, split banks and
+implicit controller backoff are explicitly excluded from this option.
+
+155 new assertions pass, including independent period integration, mean/DC
+Fourier checks, full-cycle rail enclosures, active extrema, PWM composition,
+night operation, and SI versus per-unit model composition. The independent
+EMT harness passes 28 analytic circuit checks, including its nonlinear reference;
+four allocated nonlinear/PWM probes add 12 switched checks and remain below the
+fixed 1 A capacitor budget. A zero-PV source is now one exact power equality
+rather than coincident upper/lower inequalities; the mixed night equilibrium
+then converges without relaxing source or solver acceptance.
+
+Eight heterogeneous Australian candidate cases have converged with fixed
+sizing, including mean/worst/sequence/four-leg controllers together, night and
+partial disconnection. Frozen-source full integration, committed campaign
+reproduction and all-group EMT validation follow this core checkpoint.
+
 ## PWM thermal allocation implementation (31 October 2026)
 
 The first checkpoint passes 87 new allocation/enclosure assertions and the

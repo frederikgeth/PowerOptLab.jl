@@ -122,6 +122,7 @@ include("components/generalized_generator.jl")
 include("components/generator_data.jl")
 include("components/inverter_feasibility.jl")
 include("components/advanced_inverter.jl")
+include("components/inverter_dc_energy.jl")
 include("components/inverter_pwm_allocation.jl")
 include("components/inverter_controls.jl")
 include("components/inverter_pcc_control.jl")
@@ -307,6 +308,7 @@ export VoltVarWattConstraints, ConstrainedInverter, ConstrainedInverterResult,
 export InverterOperatingConstraints, FreeReactivePower, FixedReactivePower,
     FixedPowerFactor, DCSourceBounds
 export project_inverter_current, InverterCurrentProjectionResult
+export dc_link_energy_diagnostics
 export allocate_inverter_services, evaluate_voltage_aware, InverterServiceAllocationResult
 export AbstractInverterServiceAllocationResult, PerPhaseVoltVarWatt
 export allocate_phase_inverter_services, PhaseInverterServiceAllocationResult
