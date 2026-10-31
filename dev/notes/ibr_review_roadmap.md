@@ -83,7 +83,9 @@ was not representative of certifiable hardware.
 ## User decisions
 
 - [U] **D1 Evidence bundles** (`studies/australian_pv/evidence/bundles`,
-  27 MB binary after dropping the superseded first-benchmark bundle on 2026-11-01). Move to a GitHub Release or Zenodo and keep only manifests
+  15 MB binary: on 2026-11-01 the superseded first-benchmark bundle was dropped,
+  and the historical bundle was replaced by the tag `evidence/historical-d2c9a97`
+  plus a CSV extract of the four night thermal misses). Move to a GitHub Release or Zenodo and keep only manifests
   with checksums and a download step. Creating a release is an external action.
 - [x] **D2 Split PR #75** — decided 2026-11-01: keep as one PR.
 - [U] **D3 LCL filters.** The embedded PWM thermal bound supports only L
@@ -95,7 +97,7 @@ Deleted: 12 temporary dev notes (agent goal/acceptance/review logs, old plans);
 29 superseded study scripts; 10 superseded study pages and 14 figures; all
 tracked historical result folders (`experimental_*`, `sensitivity_*`,
 `coordinated`, `four_leg`, `thermal_energy`, `voltage_aware_*`, ...). All
-historical records remain in `evidence/historical-d2c9a97.json`; pages and
+historical records are kept by the Git tag `evidence/historical-d2c9a97`; pages and
 scripts remain in Git history. `HISTORY.md` summarises them. Kept: the DOE and
 operability roadmaps (forward-looking, not from this PR).
 

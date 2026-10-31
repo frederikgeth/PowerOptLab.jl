@@ -8,7 +8,6 @@ bytes were packed from. The Git tree keeps only compact review files.
 | Manifest | Status | Contents |
 |---|---|---|
 | `current.json` (= `current-05db2db.json`) | Current | Matched benchmark with the declared 7 A / 23 A fixture (15 points, PF/OPF agreement), legacy-fixture sensitivity, 60 matched EMT references, regenerated carrier-domain and DC-boundary validations |
-| `historical-d2c9a97.json` | Historical | 546 files from all earlier campaigns, including failed predictions and solver controls (see [study history](../HISTORY.md)) |
 
 ## Restore current records
 
@@ -23,19 +22,12 @@ python scripts/australian_pv/test_plot_engineering_benchmark.py
 python scripts/australian_pv/summarize_evidence.py --check
 ```
 
-## Restore superseded or historical records
+## Earlier campaigns
 
-Restore into a separate directory; they deliberately differ from the current
-source and must not overwrite it:
-
-```sh
-python scripts/australian_pv/evidence.py restore studies/australian_pv/evidence/historical-d2c9a97.json --output /tmp/australian-pv-history
-```
-
-Reproducing an old campaign needs the source bytes matching its recorded hashes
-(each campaign's `environment.json`), not just the archive commit.
-`dependency_manifest-b61f2440.toml` is the dependency lock for the historical
-records; current records carry their own `dependency_manifest.toml`.
+Records of earlier campaigns are kept by the Git tag `evidence/historical-d2c9a97`
+rather than a bundle; see [study history](../HISTORY.md) for how to check them
+out. The four night-time thermal-prediction misses are extracted in
+`results/historical_night_thermal_misses.csv`.
 
 ## How a campaign is sealed
 
@@ -52,10 +44,10 @@ re-signing of old results), but it means any change to the shared study
 scripts requires a rerun (about 15 minutes on a laptop for everything).
 
 Restoration verifies the bundle and destination before writing, and refuses
-conflicting files, unsafe paths and checksum failures. If a distributed bundle
+conflicting files, unsafe paths and checksum failures. If the distributed bundle
 is missing, restoration falls back to the local cache, then to the pinned Git
-history.
+commit.
 
-**Open decision (roadmap D1):** the bundles are about 27 MB of binary in the
-repository. Moving them to a GitHub Release or Zenodo, keeping only manifests
-and a download step, would keep the repository small.
+**Open decision (roadmap D1):** the one remaining bundle is 15 MB of binary in
+the repository. Moving it to a GitHub Release or Zenodo, keeping only the
+manifest and a download step, would keep the repository small.

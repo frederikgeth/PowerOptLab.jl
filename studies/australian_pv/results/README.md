@@ -10,6 +10,9 @@ Tracked here (compact, reviewable):
   rated-capability gate.
 - `engineering_domain_summary.csv`, `engineering_boundary_emt/comparison.csv` —
   carrier-model validation summaries.
+- `historical_night_thermal_misses.csv` — the four night-time thermal-prediction
+  misses of the first PWM thermal bound (negative result; see
+  [study history](../HISTORY.md)).
 - `validation.json`, `modified_validation.json` — network conversion checks for
   the CSIRO feeder import.
 
