@@ -5,6 +5,10 @@ adds phase/neutral peak witnesses and compares averaged and switched voltage
 extrema with fixed sizing. It retains the LF-only failure and documents the
 carrier approximation and finite-window drift.
 
+The [declared carrier validation domain](engineering_domain.md) covers 972
+P/Q, sequence and modulation points with independent current/charge integration
+and passive R/L orbit checks. Engineering-limit failures remain in the records.
+
 The [mixed-controller thermal/energy extension](thermal_energy.md) adds
 dispatch-dependent PWM capacitor limits and nonlinear DC-energy bounds with
 fixed sizing. Mean, worst-phase, sequence and four-leg controls operate together

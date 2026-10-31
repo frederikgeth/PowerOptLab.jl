@@ -171,3 +171,20 @@ the intended max-export solve. In particular, a positive Ipopt raw
 are not max-export benchmarks and must never be published as such. Further
 work targets an equivalent coordinate formulation, with the loss bias budget,
 engineering constraints and final objective preserved.
+
+The domain campaign has now been reproduced in a fresh Julia process from
+committed preparation code (`3150ba8`). The authoritative input, independent
+36,031-check receipt and per-group summary are saved in
+`studies/australian_pv/results/engineering_domain*`. Eight corruption/coverage
+tests pass against those records. Its generated report and visually inspected
+figure explain the substantial conservatism of the all-duty envelopes. They
+make no thermal-calibration, transient or engineering-feasibility claim for the
+831 rejected dispatches. The recorded working-tree status remains honest about
+the separate, unfinished coordinated script.
+
+A zero-neutral initialization followed by removal of its temporary rows fixes
+the standalone four-leg max-export reproduction, including raw solver and SI
+physical gates. Releasing all fleet neutral rows simultaneously still fails;
+sequential release in decreasing availability is being tested. No temporary
+neutral equality may survive the final benchmark solve. The full goal remains
+active; no accepted coordinated export recovery is claimed at this checkpoint.
