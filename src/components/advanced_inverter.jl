@@ -78,7 +78,11 @@ function _loss_magnitude_epsilon(inv,rating;neutral::Bool=false)
     # nonzero. A rating-relative nanampere width then gives a needlessly stiff
     # Hessian on that cancelling channel. Allocate its absolute watt share,
     # retaining the same total loss-error guarantee and exact current limits.
-    neutral ? min(_NEUTRAL_MAGNITUDE_EPS_MAX_SI,budget) : min(_magnitude_epsilon(rating,1.),budget)
+    # A tight combined-voltage limit can put two phase currents at zero while
+    # an unbalanced Q service remains active. Those phases need the same
+    # absolute, explicitly watt-budgeted norm treatment as a cancelling neutral.
+    (neutral || inv.pwm_dc_voltage_envelope) ? min(_NEUTRAL_MAGNITUDE_EPS_MAX_SI,budget) :
+        min(_magnitude_epsilon(rating,1.),budget)
 end
 
 # A numerical current characteristic is not a hardware rating. In particular,
@@ -851,6 +855,7 @@ Base.@kwdef struct AdvancedInverter <: AbstractDevice
     pwm_current_factor::Float64 = 0.0
     pwm_ac_ripple::Bool = false
     pwm_current_envelope::Bool = false
+    pwm_dc_voltage_envelope::Bool = false
     pwm_ac_harmonics::Int = 64
     pwm_ac_converter_reserve::NTuple{3,Float64} = (0.0, 0.0, 0.0)
     pwm_ac_grid_reserve::NTuple{3,Float64} = (0.0, 0.0, 0.0)
@@ -2111,7 +2116,9 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
         if inv.dc_energy_model===:nonlinear
             er=JuMP.@variable(m,base_name="energy_re_$(inv.id)",start=0.)
             ei=JuMP.@variable(m,base_name="energy_im_$(inv.id)",start=0.)
-            dc_energy=_stamp_dc_energy!(m,inv,er,ei)
+            reserve=inv.pwm_dc_voltage_envelope ? _dc_switching_voltage_bound(inv,
+                [cri[k]*ib for k in 1:3],[cii[k]*ib for k in 1:3];norm_epsilon=_PWM_DC_VOLTAGE_NORM_EPS).total : 0.
+            dc_energy=_stamp_dc_energy!(m,inv,er,ei;switching_reserve=reserve)
             JuMP.@constraint(m,dre==dc_energy.real2)
             JuMP.@constraint(m,dim==dc_energy.imag2)
         end
@@ -2391,6 +2398,7 @@ function extract_device(inverter::AdvancedInverter, h::_InvHandles,
     icap = inverter.topology == :SPLIT_DC ? max(icu, icl) : sqmag(h.icap_sq)
     icap_thermal = inverter.topology == :SPLIT_DC ? max(ictu, ictl) :
         sqmag(h.icap_thermal_sq)
+    physical_report=inverter_physical_feasibility(inverter,h,status;dc_min=dc_min,dc_max=dc_max)
     switching_margin = if !(inverter.topology in _THREE_PHASE_TOPOLOGIES)
         0.0
     elseif !solved
@@ -2406,17 +2414,23 @@ function extract_device(inverter::AdvancedInverter, h::_InvHandles,
         if h.dc_energy===nothing
             _switching_margin(inverter, ure, uim, dr, di, nr, ni, nm; bre=br, bim=bi)
         else
-            current=complex.(JuMP.value.(h.cri),JuMP.value.(h.cii)).*ib
-            u=complex.(ure,uim)
-            _dc_energy_rail_margin(inverter,u,_dc_energy_state(inverter,sum(u.*current))).lower_V
+            physical_report.rail.lower_V
         end
     end
     selected_p, selected_q = inverter.power_limit_location === :converter ?
         (h.p_conv, h.q_conv) : (h.p_poc, h.q_poc)
     apparent_margin = inverter.s_max - hypot(scaled(selected_p, sb), scaled(selected_q, sb))
     current_envelope=_inverter_current_envelope(inverter)
+    check_value(name)=begin
+        index=findfirst(c->c.name==name,physical_report.checks)
+        index===nothing ? nothing : physical_report.checks[index].value
+    end
     return (
         pwm_current_envelope=inverter.pwm_current_envelope,
+        pwm_dc_voltage_envelope=inverter.pwm_dc_voltage_envelope,
+        dc_switching_voltage_bound_V=check_value("dc_switching_voltage_bound"),
+        dc_minimum_bound_V=check_value("dc_voltage_min"),
+        dc_maximum_bound_V=check_value("dc_voltage_max"),
         i_converter_ripple_bound=current_envelope.rms_resolved ? current_envelope.converter_rms : nothing,
         i_grid_ripple_bound=current_envelope.rms_resolved ? current_envelope.grid_rms : nothing,
         i_neutral_ripple_bound=current_envelope.rms_resolved ? current_envelope.neutral_rms : nothing,
@@ -2428,7 +2442,7 @@ function extract_device(inverter::AdvancedInverter, h::_InvHandles,
             [sqrt(2)*mag(h.cri[k],h.cii[k],ib)+current_envelope.phase_peak[k] for k in 1:nph] : nothing,
         i_grid_total_peak_bound=current_envelope.peak_resolved ?
             [sqrt(2)*mag(h.gri[k],h.gii[k],ib)+current_envelope.phase_peak[k] for k in 1:nph] : nothing,
-        physical_feasibility=inverter_physical_feasibility(inverter,h,status;dc_min=dc_min,dc_max=dc_max),
+        physical_feasibility=physical_report,
         power_limit_location=inverter.power_limit_location,
         apparent_power_rating_VA=inverter.s_max,
         apparent_power_margin_VA=apparent_margin,

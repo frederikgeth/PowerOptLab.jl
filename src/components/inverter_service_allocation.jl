@@ -140,7 +140,7 @@ function allocate_inverter_services(inv::AdvancedInverter,request::InverterContr
     effective_options=Dict{String,Any}()
     if JuMP.solver_name(m)=="Ipopt"
         merge!(effective_options,Dict("tol"=>1e-9,"max_iter"=>1000,
-            "mu_strategy"=>"adaptive","nlp_scaling_method"=>"none"))
+            "mu_strategy"=>(inv.pwm_dc_voltage_envelope ? "monotone" : "adaptive"),"nlp_scaling_method"=>"none"))
     end
     for (name,value) in (solver_options isa NamedTuple ? pairs(solver_options) : solver_options)
         effective_options[string(name)]=value

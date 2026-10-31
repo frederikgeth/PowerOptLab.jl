@@ -145,7 +145,8 @@ function allocate_phase_inverter_services(inv::AdvancedInverter,request::Inverte
         p=[JuMP.@expression(m,h.vrpoc[k]*h.gri[k]+h.vipoc[k]*h.gii[k]) for k in 1:3]
         reactive=[JuMP.@expression(m,h.vipoc[k]*h.gri[k]-h.vrpoc[k]*h.gii[k]+
             inv.b_filter_shunt*(h.vb/h.ib)*(h.vrpoc[k]^2+h.vipoc[k]^2)) for k in 1:3]
-        lambda=all(iszero,q) ? 1. : JuMP.@variable(m,lower_bound=0.,upper_bound=1.,start=.5)
+        lambda=all(iszero,q) ? 1. : JuMP.@variable(m,lower_bound=0.,upper_bound=1.,
+            start=inv.pwm_dc_voltage_envelope ? 0. : .5)
         coordinate[]=lambda
         for k in 1:3
             JuMP.@constraint(m,(reactive[k]-lambda*q[k]/h.sb)/scale==0)
@@ -160,7 +161,7 @@ function allocate_phase_inverter_services(inv::AdvancedInverter,request::Inverte
     m=_opf_model(ctx);h=handles[].plant
     options=Dict{String,Any}()
     JuMP.solver_name(m)=="Ipopt" && merge!(options,Dict("tol"=>1e-9,"max_iter"=>1000,
-        "mu_strategy"=>"adaptive","nlp_scaling_method"=>"none"))
+        "mu_strategy"=>(inv.pwm_dc_voltage_envelope ? "monotone" : "adaptive"),"nlp_scaling_method"=>"none"))
     for (name,value) in (solver_options isa NamedTuple ? pairs(solver_options) : solver_options)
         options[string(name)]=value
     end

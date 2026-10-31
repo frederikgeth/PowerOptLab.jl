@@ -558,6 +558,26 @@ quantities. Its conservative inequalities within that approximation are
 separate from the calibrated DC thermal allowance. Coupled circuit/feeder
 transients still require time-domain validation.
 
+`pwm_dc_voltage_envelope=true` combines that AC-current envelope with nonlinear
+DC energy. It requires both absolute DC-voltage limits, an open carrier-frequency
+source and waveform-resolved current bounds. RMS-only manual AC/DC allowances
+are rejected because they cannot establish a voltage peak. The reserve includes
+frozen fundamental gate current and the mean-subtracted gate/AC-ripple-current
+product. `v_dc_min` / `v_dc_max` then constrain the complete LF-plus-carrier
+envelope; `dv2_max` retains its low-frequency Fourier meaning. The same reserve
+reduces full-cycle modulation headroom and widens the thermal model's bus
+denominator bounds. Sizing and hardware tolerances do not change.
+
+`dc_link_energy_diagnostics` exposes `switching_voltage_bound_V`,
+`combined_minimum_V` and `combined_maximum_V`. Plant/operation results also
+report combined bounds and margins. Positive voltage lifts and one-sided
+0.01 V energy-norm / 1 mA current-norm padding keep the numerical model smooth
+and conservative; independent SI checks use exact current magnitudes.
+Combined-voltage service allocation defaults to monotone Ipopt barrier
+continuation, with caller options preserved. This remains a periodic carrier
+approximation with the declared constant-input-power, fixed mean-loss model;
+it does not bound arbitrary transients or cumulative mean-voltage drift.
+
 Set `pwm_strategy=:SPWM` or `:CENTERED` and provide `f_sw` to reconstruct all
 leg switch states against one shared triangular carrier. The audit subtracts
 the carrier-period average from the instantaneous DC current, so correlation

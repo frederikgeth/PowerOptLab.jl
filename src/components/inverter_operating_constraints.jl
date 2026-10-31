@@ -480,6 +480,12 @@ function extract_device(device::ConstrainedInverter,
     current_envelope=_inverter_current_envelope(inv)
     operation = (
         pwm_current_envelope=inv.pwm_current_envelope,
+        pwm_dc_voltage_envelope=inv.pwm_dc_voltage_envelope,
+        dc_switching_voltage_bound_V=plant.dc_switching_voltage_bound_V,
+        dc_voltage_min_margin_V=inv.v_dc_min===nothing || plant.dc_minimum_bound_V===nothing ? nothing :
+            plant.dc_minimum_bound_V-inv.v_dc_min,
+        dc_voltage_max_margin_V=inv.v_dc_max===nothing || plant.dc_maximum_bound_V===nothing ? nothing :
+            inv.v_dc_max-plant.dc_maximum_bound_V,
         pwm_strategy=inv.pwm_strategy,
         pwm_thermal_headroom=inv.pwm_strategy===:NONE ? nothing : device.pwm_thermal_headroom,
         reactive_mode=_reactive_mode(policy),

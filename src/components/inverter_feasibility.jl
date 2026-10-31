@@ -135,10 +135,12 @@ rail waveform, including unequal split-link banks. It does not cover unmodeled
 harmonics or switching transients. SINGLE_PHASE has no three-phase rail model.
 """
 function continuous_rail_margin(inv,voltage,ripple=0im;
-        midpoint=0im,midpoint_mean=0.,bus_fundamental=0im,atol=1e-6,energy=nothing)
+        midpoint=0im,midpoint_mean=0.,bus_fundamental=0im,atol=1e-6,energy=nothing,switching_voltage=nothing)
     if inv.dc_energy_model===:nonlinear
         energy===nothing && throw(ArgumentError("nonlinear rail checks require capacitor-energy evidence; use inverter_physical_feasibility or supply energy"))
-        return _dc_energy_rail_margin(inv,voltage,energy)
+        inv.pwm_dc_voltage_envelope && switching_voltage===nothing &&
+            throw(ArgumentError("combined rail check requires the current-dependent switching voltage reserve"))
+        return _dc_energy_rail_margin(inv,voltage,energy;switching_voltage=something(switching_voltage,0.),atol)
     end
     inv.topology===:SINGLE_PHASE && return (lower_V=Inf,upper_V=Inf,angle_rad=NaN,
         branch="not_applicable",converged=true,evaluations=0)
@@ -266,7 +268,7 @@ function inverter_physical_feasibility(inv; converter_voltage,converter_current,
     upper("single_phase_power_ripple",:VA,abs(ripple),inv.p_ripple_max)
     loss_currents=inv.topology===:FOUR_LEG ? [ic;ineutral] : ic
     loss=inv.p_loss_fixed+inv.a_loss*sum(abs,loss_currents)+inv.c_loss*sum(abs2,loss_currents)
-    caploss=0.; d=0im; midpoint=0im; bus=0im; mean=0.;energy=nothing
+    caploss=0.; d=0im; midpoint=0im; bus=0im; mean=0.;energy=nothing;carrier_voltage=0.
     if inv.topology!==:SINGLE_PHASE
         d=-ripple*_dc_ripple_factor(inv)/inv.v_dc
         if inv.dc_energy_model===:nonlinear
@@ -275,8 +277,15 @@ function inverter_physical_feasibility(inv; converter_voltage,converter_current,
             check("dc_energy_quadrature",:V,energy.quadrature_error_V,0.,1e-6)
             check("dc_energy_positive_voltage",:V,energy.minimum_V,0.,Inf)
             check("dc_energy_maximum_voltage",:V,energy.maximum_V,0.,Inf)
-            inv.v_dc_min===nothing || check("dc_voltage_min",:V,energy.minimum_V,inv.v_dc_min,Inf)
-            upper("dc_voltage_max",:V,energy.maximum_V,inv.v_dc_max)
+            if inv.pwm_dc_voltage_envelope
+                parts=_dc_switching_voltage_bound(inv,real.(ic),imag.(ic))
+                carrier_voltage=parts.total
+                check("dc_switching_frozen_voltage_bound",:V,parts.frozen,0.,Inf)
+                check("dc_switching_ac_variation_bound",:V,parts.ac_variation,0.,Inf)
+                check("dc_switching_voltage_bound",:V,carrier_voltage,0.,Inf)
+            end
+            inv.v_dc_min===nothing || check("dc_voltage_min",:V,energy.minimum_V-carrier_voltage,inv.v_dc_min,Inf)
+            upper("dc_voltage_max",:V,energy.maximum_V+carrier_voltage,inv.v_dc_max)
         end
         upper("dc_voltage_ripple",:V,abs(d),inv.dv2_max)
         # I_C,2w = j*2w*C_eq*D: phasor D is peak, current rating is RMS.
@@ -292,7 +301,7 @@ function inverter_physical_feasibility(inv; converter_voltage,converter_current,
             append!(checks,_allocation_pwm_checks(inv,u,ic,d,i2sq,switching;headroom=pwm_thermal_headroom,energy))
             padded=energy===nothing ? nothing : begin
                 delta=2inv.v_dc*sqrt(abs2(energy.energy_coordinate)+_PWM_ALLOCATION_BUS_EPS^2)
-                (sqrt(max(0.,energy.center_V2-delta)),sqrt(energy.center_V2+delta))
+                (sqrt(max(0.,energy.center_V2-delta))-carrier_voltage,sqrt(energy.center_V2+delta)+carrier_voltage)
             end
             switching+=max(0.,_allocation_pwm_variance(inv,real.(u),imag.(u),real.(ic),imag.(ic),
                 real(d),imag(d),real(sconv),real(ripple),imag(ripple);headroom=pwm_thermal_headroom,voltage_bounds=padded))
@@ -327,7 +336,7 @@ function inverter_physical_feasibility(inv; converter_voltage,converter_current,
         zero("reported_$(name)_residual",unit,getproperty(reported,name)-getproperty(derived,name))
     end
     rail=continuous_rail_margin(inv,u,d;midpoint=midpoint,midpoint_mean=mean,
-        bus_fundamental=bus,atol=t.rail_enclosure_V,energy)
+        bus_fundamental=bus,atol=t.rail_enclosure_V,energy,switching_voltage=carrier_voltage)
     if inv.topology!==:SINGLE_PHASE
         check("continuous_rail_headroom",:V,rail.lower_V,0.,Inf)
     end

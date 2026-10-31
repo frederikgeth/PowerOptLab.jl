@@ -1,5 +1,6 @@
 # Carrier-period engineering envelopes for a monolithic, inductive bridge.
 # These are separate from the calibrated DC thermal allocation allowance.
+const _PWM_DC_VOLTAGE_NORM_EPS = 1e-3 # A; one-sided norm bias, not a voltage tolerance
 
 function _switching_envelope_geometry(inv)
     inv.topology in (:THREE_LEG,:FOUR_LEG) || throw(ArgumentError(
@@ -100,7 +101,45 @@ function _validate_switching_current_limits(inv)
             (inv.i_grid_peak_max,maximum(reserve.phase_peak)),(inv.In_peak_max,reserve.neutral_peak))
         limit===nothing || limit>allowance || throw(ArgumentError("carrier peak bound exhausts the declared peak-current limit"))
     end
+    if inv.pwm_dc_voltage_envelope
+        inv.pwm_current_envelope && inv.dc_energy_model===:nonlinear ||
+            throw(ArgumentError("DC voltage envelope requires nonlinear energy and the AC current envelope"))
+        inv.v_dc_min!==nothing && inv.v_dc_max!==nothing ||
+            throw(ArgumentError("DC voltage envelope requires declared lower and upper DC voltage limits"))
+        inv.pwm_dc_source_r===nothing && inv.pwm_dc_source_l==0 ||
+            throw(ArgumentError("DC voltage envelope requires an open carrier-frequency source"))
+        reserve.peak_resolved && iszero(inv.i_sw) && iszero(inv.pwm_current_factor) ||
+            throw(ArgumentError("RMS-only AC/DC allowances cannot establish the carrier voltage peak"))
+    end
     nothing
+end
+
+"""
+    _dc_switching_voltage_bound(inv, ir, ii; norm_epsilon=0)
+
+Uniform carrier-voltage reserve, independent of the thermal calibration factor.
+All leg currents sum to zero, so the gate-current range for frozen fundamental
+currents is half their absolute sum. The primitive range bound W*T/4 gives
+`sqrt(2)*sum(abs(I_leg))/(8*f_sw*C)` over the line cycle. Bounded AC ripple adds
+a gate-current variation range no greater than the sum of leg peak bounds,
+giving a separate `sum(peak_leg)/(4*f_sw*C)` term. The latter also covers the
+mean-subtracted part of the gate/ripple-current product without assuming that
+product is frozen or orthogonal to the fundamental carrier term.
+
+This is a periodic carrier approximation, not an all-time transient enclosure.
+At constant nonnegative input power, the DC source's incremental voltage term
+is dissipative. The waveform mean and slow energy balance remain those of the
+declared mean-loss model. NLP norms use a positive, one-sided smoothing bias;
+the independent SI reconstruction uses exact magnitudes.
+"""
+function _dc_switching_voltage_bound(inv,ir,ii;norm_epsilon=0.)
+    magnitudes=[sqrt(ir[k]^2+ii[k]^2+norm_epsilon^2) for k in 1:3]
+    inv.topology===:FOUR_LEG && push!(magnitudes,
+        sqrt(sum(ir)^2+sum(ii)^2+norm_epsilon^2))
+    bounds=_inverter_current_envelope(inv)
+    frozen=sqrt(2)*sum(magnitudes)/(8inv.f_sw*inv.c_dc)
+    ac_variation=(sum(bounds.phase_peak)+bounds.neutral_peak)/(4inv.f_sw*inv.c_dc)
+    (frozen=frozen,ac_variation=ac_variation,total=frozen+ac_variation)
 end
 
 # Integrate exact centered-PWM events, not sampled gate states or harmonics.

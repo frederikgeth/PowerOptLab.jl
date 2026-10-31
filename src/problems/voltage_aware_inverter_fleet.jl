@@ -405,6 +405,7 @@ function voltage_aware_inverter_rows(result::VoltageAwareInverterFleetResult)
         allocation=get(result.devices,id,nothing)
         current=point===nothing ? nothing : point.state.converter_current
         grid=point===nothing ? nothing : point.state.grid_current
+        envelope=_inverter_current_envelope(inv)
         check_value(name)=report===nothing ? nothing :
             (c=findfirst(c->c.name==name,report.checks);c===nothing ? nothing : report.checks[c].value)
         sensed=try
@@ -417,6 +418,7 @@ function voltage_aware_inverter_rows(result::VoltageAwareInverterFleetResult)
         power(name)=!active ? 0. : point===nothing ? NaN : getproperty(point,name)
         push!(rows,(device_id=id,bus=inv.bus,operating_mode=result.operating_modes[id],model_present=active,
             pwm_strategy=inv.pwm_strategy,dc_energy_model=inv.dc_energy_model,
+            pwm_current_envelope=inv.pwm_current_envelope,pwm_dc_voltage_envelope=inv.pwm_dc_voltage_envelope,
             accepted=result.solve.publishable,reason=result.reason,iterations=result.iterations,
             physical_checked=report===nothing ? nothing : report.checked,
             physical_feasible=report===nothing ? nothing : report.passed,
@@ -426,16 +428,27 @@ function voltage_aware_inverter_rows(result::VoltageAwareInverterFleetResult)
             filter_loss_W=!active ? nothing : point===nothing ? NaN : point.p_conv-point.p_poc,
             maximum_converter_current_A=!active ? 0. : current===nothing ? NaN : maximum(abs,current),
             maximum_grid_current_A=!active ? 0. : grid===nothing ? NaN : maximum(abs,grid),
+            maximum_converter_current_bound_A=!active || current===nothing || !envelope.rms_resolved ? nothing :
+                maximum(hypot.(abs.(current),envelope.converter_rms)),
+            maximum_grid_current_bound_A=!active || grid===nothing || !envelope.rms_resolved ? nothing :
+                maximum(hypot.(abs.(grid),envelope.grid_rms)),
+            maximum_converter_peak_bound_A=!active || current===nothing || !envelope.peak_resolved ? nothing :
+                maximum(sqrt(2).*abs.(current).+envelope.phase_peak),
+            neutral_peak_current_bound_A=!active || current===nothing || !envelope.peak_resolved ? nothing :
+                sqrt(2)*abs(sum(current))+envelope.neutral_peak,
             neutral_total_rms_current_A=!active ? 0. : current===nothing ? NaN :
-                hypot(abs(sum(current)),inv.pwm_ac_neutral_reserve),
+                hypot(abs(sum(current)),envelope.neutral_rms),
             neutral_current_rating_A=inv.In_max,
             converter_negative_sequence_A=!active ? 0. : current===nothing ? NaN : abs(_phasor_sequences(Tuple(current))[3]),
             capacitor_thermal_current_A=check_value("capacitor_current"),
             capacitor_carrier_audit_current_A=check_value("allocation_pwm_actual_capacitor_current"),
             capacitor_low_frequency_current_A=check_value("capacitor_low_frequency_current"),
             capacitor_switching_current_A=check_value("allocation_pwm_carrier_prediction"),
-            dc_minimum_voltage_V=check_value("dc_energy_positive_voltage"),
-            dc_maximum_voltage_V=check_value("dc_energy_maximum_voltage"),
+            dc_minimum_voltage_V=check_value(inv.pwm_dc_voltage_envelope ? "dc_voltage_min" : "dc_energy_positive_voltage"),
+            dc_maximum_voltage_V=check_value(inv.pwm_dc_voltage_envelope ? "dc_voltage_max" : "dc_energy_maximum_voltage"),
+            dc_low_frequency_minimum_V=check_value("dc_energy_positive_voltage"),
+            dc_low_frequency_maximum_V=check_value("dc_energy_maximum_voltage"),
+            dc_switching_voltage_bound_V=check_value("dc_switching_voltage_bound"),
             dc_ripple_voltage_V=check_value("dc_voltage_ripple"),
             continuous_rail_lower_V=report===nothing ? nothing : report.rail.lower_V,
             vmin_sensed_V=sensed===nothing ? NaN : minimum(abs,sensed),
