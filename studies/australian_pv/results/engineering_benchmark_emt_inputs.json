@@ -20,10 +20,10 @@
     "source_sha256": {
         "src/formulations/experiments.jl": "aa8d24ef1b6b283c56ab7c32107d6e1be7afd4dd212494fd893ac4fea81de75d",
         "src/interfaces.jl": "e940c50d72678d8597b112a2bc8abad7c2aae0314e8871c7bf8132b856ab1786",
-        "src/components/inverter_pwm_allocation.jl": "065b8b67c0fc45d9a89d4951c04b7fe9dafab5c71e7ae1c70a7ab8a92b8f3a03",
+        "src/components/inverter_pwm_allocation.jl": "2566a2bc94f8fe87e6868aa791fc3bd36ad6307cd38d94d61263d9480692e766",
         "scripts/australian_pv/thermal_energy.jl": "ad131a0a4466b604cb821fbf391cf53d0e680fa5b8c52a5d6988d4a7208da3cf",
         "src/problems/bilevel.jl": "bd6956207345b46b2f21b3c3c9e2aa06095e8a15fea15e0781470217d552a207",
-        "src/components/inverter_operating_constraints.jl": "a2e89b974bd28dd6b830ab7a554008e45353a0aa8d316fb27f28aeb5e00f9041",
+        "src/components/inverter_operating_constraints.jl": "f39bb1034fb3ee231e559e93e09c1121fd185464a9f0f11677c6785ff8d5a45e",
         "src/problems/state_estimation_patterns.jl": "196e073470c207b4b991f0924cbc86d7f4ecfc7ae9f922f3b06a36092b8eec07",
         "scripts/australian_pv/audit.jl": "4cf28ca4836fe4580df5d43b593750f5fb6f1df7a3773d2ffb28b50d5b9ca030",
         "scripts/australian_pv/prepare_engineering_benchmark_emt.jl": "6e2cc9101830dec6539edd4130a3e5109f7446b31520cb8b341d77ef98d53387",
@@ -52,8 +52,9 @@
         "src/problems/inverter_control_sizing.jl": "a39390cb83cb6d9c31155be2c72686f9c6cf5e3c4fc80a1c79ab6a9fa8eb4647",
         "src/problems/state_estimation_injections.jl": "a5f04ef35308546b1673e23cf6a3e49874c2d12e764863264bc55378ae30c9ec",
         "src/components/battery_chemistry.jl": "71ecea656c1d432c0460c2edcbe69fa9a4a538131d3249e129e00ba1263f1188",
-        "scripts/australian_pv/coordinated_engineering.jl": "8a434d893b19653dc7caa7260edf4465e632f668573a19c9d6f14402e3e0133c",
-        "src/PowerOptLab.jl": "7b11a184aa08e3089ddd203799bb88b6c16e8b0f14a07269291d1e5f8aa16ae0",
+        "src/components/inverter_carrier_thermal.jl": "3ccd458b2f0a87d27891b051de89ea50e7483383fc09efed90c0129da51d1ebd",
+        "scripts/australian_pv/coordinated_engineering.jl": "973b8b3e6958964959afef057d73847b01de7a898f29a5f06c5e8730c24d710c",
+        "src/PowerOptLab.jl": "f29426d9f6ab6c32077a1e7a95d9ad02bd1395e1da43e57bda85e08d415d8e4b",
         "src/components/inverter_feasibility.jl": "d2e93651e245754ab54490c267d7e705cea5ce32238236843ca349d5ecc32b40",
         "src/formulations/jump.jl": "8d1480ed914a90b20302cd7b495fc470e18697dc15083897bf1d1f1808991e26",
         "src/problems/voltage_aware_inverter_fleet.jl": "285ef3067ce278ba7ee76b81e16d00348849cf46f72ab05ac43f3b972aef938d",
@@ -68,7 +69,7 @@
         "scripts/australian_pv/four_leg.jl": "f935d962f17cc6114af1983a4d8add3960b32bdc38d4b6d349682de8c42b1031",
         "src/formulations/relations.jl": "d0846f193d6705ee59a83729cf0e8eb928294dcab0f9136e70a87070951f4d8c",
         "src/upstream.jl": "313bf70a703b43b2134aef1f9f96c30bda4bc301e17b9f5f990244105d57b238",
-        "src/components/inverter_phase_allocation.jl": "bb9476df02d062e67e57daff921a21c56893d6bbbdc3e70925503f799052ff30",
+        "src/components/inverter_phase_allocation.jl": "04e552cc6e2c823b5371902c8dd7a9970a12b298009ab100f8f2e514bbac9157",
         "src/components/inverter_service_allocation.jl": "95183c86dfb0db01be01ce170dac10436c8e8ad5fff61da230e6e1baaf9e219f",
         "src/components/ivq_battery.jl": "2e3f74858ef64f95ce8b7ed125f1e19db739bb7843edbb35e9f3e3dfaa649c95",
         "src/problems/inverter_control_study.jl": "3c10d89ec926f4b4700f1e18d2d23da47c03b91819f0455994943c3d75441cc4",
@@ -79,6 +80,7 @@
         "scripts/enwl_advanced_ibr/common.jl": "22fc5aed51e469e8d314c39980fcc6fd8b4a02c7f664dfb2310f5944e37f3054",
         "scripts/australian_pv/voltage_aware.jl": "57efa97a6c14b98264b9bec20b4c8e10d868a518cc855dfb2404a46d017521ee",
         "src/components/inverter_current_projection.jl": "6f37161ca071edcdcc240110d6651d6303282c6b535eab063b1448d66c4e0a9e",
+        "src/components/inverter_solver_continuation.jl": "afcb57e975fdc81a3a46ef9b5a9d62d40f8b0e13ac03a4fda21f20ead5ed73c1",
         "src/problems/ipopt_state_estimation.jl": "3b7a42d19f65e9f9ebfe66d629d5d128b2bfcff4b6189d7abc422db1cf005464",
         "src/components/evse.jl": "dfafe56bccafa827a7c80088a57a20cc25493c389f811a6db4a80fce8333d047",
         "src/problems/state_estimation_measurements.jl": "bbf861c3106fe812f8f52c296588f2d8a2e4884c3dacb079739fa64667da958b",
@@ -89,16 +91,16 @@
     "sizing_changed": false,
     "selection_rule": "one highest model capacitor-current site per controller label, case and mode; exact ties resolved by device ID",
     "benchmark_record_sha256": {
-        "points/high_source_local.json": "475decf61a54ae6ddd27dde97dcd5c601ca1b206d5da35be64f366dfe8af619c",
-        "points/nominal_coordinated.json": "d33029601d9459fa6fae8ea2207f4bf516c2832546d8a7698b1a81b74d3e4a16",
-        "points/night_coordinated.json": "af08a3dca47a2f4fe9951662fae1e71e9e31bb84f1a6a31629e680c028481482",
-        "points/rotated_unbalance_coordinated.json": "b9734d51375db7da01017247ca640b10f914da73d76894a1013ce6c322283377",
-        "points/rotated_unbalance_local.json": "b741a63f36f8991657e684371c0115a115911d330b4885a16596fa5cbf1f43ba",
-        "points/night_local.json": "52f85c4fe67f12d9fbd8ae4173d8dde264069b6ac7f3afd1ab1fb7d71ee1641d",
-        "points/nominal_local.json": "e029f7adc3599e84416928afddb3dac8344ae7924626dcc809558f3cbeb33d1a",
-        "points/high_source_coordinated.json": "28316b860d88976e5c0d4a69a4150eaf879eca65f793a6e5c2ef0ac8c1160205"
+        "points/high_source_local.json": "bd645b0b03ab3305247b2a1204dd9f1c9daad6a01de2d3bad7a640a9e780aa10",
+        "points/nominal_coordinated.json": "daddcb4879f3ed1d3003c56d50707915abb7f59f1b1f37d3bebbc2c07e013428",
+        "points/night_coordinated.json": "1a44bd9d8c1f81e7b196513f504c1637aad08e9ea5f67b310319ddaebf17f6a4",
+        "points/rotated_unbalance_coordinated.json": "448b884bdd3e7f7dfb3d5234c49e03e715ecfa62fed3c45cd7021dc1eaedd8bf",
+        "points/rotated_unbalance_local.json": "ed9265a5e0d6b383f33aa0c7fda3850fa631db81972241d550bde2669c42b98e",
+        "points/night_local.json": "2e61e2caba328a1d65f8553a0bbc12742ac761164c2e5dc4818e1c5fb79b6fda",
+        "points/nominal_local.json": "5e9d6e66c1f6a71b992642d185ee88a5733fde5fe76dc02a1d67ea0726709e49",
+        "points/high_source_coordinated.json": "b0b1deb7573f6f9881c2c7b0f772db99bf35b687e0f351933d5135a0794e9a54"
     },
-    "git_status": "",
+    "git_status": " M studies/australian_pv/README.md\n?? studies/australian_pv/evidence/README.md\n",
     "timing": {
         "discard_cycles": 6,
         "switching_Hz": 10000,
@@ -109,48 +111,48 @@
         ],
         "cycles": 10
     },
-    "git_revision": "9b2eb96a7fafff852508b70f398deac3a4b50127",
+    "git_revision": "d01b3d0bb9558b03f36f268e904aea9d539e45b4",
     "scope": "fixed POC L-filter snapshots, constant-power DC inputs and fixed mean converter loss; no feeder/controller loops, periodic-steady-state or all-time DC drift certificate",
-    "benchmark_environment_sha256": "110c135508f376a0917909df1bd67b8716e1502e79e8c9154ecb5dba5b008628",
+    "benchmark_environment_sha256": "16b215e69a1934a31c8624447e2e6c4effe4d7090f2630061b7c1ef0bf1713d4",
     "Project_sha256": "2724f9784cf88c1b37a76368436c396b5d7ba9a05d19bb28a73bbbabc9eafb24",
-    "benchmark_audit_sha256": "c945ea806c98e69c087b04ca6ef342535aaf348d7670cbc125dc36f0e38c65ca",
+    "benchmark_audit_sha256": "5e5aa32a852bf59c4d347e6681d347ca6f6c1c3f125c459220ff5660d33b8077",
     "cases": [
         {
             "pwm_dc_voltage_envelope": true,
-            "parent_capacitor_model_A": 0.9999999994145401,
+            "parent_capacitor_model_A": 0.9999999994952788,
             "dc_2omega_peak_rating_V": 7.5,
             "dc_energy_model": "nonlinear",
             "dc_voltage_V": 750,
             "frequency_Hz": 50,
             "p_available_W": 3000,
             "grid_current_rating_A": null,
-            "mean_converter_loss_W": 27.423829488878578,
+            "mean_converter_loss_W": 26.315198906657233,
             "converter_voltage": [
                 [
-                    125.3519614957205,
-                    -208.58795702634072
+                    125.13649473994634,
+                    -208.65581227896703
                 ],
                 [
-                    -243.87160868144323,
-                    0.038926513849748545
+                    -243.82644497830626,
+                    0.25783089573215334
                 ],
                 [
-                    118.33463385509634,
-                    209.20024999299474
+                    118.50421518289096,
+                    209.0542361841178
                 ]
             ],
             "current": [
                 [
-                    1.5306304065105816,
-                    -0.637796887478486
+                    1.4452927957543693,
+                    -0.511819702379451
                 ],
                 [
-                    -1.3176635102663048,
-                    -1.006666372103823
+                    -1.1658952622951797,
+                    -0.9957504258401924
                 ],
                 [
-                    -0.21296689624427673,
-                    1.644463259582309
+                    -0.2793975334591894,
+                    1.5075701282196432
                 ]
             ],
             "expect_averaged_hardware_accepted": true,
@@ -171,74 +173,74 @@
             "neutral_peak_rating_A": null,
             "dc_voltage_max_rating_V": 765,
             "dc_voltage_min_rating_V": 735,
-            "dc_switching_voltage_bound_V": 1.8075087382527308,
+            "dc_switching_voltage_bound_V": 1.7854197445256144,
             "parent_mode": "local",
-            "parent_point_sha256": "e029f7adc3599e84416928afddb3dac8344ae7924626dcc809558f3cbeb33d1a",
+            "parent_point_sha256": "5e9d6e66c1f6a71b992642d185ee88a5733fde5fe76dc02a1d67ea0726709e49",
             "neutral_L_H": 0,
             "case_id": "nominal_local_mean_vv_vw_pv_ld1970_load_c",
             "grid_peak_rating_A": 14,
             "modulation_utilization": 0.96,
-            "p_dc_W": 992.4504022824649,
+            "p_dc_W": 880.0417270012165,
             "local_controller": "mean_vv_vw",
             "grid_voltage": [
                 [
-                    124.30604924076918,
-                    -210.52786710058194
+                    124.268473211311,
+                    -210.4995238457125
                 ],
                 [
-                    -245.0286639593178,
-                    1.9146681338876677
+                    -244.98913526804137,
+                    1.9314153739348943
                 ],
                 [
-                    120.53760138792225,
-                    209.26441844719804
+                    120.53492700126142,
+                    209.22436327266053
                 ]
             ],
             "fundamental_reference_accepted": true,
-            "reference_physical_check_count": 38,
+            "reference_physical_check_count": 41,
             "parent_case_id": "nominal"
         },
         {
             "pwm_dc_voltage_envelope": true,
-            "parent_capacitor_model_A": 0.9999999995612427,
+            "parent_capacitor_model_A": 0.9999999996368588,
             "dc_2omega_peak_rating_V": 7.5,
             "dc_energy_model": "nonlinear",
             "dc_voltage_V": 750,
             "frequency_Hz": 50,
-            "p_available_W": 5000,
+            "p_available_W": 1250,
             "grid_current_rating_A": null,
-            "mean_converter_loss_W": 27.990560870789373,
+            "mean_converter_loss_W": 26.92012269588547,
             "converter_voltage": [
                 [
-                    124.78120151762721,
-                    -208.3409530631912
+                    124.51125383150317,
+                    -208.46782070931724
                 ],
                 [
-                    -243.3166194967395,
-                    0.4162527282368791
+                    -243.27336204008682,
+                    0.7171513596085939
                 ],
                 [
-                    118.37186182254244,
-                    208.52657896303734
+                    118.6025294131245,
+                    208.34039740355186
                 ]
             ],
             "current": [
                 [
-                    1.7118813539652562,
-                    -0.17575145875279483
+                    1.6018138968113236,
+                    0.0021087930176427665
                 ],
                 [
-                    -1.0081459050147215,
-                    -1.394657011422415
+                    -0.79908068008106,
+                    -1.3882659232823729
                 ],
                 [
-                    -0.7037354489505347,
-                    1.5704084701752097
+                    -0.8027332167302637,
+                    1.38615713026473
                 ]
             ],
             "expect_averaged_hardware_accepted": true,
             "phase_peak_rating_A": 14,
-            "device_id": "pv_ld2050_load_a",
+            "device_id": "pv_ld2804_load_c",
             "expect_switched_hardware_accepted": true,
             "phase_current_rating_A": 10,
             "capacitor_current_rating_A": 1,
@@ -254,69 +256,69 @@
             "neutral_peak_rating_A": null,
             "dc_voltage_max_rating_V": 765,
             "dc_voltage_min_rating_V": 735,
-            "dc_switching_voltage_bound_V": 1.8185897070048853,
+            "dc_switching_voltage_bound_V": 1.797541923821785,
             "parent_mode": "local",
-            "parent_point_sha256": "e029f7adc3599e84416928afddb3dac8344ae7924626dcc809558f3cbeb33d1a",
+            "parent_point_sha256": "5e9d6e66c1f6a71b992642d185ee88a5733fde5fe76dc02a1d67ea0726709e49",
             "neutral_L_H": 0,
-            "case_id": "nominal_local_worst_vv_vw_pv_ld2050_load_a",
+            "case_id": "nominal_local_worst_vv_vw_pv_ld2804_load_c",
             "grid_peak_rating_A": 14,
             "modulation_utilization": 0.96,
-            "p_dc_W": 767.1049538121198,
+            "p_dc_W": 612.9101481330704,
             "local_controller": "worst_vv_vw",
             "grid_voltage": [
                 [
-                    124.32237390436474,
-                    -210.58167302339018
+                    124.30220282241571,
+                    -210.58649847572678
                 ],
                 [
-                    -245.02772609840744,
-                    1.9339690773794629
+                    -245.00366530368703,
+                    1.9575337273698898
                 ],
                 [
-                    120.54179603747286,
-                    209.24958257409375
+                    120.54188368581218,
+                    209.21869280220014
                 ]
             ],
             "fundamental_reference_accepted": true,
-            "reference_physical_check_count": 38,
+            "reference_physical_check_count": 41,
             "parent_case_id": "nominal"
         },
         {
             "pwm_dc_voltage_envelope": true,
-            "parent_capacitor_model_A": 0.9999999994229477,
+            "parent_capacitor_model_A": 0.9999999995019695,
             "dc_2omega_peak_rating_V": 7.5,
             "dc_energy_model": "nonlinear",
             "dc_voltage_V": 750,
             "frequency_Hz": 50,
             "p_available_W": 3000,
             "grid_current_rating_A": null,
-            "mean_converter_loss_W": 27.416793583364335,
+            "mean_converter_loss_W": 26.30786472894316,
             "converter_voltage": [
                 [
-                    125.34810299819522,
-                    -208.5673065807089
+                    125.13266979237387,
+                    -208.6350905285472
                 ],
                 [
-                    -243.8747321842907,
-                    0.027596528409638887
+                    -243.82963253518417,
+                    0.24642738291981825
                 ],
                 [
-                    118.32340183561034,
-                    209.2072115632446
+                    118.4929712603494,
+                    209.06135810966288
                 ]
             ],
             "current": [
                 [
-                    1.527444985968683,
-                    -0.6433735220172653
+                    1.4422904145374704,
+                    -0.5177471372074188
                 ],
                 [
-                    -1.3209003071735599,
-                    -1.0011193997234122
+                    -1.1695273808270272,
+                    -0.9901865700205288
                 ],
                 [
-                    -0.20654467879512287,
-                    1.6444929217406772
+                    -0.27276303371044314,
+                    1.5079337072279477
                 ]
             ],
             "expect_averaged_hardware_accepted": true,
@@ -337,69 +339,69 @@
             "neutral_peak_rating_A": null,
             "dc_voltage_max_rating_V": 765,
             "dc_voltage_min_rating_V": 735,
-            "dc_switching_voltage_bound_V": 1.8073702946351713,
+            "dc_switching_voltage_bound_V": 1.7852717253920294,
             "parent_mode": "local",
-            "parent_point_sha256": "e029f7adc3599e84416928afddb3dac8344ae7924626dcc809558f3cbeb33d1a",
+            "parent_point_sha256": "5e9d6e66c1f6a71b992642d185ee88a5733fde5fe76dc02a1d67ea0726709e49",
             "neutral_L_H": 0,
             "case_id": "nominal_local_sequence_vv_vw_pv_ld626_load_c",
             "grid_peak_rating_A": 14,
             "modulation_utilization": 0.96,
-            "p_dc_W": 994.7730984220501,
+            "p_dc_W": 882.6573246380466,
             "local_controller": "sequence_vv_vw",
             "grid_voltage": [
                 [
-                    124.29523691593302,
-                    -210.5022664263657
+                    124.25720629609448,
+                    -210.47404754287734
                 ],
                 [
-                    -245.0240235248012,
-                    1.9068852252600934
+                    -244.98448427792195,
+                    1.924079517948777
                 ],
                 [
-                    120.52555925838304,
-                    209.26288271205095
+                    120.52328649936658,
+                    209.22266298896403
                 ]
             ],
             "fundamental_reference_accepted": true,
-            "reference_physical_check_count": 38,
+            "reference_physical_check_count": 41,
             "parent_case_id": "nominal"
         },
         {
             "pwm_dc_voltage_envelope": true,
-            "parent_capacitor_model_A": 0.9999999993354606,
+            "parent_capacitor_model_A": 0.9999999995890287,
             "dc_2omega_peak_rating_V": 7.5,
             "dc_energy_model": "nonlinear",
             "dc_voltage_V": 750,
             "frequency_Hz": 50,
             "p_available_W": 3000,
             "grid_current_rating_A": null,
-            "mean_converter_loss_W": 28.583220464890637,
+            "mean_converter_loss_W": 25.742819744016273,
             "converter_voltage": [
                 [
-                    125.76027612199135,
-                    -207.63040411032335
+                    125.1539748607637,
+                    -207.9061783790548
                 ],
                 [
-                    -242.6576708061079,
-                    1.2953812141697867
+                    -242.54827886507854,
+                    1.9497850478706151
                 ],
                 [
-                    119.78526969841498,
-                    210.614345266859
+                    120.34371985356483,
+                    210.1876241916368
                 ]
             ],
             "current": [
                 [
-                    1.656152704906933,
-                    -0.3291616602441733
+                    1.3944792111872935,
+                    0.09410054233368084
                 ],
                 [
-                    -1.1351390091702191,
-                    -1.3709226414649318
+                    -0.638490815436001,
+                    -1.3659894562361772
                 ],
                 [
-                    0.18751515884680375,
-                    1.2070641889199727
+                    -0.056285046274513036,
+                    0.7661060789152311
                 ]
             ],
             "expect_averaged_hardware_accepted": true,
@@ -420,69 +422,69 @@
             "neutral_peak_rating_A": 14,
             "dc_voltage_max_rating_V": 765,
             "dc_voltage_min_rating_V": 735,
-            "dc_switching_voltage_bound_V": 2.59878992498913,
+            "dc_switching_voltage_bound_V": 2.5389147002910484,
             "parent_mode": "local",
-            "parent_point_sha256": "e029f7adc3599e84416928afddb3dac8344ae7924626dcc809558f3cbeb33d1a",
+            "parent_point_sha256": "5e9d6e66c1f6a71b992642d185ee88a5733fde5fe76dc02a1d67ea0726709e49",
             "neutral_L_H": 0.004209648244780632,
             "case_id": "nominal_local_phase_vv_vw_pv_ld248_load_b",
             "grid_peak_rating_A": 14,
             "modulation_utilization": 0.96,
-            "p_dc_W": 855.5663187583147,
+            "p_dc_W": 487.1572790478188,
             "local_controller": "phase_vv_vw",
             "grid_voltage": [
                 [
-                    124.3602115909122,
-                    -210.6489619332658
+                    124.33256938508151,
+                    -210.6212898323296
                 ],
                 [
-                    -245.0663159056648,
-                    2.1060795728607995
+                    -245.03179307784845,
+                    2.116373357115986
                 ],
                 [
-                    120.61109116832185,
-                    209.3348947300291
+                    120.60290527306107,
+                    209.30227573664231
                 ]
             ],
             "fundamental_reference_accepted": true,
-            "reference_physical_check_count": 39,
+            "reference_physical_check_count": 42,
             "parent_case_id": "nominal"
         },
         {
             "pwm_dc_voltage_envelope": true,
-            "parent_capacitor_model_A": 0.9999999990239127,
+            "parent_capacitor_model_A": 0.999999999090487,
             "dc_2omega_peak_rating_V": 7.5,
             "dc_energy_model": "nonlinear",
             "dc_voltage_V": 750,
             "frequency_Hz": 50,
             "p_available_W": 3000,
             "grid_current_rating_A": null,
-            "mean_converter_loss_W": 26.889795321677717,
+            "mean_converter_loss_W": 25.746919767129175,
             "converter_voltage": [
                 [
-                    126.1586589671955,
-                    -209.8957652197034
+                    125.97271430764884,
+                    -209.93969708851807
                 ],
                 [
-                    -245.41321447444025,
-                    -0.019407180302974118
+                    -245.36148845875928,
+                    0.16327262632178519
                 ],
                 [
-                    118.99160481525865,
-                    210.570037154519
+                    119.12557195102022,
+                    210.43577154969913
                 ]
             ],
             "current": [
                 [
-                    0.7802346926278632,
-                    -1.395032885240613
+                    0.7179845452385432,
+                    -1.2803584424811687
                 ],
                 [
-                    -1.5982512640470041,
-                    0.02181337789063401
+                    -1.4678152097578405,
+                    0.01838636553938828
                 ],
                 [
-                    0.8180165714191409,
-                    1.3732195073499793
+                    0.7498306645192975,
+                    1.2619720769417804
                 ]
             ],
             "expect_averaged_hardware_accepted": true,
@@ -503,69 +505,69 @@
             "neutral_peak_rating_A": null,
             "dc_voltage_max_rating_V": 765,
             "dc_voltage_min_rating_V": 735,
-            "dc_switching_voltage_bound_V": 1.7969382013046609,
+            "dc_switching_voltage_bound_V": 1.7738741896420245,
             "parent_mode": "coordinated",
-            "parent_point_sha256": "d33029601d9459fa6fae8ea2207f4bf516c2832546d8a7698b1a81b74d3e4a16",
+            "parent_point_sha256": "daddcb4879f3ed1d3003c56d50707915abb7f59f1b1f37d3bebbc2c07e013428",
             "neutral_L_H": 0,
             "case_id": "nominal_coordinated_mean_vv_vw_pv_ld1970_load_c",
             "grid_peak_rating_A": 14,
             "modulation_utilization": 0.96,
-            "p_dc_W": 1196.8621969716096,
+            "p_dc_W": 1100.0278464424694,
             "local_controller": "mean_vv_vw",
             "grid_voltage": [
                 [
-                    124.21054193836476,
-                    -210.7431325016307
+                    124.18448681135969,
+                    -210.7199042455779
                 ],
                 [
-                    -245.17299755250968,
-                    2.091395297173152
+                    -245.14305392884296,
+                    2.1020266443839453
                 ],
                 [
-                    120.69950492215882,
-                    209.30660195897016
+                    120.69536491739304,
+                    209.27722468869678
                 ]
             ],
             "fundamental_reference_accepted": true,
-            "reference_physical_check_count": 38,
+            "reference_physical_check_count": 41,
             "parent_case_id": "nominal"
         },
         {
             "pwm_dc_voltage_envelope": true,
-            "parent_capacitor_model_A": 0.9999999990237602,
+            "parent_capacitor_model_A": 0.9999999990903675,
             "dc_2omega_peak_rating_V": 7.5,
             "dc_energy_model": "nonlinear",
             "dc_voltage_V": 750,
             "frequency_Hz": 50,
             "p_available_W": 5000,
             "grid_current_rating_A": null,
-            "mean_converter_loss_W": 26.890376633932078,
+            "mean_converter_loss_W": 25.747616566858376,
             "converter_voltage": [
                 [
-                    126.18009579029797,
-                    -209.94251321164646
+                    125.99747461682111,
+                    -209.98894265483656
                 ],
                 [
-                    -245.40865212090594,
-                    -0.008306325424318976
+                    -245.3603503710059,
+                    0.1729218571016309
                 ],
                 [
-                    118.99181230060235,
-                    210.55504693956573
+                    119.12592700330464,
+                    210.42431617235295
                 ]
             ],
             "current": [
                 [
-                    0.7804348866738068,
-                    -1.3949959345315281
+                    0.7181652340535994,
+                    -1.2803495455789573
                 ],
                 [
-                    -1.5983193608172204,
-                    0.021621529406617854
+                    -1.4678978492220387,
+                    0.018225435984264085
                 ],
                 [
-                    0.8178844741434137,
-                    1.3733744051249102
+                    0.7497326151684393,
+                    1.262124109594693
                 ]
             ],
             "expect_averaged_hardware_accepted": true,
@@ -586,69 +588,69 @@
             "neutral_peak_rating_A": null,
             "dc_voltage_max_rating_V": 765,
             "dc_voltage_min_rating_V": 735,
-            "dc_switching_voltage_bound_V": 1.7969497773309662,
+            "dc_switching_voltage_bound_V": 1.7738884424775492,
             "parent_mode": "coordinated",
-            "parent_point_sha256": "d33029601d9459fa6fae8ea2207f4bf516c2832546d8a7698b1a81b74d3e4a16",
+            "parent_point_sha256": "daddcb4879f3ed1d3003c56d50707915abb7f59f1b1f37d3bebbc2c07e013428",
             "neutral_L_H": 0,
             "case_id": "nominal_coordinated_worst_vv_vw_pv_ld2050_load_a",
             "grid_peak_rating_A": 14,
             "modulation_utilization": 0.96,
-            "p_dc_W": 1196.968366377068,
+            "p_dc_W": 1100.1551473627935,
             "local_controller": "worst_vv_vw",
             "grid_voltage": [
                 [
-                    124.23200115311741,
-                    -210.79015013693078
+                    124.20923499058934,
+                    -210.76938994946963
                 ],
                 [
-                    -245.1686799127976,
-                    2.1026115819924303
+                    -245.1421177413571,
+                    2.1118064487888586
                 ],
                 [
-                    120.69993472967458,
-                    209.29176595743328
+                    120.6959339998876,
+                    209.2658788752988
                 ]
             ],
             "fundamental_reference_accepted": true,
-            "reference_physical_check_count": 38,
+            "reference_physical_check_count": 41,
             "parent_case_id": "nominal"
         },
         {
             "pwm_dc_voltage_envelope": true,
-            "parent_capacitor_model_A": 0.999999999023953,
+            "parent_capacitor_model_A": 0.9999999990905264,
             "dc_2omega_peak_rating_V": 7.5,
             "dc_energy_model": "nonlinear",
             "dc_voltage_V": 750,
             "frequency_Hz": 50,
             "p_available_W": 3000,
             "grid_current_rating_A": null,
-            "mean_converter_loss_W": 26.8896165277967,
+            "mean_converter_loss_W": 25.746758039555274,
             "converter_voltage": [
                 [
-                    126.14682086296223,
-                    -209.8832055835568
+                    125.96064538529853,
+                    -209.9271968693454
                 ],
                 [
-                    -245.41660306981817,
-                    -0.02294123246512396
+                    -245.36485788994878,
+                    0.15991633266635955
                 ],
                 [
-                    118.99005526980721,
-                    210.57415232242406
+                    119.12421873377195,
+                    210.4398232026057
                 ]
             ],
             "current": [
                 [
-                    0.7801194883636152,
-                    -1.3950742359996
+                    0.7178804465784827,
+                    -1.2803953579825258
                 ],
                 [
-                    -1.5982294727226285,
-                    0.021933823089590524
+                    -1.4677951301897791,
+                    0.018494975374179285
                 ],
                 [
-                    0.8181099843590135,
-                    1.3731404129100098
+                    0.7499146836112965,
+                    1.2619003826083466
                 ]
             ],
             "expect_averaged_hardware_accepted": true,
@@ -669,69 +671,69 @@
             "neutral_peak_rating_A": null,
             "dc_voltage_max_rating_V": 765,
             "dc_voltage_min_rating_V": 735,
-            "dc_switching_voltage_bound_V": 1.796934640841895,
+            "dc_switching_voltage_bound_V": 1.7738708815173791,
             "parent_mode": "coordinated",
-            "parent_point_sha256": "d33029601d9459fa6fae8ea2207f4bf516c2832546d8a7698b1a81b74d3e4a16",
+            "parent_point_sha256": "daddcb4879f3ed1d3003c56d50707915abb7f59f1b1f37d3bebbc2c07e013428",
             "neutral_L_H": 0,
             "case_id": "nominal_coordinated_sequence_vv_vw_pv_ld626_load_c",
             "grid_peak_rating_A": 14,
             "modulation_utilization": 0.96,
-            "p_dc_W": 1196.8282382133034,
+            "p_dc_W": 1099.99664618265,
             "local_controller": "sequence_vv_vw",
             "grid_voltage": [
                 [
-                    124.19866438351667,
-                    -210.73041503920672
+                    124.17238283530664,
+                    -210.70726147385224
                 ],
                 [
-                    -245.17622974101462,
-                    2.0878164971069544
+                    -245.14628237904884,
+                    2.0986294318491074
                 ],
                 [
-                    120.69783842044922,
-                    209.31060404850192
+                    120.6939057728639,
+                    209.2811747079298
                 ]
             ],
             "fundamental_reference_accepted": true,
-            "reference_physical_check_count": 38,
+            "reference_physical_check_count": 41,
             "parent_case_id": "nominal"
         },
         {
             "pwm_dc_voltage_envelope": true,
-            "parent_capacitor_model_A": 0.999999979409064,
+            "parent_capacitor_model_A": 0.9999999801881599,
             "dc_2omega_peak_rating_V": 7.5,
             "dc_energy_model": "nonlinear",
             "dc_voltage_V": 750,
             "frequency_Hz": 50,
             "p_available_W": 1250,
             "grid_current_rating_A": null,
-            "mean_converter_loss_W": 26.84587786031281,
+            "mean_converter_loss_W": 24.077857603013683,
             "converter_voltage": [
                 [
-                    126.06134816505605,
-                    -209.68684706133547
+                    125.63577554251725,
+                    -209.82385568258752
                 ],
                 [
-                    -245.48290105994027,
-                    0.2637424274379269
+                    -245.40598723950865,
+                    0.6982813618205125
                 ],
                 [
-                    118.8927827988472,
-                    210.82571291519247
+                    119.22841579884398,
+                    210.53398431037752
                 ]
             ],
             "current": [
                 [
-                    0.764578597523693,
-                    -1.391714804639546
+                    0.6129171192102763,
+                    -1.1081202609329186
                 ],
                 [
-                    -1.581325118890785,
-                    0.00674401632190896
+                    -1.2611879047985193,
+                    0.0025228876545928046
                 ],
                 [
-                    0.8228466154086097,
-                    1.377463878083832
+                    0.6530656274738686,
+                    1.1003812466382825
                 ]
             ],
             "expect_averaged_hardware_accepted": true,
@@ -752,69 +754,69 @@
             "neutral_peak_rating_A": 14,
             "dc_voltage_max_rating_V": 765,
             "dc_voltage_min_rating_V": 735,
-            "dc_switching_voltage_bound_V": 2.5534343502791215,
+            "dc_switching_voltage_bound_V": 2.496320847661584,
             "parent_mode": "coordinated",
-            "parent_point_sha256": "d33029601d9459fa6fae8ea2207f4bf516c2832546d8a7698b1a81b74d3e4a16",
+            "parent_point_sha256": "daddcb4879f3ed1d3003c56d50707915abb7f59f1b1f37d3bebbc2c07e013428",
             "neutral_L_H": 0.004209648244780632,
             "case_id": "nominal_coordinated_phase_vv_vw_pv_ld1895_load_b",
             "grid_peak_rating_A": 14,
             "modulation_utilization": 0.96,
-            "p_dc_W": 1191.4793604577385,
+            "p_dc_W": 952.6286937758225,
             "local_controller": "phase_vv_vw",
             "grid_voltage": [
                 [
-                    124.10895519017656,
-                    -210.5210225591385
+                    124.08169576309709,
+                    -210.49354101388033
                 ],
                 [
-                    -245.27558647760245,
-                    2.347078415520931
+                    -245.2433910654967,
+                    2.3602173683786396
                 ],
                 [
-                    120.59492268650408,
-                    209.54825408294653
+                    120.58976962296889,
+                    209.51912825252978
                 ]
             ],
             "fundamental_reference_accepted": true,
-            "reference_physical_check_count": 39,
+            "reference_physical_check_count": 42,
             "parent_case_id": "nominal"
         },
         {
             "pwm_dc_voltage_envelope": true,
-            "parent_capacitor_model_A": 0.9999999999667942,
+            "parent_capacitor_model_A": 0.9999999999596408,
             "dc_2omega_peak_rating_V": 7.5,
             "dc_energy_model": "nonlinear",
             "dc_voltage_V": 750,
             "frequency_Hz": 50,
             "p_available_W": 3000,
             "grid_current_rating_A": null,
-            "mean_converter_loss_W": 28.59206527060191,
+            "mean_converter_loss_W": 27.26174971655943,
             "converter_voltage": [
                 [
-                    126.97198793660137,
-                    -214.45695632967983
+                    127.02694540409068,
+                    -214.66413550247466
                 ],
                 [
-                    -249.77698531550644,
-                    1.7021169365716142
+                    -249.98493370771584,
+                    1.7555644222948907
                 ],
                 [
-                    122.61909720626466,
-                    213.4202758812409
+                    122.76127464869305,
+                    213.57568035704725
                 ]
             ],
             "current": [
                 [
-                    1.546016307354039,
-                    0.8953571614470613
+                    1.4194492579203761,
+                    0.8216875397918366
                 ],
                 [
-                    0.002393893596460571,
-                    -1.7865679775571395
+                    0.0018776544726793198,
+                    -1.6401228866379338
                 ],
                 [
-                    -1.5484102009504999,
-                    0.8912108161100779
+                    -1.4213269123930554,
+                    0.8184353468460972
                 ]
             ],
             "expect_averaged_hardware_accepted": true,
@@ -835,74 +837,74 @@
             "neutral_peak_rating_A": null,
             "dc_voltage_max_rating_V": 765,
             "dc_voltage_min_rating_V": 735,
-            "dc_switching_voltage_bound_V": 1.8302021777929136,
+            "dc_switching_voltage_bound_V": 1.8043140050553308,
             "parent_mode": "local",
-            "parent_point_sha256": "475decf61a54ae6ddd27dde97dcd5c601ca1b206d5da35be64f366dfe8af619c",
+            "parent_point_sha256": "bd645b0b03ab3305247b2a1204dd9f1c9daad6a01de2d3bad7a640a9e780aa10",
             "neutral_L_H": 0,
             "case_id": "high_source_local_mean_vv_vw_pv_ld1970_load_c",
             "grid_peak_rating_A": 14,
             "modulation_utilization": 0.96,
-            "p_dc_W": 29.57616768424043,
+            "p_dc_W": 28.148463579914722,
             "local_controller": "mean_vv_vw",
             "grid_voltage": [
                 [
-                    127.95163712596754,
-                    -216.61997388075693
+                    127.92590501110541,
+                    -216.65002532321182
                 ],
                 [
-                    -252.14003805825388,
-                    1.9352246273222269
+                    -252.15424454509852,
+                    1.9699874760126392
                 ],
                 [
-                    124.00250075964594,
-                    215.3501857415674
+                    124.031625879061,
+                    215.34714712406668
                 ]
             ],
             "fundamental_reference_accepted": true,
-            "reference_physical_check_count": 38,
+            "reference_physical_check_count": 41,
             "parent_case_id": "high_source"
         },
         {
             "pwm_dc_voltage_envelope": true,
-            "parent_capacitor_model_A": 0.9999999999668084,
+            "parent_capacitor_model_A": 0.999999999958942,
             "dc_2omega_peak_rating_V": 7.5,
             "dc_energy_model": "nonlinear",
             "dc_voltage_V": 750,
             "frequency_Hz": 50,
-            "p_available_W": 5000,
+            "p_available_W": 1250,
             "grid_current_rating_A": null,
-            "mean_converter_loss_W": 28.590066807977845,
+            "mean_converter_loss_W": 27.259432200117875,
             "converter_voltage": [
                 [
-                    126.99815929561592,
-                    -214.56006618783587
+                    127.07189838132997,
+                    -214.79510375829938
                 ],
                 [
-                    -249.82050470124457,
-                    1.7364220053598483
+                    -250.04012981685383,
+                    1.7927835887048023
                 ],
                 [
-                    122.65647846849663,
-                    213.43711958197295
+                    122.80125970429945,
+                    213.60062863012232
                 ]
             ],
             "current": [
                 [
-                    1.5459340618788149,
-                    0.8950664425827226
+                    1.419320646499801,
+                    0.8213929500978646
                 ],
                 [
-                    0.0021832464121959412,
-                    -1.7863513914540792
+                    0.0016868380242939034,
+                    -1.6398642110335127
                 ],
                 [
-                    -1.548117308291011,
-                    0.8912849488713568
+                    -1.4210074845240948,
+                    0.8184712609356483
                 ]
             ],
             "expect_averaged_hardware_accepted": true,
             "phase_peak_rating_A": 14,
-            "device_id": "pv_ld2050_load_a",
+            "device_id": "pv_ld2804_load_c",
             "expect_switched_hardware_accepted": true,
             "phase_current_rating_A": 10,
             "capacitor_current_rating_A": 1,
@@ -918,74 +920,74 @@
             "neutral_peak_rating_A": null,
             "dc_voltage_max_rating_V": 765,
             "dc_voltage_min_rating_V": 735,
-            "dc_switching_voltage_bound_V": 1.8301638427452356,
+            "dc_switching_voltage_bound_V": 1.8042682406061292,
             "parent_mode": "local",
-            "parent_point_sha256": "475decf61a54ae6ddd27dde97dcd5c601ca1b206d5da35be64f366dfe8af619c",
+            "parent_point_sha256": "bd645b0b03ab3305247b2a1204dd9f1c9daad6a01de2d3bad7a640a9e780aa10",
             "neutral_L_H": 0,
-            "case_id": "high_source_local_worst_vv_vw_pv_ld2050_load_a",
+            "case_id": "high_source_local_worst_vv_vw_pv_ld2804_load_c",
             "grid_peak_rating_A": 14,
             "modulation_utilization": 0.96,
-            "p_dc_W": 29.574727232679454,
+            "p_dc_W": 28.146785078984706,
             "local_controller": "worst_vv_vw",
             "grid_voltage": [
                 [
-                    127.9774348862481,
-                    -216.72293652170217
+                    127.9704854023348,
+                    -216.7807845309458
                 ],
                 [
-                    -252.1832431507806,
-                    1.9697796334995212
+                    -252.20907332027437,
+                    2.0074247873268556
                 ],
                 [
-                    124.03994132740048,
-                    215.3666322876996
+                    124.07161618671516,
+                    215.3716682041467
                 ]
             ],
             "fundamental_reference_accepted": true,
-            "reference_physical_check_count": 38,
+            "reference_physical_check_count": 41,
             "parent_case_id": "high_source"
         },
         {
             "pwm_dc_voltage_envelope": true,
-            "parent_capacitor_model_A": 0.999999999966817,
+            "parent_capacitor_model_A": 0.9999999999587587,
             "dc_2omega_peak_rating_V": 7.5,
             "dc_energy_model": "nonlinear",
             "dc_voltage_V": 750,
             "frequency_Hz": 50,
-            "p_available_W": 3000,
+            "p_available_W": 1250,
             "grid_current_rating_A": null,
-            "mean_converter_loss_W": 28.592777492103384,
+            "mean_converter_loss_W": 27.262041652202743,
             "converter_voltage": [
                 [
-                    126.9543242725823,
-                    -214.42510052528098
+                    127.01481023849169,
+                    -214.65202558283715
                 ],
                 [
-                    -249.76381492037305,
-                    1.696508221621517
+                    -249.9797434108441,
+                    1.7556742216669639
                 ],
                 [
-                    122.60750776878922,
-                    213.41050555574418
+                    122.7570956835769,
+                    213.56934877095972
                 ]
             ],
             "current": [
                 [
-                    1.5460692437761296,
-                    0.8954199614848161
+                    1.4194819125993972,
+                    0.8216962209946345
                 ],
                 [
-                    0.0024218118134697176,
-                    -1.7866452218623325
+                    0.0018688452753271054,
+                    -1.6401555070209175
                 ],
                 [
-                    -1.5484910555895992,
-                    0.8912252603775163
+                    -1.421350757874724,
+                    0.8184592860262828
                 ]
             ],
             "expect_averaged_hardware_accepted": true,
             "phase_peak_rating_A": 14,
-            "device_id": "pv_ld626_load_c",
+            "device_id": "pv_ld2186_load_b",
             "expect_switched_hardware_accepted": true,
             "phase_current_rating_A": 10,
             "capacitor_current_rating_A": 1,
@@ -1001,69 +1003,69 @@
             "neutral_peak_rating_A": null,
             "dc_voltage_max_rating_V": 765,
             "dc_voltage_min_rating_V": 735,
-            "dc_switching_voltage_bound_V": 1.8302158394249177,
+            "dc_switching_voltage_bound_V": 1.804319769796482,
             "parent_mode": "local",
-            "parent_point_sha256": "475decf61a54ae6ddd27dde97dcd5c601ca1b206d5da35be64f366dfe8af619c",
+            "parent_point_sha256": "bd645b0b03ab3305247b2a1204dd9f1c9daad6a01de2d3bad7a640a9e780aa10",
             "neutral_L_H": 0,
-            "case_id": "high_source_local_sequence_vv_vw_pv_ld626_load_c",
+            "case_id": "high_source_local_sequence_vv_vw_pv_ld2186_load_b",
             "grid_peak_rating_A": 14,
             "modulation_utilization": 0.96,
-            "p_dc_W": 29.576703348150765,
+            "p_dc_W": 28.148682689948785,
             "local_controller": "sequence_vv_vw",
             "grid_voltage": [
                 [
-                    127.93404951415657,
-                    -216.5881963900813
+                    127.91377700781582,
+                    -216.6379597374764
                 ],
                 [
-                    -252.12697351089832,
-                    1.9295892060894968
+                    -252.14909622366693,
+                    1.97011323959386
                 ],
                 [
-                    123.9909411177402,
-                    215.3405204360765
+                    124.0274817270756,
+                    215.34084390767208
                 ]
             ],
             "fundamental_reference_accepted": true,
-            "reference_physical_check_count": 38,
+            "reference_physical_check_count": 41,
             "parent_case_id": "high_source"
         },
         {
             "pwm_dc_voltage_envelope": true,
-            "parent_capacitor_model_A": 0.999999999921068,
+            "parent_capacitor_model_A": 0.9999999998599448,
             "dc_2omega_peak_rating_V": 7.5,
             "dc_energy_model": "nonlinear",
             "dc_voltage_V": 750,
             "frequency_Hz": 50,
             "p_available_W": 3000,
             "grid_current_rating_A": null,
-            "mean_converter_loss_W": 29.189003552060743,
+            "mean_converter_loss_W": 25.841519257793454,
             "converter_voltage": [
                 [
-                    127.4407480526348,
-                    -214.11816340800777
+                    127.53858696093508,
+                    -214.69277533727217
                 ],
                 [
-                    -249.28922825314064,
-                    2.3363441410366295
+                    -249.91111594152346,
+                    2.325866207256519
                 ],
                 [
-                    123.4789077200846,
-                    214.48515673329427
+                    123.62574470182754,
+                    214.69125765049364
                 ]
             ],
             "current": [
                 [
-                    1.6075673691693853,
-                    0.9490271466283325
+                    1.2799325132155037,
+                    0.75506762024696
                 ],
                 [
-                    -0.016666925265317125,
-                    -1.9387100928240317
+                    -0.013733624039388086,
+                    -1.5444164633338453
                 ],
                 [
-                    -1.2054130071816997,
-                    0.6944166585980882
+                    -0.9597189624976286,
+                    0.5532779429342604
                 ]
             ],
             "expect_averaged_hardware_accepted": true,
@@ -1084,69 +1086,69 @@
             "neutral_peak_rating_A": 14,
             "dc_voltage_max_rating_V": 765,
             "dc_voltage_min_rating_V": 735,
-            "dc_switching_voltage_bound_V": 2.6063989748182346,
+            "dc_switching_voltage_bound_V": 2.5382156306895047,
             "parent_mode": "local",
-            "parent_point_sha256": "475decf61a54ae6ddd27dde97dcd5c601ca1b206d5da35be64f366dfe8af619c",
+            "parent_point_sha256": "bd645b0b03ab3305247b2a1204dd9f1c9daad6a01de2d3bad7a640a9e780aa10",
             "neutral_L_H": 0.004209648244780632,
             "case_id": "high_source_local_phase_vv_vw_pv_ld248_load_b",
             "grid_peak_rating_A": 14,
             "modulation_utilization": 0.96,
-            "p_dc_W": 30.579017313061005,
+            "p_dc_W": 26.952785643733616,
             "local_controller": "phase_vv_vw",
             "grid_voltage": [
                 [
-                    128.04176529062374,
-                    -216.84043826240642
+                    128.01515707808386,
+                    -216.85944310526443
                 ],
                 [
-                    -252.29243852888845,
-                    2.1440223909454414
+                    -252.30452617825833,
+                    2.1741786758373967
                 ],
                 [
-                    124.11521924242598,
-                    215.5167206636619
+                    124.13164187839334,
+                    215.51321564395658
                 ]
             ],
             "fundamental_reference_accepted": true,
-            "reference_physical_check_count": 39,
+            "reference_physical_check_count": 42,
             "parent_case_id": "high_source"
         },
         {
             "pwm_dc_voltage_envelope": true,
-            "parent_capacitor_model_A": 0.9999999990302455,
+            "parent_capacitor_model_A": 0.9999999990971619,
             "dc_2omega_peak_rating_V": 7.5,
             "dc_energy_model": "nonlinear",
             "dc_voltage_V": 750,
             "frequency_Hz": 50,
             "p_available_W": 3000,
             "grid_current_rating_A": null,
-            "mean_converter_loss_W": 27.342014815129897,
+            "mean_converter_loss_W": 26.15108625655235,
             "converter_voltage": [
                 [
-                    129.96869280804987,
-                    -216.23208949533299
+                    129.77978199704748,
+                    -216.27768135228212
                 ],
                 [
-                    -252.78784691859886,
-                    -0.025847750177237075
+                    -252.73591195006148,
+                    0.16033258909300024
                 ],
                 [
-                    122.56332407545094,
-                    216.89164898359056
+                    122.70078407523742,
+                    216.7552970910463
                 ]
             ],
             "current": [
                 [
-                    0.8055922106422588,
-                    -1.438920459016419
+                    0.7407290819926834,
+                    -1.320962856166547
                 ],
                 [
-                    -1.6489377768545135,
-                    0.021796910001148657
+                    -1.514351931892221,
+                    0.018991225755683332
                 ],
                 [
-                    0.8433455662122546,
-                    1.41712354901527
+                    0.7736228498995377,
+                    1.3019716304108637
                 ]
             ],
             "expect_averaged_hardware_accepted": true,
@@ -1167,69 +1169,69 @@
             "neutral_peak_rating_A": null,
             "dc_voltage_max_rating_V": 765,
             "dc_voltage_min_rating_V": 735,
-            "dc_switching_voltage_bound_V": 1.8058975482718935,
+            "dc_switching_voltage_bound_V": 1.782101491555915,
             "parent_mode": "coordinated",
-            "parent_point_sha256": "28316b860d88976e5c0d4a69a4150eaf879eca65f793a6e5c2ef0ac8c1160205",
+            "parent_point_sha256": "b0b1deb7573f6f9881c2c7b0f772db99bf35b687e0f351933d5135a0794e9a54",
             "neutral_L_H": 0,
             "case_id": "high_source_coordinated_mean_vv_vw_pv_ld1970_load_c",
             "grid_peak_rating_A": 14,
             "modulation_utilization": 0.96,
-            "p_dc_W": 1270.740925050732,
+            "p_dc_W": 1167.8450679681519,
             "local_controller": "mean_vv_vw",
             "grid_voltage": [
                 [
-                    127.9591809311432,
-                    -217.10718796320242
+                    127.9348471986737,
+                    -217.08259822548942
                 ],
                 [
-                    -252.54094848413337,
-                    2.1519898183652058
+                    -252.51052301100682,
+                    2.1605514294142734
                 ],
                 [
-                    124.32593751789206,
-                    215.58890988291756
+                    124.3203299345566,
+                    215.55999512393234
                 ]
             ],
             "fundamental_reference_accepted": true,
-            "reference_physical_check_count": 38,
+            "reference_physical_check_count": 41,
             "parent_case_id": "high_source"
         },
         {
             "pwm_dc_voltage_envelope": true,
-            "parent_capacitor_model_A": 0.9999999990303288,
+            "parent_capacitor_model_A": 0.9999999990970315,
             "dc_2omega_peak_rating_V": 7.5,
             "dc_energy_model": "nonlinear",
             "dc_voltage_V": 750,
             "frequency_Hz": 50,
             "p_available_W": 5000,
             "grid_current_rating_A": null,
-            "mean_converter_loss_W": 27.342646539456236,
+            "mean_converter_loss_W": 26.151800685709706,
             "converter_voltage": [
                 [
-                    129.9886939782321,
-                    -216.27658534257935
+                    129.80213402312546,
+                    -216.3242022409607
                 ],
                 [
-                    -252.78232544204369,
-                    -0.014949559532223416
+                    -252.73304978394498,
+                    0.1704186898232307
                 ],
                 [
-                    122.56360831642591,
-                    216.87614383750434
+                    122.70103259132986,
+                    216.74237734268792
                 ]
             ],
             "current": [
                 [
-                    0.8054083285312807,
-                    -1.4391041120421084
+                    0.7409127477168704,
+                    -1.3209537214575073
                 ],
                 [
-                    -1.6490048839847533,
-                    0.022047983093401825
+                    -1.5144358538642297,
+                    0.0188275992182129
                 ],
                 [
-                    0.8435965554534726,
-                    1.4170561289487063
+                    0.7735231061473594,
+                    1.3021261222392941
                 ]
             ],
             "expect_averaged_hardware_accepted": true,
@@ -1250,69 +1252,69 @@
             "neutral_peak_rating_A": null,
             "dc_voltage_max_rating_V": 765,
             "dc_voltage_min_rating_V": 735,
-            "dc_switching_voltage_bound_V": 1.8059100002148873,
+            "dc_switching_voltage_bound_V": 1.782115964701334,
             "parent_mode": "coordinated",
-            "parent_point_sha256": "28316b860d88976e5c0d4a69a4150eaf879eca65f793a6e5c2ef0ac8c1160205",
+            "parent_point_sha256": "b0b1deb7573f6f9881c2c7b0f772db99bf35b687e0f351933d5135a0794e9a54",
             "neutral_L_H": 0,
             "case_id": "high_source_coordinated_worst_vv_vw_pv_ld2050_load_a",
             "grid_peak_rating_A": 14,
             "modulation_utilization": 0.96,
-            "p_dc_W": 1270.84001286806,
+            "p_dc_W": 1167.9673122715656,
             "local_controller": "worst_vv_vw",
             "grid_voltage": [
                 [
-                    127.97896353860816,
-                    -217.1514163382444
+                    127.95718701561233,
+                    -217.12936322015352
                 ],
                 [
-                    -252.53508608849566,
-                    2.162943553773511
+                    -252.50786614230535,
+                    2.170770156562066
                 ],
                 [
-                    124.32609940250187,
-                    215.57308171986367
+                    124.32079595720333,
+                    215.54718685514192
                 ]
             ],
             "fundamental_reference_accepted": true,
-            "reference_physical_check_count": 38,
+            "reference_physical_check_count": 41,
             "parent_case_id": "high_source"
         },
         {
             "pwm_dc_voltage_envelope": true,
-            "parent_capacitor_model_A": 0.9999999990304475,
+            "parent_capacitor_model_A": 0.9999999990972069,
             "dc_2omega_peak_rating_V": 7.5,
             "dc_energy_model": "nonlinear",
             "dc_voltage_V": 750,
             "frequency_Hz": 50,
             "p_available_W": 3000,
             "grid_current_rating_A": null,
-            "mean_converter_loss_W": 27.34190346580376,
+            "mean_converter_loss_W": 26.15092845768051,
             "converter_voltage": [
                 [
-                    129.95822222697655,
-                    -216.22106223063477
+                    129.76881961014897,
+                    -216.26589019139
                 ],
                 [
-                    -252.79238759041928,
-                    -0.02963183693750826
+                    -252.73974128289856,
+                    0.15666448183195242
                 ],
                 [
-                    122.56237661225931,
-                    216.89690013420153
+                    122.6992976206188,
+                    216.75986395694443
                 ]
             ],
             "current": [
                 [
-                    0.8052311667509681,
-                    -1.4391083058738154
+                    0.7406242177637371,
+                    -1.3210009213524236
                 ],
                 [
-                    -1.6489199350593946,
-                    0.02220350661158611
+                    -1.5143324651957166,
+                    0.01910107343483741
                 ],
                 [
-                    0.8436887683084267,
-                    1.4169047992622295
+                    0.7737082474319796,
+                    1.3018998479175863
                 ]
             ],
             "expect_averaged_hardware_accepted": true,
@@ -1333,74 +1335,74 @@
             "neutral_peak_rating_A": null,
             "dc_voltage_max_rating_V": 765,
             "dc_voltage_min_rating_V": 735,
-            "dc_switching_voltage_bound_V": 1.8058953534427058,
+            "dc_switching_voltage_bound_V": 1.7820982947805026,
             "parent_mode": "coordinated",
-            "parent_point_sha256": "28316b860d88976e5c0d4a69a4150eaf879eca65f793a6e5c2ef0ac8c1160205",
+            "parent_point_sha256": "b0b1deb7573f6f9881c2c7b0f772db99bf35b687e0f351933d5135a0794e9a54",
             "neutral_L_H": 0,
             "case_id": "high_source_coordinated_sequence_vv_vw_pv_ld626_load_c",
             "grid_peak_rating_A": 14,
             "modulation_utilization": 0.96,
-            "p_dc_W": 1270.714349648097,
+            "p_dc_W": 1167.8163795444968,
             "local_controller": "sequence_vv_vw",
             "grid_voltage": [
                 [
-                    127.94850967065561,
-                    -217.09565837521112
+                    127.92384833886113,
+                    -217.0706633475337
                 ],
                 [
-                    -252.54495379151388,
-                    2.1481283634291595
+                    -252.51420964475886,
+                    2.156843050091531
                 ],
                 [
-                    124.32465536967484,
-                    215.59373607841118
+                    124.31873725376691,
+                    215.5644585448285
                 ]
             ],
             "fundamental_reference_accepted": true,
-            "reference_physical_check_count": 38,
+            "reference_physical_check_count": 41,
             "parent_case_id": "high_source"
         },
         {
             "pwm_dc_voltage_envelope": true,
-            "parent_capacitor_model_A": 0.9999999756864727,
+            "parent_capacitor_model_A": 0.9999999781176234,
             "dc_2omega_peak_rating_V": 7.5,
             "dc_energy_model": "nonlinear",
             "dc_voltage_V": 750,
             "frequency_Hz": 50,
-            "p_available_W": 5000,
+            "p_available_W": 1250,
             "grid_current_rating_A": null,
-            "mean_converter_loss_W": 27.287218581685725,
+            "mean_converter_loss_W": 24.407129903336156,
             "converter_voltage": [
                 [
-                    129.90557147963847,
-                    -216.0575062257772
+                    129.43647581622585,
+                    -216.17281451082766
                 ],
                 [
-                    -252.8331646785376,
-                    0.2391846946316928
+                    -252.77436575433063,
+                    0.6960209616218348
                 ],
                 [
-                    122.48547887791605,
-                    217.11930414080558
+                    122.81308729125938,
+                    216.83895319887088
                 ]
             ],
             "current": [
                 [
-                    0.7884172879059754,
-                    -1.4346144855706282
+                    0.6317986335767535,
+                    -1.1425756305641135
                 ],
                 [
-                    -1.6309544025925529,
-                    0.006435161975802866
+                    -1.300605793642537,
+                    0.0024977602056685394
                 ],
                 [
-                    0.848077419574201,
-                    1.4210088662634057
+                    0.6735009744062979,
+                    1.1348264541857542
                 ]
             ],
             "expect_averaged_hardware_accepted": true,
             "phase_peak_rating_A": 14,
-            "device_id": "pv_ld868_load_a",
+            "device_id": "pv_ld1895_load_b",
             "expect_switched_hardware_accepted": true,
             "phase_current_rating_A": 10,
             "capacitor_current_rating_A": 1,
@@ -1416,69 +1418,69 @@
             "neutral_peak_rating_A": 14,
             "dc_voltage_max_rating_V": 765,
             "dc_voltage_min_rating_V": 735,
-            "dc_switching_voltage_bound_V": 2.562179846052203,
+            "dc_switching_voltage_bound_V": 2.503316280074108,
             "parent_mode": "coordinated",
-            "parent_point_sha256": "28316b860d88976e5c0d4a69a4150eaf879eca65f793a6e5c2ef0ac8c1160205",
+            "parent_point_sha256": "b0b1deb7573f6f9881c2c7b0f772db99bf35b687e0f351933d5135a0794e9a54",
             "neutral_L_H": 0.004209648244780632,
-            "case_id": "high_source_coordinated_phase_vv_vw_pv_ld868_load_a",
+            "case_id": "high_source_coordinated_phase_vv_vw_pv_ld1895_load_b",
             "grid_peak_rating_A": 14,
             "modulation_utilization": 0.96,
-            "p_dc_W": 1264.4327724085442,
+            "p_dc_W": 1010.7295657359408,
             "local_controller": "phase_vv_vw",
             "grid_voltage": [
                 [
-                    127.89381000100357,
-                    -216.91683908354796
+                    127.83429842067939,
+                    -216.86277564626732
                 ],
                 [
-                    -252.61917609222394,
-                    2.3888920816572434
+                    -252.60662310508434,
+                    2.4102287252503984
                 ],
                 [
-                    124.24238922966855,
-                    215.80341457062354
+                    124.21725901821989,
+                    215.792654291976
                 ]
             ],
             "fundamental_reference_accepted": true,
-            "reference_physical_check_count": 39,
+            "reference_physical_check_count": 42,
             "parent_case_id": "high_source"
         },
         {
             "pwm_dc_voltage_envelope": true,
-            "parent_capacitor_model_A": 0.9999999993509758,
+            "parent_capacitor_model_A": 0.9999999994263489,
             "dc_2omega_peak_rating_V": 7.5,
             "dc_energy_model": "nonlinear",
             "dc_voltage_V": 750,
             "frequency_Hz": 50,
             "p_available_W": 1250,
             "grid_current_rating_A": null,
-            "mean_converter_loss_W": 27.458527269437965,
+            "mean_converter_loss_W": 26.36230656630621,
             "converter_voltage": [
                 [
-                    122.92536172417839,
-                    -203.94657494401028
+                    122.72410552254416,
+                    -204.0257565081907
                 ],
                 [
-                    -246.88219398378482,
-                    -4.392789786305821
+                    -246.8537818056989,
+                    -4.170467503815004
                 ],
                 [
-                    123.8169785580377,
-                    208.79580387388026
+                    123.99103703695774,
+                    208.6655175168332
                 ]
             ],
             "current": [
                 [
-                    1.5476636952290463,
-                    -0.6059445213925578
+                    1.4651213873678584,
+                    -0.4698514362437073
                 ],
                 [
-                    -1.2985951964244815,
-                    -1.0373438158869723
+                    -1.1394639734755843,
+                    -1.0339066229666127
                 ],
                 [
-                    -0.24906849880456483,
-                    1.64328833727953
+                    -0.3256574138922741,
+                    1.5037580592103201
                 ]
             ],
             "expect_averaged_hardware_accepted": true,
@@ -1499,69 +1501,69 @@
             "neutral_peak_rating_A": null,
             "dc_voltage_max_rating_V": 765,
             "dc_voltage_min_rating_V": 735,
-            "dc_switching_voltage_bound_V": 1.808191159688347,
+            "dc_switching_voltage_bound_V": 1.7863698697316308,
             "parent_mode": "local",
-            "parent_point_sha256": "b741a63f36f8991657e684371c0115a115911d330b4885a16596fa5cbf1f43ba",
+            "parent_point_sha256": "ed9265a5e0d6b383f33aa0c7fda3850fa631db81972241d550bde2669c42b98e",
             "neutral_L_H": 0,
             "case_id": "rotated_unbalance_local_mean_vv_vw_pv_ld1291_load_b",
             "grid_peak_rating_A": 14,
             "modulation_utilization": 0.96,
-            "p_dc_W": 978.7156214892267,
+            "p_dc_W": 861.0265312738691,
             "local_controller": "mean_vv_vw",
             "grid_voltage": [
                 [
-                    121.91932157094269,
-                    -205.91322401799653
+                    121.90896469463246,
+                    -205.90124169054147
                 ],
                 [
-                    -248.0823419655682,
-                    -2.538208919383392
+                    -248.0704292040801,
+                    -2.5267922480062093
                 ],
                 [
-                    126.02316669305678,
-                    208.9078720809441
+                    126.02282526325064,
+                    208.89732744337516
                 ]
             ],
             "fundamental_reference_accepted": true,
-            "reference_physical_check_count": 38,
+            "reference_physical_check_count": 41,
             "parent_case_id": "rotated_unbalance"
         },
         {
             "pwm_dc_voltage_envelope": true,
-            "parent_capacitor_model_A": 0.999999999996897,
+            "parent_capacitor_model_A": 0.9999999999876868,
             "dc_2omega_peak_rating_V": 7.5,
             "dc_energy_model": "nonlinear",
             "dc_voltage_V": 750,
             "frequency_Hz": 50,
             "p_available_W": 5000,
             "grid_current_rating_A": null,
-            "mean_converter_loss_W": 28.83009970622903,
+            "mean_converter_loss_W": 27.47393385412105,
             "converter_voltage": [
                 [
-                    120.7800740524355,
-                    -203.4435589066989
+                    120.84614729370549,
+                    -203.62207780176456
                 ],
                 [
-                    -245.52566702703564,
-                    -2.8807822877107543
+                    -245.72393388078788,
+                    -2.83065616316258
                 ],
                 [
-                    124.50777419639027,
-                    206.8731396895169
+                    124.63816049826143,
+                    207.02495145927014
                 ]
             ],
             "current": [
                 [
-                    1.5684596798434742,
-                    0.9080129085014887
+                    1.4400140243175537,
+                    0.8333599791303694
                 ],
                 [
-                    0.0021324058047472484,
-                    -1.8123323818068005
+                    0.0017039002653928858,
+                    -1.6637687164300488
                 ],
                 [
-                    -1.5705920856482216,
-                    0.9043194733053118
+                    -1.4417179245829466,
+                    0.830408737299679
                 ]
             ],
             "expect_averaged_hardware_accepted": true,
@@ -1582,69 +1584,69 @@
             "neutral_peak_rating_A": null,
             "dc_voltage_max_rating_V": 765,
             "dc_voltage_min_rating_V": 735,
-            "dc_switching_voltage_bound_V": 1.834756662278533,
+            "dc_switching_voltage_bound_V": 1.8084940009427852,
             "parent_mode": "local",
-            "parent_point_sha256": "b741a63f36f8991657e684371c0115a115911d330b4885a16596fa5cbf1f43ba",
+            "parent_point_sha256": "ed9265a5e0d6b383f33aa0c7fda3850fa631db81972241d550bde2669c42b98e",
             "neutral_L_H": 0,
             "case_id": "rotated_unbalance_local_worst_vv_vw_pv_ld2050_load_a",
             "grid_peak_rating_A": 14,
             "modulation_utilization": 0.96,
-            "p_dc_W": 29.765256985101942,
+            "p_dc_W": 28.316716782957922,
             "local_controller": "worst_vv_vw",
             "grid_voltage": [
                 [
-                    121.77349233126941,
-                    -205.63793154044123
+                    121.7578240113894,
+                    -205.6367082061645
                 ],
                 [
-                    -247.9227586126428,
-                    -2.6439214368935833
+                    -247.92449334907673,
+                    -2.612876158515688
                 ],
                 [
-                    125.91144750316353,
-                    208.83065147244204
+                    125.92704324886635,
+                    208.8218018590232
                 ]
             ],
             "fundamental_reference_accepted": true,
-            "reference_physical_check_count": 38,
+            "reference_physical_check_count": 41,
             "parent_case_id": "rotated_unbalance"
         },
         {
             "pwm_dc_voltage_envelope": true,
-            "parent_capacitor_model_A": 0.9999999993453036,
+            "parent_capacitor_model_A": 0.9999999994212575,
             "dc_2omega_peak_rating_V": 7.5,
             "dc_energy_model": "nonlinear",
             "dc_voltage_V": 750,
             "frequency_Hz": 50,
             "p_available_W": 5000,
             "grid_current_rating_A": null,
-            "mean_converter_loss_W": 27.439502542710493,
+            "mean_converter_loss_W": 26.34399103742938,
             "converter_voltage": [
                 [
-                    122.89302898396966,
-                    -203.95184008194786
+                    122.69197627255525,
+                    -204.03314586013335
                 ],
                 [
-                    -246.87267986665236,
-                    -4.400939962317039
+                    -246.8482711698855,
+                    -4.17492183156968
                 ],
                 [
-                    123.81453921732773,
-                    208.7858594412722
+                    123.99149690398944,
+                    208.6570619134423
                 ]
             ],
             "current": [
                 [
-                    1.5392816900155382,
-                    -0.6212997299575089
+                    1.4579798936173876,
+                    -0.4849863120363661
                 ],
                 [
-                    -1.3077021945153835,
-                    -1.0224071821549447
+                    -1.1490004135199134,
+                    -1.020154470061408
                 ],
                 [
-                    -0.23157949550015486,
-                    1.643706912112454
+                    -0.30897948009747406,
+                    1.5051407820977742
                 ]
             ],
             "expect_averaged_hardware_accepted": true,
@@ -1665,401 +1667,69 @@
             "neutral_peak_rating_A": null,
             "dc_voltage_max_rating_V": 765,
             "dc_voltage_min_rating_V": 735,
-            "dc_switching_voltage_bound_V": 1.8078170546533616,
+            "dc_switching_voltage_bound_V": 1.7860005842183693,
             "parent_mode": "local",
-            "parent_point_sha256": "b741a63f36f8991657e684371c0115a115911d330b4885a16596fa5cbf1f43ba",
+            "parent_point_sha256": "ed9265a5e0d6b383f33aa0c7fda3850fa631db81972241d550bde2669c42b98e",
             "neutral_L_H": 0,
             "case_id": "rotated_unbalance_local_sequence_vv_vw_pv_ld1668_load_a",
             "grid_peak_rating_A": 14,
             "modulation_utilization": 0.96,
-            "p_dc_W": 985.1670646961811,
+            "p_dc_W": 867.8149644231077,
             "local_controller": "sequence_vv_vw",
             "grid_voltage": [
                 [
-                    121.86779008759629,
-                    -205.90537322770652
+                    121.85776403395626,
+                    -205.89718482967552
                 ],
                 [
-                    -248.05186974982763,
-                    -2.536290460230452
+                    -248.0454701518537,
+                    -2.5204533560239732
                 ],
                 [
-                    126.01896799687636,
-                    208.8747430849443
+                    126.02290812455664,
+                    208.86663240743877
                 ]
             ],
             "fundamental_reference_accepted": true,
-            "reference_physical_check_count": 38,
+            "reference_physical_check_count": 41,
             "parent_case_id": "rotated_unbalance"
         },
         {
             "pwm_dc_voltage_envelope": true,
-            "parent_capacitor_model_A": 0.999999951796938,
-            "dc_2omega_peak_rating_V": 7.5,
-            "dc_energy_model": "nonlinear",
-            "dc_voltage_V": 750,
-            "frequency_Hz": 50,
-            "p_available_W": 3000,
-            "grid_current_rating_A": null,
-            "mean_converter_loss_W": 27.52917884115581,
-            "converter_voltage": [
-                [
-                    123.71298182107152,
-                    -207.14214773048607
-                ],
-                [
-                    -243.2856277202151,
-                    -4.131573898493372
-                ],
-                [
-                    127.06269613287184,
-                    206.42395260600335
-                ]
-            ],
-            "current": [
-                [
-                    -0.00010184691779243525,
-                    0.00017213338328158362
-                ],
-                [
-                    0.021598709585251976,
-                    -2.1085197576314503
-                ],
-                [
-                    -0.8953915526010093,
-                    0.5395587023558719
-                ]
-            ],
-            "expect_averaged_hardware_accepted": true,
-            "phase_peak_rating_A": 14,
-            "device_id": "pv_ld248_load_b",
-            "expect_switched_hardware_accepted": true,
-            "phase_current_rating_A": 10,
-            "capacitor_current_rating_A": 1,
-            "pwm_current_envelope": true,
-            "reference_pwm_strategy": "CENTERED",
-            "phase_L_H": 0.004209648244780632,
-            "phase_R_ohm": 0.13225000000000003,
-            "neutral_R_ohm": 0.13225000000000003,
-            "neutral_current_rating_A": 10,
-            "scope": "matched Australian fixed-POC snapshot; highest capacitor model stress in this controller group; released VV/VW commands in coordinated mode",
-            "topology": "FOUR_LEG",
-            "dc_capacitance_F": 0.0003,
-            "neutral_peak_rating_A": 14,
-            "dc_voltage_max_rating_V": 765,
-            "dc_voltage_min_rating_V": 735,
-            "dc_switching_voltage_bound_V": 2.563248723548135,
-            "parent_mode": "local",
-            "parent_point_sha256": "b741a63f36f8991657e684371c0115a115911d330b4885a16596fa5cbf1f43ba",
-            "neutral_L_H": 0.004209648244780632,
-            "case_id": "rotated_unbalance_local_phase_vv_vw_pv_ld248_load_b",
-            "grid_peak_rating_A": 14,
-            "modulation_utilization": 0.96,
-            "p_dc_W": 28.544747787433167,
-            "local_controller": "phase_vv_vw",
-            "grid_voltage": [
-                [
-                    121.75407216026694,
-                    -205.77883774021984
-                ],
-                [
-                    -248.0361523054842,
-                    -2.518088391615732
-                ],
-                [
-                    125.93552727311011,
-                    208.899949358289
-                ]
-            ],
-            "fundamental_reference_accepted": true,
-            "reference_physical_check_count": 39,
-            "parent_case_id": "rotated_unbalance"
-        },
-        {
-            "pwm_dc_voltage_envelope": true,
-            "parent_capacitor_model_A": 0.9999999990234422,
-            "dc_2omega_peak_rating_V": 7.5,
-            "dc_energy_model": "nonlinear",
-            "dc_voltage_V": 750,
-            "frequency_Hz": 50,
-            "p_available_W": 3000,
-            "grid_current_rating_A": null,
-            "mean_converter_loss_W": 26.883220493857458,
-            "converter_voltage": [
-                [
-                    123.7075892061692,
-                    -205.0026155124033
-                ],
-                [
-                    -248.42632779721427,
-                    -4.560447421306764
-                ],
-                [
-                    124.43065877115676,
-                    210.24875319938346
-                ]
-            ],
-            "current": [
-                [
-                    0.7799208708809405,
-                    -1.3943597191676966
-                ],
-                [
-                    -1.5975113742534313,
-                    0.02174857245927095
-                ],
-                [
-                    0.8175905033724905,
-                    1.3726111467084257
-                ]
-            ],
-            "expect_averaged_hardware_accepted": true,
-            "phase_peak_rating_A": 14,
-            "device_id": "pv_ld1970_load_c",
-            "expect_switched_hardware_accepted": true,
-            "phase_current_rating_A": 10,
-            "capacitor_current_rating_A": 1,
-            "pwm_current_envelope": true,
-            "reference_pwm_strategy": "CENTERED",
-            "phase_L_H": 0.004209648244780632,
-            "phase_R_ohm": 0.13225000000000003,
-            "neutral_R_ohm": 0,
-            "neutral_current_rating_A": null,
-            "scope": "matched Australian fixed-POC snapshot; highest capacitor model stress in this controller group; released VV/VW commands in coordinated mode",
-            "topology": "THREE_LEG",
-            "dc_capacitance_F": 0.0003,
-            "neutral_peak_rating_A": null,
-            "dc_voltage_max_rating_V": 765,
-            "dc_voltage_min_rating_V": 735,
-            "dc_switching_voltage_bound_V": 1.7968072620365485,
-            "parent_mode": "coordinated",
-            "parent_point_sha256": "b9734d51375db7da01017247ca640b10f914da73d76894a1013ce6c322283377",
-            "neutral_L_H": 0,
-            "case_id": "rotated_unbalance_coordinated_mean_vv_vw_pv_ld1970_load_c",
-            "grid_peak_rating_A": 14,
-            "modulation_utilization": 0.96,
-            "p_dc_W": 1196.3005488582078,
-            "local_controller": "mean_vv_vw",
-            "grid_voltage": [
-                [
-                    121.76040394239591,
-                    -205.84965679128342
-                ],
-                [
-                    -248.18629443089188,
-                    -2.4506148775643393
-                ],
-                [
-                    126.13781066860763,
-                    208.98596193452116
-                ]
-            ],
-            "fundamental_reference_accepted": true,
-            "reference_physical_check_count": 38,
-            "parent_case_id": "rotated_unbalance"
-        },
-        {
-            "pwm_dc_voltage_envelope": true,
-            "parent_capacitor_model_A": 0.9999999990232965,
-            "dc_2omega_peak_rating_V": 7.5,
-            "dc_energy_model": "nonlinear",
-            "dc_voltage_V": 750,
-            "frequency_Hz": 50,
-            "p_available_W": 5000,
-            "grid_current_rating_A": null,
-            "mean_converter_loss_W": 26.883886142667805,
-            "converter_voltage": [
-                [
-                    123.73018491704946,
-                    -205.0507507449381
-                ],
-                [
-                    -248.42094642289794,
-                    -4.549962619464
-                ],
-                [
-                    124.43117396861038,
-                    210.23347627752617
-                ]
-            ],
-            "current": [
-                [
-                    0.7801257805274884,
-                    -1.3943310216255265
-                ],
-                [
-                    -1.5975889762761597,
-                    0.021556766728794783
-                ],
-                [
-                    0.8174631957486711,
-                    1.3727742548967319
-                ]
-            ],
-            "expect_averaged_hardware_accepted": true,
-            "phase_peak_rating_A": 14,
-            "device_id": "pv_ld2050_load_a",
-            "expect_switched_hardware_accepted": true,
-            "phase_current_rating_A": 10,
-            "capacitor_current_rating_A": 1,
-            "pwm_current_envelope": true,
-            "reference_pwm_strategy": "CENTERED",
-            "phase_L_H": 0.004209648244780632,
-            "phase_R_ohm": 0.13225000000000003,
-            "neutral_R_ohm": 0,
-            "neutral_current_rating_A": null,
-            "scope": "matched Australian fixed-POC snapshot; highest capacitor model stress in this controller group; released VV/VW commands in coordinated mode",
-            "topology": "THREE_LEG",
-            "dc_capacitance_F": 0.0003,
-            "neutral_peak_rating_A": null,
-            "dc_voltage_max_rating_V": 765,
-            "dc_voltage_min_rating_V": 735,
-            "dc_switching_voltage_bound_V": 1.7968205194866103,
-            "parent_mode": "coordinated",
-            "parent_point_sha256": "b9734d51375db7da01017247ca640b10f914da73d76894a1013ce6c322283377",
-            "neutral_L_H": 0,
-            "case_id": "rotated_unbalance_coordinated_worst_vv_vw_pv_ld2050_load_a",
-            "grid_peak_rating_A": 14,
-            "modulation_utilization": 0.96,
-            "p_dc_W": 1196.4151078700318,
-            "local_controller": "worst_vv_vw",
-            "grid_voltage": [
-                [
-                    121.78301050647494,
-                    -205.89806681207574
-                ],
-                [
-                    -248.1811564567866,
-                    -2.4400020807386613
-                ],
-                [
-                    126.13855841307354,
-                    208.97083180593845
-                ]
-            ],
-            "fundamental_reference_accepted": true,
-            "reference_physical_check_count": 38,
-            "parent_case_id": "rotated_unbalance"
-        },
-        {
-            "pwm_dc_voltage_envelope": true,
-            "parent_capacitor_model_A": 0.9999999990234829,
-            "dc_2omega_peak_rating_V": 7.5,
-            "dc_energy_model": "nonlinear",
-            "dc_voltage_V": 750,
-            "frequency_Hz": 50,
-            "p_available_W": 3000,
-            "grid_current_rating_A": null,
-            "mean_converter_loss_W": 26.88301651447537,
-            "converter_voltage": [
-                [
-                    123.695025368303,
-                    -204.9896449476687
-                ],
-                [
-                    -248.4301996961837,
-                    -4.564063458043627
-                ],
-                [
-                    124.42915306355565,
-                    210.25300238533262
-                ]
-            ],
-            "current": [
-                [
-                    0.7798041826974877,
-                    -1.3943986499146206
-                ],
-                [
-                    -1.5974867451775292,
-                    0.02186909276392424
-                ],
-                [
-                    0.8176825624800417,
-                    1.3725295571506964
-                ]
-            ],
-            "expect_averaged_hardware_accepted": true,
-            "phase_peak_rating_A": 14,
-            "device_id": "pv_ld626_load_c",
-            "expect_switched_hardware_accepted": true,
-            "phase_current_rating_A": 10,
-            "capacitor_current_rating_A": 1,
-            "pwm_current_envelope": true,
-            "reference_pwm_strategy": "CENTERED",
-            "phase_L_H": 0.004209648244780632,
-            "phase_R_ohm": 0.13225000000000003,
-            "neutral_R_ohm": 0,
-            "neutral_current_rating_A": null,
-            "scope": "matched Australian fixed-POC snapshot; highest capacitor model stress in this controller group; released VV/VW commands in coordinated mode",
-            "topology": "THREE_LEG",
-            "dc_capacitance_F": 0.0003,
-            "neutral_peak_rating_A": null,
-            "dc_voltage_max_rating_V": 765,
-            "dc_voltage_min_rating_V": 735,
-            "dc_switching_voltage_bound_V": 1.7968031994238074,
-            "parent_mode": "coordinated",
-            "parent_point_sha256": "b9734d51375db7da01017247ca640b10f914da73d76894a1013ce6c322283377",
-            "neutral_L_H": 0,
-            "case_id": "rotated_unbalance_coordinated_sequence_vv_vw_pv_ld626_load_c",
-            "grid_peak_rating_A": 14,
-            "modulation_utilization": 0.96,
-            "p_dc_W": 1196.2643470041467,
-            "local_controller": "sequence_vv_vw",
-            "grid_voltage": [
-                [
-                    121.74780405062917,
-                    -205.8365267578349
-                ],
-                [
-                    -248.19001019895367,
-                    -2.454279425064373
-                ],
-                [
-                    126.13618488399945,
-                    208.99010016251958
-                ]
-            ],
-            "fundamental_reference_accepted": true,
-            "reference_physical_check_count": 38,
-            "parent_case_id": "rotated_unbalance"
-        },
-        {
-            "pwm_dc_voltage_envelope": true,
-            "parent_capacitor_model_A": 0.9999999872925351,
+            "parent_capacitor_model_A": 0.9999999583789555,
             "dc_2omega_peak_rating_V": 7.5,
             "dc_energy_model": "nonlinear",
             "dc_voltage_V": 750,
             "frequency_Hz": 50,
             "p_available_W": 1250,
             "grid_current_rating_A": null,
-            "mean_converter_loss_W": 26.858141904400686,
+            "mean_converter_loss_W": 24.557736510807096,
             "converter_voltage": [
                 [
-                    123.65737655510367,
-                    -204.7698589923825
+                    123.14486040348339,
+                    -206.5292542475415
                 ],
                 [
-                    -248.52627290720758,
-                    -4.238331079012827
+                    -244.2781661759997,
+                    -3.7072998485272137
                 ],
                 [
-                    124.32547871632592,
-                    210.47025007140994
+                    126.70837882979005,
+                    207.04025768369095
                 ]
             ],
             "current": [
                 [
-                    0.7789413716692329,
-                    -1.424663434710469
+                    0.00024251359541072864,
+                    -0.0004097133120687126
                 ],
                 [
-                    -1.5616822721071282,
-                    0.03180881959658571
+                    0.01581070203358461,
+                    -1.6751020325935435
                 ],
                 [
-                    0.7887486720169533,
-                    1.3778193793145455
+                    -0.7219908184919536,
+                    0.43515861983493576
                 ]
             ],
             "expect_averaged_hardware_accepted": true,
@@ -2080,69 +1750,401 @@
             "neutral_peak_rating_A": 14,
             "dc_voltage_max_rating_V": 765,
             "dc_voltage_min_rating_V": 735,
-            "dc_switching_voltage_bound_V": 2.553792238219997,
-            "parent_mode": "coordinated",
-            "parent_point_sha256": "b9734d51375db7da01017247ca640b10f914da73d76894a1013ce6c322283377",
+            "dc_switching_voltage_bound_V": 2.5040769675583627,
+            "parent_mode": "local",
+            "parent_point_sha256": "ed9265a5e0d6b383f33aa0c7fda3850fa631db81972241d550bde2669c42b98e",
             "neutral_L_H": 0.004209648244780632,
-            "case_id": "rotated_unbalance_coordinated_phase_vv_vw_pv_ld1895_load_b",
+            "case_id": "rotated_unbalance_local_phase_vv_vw_pv_ld1895_load_b",
             "grid_peak_rating_A": 14,
             "modulation_utilization": 0.96,
-            "p_dc_W": 1190.9439228488206,
+            "p_dc_W": 25.633181454234972,
             "local_controller": "phase_vv_vw",
             "grid_voltage": [
                 [
-                    121.64956553915988,
-                    -205.61755408515344
+                    121.59727972395534,
+                    -205.4318816064768
                 ],
                 [
-                    -248.2983518899409,
-                    -2.18316985852164
+                    -248.04258634069845,
+                    -2.4090380774470237
                 ],
                 [
-                    126.02265420645924,
-                    209.23895647177434
+                    125.83235262901746,
+                    209.0351799943825
                 ]
             ],
             "fundamental_reference_accepted": true,
-            "reference_physical_check_count": 39,
+            "reference_physical_check_count": 42,
             "parent_case_id": "rotated_unbalance"
         },
         {
             "pwm_dc_voltage_envelope": true,
-            "parent_capacitor_model_A": 0.9999999396270463,
+            "parent_capacitor_model_A": 0.9999999990900891,
+            "dc_2omega_peak_rating_V": 7.5,
+            "dc_energy_model": "nonlinear",
+            "dc_voltage_V": 750,
+            "frequency_Hz": 50,
+            "p_available_W": 3000,
+            "grid_current_rating_A": null,
+            "mean_converter_loss_W": 25.741398938759716,
+            "converter_voltage": [
+                [
+                    123.52158531081223,
+                    -205.04630570614395
+                ],
+                [
+                    -248.37470014346098,
+                    -4.378165224660249
+                ],
+                [
+                    124.56488318948615,
+                    210.11471603317858
+                ]
+            ],
+            "current": [
+                [
+                    0.7177114852988313,
+                    -1.2797791134185685
+                ],
+                [
+                    -1.4671769661026224,
+                    0.01833317785263457
+                ],
+                [
+                    0.749465480803791,
+                    1.261445935565934
+                ]
+            ],
+            "expect_averaged_hardware_accepted": true,
+            "phase_peak_rating_A": 14,
+            "device_id": "pv_ld1970_load_c",
+            "expect_switched_hardware_accepted": true,
+            "phase_current_rating_A": 10,
+            "capacitor_current_rating_A": 1,
+            "pwm_current_envelope": true,
+            "reference_pwm_strategy": "CENTERED",
+            "phase_L_H": 0.004209648244780632,
+            "phase_R_ohm": 0.13225000000000003,
+            "neutral_R_ohm": 0,
+            "neutral_current_rating_A": null,
+            "scope": "matched Australian fixed-POC snapshot; highest capacitor model stress in this controller group; released VV/VW commands in coordinated mode",
+            "topology": "THREE_LEG",
+            "dc_capacitance_F": 0.0003,
+            "neutral_peak_rating_A": null,
+            "dc_voltage_max_rating_V": 765,
+            "dc_voltage_min_rating_V": 735,
+            "dc_switching_voltage_bound_V": 1.7737612542438137,
+            "parent_mode": "coordinated",
+            "parent_point_sha256": "448b884bdd3e7f7dfb3d5234c49e03e715ecfa62fed3c45cd7021dc1eaedd8bf",
+            "neutral_L_H": 0,
+            "case_id": "rotated_unbalance_coordinated_mean_vv_vw_pv_ld1970_load_c",
+            "grid_peak_rating_A": 14,
+            "modulation_utilization": 0.96,
+            "p_dc_W": 1099.5430466699304,
+            "local_controller": "mean_vv_vw",
+            "grid_voltage": [
+                [
+                    121.7341600893854,
+                    -205.82622835770204
+                ],
+                [
+                    -248.15642036198378,
+                    -2.4402482497605407
+                ],
+                [
+                    126.1340286294358,
+                    208.95672170983696
+                ]
+            ],
+            "fundamental_reference_accepted": true,
+            "reference_physical_check_count": 41,
+            "parent_case_id": "rotated_unbalance"
+        },
+        {
+            "pwm_dc_voltage_envelope": true,
+            "parent_capacitor_model_A": 0.9999999990899767,
+            "dc_2omega_peak_rating_V": 7.5,
+            "dc_energy_model": "nonlinear",
+            "dc_voltage_V": 750,
+            "frequency_Hz": 50,
+            "p_available_W": 5000,
+            "grid_current_rating_A": null,
+            "mean_converter_loss_W": 25.742167268830283,
+            "converter_voltage": [
+                [
+                    123.54752587638903,
+                    -205.09695646248792
+                ],
+                [
+                    -248.37273598488494,
+                    -4.369101634261427
+                ],
+                [
+                    124.56551182932499,
+                    210.1029557824623
+                ]
+            ],
+            "current": [
+                [
+                    0.7178963543664567,
+                    -1.279777369355396
+                ],
+                [
+                    -1.4672678902334215,
+                    0.018172204512110563
+                ],
+                [
+                    0.7493715358669649,
+                    1.261605164843285
+                ]
+            ],
+            "expect_averaged_hardware_accepted": true,
+            "phase_peak_rating_A": 14,
+            "device_id": "pv_ld2050_load_a",
+            "expect_switched_hardware_accepted": true,
+            "phase_current_rating_A": 10,
+            "capacitor_current_rating_A": 1,
+            "pwm_current_envelope": true,
+            "reference_pwm_strategy": "CENTERED",
+            "phase_L_H": 0.004209648244780632,
+            "phase_R_ohm": 0.13225000000000003,
+            "neutral_R_ohm": 0,
+            "neutral_current_rating_A": null,
+            "scope": "matched Australian fixed-POC snapshot; highest capacitor model stress in this controller group; released VV/VW commands in coordinated mode",
+            "topology": "THREE_LEG",
+            "dc_capacitance_F": 0.0003,
+            "neutral_peak_rating_A": null,
+            "dc_voltage_max_rating_V": 765,
+            "dc_voltage_min_rating_V": 735,
+            "dc_switching_voltage_bound_V": 1.7737769722895067,
+            "parent_mode": "coordinated",
+            "parent_point_sha256": "448b884bdd3e7f7dfb3d5234c49e03e715ecfa62fed3c45cd7021dc1eaedd8bf",
+            "neutral_L_H": 0,
+            "case_id": "rotated_unbalance_coordinated_worst_vv_vw_pv_ld2050_load_a",
+            "grid_peak_rating_A": 14,
+            "modulation_utilization": 0.96,
+            "p_dc_W": 1099.67769628205,
+            "local_controller": "worst_vv_vw",
+            "grid_voltage": [
+                [
+                    121.76007851255156,
+                    -205.87712383404033
+                ],
+                [
+                    -248.15465706593432,
+                    -2.431043123474453
+                ],
+                [
+                    126.13488027421182,
+                    208.9450646432277
+                ]
+            ],
+            "fundamental_reference_accepted": true,
+            "reference_physical_check_count": 41,
+            "parent_case_id": "rotated_unbalance"
+        },
+        {
+            "pwm_dc_voltage_envelope": true,
+            "parent_capacitor_model_A": 0.999999999090128,
+            "dc_2omega_peak_rating_V": 7.5,
+            "dc_energy_model": "nonlinear",
+            "dc_voltage_V": 750,
+            "frequency_Hz": 50,
+            "p_available_W": 3000,
+            "grid_current_rating_A": null,
+            "mean_converter_loss_W": 25.74121585738475,
+            "converter_voltage": [
+                [
+                    123.50881598846078,
+                    -205.03341268117285
+                ],
+                [
+                    -248.37854946906958,
+                    -4.38157551190821
+                ],
+                [
+                    124.56353811330618,
+                    210.11888829056502
+                ]
+            ],
+            "current": [
+                [
+                    0.7176060557501667,
+                    -1.2798139429975175
+                ],
+                [
+                    -1.467154414628463,
+                    0.01844189730956219
+                ],
+                [
+                    0.7495483588782962,
+                    1.2613720456879551
+                ]
+            ],
+            "expect_averaged_hardware_accepted": true,
+            "phase_peak_rating_A": 14,
+            "device_id": "pv_ld626_load_c",
+            "expect_switched_hardware_accepted": true,
+            "phase_current_rating_A": 10,
+            "capacitor_current_rating_A": 1,
+            "pwm_current_envelope": true,
+            "reference_pwm_strategy": "CENTERED",
+            "phase_L_H": 0.004209648244780632,
+            "phase_R_ohm": 0.13225000000000003,
+            "neutral_R_ohm": 0,
+            "neutral_current_rating_A": null,
+            "scope": "matched Australian fixed-POC snapshot; highest capacitor model stress in this controller group; released VV/VW commands in coordinated mode",
+            "topology": "THREE_LEG",
+            "dc_capacitance_F": 0.0003,
+            "neutral_peak_rating_A": null,
+            "dc_voltage_max_rating_V": 765,
+            "dc_voltage_min_rating_V": 735,
+            "dc_switching_voltage_bound_V": 1.773757508829535,
+            "parent_mode": "coordinated",
+            "parent_point_sha256": "448b884bdd3e7f7dfb3d5234c49e03e715ecfa62fed3c45cd7021dc1eaedd8bf",
+            "neutral_L_H": 0,
+            "case_id": "rotated_unbalance_coordinated_sequence_vv_vw_pv_ld626_load_c",
+            "grid_peak_rating_A": 14,
+            "modulation_utilization": 0.96,
+            "p_dc_W": 1099.5098787955328,
+            "local_controller": "sequence_vv_vw",
+            "grid_voltage": [
+                [
+                    121.7213586479736,
+                    -205.81319129594098
+                ],
+                [
+                    -248.16012888854306,
+                    -2.443702739481257
+                ],
+                [
+                    126.13257487326685,
+                    208.96079413290624
+                ]
+            ],
+            "fundamental_reference_accepted": true,
+            "reference_physical_check_count": 41,
+            "parent_case_id": "rotated_unbalance"
+        },
+        {
+            "pwm_dc_voltage_envelope": true,
+            "parent_capacitor_model_A": 0.9999999891692994,
+            "dc_2omega_peak_rating_V": 7.5,
+            "dc_energy_model": "nonlinear",
+            "dc_voltage_V": 750,
+            "frequency_Hz": 50,
+            "p_available_W": 1250,
+            "grid_current_rating_A": null,
+            "mean_converter_loss_W": 24.089968976121845,
+            "converter_voltage": [
+                [
+                    123.2212825062571,
+                    -204.9066966637013
+                ],
+                [
+                    -248.443412487767,
+                    -3.807943729534881
+                ],
+                [
+                    124.66265653493119,
+                    210.19115461725193
+                ]
+            ],
+            "current": [
+                [
+                    0.6248354716514888,
+                    -1.1341300006255313
+                ],
+                [
+                    -1.2454655962108583,
+                    0.022012509571948495
+                ],
+                [
+                    0.626848215577155,
+                    1.100162695740388
+                ]
+            ],
+            "expect_averaged_hardware_accepted": true,
+            "phase_peak_rating_A": 14,
+            "device_id": "pv_ld1895_load_b",
+            "expect_switched_hardware_accepted": true,
+            "phase_current_rating_A": 10,
+            "capacitor_current_rating_A": 1,
+            "pwm_current_envelope": true,
+            "reference_pwm_strategy": "CENTERED",
+            "phase_L_H": 0.004209648244780632,
+            "phase_R_ohm": 0.13225000000000003,
+            "neutral_R_ohm": 0.13225000000000003,
+            "neutral_current_rating_A": 10,
+            "scope": "matched Australian fixed-POC snapshot; highest capacitor model stress in this controller group; released VV/VW commands in coordinated mode",
+            "topology": "FOUR_LEG",
+            "dc_capacitance_F": 0.0003,
+            "neutral_peak_rating_A": 14,
+            "dc_voltage_max_rating_V": 765,
+            "dc_voltage_min_rating_V": 735,
+            "dc_switching_voltage_bound_V": 2.496675609291463,
+            "parent_mode": "coordinated",
+            "parent_point_sha256": "448b884bdd3e7f7dfb3d5234c49e03e715ecfa62fed3c45cd7021dc1eaedd8bf",
+            "neutral_L_H": 0.004209648244780632,
+            "case_id": "rotated_unbalance_coordinated_phase_vv_vw_pv_ld1895_load_b",
+            "grid_peak_rating_A": 14,
+            "modulation_utilization": 0.96,
+            "p_dc_W": 952.2067607072705,
+            "local_controller": "phase_vv_vw",
+            "grid_voltage": [
+                [
+                    121.62212852996511,
+                    -205.58969528606852
+                ],
+                [
+                    -248.266220678098,
+                    -2.1703690366277617
+                ],
+                [
+                    126.01808846419897,
+                    209.21000893194858
+                ]
+            ],
+            "fundamental_reference_accepted": true,
+            "reference_physical_check_count": 42,
+            "parent_case_id": "rotated_unbalance"
+        },
+        {
+            "pwm_dc_voltage_envelope": true,
+            "parent_capacitor_model_A": 0.9999999447384132,
             "dc_2omega_peak_rating_V": 7.5,
             "dc_energy_model": "nonlinear",
             "dc_voltage_V": 750,
             "frequency_Hz": 50,
             "p_available_W": 0,
             "grid_current_rating_A": null,
-            "mean_converter_loss_W": 28.58365607336722,
+            "mean_converter_loss_W": 27.25449946476573,
             "converter_voltage": [
                 [
-                    127.0695872932119,
-                    -214.85797542480924
+                    127.13761323853126,
+                    -215.0453634993484
                 ],
                 [
-                    -249.9377257274723,
-                    1.8614034431722726
+                    -250.1358075142625,
+                    1.8952299059237567
                 ],
                 [
-                    122.77909790306352,
-                    213.47514440155442
+                    122.90400376215705,
+                    213.6300455799804
                 ]
             ],
             "current": [
                 [
-                    1.5254600000180003,
-                    0.9281933012688945
+                    1.399864053430757,
+                    0.8530715468141241
                 ],
                 [
-                    0.04110897851240529,
-                    -1.7851837631070457
+                    0.03884960407133897,
+                    -1.6388536055227545
                 ],
                 [
-                    -1.5665689785304056,
-                    0.8569904618381512
+                    -1.438713657502096,
+                    0.7857820587086303
                 ]
             ],
             "expect_averaged_hardware_accepted": true,
@@ -2163,69 +2165,69 @@
             "neutral_peak_rating_A": null,
             "dc_voltage_max_rating_V": 765,
             "dc_voltage_min_rating_V": 735,
-            "dc_switching_voltage_bound_V": 1.8300408593490165,
+            "dc_switching_voltage_bound_V": 1.8041708249865218,
             "parent_mode": "local",
-            "parent_point_sha256": "52f85c4fe67f12d9fbd8ae4173d8dde264069b6ac7f3afd1ab1fb7d71ee1641d",
+            "parent_point_sha256": "2e61e2caba328a1d65f8553a0bbc12742ac761164c2e5dc4818e1c5fb79b6fda",
             "neutral_L_H": 0,
             "case_id": "night_local_mean_vv_vw_pv_ld1291_load_b",
             "grid_peak_rating_A": 14,
             "modulation_utilization": 0.96,
-            "p_dc_W": 9.999950727390683e-5,
+            "p_dc_W": 9.999371294355797e-5,
             "local_controller": "mean_vv_vw",
             "grid_voltage": [
                 [
-                    128.09538084913763,
-                    -216.99814983892585
+                    128.0806683381267,
+                    -217.00950242207676
                 ],
                 [
-                    -252.30406791658964,
-                    2.0431273717605234
+                    -252.30832926770478,
+                    2.060589693869795
                 ],
                 [
-                    124.11964653625512,
-                    215.4335948870828
+                    124.13347041600386,
+                    215.4288247147627
                 ]
             ],
             "fundamental_reference_accepted": true,
-            "reference_physical_check_count": 38,
+            "reference_physical_check_count": 41,
             "parent_case_id": "night"
         },
         {
             "pwm_dc_voltage_envelope": true,
-            "parent_capacitor_model_A": 0.9999999396011102,
+            "parent_capacitor_model_A": 0.9999999447152418,
             "dc_2omega_peak_rating_V": 7.5,
             "dc_energy_model": "nonlinear",
             "dc_voltage_V": 750,
             "frequency_Hz": 50,
             "p_available_W": 0,
             "grid_current_rating_A": null,
-            "mean_converter_loss_W": 28.585587658661613,
+            "mean_converter_loss_W": 27.256115854361944,
             "converter_voltage": [
                 [
-                    127.02552143139447,
-                    -214.76954575744443
+                    127.09026280764381,
+                    -214.96340350140318
                 ],
                 [
-                    -249.89636102052262,
-                    1.8403671650835738
+                    -250.09815168076494,
+                    1.879702342571908
                 ],
                 [
-                    122.75757626900672,
-                    213.44926255897107
+                    122.88700440673989,
+                    213.60519945863734
                 ]
             ],
             "current": [
                 [
-                    1.5255942919004968,
-                    0.9283758733127498
+                    1.3999944769576802,
+                    0.8532045447586682
                 ],
                 [
-                    0.0411999445991567,
-                    -1.7853913493107376
+                    0.038899571906503734,
+                    -1.6390330545825929
                 ],
                 [
-                    -1.5667942364996534,
-                    0.8570154759979874
+                    -1.438894048864184,
+                    0.7858285098239246
                 ]
             ],
             "expect_averaged_hardware_accepted": true,
@@ -2246,69 +2248,69 @@
             "neutral_peak_rating_A": null,
             "dc_voltage_max_rating_V": 765,
             "dc_voltage_min_rating_V": 735,
-            "dc_switching_voltage_bound_V": 1.8300779165994194,
+            "dc_switching_voltage_bound_V": 1.8042027479356484,
             "parent_mode": "local",
-            "parent_point_sha256": "52f85c4fe67f12d9fbd8ae4173d8dde264069b6ac7f3afd1ab1fb7d71ee1641d",
+            "parent_point_sha256": "2e61e2caba328a1d65f8553a0bbc12742ac761164c2e5dc4818e1c5fb79b6fda",
             "neutral_L_H": 0,
             "case_id": "night_local_worst_vv_vw_pv_ld1446_load_c",
             "grid_peak_rating_A": 14,
             "modulation_utilization": 0.96,
-            "p_dc_W": 9.99993087056339e-5,
+            "p_dc_W": 9.998635184871318e-5,
             "local_controller": "worst_vv_vw",
             "grid_voltage": [
                 [
-                    128.05153867874674,
-                    -216.90992191772844
+                    128.0334765485095,
+                    -216.92773249822403
                 ],
                 [
-                    -252.2629897726593,
-                    2.021998244297534
+                    -252.27091736383505,
+                    2.045019780194105
                 ],
                 [
-                    124.09818777379114,
-                    215.40800764004112
+                    124.11655634894431,
+                    215.40421101783602
                 ]
             ],
             "fundamental_reference_accepted": true,
-            "reference_physical_check_count": 38,
+            "reference_physical_check_count": 41,
             "parent_case_id": "night"
         },
         {
             "pwm_dc_voltage_envelope": true,
-            "parent_capacitor_model_A": 0.9999999396253162,
+            "parent_capacitor_model_A": 0.9999999447374044,
             "dc_2omega_peak_rating_V": 7.5,
             "dc_energy_model": "nonlinear",
             "dc_voltage_V": 750,
             "frequency_Hz": 50,
             "p_available_W": 0,
             "grid_current_rating_A": null,
-            "mean_converter_loss_W": 28.584104580279963,
+            "mean_converter_loss_W": 27.254832004018628,
             "converter_voltage": [
                 [
-                    127.02493372195022,
-                    -214.86044649562004
+                    127.09280673064416,
+                    -215.05080691349698
                 ],
                 [
-                    -249.92997903346446,
-                    1.879960561066413
+                    -250.13038646432267,
+                    1.9150331062705657
                 ],
                 [
-                    122.79568820365219,
-                    213.45210945591725
+                    122.92168529706645,
+                    213.60877682896518
                 ]
             ],
             "current": [
                 [
-                    1.5256056498657389,
-                    0.928047550007447
+                    1.3999948342223247,
+                    0.8529283116950332
                 ],
                 [
-                    0.04090992929348883,
-                    -1.785237023944521
+                    0.038660168423708216,
+                    -1.6388952474510337
                 ],
                 [
-                    -1.5665155791592278,
-                    0.8571894739370742
+                    -1.4386550026460332,
+                    0.7859669357560006
                 ]
             ],
             "expect_averaged_hardware_accepted": true,
@@ -2329,69 +2331,69 @@
             "neutral_peak_rating_A": null,
             "dc_voltage_max_rating_V": 765,
             "dc_voltage_min_rating_V": 735,
-            "dc_switching_voltage_bound_V": 1.8300494640398428,
+            "dc_switching_voltage_bound_V": 1.8041773925781326,
             "parent_mode": "local",
-            "parent_point_sha256": "52f85c4fe67f12d9fbd8ae4173d8dde264069b6ac7f3afd1ab1fb7d71ee1641d",
+            "parent_point_sha256": "2e61e2caba328a1d65f8553a0bbc12742ac761164c2e5dc4818e1c5fb79b6fda",
             "neutral_L_H": 0,
             "case_id": "night_local_sequence_vv_vw_pv_ld1668_load_a",
             "grid_peak_rating_A": 14,
             "modulation_utilization": 0.96,
-            "p_dc_W": 9.999946478700394e-5,
+            "p_dc_W": 9.998772021191371e-5,
             "local_controller": "sequence_vv_vw",
             "grid_voltage": [
                 [
-                    128.05051525964032,
-                    -217.00079425605597
+                    128.03565510603494,
+                    -217.0150998509777
                 ],
                 [
-                    -252.29636533578017,
-                    2.061954775992437
+                    -252.30293823635068,
+                    2.080648930005611
                 ],
                 [
-                    124.13649296827778,
-                    215.41046300142716
+                    124.1513886937037,
+                    215.40745394271082
                 ]
             ],
             "fundamental_reference_accepted": true,
-            "reference_physical_check_count": 38,
+            "reference_physical_check_count": 41,
             "parent_case_id": "night"
         },
         {
             "pwm_dc_voltage_envelope": true,
-            "parent_capacitor_model_A": 0.999999937392015,
+            "parent_capacitor_model_A": 0.9999999504697269,
             "dc_2omega_peak_rating_V": 7.5,
             "dc_energy_model": "nonlinear",
             "dc_voltage_V": 750,
             "frequency_Hz": 50,
             "p_available_W": 0,
             "grid_current_rating_A": null,
-            "mean_converter_loss_W": 29.180958855246963,
+            "mean_converter_loss_W": 25.834435818003275,
             "converter_voltage": [
                 [
-                    127.28214394738552,
-                    -213.83443350681353
+                    127.36866273947585,
+                    -214.39454636670348
                 ],
                 [
-                    -249.14160936083678,
-                    2.3788540515261896
+                    -249.78571165387902,
+                    2.3871019611637494
                 ],
                 [
-                    123.39626157205798,
-                    214.42710259843597
+                    123.54265463361718,
+                    214.65962523668506
                 ]
             ],
             "current": [
                 [
-                    1.5568302975582466,
-                    0.9667920391607208
+                    1.2375557111415025,
+                    0.7719751764637813
                 ],
                 [
-                    0.023013165964391062,
-                    -1.962170064672296
+                    0.021236576577415543,
+                    -1.5631577003365318
                 ],
                 [
-                    -1.2472228069918045,
-                    0.6701566850589804
+                    -0.9946761097981404,
+                    0.5309244955927133
                 ]
             ],
             "expect_averaged_hardware_accepted": true,
@@ -2412,36 +2414,36 @@
             "neutral_peak_rating_A": 14,
             "dc_voltage_max_rating_V": 765,
             "dc_voltage_min_rating_V": 735,
-            "dc_switching_voltage_bound_V": 2.6060266261650518,
+            "dc_switching_voltage_bound_V": 2.5379224846620057,
             "parent_mode": "local",
-            "parent_point_sha256": "52f85c4fe67f12d9fbd8ae4173d8dde264069b6ac7f3afd1ab1fb7d71ee1641d",
+            "parent_point_sha256": "2e61e2caba328a1d65f8553a0bbc12742ac761164c2e5dc4818e1c5fb79b6fda",
             "neutral_L_H": 0.004209648244780632,
             "case_id": "night_local_phase_vv_vw_pv_ld1895_load_b",
             "grid_peak_rating_A": 14,
             "modulation_utilization": 0.96,
-            "p_dc_W": 9.999886407285885e-5,
+            "p_dc_W": 9.998963220070323e-5,
             "local_controller": "phase_vv_vw",
             "grid_voltage": [
                 [
-                    127.88074130774874,
-                    -216.41808011850048
+                    127.84681256062036,
+                    -216.44818203283563
                 ],
                 [
-                    -252.21371706713944,
-                    2.2110358346040218
+                    -252.23491685675683,
+                    2.25086967344943
                 ],
                 [
-                    123.97339469969839,
-                    215.5910462430964
+                    123.99722758762897,
+                    215.58999510629076
                 ]
             ],
             "fundamental_reference_accepted": true,
-            "reference_physical_check_count": 39,
+            "reference_physical_check_count": 42,
             "parent_case_id": "night"
         },
         {
             "pwm_dc_voltage_envelope": true,
-            "parent_capacitor_model_A": 0.012183307908624447,
+            "parent_capacitor_model_A": 0.39513920392661356,
             "dc_2omega_peak_rating_V": 7.5,
             "dc_energy_model": "nonlinear",
             "dc_voltage_V": 750,
@@ -2456,7 +2458,7 @@
                 ],
                 [
                     -252.25175185088077,
-                    2.275787934344832
+                    2.275787934344837
                 ],
                 [
                     124.30467643997362,
@@ -2465,16 +2467,16 @@
             ],
             "current": [
                 [
-                    -0.010045135318780594,
-                    0.01740197119712223
+                    -0.010045135318781416,
+                    0.017401971197121755
                 ],
                 [
-                    0.02009311679202325,
-                    -1.6432280448276777e-6
+                    0.020093116792023247,
+                    -1.6432280438760633e-6
                 ],
                 [
-                    -0.010047981473242656,
-                    -0.017400327969077405
+                    -0.010047981473241832,
+                    -0.01740032796907788
                 ]
             ],
             "expect_averaged_hardware_accepted": true,
@@ -2497,12 +2499,12 @@
             "dc_voltage_min_rating_V": 735,
             "dc_switching_voltage_bound_V": 1.5179303060733245,
             "parent_mode": "coordinated",
-            "parent_point_sha256": "af08a3dca47a2f4fe9951662fae1e71e9e31bb84f1a6a31629e680c028481482",
+            "parent_point_sha256": "1a44bd9d8c1f81e7b196513f504c1637aad08e9ea5f67b310319ddaebf17f6a4",
             "neutral_L_H": 0,
             "case_id": "night_coordinated_mean_vv_vw_pv_ld1970_load_c",
             "grid_peak_rating_A": 14,
             "modulation_utilization": 0.96,
-            "p_dc_W": 9.995852643562841e-5,
+            "p_dc_W": 9.995852643918113e-5,
             "local_controller": "mean_vv_vw",
             "grid_voltage": [
                 [
@@ -2511,7 +2513,7 @@
                 ],
                 [
                     -252.2544113387456,
-                    2.2492150047042903
+                    2.249215004704295
                 ],
                 [
                     124.28299335178434,
@@ -2519,12 +2521,12 @@
                 ]
             ],
             "fundamental_reference_accepted": true,
-            "reference_physical_check_count": 38,
+            "reference_physical_check_count": 41,
             "parent_case_id": "night"
         },
         {
             "pwm_dc_voltage_envelope": true,
-            "parent_capacitor_model_A": 0.012178791221901806,
+            "parent_capacitor_model_A": 0.3951390646189721,
             "dc_2omega_peak_rating_V": 7.5,
             "dc_energy_model": "nonlinear",
             "dc_voltage_V": 750,
@@ -2535,11 +2537,11 @@
             "converter_voltage": [
                 [
                     127.74128708612274,
-                    -216.96500124334406
+                    -216.9650012433441
                 ],
                 [
                     -252.279207154882,
-                    2.273493182712844
+                    2.273493182712849
                 ],
                 [
                     124.30666494641453,
@@ -2548,16 +2550,16 @@
             ],
             "current": [
                 [
-                    -0.01004384116540754,
-                    0.017398706727338974
+                    -0.010043841165408438,
+                    0.017398706727338457
                 ],
                 [
                     0.020089642601574535,
-                    -1.1317628506554055e-6
+                    -1.1317628496212588e-6
                 ],
                 [
-                    -0.010045801436166995,
-                    -0.017397574964488318
+                    -0.010045801436166096,
+                    -0.017397574964488835
                 ]
             ],
             "expect_averaged_hardware_accepted": true,
@@ -2580,12 +2582,12 @@
             "dc_voltage_min_rating_V": 735,
             "dc_switching_voltage_bound_V": 1.5179296919111758,
             "parent_mode": "coordinated",
-            "parent_point_sha256": "af08a3dca47a2f4fe9951662fae1e71e9e31bb84f1a6a31629e680c028481482",
+            "parent_point_sha256": "1a44bd9d8c1f81e7b196513f504c1637aad08e9ea5f67b310319ddaebf17f6a4",
             "neutral_L_H": 0,
             "case_id": "night_coordinated_worst_vv_vw_pv_ld2050_load_a",
             "grid_peak_rating_A": 14,
             "modulation_utilization": 0.96,
-            "p_dc_W": 9.99585192626995e-5,
+            "p_dc_W": 9.995851926447585e-5,
             "local_controller": "worst_vv_vw",
             "grid_voltage": [
                 [
@@ -2594,7 +2596,7 @@
                 ],
                 [
                     -252.28186550687238,
-                    2.2469247800478986
+                    2.2469247800479035
                 ],
                 [
                     124.28498521076394,
@@ -2602,12 +2604,12 @@
                 ]
             ],
             "fundamental_reference_accepted": true,
-            "reference_physical_check_count": 38,
+            "reference_physical_check_count": 41,
             "parent_case_id": "night"
         },
         {
             "pwm_dc_voltage_envelope": true,
-            "parent_capacitor_model_A": 0.01218462723355257,
+            "parent_capacitor_model_A": 0.39513924458858346,
             "dc_2omega_peak_rating_V": 7.5,
             "dc_energy_model": "nonlinear",
             "dc_voltage_V": 750,
@@ -2622,7 +2624,7 @@
                 ],
                 [
                     -252.2459548795404,
-                    2.279159118746928
+                    2.279159118746933
                 ],
                 [
                     124.30607419822465,
@@ -2631,16 +2633,16 @@
             ],
             "current": [
                 [
-                    -0.010045199298697221,
-                    0.01740310563579644
+                    -0.010045199298697911,
+                    0.01740310563579605
                 ],
                 [
-                    0.020094131234692465,
-                    -2.155039148796691e-6
+                    0.020094131234692468,
+                    -2.1550391480057486e-6
                 ],
                 [
-                    -0.010048931935995242,
-                    -0.017400950596647643
+                    -0.010048931935994557,
+                    -0.017400950596648042
                 ]
             ],
             "expect_averaged_hardware_accepted": true,
@@ -2663,12 +2665,12 @@
             "dc_voltage_min_rating_V": 735,
             "dc_switching_voltage_bound_V": 1.5179304854116977,
             "parent_mode": "coordinated",
-            "parent_point_sha256": "af08a3dca47a2f4fe9951662fae1e71e9e31bb84f1a6a31629e680c028481482",
+            "parent_point_sha256": "1a44bd9d8c1f81e7b196513f504c1637aad08e9ea5f67b310319ddaebf17f6a4",
             "neutral_L_H": 0,
             "case_id": "night_coordinated_sequence_vv_vw_pv_ld626_load_c",
             "grid_peak_rating_A": 14,
             "modulation_utilization": 0.96,
-            "p_dc_W": 9.995852852995313e-5,
+            "p_dc_W": 9.995852852817677e-5,
             "local_controller": "sequence_vv_vw",
             "grid_voltage": [
                 [
@@ -2677,7 +2679,7 @@
                 ],
                 [
                     -252.24861517843547,
-                    2.2525849151929744
+                    2.2525849151929793
                 ],
                 [
                     124.28439041230914,
@@ -2685,12 +2687,12 @@
                 ]
             ],
             "fundamental_reference_accepted": true,
-            "reference_physical_check_count": 38,
+            "reference_physical_check_count": 41,
             "parent_case_id": "night"
         },
         {
             "pwm_dc_voltage_envelope": true,
-            "parent_capacitor_model_A": 0.012249381603962863,
+            "parent_capacitor_model_A": 0.6029973671383387,
             "dc_2omega_peak_rating_V": 7.5,
             "dc_energy_model": "nonlinear",
             "dc_voltage_V": 750,
@@ -2700,30 +2702,30 @@
             "mean_converter_loss_W": 15.1209231404944,
             "converter_voltage": [
                 [
-                    127.60258165094938,
+                    127.60258165094939,
                     -216.67754504620967
                 ],
                 [
-                    -252.3698850933819,
-                    2.5416722456327028
+                    -252.36988509338192,
+                    2.5416722456327085
                 ],
                 [
-                    124.21172504563137,
-                    215.56397496481026
+                    124.21172504563138,
+                    215.56397496481028
                 ]
             ],
             "current": [
                 [
-                    -0.00987895541214224,
-                    0.01744390541499543
+                    -0.009878955412151877,
+                    0.01744390541498975
                 ],
                 [
-                    0.019973030571176928,
-                    0.00012127268340029022
+                    0.01997303057117704,
+                    0.00012127268341137663
                 ],
                 [
-                    -0.010094206212401872,
-                    -0.017565378964710183
+                    -0.010094206212392603,
+                    -0.01756537896471552
                 ]
             ],
             "expect_averaged_hardware_accepted": true,
@@ -2746,7 +2748,7 @@
             "dc_voltage_min_rating_V": 735,
             "dc_switching_voltage_bound_V": 2.275119493018905,
             "parent_mode": "coordinated",
-            "parent_point_sha256": "af08a3dca47a2f4fe9951662fae1e71e9e31bb84f1a6a31629e680c028481482",
+            "parent_point_sha256": "1a44bd9d8c1f81e7b196513f504c1637aad08e9ea5f67b310319ddaebf17f6a4",
             "neutral_L_H": 0.004209648244780632,
             "case_id": "night_coordinated_phase_vv_vw_pv_ld1895_load_b",
             "grid_peak_rating_A": 14,
@@ -2760,7 +2762,7 @@
                 ],
                 [
                     -252.37236639186506,
-                    2.51524207427259
+                    2.515242074272595
                 ],
                 [
                     124.18982954240823,
@@ -2768,7 +2770,7 @@
                 ]
             ],
             "fundamental_reference_accepted": true,
-            "reference_physical_check_count": 39,
+            "reference_physical_check_count": 42,
             "parent_case_id": "night"
         }
     ],

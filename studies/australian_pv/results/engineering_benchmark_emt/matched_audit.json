@@ -2,212 +2,207 @@
   "accepted": true,
   "reference_checks": 391,
   "references": 32,
-  "circuit_checks": 7274,
+  "circuit_checks": 7276,
   "integrations": 192,
-  "input_sha256": "fdf941eb7c341b5728fbef17115c275f50c0425dc0919a77662c852fc1298391",
-  "parent_audit_sha256": "c945ea806c98e69c087b04ca6ef342535aaf348d7670cbc125dc36f0e38c65ca",
-  "results_sha256": "29fe7693b507e826482cffb4104840976c65c1924298b3e4e5aef83a20078b55",
+  "input_sha256": "6aa60bf7c87497dde5e2a7012e5faf73b733525389187110e149ea102d5e63d5",
+  "parent_audit_sha256": "5e5aa32a852bf59c4d347e6681d347ca6f6c1c3f125c459220ff5660d33b8077",
+  "results_sha256": "cda9ee3fc54443f22775e350a635b10dec6879f4bc4b6c3eb07288fe4596df33",
   "audit_code_sha256": "86d968978a762ed3d22541c82b9926e7c10279e114dfafc3c2b47c1f01630f34",
   "thermal_prediction_coverage": {
     "nominal_local_mean_vv_vw_pv_ld1970_load_c": {
-      "predicted_A": 0.9999999994145401,
-      "switched_A": 0.9429781126031629,
-      "error_A": -0.05702188681137721,
+      "predicted_A": 0.9999999994952788,
+      "switched_A": 0.8734889304044081,
+      "error_A": -0.12651106909087073,
       "encloses_with_mesh_band": true
     },
-    "nominal_local_worst_vv_vw_pv_ld2050_load_a": {
-      "predicted_A": 0.9999999995612427,
-      "switched_A": 0.9460181454111148,
-      "error_A": -0.053981854150127906,
+    "nominal_local_worst_vv_vw_pv_ld2804_load_c": {
+      "predicted_A": 0.9999999996368588,
+      "switched_A": 0.8767467993164078,
+      "error_A": -0.12325320032045106,
       "encloses_with_mesh_band": true
     },
     "nominal_local_sequence_vv_vw_pv_ld626_load_c": {
-      "predicted_A": 0.9999999994229477,
-      "switched_A": 0.9429415611348432,
-      "error_A": -0.05705843828810453,
+      "predicted_A": 0.9999999995019695,
+      "switched_A": 0.8734501310293705,
+      "error_A": -0.12654986847259897,
       "encloses_with_mesh_band": true
     },
     "nominal_local_phase_vv_vw_pv_ld248_load_b": {
-      "predicted_A": 0.9999999993354606,
-      "switched_A": 0.9513607562223414,
-      "error_A": -0.04863924311311918,
+      "predicted_A": 0.9999999995890287,
+      "switched_A": 0.7865124067117738,
+      "error_A": -0.21348759287725494,
       "encloses_with_mesh_band": true
     },
     "nominal_coordinated_mean_vv_vw_pv_ld1970_load_c": {
-      "predicted_A": 0.9999999990239127,
-      "switched_A": 0.9389312968526857,
-      "error_A": -0.06106870217122695,
+      "predicted_A": 0.999999999090487,
+      "switched_A": 0.8692852471197322,
+      "error_A": -0.13071475197075477,
       "encloses_with_mesh_band": true
     },
     "nominal_coordinated_worst_vv_vw_pv_ld2050_load_a": {
-      "predicted_A": 0.9999999990237602,
-      "switched_A": 0.9389280527545163,
-      "error_A": -0.06107194626924395,
+      "predicted_A": 0.9999999990903675,
+      "switched_A": 0.8692820010295874,
+      "error_A": -0.1307179980607801,
       "encloses_with_mesh_band": true
     },
     "nominal_coordinated_sequence_vv_vw_pv_ld626_load_c": {
-      "predicted_A": 0.999999999023953,
-      "switched_A": 0.9389325348218921,
-      "error_A": -0.061067464202060884,
+      "predicted_A": 0.9999999990905264,
+      "switched_A": 0.8692863133489359,
+      "error_A": -0.13071368574159048,
       "encloses_with_mesh_band": true
     },
     "nominal_coordinated_phase_vv_vw_pv_ld1895_load_b": {
-      "predicted_A": 0.999999979409064,
-      "switched_A": 0.9449869739019712,
-      "error_A": -0.05501300550709287,
+      "predicted_A": 0.9999999801881599,
+      "switched_A": 0.7761933773649395,
+      "error_A": -0.2238066028232204,
       "encloses_with_mesh_band": true
     },
     "high_source_local_mean_vv_vw_pv_ld1970_load_c": {
-      "predicted_A": 0.9999999999667942,
-      "switched_A": 0.950799972075771,
-      "error_A": -0.04920002789102318,
+      "predicted_A": 0.9999999999596408,
+      "switched_A": 0.8801718917513967,
+      "error_A": -0.11982810820824419,
       "encloses_with_mesh_band": true
     },
-    "high_source_local_worst_vv_vw_pv_ld2050_load_a": {
-      "predicted_A": 0.9999999999668084,
-      "switched_A": 0.9508097134235867,
-      "error_A": -0.04919028654322177,
+    "high_source_local_worst_vv_vw_pv_ld2804_load_c": {
+      "predicted_A": 0.999999999958942,
+      "switched_A": 0.8801823173315692,
+      "error_A": -0.1198176826273728,
       "encloses_with_mesh_band": true
     },
-    "high_source_local_sequence_vv_vw_pv_ld626_load_c": {
-      "predicted_A": 0.999999999966817,
-      "switched_A": 0.9507977726743114,
-      "error_A": -0.04920222729250556,
+    "high_source_local_sequence_vv_vw_pv_ld2186_load_b": {
+      "predicted_A": 0.9999999999587587,
+      "switched_A": 0.8801714458816896,
+      "error_A": -0.11982855407706905,
       "encloses_with_mesh_band": true
     },
     "high_source_local_phase_vv_vw_pv_ld248_load_b": {
-      "predicted_A": 0.999999999921068,
-      "switched_A": 0.9641169281776906,
-      "error_A": -0.03588307174337746,
+      "predicted_A": 0.9999999998599448,
+      "switched_A": 0.7923209967963915,
+      "error_A": -0.20767900306355336,
       "encloses_with_mesh_band": true
     },
     "high_source_coordinated_mean_vv_vw_pv_ld1970_load_c": {
-      "predicted_A": 0.9999999990302455,
-      "switched_A": 0.937877566621268,
-      "error_A": -0.062122432408977524,
+      "predicted_A": 0.9999999990971619,
+      "switched_A": 0.8683850029812458,
+      "error_A": -0.1316149961159161,
       "encloses_with_mesh_band": true
     },
     "high_source_coordinated_worst_vv_vw_pv_ld2050_load_a": {
-      "predicted_A": 0.9999999990303288,
-      "switched_A": 0.9378737064858079,
-      "error_A": -0.062126292544520845,
+      "predicted_A": 0.9999999990970315,
+      "switched_A": 0.8683817064232728,
+      "error_A": -0.13161829267375869,
       "encloses_with_mesh_band": true
     },
     "high_source_coordinated_sequence_vv_vw_pv_ld626_load_c": {
-      "predicted_A": 0.9999999990304475,
-      "switched_A": 0.9378784486742822,
-      "error_A": -0.06212155035616529,
+      "predicted_A": 0.9999999990972069,
+      "switched_A": 0.8683860626471289,
+      "error_A": -0.13161393645007802,
       "encloses_with_mesh_band": true
     },
-    "high_source_coordinated_phase_vv_vw_pv_ld868_load_a": {
-      "predicted_A": 0.9999999756864727,
-      "switched_A": 0.9466858623135923,
-      "error_A": -0.05331411337288039,
+    "high_source_coordinated_phase_vv_vw_pv_ld1895_load_b": {
+      "predicted_A": 0.9999999781176234,
+      "switched_A": 0.7790147068596806,
+      "error_A": -0.22098527125794287,
       "encloses_with_mesh_band": true
     },
     "rotated_unbalance_local_mean_vv_vw_pv_ld1291_load_b": {
-      "predicted_A": 0.9999999993509758,
-      "switched_A": 0.9428998309224554,
-      "error_A": -0.05710016842852039,
+      "predicted_A": 0.9999999994263489,
+      "switched_A": 0.8735517131327126,
+      "error_A": -0.12644828629363625,
       "encloses_with_mesh_band": true
     },
     "rotated_unbalance_local_worst_vv_vw_pv_ld2050_load_a": {
-      "predicted_A": 0.999999999996897,
-      "switched_A": 0.9505350718916741,
-      "error_A": -0.04946492810522296,
+      "predicted_A": 0.9999999999876868,
+      "switched_A": 0.8798564639138788,
+      "error_A": -0.12014353607380801,
       "encloses_with_mesh_band": true
     },
     "rotated_unbalance_local_sequence_vv_vw_pv_ld1668_load_a": {
-      "predicted_A": 0.9999999993453036,
-      "switched_A": 0.9427926954797314,
-      "error_A": -0.05720730386557216,
+      "predicted_A": 0.9999999994212575,
+      "switched_A": 0.8734461973328973,
+      "error_A": -0.1265538020883602,
       "encloses_with_mesh_band": true
     },
-    "rotated_unbalance_local_phase_vv_vw_pv_ld248_load_b": {
-      "predicted_A": 0.999999951796938,
-      "switched_A": 0.9727930160810345,
-      "error_A": -0.02720693571590349,
+    "rotated_unbalance_local_phase_vv_vw_pv_ld1895_load_b": {
+      "predicted_A": 0.9999999583789555,
+      "switched_A": 0.7968776834103664,
+      "error_A": -0.20312227496858914,
       "encloses_with_mesh_band": true
     },
     "rotated_unbalance_coordinated_mean_vv_vw_pv_ld1970_load_c": {
-      "predicted_A": 0.9999999990234422,
-      "switched_A": 0.9384265461246589,
-      "error_A": -0.06157345289878324,
+      "predicted_A": 0.9999999990900891,
+      "switched_A": 0.868839421457499,
+      "error_A": -0.13116057763259004,
       "encloses_with_mesh_band": true
     },
     "rotated_unbalance_coordinated_worst_vv_vw_pv_ld2050_load_a": {
-      "predicted_A": 0.9999999990232965,
-      "switched_A": 0.9384278086565795,
-      "error_A": -0.06157219036671702,
+      "predicted_A": 0.9999999990899767,
+      "switched_A": 0.8688401223361443,
+      "error_A": -0.13115987675383245,
       "encloses_with_mesh_band": true
     },
     "rotated_unbalance_coordinated_sequence_vv_vw_pv_ld626_load_c": {
-      "predicted_A": 0.9999999990234829,
-      "switched_A": 0.9384261426919118,
-      "error_A": -0.061573856331571086,
+      "predicted_A": 0.999999999090128,
+      "switched_A": 0.8688390641758695,
+      "error_A": -0.1311609349142585,
       "encloses_with_mesh_band": true
     },
     "rotated_unbalance_coordinated_phase_vv_vw_pv_ld1895_load_b": {
-      "predicted_A": 0.9999999872925351,
-      "switched_A": 0.9450133630744281,
-      "error_A": -0.05498662421810707,
+      "predicted_A": 0.9999999891692994,
+      "switched_A": 0.7762223504490886,
+      "error_A": -0.22377763872021084,
       "encloses_with_mesh_band": true
     },
     "night_local_mean_vv_vw_pv_ld1291_load_b": {
-      "predicted_A": 0.9999999396270463,
-      "switched_A": 0.9508402343253806,
-      "error_A": -0.04915970530166569,
+      "predicted_A": 0.9999999447384132,
+      "switched_A": 0.8802063097347085,
+      "error_A": -0.11979363500370477,
       "encloses_with_mesh_band": true
     },
     "night_local_worst_vv_vw_pv_ld1446_load_c": {
-      "predicted_A": 0.9999999396011102,
-      "switched_A": 0.9508342215355711,
-      "error_A": -0.049165718065539155,
+      "predicted_A": 0.9999999447152418,
+      "switched_A": 0.8802015122744977,
+      "error_A": -0.11979843244074406,
       "encloses_with_mesh_band": true
     },
     "night_local_sequence_vv_vw_pv_ld1668_load_a": {
-      "predicted_A": 0.9999999396253162,
-      "switched_A": 0.9508445037664397,
-      "error_A": -0.049155435858876495,
+      "predicted_A": 0.9999999447374044,
+      "switched_A": 0.8802103611626132,
+      "error_A": -0.11978958357479119,
       "encloses_with_mesh_band": true
     },
     "night_local_phase_vv_vw_pv_ld1895_load_b": {
-      "predicted_A": 0.999999937392015,
-      "switched_A": 0.9639206808319407,
-      "error_A": -0.03607925656007427,
+      "predicted_A": 0.9999999504697269,
+      "switched_A": 0.7921476034173323,
+      "error_A": -0.20785234705239464,
       "encloses_with_mesh_band": true
     },
     "night_coordinated_mean_vv_vw_pv_ld1970_load_c": {
-      "predicted_A": 0.012183307908624447,
-      "switched_A": 0.2756966307644126,
-      "error_A": 0.26351332285578816,
-      "encloses_with_mesh_band": false
+      "predicted_A": 0.39513920392661356,
+      "switched_A": 0.275696630764413,
+      "error_A": -0.11944257316220058,
+      "encloses_with_mesh_band": true
     },
     "night_coordinated_worst_vv_vw_pv_ld2050_load_a": {
-      "predicted_A": 0.012178791221901806,
-      "switched_A": 0.27570226857009256,
-      "error_A": 0.26352347734819076,
-      "encloses_with_mesh_band": false
+      "predicted_A": 0.3951390646189721,
+      "switched_A": 0.2757022685700932,
+      "error_A": -0.11943679604887886,
+      "encloses_with_mesh_band": true
     },
     "night_coordinated_sequence_vv_vw_pv_ld626_load_c": {
-      "predicted_A": 0.01218462723355257,
-      "switched_A": 0.2756949189412744,
-      "error_A": 0.26351029170772183,
-      "encloses_with_mesh_band": false
+      "predicted_A": 0.39513924458858346,
+      "switched_A": 0.27569491894127446,
+      "error_A": -0.119444325647309,
+      "encloses_with_mesh_band": true
     },
     "night_coordinated_phase_vv_vw_pv_ld1895_load_b": {
-      "predicted_A": 0.012249381603962863,
-      "switched_A": 0.3163609974247278,
-      "error_A": 0.3041116158207649,
-      "encloses_with_mesh_band": false
+      "predicted_A": 0.6029973671383387,
+      "switched_A": 0.31636099742472795,
+      "error_A": -0.2866363697136108,
+      "encloses_with_mesh_band": true
     }
   },
-  "thermal_prediction_failures": [
-    "night_coordinated_mean_vv_vw_pv_ld1970_load_c",
-    "night_coordinated_worst_vv_vw_pv_ld2050_load_a",
-    "night_coordinated_sequence_vv_vw_pv_ld626_load_c",
-    "night_coordinated_phase_vv_vw_pv_ld1895_load_b"
-  ],
-  "all_thermal_predictions_enclose": false,
+  "thermal_prediction_failures": [],
+  "all_thermal_predictions_enclose": true,
   "scope": "declared worst-capacitor-stress selection, actual site availability, saved parent phasors, fixed mean losses and independent averaged/switched circuit records; no controller/feeder dynamics or all-time DC-drift certificate"
 }

@@ -1,6 +1,6 @@
 # Declared switching-envelope validation domain
 
-The independent NumPy oracle passes **36,031 checks over 972 operating points**. The domain is declared in the preparation script and independently checked by the oracle; publication cannot shrink it to accepted points.
+The independent NumPy oracle passes **36,033 checks over 972 operating points**. The domain is declared in the preparation script and independently checked by the oracle; publication cannot shrink it to accepted points.
 
 | Dimension | Declared values |
 |---|---|
@@ -21,7 +21,7 @@ The figure shows the largest ratio over P/Q, sequence and carrier-angle variatio
 
 The largest exact-event versus sampled phase-RMS difference is 0.000222 A; the largest frozen-current DC-extremum difference is 0.000150 V. Across meshes, the largest RMS difference is 0.000554 A and the largest coupled-charge peak difference is 0.000251 V. The independent passive R/L orbit checks also enforce periodic closure and phase/neutral RMS and peak envelopes.
 
-**831 points violate at least one physical engineering limit and are retained with their failure names.** These include intentionally stressed power/current combinations. Carrier-domain agreement does not turn them into acceptable dispatches. The engineering-feasibility labels are Julia SI-model diagnostics; the independent oracle validates carrier mechanisms, bounds, coverage and retention, not all those feasibility labels.
+**855 points violate at least one physical engineering limit and are retained with their failure names.** These include intentionally stressed power/current combinations. Carrier-domain agreement does not turn them into acceptable dispatches. The engineering-feasibility labels are Julia SI-model diagnostics; the independent oracle validates carrier mechanisms, bounds, coverage and retention, not all those feasibility labels.
 
 The hardware remains 6 kVA, 10 A, 750 V, 300 µF, a 1 A capacitor budget and the same filter. This is a frozen-bus/frozen-reference, inductive carrier approximation with periodic mean-subtracted charge. It does not establish coupled nonlinear transient bounds, cumulative DC-energy drift, LCL validity or closed-loop stability. The calibrated 10% capacitor thermal allowance is separate and is not validated or retuned by this carrier sweep. Representative averaged/switched EMT is documented in the [boundary experiment](engineering_boundary.md); mixed-feeder OPF/EMT validation remains a separate deliverable.
 

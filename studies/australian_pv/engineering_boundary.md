@@ -14,7 +14,7 @@ The grey rows show averaged integration; blue rows show switched integration. Re
 
 The three-leg references request the same 600 W active power, −300 var reactive power and 1 A negative-sequence current. Q and P have priority; the combined guard reduces the remaining sequence service to leave voltage headroom. The four-leg reference has a different declared request (600 W total and per-phase Q of [−600, 0, 0] var); its row demonstrates that topology and is not a matched controller performance comparison.
 
-The independent record audit passes **747 checks** covering provenance, mechanism agreement, energy, mesh convergence, extrema witnesses and engineering flags. The LF-only switched reference fails only the upper DC-voltage check; its failure remains in the results and is not accepted as hardware-feasible.
+The independent record audit passes **749 checks** covering provenance, mechanism agreement, energy, mesh convergence, extrema witnesses and engineering flags. The LF-only switched reference fails only the upper DC-voltage check; its failure remains in the results and is not accepted as hardware-feasible.
 
 These are fixed-POC, feedforward L-filter circuits with a constant-power DC input and fixed mean converter loss. Finite-window DC mean drift is retained: the switched extrema include both carrier ripple and that drift. This experiment does not isolate a carrier-only error or establish periodic steady state, closed-loop regulation, feeder dynamics, LCL validity or all-time transient bounds. Analytical carrier bounds and the calibrated 10% capacitor thermal allowance remain distinct.
 

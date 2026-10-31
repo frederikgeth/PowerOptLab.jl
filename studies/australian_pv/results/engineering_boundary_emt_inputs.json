@@ -27,10 +27,10 @@
     "source_sha256": {
         "src/formulations/experiments.jl": "aa8d24ef1b6b283c56ab7c32107d6e1be7afd4dd212494fd893ac4fea81de75d",
         "src/interfaces.jl": "e940c50d72678d8597b112a2bc8abad7c2aae0314e8871c7bf8132b856ab1786",
-        "src/components/inverter_pwm_allocation.jl": "065b8b67c0fc45d9a89d4951c04b7fe9dafab5c71e7ae1c70a7ab8a92b8f3a03",
+        "src/components/inverter_pwm_allocation.jl": "2566a2bc94f8fe87e6868aa791fc3bd36ad6307cd38d94d61263d9480692e766",
         "scripts/australian_pv/thermal_energy.jl": "ad131a0a4466b604cb821fbf391cf53d0e680fa5b8c52a5d6988d4a7208da3cf",
         "src/problems/bilevel.jl": "bd6956207345b46b2f21b3c3c9e2aa06095e8a15fea15e0781470217d552a207",
-        "src/components/inverter_operating_constraints.jl": "a2e89b974bd28dd6b830ab7a554008e45353a0aa8d316fb27f28aeb5e00f9041",
+        "src/components/inverter_operating_constraints.jl": "f39bb1034fb3ee231e559e93e09c1121fd185464a9f0f11677c6785ff8d5a45e",
         "src/problems/state_estimation_patterns.jl": "196e073470c207b4b991f0924cbc86d7f4ecfc7ae9f922f3b06a36092b8eec07",
         "scripts/australian_pv/audit.jl": "4cf28ca4836fe4580df5d43b593750f5fb6f1df7a3773d2ffb28b50d5b9ca030",
         "src/problems/operating_envelope.jl": "62b293c4870ed3f94d7cce67c2a2b79381b873d5cf1718bcd760534930f0a72e",
@@ -57,7 +57,8 @@
         "src/problems/inverter_control_sizing.jl": "a39390cb83cb6d9c31155be2c72686f9c6cf5e3c4fc80a1c79ab6a9fa8eb4647",
         "src/problems/state_estimation_injections.jl": "a5f04ef35308546b1673e23cf6a3e49874c2d12e764863264bc55378ae30c9ec",
         "src/components/battery_chemistry.jl": "71ecea656c1d432c0460c2edcbe69fa9a4a538131d3249e129e00ba1263f1188",
-        "src/PowerOptLab.jl": "7b11a184aa08e3089ddd203799bb88b6c16e8b0f14a07269291d1e5f8aa16ae0",
+        "src/components/inverter_carrier_thermal.jl": "3ccd458b2f0a87d27891b051de89ea50e7483383fc09efed90c0129da51d1ebd",
+        "src/PowerOptLab.jl": "f29426d9f6ab6c32077a1e7a95d9ad02bd1395e1da43e57bda85e08d415d8e4b",
         "src/components/inverter_feasibility.jl": "d2e93651e245754ab54490c267d7e705cea5ce32238236843ca349d5ecc32b40",
         "src/formulations/jump.jl": "8d1480ed914a90b20302cd7b495fc470e18697dc15083897bf1d1f1808991e26",
         "src/problems/voltage_aware_inverter_fleet.jl": "285ef3067ce278ba7ee76b81e16d00348849cf46f72ab05ac43f3b972aef938d",
@@ -72,7 +73,7 @@
         "scripts/australian_pv/four_leg.jl": "f935d962f17cc6114af1983a4d8add3960b32bdc38d4b6d349682de8c42b1031",
         "src/formulations/relations.jl": "d0846f193d6705ee59a83729cf0e8eb928294dcab0f9136e70a87070951f4d8c",
         "src/upstream.jl": "313bf70a703b43b2134aef1f9f96c30bda4bc301e17b9f5f990244105d57b238",
-        "src/components/inverter_phase_allocation.jl": "bb9476df02d062e67e57daff921a21c56893d6bbbdc3e70925503f799052ff30",
+        "src/components/inverter_phase_allocation.jl": "04e552cc6e2c823b5371902c8dd7a9970a12b298009ab100f8f2e514bbac9157",
         "src/components/inverter_service_allocation.jl": "95183c86dfb0db01be01ce170dac10436c8e8ad5fff61da230e6e1baaf9e219f",
         "src/components/ivq_battery.jl": "2e3f74858ef64f95ce8b7ed125f1e19db739bb7843edbb35e9f3e3dfaa649c95",
         "src/problems/inverter_control_study.jl": "3c10d89ec926f4b4700f1e18d2d23da47c03b91819f0455994943c3d75441cc4",
@@ -83,6 +84,7 @@
         "scripts/enwl_advanced_ibr/common.jl": "22fc5aed51e469e8d314c39980fcc6fd8b4a02c7f664dfb2310f5944e37f3054",
         "scripts/australian_pv/voltage_aware.jl": "57efa97a6c14b98264b9bec20b4c8e10d868a518cc855dfb2404a46d017521ee",
         "src/components/inverter_current_projection.jl": "6f37161ca071edcdcc240110d6651d6303282c6b535eab063b1448d66c4e0a9e",
+        "src/components/inverter_solver_continuation.jl": "afcb57e975fdc81a3a46ef9b5a9d62d40f8b0e13ac03a4fda21f20ead5ed73c1",
         "src/problems/ipopt_state_estimation.jl": "3b7a42d19f65e9f9ebfe66d629d5d128b2bfcff4b6189d7abc422db1cf005464",
         "src/components/evse.jl": "dfafe56bccafa827a7c80088a57a20cc25493c389f811a6db4a80fce8333d047",
         "src/problems/state_estimation_measurements.jl": "bbf861c3106fe812f8f52c296588f2d8a2e4884c3dacb079739fa64667da958b",
@@ -92,7 +94,7 @@
     },
     "julia_version": "1.12.6",
     "sizing_changed": false,
-    "git_status": "",
+    "git_status": " M studies/australian_pv/README.md\n?? studies/australian_pv/evidence/README.md\n",
     "timing": {
         "discard_cycles": 6,
         "switching_Hz": 10000,
@@ -103,7 +105,7 @@
         ],
         "cycles": 10
     },
-    "git_revision": "693b2cb1f0b1b109328771293d4136e7dd3203b5",
+    "git_revision": "d01b3d0bb9558b03f36f268e904aea9d539e45b4",
     "scope": "fixed POC L-filter circuits; no dynamic feeder/service loop or all-time drift certificate",
     "Project_sha256": "2724f9784cf88c1b37a76368436c396b5d7ba9a05d19bb28a73bbbabc9eafb24",
     "cases": [
@@ -133,35 +135,35 @@
             "dc_2omega_peak_rating_V": 7.5,
             "dc_energy_model": "nonlinear",
             "dc_voltage_V": 750,
-            "mean_converter_loss_W": 21.871195824634448,
+            "mean_converter_loss_W": 21.871195824627318,
             "current": [
                 [
-                    1.1438340512661749,
-                    0.43478246970187423
+                    1.1438340512662033,
+                    0.4347824696997136
                 ],
                 [
-                    -0.1953843617511265,
-                    -0.7329327781333974
+                    -0.19538436175301171,
+                    -0.7329327781323242
                 ],
                 [
-                    -0.9484496895150485,
-                    0.2981503084315231
+                    -0.9484496895131915,
+                    0.2981503084326106
                 ]
             ],
             "p_available_W": 5000,
             "frequency_Hz": 50,
             "converter_voltage": [
                 [
-                    229.57627223709923,
-                    1.5702205144175894
+                    229.5762722371021,
+                    1.5702205144173411
                 ],
                 [
-                    -114.05653598276011,
-                    -199.5411690487449
+                    -114.05653598276179,
+                    -199.54116904874726
                 ],
                 [
-                    -115.51973625433901,
-                    197.97094853432733
+                    -115.51973625434019,
+                    197.97094853432992
                 ]
             ],
             "grid_current_rating_A": null,
@@ -182,7 +184,7 @@
             "neutral_peak_rating_A": null,
             "dc_voltage_max_rating_V": 753,
             "dc_voltage_min_rating_V": 747,
-            "dc_switching_voltage_bound_V": 1.6660103935973767,
+            "dc_switching_voltage_bound_V": 1.6660103935972153,
             "allocation_request": {
                 "reactive_request_var": -300,
                 "p_rated_W": 6000,
@@ -197,7 +199,7 @@
             "case_id": "combined",
             "grid_peak_rating_A": 14,
             "modulation_utilization": 0.96,
-            "p_dc_W": 622.2758419449871,
+            "p_dc_W": 622.2758419449917,
             "grid_voltage": [
                 [
                     230,
@@ -213,7 +215,7 @@
                 ]
             ],
             "fundamental_reference_accepted": true,
-            "reference_physical_check_count": 38
+            "reference_physical_check_count": 41
         },
         {
             "pwm_dc_voltage_envelope": false,
@@ -241,35 +243,35 @@
             "dc_2omega_peak_rating_V": 7.5,
             "dc_energy_model": "nonlinear",
             "dc_voltage_V": 750,
-            "mean_converter_loss_W": 22.66850156120466,
+            "mean_converter_loss_W": 22.668501576764687,
             "current": [
                 [
-                    1.4860404413458956,
-                    0.4347826062693684
+                    1.4860404437550876,
+                    0.4347826062693728
                 ],
                 [
-                    -0.3664874385200674,
-                    -0.4365734879913215
+                    -0.3664874397246598,
+                    -0.43657349007981383
                 ],
                 [
-                    -1.119553002825828,
-                    0.0017908817219531726
+                    -1.119553004030428,
+                    0.0017908838104409577
                 ]
             ],
             "p_available_W": 5000,
             "frequency_Hz": 50,
             "converter_voltage": [
                 [
-                    229.62152885157676,
-                    2.0227884833590712
+                    229.62152885189536,
+                    2.0227884865452284
                 ],
                 [
-                    -114.47109952587572,
-                    -199.72825935165054
+                    -114.47109952327298,
+                    -199.7282593535198
                 ],
                 [
-                    -115.15042932570094,
-                    197.70547086829148
+                    -115.1504293286223,
+                    197.7054708669746
                 ]
             ],
             "grid_current_rating_A": null,
@@ -305,7 +307,7 @@
             "case_id": "lf_only_boundary",
             "grid_peak_rating_A": 14,
             "modulation_utilization": 0.96,
-            "p_dc_W": 623.1942117548267,
+            "p_dc_W": 623.194213435216,
             "grid_voltage": [
                 [
                     230,
@@ -321,7 +323,7 @@
                 ]
             ],
             "fundamental_reference_accepted": true,
-            "reference_physical_check_count": 35
+            "reference_physical_check_count": 38
         },
         {
             "pwm_dc_voltage_envelope": true,
@@ -343,35 +345,35 @@
             "dc_2omega_peak_rating_V": 7.5,
             "dc_energy_model": "nonlinear",
             "dc_voltage_V": 750,
-            "mean_converter_loss_W": 16.87561710103714,
+            "mean_converter_loss_W": 16.875617101004877,
             "current": [
                 [
-                    0.000106038078043627,
-                    0.4397864146790992
+                    0.00010603806997797496,
+                    0.4397864146791001
                 ],
                 [
-                    -5.301903902181348e-5,
-                    -9.18316693542579e-5
+                    -5.301903498898746e-5,
+                    -9.183166236919836e-5
                 ],
                 [
-                    -5.301903902181348e-5,
-                    9.18316693542579e-5
+                    -5.3019034988987465e-5,
+                    9.183166236919836e-5
                 ]
             ],
             "p_available_W": 5000,
             "frequency_Hz": 50,
             "converter_voltage": [
                 [
-                    228.8367789567096,
-                    0.11646374204083444
+                    228.83677895670854,
+                    0.11646374203016786
                 ],
                 [
-                    -115.58150309779823,
-                    -199.12776337949697
+                    -115.58150309780697,
+                    -199.1277633794907
                 ],
                 [
-                    -115.5817459925637,
-                    199.24394665082139
+                    -115.58174599255392,
+                    199.24394665082582
                 ]
             ],
             "grid_current_rating_A": null,
@@ -392,7 +394,7 @@
             "neutral_peak_rating_A": 14,
             "dc_voltage_max_rating_V": 753,
             "dc_voltage_min_rating_V": 747,
-            "dc_switching_voltage_bound_V": 2.2877768595377166,
+            "dc_switching_voltage_bound_V": 2.2877768595367662,
             "allocation_request": {
                 "reactive_request_var": [
                     -600,
@@ -408,7 +410,7 @@
             "case_id": "four_leg_combined",
             "grid_peak_rating_A": 14,
             "modulation_utilization": 0.96,
-            "p_dc_W": 16.9998438148926,
+            "p_dc_W": 16.999843809295257,
             "grid_voltage": [
                 [
                     230,
@@ -424,7 +426,7 @@
                 ]
             ],
             "fundamental_reference_accepted": true,
-            "reference_physical_check_count": 39
+            "reference_physical_check_count": 42
         }
     ],
     "hardware": {

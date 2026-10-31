@@ -1,6 +1,6 @@
 {
   "accepted": true,
-  "checks": 36031,
+  "checks": 36033,
   "cases": 972,
   "records": [
     {
@@ -1667,8 +1667,10 @@
     },
     {
       "id": 88,
-      "engineering_limits_passed": true,
-      "failed_engineering_checks": [],
+      "engineering_limits_passed": false,
+      "failed_engineering_checks": [
+        "capacitor_current"
+      ],
       "event_rms_error_A": 2.341090793195333e-05,
       "event_dc_error_V": 6.321126409764705e-06,
       "mesh_rms_error_A": 3.8306799454712603e-08,
@@ -1683,8 +1685,10 @@
     },
     {
       "id": 89,
-      "engineering_limits_passed": true,
-      "failed_engineering_checks": [],
+      "engineering_limits_passed": false,
+      "failed_engineering_checks": [
+        "capacitor_current"
+      ],
       "event_rms_error_A": 2.4051328194940602e-05,
       "event_dc_error_V": 7.350962148882853e-06,
       "mesh_rms_error_A": 3.7301168931414e-08,
@@ -1699,8 +1703,10 @@
     },
     {
       "id": 90,
-      "engineering_limits_passed": true,
-      "failed_engineering_checks": [],
+      "engineering_limits_passed": false,
+      "failed_engineering_checks": [
+        "capacitor_current"
+      ],
       "event_rms_error_A": 5.596745374741863e-05,
       "event_dc_error_V": 7.350962148669482e-06,
       "mesh_rms_error_A": 3.729685615905254e-08,
@@ -1811,8 +1817,10 @@
     },
     {
       "id": 97,
-      "engineering_limits_passed": true,
-      "failed_engineering_checks": [],
+      "engineering_limits_passed": false,
+      "failed_engineering_checks": [
+        "capacitor_current"
+      ],
       "event_rms_error_A": 5.596745374719658e-05,
       "event_dc_error_V": 7.350962148794382e-06,
       "mesh_rms_error_A": 3.729685615905254e-08,
@@ -1827,8 +1835,10 @@
     },
     {
       "id": 98,
-      "engineering_limits_passed": true,
-      "failed_engineering_checks": [],
+      "engineering_limits_passed": false,
+      "failed_engineering_checks": [
+        "capacitor_current"
+      ],
       "event_rms_error_A": 2.4051328194496513e-05,
       "event_dc_error_V": 7.350962148780504e-06,
       "mesh_rms_error_A": 3.7301168820391695e-08,
@@ -1843,8 +1853,10 @@
     },
     {
       "id": 99,
-      "engineering_limits_passed": true,
-      "failed_engineering_checks": [],
+      "engineering_limits_passed": false,
+      "failed_engineering_checks": [
+        "capacitor_current"
+      ],
       "event_rms_error_A": 2.341090793195333e-05,
       "event_dc_error_V": 6.321126409768174e-06,
       "mesh_rms_error_A": 3.8306799454712603e-08,
@@ -1955,8 +1967,10 @@
     },
     {
       "id": 106,
-      "engineering_limits_passed": true,
-      "failed_engineering_checks": [],
+      "engineering_limits_passed": false,
+      "failed_engineering_checks": [
+        "capacitor_current"
+      ],
       "event_rms_error_A": 5.596745374747414e-05,
       "event_dc_error_V": 7.350962148666013e-06,
       "mesh_rms_error_A": 3.729685621456369e-08,
@@ -1971,8 +1985,10 @@
     },
     {
       "id": 107,
-      "engineering_limits_passed": true,
-      "failed_engineering_checks": [],
+      "engineering_limits_passed": false,
+      "failed_engineering_checks": [
+        "capacitor_current"
+      ],
       "event_rms_error_A": 2.341090793206435e-05,
       "event_dc_error_V": 6.321126409768174e-06,
       "mesh_rms_error_A": 3.8306799454712603e-08,
@@ -1987,8 +2003,10 @@
     },
     {
       "id": 108,
-      "engineering_limits_passed": true,
-      "failed_engineering_checks": [],
+      "engineering_limits_passed": false,
+      "failed_engineering_checks": [
+        "capacitor_current"
+      ],
       "event_rms_error_A": 5.5967453747363116e-05,
       "event_dc_error_V": 7.350962148726728e-06,
       "mesh_rms_error_A": 3.729685627007484e-08,
@@ -4846,6 +4864,7 @@
       "id": 250,
       "engineering_limits_passed": false,
       "failed_engineering_checks": [
+        "allocation_pwm_actual_capacitor_current",
         "capacitor_current"
       ],
       "event_rms_error_A": 2.341090793195333e-05,
@@ -4864,6 +4883,7 @@
       "id": 251,
       "engineering_limits_passed": false,
       "failed_engineering_checks": [
+        "allocation_pwm_actual_capacitor_current",
         "capacitor_current"
       ],
       "event_rms_error_A": 2.4051328194940602e-05,
@@ -4882,6 +4902,7 @@
       "id": 252,
       "engineering_limits_passed": false,
       "failed_engineering_checks": [
+        "allocation_pwm_actual_capacitor_current",
         "capacitor_current"
       ],
       "event_rms_error_A": 5.596745374741863e-05,
@@ -5014,6 +5035,7 @@
       "id": 259,
       "engineering_limits_passed": false,
       "failed_engineering_checks": [
+        "allocation_pwm_actual_capacitor_current",
         "capacitor_current"
       ],
       "event_rms_error_A": 5.596745374719658e-05,
@@ -5032,6 +5054,7 @@
       "id": 260,
       "engineering_limits_passed": false,
       "failed_engineering_checks": [
+        "allocation_pwm_actual_capacitor_current",
         "capacitor_current"
       ],
       "event_rms_error_A": 2.4051328194496513e-05,
@@ -5050,6 +5073,7 @@
       "id": 261,
       "engineering_limits_passed": false,
       "failed_engineering_checks": [
+        "allocation_pwm_actual_capacitor_current",
         "capacitor_current"
       ],
       "event_rms_error_A": 2.341090793195333e-05,
@@ -5182,6 +5206,7 @@
       "id": 268,
       "engineering_limits_passed": false,
       "failed_engineering_checks": [
+        "allocation_pwm_actual_capacitor_current",
         "capacitor_current"
       ],
       "event_rms_error_A": 5.596745374747414e-05,
@@ -5200,6 +5225,7 @@
       "id": 269,
       "engineering_limits_passed": false,
       "failed_engineering_checks": [
+        "allocation_pwm_actual_capacitor_current",
         "capacitor_current"
       ],
       "event_rms_error_A": 2.341090793206435e-05,
@@ -5218,6 +5244,7 @@
       "id": 270,
       "engineering_limits_passed": false,
       "failed_engineering_checks": [
+        "allocation_pwm_actual_capacitor_current",
         "capacitor_current"
       ],
       "event_rms_error_A": 5.5967453747363116e-05,
@@ -12158,8 +12185,10 @@
     },
     {
       "id": 571,
-      "engineering_limits_passed": true,
-      "failed_engineering_checks": [],
+      "engineering_limits_passed": false,
+      "failed_engineering_checks": [
+        "capacitor_current"
+      ],
       "event_rms_error_A": 3.658592441135866e-05,
       "event_dc_error_V": 3.871027566656332e-06,
       "mesh_rms_error_A": 0.00037806094378689536,
@@ -12174,8 +12203,10 @@
     },
     {
       "id": 572,
-      "engineering_limits_passed": true,
-      "failed_engineering_checks": [],
+      "engineering_limits_passed": false,
+      "failed_engineering_checks": [
+        "capacitor_current"
+      ],
       "event_rms_error_A": 0.00018474507828841746,
       "event_dc_error_V": 5.998546711349917e-06,
       "mesh_rms_error_A": 0.0003205615091300684,
@@ -12190,8 +12221,10 @@
     },
     {
       "id": 573,
-      "engineering_limits_passed": true,
-      "failed_engineering_checks": [],
+      "engineering_limits_passed": false,
+      "failed_engineering_checks": [
+        "capacitor_current"
+      ],
       "event_rms_error_A": 6.574424734615003e-05,
       "event_dc_error_V": 1.0005588598708398e-05,
       "mesh_rms_error_A": 0.0001709538289811352,
@@ -12208,6 +12241,7 @@
       "id": 574,
       "engineering_limits_passed": false,
       "failed_engineering_checks": [
+        "allocation_pwm_actual_capacitor_current",
         "capacitor_current"
       ],
       "event_rms_error_A": 6.565723628076947e-05,
@@ -12226,6 +12260,7 @@
       "id": 575,
       "engineering_limits_passed": false,
       "failed_engineering_checks": [
+        "allocation_pwm_actual_capacitor_current",
         "capacitor_current"
       ],
       "event_rms_error_A": 0.0002218214554018938,
@@ -12244,6 +12279,7 @@
       "id": 576,
       "engineering_limits_passed": false,
       "failed_engineering_checks": [
+        "allocation_pwm_actual_capacitor_current",
         "capacitor_current"
       ],
       "event_rms_error_A": 0.00011391899504564762,
@@ -12308,8 +12344,10 @@
     },
     {
       "id": 580,
-      "engineering_limits_passed": true,
-      "failed_engineering_checks": [],
+      "engineering_limits_passed": false,
+      "failed_engineering_checks": [
+        "capacitor_current"
+      ],
       "event_rms_error_A": 6.574424734567819e-05,
       "event_dc_error_V": 1.00055885986286e-05,
       "mesh_rms_error_A": 0.0001709538289811352,
@@ -12324,8 +12362,10 @@
     },
     {
       "id": 581,
-      "engineering_limits_passed": true,
-      "failed_engineering_checks": [],
+      "engineering_limits_passed": false,
+      "failed_engineering_checks": [
+        "capacitor_current"
+      ],
       "event_rms_error_A": 0.0001847450782888893,
       "event_dc_error_V": 1.991504823418977e-06,
       "mesh_rms_error_A": 0.0003205615091285696,
@@ -12340,8 +12380,10 @@
     },
     {
       "id": 582,
-      "engineering_limits_passed": true,
-      "failed_engineering_checks": [],
+      "engineering_limits_passed": false,
+      "failed_engineering_checks": [
+        "capacitor_current"
+      ],
       "event_rms_error_A": 3.6585924411580706e-05,
       "event_dc_error_V": 5.8488844043406985e-06,
       "mesh_rms_error_A": 0.00037806094378689536,
@@ -12356,8 +12398,11 @@
     },
     {
       "id": 583,
-      "engineering_limits_passed": true,
-      "failed_engineering_checks": [],
+      "engineering_limits_passed": false,
+      "failed_engineering_checks": [
+        "allocation_pwm_actual_capacitor_current",
+        "capacitor_current"
+      ],
       "event_rms_error_A": 0.00011391899504559211,
       "event_dc_error_V": 3.456332232233683e-06,
       "mesh_rms_error_A": 0.00012202023175722498,
@@ -12372,8 +12417,11 @@
     },
     {
       "id": 584,
-      "engineering_limits_passed": true,
-      "failed_engineering_checks": [],
+      "engineering_limits_passed": false,
+      "failed_engineering_checks": [
+        "allocation_pwm_actual_capacitor_current",
+        "capacitor_current"
+      ],
       "event_rms_error_A": 0.0002218214554008946,
       "event_dc_error_V": 9.191167100680922e-06,
       "mesh_rms_error_A": 0.00018823997598668707,
@@ -12388,8 +12436,11 @@
     },
     {
       "id": 585,
-      "engineering_limits_passed": true,
-      "failed_engineering_checks": [],
+      "engineering_limits_passed": false,
+      "failed_engineering_checks": [
+        "allocation_pwm_actual_capacitor_current",
+        "capacitor_current"
+      ],
       "event_rms_error_A": 6.565723628060294e-05,
       "event_dc_error_V": 6.321126409764705e-06,
       "mesh_rms_error_A": 0.00011898549397676428,
@@ -12452,8 +12503,10 @@
     },
     {
       "id": 589,
-      "engineering_limits_passed": true,
-      "failed_engineering_checks": [],
+      "engineering_limits_passed": false,
+      "failed_engineering_checks": [
+        "capacitor_current"
+      ],
       "event_rms_error_A": 6.574424734612228e-05,
       "event_dc_error_V": 5.998546711492164e-06,
       "mesh_rms_error_A": 0.00017095382898074662,
@@ -12468,8 +12521,10 @@
     },
     {
       "id": 590,
-      "engineering_limits_passed": true,
-      "failed_engineering_checks": [],
+      "engineering_limits_passed": false,
+      "failed_engineering_checks": [
+        "capacitor_current"
+      ],
       "event_rms_error_A": 5.7561832315561334e-05,
       "event_dc_error_V": 4.089116510310603e-06,
       "mesh_rms_error_A": 0.00033331493226210207,
@@ -12484,8 +12539,10 @@
     },
     {
       "id": 591,
-      "engineering_limits_passed": true,
-      "failed_engineering_checks": [],
+      "engineering_limits_passed": false,
+      "failed_engineering_checks": [
+        "capacitor_current"
+      ],
       "event_rms_error_A": 6.574424734534512e-05,
       "event_dc_error_V": 1.991504821826501e-06,
       "mesh_rms_error_A": 0.00017095382898102418,
@@ -12500,8 +12557,11 @@
     },
     {
       "id": 592,
-      "engineering_limits_passed": true,
-      "failed_engineering_checks": [],
+      "engineering_limits_passed": false,
+      "failed_engineering_checks": [
+        "allocation_pwm_actual_capacitor_current",
+        "capacitor_current"
+      ],
       "event_rms_error_A": 0.00011391899504575864,
       "event_dc_error_V": 7.350962148669482e-06,
       "mesh_rms_error_A": 0.00012202023175711396,
@@ -12516,8 +12576,11 @@
     },
     {
       "id": 593,
-      "engineering_limits_passed": true,
-      "failed_engineering_checks": [],
+      "engineering_limits_passed": false,
+      "failed_engineering_checks": [
+        "allocation_pwm_actual_capacitor_current",
+        "capacitor_current"
+      ],
       "event_rms_error_A": 0.0001401916518498636,
       "event_dc_error_V": 4.854272957689754e-06,
       "mesh_rms_error_A": 0.0001899119823420281,
@@ -12532,8 +12595,11 @@
     },
     {
       "id": 594,
-      "engineering_limits_passed": true,
-      "failed_engineering_checks": [],
+      "engineering_limits_passed": false,
+      "failed_engineering_checks": [
+        "allocation_pwm_actual_capacitor_current",
+        "capacitor_current"
+      ],
       "event_rms_error_A": 0.0001139189950455366,
       "event_dc_error_V": 9.191167101000111e-06,
       "mesh_rms_error_A": 0.00012202023175705845,
@@ -15562,6 +15628,7 @@
       "id": 745,
       "engineering_limits_passed": false,
       "failed_engineering_checks": [
+        "allocation_pwm_actual_capacitor_current",
         "capacitor_current"
       ],
       "event_rms_error_A": 0.00011391899504559211,
@@ -15580,6 +15647,7 @@
       "id": 746,
       "engineering_limits_passed": false,
       "failed_engineering_checks": [
+        "allocation_pwm_actual_capacitor_current",
         "capacitor_current"
       ],
       "event_rms_error_A": 0.0002218214554008946,
@@ -15598,6 +15666,7 @@
       "id": 747,
       "engineering_limits_passed": false,
       "failed_engineering_checks": [
+        "allocation_pwm_actual_capacitor_current",
         "capacitor_current"
       ],
       "event_rms_error_A": 6.565723628060294e-05,
@@ -15673,6 +15742,7 @@
       "id": 751,
       "engineering_limits_passed": false,
       "failed_engineering_checks": [
+        "allocation_pwm_actual_capacitor_current",
         "capacitor_current"
       ],
       "event_rms_error_A": 6.574424734612228e-05,
@@ -15691,6 +15761,7 @@
       "id": 752,
       "engineering_limits_passed": false,
       "failed_engineering_checks": [
+        "allocation_pwm_actual_capacitor_current",
         "capacitor_current"
       ],
       "event_rms_error_A": 5.7561832315561334e-05,
@@ -15709,6 +15780,7 @@
       "id": 753,
       "engineering_limits_passed": false,
       "failed_engineering_checks": [
+        "allocation_pwm_actual_capacitor_current",
         "capacitor_current"
       ],
       "event_rms_error_A": 6.574424734534512e-05,
@@ -15727,6 +15799,7 @@
       "id": 754,
       "engineering_limits_passed": false,
       "failed_engineering_checks": [
+        "allocation_pwm_actual_capacitor_current",
         "capacitor_current"
       ],
       "event_rms_error_A": 0.00011391899504575864,
@@ -15745,6 +15818,7 @@
       "id": 755,
       "engineering_limits_passed": false,
       "failed_engineering_checks": [
+        "allocation_pwm_actual_capacitor_current",
         "capacitor_current"
       ],
       "event_rms_error_A": 0.0001401916518498636,
@@ -15763,6 +15837,7 @@
       "id": 756,
       "engineering_limits_passed": false,
       "failed_engineering_checks": [
+        "allocation_pwm_actual_capacitor_current",
         "capacitor_current"
       ],
       "event_rms_error_A": 0.0001139189950455366,
@@ -21160,8 +21235,8 @@
       "sampled_closure_A": 0.0008089727874463279
     }
   ],
-  "engineering_limit_failures": 831,
-  "input_sha256": "33d077d22ba45db56f8515d270a089d903d332e10b3f5c57368e5464ad8a1113",
+  "engineering_limit_failures": 855,
+  "input_sha256": "288e6fdc11499826bf75d0866f2c4e33e71464cd877f06d897edbece98220c52",
   "audit_code_sha256": "389a9b704b07b1472a2dbbcf7b2cb23aba61f4a8b165de07e268eadd747af984",
   "numpy_version": "2.5.4",
   "scope": "frozen-bus, frozen-reference centered carrier with inductive AC ripple; periodic mean-subtracted gate-current charge; not a transient or thermal-calibration certificate; analytical carrier-domain validation is separate from engineering feasibility and coupled EMT"
