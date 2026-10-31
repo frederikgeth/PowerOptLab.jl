@@ -70,6 +70,9 @@ into the converter). Request availability always remains an upper bound.
 `p_min=0` models a non-charging PV source while permitting AC loss imports.
 Signed bounds permit bidirectional sources. Omitted bounds retain the legacy
 availability-only source model; they do not assert that the source is PV.
+The boundary is the regulated DC-link input, including modeled converter and
+capacitor ESR loss. Upstream source/DC–DC mean-path and source-impedance harmonic
+losses are excluded; see [`dc_source_line_frequency_diagnostics`](@ref).
 """
 struct DCSourceBounds
     p_min::Union{Nothing,Float64}
@@ -284,16 +287,59 @@ function _stamp_current_allocation!(m, device, h)
     converter = allocation === :balanced_converter
     ir, ii = converter ? (h.cri, h.cii) : (h.gri, h.gii)
     i0, _, i2 = _sequence_pair(ir, ii)
+    # Physical characteristic, not a per-unit current or an implicit rating.
+    start(e)=JuMP.value(v->_start_or(v,0.),e)
+    current_scale=_inverter_current_characteristic(device.device,
+        complex.(start.(h.vrpoc),start.(h.vipoc)).*h.vb)/h.ib
     # With no midpoint capacitor, grid and converter I0 coincide even if the
     # LCL series arms use different variables. Avoid redundant topology rows.
     plant_zero_sum = device.device.topology === :THREE_LEG &&
         (converter || device.device.c_filter_mid == 0)
     if !plant_zero_sum
-        JuMP.@constraint(m, i0[1] == 0)
-        JuMP.@constraint(m, i0[2] == 0)
+        JuMP.@constraint(m, i0[1]/current_scale == 0)
+        JuMP.@constraint(m, i0[2]/current_scale == 0)
     end
-    JuMP.@constraint(m, i2[1] == 0)
-    JuMP.@constraint(m, i2[2] == 0)
+    JuMP.@constraint(m, i2[1]/current_scale == 0)
+    JuMP.@constraint(m, i2[2]/current_scale == 0)
+end
+
+# Independent SI operating-policy audit from terminal phasors. Do not audit a
+# model equality by subtracting the same lifted auxiliaries it constrains.
+function _constrained_operating_checks(device,request;grid_voltage,grid_current,
+        converter_current,sensed_voltage,p_dc)
+    inv=device.device;policy=device.policy
+    checks=InverterLimitCheck[]
+    if !all(isfinite,vcat(grid_voltage,grid_current,converter_current,sensed_voltage,[p_dc]))
+        return [_inverter_limit_check("operating_finite_state",:VA,NaN,0.,0.)]
+    end
+    power=sum(grid_voltage.*conj.(grid_current))+im*inv.b_filter_shunt*sum(abs2,grid_voltage)
+    p,q=reim(power);bounds=_poc_operating_bounds(policy)
+    for (label,value,lo,hi) in (("active",p,bounds.p_min,bounds.p_max),
+            ("reactive",q,bounds.q_min,bounds.q_max))
+        lo===nothing && hi===nothing && continue
+        push!(checks,_inverter_limit_check("operating_$(label)_power",:VA,value,something(lo,-Inf),something(hi,Inf)))
+    end
+    if device.current_allocation!==:free
+        current=device.current_allocation===:balanced_converter ? converter_current : grid_current
+        zero,_,negative=_phasor_sequences(Tuple(current))
+        push!(checks,_inverter_limit_check("operating_balanced_zero_sequence",:A,abs(zero),0.,0.))
+        push!(checks,_inverter_limit_check("operating_balanced_negative_sequence",:A,abs(negative),0.,0.))
+    end
+    _,u1,_=_phasor_sequences(Tuple(sensed_voltage))
+    fraction,curve_q,_,_=_positive_numeric_smooth(policy.positive,u1,abs.(sensed_voltage),request)
+    if policy isa VoltVarWattConstraints || policy.reactive isa FixedReactivePower
+        target=policy isa VoltVarWattConstraints ? curve_q : policy.reactive.q
+        push!(checks,_inverter_limit_check("operating_reactive_relation",:VA,abs(q-target),0.,0.))
+    elseif policy.reactive isa FixedPowerFactor
+        cosine,sine=_pf_coefficients(policy.reactive)
+        push!(checks,_inverter_limit_check("operating_power_factor",:VA,abs(cosine*q+sine*p),0.,0.))
+    end
+    if _has_watt_cap(policy)
+        available=_available_dc(device,request)
+        cap=fraction*(_volt_watt_basis(policy.positive)===:rated ? request.p_rated : available-(p_dc-p))
+        push!(checks,_inverter_limit_check("operating_volt_watt",:VA,p,-Inf,cap))
+    end
+    checks
 end
 
 # Device validation uses SI parameters, including the voltage bounds used to
@@ -400,14 +446,16 @@ function extract_device(device::ConstrainedInverter,
         nothing
     end
     bounds = _poc_operating_bounds(policy)
-    if status.has_primal
-        additional=InverterLimitCheck[]
-        for (label,quantity,lower,upper) in (("active",h.p_poc,bounds.p_min,bounds.p_max),
-                ("reactive",h.q_poc,bounds.q_min,bounds.q_max))
-            lower===nothing && upper===nothing && continue
-            push!(additional,_inverter_limit_check("operating_$(label)_power",:VA,
-                JuMP.value(quantity)*h.sb,something(lower,-Inf),something(upper,Inf)))
-        end
+    if status.has_primal && plant.physical_feasibility.checked
+        phasors(re,im)=complex.(JuMP.value.(re),JuMP.value.(im)).*h.ib
+        voltage(re,im)=complex.(JuMP.value.(re),JuMP.value.(im)).*h.vb
+        # Request availability is always supplied, so the physical report owns
+        # exactly one independently reconstructed DC-power maximum check.
+        pdc=only(c.value for c in plant.physical_feasibility.checks if c.name=="dc_source_power_max")
+        additional=_constrained_operating_checks(device,request;
+            grid_voltage=voltage(h.vrpoc,h.vipoc),grid_current=phasors(h.gri,h.gii),
+            converter_current=phasors(h.cri,h.cii),
+            sensed_voltage=[complex(JuMP.value(v[1]),JuMP.value(v[2]))*h.vb for v in handles.phase_voltage],p_dc=pdc)
         plant=merge(plant,(physical_feasibility=
             _extend_inverter_feasibility(plant.physical_feasibility,additional),))
     end
@@ -537,6 +585,15 @@ function solve_constrained_inverter(net::Dict{String,Any},
     outcome = _solve_outcome(_opf_model(ctx))
     status = SolveStatus(outcome)
     extracted = extract_device(device, handles[], status)
+    if objective===:feasibility && status.has_primal
+        h=handles[].plant
+        v=complex.(JuMP.value.(h.vrpoc),JuMP.value.(h.vipoc)).*h.vb
+        i=complex.(JuMP.value.(h.gri),JuMP.value.(h.gii)).*h.ib
+        power=real(sum(v.*conj.(i)))
+        report=_extend_inverter_feasibility(extracted.plant.physical_feasibility,
+            [_inverter_limit_check("operating_fixed_dispatch",:VA,abs(power-p_set),0.,0.)])
+        extracted=merge(extracted,(plant=merge(extracted.plant,(physical_feasibility=report,)),))
+    end
     network = _extract_result(ctx, outcome)
     return ConstrainedInverterResult(string(outcome.termination_status),
         extracted.plant, extracted.operation, extracted.converter_terminal,

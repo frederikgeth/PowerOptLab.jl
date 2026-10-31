@@ -284,6 +284,7 @@ export BilevelPVResult, BilevelPVResponse, SingleLevelPVResult,
 
 # Advanced inverter (prototype internal-node IBR)
 export AdvancedInverter, solve_advanced_inverter, InverterResult
+export dc_source_line_frequency_diagnostics
 export InverterFeasibilityTolerances, InverterLimitCheck, InverterFeasibilityReport,
     inverter_physical_feasibility, physical_feasibility, continuous_rail_margin
 

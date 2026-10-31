@@ -46,6 +46,7 @@ const _HALF_SQRT3 = _SQRT3 / 2
 # origin is proportional to 1/epsilon).
 const _MAGNITUDE_EPS_REL = 1e-9      # of the per-leg current rating
 const _MAGNITUDE_EPS_FLOOR_SI = 1e-3 # A, used only when no rating is declared
+const _LOSS_MAGNITUDE_POWER_BUDGET_W = 1e-4 # total one-sided loss bias per inverter
 
 """
     _magnitude_epsilon(rating, ib) -> ε in working units
@@ -58,11 +59,45 @@ _magnitude_epsilon(rating, ib) =
      _MAGNITUDE_EPS_REL * rating) / ib
 
 "Accumulate a shared smooth loss norm with a physical, base-invariant budget."
-function _push_magnitude(ctx, total, x, y, rating, ib; name)
-    approximation = MagnitudeApproximation(_magnitude_epsilon(rating,1.);unit=:A,scale=something(rating,1.))
+function _push_magnitude(ctx, total, x, y, rating, ib; name,
+        epsilon_SI=_magnitude_epsilon(rating,1.),scale_SI=something(rating,1.))
+    approximation = MagnitudeApproximation(epsilon_SI;unit=:A,scale=scale_SI)
     magnitude = magnitude_expression(ctx,(x,y),approximation;
         component_scale=ib,output_scale=ib,name=name)
     return total === nothing ? magnitude : total + magnitude
+end
+
+# Divide the absolute watt error budget among all conducting semiconductor legs.
+# Keep the established smaller rating-relative width whenever it already fits.
+function _loss_magnitude_epsilon(inv,rating)
+    legs=inv.topology===:FOUR_LEG ? 4 : length(inv.phase_terminals)
+    min(_magnitude_epsilon(rating,1.),inv.a_loss>0 ?
+        (_LOSS_MAGNITUDE_POWER_BUDGET_W/legs)/inv.a_loss : Inf)
+end
+
+# A numerical current characteristic is not a hardware rating. In particular,
+# the coordinate voltage base is unity in SI and must not stand in for a
+# physical terminal voltage when no conductor rating was supplied.
+function _inverter_current_characteristic(inv,voltage_SI)
+    inv.i_max===nothing || return inv.i_max
+    inv.i_grid_max===nothing || return inv.i_grid_max
+    voltage=maximum(abs,voltage_SI;init=0.)
+    if !(isfinite(voltage) && voltage>0)
+        voltage=something(_inverter_voltage_scale(inv,()),inv.v_int_max,inv.v_int_min,0.)
+    end
+    isfinite(voltage) && voltage>0 || throw(ArgumentError(
+        "inverter '$(inv.id)' needs a physical voltage or current characteristic for numerical scaling"))
+    inv.s_max/(length(inv.phase_terminals)*voltage)
+end
+
+function _inverter_current_characteristic_at_start(ctx,inv)
+    vr,vi=_opf_voltage_maps(ctx)
+    vb=BMOPFTools.opf_ac_coordinate_bases(ctx,inv.bus).voltage
+    neutral=inv.neutral===nothing ? 0im :
+        complex(_start_or(vr[(inv.bus,inv.neutral)],0.),_start_or(vi[(inv.bus,inv.neutral)],0.))
+    voltage=[vb*(complex(_start_or(vr[(inv.bus,p)],0.),_start_or(vi[(inv.bus,p)],0.))-neutral)
+        for p in inv.phase_terminals]
+    _inverter_current_characteristic(inv,voltage)
 end
 const _PAIRS_IDX = ((1, 2), (2, 3), (3, 1))
 # Relaxation weight on the previous PWM reserve in the outer closure below.
@@ -730,6 +765,10 @@ zero filter) it is a plain grid-following converter at the POC.
   conducting leg — a closed-form, one-sided budget, not a tuning knob. `ε` is
   `1e-9` of the leg's own current rating, so the relative bias is identical
   for every device in a heterogeneous fleet and identical in SI and per-unit.
+  If no rating is supplied the initial width is 1 mA. Every width is additionally
+  capped so the sum of all conducting-leg linear-loss deficits is at most
+  0.0001 W per inverter. That absolute watt budget is independent of solver
+  tolerances and does not add an omitted current rating.
   With `a_loss == 0` no magnitude term is stamped at all. Reported currents
   are recomputed exactly after the solve and carry none of this bias.
 
@@ -884,6 +923,56 @@ function _split_fundamental_coefficients(inv)
     dl = lower/(im*omega*cl)
     return (midpoint=(dl - du)/2, bus=du + dl,
             upper_weight=abs2(upper), lower_weight=abs2(lower))
+end
+
+"""
+    dc_source_line_frequency_diagnostics(inv; converter_voltage, converter_current)
+
+Reconstruct source-branch current at ω and 2ω and its resistive dissipation
+from three RMS converter-terminal voltage/current phasors. Fundamental source
+current exists only for an unequal split link; the 2ω excitation is
+`sum(U .* I)/v_dc` (peak). Returned source phasors explicitly distinguish RMS
+at ω from peak at 2ω. `resolved=false` flags singular/ill-conditioned source
+sharing; `network_margin` is a normalized cancellation screen, not stability.
+
+`dc_source_r/l` describes the small-signal source impedance at these frequencies.
+Its dissipation is **outside** the mean DC-link input boundary used by `p_dc`,
+`InverterControlRequest.p_available` and `DCSourceBounds`. Those powers include
+converter and modeled capacitor ESR loss, but no upstream source/DC–DC loss.
+This diagnostic does not impose an upstream availability bound or model the DC
+mean-current path, source regulator, switching-frequency loss or DC standby.
+It is not a source-component thermal rating or dynamic-stability certificate.
+"""
+function dc_source_line_frequency_diagnostics(inv::AdvancedInverter;
+        converter_voltage,converter_current)
+    _validate_inverter(inv)
+    inv.topology in _THREE_PHASE_TOPOLOGIES || throw(ArgumentError("requires a three-phase inverter"))
+    length(converter_voltage)==length(converter_current)==3 || throw(DimensionMismatch("provide three converter RMS phasors"))
+    u=ComplexF64.(collect(converter_voltage));i=ComplexF64.(collect(converter_current))
+    all(isfinite,vcat(u,i)) || throw(ArgumentError("converter phasors must be finite"))
+    omega=2pi*inv.f;excitation=sum(u.*i)/inv.v_dc
+    fundamental=0im;second=0im;margin=1.
+    if inv.dc_source_r!==nothing
+        term=im*2omega*_dc_link_capacitance(inv)*_dc_source_impedance(inv,2omega)
+        margin=abs(1+term)/(1+abs(term))
+        second=excitation/(1+term)
+        if inv.topology===:SPLIT_DC
+            cu,cl=_split_capacitances(inv)
+            term=im*omega*cu*cl*_dc_source_impedance(inv,omega)
+            margin=min(margin,abs(cu+cl+term)/(cu+cl+abs(term)))
+            fundamental=(cl-cu)*sum(i)/(2*(cu+cl+term))
+        end
+    end
+    fundamental_rms=abs(fundamental);second_rms=abs(second)/sqrt(2)
+    loss=something(inv.dc_source_r,0.)*(fundamental_rms^2+second_rms^2)
+    finite=all(isfinite,(fundamental,second,loss))
+    (finite=finite,resolved=finite && margin>64eps(Float64),network_margin=margin,
+        source_present=inv.dc_source_r!==nothing,
+        frequency_Hz=inv.f,source_fundamental_current_A=fundamental,
+        source_second_harmonic_peak_current_A=second,
+        source_fundamental_current_rms_A=fundamental_rms,
+        source_second_harmonic_current_rms_A=second_rms,source_line_frequency_loss_W=loss,
+        mean_power_boundary=:dc_link,upstream_mean_path_loss_included=false)
 end
 
 # Ratio of the 2ω midpoint displacement to the 2ω bus ripple: the series
@@ -1622,8 +1711,8 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
     vb = bs === nothing ? 1.0 : get(bs.v_base, bus, 1.0)
     ib = bs === nothing ? 1.0 : get(bs.i_base, bus, 1.0)
     zb = bs === nothing ? 1.0 : get(bs.z_base, bus, 1.0)
-    current_scale = normalize_capability_constraints ?
-        something(inv.i_max, inv.s_max/(nph*vb))/ib : 1.0
+    characteristic_current = _inverter_current_characteristic_at_start(ctx,inv)
+    current_scale = normalize_capability_constraints ? characteristic_current/ib : 1.0
 
     Rf, Xf = _series_filter_matrices(inv, nph, zb; side=:converter)
     Rg, Xg = _series_filter_matrices(inv, nph, zb; side=:grid)
@@ -1814,7 +1903,8 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
         if inv.a_loss != 0.0
             imag_terms = _push_magnitude(
                 ctx, imag_terms, cri[k], cii[k], inv.i_max, ib;
-                name="loss_$(inv.id)_$(ph)")
+                name="loss_$(inv.id)_$(ph)",epsilon_SI=_loss_magnitude_epsilon(inv,inv.i_max),
+                scale_SI=characteristic_current)
         elseif retain_lossless_magnitude_epigraph
             # Kept even though a_loss == 0 multiplies the magnitude away:
             # removing this epigraph was measured to push otherwise healthy
@@ -1866,7 +1956,9 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
             imag_terms = _push_magnitude(
                 ctx, imag_terms, sumcr, sumci,
                 inv.In_max === nothing ? inv.i_max : inv.In_max, ib;
-                name="loss_$(inv.id)_neutral")
+                name="loss_$(inv.id)_neutral",
+                epsilon_SI=_loss_magnitude_epsilon(inv,inv.In_max===nothing ? inv.i_max : inv.In_max),
+                scale_SI=something(inv.In_max,inv.i_max,3characteristic_current))
         elseif retain_lossless_magnitude_epigraph
             # Same retained epigraph as the per-phase branch; the fourth leg is
             # boxed by its own rating.

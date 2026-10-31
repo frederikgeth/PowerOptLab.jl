@@ -282,6 +282,19 @@ which reduces to the boxed open-source result as ``Z_s\to\infty`` and to
 so one physical source model governs every line-frequency quantity. Carrier
 frequencies use the separate `pwm_dc_source_*` branch (Section 9.1).
 
+The mean power boundary is separate from this small-signal impedance model.
+`p_dc`, request availability and `DCSourceBounds` apply at the regulated DC-link
+input, including converter and modeled capacitor ESR loss. They do not include
+upstream source/DC–DC or mean-current-path dissipation. The line-frequency source
+resistor additionally dissipates
+``R_s(|I_{s,\omega}|^2+|\widehat I_{s,2\omega}|^2/2)``: the fundamental phasor is
+RMS, while the second-harmonic phasor is peak. The public
+`dc_source_line_frequency_diagnostics` reconstructs these currents and their
+dissipation from terminal phasors. It reports a normalized cancellation screen
+for singular/ill-conditioned sharing, not a stability or source thermal rating.
+An upstream availability bound requires an explicit additional source-path
+model; setting an impedance here does not add that capability.
+
 This derivation is first order. It neglects products of ripple quantities,
 higher harmonics, ESR/ESL, and controller response. A practical small-ripple
 audit should report ``|D|/V_{dc}``.

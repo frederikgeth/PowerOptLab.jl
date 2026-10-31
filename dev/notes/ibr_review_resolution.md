@@ -1,5 +1,38 @@
 # Advanced IBR review: resolution plan
 
+## Optional-current scaling, loss error budget and operating-policy acceptance
+
+The engineering audit reproduced raw `LOCALLY_SOLVED` DC demand understated by
+about 0.30 W for an unrated three-leg plant with `a_loss=100 W/A`. The prior
+physical gate correctly rejected it. The shifted-norm error is now capped at
+0.0001 W in total across semiconductor legs, while retaining any smaller
+rating-relative width. Current characteristics derive from declared currents or
+physical voltage starts/ratings, rather than treating a unity SI coordinate base
+as a physical voltage. LCL/three-leg/balanced-arm current rows retain engineering
+scaling without introducing an omitted current bound. Australian sizing is fixed.
+
+Constrained-device extraction now independently reconstructs operating P/Q from
+terminal phasors and checks current balance, smooth VV/VW policy, fixed Q/PF and
+power boxes. Standalone fixed-dispatch requests are audited too. A deliberately
+coarse raw-success solve at 60 W / 0 var for a 2,500 W / −600 var request passes
+all hardware checks but fails the new Q/dispatch checks; its raw flags remain
+visible and publication is rejected. The unchanged physical floors apply.
+
+`dc_source_line_frequency_diagnostics` reports ω/2ω source currents with explicit
+RMS/peak conventions, resistance dissipation and a normalized cancellation
+screen. Separate capacitor-node KCL and period integration validate the source
+response. The mean availability/bounds apply at the regulated DC-link input,
+including converter/capacitor ESR loss; upstream source/DC–DC mean-path and
+harmonic dissipation are outside this boundary. The diagnostic adds no upstream
+availability bound, thermal rating, regulator or dynamic-stability model.
+
+All 304 new engineering assertions pass, including SI/10 kVA/1 MVA/100 MVA
+paired constrained solves, independent policy counterexamples and actual raw
+solver-success regressions for violated Q/dispatch, PF and volt-watt relations.
+The full frozen-source suite and refreshed Australian campaigns remain validation
+steps at this source checkpoint. Coordinated OPF,
+four-leg control and representative EMT remain part of the active goal.
+
 ## Validated coupling and expanded Australian campaigns
 
 At core checkpoint `11a9723`, the complete offline suite passes

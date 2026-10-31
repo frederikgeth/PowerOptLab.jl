@@ -550,7 +550,13 @@ function InverterControlMeasurement(phase_voltage::AbstractVector{<:Complex})
     InverterControlMeasurement(Tuple(phase_voltage))
 end
 
-"""Per-operating-point active availability, rated active power, and reactive-power base, in SI."""
+"""Per-point DC-link input availability, rated active power and reactive-power base, in SI.
+
+`p_available` applies at the regulated DC-link input, including modeled converter
+and capacitor ESR loss. It is not lossless POC power or upstream PV/DC–DC input.
+Source-path mean and harmonic dissipation outside that boundary is excluded;
+see [`dc_source_line_frequency_diagnostics`](@ref).
+"""
 struct InverterControlRequest
     p_available::Float64
     p_rated::Float64

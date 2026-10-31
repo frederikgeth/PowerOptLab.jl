@@ -83,6 +83,43 @@ angles introduce a small U₀ and can make a strict balanced-grid LCL controller
 incompatible with its passive shunt, even when a converter-target plant is
 feasible. A separate common-mode case retains and tests that distinction.
 
+Constrained-device acceptance additionally reconstructs POC P/Q from terminal
+phasors, evaluates the declared smooth VV/VW relationship numerically, checks
+fixed Q/PF and P/Q bounds, and checks zero/negative sequence on the selected
+balanced-current arm. Standalone fixed-dispatch solves also check the requested
+POC watts. These checks do not rely on the constrained model's lifted power or
+sequence auxiliaries. Exact PWL tracking errors remain separate diagnostics:
+the encoded smooth curve is the declared optimization policy, not an assertion
+of exact firmware or regional-standard behavior.
+
+A deliberately coarse Ipopt reproduction returns raw `LOCALLY_SOLVED` at
+60 W / 0 var for a 2,500 W / −600 var request. All hardware checks pass, but
+the independently reconstructed Q and fixed-dispatch checks reject publication.
+Separate raw-success reproductions similarly reject violated PF and volt-watt
+relationships. Solver tolerances do not change the physical acceptance floors.
+
+Omitting a conductor rating does not create a hidden current bound. Numerical
+current characteristics use declared ratings when present, otherwise physical
+terminal-voltage starts (with declared voltage-rating fallback), rather than
+the numerical coordinate voltage base. Three-leg KCL, LCL KCL and balanced-arm
+equations retain physical scaling in SI and at different per-unit bases.
+The shifted current norm's one-sided loss deficit is capped at 0.0001 W in
+total across conducting legs, as well as the existing rating-relative width.
+The unrated 1 mA fallback alone once understated demand by about 0.30 W for
+`a_loss=100 W/A`; the unchanged exact-norm physical gate correctly rejected
+that raw solver success. Regression solves now accept the corrected point in
+SI and at 10 kVA, 1 MVA and 100 MVA bases without widening physical tolerances.
+
+`dc_source_line_frequency_diagnostics` separately reports ω/2ω source currents,
+their RMS/peak conventions, source resistance dissipation and a normalized
+antiresonance cancellation screen. Independent capacitor-node KCL and period
+integration check these quantities. The regulated DC-link input is the mean
+power boundary for `p_dc`, request availability and `DCSourceBounds`; converter
+and modeled capacitor ESR losses are included. Upstream source/DC–DC mean-path
+loss, source-impedance harmonic dissipation and DC standby are outside that
+boundary. The source diagnostic does not add an upstream power bound, a
+component thermal rating or a dynamic-stability guarantee.
+
 ## Voltage-aware feeder coupling
 
 `solve_voltage_aware_inverter_fleet(net, spec)` couples the local staged
