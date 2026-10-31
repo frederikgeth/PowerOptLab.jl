@@ -156,10 +156,15 @@ def figures(snapshots, chronology):
 
     out = ROOT / "figures"
     out.mkdir(exist_ok=True)
-    plt.rcParams.update({"font.size": 10, "axes.spines.top": False, "axes.spines.right": False})
+    plt.rcParams.update({"font.size": 10, "axes.spines.top": False, "axes.spines.right": False,
+                         "svg.hashsalt": "PowerOptLab Australian voltage-aware study"})
     def save(fig, name):
         for extension in ("svg", "png"):
-            fig.savefig(out / f"{name}.{extension}", dpi=180, bbox_inches="tight")
+            path = out / f"{name}.{extension}"
+            metadata = {"Date": None} if extension == "svg" else None
+            fig.savefig(path, dpi=180, bbox_inches="tight", metadata=metadata)
+            if extension == "svg":
+                path.write_text("\n".join(line.rstrip() for line in path.read_text().splitlines())+"\n")
         plt.close(fig)
     _, cases, _, iterations, _, _ = snapshots
     fig, axes = plt.subplots(1, 2, figsize=(11, 4), layout="constrained")
