@@ -19,6 +19,8 @@ No source manifest is re-signed to make an old result appear current.
 | `current.json` | Current | Complete benchmark, domain/boundary records and matched EMT, including failures and raw statuses |
 | `historical-d2c9a97.json` | Pinned historical archive | All 546 pre-update result files, including four night thermal-prediction misses, the unsuccessful solver control and earlier failed hardware controls |
 
+## Restore current records
+
 From a checkout, restore current records into their canonical
 paths before running saved-evidence tests:
 
@@ -29,6 +31,8 @@ python scripts/australian_pv/test_engineering_benchmark_emt.py
 python scripts/australian_pv/test_plot_engineering_benchmark.py
 python scripts/australian_pv/summarize_evidence.py --check
 ```
+
+## Restore historical records
 
 Restore historical results into a separate directory; they deliberately differ
 from the current source and must not overwrite it:
@@ -66,3 +70,11 @@ workflow regenerates eight coupled points and 32 representative EMT references
 at three meshes in averaged and switched modes. It requires every thermal
 prediction to enclose its switched reference. Hardware, raw solver, physical/
 replay, mesh and prediction acceptance remain separate gates.
+
+`current-35d5cac.json` is the immutable manifest for this campaign;
+`current.json` is its active copy. For a future campaign, create a new versioned
+manifest and retain prior bundles/manifests before updating the active copy.
+Regenerate data when source hashes change; do not edit old provenance to make
+it appear current. `summarize_evidence.py --check` independently replays the
+audits in temporary directories and checks the compact fixtures and summary
+without changing original receipts.

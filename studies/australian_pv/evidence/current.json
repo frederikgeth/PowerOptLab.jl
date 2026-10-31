@@ -1,0 +1,746 @@
+{
+  "bundle_bytes": 6824341,
+  "bundle_sha256": "3bac6a3190f167dbff5e7c55e49e0ff455ef9832bc2d774c261555b8498c7125",
+  "files": {
+    "studies/australian_pv/results/engineering_benchmark/audit.json": {
+      "bytes": 189163,
+      "sha256": "5e88b92b4941d34f6edf95e3bc761021c2be1382fad1a25be50912bfebe52680"
+    },
+    "studies/australian_pv/results/engineering_benchmark/cases.csv": {
+      "bytes": 1591,
+      "sha256": "1e2605a1f495c8268420e75ce3e1de006d025f3ff5ebb721378346ef80e6f9a8"
+    },
+    "studies/australian_pv/results/engineering_benchmark/dependency_manifest.toml": {
+      "bytes": 25983,
+      "sha256": "b61f2440eecd083978dd5bffb99893c75454a70aa2438d97e2b9b45aa0117e07"
+    },
+    "studies/australian_pv/results/engineering_benchmark/devices.csv": {
+      "bytes": 53135,
+      "sha256": "021418e4308480f5d14349b5e53dc3ea50705c896569bc02f2f6abd3fcfcaf3b"
+    },
+    "studies/australian_pv/results/engineering_benchmark/environment.json": {
+      "bytes": 11742,
+      "sha256": "700ec17df4a8334c56e4abab991e7ca0c526c64acd04d226d337e4605c066540"
+    },
+    "studies/australian_pv/results/engineering_benchmark/high_source_coordinated_status.json": {
+      "bytes": 2457705,
+      "sha256": "e585004f5e17e45c8781d89f23d9065f41507b17369ac1671b2ccc5fd39a7596"
+    },
+    "studies/australian_pv/results/engineering_benchmark/high_source_local_status.json": {
+      "bytes": 188485,
+      "sha256": "986b780106093cd24887102bfb8e9329407e11b6f95d8f51f62abffd20e963dd"
+    },
+    "studies/australian_pv/results/engineering_benchmark/network_audits/high_source_coordinated.json": {
+      "bytes": 198158,
+      "sha256": "c46cbd7892131d25c179a43ef6fded8626377f9ad712b10bf2c848beae751401"
+    },
+    "studies/australian_pv/results/engineering_benchmark/network_audits/high_source_local.json": {
+      "bytes": 197805,
+      "sha256": "23a169ca36077061592188cc3f9b15a41dbd25a4b8dfe584178f11a324df4fb2"
+    },
+    "studies/australian_pv/results/engineering_benchmark/network_audits/night_coordinated.json": {
+      "bytes": 197794,
+      "sha256": "4773b802859d058a1a3b6df03c4c82035dc9bbe292a99490837389229617834a"
+    },
+    "studies/australian_pv/results/engineering_benchmark/network_audits/night_local.json": {
+      "bytes": 197829,
+      "sha256": "581b71fb1d53c5831e53bcd2fab3ae5cbdcd3570dd140dd38288d336dbb72d62"
+    },
+    "studies/australian_pv/results/engineering_benchmark/network_audits/nominal_coordinated.json": {
+      "bytes": 198174,
+      "sha256": "6fae930647a6d9331cfac190367774c3b969bf51ec169d74ee4d979892352d41"
+    },
+    "studies/australian_pv/results/engineering_benchmark/network_audits/nominal_local.json": {
+      "bytes": 197795,
+      "sha256": "eb467344eea0fb57d7d84dd8e8718c9ee6564b98be01f07ffc58b7a6680b76e7"
+    },
+    "studies/australian_pv/results/engineering_benchmark/network_audits/rotated_unbalance_coordinated.json": {
+      "bytes": 198062,
+      "sha256": "2e644ea1ffcee6ff45bdf36dc2fef581412abf06bf173e603b3320939ebb4dc6"
+    },
+    "studies/australian_pv/results/engineering_benchmark/network_audits/rotated_unbalance_local.json": {
+      "bytes": 197774,
+      "sha256": "36171f2fcdead314569011c4b80b875fa9061e35adefc5cb74183cd17f2a0c4b"
+    },
+    "studies/australian_pv/results/engineering_benchmark/night_coordinated_status.json": {
+      "bytes": 2465086,
+      "sha256": "b362a53b345681c68cdc84763e50188cdd57e78d662133e743499bf9b297fd45"
+    },
+    "studies/australian_pv/results/engineering_benchmark/night_local_status.json": {
+      "bytes": 188529,
+      "sha256": "0b9aa3dc65fe4be36d52169e51d4dc413a2fdb588533159127b26001acd7b2ea"
+    },
+    "studies/australian_pv/results/engineering_benchmark/nominal_coordinated_status.json": {
+      "bytes": 2459447,
+      "sha256": "c59a5d041feb59397943b512284724ccadb1764108c10ca7c6eab319a172c5cf"
+    },
+    "studies/australian_pv/results/engineering_benchmark/nominal_local_status.json": {
+      "bytes": 189162,
+      "sha256": "49559951e0db0bb1801b44b7ddadb8ce2d858524ad883c7f6ca60d5387be8b2b"
+    },
+    "studies/australian_pv/results/engineering_benchmark/points/high_source_coordinated.json": {
+      "bytes": 63652,
+      "sha256": "b0b1deb7573f6f9881c2c7b0f772db99bf35b687e0f351933d5135a0794e9a54"
+    },
+    "studies/australian_pv/results/engineering_benchmark/points/high_source_local.json": {
+      "bytes": 1073365,
+      "sha256": "bd645b0b03ab3305247b2a1204dd9f1c9daad6a01de2d3bad7a640a9e780aa10"
+    },
+    "studies/australian_pv/results/engineering_benchmark/points/night_coordinated.json": {
+      "bytes": 63918,
+      "sha256": "1a44bd9d8c1f81e7b196513f504c1637aad08e9ea5f67b310319ddaebf17f6a4"
+    },
+    "studies/australian_pv/results/engineering_benchmark/points/night_local.json": {
+      "bytes": 1072720,
+      "sha256": "2e61e2caba328a1d65f8553a0bbc12742ac761164c2e5dc4818e1c5fb79b6fda"
+    },
+    "studies/australian_pv/results/engineering_benchmark/points/nominal_coordinated.json": {
+      "bytes": 63602,
+      "sha256": "daddcb4879f3ed1d3003c56d50707915abb7f59f1b1f37d3bebbc2c07e013428"
+    },
+    "studies/australian_pv/results/engineering_benchmark/points/nominal_local.json": {
+      "bytes": 1071100,
+      "sha256": "5e9d6e66c1f6a71b992642d185ee88a5733fde5fe76dc02a1d67ea0726709e49"
+    },
+    "studies/australian_pv/results/engineering_benchmark/points/rotated_unbalance_coordinated.json": {
+      "bytes": 63735,
+      "sha256": "448b884bdd3e7f7dfb3d5234c49e03e715ecfa62fed3c45cd7021dc1eaedd8bf"
+    },
+    "studies/australian_pv/results/engineering_benchmark/points/rotated_unbalance_local.json": {
+      "bytes": 1073182,
+      "sha256": "ed9265a5e0d6b383f33aa0c7fda3850fa631db81972241d550bde2669c42b98e"
+    },
+    "studies/australian_pv/results/engineering_benchmark/publication.json": {
+      "bytes": 854,
+      "sha256": "c7570cf923d5bfd72ca514ee09cff6d16c3e95f984209daf142af7f914f0f01a"
+    },
+    "studies/australian_pv/results/engineering_benchmark/rotated_unbalance_coordinated_status.json": {
+      "bytes": 2459501,
+      "sha256": "88f8dba18dfa7447a736b271059483b924983e416be4fde712d038fe6404681b"
+    },
+    "studies/australian_pv/results/engineering_benchmark/rotated_unbalance_local_status.json": {
+      "bytes": 188720,
+      "sha256": "2302c87b0262b92e3d1c2eff8a5dc3fd20bf41bed2dcd7182399a2b3b125076c"
+    },
+    "studies/australian_pv/results/engineering_benchmark/summary.json": {
+      "bytes": 4370,
+      "sha256": "2e236938f118c8e7eb45d15284200a35554064ff9f6b9aa0d0b01c21cfaa318c"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/audit.json": {
+      "bytes": 12681,
+      "sha256": "bdc7004ada75c00e6f6011295887fc9a2547a2cb97a9575c89ed59e5cdbe0b37"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/high_source_coordinated_mean_vv_vw_pv_ld1970_load_c_averaged_carrier.csv": {
+      "bytes": 69398,
+      "sha256": "430fcd30d147e2533648768ddd534ee8a8f54464747b21c292dd2f135b8d6679"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/high_source_coordinated_mean_vv_vw_pv_ld1970_load_c_averaged_switching.csv": {
+      "bytes": 141107,
+      "sha256": "f76d9363ee3ddac8c15cfedd7139f7eaa3ae9d0e63454c3b6cf5663f0974c7a6"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/high_source_coordinated_mean_vv_vw_pv_ld1970_load_c_switched_carrier.csv": {
+      "bytes": 69301,
+      "sha256": "8612fea0a6e1c2d0ab786e5495c69111a31e297e554028e06b59512ae7799115"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/high_source_coordinated_mean_vv_vw_pv_ld1970_load_c_switched_switching.csv": {
+      "bytes": 144687,
+      "sha256": "f0469d0dc5fe30980f0bb87f3a26f0eeafa93d0106c0e83f5bf09ff9054d82b9"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/high_source_coordinated_phase_vv_vw_pv_ld1895_load_b_averaged_carrier.csv": {
+      "bytes": 69513,
+      "sha256": "18ab7aef03351110d4e8d5b89f66ec36ef6e38cdbaf59bc179e7181a4f5fcdf7"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/high_source_coordinated_phase_vv_vw_pv_ld1895_load_b_averaged_switching.csv": {
+      "bytes": 142066,
+      "sha256": "942fb39acac94a62d3f077aed23c3f7a1746526727e2b77acfcd46b0491392c4"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/high_source_coordinated_phase_vv_vw_pv_ld1895_load_b_switched_carrier.csv": {
+      "bytes": 69525,
+      "sha256": "bdd6f2526a668fb8b6561c3a3a333dc73ce92f6a9f5a75b28412db635e5a4f31"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/high_source_coordinated_phase_vv_vw_pv_ld1895_load_b_switched_switching.csv": {
+      "bytes": 144367,
+      "sha256": "4d7fb8cdd80178f644032936ee488adedd36acc324e32517fbdafb252a4736fd"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/high_source_coordinated_sequence_vv_vw_pv_ld626_load_c_averaged_carrier.csv": {
+      "bytes": 69349,
+      "sha256": "e85c8d29761f9592906c7e5ec359ba52115547fc9b124d689392b9f92461f60c"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/high_source_coordinated_sequence_vv_vw_pv_ld626_load_c_averaged_switching.csv": {
+      "bytes": 140086,
+      "sha256": "18b41d0fcea9d2f8e44a8fc9770ce07df9ddb879028fe1d3fddb113163a0f192"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/high_source_coordinated_sequence_vv_vw_pv_ld626_load_c_switched_carrier.csv": {
+      "bytes": 69311,
+      "sha256": "c420b6dde725ac50fed60c7636d6194d01ed95527b1dfc69be48d0f378d38d7c"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/high_source_coordinated_sequence_vv_vw_pv_ld626_load_c_switched_switching.csv": {
+      "bytes": 144490,
+      "sha256": "371f1467071b846fd2fdc0e447e3c5a93c51fa792fa45ff03a629a3126557a91"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/high_source_coordinated_worst_vv_vw_pv_ld2050_load_a_averaged_carrier.csv": {
+      "bytes": 69319,
+      "sha256": "b9ec87a26d8ca67290b10c0a796cb9a4d08f9442a59138aead1f42578b4dc5f9"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/high_source_coordinated_worst_vv_vw_pv_ld2050_load_a_averaged_switching.csv": {
+      "bytes": 141052,
+      "sha256": "ef2d1cac6799da41f293d89cefd81c3c6653ec441f4ed8a9661b8406ed106a9f"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/high_source_coordinated_worst_vv_vw_pv_ld2050_load_a_switched_carrier.csv": {
+      "bytes": 69323,
+      "sha256": "b4871fe7a84172be156b2cbeeb358c90eb3819a2dadf21a1ae946283808bcb1f"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/high_source_coordinated_worst_vv_vw_pv_ld2050_load_a_switched_switching.csv": {
+      "bytes": 145167,
+      "sha256": "16e667db58e859df0da76fdeb818c47be22a7d44705729239e442093590dbfd6"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/high_source_local_mean_vv_vw_pv_ld1970_load_c_averaged_carrier.csv": {
+      "bytes": 69210,
+      "sha256": "048a64633d791b760809f245e14c5629a29c3b7aeaf1c501073f7a81e08773d0"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/high_source_local_mean_vv_vw_pv_ld1970_load_c_averaged_switching.csv": {
+      "bytes": 141560,
+      "sha256": "e2239f05b9f4d33f91fb516550db10666d9539e763cb96f79bcb1b64a986623e"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/high_source_local_mean_vv_vw_pv_ld1970_load_c_switched_carrier.csv": {
+      "bytes": 69189,
+      "sha256": "fc2d69c5b74abcfd0cb11b0561cbfe06e35834356f4f81e37f7c1e872ee5d329"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/high_source_local_mean_vv_vw_pv_ld1970_load_c_switched_switching.csv": {
+      "bytes": 146638,
+      "sha256": "ad841070e4424f8a50b6fcb6f3aaf7f524ed4d9aaa2517aa14303a4e90b7ff88"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/high_source_local_phase_vv_vw_pv_ld248_load_b_averaged_carrier.csv": {
+      "bytes": 69478,
+      "sha256": "6ccd2f5d154e4c3dc51c500fc690f14f112227f1f39e135450fb2ba266e7aa60"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/high_source_local_phase_vv_vw_pv_ld248_load_b_averaged_switching.csv": {
+      "bytes": 139479,
+      "sha256": "dcab99215362601fa1fad6863094b717f5321c2998cc53044a86bbaa73142634"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/high_source_local_phase_vv_vw_pv_ld248_load_b_switched_carrier.csv": {
+      "bytes": 69415,
+      "sha256": "795395489e3eeb83cfdcdcec27cd018335bcb79f02423e1045a792b4c9378b47"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/high_source_local_phase_vv_vw_pv_ld248_load_b_switched_switching.csv": {
+      "bytes": 144726,
+      "sha256": "720314ce210ab59967f224a61464d75d0f5aafd88791b892f7e34220453ae487"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/high_source_local_sequence_vv_vw_pv_ld2186_load_b_averaged_carrier.csv": {
+      "bytes": 69229,
+      "sha256": "893b6f6a4212f6d3ab99383f273bacadcd621131666dc93c0b35dc0adf706091"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/high_source_local_sequence_vv_vw_pv_ld2186_load_b_averaged_switching.csv": {
+      "bytes": 142802,
+      "sha256": "94beee7e247269ec86319b97222e478d21cf120b531e1dc8164d5e5b12ae45de"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/high_source_local_sequence_vv_vw_pv_ld2186_load_b_switched_carrier.csv": {
+      "bytes": 69279,
+      "sha256": "bc10b2c057308373bc180548b6fe9898590203c7d77c1ed8aef22d35e3371b01"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/high_source_local_sequence_vv_vw_pv_ld2186_load_b_switched_switching.csv": {
+      "bytes": 146640,
+      "sha256": "772d8250772cd3de3f93372fae6346207fd617072bedda0c609eb0b0bd70f268"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/high_source_local_worst_vv_vw_pv_ld2804_load_c_averaged_carrier.csv": {
+      "bytes": 69253,
+      "sha256": "6ff0707808eeaa12e1aaa012708e014a788c1243323985ebadbf88a1701a386d"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/high_source_local_worst_vv_vw_pv_ld2804_load_c_averaged_switching.csv": {
+      "bytes": 142326,
+      "sha256": "43be485099cdc932c03c21fa7396ef0ddf38f3d9483538f811044bbb677a4fb1"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/high_source_local_worst_vv_vw_pv_ld2804_load_c_switched_carrier.csv": {
+      "bytes": 69231,
+      "sha256": "b69bf5b48fbee4145d2627c39647fc1fa03a12adb98e62d55665f0dd68283bed"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/high_source_local_worst_vv_vw_pv_ld2804_load_c_switched_switching.csv": {
+      "bytes": 147015,
+      "sha256": "1d9f92b2c4d8beb072f44a9f39a427f507763ca87c9bd3589f38c76637d90cfa"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/matched_audit.json": {
+      "bytes": 7968,
+      "sha256": "09c32b37c98c2e3561f6dbc67e064378901b4794373f5675f2448724e9d5fa8d"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/night_coordinated_mean_vv_vw_pv_ld1970_load_c_averaged_carrier.csv": {
+      "bytes": 73943,
+      "sha256": "f96799c40d358f56a064167b0fa9a2e6774a324def2b6e3805019db297c48500"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/night_coordinated_mean_vv_vw_pv_ld1970_load_c_averaged_switching.csv": {
+      "bytes": 147500,
+      "sha256": "be91a6bf733bfca3e5dd40f66089bd4c59ce618c0feb695881ce683fdbeb334b"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/night_coordinated_mean_vv_vw_pv_ld1970_load_c_switched_carrier.csv": {
+      "bytes": 73768,
+      "sha256": "9201664fb1c30ae4f6d91c6496713052f5568c58eacfdfe346bf9e7130ee9055"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/night_coordinated_mean_vv_vw_pv_ld1970_load_c_switched_switching.csv": {
+      "bytes": 150722,
+      "sha256": "007b24797874699ad564bd402e54ebe4234cd7f20924644f0e5e47c985748a86"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/night_coordinated_phase_vv_vw_pv_ld1895_load_b_averaged_carrier.csv": {
+      "bytes": 73994,
+      "sha256": "69712da54eb5b8d38b364eab8db7400296cef1ec9da8f7dec0bdc8f78dd96d8c"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/night_coordinated_phase_vv_vw_pv_ld1895_load_b_averaged_switching.csv": {
+      "bytes": 147541,
+      "sha256": "97c5233af56dfb5a6f435c0fcb4c32e037a1ebf6a264c357b73e2c940fc41766"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/night_coordinated_phase_vv_vw_pv_ld1895_load_b_switched_carrier.csv": {
+      "bytes": 73837,
+      "sha256": "82559ad3118a25bb45c9dc1a94a9557fe7b8406c42aa4189a4a2cb57178b2257"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/night_coordinated_phase_vv_vw_pv_ld1895_load_b_switched_switching.csv": {
+      "bytes": 148432,
+      "sha256": "78e483ac69d8c9685fbd289c2684b06dbc282141e9858888e4666f81a920a685"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/night_coordinated_sequence_vv_vw_pv_ld626_load_c_averaged_carrier.csv": {
+      "bytes": 73986,
+      "sha256": "8c2c5c2c7e0456978a1856480128f55efbdca1099a52de2cdb2e7f269f80445f"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/night_coordinated_sequence_vv_vw_pv_ld626_load_c_averaged_switching.csv": {
+      "bytes": 146587,
+      "sha256": "f324e4b899093121667b0d061c94ccd01eaba3d0db6e5269bde0546ba0ecec42"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/night_coordinated_sequence_vv_vw_pv_ld626_load_c_switched_carrier.csv": {
+      "bytes": 73821,
+      "sha256": "b4a779d7e1c566e462b2e097502fe611b223dc19072a800abb0dea42a5b3b493"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/night_coordinated_sequence_vv_vw_pv_ld626_load_c_switched_switching.csv": {
+      "bytes": 150751,
+      "sha256": "332ffb7ad80451f63f96ad35851faca956ff3966af44b87500474ec92750795b"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/night_coordinated_worst_vv_vw_pv_ld2050_load_a_averaged_carrier.csv": {
+      "bytes": 73972,
+      "sha256": "6bbadb4eb04a69178e633d6c876f604afa177e4a12ebb97275b93fd5ebeb8bfb"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/night_coordinated_worst_vv_vw_pv_ld2050_load_a_averaged_switching.csv": {
+      "bytes": 148448,
+      "sha256": "a43691ae2c167c95ea908f5f02af8ce76182e4531ab9c7e47d6e88bf47930e74"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/night_coordinated_worst_vv_vw_pv_ld2050_load_a_switched_carrier.csv": {
+      "bytes": 73765,
+      "sha256": "1aaa36f24d68017582430746c0567d0657cf4f3b57814bb9d97be1d95f8e0214"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/night_coordinated_worst_vv_vw_pv_ld2050_load_a_switched_switching.csv": {
+      "bytes": 150817,
+      "sha256": "3f1a667ba5c3c41e2d34acb929b32fa7bb596b7c19511c460eac1f11e8cf7f80"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/night_local_mean_vv_vw_pv_ld1291_load_b_averaged_carrier.csv": {
+      "bytes": 69219,
+      "sha256": "9db77115dfe46c61ba87d19ba0a2a8c0900654a33a0a04c999564ef14ee2d405"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/night_local_mean_vv_vw_pv_ld1291_load_b_averaged_switching.csv": {
+      "bytes": 143622,
+      "sha256": "16813a8711487ffed31f79af1de72824759016b9206585fc57a0cab24b188659"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/night_local_mean_vv_vw_pv_ld1291_load_b_switched_carrier.csv": {
+      "bytes": 69238,
+      "sha256": "1d1c5be9806910cf43276b994f2357e10dadc36671202b4ed74d67f9777eb4fa"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/night_local_mean_vv_vw_pv_ld1291_load_b_switched_switching.csv": {
+      "bytes": 147030,
+      "sha256": "10f8871284fec32a377be38e2ced573d0b6801398776acef70005ec7c12df665"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/night_local_phase_vv_vw_pv_ld1895_load_b_averaged_carrier.csv": {
+      "bytes": 69454,
+      "sha256": "f41cd544f408cde7fa7d540ad036b9a551f92f145dfb60cfd5808c7f1049fa44"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/night_local_phase_vv_vw_pv_ld1895_load_b_averaged_switching.csv": {
+      "bytes": 139777,
+      "sha256": "afe063419c903dc44e55c00bdbca0564bbfdd4eef6b6bb81c8be950e3a327c8d"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/night_local_phase_vv_vw_pv_ld1895_load_b_switched_carrier.csv": {
+      "bytes": 69442,
+      "sha256": "60637b3b3e3c10981bae42bd31c3503471afd9c9efceaae5204be590eae012be"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/night_local_phase_vv_vw_pv_ld1895_load_b_switched_switching.csv": {
+      "bytes": 144560,
+      "sha256": "0682d040a01181f02918a09e597d7fd065bc4060e4467e8fa0f2159e3a181713"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/night_local_sequence_vv_vw_pv_ld1668_load_a_averaged_carrier.csv": {
+      "bytes": 69286,
+      "sha256": "0ddf920055d2fa2fa33cedd739ed381665029ed697cf1d6eb92b3e245f1472c4"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/night_local_sequence_vv_vw_pv_ld1668_load_a_averaged_switching.csv": {
+      "bytes": 141701,
+      "sha256": "6c90be536091458923bae3283e72aa433470c250d04f77aa12aecb4486717685"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/night_local_sequence_vv_vw_pv_ld1668_load_a_switched_carrier.csv": {
+      "bytes": 69267,
+      "sha256": "a2351a863ad19d08be0e1666538d5a5b61bde9acc7bb6bb2dd1e389834b3a005"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/night_local_sequence_vv_vw_pv_ld1668_load_a_switched_switching.csv": {
+      "bytes": 146841,
+      "sha256": "96dba8fc280cdd47e5176ac675e2cea74d06c8bc073eaacb78dcbc0e2005cd2b"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/night_local_worst_vv_vw_pv_ld1446_load_c_averaged_carrier.csv": {
+      "bytes": 69260,
+      "sha256": "352b9d3114fc372aef98d802ac877314a4c8a50a2e24278859bb4eda73323ec5"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/night_local_worst_vv_vw_pv_ld1446_load_c_averaged_switching.csv": {
+      "bytes": 142965,
+      "sha256": "c82e96199bb23087c23de91f12ae7f9908854e1bb6d1b6b5a9277b368c119752"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/night_local_worst_vv_vw_pv_ld1446_load_c_switched_carrier.csv": {
+      "bytes": 69283,
+      "sha256": "ca4b1f2760d1f5e7e3b5d01267ad443368ac955b82d17f5a2dff821d4e9f3368"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/night_local_worst_vv_vw_pv_ld1446_load_c_switched_switching.csv": {
+      "bytes": 146933,
+      "sha256": "cb1919b2d556fa972681c1d8db3be28f49896f1cb74badca12ca6503a4b2dee9"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/nominal_coordinated_mean_vv_vw_pv_ld1970_load_c_averaged_carrier.csv": {
+      "bytes": 69377,
+      "sha256": "f65b2f6fd03b100ea194439aa9e77a5e6dc8886d8dd96594a489595d0e54f3f9"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/nominal_coordinated_mean_vv_vw_pv_ld1970_load_c_averaged_switching.csv": {
+      "bytes": 140068,
+      "sha256": "b01f3768e6ecb56285947330fc514088d79af4189fb3e772b3ffe9f5c786c9b2"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/nominal_coordinated_mean_vv_vw_pv_ld1970_load_c_switched_carrier.csv": {
+      "bytes": 69417,
+      "sha256": "6ff1b6cd94f0eacf01a3d7dccf00a588fa2100ceda0e90d0691eb106235655d6"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/nominal_coordinated_mean_vv_vw_pv_ld1970_load_c_switched_switching.csv": {
+      "bytes": 145089,
+      "sha256": "17e79838199091d8ba7e49194186103167e5426d97c94c144f501c9476fac5b2"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/nominal_coordinated_phase_vv_vw_pv_ld1895_load_b_averaged_carrier.csv": {
+      "bytes": 69542,
+      "sha256": "fecaa9eb9d82ca3f44ed7415ec24b526898594cf753f2f050c4c70eef0f2abe6"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/nominal_coordinated_phase_vv_vw_pv_ld1895_load_b_averaged_switching.csv": {
+      "bytes": 142083,
+      "sha256": "dda2429bd647371dac8fe8c5e740e24ad4c3029e3c2f76207e71defb6e461072"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/nominal_coordinated_phase_vv_vw_pv_ld1895_load_b_switched_carrier.csv": {
+      "bytes": 69586,
+      "sha256": "dcab02fdd595098170dd856757c329749f07a4dd398694a609b833dae32e0336"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/nominal_coordinated_phase_vv_vw_pv_ld1895_load_b_switched_switching.csv": {
+      "bytes": 142232,
+      "sha256": "8dc8886dac9a6fb5b99f3d8f3c7211fd8dfe056dce2bdf2a926de90431cb5c12"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/nominal_coordinated_sequence_vv_vw_pv_ld626_load_c_averaged_carrier.csv": {
+      "bytes": 69373,
+      "sha256": "6e5457f773d4b98958d1ba456575c8a1d2567f562d69dc8e991b83811f113793"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/nominal_coordinated_sequence_vv_vw_pv_ld626_load_c_averaged_switching.csv": {
+      "bytes": 140029,
+      "sha256": "db0dfffc399d2886638ca5f92d3eec4ccf1689d178587b81f284767962ac199e"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/nominal_coordinated_sequence_vv_vw_pv_ld626_load_c_switched_carrier.csv": {
+      "bytes": 69415,
+      "sha256": "2f55a230e9b61e0658329a8aedc11b12635a63d22a0c003e9243bc3281a9da2e"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/nominal_coordinated_sequence_vv_vw_pv_ld626_load_c_switched_switching.csv": {
+      "bytes": 145187,
+      "sha256": "8b616d1942e1000841243bd00e36572739a131c6b4e5038da6b027ec8e1db0e3"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/nominal_coordinated_worst_vv_vw_pv_ld2050_load_a_averaged_carrier.csv": {
+      "bytes": 69418,
+      "sha256": "47d3843a78876e9b0e624c77458f56ecabf3726413699034e5fac1c20cba499a"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/nominal_coordinated_worst_vv_vw_pv_ld2050_load_a_averaged_switching.csv": {
+      "bytes": 141737,
+      "sha256": "5187b0f95867e4870b6fed341a4c75c5fc589e8ad107026614fa085c38fa0ad1"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/nominal_coordinated_worst_vv_vw_pv_ld2050_load_a_switched_carrier.csv": {
+      "bytes": 69375,
+      "sha256": "f005c381eac29dffd2cfc275ffa9e17a11498c3c6e15e047ef0e9e03a70d22df"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/nominal_coordinated_worst_vv_vw_pv_ld2050_load_a_switched_switching.csv": {
+      "bytes": 145298,
+      "sha256": "676bb8022a7e287c1512d237a12cc2eca7dc657e87c5c2c2db0b77523bf882fc"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/nominal_local_mean_vv_vw_pv_ld1970_load_c_averaged_carrier.csv": {
+      "bytes": 69323,
+      "sha256": "00ff0c60e063c7fb800b08c5c79eb92e4da029d3f60b58adba3fcc26e3a27dfb"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/nominal_local_mean_vv_vw_pv_ld1970_load_c_averaged_switching.csv": {
+      "bytes": 141899,
+      "sha256": "1d523e593e13dc65021c20b30c9cdb1d17f058e7cbb2e2c05f771dfa596c6107"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/nominal_local_mean_vv_vw_pv_ld1970_load_c_switched_carrier.csv": {
+      "bytes": 69283,
+      "sha256": "b4615e381ad8bdd5837334e583af32ca16ba494b253b693b9beecab2af71ddda"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/nominal_local_mean_vv_vw_pv_ld1970_load_c_switched_switching.csv": {
+      "bytes": 147345,
+      "sha256": "a8bdeac49eefd5d54375576ea690c52c315b475239d27cd69eb3dcf8fcc53c19"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/nominal_local_phase_vv_vw_pv_ld248_load_b_averaged_carrier.csv": {
+      "bytes": 69573,
+      "sha256": "e89b30753656af27389668fcf1b5468951074ff9bec8ea0df750974a6643c788"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/nominal_local_phase_vv_vw_pv_ld248_load_b_averaged_switching.csv": {
+      "bytes": 139020,
+      "sha256": "2c880c89770c0178d3f57f72bc0865f063e7800629caf0cebc5902ccc04abb3f"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/nominal_local_phase_vv_vw_pv_ld248_load_b_switched_carrier.csv": {
+      "bytes": 69570,
+      "sha256": "b3826888c412948a88e1017674d28181a1ac7b8880f93821d8665eb72737e45f"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/nominal_local_phase_vv_vw_pv_ld248_load_b_switched_switching.csv": {
+      "bytes": 143636,
+      "sha256": "353f8bc1d75f6900b6aee742739378c073601f20d7337aac638486cda05876cb"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/nominal_local_sequence_vv_vw_pv_ld626_load_c_averaged_carrier.csv": {
+      "bytes": 69311,
+      "sha256": "71aa2b0108b524d7ab3b2026b74e7ea4fb11f1647a314937bbbabcc3bc9bf37a"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/nominal_local_sequence_vv_vw_pv_ld626_load_c_averaged_switching.csv": {
+      "bytes": 141612,
+      "sha256": "0b7de16fe727102d1e9af91af73125f49b75ab13af6100fe0a3626110b018188"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/nominal_local_sequence_vv_vw_pv_ld626_load_c_switched_carrier.csv": {
+      "bytes": 69302,
+      "sha256": "ef7cce8752370a526515143c9aae6c2f844e3547399509b57379b48a978ef5f0"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/nominal_local_sequence_vv_vw_pv_ld626_load_c_switched_switching.csv": {
+      "bytes": 147260,
+      "sha256": "aed17cd1c4c4b3b98d2dc1e3e409a21abea9752745b44ee3a9749880270d5a4a"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/nominal_local_worst_vv_vw_pv_ld2804_load_c_averaged_carrier.csv": {
+      "bytes": 69262,
+      "sha256": "eb77d2a04c7b615cae4e729aba7097b7db605ced3e6dde6f5ca5158a22776a4f"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/nominal_local_worst_vv_vw_pv_ld2804_load_c_averaged_switching.csv": {
+      "bytes": 139904,
+      "sha256": "07f9b38da0dea1c97984c080caeeb3879a3a757794b590c4b00bbf19c9392340"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/nominal_local_worst_vv_vw_pv_ld2804_load_c_switched_carrier.csv": {
+      "bytes": 69274,
+      "sha256": "03f493d9a6961d0061d6624ffae1a88cb271dff54fc1b24a770ca315720dd85b"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/nominal_local_worst_vv_vw_pv_ld2804_load_c_switched_switching.csv": {
+      "bytes": 145107,
+      "sha256": "ed853f6a0a8bde7387b4ecff6a5dd25546790e21a9fce046756b3bee9a42c7ac"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/results.json": {
+      "bytes": 1507218,
+      "sha256": "75259bd08ab7103e1fe3b470540fad50d9b2186cb322976c8630ab340de2d81b"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/rotated_unbalance_coordinated_mean_vv_vw_pv_ld1970_load_c_averaged_carrier.csv": {
+      "bytes": 69405,
+      "sha256": "dd0dc9e98e3009805b416fc8c13b4fe02d7c84ef4c9fcab67497087ce0b1c2b4"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/rotated_unbalance_coordinated_mean_vv_vw_pv_ld1970_load_c_averaged_switching.csv": {
+      "bytes": 138594,
+      "sha256": "9bdb8628e52f51a665a2422605c39a5ad3fff6d66d5a748257b1695975d71330"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/rotated_unbalance_coordinated_mean_vv_vw_pv_ld1970_load_c_switched_carrier.csv": {
+      "bytes": 69414,
+      "sha256": "26386855b548c0965b5698d56bc3cb7236e1a706a8709b1013610c5aae3acaec"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/rotated_unbalance_coordinated_mean_vv_vw_pv_ld1970_load_c_switched_switching.csv": {
+      "bytes": 144016,
+      "sha256": "d0a4c6ca68c8a35f6eb6811a8eacd5d528bc3cadf2ae94e57ac98ee697f9609f"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/rotated_unbalance_coordinated_phase_vv_vw_pv_ld1895_load_b_averaged_carrier.csv": {
+      "bytes": 69540,
+      "sha256": "004a9511229ea315a62c7568d687d18cdccd8315b2853962997aa4c90b5549a9"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/rotated_unbalance_coordinated_phase_vv_vw_pv_ld1895_load_b_averaged_switching.csv": {
+      "bytes": 140990,
+      "sha256": "0f9cdb2c6b5e0974ccc0389243bb6b439e7f4e06d5a85e9848125e27e039f410"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/rotated_unbalance_coordinated_phase_vv_vw_pv_ld1895_load_b_switched_carrier.csv": {
+      "bytes": 69538,
+      "sha256": "5ba363c409074529acf6f76407817c8ba95d9f452918849fe8c5a7d17c8431f3"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/rotated_unbalance_coordinated_phase_vv_vw_pv_ld1895_load_b_switched_switching.csv": {
+      "bytes": 141043,
+      "sha256": "9e84dfafa1305c3db1dfb6ded9fa7006a74982a9d0dcac0b1d39842cce5ccdad"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/rotated_unbalance_coordinated_sequence_vv_vw_pv_ld626_load_c_averaged_carrier.csv": {
+      "bytes": 69378,
+      "sha256": "475a4f994d789f12a3aebd4ddb5ba4e73d4f17cb3adeae6c48f0c757d5c9de0c"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/rotated_unbalance_coordinated_sequence_vv_vw_pv_ld626_load_c_averaged_switching.csv": {
+      "bytes": 140604,
+      "sha256": "2171fa1b72210da56e1587cd618750a7e3f5b6fb93ae1e8a21791f64e1a131ec"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/rotated_unbalance_coordinated_sequence_vv_vw_pv_ld626_load_c_switched_carrier.csv": {
+      "bytes": 69392,
+      "sha256": "ca75a67414e1d56250f33fcc8ad47f6bf3c95d1c7e7aca58b01647133fb511e0"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/rotated_unbalance_coordinated_sequence_vv_vw_pv_ld626_load_c_switched_switching.csv": {
+      "bytes": 143905,
+      "sha256": "f2f39f274090fef0efdacfa921944446825f385244558846e51a1423eadd6444"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/rotated_unbalance_coordinated_worst_vv_vw_pv_ld2050_load_a_averaged_carrier.csv": {
+      "bytes": 69383,
+      "sha256": "8b93dc61af1812a587847e54403877fc22346c5b5c09de703eedae30509730e4"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/rotated_unbalance_coordinated_worst_vv_vw_pv_ld2050_load_a_averaged_switching.csv": {
+      "bytes": 140412,
+      "sha256": "28d34cd4e7b5591af7728d8d0197d3c313011f5620f8b2b3882f114144ca9085"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/rotated_unbalance_coordinated_worst_vv_vw_pv_ld2050_load_a_switched_carrier.csv": {
+      "bytes": 69448,
+      "sha256": "15c2c501c863608e7040a3bff6dd13aeba8bb470c8e9b4c05f59dd01e1134784"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/rotated_unbalance_coordinated_worst_vv_vw_pv_ld2050_load_a_switched_switching.csv": {
+      "bytes": 144216,
+      "sha256": "13394035c069871a20bf2734879fd636656ab882601c578dac3f8df82ac9850e"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/rotated_unbalance_local_mean_vv_vw_pv_ld1291_load_b_averaged_carrier.csv": {
+      "bytes": 69366,
+      "sha256": "5e55225fb2e2864aa55969e482c12bb15bd1744635a6ceed11006966ae0599ca"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/rotated_unbalance_local_mean_vv_vw_pv_ld1291_load_b_averaged_switching.csv": {
+      "bytes": 141729,
+      "sha256": "70c8531b586acd0de938fae3616c43755a557a8b3ef6abad1eea24a04239a3ef"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/rotated_unbalance_local_mean_vv_vw_pv_ld1291_load_b_switched_carrier.csv": {
+      "bytes": 69356,
+      "sha256": "774f2bf65b00df64ef213365a0007b32d0d557a3d2c49d4b572462d1a005ac65"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/rotated_unbalance_local_mean_vv_vw_pv_ld1291_load_b_switched_switching.csv": {
+      "bytes": 147146,
+      "sha256": "ec9c5bb649cf920f30acb4365900539704ae04c4158dcf874745a1fab3bb0301"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/rotated_unbalance_local_phase_vv_vw_pv_ld1895_load_b_averaged_carrier.csv": {
+      "bytes": 71996,
+      "sha256": "14ac88b2c406ee0f81cf86618312d4009060be6d903ca91a0102cf1cdafe48ef"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/rotated_unbalance_local_phase_vv_vw_pv_ld1895_load_b_averaged_switching.csv": {
+      "bytes": 140675,
+      "sha256": "1717640eaa5a30ed725cf9cdfdf86f61c1ed6ac4dcf545063d73a942e6528011"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/rotated_unbalance_local_phase_vv_vw_pv_ld1895_load_b_switched_carrier.csv": {
+      "bytes": 71212,
+      "sha256": "f01b698f3ebee20daaeefd78a6553547e5fdc4059379dd9f3a33f851b20512a6"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/rotated_unbalance_local_phase_vv_vw_pv_ld1895_load_b_switched_switching.csv": {
+      "bytes": 143803,
+      "sha256": "7fc5c2fc4c7d8b6e0cc1fd08df714c5197551d9a2c67a20b2797723e7c4a7cf6"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/rotated_unbalance_local_sequence_vv_vw_pv_ld1668_load_a_averaged_carrier.csv": {
+      "bytes": 69283,
+      "sha256": "c9bd0f99e563002d2c5f3f000e05e7bb0cd16c1902b2c473dda9df5845bec0b6"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/rotated_unbalance_local_sequence_vv_vw_pv_ld1668_load_a_averaged_switching.csv": {
+      "bytes": 142568,
+      "sha256": "b262847b1d2d433dd7166d4870c5180281fe101666767f373ce8b8d1a8a623b7"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/rotated_unbalance_local_sequence_vv_vw_pv_ld1668_load_a_switched_carrier.csv": {
+      "bytes": 69303,
+      "sha256": "9de51c3c55bd2414558457d6240b2a1ae7aaad318e4bb7ea1463f80d3cd8f6fb"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/rotated_unbalance_local_sequence_vv_vw_pv_ld1668_load_a_switched_switching.csv": {
+      "bytes": 147153,
+      "sha256": "5fe0467a2d6e3949cc705d68fc4b7ede348cbb6020f6bf2e5f5b24ad9185ae28"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/rotated_unbalance_local_worst_vv_vw_pv_ld2050_load_a_averaged_carrier.csv": {
+      "bytes": 69244,
+      "sha256": "81ec911d64832ca59dd906552e15ed1fe6f8139522a3ffcaa8206e8e6ed4cc77"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/rotated_unbalance_local_worst_vv_vw_pv_ld2050_load_a_averaged_switching.csv": {
+      "bytes": 141912,
+      "sha256": "03c871541746e55d2245e2e1635ac3107dee81b828cc1f3c64b67e93c4832c81"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/rotated_unbalance_local_worst_vv_vw_pv_ld2050_load_a_switched_carrier.csv": {
+      "bytes": 69209,
+      "sha256": "19063703669a7864e062b1d1e48f5f76a212da535a38364d956686772cd99e90"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt/rotated_unbalance_local_worst_vv_vw_pv_ld2050_load_a_switched_switching.csv": {
+      "bytes": 147576,
+      "sha256": "6374843959585a98af8345a312d21858a4b49b0a45f63b417e5a3c917d55b3d6"
+    },
+    "studies/australian_pv/results/engineering_benchmark_emt_inputs.json": {
+      "bytes": 111420,
+      "sha256": "9c85659f030dc9eefb42c6b2c3c958133533efc03455bc4af59bdf8b166111a0"
+    },
+    "studies/australian_pv/results/engineering_boundary_emt/audit.json": {
+      "bytes": 1464,
+      "sha256": "057a55b703496e95be40e842b0d75e7f854e7cc60ea9125500eedfa2de77c3f7"
+    },
+    "studies/australian_pv/results/engineering_boundary_emt/combined_averaged_carrier.csv": {
+      "bytes": 69682,
+      "sha256": "90a290e12c661f28c5c22b3b3f5db575a226510bff2b01d9ddb827cfaf449eec"
+    },
+    "studies/australian_pv/results/engineering_boundary_emt/combined_averaged_switching.csv": {
+      "bytes": 141093,
+      "sha256": "e4c36d620c0176c8237c65656e73d56ad8a44e5c0e3a59d93cbb1d25f8433f04"
+    },
+    "studies/australian_pv/results/engineering_boundary_emt/combined_switched_carrier.csv": {
+      "bytes": 69713,
+      "sha256": "9fdf5fc23121ed78d38c92c584d4aa9e496d8d1c17f560b544589d2e600096e3"
+    },
+    "studies/australian_pv/results/engineering_boundary_emt/combined_switched_switching.csv": {
+      "bytes": 147815,
+      "sha256": "5392971e4bb6b44a7b5875722086e0dca557fb867e1bae85854eb5e3888faa1a"
+    },
+    "studies/australian_pv/results/engineering_boundary_emt/comparison.csv": {
+      "bytes": 960,
+      "sha256": "1a356719522e9d0e7d7a2ba23322f5bdcf2d60b05f829d2132c539317ae65751"
+    },
+    "studies/australian_pv/results/engineering_boundary_emt/four_leg_combined_averaged_carrier.csv": {
+      "bytes": 74837,
+      "sha256": "dcd8cd69c0ad9663727da20002c85b6ff4afed99f55672968c449fbd10077d83"
+    },
+    "studies/australian_pv/results/engineering_boundary_emt/four_leg_combined_averaged_switching.csv": {
+      "bytes": 147185,
+      "sha256": "f70d3e502556927859e70515a6b28f7f1586955a3f6931362d43f5e7092eaee0"
+    },
+    "studies/australian_pv/results/engineering_boundary_emt/four_leg_combined_switched_carrier.csv": {
+      "bytes": 73242,
+      "sha256": "dc9f88724036e17e26905ef9050d3257d3cebd7444597c9e3462ac147ab8e6b4"
+    },
+    "studies/australian_pv/results/engineering_boundary_emt/four_leg_combined_switched_switching.csv": {
+      "bytes": 147638,
+      "sha256": "f7ac334cb1672d72cbbee2f684ba88be579d9203b407ff66954ffdfb8d81f959"
+    },
+    "studies/australian_pv/results/engineering_boundary_emt/lf_only_boundary_averaged_carrier.csv": {
+      "bytes": 69742,
+      "sha256": "cce2462919eaef7b1c0902b7b0046924ce9b2962f457d9f0f14c4761a754a2a4"
+    },
+    "studies/australian_pv/results/engineering_boundary_emt/lf_only_boundary_averaged_switching.csv": {
+      "bytes": 139671,
+      "sha256": "caafa60b34a9651a9eaee59556efaccf261ca0518dc525b25de350231d369ede"
+    },
+    "studies/australian_pv/results/engineering_boundary_emt/lf_only_boundary_switched_carrier.csv": {
+      "bytes": 69740,
+      "sha256": "fbe63d5e4af1439fa7c7d5a408733cf2112df5d382803a0620fe9bf766c615e0"
+    },
+    "studies/australian_pv/results/engineering_boundary_emt/lf_only_boundary_switched_switching.csv": {
+      "bytes": 147538,
+      "sha256": "d7aeff954584f8618e8e849c42cf3203a0c173d8df5270907cc9d6135cfdd058"
+    },
+    "studies/australian_pv/results/engineering_boundary_emt/results.json": {
+      "bytes": 140653,
+      "sha256": "66f54e747203e90bddebca4fa447057781cbd460120d0d63378f7d1e0817148d"
+    },
+    "studies/australian_pv/results/engineering_boundary_emt_inputs.json": {
+      "bytes": 20454,
+      "sha256": "1e428eed8d7f0659b2e5165300b062e2c9b31623bff468ff172de02ce625bcb9"
+    },
+    "studies/australian_pv/results/engineering_domain_audit.json": {
+      "bytes": 776081,
+      "sha256": "dc59170cc0124694cec2f1751a2ddc8efd23d50802bd31672b239972b8f87fc2"
+    },
+    "studies/australian_pv/results/engineering_domain_inputs.json": {
+      "bytes": 2757374,
+      "sha256": "07fac408761a1cc13c1c98f5075adc2b66e3e011bab7fdd905eedaeb80299b31"
+    },
+    "studies/australian_pv/results/engineering_domain_summary.csv": {
+      "bytes": 602,
+      "sha256": "a3d26dc598d0561a59cea714e6e98420a659d8e955a6fb7a5dd267dc5610b993"
+    }
+  },
+  "format": 1,
+  "roots": [
+    "studies/australian_pv/results/engineering_benchmark",
+    "studies/australian_pv/results/engineering_benchmark_emt",
+    "studies/australian_pv/results/engineering_benchmark_emt_inputs.json",
+    "studies/australian_pv/results/engineering_domain_inputs.json",
+    "studies/australian_pv/results/engineering_domain_audit.json",
+    "studies/australian_pv/results/engineering_domain_summary.csv",
+    "studies/australian_pv/results/engineering_boundary_emt_inputs.json",
+    "studies/australian_pv/results/engineering_boundary_emt"
+  ],
+  "source_revision": "1f4cc19c0a342ac7adedaca2e77427f592d9ffad"
+}

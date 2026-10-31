@@ -21,5 +21,9 @@ docs/build/
 /scratch/
 /.evidence-cache/
 
+# Full Australian study payloads are restored from verified evidence bundles.
+# Compact review tables and metadata are explicitly tracked.
+/studies/australian_pv/results/
+
 # Python bytecode from the plotting helpers
 __pycache__/
