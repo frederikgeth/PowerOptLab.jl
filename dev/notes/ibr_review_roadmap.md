@@ -16,43 +16,50 @@ was not representative of certifiable hardware.
 
 ## P0: required before merge
 
-- [ ] **R1 Fixture capacitor rating.** Derive `i_cap_max` from a declared
+- [x] **R1 Fixture capacitor rating.** Derive `i_cap_max` from a declared
   design rule (nameplate deliverable at the AS/NZS 4777.2 volt-var corners,
   checked against Kolar & Round 2006), not from the old 2ω-only model. Keep
   the 1 A value only as a labelled sensitivity.
-- [ ] **R2 Rated-capability fixture gate.** A study test that every fixture
+- [x] **R2 Rated-capability fixture gate.** A study test that every fixture
   plant delivers rated apparent power at unity PF and the Australia A volt-var
   extremes (−60 % / +44 % of rated S) across 216–253 V, with phase current,
   not an internal budget, as the limiting quantity. Run it before any campaign.
-- [ ] **R3 Rerun the matched PF/OPF benchmark** with the corrected fixture and
+- [x] **R3 Rerun the matched PF/OPF benchmark** with the corrected fixture and
   regenerate tables/figures.
-- [ ] **R4 Equal-service OPF.** Add a coordinated mode that enforces each
+- [x] **R4 Equal-service OPF.** Add a coordinated mode that enforces each
   site's local volt-var request (same reactive service) and maximises export,
   so "coordination benefit" and "cost of releasing volt-var" are separated.
-- [ ] **R5 PF/OPF agreement test.** OPF with the local laws imposed must
+- [x] **R5 PF/OPF agreement test.** OPF with the local laws imposed must
   reproduce the local fixed point (voltages, P, Q) within tolerance.
-- [ ] **R6 Feeder-limited case.** At least one predeclared case where the
+- [x] **R6 Feeder-limited case.** At least one predeclared case where the
   253 V planning limit or a native thermal limit binds, so Q has network value.
-- [ ] **R7 Report claims generated from data.** Binding-constraint counts and
+- [x] **R7 Report claims generated from data.** Binding-constraint counts and
   limiting-quantity statements in the report come from the CSVs, with a check
   that fails on text/data drift. Fix the "DC source ceiling" contradiction.
-- [ ] **R8 Wording.** "Recovery" → "export gained by releasing volt-var";
+- [x] **R8 Wording.** "Recovery" → "export gained by releasing volt-var";
   "independent EMT" → "separately coded"; drop assertion-count headlines in
   favour of what was tested and the worst margin; state that the thermal
   enclosure is not an out-of-sample test; short glossary for project jargon.
-- [ ] **R9 Remove temporary/bloat files** (list below) and consolidate the
+- [x] **R9 Remove temporary/bloat files** (list below) and consolidate the
   study pages into one current page plus one archive page.
 
 ## P1: should follow in this PR if time allows
 
-- [ ] **R10 AS/NZS 4777.2 grounding.** Report the 10-minute average
+- [~] **R10 AS/NZS 4777.2 grounding.** Report the 10-minute average
   sustained-overvoltage quantity (258 V) beside the 253 V planning limit;
   label var priority and multi-phase sensing choices as study settings that
   must be checked against the standard's clauses; add a watt-priority
   sensitivity.
-- [ ] **R11 Scalability record.** Save solve times, iterations and NLP size
+  *Done:* 258 V sustained quantity reported per case; var priority and
+  sensing labelled as study settings in the README. *Open:* watt-priority
+  sensitivity needs a watt-priority stage in `allocate_inverter_services`
+  (the voltage-aware allocator currently requires var priority).
+- [~] **R11 Scalability record.** Save solve times, iterations and NLP size
   for every PF/OPF solve; add a site-count sweep on the LV feeder.
-- [ ] **R12 Superseded sensitivity results.** Label or archive the
+  *Done:* elapsed time, local iterations, equal-service rounds and NLP size
+  are recorded in `cases.csv` and summarised in the report. *Open:* site-count
+  sweep (needs a second feeder or synthetic replication; see R15).
+- [x] **R12 Superseded sensitivity results.** Label or archive the
   `sensitivity_*` folders computed without the carrier thermal term.
 
 ## P2: follow-up work (separate PRs)
@@ -98,3 +105,11 @@ was not representative of certifiable hardware.
 ## Log
 
 - 2026-11-01: roadmap created from the PR #75 review.
+- 2026-11-01: R1–R9, R12 done. Declared fixture 7 A capacitor / 23 A peak
+  (model requirement at the Australia A corners + 10 %); legacy 1 A / 14 A
+  delivers 0.84–1.25 kVA of 6 kVA and fails the gate. Three modes (local,
+  same-service OPF, released OPF) over five conditions, including the
+  feeder-limited `oversized_dc`. PF/OPF agreement holds to ~1e-8 V in every
+  condition. Releasing volt-var gains only losses unless 253 V binds.
+  Superseded scripts/pages/results removed (archived in the historical
+  bundle); temporary dev notes deleted.

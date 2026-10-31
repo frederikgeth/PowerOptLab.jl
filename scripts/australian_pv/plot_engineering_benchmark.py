@@ -317,6 +317,15 @@ def publish():
         f"site P {worst['max_site_P_difference_W']:.1e} W, site Q {worst['max_site_Q_difference_var']:.1e} var "
         f"(tolerances {env['agreement_tolerance']['voltage_V']:g} V, {env['agreement_tolerance']['power_W']:g} W, "
         f"{env['agreement_tolerance']['reactive_var']:g} var).", ""]
+    ratios, counts = [], []
+    for c in CONDITIONS:
+        history = json.loads((folder/f"{c}_local_status.json").read_text())["history"]
+        v = [r["voltage_residual_inf_V"] for r in history if r.get("voltage_residual_inf_V") is not None]
+        counts.append(len(history))
+        ratios += [b/a for a, b in zip(v, v[1:]) if a > 0 and b > 0]
+    lines += [f"**Local fixed point.** Converged in {min(counts)}–{max(counts)} iterations without relaxation. The largest "
+        f"ratio between successive voltage residuals is {max(ratios):.3f} (empirical contraction indicator on this stiff feeder; "
+        "not a uniqueness or stability proof).", ""]
     legacy = legacy_rows()
     if legacy:
         lines += ["**Sensitivity: legacy fixture** (1 A capacitor budget, 14 A peak; fails the rated-capability gate). "
