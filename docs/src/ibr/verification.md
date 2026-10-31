@@ -449,6 +449,32 @@ Separate study tests reject corrupted metrics, missing meshes and false
 engineering acceptance. The calibrated 10% allowance is explicit model
 headroom; neither it nor these tests establish a universal switching-error bound.
 
+### Switching engineering and matched coordinated benchmark
+
+`studies/australian_pv/engineering_domain.md` declares 972 P/Q, sequence and
+modulation points for analytical AC-current and combined DC-voltage envelopes.
+Independent sampled carrier integration and periodic passive R/L orbits pass
+36,031 checks. The 831 engineering-infeasible dispatches remain in that domain
+record; carrier agreement does not make them feasible operating points.
+
+The matched benchmark in `studies/australian_pv/engineering_benchmark.md`
+accepts eight coupled PF/OPF points with identical physical models and network
+ceilings. It records 372 saved-point conditions, 3,672 SI inverter checks and
+6,608 independent SI feeder checks. Coordination releases the local VV/VW
+commands, so export recovery is reported alongside the lost reactive support.
+Temporary neutral initialization equalities are removed before the final
+full-capability export solve; a source-traceable iteration-limit ablation stays
+rejected even when its independent feeder residuals pass.
+
+Thirty-two maximum-capacitor-stress representatives cover all four controller
+groups, conditions and modes. All 192 averaged/switched integrations pass the
+declared mechanism, mesh and hardware checks, with a largest switched
+capacitor RMS of 0.972793 A against 1 A. The four coordinated night references
+also retain a thermal-prediction failure: approximately 0.012 A predicted versus
+0.276–0.316 A measured. The calibrated allowance is not an all-duty thermal
+bound. These are fixed-POC snapshots with finite-window DC drift, rather than
+feeder/controller dynamic or periodic-steady-state validation.
+
 ## Further higher-fidelity validation
 
 For each topology, build one parameter-identical averaged or switched model in

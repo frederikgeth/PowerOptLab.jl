@@ -73,11 +73,22 @@ def audit(inputs, folder, benchmark):
         for case in results["cases"].values():
             if not all(m["finest"]["all_engineering_checks_passed"] for m in case["modes"].values()):
                 raise ValueError("averaged or switched engineering rejection")
+        env = json.loads(inputs.read_text())
+        predictions = {}
+        for c in env["cases"]:
+            fine = results["cases"][c["case_id"]]["modes"]["switched"]["finest"]
+            predicted, measured = c["parent_capacitor_model_A"], fine["capacitor_total_rms_A"]
+            predictions[c["case_id"]] = dict(predicted_A=predicted, switched_A=measured,
+                error_A=measured-predicted,
+                encloses_with_mesh_band=measured <= predicted+env["validation_bands"]["mesh_current_A"])
+        missed = [key for key, row in predictions.items() if not row["encloses_with_mesh_band"]]
         report = dict(accepted=True, reference_checks=refs["checks"], references=refs["references"],
             circuit_checks=circuit["checks"], integrations=len(results["metrics"]),
             input_sha256=refs["input_sha256"], parent_audit_sha256=refs["parent_audit_sha256"],
             results_sha256=hashlib.sha256((folder/"results.json").read_bytes()).hexdigest(),
             audit_code_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+            thermal_prediction_coverage=predictions, thermal_prediction_failures=missed,
+            all_thermal_predictions_enclose=not missed,
             scope="declared worst-capacitor-stress selection, actual site availability, saved parent phasors, fixed mean losses and independent averaged/switched circuit records; no controller/feeder dynamics or all-time DC-drift certificate")
         target.write_text(json.dumps(report, indent=2, allow_nan=False)+"\n")
         return report

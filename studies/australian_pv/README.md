@@ -1,5 +1,11 @@
 # Australian LV photovoltaic control study
 
+The [matched switching-aware PF/OPF benchmark](engineering_benchmark.md)
+compares all four local controller families with coordinated dispatch under
+unchanged hardware and network limits. Its figures show per-inverter limits,
+export recovery, the reactive-service tradeoff and the retained low-current
+thermal-prediction discrepancy from 32 representative EMT references.
+
 The [combined switching/DC-voltage boundary experiment](engineering_boundary.md)
 adds phase/neutral peak witnesses and compares averaged and switched voltage
 extrema with fixed sizing. It retains the LF-only failure and documents the

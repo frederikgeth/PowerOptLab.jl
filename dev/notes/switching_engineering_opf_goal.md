@@ -275,3 +275,44 @@ raw solver outcome with the same final physical constraints and export
 objective. It does not substitute an unsuccessful candidate for the accepted
 benchmark. The final report must show both export recovery and the reactive
 service given up by the free-Q objective.
+
+## Integrated EMT and pedagogical publication checkpoint
+
+Clean `9b2eb96` preparation produced 32 immutable matched-case EMT references
+with actual site availability. All **192 averaged/switched integrations** finish
+successfully and pass **391 parent-selection checks and 7,274 independent
+circuit-record checks**. Their largest switched capacitor RMS is 0.972793 A
+against the fixed 1 A budget. The initialization ablation retains a raw
+`ITERATION_LIMIT`/`INFEASIBLE_POINT` with finite phasors and a successful 826-check
+feeder reconstruction; it remains rejected.
+
+The matrix also exposes four thermal-prediction failures: coordinated night
+references predict about 0.012 A while switched EMT measures 0.276–0.316 A.
+Hardware acceptance and predictor enclosure are separately reported. The
+existing calibrated 10% frozen-current allowance does not cover AC-ripple-
+induced capacitor stress in that regime. This is not an analytical thermal
+bound; its failure is explicit in the receipt, figure and API/foundations/
+verification documentation. The specified analytical phase/neutral current and
+combined DC-voltage envelopes remain distinct and validated. An analytical
+coupled AC/DC thermal allocator is a subsequent modeling priority, not a claim
+made by this publication.
+
+The report/figures show active export alongside lost reactive support, per-site
+high-source recovery, capacitor/source/voltage/peak utilization, switched DC
+ranges and the thermal-prediction discrepancy. All eight points receive fresh
+independent SI feeder reconstruction during plotting. Conductor utilization is
+at most 9.35% and LV voltage at most 252.669 V: these cases illustrate inverter
+limits and service choices, not congestion-management gains.
+
+Eight publication/corruption assertions pass, including a reconstruction of
+all measured-versus-predicted thermal errors so misses cannot disappear from
+the receipt. Eight EMT-reference corruption tests pass against canonical
+inputs. The documentation build passes. `src`, package tests, Project and
+Manifest are unchanged from the **22,100/22,100** full-suite checkpoint at
+`a6ab8e3`; the additional solver and benchmark regressions pass 75 and 25
+assertions respectively. Publication/source hashes match their current
+artifacts. The requirement-by-requirement audit is recorded in
+`switching_engineering_opf_acceptance.md`; the specified deliverables are
+verified within their declared carrier/validation scope. The retained
+low-current thermal prediction discrepancy is a separate subsequent modeling
+priority and is not presented as an analytical thermal certificate.
