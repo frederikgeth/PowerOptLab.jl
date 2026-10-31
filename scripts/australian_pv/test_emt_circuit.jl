@@ -67,3 +67,16 @@ end
     @test r.metrics["v_dc_mean_V"] ≈ 750. atol=1e-6
     @test r.metrics["energy_relative_residual"]<1e-9
 end
+
+@testset "Independent EMT circuit: three-wire common-mode projection" begin
+    c=emt_fixture();offset=0.9+.4im
+    for key in ("grid_voltage","converter_voltage")
+        voltage=[complex(p[1],p[2])+offset for p in c[key]]
+        c[key]=[[real(z),imag(z)] for z in voltage]
+    end
+    r=IBREMT.simulate(c;cycles=2,discard_cycles=1,steps_per_carrier=64,mode=:averaged)
+    @test r.metrics["fundamental_current_max_error_A"]<1e-6
+    @test r.metrics["neutral_total_rms_A"]<1e-8
+    @test r.metrics["energy_relative_residual"]<1e-9
+    @test r.metrics["engineering_checks"]["three_wire_kcl"]
+end

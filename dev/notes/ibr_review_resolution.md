@@ -1,5 +1,26 @@
 # Advanced IBR review: resolution plan
 
+## Expanded EMT calibration and common-mode regression
+
+The first committed core passes 20,906/20,906 package assertions (8m12.2s).
+Expanding EMT from four probes to every inverter in both mixed daytime cases
+exposed three four-leg switching currents of 1.0057–1.0059 A with the initial
+5% allowance. These earlier references are retained as negative calibration
+controls. The default model validation allowance is now 10%; no nameplate,
+capacitance, nominal DC voltage or filter sizing changed. This is a scoped
+validation allowance, not a universal AC-ripple bound.
+
+The expanded matrix also found an independent EMT-harness bug: the averaged
+three-wire bridge retained grid common mode while the switched bridge correctly
+projected it out. Both now use the same physical sum-zero projection. An added
+analytic common-mode/KCL/energy oracle passes; the standalone circuit now has
+32 assertions. A separate explicit three-wire KCL engineering check prevents
+this error from masquerading as an inverter/controller discrepancy.
+
+All 242 new model assertions pass with the 10% allowance; the full suite and
+31-reference EMT validation are being rerun before publication. The calibration
+failures are never reclassified as accepted current commands.
+
 ## Nonlinear monolithic DC energy implementation (31 October 2026)
 
 The opt-in `dc_energy_model=:nonlinear` selects constant-input-power capacitor

@@ -30,7 +30,7 @@ def audit(input_path, folder):
         for file, digest in result["waveform_sha256"].items():
             require(hashlib.sha256((folder / file).read_bytes()).hexdigest() == digest, f"waveform digest mismatch: {file}")
         refs = {c["case_id"]: c for c in env["cases"]}
-        expected_waveforms = {f"{i}_{m}_{suffix}.csv" for i in refs for m in ("averaged", "switched") for suffix in ("carrier", "switching")}
+        expected_waveforms = {f"{i}_{m}_{suffix}.csv" for i, c in refs.items() if c.get("save_waveforms", True) for m in ("averaged", "switched") for suffix in ("carrier", "switching")}
         require(set(result["waveform_sha256"]) == expected_waveforms, "waveform coverage mismatch")
         require(len(refs) == len(env["cases"]) == result["planned"] == result["completed"], "incomplete/duplicate case plan")
         require(set(result["cases"]) == set(refs), "case coverage mismatch")
@@ -87,6 +87,7 @@ def audit(input_path, folder):
                     close(residual, r["energy_residual_J"], 1e-6)
                     close(r["energy_relative_residual"], abs(residual)/max(1, abs(c["p_dc_W"])*window), 1e-8)
                     hardware = {"phase_rms": max(r["current_total_rms_A"]) <= c["phase_current_rating_A"]+1e-5,
+                                "three_wire_kcl": c["topology"] == "FOUR_LEG" or r["neutral_total_rms_A"] <= 1e-5,
                                 "neutral_rms": c["topology"] != "FOUR_LEG" or r["neutral_total_rms_A"] <= c["neutral_current_rating_A"]+1e-5,
                                 "capacitor_total_rms": r["capacitor_total_rms_A"] <= c["capacitor_current_rating_A"]+1e-5,
                                 "dc_2omega_peak": abs(d) <= c["dc_2omega_peak_rating_V"]+1e-5,
@@ -114,6 +115,9 @@ def audit(input_path, folder):
                 all_mechanisms.append(accepted)
                 if mode == "switched":
                     all_hardware.append(fine["all_engineering_checks_passed"])
+                expectation = f"expect_{mode}_hardware_accepted"
+                if expectation in c:
+                    require(fine["all_engineering_checks_passed"] == c[expectation], f"{ident}/{mode}: declared engineering expectation failed")
                 case_modes[mode] = {"mechanisms_accepted": accepted, "capacitor_total_rms_A": fine["capacitor_total_rms_A"],
                                     "failed_engineering_checks": [k for k, v in fine["engineering_checks"].items() if not v]}
             require(result["cases"][ident]["mechanisms_accepted"] == all(v["mechanisms_accepted"] for v in case_modes.values()), "case acceptance mismatch")

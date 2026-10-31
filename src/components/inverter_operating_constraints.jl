@@ -193,7 +193,7 @@ Supports THREE_LEG, FOUR_LEG and SPLIT_DC with `grid_forming=false` and
 THREE_LEG/FOUR_LEG also support `:CENTERED` with an open carrier-frequency DC
 source through embedded shared-carrier thermal allocation. Its analytic
 frozen-fundamental variance enclosure participates in every objective stage;
-`pwm_thermal_headroom=0.05` is a validation allowance, not a universal bound on
+`pwm_thermal_headroom=0.10` is a validation allowance, not a universal bound on
 AC ripple or unmodeled dynamics. Independent carrier-dwell quadrature gates
 publication. Automatic AC reserve closure and split-link PWM allocation are
 not provided by this wrapper. Representative EMT is still required. The default

@@ -27,8 +27,7 @@ end
 # magnetic energy uses L*I + Ln*11'; three-wire currents stay on sum(i)=0.
 function rhs(p,t,x,g,mode)
     voltage=wave(p.vg,t,p.w);total=x[1]+x[2]+x[3]
-    bridge=mode===:averaged ? wave(p.uc,t,p.w) :
-        ntuple(k->x[4]*(p.four ? g[k]-g[4] : g[k]-(g[1]+g[2]+g[3])/3),3)
+    bridge=bridge_voltage(p,t,x,g,mode)
     offset=p.four ? p.rn*total : -(voltage[1]+voltage[2]+voltage[3])/3
     u=ntuple(k->bridge[k]-voltage[k]-p.r*x[k]-offset,3)
     common=p.four ? p.ln/(p.l+3p.ln)*sum(u) : 0.
@@ -38,6 +37,15 @@ function rhs(p,t,x,g,mode)
     filterloss=p.r*sum(x[k]^2 for k in 1:3)+(p.four ? p.rn*total^2 : 0.)
     net=p.psource-p.loss-sum(voltage[k]*x[k] for k in 1:3)-filterloss
     ((di...,dv),net)
+end
+
+function bridge_voltage(p,t,x,g,mode)
+    if mode===:averaged
+        raw=wave(p.uc,t,p.w)
+        common=p.four ? 0. : sum(raw)/3
+        return ntuple(k->raw[k]-common,3)
+    end
+    ntuple(k->x[4]*(p.four ? g[k]-g[4] : g[k]-(g[1]+g[2]+g[3])/3),3)
 end
 
 energy(p,x)=p.capacitance*x[4]^2/2+p.l*sum(x[k]^2 for k in 1:3)/2+
@@ -122,7 +130,7 @@ function simulate(c;switching_Hz=10000.,cycles=10,discard_cycles=6,steps_per_car
                 if active
                   for (tm,mid,weight) in quadrature
                     ii=(mid[1],mid[2],mid[3]);vg=wave(p.vg,tm,p.w)
-                    bridge=mode===:averaged ? wave(p.uc,tm,p.w) : ntuple(k->mid[4]*(p.four ? g[k]-g[4] : g[k]-(g[1]+g[2]+g[3])/3),3)
+                    bridge=bridge_voltage(p,tm,mid,g,mode)
                     ic=(p.psource-p.loss-sum(bridge[k]*ii[k] for k in 1:3))/mid[4]
                     for k in 1:3
                         fund[k]+=weight*SQRT2*ii[k]*cis(-p.w*tm)
@@ -147,6 +155,7 @@ function simulate(c;switching_Hz=10000.,cycles=10,discard_cycles=6,steps_per_car
     fund./=window;actual_d=v2/window;actual_ic2=ic2/window
     expected_ic2=im*2p.w*p.capacitance*expected_d
     engineering=Dict("phase_rms"=>all(sqrt.(isq./window).<=c["phase_current_rating_A"]+1e-5),
+        "three_wire_kcl"=>p.four || sqrt(nsq/window)<=1e-5,
         "neutral_rms"=>!p.four || sqrt(nsq/window)<=c["neutral_current_rating_A"]+1e-5,
         "capacitor_total_rms"=>sqrt(icsq/window)<=c["capacitor_current_rating_A"]+1e-5,
         "dc_2omega_peak"=>abs(actual_d)<=c["dc_2omega_peak_rating_V"]+1e-5,
@@ -192,7 +201,7 @@ function run(input,output)
             result=simulate(c;switching_Hz=timing["switching_Hz"],cycles=timing["cycles"],
                 discard_cycles=timing["discard_cycles"],steps_per_carrier=mesh,mode)
             push!(solves,result);push!(all_metrics,result.metrics)
-            if mesh==last(timing["steps_per_carrier"])
+            if mesh==last(timing["steps_per_carrier"]) && get(c,"save_waveforms",true)
                 prefix=c["case_id"]*"_"*String(mode)
                 writecsv(joinpath(output,prefix*"_carrier.csv"),result.carrier)
                 writecsv(joinpath(output,prefix*"_switching.csv"),result.trace)

@@ -1,6 +1,6 @@
 # Shared-carrier DC-current variance, embedded in local allocation objectives.
 # No point-calibrated current factor is transferred between dispatches.
-const _PWM_ALLOCATION_HEADROOM = 0.05
+const _PWM_ALLOCATION_HEADROOM = 0.10
 const _PWM_ALLOCATION_VOLTAGE_EPS = 1e-3 # V; explicit analytic error enclosure
 const _PWM_ALLOCATION_BUS_EPS = 1e-2 # V; conservative ripple enclosure at balance
 const _PWM_SERVICE_PRESERVATION_VA = 1e-4 # SI Q/P budget, not a hardware tolerance

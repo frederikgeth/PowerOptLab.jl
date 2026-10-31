@@ -292,7 +292,7 @@ dispatch-dependent expression, not a factor calibrated at another point.
 Independent numerical integration of exact carrier dwell probabilities checks
 actual frozen-current RMS and modulation feasibility after each solve.
 
-`ConstrainedInverter(...; pwm_thermal_headroom=0.05)` reserves an additional
+`ConstrainedInverter(...; pwm_thermal_headroom=0.10)` reserves an additional
 validation allowance on the switching component. This allowance does not prove
 a universal bound on AC switching ripple or semiconductor dynamics. The local
 allocators and voltage-aware fleet use the same default. Representative EMT at
