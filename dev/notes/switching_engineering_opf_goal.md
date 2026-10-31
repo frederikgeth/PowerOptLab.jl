@@ -1,6 +1,9 @@
 # Switching-aware engineering and matched Australian OPF
 
-Active objective: complete AC phase/neutral RMS and declared peak-current
+> Historical goal record. The current completion status and final release
+> review are in [the acceptance report](switching_engineering_opf_acceptance.md).
+
+Original objective: complete AC phase/neutral RMS and declared peak-current
 limits, combine carrier ripple with nonlinear DC voltage bounds, then benchmark
 mixed local controllers against coordinated OPF under identical physical and
 network constraints. Hardware sizing stays fixed. The completed thermal/energy

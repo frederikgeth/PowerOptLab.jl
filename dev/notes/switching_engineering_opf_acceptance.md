@@ -1,46 +1,95 @@
-# Switching engineering and matched OPF acceptance audit
+# Advanced IBR branch: final release review
 
-Objective: complete the specified AC current/peak and combined DC-voltage
-engineering envelope, and deliver the matched Australian mixed-controller
-PF/OPF benchmark without changing inverter sizing.
+Reviewed 31 October 2026. The four release gates are complete. No unresolved
+blocking correctness, API, numerical, documentation or reproducibility finding
+remains within the declared model scope. No PR has been opened or published.
 
-| Requirement | Current authoritative evidence | Disposition |
+The tested implementation is `35d5cac`; subsequent commits package its evidence
+and documentation. `src`, package tests and `Project.toml` remain byte-identical
+to that tested revision. Hardware sizing and validation tolerances were not
+changed during release preparation.
+
+## Validation
+
+| Gate | Final evidence | Result |
 |---|---|---|
-| Phase/neutral switching RMS and declared peaks | Shared plant/SI reconstruction in `src/components/inverter_switching_envelope.jl` and `advanced_inverter.jl`; 895 carrier-kernel and 56 enforcement assertions included in the package suite | Verified within the declared carrier approximation |
-| Combined carrier/nonlinear DC voltage, extrema and modulation | Nonlinear energy/combined rail stamping and independent SI reconstruction; 243 guard assertions, base/phase/boundary tests | Verified within the declared carrier approximation |
-| Declared P/Q, sequence and modulation domain | `studies/australian_pv/results/engineering_domain_inputs.json` and `engineering_domain_audit.json`: 972 points, 36,031 independent conditions, two meshes and passive periodic R/L orbits | Verified; all 831 engineering-infeasible points retained |
-| Retained voltage-boundary failure | `results/engineering_boundary_emt*`: 18 integrations, 747 record checks, LF-only switched upper-voltage failure retained | Verified; failed hardware point remains rejected |
-| Mixed mean/worst/sequence/four-leg PF and coordinated OPF | `results/engineering_benchmark`: eight accepted coupled points, 96 inverter rows, identical per-site physical-model fingerprints, identical availability/loads/source/network limits | Verified |
-| Export, reactive service, curtailment and binding limits | `cases.csv`, `devices.csv`, `engineering_benchmark.md` and the coordination/limits figure; requested/achieved Q and losses also retained | Verified; released service obligations stated explicitly |
-| Independent PF/OPF audits | 372 record conditions, 3,672 SI inverter checks, 6,608 independent Python SI feeder conditions; saved-point fixed-PQ replay | Verified for all eight points |
-| Raw solver gates and full final capability | 75 solver assertions at 10/100 kVA coordinates; last stage is full capability with zero regularization and no remaining temporary neutral rows | Verified |
-| Retained unsuccessful solver outcome | `results/engineering_benchmark_numerical_control`: raw ITERATION_LIMIT/INFEASIBLE_POINT, model rejected despite successful 826-condition feeder reconstruction | Verified; no promotion from residual checks |
-| Representative averaged/switched EMT | `results/engineering_benchmark_emt*`: 32 parent references, 192 integrations, 391 parent checks, 7,274 independent circuit checks; largest switched capacitor RMS 0.972793 A against 1 A | Hardware/mechanism/mesh gates verified |
-| Distinguish calibrated allowances from bounds and retain failed predictions | Four coordinated night predictions are about 0.012 A versus 0.276–0.316 A switched RMS; `matched_audit.json` explicitly records failed prediction enclosures | Verified as a documented calibration limitation, not relabeled as an analytical bound |
-| Relevant regression gates | 75 solver, 25 campaign/corruption, eight EMT-reference and eight publication/corruption assertions pass; eight domain corruption tests pass | Verified |
-| Full package suite | 22,100/22,100 pass in `/tmp/ibr-switching-engineering-full-suite.log`; current `src`, package tests, Project and Manifest match tested `a6ab8e3` exactly | Verified; no package changes since that pass |
-| Documentation | Fresh `docs/make.jl` build exits successfully; API/foundations/verification explain the thermal-prediction limitation | Verified |
-| Reproducible pedagogical figures | Boundary, domain, export/service/limits and EMT discrepancy PNG/SVG figures; generators and publication digest receipt; all visually inspected | Verified |
-| Source freshness and fixed sizing | All five campaign input/environment source manifests match current files; authoritative PF/OPF generated from clean `4efefd0`, EMT preparation from clean `9b2eb96`; no sizing changes | Verified |
+| Supported Julia package suite | Julia 1.10.12 and 1.13.3, independently resolved compatible environments | 22,372/22,372 package assertions pass on each, plus package-quality checks |
+| Generation-runtime regressions | Julia 1.12.6 PCC review and terminal-profile fleet cases | All pass |
+| Documentation | Final `docs/make.jl` on Julia 1.10.12 and 1.13.3 | Both builds pass; existing size warnings only; deployment skipped |
+| Executable tutorials | Eight study tutorials on both supported versions, including mixed local PF/coordinated OPF; eight DOE tutorials on latest Julia | All pass |
+| Tutorial figures | Three generated study figures checked against fresh solved data on both supported versions | Pass |
+| Mixed-controller campaign | Four conditions × local/coordinated modes, 96 inverter rows | Eight accepted points; 375 record, 3,960 SI inverter and 6,608 independent SI feeder checks |
+| Coordinated OPF regression | Raw solver, final objective, neutral release, coordinate invariance and rejected-record gates | 79 assertions pass on both supported versions |
+| Saved-point corruption gates | Reconstruct saved points and fixed-PQ network replay; reject altered currents, source conditions, hardware, raw outcomes, objectives and dependency records | 27 assertions pass on both supported versions |
+| Independent circuit regression | Averaged/switched energy, three-wire common mode, peaks, voltage extrema and witnesses | 53 assertions pass on both supported versions |
+| Matched EMT | 32 maximum-modeled-stress representatives; three meshes, averaged and switched | 192 integrations, 391 parent checks and 7,276 circuit checks pass |
+| Thermal enclosure | Current all-duty AC-induced DC-current term plus passive-damping residual | All 32 predictions enclose switched measurements; largest selected RMS 0.880210 A against 1 A; minimum prediction margin 0.119437 A |
+| Boundary experiment | Three references and 18 integrations | 749 checks pass; LF-only switched voltage failure remains rejected |
+| Declared carrier domain | 972 predeclared P/Q, sequence, modulation and angle points | 36,033 independent checks pass; all 855 modeled-constraint rejections retained |
+| Python integrity/publication gates | Archive, domain, EMT selection and publication checks | 35 tests pass |
+| Compact artifacts | Independent audit replay and exact semantic comparison in `summarize_evidence.py --check` | Pass; original receipts remain unchanged |
+| Clean exported checkout | No `.git` and no evidence cache; restore actual distributed bundles | All 182 current and 546 historical files verify; 27 saved-record and 35 Python gates plus compact-artifact check pass |
+| Publication | Regenerated figures, report/receipt hashes and visual inspection | Pass |
 
-The findings are deliberately bounded in scope. Analytical current and voltage
-bounds apply to the declared periodic, frozen-slow-quantity, monolithic L-filter
-carrier approximation with proportional passive R/L. The 10% thermal allowance
-is calibrated and demonstrably does not enclose near-zero-current capacitor
-stress generated by AC ripple. Selected hardware outcomes still pass; this is
-not a universal thermal certificate. An analytical coupled AC/DC thermal
-allocator remains a subsequent modeling priority.
+The full-suite logs are `/tmp/ibr-release-julia110-v2-full.log` and
+`/tmp/ibr-release-julia113-v2-full.log`. The repository CI workflows encode the
+repeatable commands. GitHub-hosted CI has not been run for a PR yet; the local
+checks above exercise its release paths.
 
-The OPF releases the local VV/VW requests and therefore changes reactive-service
-obligations. It is a feasible local nonconvex benchmark, not an equal-service or
-global-optimality claim. Feeder limits are slack in these cases (maximum native
-conductor utilization 9.35%; maximum LV phase-neutral voltage 252.669 V under
-253 V). Native feeder limits are fundamental-frequency constraints. EMT fixes
-the POC boundary, retains finite-window DC drift and does not validate feeder/
-service-controller dynamics, periodic steady state or arbitrary transient bounds.
+## Review findings resolved
 
-These restrictions were kept in the formulation, source manifests, audits and
-publication. No failed solver/hardware/prediction outcome is hidden by the
-acceptance of a different check. The specified envelope and matched-study
-deliverables are complete within their declared approximation and validation
-scope; the retained thermal calibration discrepancy is explicitly reported.
+- Support-floor numerical failures: implicit controllers preserve explicit
+  solver options and retain every raw stage. A bounded cold fallback can try
+  alternate default scaling; a zero-objective fallback transfers only an
+  accepted loss-objective seed into the final zero objective. Failed raw values
+  are not promoted. Zero-iteration and time-limit outcomes remain final.
+- Stale evidence: the authoritative PF/OPF, carrier-domain, boundary and matched
+  EMT campaigns were regenerated from committed implementation `35d5cac`.
+  All four source manifests match current files (67, 68, 64 and 66 entries).
+  The generation dependency lock is preserved; runtime audit environments are
+  recorded separately.
+- Incomplete archival packaging: `current.json` and immutable
+  `current-35d5cac.json` identify the complete current bundle. Distributed
+  compressed bytes allow restoration after squash merges or branch deletion.
+  The actual current and historical bundles were tested without Git history or
+  an evidence cache. Every raw payload removed from the review tree matched one
+  of the immutable manifests before compaction.
+- Inconsistent scientific wording: historical frozen-current thermal results
+  are labeled explicitly. Current coupled thermal bounds are distinguished from
+  the 10% frozen-current allowance. Rejection by a sufficient engineering bound
+  is not described as proof of physical hardware infeasibility.
+
+## Compatibility and interpretation
+
+The coupled embedded PWM thermal allocator requires a centered monolithic
+three/four-leg L-filter bridge, proportional passive R/L and an open
+carrier-frequency source. LCL and finite-source PWM thermal allocation remain
+outside that bound; other documented fundamental/harmonic paths retain their
+scope. A missing phase inductance is rejected. The retained four-leg fixture
+with zero neutral inductance cannot fit its conservative all-duty reserve into
+1 A and remains unresolved; its hardware was not resized.
+
+The implementation and case-study review checked current/power reference
+locations, sequence/neutral physics, complete final OPF capability, source and
+loss balances, thermal/DC limits, strict raw/physical/replay publication gates,
+source freshness, archive integrity and API support documentation.
+
+The coordinated benchmark releases local VV/VW reactive-service obligations.
+It is a feasible local nonconvex OPF comparison, not an equal-service dominance
+or global-optimality claim. Feeder limits are slack in these cases. Analytical
+bounds use the periodic frozen-slow-quantity carrier approximation; the slow
+energy model retains fitted mean losses. Fixed-POC EMT includes finite-window
+DC drift and does not validate feeder/controller dynamics, periodic steady
+state, regional conformity or all-time transient bounds.
+
+## Review package
+
+See `studies/australian_pv/evidence/README.md`, `current_summary.json` and the
+mixed PF/OPF report. The review tree retains 49 compact result files (about
+0.2 MB), two physical reference fixtures, summaries and teaching figures.
+The complete current and historical result bundles contain 182 and 546 files,
+compressed to 6,824,341 and 11,967,257 bytes. Historical source hashes, failed
+predictions and failed hardware/solver outcomes have not been relabeled.
+
+The next step is to open the PR after reviewing this report. No additional
+modeling scope or inverter-sizing work is needed to close this package.
