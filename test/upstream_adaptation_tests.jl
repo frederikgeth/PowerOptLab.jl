@@ -87,6 +87,9 @@ end
     for neutral in (true, false), coordinates in (true, false)
         terminals = neutral ? ["a","n"] : ["a"]
         net = Dict{String,Any}(
+            # Both independent writes must compare the same provenance, even
+            # when execution crosses a wall-clock second boundary.
+            "meta"=>Dict{String,Any}("created"=>"2026-01-01T00:00:00Z"),
             "bus"=>Dict("b"=>Dict{String,Any}("terminal_names"=>terminals)),
             "voltage_source"=>Dict("s"=>Dict{String,Any}("bus"=>"b",
                 "terminal_map"=>["a"],"v_magnitude"=>[230.0],"v_angle"=>[0.0])))
@@ -101,6 +104,7 @@ end
             @test haskey(dict["bus"]["b"],"longitude") == coordinates
             strict = JSON3.read(kron_reduce_bmopf(input; as_json=true), Dict{String,Any})
             @test JSONSchema.validate(schema, strict) === nothing
+            @test strict["meta"]["created"] == net["meta"]["created"]
             @test !haskey(strict["bus"]["b"],"longitude")
             @test !haskey(strict["bus"]["b"],"latitude")
             extended = JSON3.read(kron_reduce_bmopf(input; as_json=true, include_coordinates=true), Dict{String,Any})

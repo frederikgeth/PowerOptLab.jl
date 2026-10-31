@@ -1,5 +1,11 @@
 # Advanced IBR review: resolution plan
 
+The full suite at `2b6d4de` clears the LCL regression (20,422 passing assertions)
+but exposed an unrelated clock-sensitive Kron serialization fixture. Two writes
+crossed a UTC second and differed only in automatically generated `meta.created`.
+The fixture now supplies a fixed timestamp and explicitly checks its preservation;
+the complete electrical/provenance dictionary comparison remains unchanged.
+
 ## LCL numerical-scale regression
 
 The first full run after `0874954` passed 20,418 assertions with one failure:
