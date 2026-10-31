@@ -250,3 +250,28 @@ to +0.277 kvar; rotated-unbalance Q from -10.700 kvar to +0.191 kvar; night Q
 from -16.013 kvar to approximately zero. Export recovery must be presented
 alongside that reactive-service reduction, not as an equal-service dominance
 claim. Hardware and network limits stay matched; service obligations differ.
+
+## Committed-source PF/OPF reproduction checkpoint
+
+The authoritative `engineering_benchmark` campaign was generated in a fresh
+Julia process from clean `4efefd0` source (recorded git status is empty). All
+eight points pass, with **372 record conditions, 3,672 SI inverter checks and
+6,608 independent network checks**. The complete campaign/corruption tests pass
+25 assertions in a fresh process against these records. Their raw stages,
+hardware fingerprints, actual availability, reactive-service errors, losses and
+binding constraints are preserved. The matched-case figures and final EMT
+publication still remain; this is not completion of the goal.
+
+The EMT preparation driver selects 32 references: the highest modeled
+capacitor-current site in each controller group for every condition and mode.
+It checks actual per-site source bounds before overriding the older generic
+helper's 5000 W fixture metadata. Night references retain zero availability.
+The independent parent-reference oracle passes 391 checks on development
+inputs, and eight corruption tests pass. Coupled averaged/switched integrations
+and their final hardware/mesh audit have not yet run for this matrix.
+
+A separate initialization-ablation driver will retain a fresh, source-traceable
+raw solver outcome with the same final physical constraints and export
+objective. It does not substitute an unsuccessful candidate for the accepted
+benchmark. The final report must show both export recovery and the reactive
+service given up by the free-Q objective.

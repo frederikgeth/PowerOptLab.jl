@@ -1,0 +1,4840 @@
+{
+    "history": [
+        {
+            "failed_allocation_ids": [
+            ],
+            "iteration": 1,
+            "voltage_residual_inf_V": 0.3897088098876786,
+            "failed_physical_devices": 0,
+            "network_accepted": true,
+            "reason": "ITERATING",
+            "current_residual_inf_A": null
+        },
+        {
+            "failed_allocation_ids": [
+            ],
+            "iteration": 2,
+            "voltage_residual_inf_V": 0.0011421254258978165,
+            "failed_physical_devices": 0,
+            "network_accepted": true,
+            "reason": "ITERATING",
+            "current_residual_inf_A": null
+        },
+        {
+            "failed_allocation_ids": [
+            ],
+            "iteration": 3,
+            "voltage_residual_inf_V": 1.5245719147698728e-5,
+            "failed_physical_devices": 0,
+            "network_accepted": true,
+            "reason": "ITERATING",
+            "current_residual_inf_A": null
+        },
+        {
+            "failed_allocation_ids": [
+            ],
+            "iteration": 4,
+            "voltage_residual_inf_V": 1.8416149929311844e-7,
+            "failed_physical_devices": 0,
+            "network_accepted": true,
+            "reason": "ITERATING",
+            "current_residual_inf_A": null
+        },
+        {
+            "failed_allocation_ids": [
+            ],
+            "iteration": 5,
+            "voltage_residual_inf_V": 2.933484078667456e-9,
+            "failed_physical_devices": 0,
+            "network_accepted": true,
+            "reason": "CONVERGED",
+            "current_residual_inf_A": 3.5152088678269003e-10
+        }
+    ],
+    "policy_or_capability_checks": {
+        "pv_ld868_load_a": true,
+        "pv_ld2186_load_b": true,
+        "pv_ld1895_load_b": true,
+        "pv_ld1970_load_c": true,
+        "pv_ld1668_load_a": true,
+        "pv_ld1446_load_c": true,
+        "pv_ld248_load_b": true,
+        "pv_ld2050_load_a": true,
+        "pv_ld2804_load_c": true,
+        "pv_ld626_load_c": true,
+        "pv_ld24_load_a": true,
+        "pv_ld1291_load_b": true
+    },
+    "point_sha256": "475decf61a54ae6ddd27dde97dcd5c601ca1b206d5da35be64f366dfe8af619c",
+    "physical_reports": {
+        "pv_ld1895_load_b": {
+            "checked": true,
+            "passed": true,
+            "checks": [
+                {
+                    "name": "converter_current_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.869020192124417,
+                    "lower": null,
+                    "upper": 10,
+                    "margin": 6.130979807875583,
+                    "tolerance": 1.0100000000000002e-5
+                },
+                {
+                    "name": "converter_peak_current_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 9.406719007322305,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 4.593280992677695,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "grid_peak_current_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 9.406719007322305,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 4.593280992677695,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "converter_current_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.932042613701978,
+                    "lower": null,
+                    "upper": 10,
+                    "margin": 6.067957386298022,
+                    "tolerance": 1.0100000000000002e-5
+                },
+                {
+                    "name": "converter_peak_current_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 9.589920198788299,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 4.410079801211701,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "grid_peak_current_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 9.589920198788299,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 4.410079801211701,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "converter_current_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.6897819904064404,
+                    "lower": null,
+                    "upper": 10,
+                    "margin": 6.31021800959356,
+                    "tolerance": 1.0100000000000002e-5
+                },
+                {
+                    "name": "converter_peak_current_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.816925632079265,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.183074367920735,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "grid_peak_current_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.816925632079265,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.183074367920735,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "neutral_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.4389336526574046,
+                    "lower": null,
+                    "upper": 10,
+                    "margin": 6.561066347342596,
+                    "tolerance": 1.0100000000000002e-5
+                },
+                {
+                    "name": "neutral_peak_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 7.472307851906611,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 6.527692148093389,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "converter_filter_kvl_1",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.377392637215886e-14,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -1.377392637215886e-14,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "converter_filter_kvl_2",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 7.549720649807456e-15,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -7.549720649807456e-15,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "converter_filter_kvl_3",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 3.781283367737843e-15,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -3.781283367737843e-15,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "grid_filter_kvl_1",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "grid_filter_kvl_2",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "grid_filter_kvl_3",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "filter_kcl_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "filter_kcl_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "filter_kcl_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "poc_apparent_power",
+                    "passed": true,
+                    "unit": "VA",
+                    "value": 1307.8200588928053,
+                    "lower": null,
+                    "upper": 6000,
+                    "margin": 4692.179941107195,
+                    "tolerance": 0.01006
+                },
+                {
+                    "name": "dc_energy_quadrature",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.1368683772161603e-12,
+                    "lower": 0,
+                    "upper": 1.0e-6,
+                    "margin": 1.1368683772161603e-12,
+                    "tolerance": 1.000000001e-5
+                },
+                {
+                    "name": "dc_energy_positive_voltage",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 748.9952722105583,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 748.9952722105583,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_energy_maximum_voltage",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 751.004055254179,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 751.004055254179,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_switching_frozen_voltage_bound",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0.33446096196312913,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 0.33446096196312913,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_switching_ac_variation_bound",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 2.271567466915115,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 2.271567466915115,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_switching_voltage_bound",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 2.6060284288782443,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 2.6060284288782443,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_voltage_min",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 746.38924378168,
+                    "lower": 735,
+                    "upper": null,
+                    "margin": 11.389243781679966,
+                    "tolerance": 1.735e-5
+                },
+                {
+                    "name": "dc_voltage_max",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 753.6100836830573,
+                    "lower": null,
+                    "upper": 765,
+                    "margin": 11.389916316942731,
+                    "tolerance": 1.7650000000000002e-5
+                },
+                {
+                    "name": "dc_voltage_ripple",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.0043912966472637,
+                    "lower": null,
+                    "upper": 7.5,
+                    "margin": 6.495608703352737,
+                    "tolerance": 1.0075000000000001e-5
+                },
+                {
+                    "name": "capacitor_low_frequency_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.13387181866447137,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 0.13387181866447137,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "allocation_pwm_carrier_prediction",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.8985989379208712,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 0.8985989379208712,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "allocation_pwm_modulation",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 105.11500110448048,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 105.11500110448048,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "allocation_pwm_quadrature",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 4.132492728792236e-6,
+                    "lower": 0,
+                    "upper": 0.0001,
+                    "margin": 4.132492728792236e-6,
+                    "tolerance": 1.0000001e-5
+                },
+                {
+                    "name": "allocation_pwm_actual_capacitor_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.9085162161816656,
+                    "lower": 0,
+                    "upper": 1,
+                    "margin": 0.09148378381833444,
+                    "tolerance": 1.001e-5
+                },
+                {
+                    "name": "capacitor_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.9999999999201422,
+                    "lower": null,
+                    "upper": 1,
+                    "margin": 7.98577870497752e-11,
+                    "tolerance": 1.001e-5
+                },
+                {
+                    "name": "dc_source_power_max",
+                    "passed": true,
+                    "unit": "VA",
+                    "value": 31.00889847421534,
+                    "lower": null,
+                    "upper": 1250,
+                    "margin": 1218.9911015257846,
+                    "tolerance": 0.0100125
+                },
+                {
+                    "name": "dc_source_power_min",
+                    "passed": true,
+                    "unit": "VA",
+                    "value": 31.00889847421534,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 31.00889847421534,
+                    "tolerance": 0.01
+                },
+                {
+                    "name": "continuous_rail_headroom",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 102.61312939833725,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 102.61312939833725,
+                    "tolerance": 1.0e-5
+                }
+            ],
+            "rail": {
+                "lower_V": 102.61312939833725,
+                "upper_V": 102.61313032581215,
+                "branch": "line_1_2",
+                "evaluations": 454,
+                "angle_rad": 0.5205467929890681,
+                "converged": true
+            }
+        },
+        "pv_ld1970_load_c": {
+            "checked": true,
+            "passed": true,
+            "checks": [
+                {
+                    "name": "converter_current_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.5164182839674747,
+                    "lower": null,
+                    "upper": 10,
+                    "margin": 6.483581716032525,
+                    "tolerance": 1.0100000000000002e-5
+                },
+                {
+                    "name": "converter_peak_current_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.584104177236334,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.415895822763666,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "grid_peak_current_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.584104177236334,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.415895822763666,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "converter_current_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.516418283967475,
+                    "lower": null,
+                    "upper": 10,
+                    "margin": 6.483581716032525,
+                    "tolerance": 1.0100000000000002e-5
+                },
+                {
+                    "name": "converter_peak_current_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.584104177236334,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.415895822763666,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "grid_peak_current_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.584104177236334,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.415895822763666,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "converter_current_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.5164182839674747,
+                    "lower": null,
+                    "upper": 10,
+                    "margin": 6.483581716032525,
+                    "tolerance": 1.0100000000000002e-5
+                },
+                {
+                    "name": "converter_peak_current_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.584104177236334,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.415895822763666,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "grid_peak_current_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.584104177236334,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.415895822763666,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "three_leg_zero_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 4.965068306494546e-16,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -4.965068306494546e-16,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "converter_filter_kvl_1",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.3452036875013154e-14,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -1.3452036875013154e-14,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "converter_filter_kvl_2",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 7.549516567451064e-15,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -7.549516567451064e-15,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "converter_filter_kvl_3",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.1378567399694856e-14,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -1.1378567399694856e-14,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "grid_filter_kvl_1",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "grid_filter_kvl_2",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "grid_filter_kvl_3",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "filter_kcl_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "filter_kcl_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "filter_kcl_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "poc_apparent_power",
+                    "passed": true,
+                    "unit": "VA",
+                    "value": 1343.883935792683,
+                    "lower": null,
+                    "upper": 6000,
+                    "margin": 4656.116064207317,
+                    "tolerance": 0.01006
+                },
+                {
+                    "name": "dc_energy_quadrature",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 5.684341886080801e-13,
+                    "lower": 0,
+                    "upper": 1.0e-6,
+                    "margin": 5.684341886080801e-13,
+                    "tolerance": 1.000000001e-5
+                },
+                {
+                    "name": "dc_energy_positive_voltage",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 749.9088305790864,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 749.9088305790864,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_energy_maximum_voltage",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 750.0911638800083,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 750.0911638800083,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_switching_frozen_voltage_bound",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0.3158238665161702,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 0.3158238665161702,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_switching_ac_variation_bound",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.5143783112767433,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 1.5143783112767433,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_switching_voltage_bound",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.8302021777929136,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 1.8302021777929136,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_voltage_min",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 748.0786284012935,
+                    "lower": 735,
+                    "upper": null,
+                    "margin": 13.078628401293486,
+                    "tolerance": 1.735e-5
+                },
+                {
+                    "name": "dc_voltage_max",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 751.9213660578012,
+                    "lower": null,
+                    "upper": 765,
+                    "margin": 13.078633942198849,
+                    "tolerance": 1.7650000000000002e-5
+                },
+                {
+                    "name": "dc_voltage_ripple",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0.09116665029239979,
+                    "lower": null,
+                    "upper": 7.5,
+                    "margin": 7.4088333497076,
+                    "tolerance": 1.0075000000000001e-5
+                },
+                {
+                    "name": "capacitor_low_frequency_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.012151282675859899,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 0.012151282675859899,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "allocation_pwm_carrier_prediction",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.907848621083301,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 0.907848621083301,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "allocation_pwm_modulation",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 105.64171019178457,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 105.64171019178457,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "allocation_pwm_quadrature",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 2.431671170310956e-6,
+                    "lower": 0,
+                    "upper": 0.0001,
+                    "margin": 2.431671170310956e-6,
+                    "tolerance": 1.0000001e-5
+                },
+                {
+                    "name": "allocation_pwm_actual_capacitor_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.90792993808637,
+                    "lower": 0,
+                    "upper": 1,
+                    "margin": 0.09207006191362999,
+                    "tolerance": 1.001e-5
+                },
+                {
+                    "name": "capacitor_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.9999999999667942,
+                    "lower": null,
+                    "upper": 1,
+                    "margin": 3.320577146581627e-11,
+                    "tolerance": 1.001e-5
+                },
+                {
+                    "name": "dc_source_power_max",
+                    "passed": true,
+                    "unit": "VA",
+                    "value": 29.57616768424043,
+                    "lower": null,
+                    "upper": 3000,
+                    "margin": 2970.4238323157597,
+                    "tolerance": 0.01003
+                },
+                {
+                    "name": "dc_source_power_min",
+                    "passed": true,
+                    "unit": "VA",
+                    "value": 29.57616768424043,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 29.57616768424043,
+                    "tolerance": 0.01
+                },
+                {
+                    "name": "continuous_rail_headroom",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 103.88449083169179,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 103.88449083169179,
+                    "tolerance": 1.0e-5
+                }
+            ],
+            "rail": {
+                "lower_V": 103.88449083169179,
+                "upper_V": 103.88449118485937,
+                "branch": "line_1_2",
+                "evaluations": 238,
+                "angle_rad": 0.520882351286418,
+                "converged": true
+            }
+        },
+        "pv_ld1668_load_a": {
+            "checked": true,
+            "passed": true,
+            "checks": [
+                {
+                    "name": "converter_current_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.516006465099525,
+                    "lower": null,
+                    "upper": 10,
+                    "margin": 6.483993534900475,
+                    "tolerance": 1.0100000000000002e-5
+                },
+                {
+                    "name": "converter_peak_current_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.582957674889602,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.417042325110398,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "grid_peak_current_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.582957674889602,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.417042325110398,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "converter_current_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.516006465099525,
+                    "lower": null,
+                    "upper": 10,
+                    "margin": 6.483993534900475,
+                    "tolerance": 1.0100000000000002e-5
+                },
+                {
+                    "name": "converter_peak_current_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.582957674889602,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.417042325110398,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "grid_peak_current_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.582957674889602,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.417042325110398,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "converter_current_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.5160064650995246,
+                    "lower": null,
+                    "upper": 10,
+                    "margin": 6.483993534900476,
+                    "tolerance": 1.0100000000000002e-5
+                },
+                {
+                    "name": "converter_peak_current_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.582957674889602,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.417042325110398,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "grid_peak_current_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.582957674889602,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.417042325110398,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "three_leg_zero_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 2.482534153247273e-16,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -2.482534153247273e-16,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "converter_filter_kvl_1",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 5.8621457832171254e-15,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -5.8621457832171254e-15,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "converter_filter_kvl_2",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 5.7742271515097e-15,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -5.7742271515097e-15,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "converter_filter_kvl_3",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.093668298681716e-14,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -1.093668298681716e-14,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "grid_filter_kvl_1",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "grid_filter_kvl_2",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "grid_filter_kvl_3",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "filter_kcl_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "filter_kcl_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "filter_kcl_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "poc_apparent_power",
+                    "passed": true,
+                    "unit": "VA",
+                    "value": 1344.463485280195,
+                    "lower": null,
+                    "upper": 6000,
+                    "margin": 4655.5365147198045,
+                    "tolerance": 0.01006
+                },
+                {
+                    "name": "dc_energy_quadrature",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 5.684341886080801e-13,
+                    "lower": 0,
+                    "upper": 1.0e-6,
+                    "margin": 5.684341886080801e-13,
+                    "tolerance": 1.000000001e-5
+                },
+                {
+                    "name": "dc_energy_positive_voltage",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 749.9068972164704,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 749.9068972164704,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_energy_maximum_voltage",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 750.0930970051356,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 750.0930970051356,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_switching_frozen_voltage_bound",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0.31568055372282877,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 0.31568055372282877,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_switching_ac_variation_bound",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.5143783112767433,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 1.5143783112767433,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_switching_voltage_bound",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.8300588649995722,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 1.8300588649995722,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_voltage_min",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 748.0768383514708,
+                    "lower": 735,
+                    "upper": null,
+                    "margin": 13.07683835147077,
+                    "tolerance": 1.735e-5
+                },
+                {
+                    "name": "dc_voltage_max",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 751.9231558701352,
+                    "lower": null,
+                    "upper": 765,
+                    "margin": 13.076844129864753,
+                    "tolerance": 1.7650000000000002e-5
+                },
+                {
+                    "name": "dc_voltage_ripple",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0.09309989415343001,
+                    "lower": null,
+                    "upper": 7.5,
+                    "margin": 7.40690010584657,
+                    "tolerance": 1.0075000000000001e-5
+                },
+                {
+                    "name": "capacitor_low_frequency_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.012408957962243018,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 0.012408957962243018,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "allocation_pwm_carrier_prediction",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.9078458569812574,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 0.9078458569812574,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "allocation_pwm_modulation",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 104.95709915793157,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 104.95709915793157,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "allocation_pwm_quadrature",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 2.1100056417644453e-6,
+                    "lower": 0,
+                    "upper": 0.0001,
+                    "margin": 2.1100056417644453e-6,
+                    "tolerance": 1.0000001e-5
+                },
+                {
+                    "name": "allocation_pwm_actual_capacitor_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.907930659398471,
+                    "lower": 0,
+                    "upper": 1,
+                    "margin": 0.09206934060152905,
+                    "tolerance": 1.001e-5
+                },
+                {
+                    "name": "capacitor_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.999999999966748,
+                    "lower": null,
+                    "upper": 1,
+                    "margin": 3.3251956743640676e-11,
+                    "tolerance": 1.001e-5
+                },
+                {
+                    "name": "dc_source_power_max",
+                    "passed": true,
+                    "unit": "VA",
+                    "value": 29.570558362653614,
+                    "lower": null,
+                    "upper": 5000,
+                    "margin": 4970.429441637347,
+                    "tolerance": 0.01005
+                },
+                {
+                    "name": "dc_source_power_min",
+                    "passed": true,
+                    "unit": "VA",
+                    "value": 29.570558362653614,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 29.570558362653614,
+                    "tolerance": 0.01
+                },
+                {
+                    "name": "continuous_rail_headroom",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 103.199557610574,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 103.199557610574,
+                    "tolerance": 1.0e-5
+                }
+            ],
+            "rail": {
+                "lower_V": 103.199557610574,
+                "upper_V": 103.19955847155282,
+                "branch": "line_1_2",
+                "evaluations": 222,
+                "angle_rad": 0.5216014047807395,
+                "converged": true
+            }
+        },
+        "pv_ld1446_load_c": {
+            "checked": true,
+            "passed": true,
+            "checks": [
+                {
+                    "name": "converter_current_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.516086988007183,
+                    "lower": null,
+                    "upper": 10,
+                    "margin": 6.483913011992817,
+                    "tolerance": 1.0100000000000002e-5
+                },
+                {
+                    "name": "converter_peak_current_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.5831818807644,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.4168181192356,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "grid_peak_current_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.5831818807644,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.4168181192356,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "converter_current_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.516086988007183,
+                    "lower": null,
+                    "upper": 10,
+                    "margin": 6.483913011992817,
+                    "tolerance": 1.0100000000000002e-5
+                },
+                {
+                    "name": "converter_peak_current_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.5831818807644,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.4168181192356,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "grid_peak_current_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.5831818807644,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.4168181192356,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "converter_current_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.5160869880071823,
+                    "lower": null,
+                    "upper": 10,
+                    "margin": 6.483913011992818,
+                    "tolerance": 1.0100000000000002e-5
+                },
+                {
+                    "name": "converter_peak_current_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.583181880764398,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.416818119235602,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "grid_peak_current_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.583181880764398,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.416818119235602,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "three_leg_zero_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 1.1102230246251565e-16,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -1.1102230246251565e-16,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "converter_filter_kvl_1",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 6.6696596227602666e-15,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -6.6696596227602666e-15,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "converter_filter_kvl_2",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.1546352816120282e-14,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -1.1546352816120282e-14,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "converter_filter_kvl_3",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.2499750519123837e-14,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -1.2499750519123837e-14,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "grid_filter_kvl_1",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "grid_filter_kvl_2",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "grid_filter_kvl_3",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "filter_kcl_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "filter_kcl_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "filter_kcl_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "poc_apparent_power",
+                    "passed": true,
+                    "unit": "VA",
+                    "value": 1344.3497945553106,
+                    "lower": null,
+                    "upper": 6000,
+                    "margin": 4655.650205444689,
+                    "tolerance": 0.01006
+                },
+                {
+                    "name": "dc_energy_quadrature",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 1.0e-6,
+                    "margin": 0,
+                    "tolerance": 1.000000001e-5
+                },
+                {
+                    "name": "dc_energy_positive_voltage",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 749.907229570337,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 749.907229570337,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_energy_maximum_voltage",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 750.0927646924501,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 750.0927646924501,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_switching_frozen_voltage_bound",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0.3157085794571783,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 0.3157085794571783,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_switching_ac_variation_bound",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.5143783112767433,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 1.5143783112767433,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_switching_voltage_bound",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.8300868907339216,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 1.8300868907339216,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_voltage_min",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 748.0771426796031,
+                    "lower": 735,
+                    "upper": null,
+                    "margin": 13.077142679603071,
+                    "tolerance": 1.735e-5
+                },
+                {
+                    "name": "dc_voltage_max",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 751.9228515831841,
+                    "lower": null,
+                    "upper": 765,
+                    "margin": 13.07714841681593,
+                    "tolerance": 1.7650000000000002e-5
+                },
+                {
+                    "name": "dc_voltage_ripple",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0.092767560878819,
+                    "lower": null,
+                    "upper": 7.5,
+                    "margin": 7.407232439121181,
+                    "tolerance": 1.0075000000000001e-5
+                },
+                {
+                    "name": "capacitor_low_frequency_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.012364662426981253,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 0.012364662426981253,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "allocation_pwm_carrier_prediction",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.9078461565301104,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 0.9078461565301104,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "allocation_pwm_modulation",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 105.08788793751,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 105.08788793751,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "allocation_pwm_quadrature",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 2.4972508809728566e-6,
+                    "lower": 0,
+                    "upper": 0.0001,
+                    "margin": 2.4972508809728566e-6,
+                    "tolerance": 1.0000001e-5
+                },
+                {
+                    "name": "allocation_pwm_actual_capacitor_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.9079303545996393,
+                    "lower": 0,
+                    "upper": 1,
+                    "margin": 0.09206964540036067,
+                    "tolerance": 1.001e-5
+                },
+                {
+                    "name": "capacitor_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.9999999999667702,
+                    "lower": null,
+                    "upper": 1,
+                    "margin": 3.322975228314817e-11,
+                    "tolerance": 1.001e-5
+                },
+                {
+                    "name": "dc_source_power_max",
+                    "passed": true,
+                    "unit": "VA",
+                    "value": 29.571710979932675,
+                    "lower": null,
+                    "upper": 3000,
+                    "margin": 2970.4282890200675,
+                    "tolerance": 0.01003
+                },
+                {
+                    "name": "dc_source_power_min",
+                    "passed": true,
+                    "unit": "VA",
+                    "value": 29.571710979932675,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 29.571710979932675,
+                    "tolerance": 0.01
+                },
+                {
+                    "name": "continuous_rail_headroom",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 103.33044202613857,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 103.33044202613857,
+                    "tolerance": 1.0e-5
+                }
+            ],
+            "rail": {
+                "lower_V": 103.33044202613857,
+                "upper_V": 103.33044237962714,
+                "branch": "line_1_2",
+                "evaluations": 238,
+                "angle_rad": 0.5213617202826323,
+                "converged": true
+            }
+        },
+        "pv_ld2050_load_a": {
+            "checked": true,
+            "passed": true,
+            "checks": [
+                {
+                    "name": "converter_current_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.5163081120653272,
+                    "lower": null,
+                    "upper": 10,
+                    "margin": 6.483691887934673,
+                    "tolerance": 1.0100000000000002e-5
+                },
+                {
+                    "name": "converter_peak_current_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.583797496854912,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.416202503145088,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "grid_peak_current_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.583797496854912,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.416202503145088,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "converter_current_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.516308112065327,
+                    "lower": null,
+                    "upper": 10,
+                    "margin": 6.483691887934674,
+                    "tolerance": 1.0100000000000002e-5
+                },
+                {
+                    "name": "converter_peak_current_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.583797496854912,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.416202503145088,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "grid_peak_current_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.583797496854912,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.416202503145088,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "converter_current_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.516308112065327,
+                    "lower": null,
+                    "upper": 10,
+                    "margin": 6.483691887934674,
+                    "tolerance": 1.0100000000000002e-5
+                },
+                {
+                    "name": "converter_peak_current_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.583797496854912,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.416202503145088,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "grid_peak_current_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.583797496854912,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.416202503145088,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "three_leg_zero_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 2.220446049250313e-16,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -2.220446049250313e-16,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "converter_filter_kvl_1",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 7.746143079195815e-15,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -7.746143079195815e-15,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "converter_filter_kvl_2",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 5.773760178028487e-15,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -5.773760178028487e-15,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "converter_filter_kvl_3",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.1843535355188972e-14,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -1.1843535355188972e-14,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "grid_filter_kvl_1",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "grid_filter_kvl_2",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "grid_filter_kvl_3",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "filter_kcl_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "filter_kcl_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "filter_kcl_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "poc_apparent_power",
+                    "passed": true,
+                    "unit": "VA",
+                    "value": 1344.039037016546,
+                    "lower": null,
+                    "upper": 6000,
+                    "margin": 4655.960962983454,
+                    "tolerance": 0.01006
+                },
+                {
+                    "name": "dc_energy_quadrature",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.1368683772161603e-13,
+                    "lower": 0,
+                    "upper": 1.0e-6,
+                    "margin": 1.1368683772161603e-13,
+                    "tolerance": 1.000000001e-5
+                },
+                {
+                    "name": "dc_energy_positive_voltage",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 749.9083289757377,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 749.9083289757377,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_energy_maximum_voltage",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 750.0916654222193,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 750.0916654222193,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_switching_frozen_voltage_bound",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0.3157855314684924,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 0.3157855314684924,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_switching_ac_variation_bound",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.5143783112767433,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 1.5143783112767433,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_switching_voltage_bound",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.8301638427452356,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 1.8301638427452356,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_voltage_min",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 748.0781651329925,
+                    "lower": 735,
+                    "upper": null,
+                    "margin": 13.078165132992467,
+                    "tolerance": 1.735e-5
+                },
+                {
+                    "name": "dc_voltage_max",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 751.9218292649646,
+                    "lower": null,
+                    "upper": 765,
+                    "margin": 13.078170735035428,
+                    "tolerance": 1.7650000000000002e-5
+                },
+                {
+                    "name": "dc_voltage_ripple",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0.09166822306956958,
+                    "lower": null,
+                    "upper": 7.5,
+                    "margin": 7.408331776930431,
+                    "tolerance": 1.0075000000000001e-5
+                },
+                {
+                    "name": "capacitor_low_frequency_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.01221813555023319,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 0.01221813555023319,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "allocation_pwm_carrier_prediction",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.9078480194736143,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 0.9078480194736143,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "allocation_pwm_modulation",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 105.45909298642039,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 105.45909298642039,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "allocation_pwm_quadrature",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 2.3375650646251245e-6,
+                    "lower": 0,
+                    "upper": 0.0001,
+                    "margin": 2.3375650646251245e-6,
+                    "tolerance": 1.0000001e-5
+                },
+                {
+                    "name": "allocation_pwm_actual_capacitor_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.9079302337175956,
+                    "lower": 0,
+                    "upper": 1,
+                    "margin": 0.09206976628240437,
+                    "tolerance": 1.001e-5
+                },
+                {
+                    "name": "capacitor_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.9999999999668084,
+                    "lower": null,
+                    "upper": 1,
+                    "margin": 3.319156061110107e-11,
+                    "tolerance": 1.001e-5
+                },
+                {
+                    "name": "dc_source_power_max",
+                    "passed": true,
+                    "unit": "VA",
+                    "value": 29.574727232679454,
+                    "lower": null,
+                    "upper": 5000,
+                    "margin": 4970.42527276732,
+                    "tolerance": 0.01005
+                },
+                {
+                    "name": "dc_source_power_min",
+                    "passed": true,
+                    "unit": "VA",
+                    "value": 29.574727232679454,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 29.574727232679454,
+                    "tolerance": 0.01
+                },
+                {
+                    "name": "continuous_rail_headroom",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 103.7017949556697,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 103.7017949556697,
+                    "tolerance": 1.0e-5
+                }
+            ],
+            "rail": {
+                "lower_V": 103.7017949556697,
+                "upper_V": 103.70179530894303,
+                "branch": "line_1_2",
+                "evaluations": 238,
+                "angle_rad": 0.5210740988849037,
+                "converged": true
+            }
+        },
+        "pv_ld2804_load_c": {
+            "checked": true,
+            "passed": true,
+            "checks": [
+                {
+                    "name": "converter_current_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.5162686680451976,
+                    "lower": null,
+                    "upper": 10,
+                    "margin": 6.483731331954802,
+                    "tolerance": 1.0100000000000002e-5
+                },
+                {
+                    "name": "converter_peak_current_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.583687691662375,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.416312308337625,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "grid_peak_current_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.583687691662375,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.416312308337625,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "converter_current_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.5162686680451976,
+                    "lower": null,
+                    "upper": 10,
+                    "margin": 6.483731331954802,
+                    "tolerance": 1.0100000000000002e-5
+                },
+                {
+                    "name": "converter_peak_current_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.583687691662375,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.416312308337625,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "grid_peak_current_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.583687691662375,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.416312308337625,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "converter_current_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.516268668045197,
+                    "lower": null,
+                    "upper": 10,
+                    "margin": 6.483731331954803,
+                    "tolerance": 1.0100000000000002e-5
+                },
+                {
+                    "name": "converter_peak_current_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.583687691662373,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.416312308337627,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "grid_peak_current_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.583687691662373,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.416312308337627,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "three_leg_zero_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 1.1102230246251565e-16,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -1.1102230246251565e-16,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "converter_filter_kvl_1",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 6.83035335636718e-15,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -6.83035335636718e-15,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "converter_filter_kvl_2",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 8.437877587646513e-15,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -8.437877587646513e-15,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "converter_filter_kvl_3",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.37882369488729e-14,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -1.37882369488729e-14,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "grid_filter_kvl_1",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "grid_filter_kvl_2",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "grid_filter_kvl_3",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "filter_kcl_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "filter_kcl_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "filter_kcl_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "poc_apparent_power",
+                    "passed": true,
+                    "unit": "VA",
+                    "value": 1344.0943029806106,
+                    "lower": null,
+                    "upper": 6000,
+                    "margin": 4655.90569701939,
+                    "tolerance": 0.01006
+                },
+                {
+                    "name": "dc_energy_quadrature",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.7053025658242404e-12,
+                    "lower": 0,
+                    "upper": 1.0e-6,
+                    "margin": 1.7053025658242404e-12,
+                    "tolerance": 1.000000001e-5
+                },
+                {
+                    "name": "dc_energy_positive_voltage",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 749.9081110803055,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 749.9081110803055,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_energy_maximum_voltage",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 750.0918832909907,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 750.0918832909907,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_switching_frozen_voltage_bound",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0.3157718058194252,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 0.3157718058194252,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_switching_ac_variation_bound",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.5143783112767433,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 1.5143783112767433,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_switching_voltage_bound",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.8301501170961685,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 1.8301501170961685,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_voltage_min",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 748.0779609632093,
+                    "lower": 735,
+                    "upper": null,
+                    "margin": 13.077960963209307,
+                    "tolerance": 1.735e-5
+                },
+                {
+                    "name": "dc_voltage_max",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 751.9220334080869,
+                    "lower": null,
+                    "upper": 765,
+                    "margin": 13.077966591913082,
+                    "tolerance": 1.7650000000000002e-5
+                },
+                {
+                    "name": "dc_voltage_ripple",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0.0918861051699289,
+                    "lower": null,
+                    "upper": 7.5,
+                    "margin": 7.4081138948300715,
+                    "tolerance": 1.0075000000000001e-5
+                },
+                {
+                    "name": "capacitor_low_frequency_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.012247176290415085,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 0.012247176290415085,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "allocation_pwm_carrier_prediction",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.9078476438676306,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 0.9078476438676306,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "allocation_pwm_modulation",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 105.39129139943441,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 105.39129139943441,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "allocation_pwm_quadrature",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 2.3935686662701627e-6,
+                    "lower": 0,
+                    "upper": 0.0001,
+                    "margin": 2.3935686662701627e-6,
+                    "tolerance": 1.0000001e-5
+                },
+                {
+                    "name": "allocation_pwm_actual_capacitor_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.9079302494151722,
+                    "lower": 0,
+                    "upper": 1,
+                    "margin": 0.0920697505848278,
+                    "tolerance": 1.001e-5
+                },
+                {
+                    "name": "capacitor_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.9999999999667726,
+                    "lower": null,
+                    "upper": 1,
+                    "margin": 3.322742081479646e-11,
+                    "tolerance": 1.001e-5
+                },
+                {
+                    "name": "dc_source_power_max",
+                    "passed": true,
+                    "unit": "VA",
+                    "value": 29.57418931451841,
+                    "lower": null,
+                    "upper": 1250,
+                    "margin": 1220.4258106854816,
+                    "tolerance": 0.0100125
+                },
+                {
+                    "name": "dc_source_power_min",
+                    "passed": true,
+                    "unit": "VA",
+                    "value": 29.57418931451841,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 29.57418931451841,
+                    "tolerance": 0.01
+                },
+                {
+                    "name": "continuous_rail_headroom",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 103.63396942094971,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 103.63396942094971,
+                    "tolerance": 1.0e-5
+                }
+            ],
+            "rail": {
+                "lower_V": 103.63396942094971,
+                "upper_V": 103.63397027063913,
+                "branch": "line_1_2",
+                "evaluations": 226,
+                "angle_rad": 0.5211220357845252,
+                "converged": true
+            }
+        },
+        "pv_ld626_load_c": {
+            "checked": true,
+            "passed": true,
+            "checks": [
+                {
+                    "name": "converter_current_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.5164575488177823,
+                    "lower": null,
+                    "upper": 10,
+                    "margin": 6.483542451182218,
+                    "tolerance": 1.0100000000000002e-5
+                },
+                {
+                    "name": "converter_peak_current_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.584213470292369,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.415786529707631,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "grid_peak_current_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.584213470292369,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.415786529707631,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "converter_current_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.5164575488177823,
+                    "lower": null,
+                    "upper": 10,
+                    "margin": 6.483542451182218,
+                    "tolerance": 1.0100000000000002e-5
+                },
+                {
+                    "name": "converter_peak_current_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.584213470292369,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.415786529707631,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "grid_peak_current_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.584213470292369,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.415786529707631,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "converter_current_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.516457548817782,
+                    "lower": null,
+                    "upper": 10,
+                    "margin": 6.483542451182219,
+                    "tolerance": 1.0100000000000002e-5
+                },
+                {
+                    "name": "converter_peak_current_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.584213470292367,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.415786529707633,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "grid_peak_current_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.584213470292367,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.415786529707633,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "three_leg_zero_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.1401849173675503e-16,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -3.1401849173675503e-16,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "converter_filter_kvl_1",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.3586970882921655e-14,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -1.3586970882921655e-14,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "converter_filter_kvl_2",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 6.66185854446653e-15,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -6.66185854446653e-15,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "converter_filter_kvl_3",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 4.440892098500626e-15,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -4.440892098500626e-15,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "grid_filter_kvl_1",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "grid_filter_kvl_2",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "grid_filter_kvl_3",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "filter_kcl_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "filter_kcl_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "filter_kcl_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "poc_apparent_power",
+                    "passed": true,
+                    "unit": "VA",
+                    "value": 1343.8285884020886,
+                    "lower": null,
+                    "upper": 6000,
+                    "margin": 4656.171411597911,
+                    "tolerance": 0.01006
+                },
+                {
+                    "name": "dc_energy_quadrature",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.7053025658242404e-12,
+                    "lower": 0,
+                    "upper": 1.0e-6,
+                    "margin": 1.7053025658242404e-12,
+                    "tolerance": 1.000000001e-5
+                },
+                {
+                    "name": "dc_energy_positive_voltage",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 749.9089981516782,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 749.9089981516782,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_energy_maximum_voltage",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 750.0909963277659,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 750.0909963277659,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_switching_frozen_voltage_bound",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0.31583752814817445,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 0.31583752814817445,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_switching_ac_variation_bound",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.5143783112767433,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 1.5143783112767433,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_switching_voltage_bound",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.8302158394249177,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 1.8302158394249177,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_voltage_min",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 748.0787823122533,
+                    "lower": 735,
+                    "upper": null,
+                    "margin": 13.078782312253338,
+                    "tolerance": 1.735e-5
+                },
+                {
+                    "name": "dc_voltage_max",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 751.9212121671908,
+                    "lower": null,
+                    "upper": 765,
+                    "margin": 13.078787832809212,
+                    "tolerance": 1.7650000000000002e-5
+                },
+                {
+                    "name": "dc_voltage_ripple",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0.09099908787657073,
+                    "lower": null,
+                    "upper": 7.5,
+                    "margin": 7.409000912123429,
+                    "tolerance": 1.0075000000000001e-5
+                },
+                {
+                    "name": "capacitor_low_frequency_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.012128948869738032,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 0.012128948869738032,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "allocation_pwm_carrier_prediction",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.9078489823076424,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 0.9078489823076424,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "allocation_pwm_modulation",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 105.70605406390257,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 105.70605406390257,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "allocation_pwm_quadrature",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 2.2931127321434985e-6,
+                    "lower": 0,
+                    "upper": 0.0001,
+                    "margin": 2.2931127321434985e-6,
+                    "tolerance": 1.0000001e-5
+                },
+                {
+                    "name": "allocation_pwm_actual_capacitor_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.9079300006485669,
+                    "lower": 0,
+                    "upper": 1,
+                    "margin": 0.09206999935143312,
+                    "tolerance": 1.001e-5
+                },
+                {
+                    "name": "capacitor_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.999999999966817,
+                    "lower": null,
+                    "upper": 1,
+                    "margin": 3.3183011893811454e-11,
+                    "tolerance": 1.001e-5
+                },
+                {
+                    "name": "dc_source_power_max",
+                    "passed": true,
+                    "unit": "VA",
+                    "value": 29.576703348150765,
+                    "lower": null,
+                    "upper": 3000,
+                    "margin": 2970.4232966518493,
+                    "tolerance": 0.01003
+                },
+                {
+                    "name": "dc_source_power_min",
+                    "passed": true,
+                    "unit": "VA",
+                    "value": 29.576703348150765,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 29.576703348150765,
+                    "tolerance": 0.01
+                },
+                {
+                    "name": "continuous_rail_headroom",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 103.94884186636224,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 103.94884186636224,
+                    "tolerance": 1.0e-5
+                }
+            ],
+            "rail": {
+                "lower_V": 103.94884186636224,
+                "upper_V": 103.9488425847884,
+                "branch": "line_1_2",
+                "evaluations": 224,
+                "angle_rad": 0.5208344143867967,
+                "converged": true
+            }
+        },
+        "pv_ld24_load_a": {
+            "checked": true,
+            "passed": true,
+            "checks": [
+                {
+                    "name": "converter_current_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.5162531559420485,
+                    "lower": null,
+                    "upper": 10,
+                    "margin": 6.4837468440579515,
+                    "tolerance": 1.0100000000000002e-5
+                },
+                {
+                    "name": "converter_peak_current_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.583644507734002,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.416355492265998,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "grid_peak_current_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.583644507734002,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.416355492265998,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "converter_current_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.516253155942048,
+                    "lower": null,
+                    "upper": 10,
+                    "margin": 6.483746844057952,
+                    "tolerance": 1.0100000000000002e-5
+                },
+                {
+                    "name": "converter_peak_current_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.583644507734,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.416355492266,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "grid_peak_current_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.583644507734,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.416355492266,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "converter_current_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.516253155942048,
+                    "lower": null,
+                    "upper": 10,
+                    "margin": 6.483746844057952,
+                    "tolerance": 1.0100000000000002e-5
+                },
+                {
+                    "name": "converter_peak_current_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.583644507734,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.416355492266,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "grid_peak_current_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.583644507734,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.416355492266,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "three_leg_zero_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 2.482534153247273e-16,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -2.482534153247273e-16,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "converter_filter_kvl_1",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 9.762389979508782e-15,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -9.762389979508782e-15,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "converter_filter_kvl_2",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 4.8850601587814005e-15,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -4.8850601587814005e-15,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "converter_filter_kvl_3",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 5.995204332975845e-15,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -5.995204332975845e-15,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "grid_filter_kvl_1",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "grid_filter_kvl_2",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "grid_filter_kvl_3",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "filter_kcl_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "filter_kcl_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "filter_kcl_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "poc_apparent_power",
+                    "passed": true,
+                    "unit": "VA",
+                    "value": 1344.1162682246804,
+                    "lower": null,
+                    "upper": 6000,
+                    "margin": 4655.88373177532,
+                    "tolerance": 0.01006
+                },
+                {
+                    "name": "dc_energy_quadrature",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 9.094947017729282e-13,
+                    "lower": 0,
+                    "upper": 1.0e-6,
+                    "margin": 9.094947017729282e-13,
+                    "tolerance": 1.000000001e-5
+                },
+                {
+                    "name": "dc_energy_positive_voltage",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 749.9080575390776,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 749.9080575390776,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_energy_maximum_voltage",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 750.0919368256563,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 750.0919368256563,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_switching_frozen_voltage_bound",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0.3157664078283786,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 0.3157664078283786,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_switching_ac_variation_bound",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.5143783112767433,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 1.5143783112767433,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_switching_voltage_bound",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.8301447191051219,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 1.8301447191051219,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_voltage_min",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 748.0779128199725,
+                    "lower": 735,
+                    "upper": null,
+                    "margin": 13.07791281997254,
+                    "tolerance": 1.735e-5
+                },
+                {
+                    "name": "dc_voltage_max",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 751.9220815447613,
+                    "lower": null,
+                    "upper": 765,
+                    "margin": 13.07791845523866,
+                    "tolerance": 1.7650000000000002e-5
+                },
+                {
+                    "name": "dc_voltage_ripple",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0.09193964311677716,
+                    "lower": null,
+                    "upper": 7.5,
+                    "margin": 7.408060356883222,
+                    "tolerance": 1.0075000000000001e-5
+                },
+                {
+                    "name": "capacitor_low_frequency_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.012254312175313281,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 0.012254312175313281,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "allocation_pwm_carrier_prediction",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.9078476543594086,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 0.9078476543594086,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "allocation_pwm_modulation",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 105.36667008238635,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 105.36667008238635,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "allocation_pwm_quadrature",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 2.295360951976022e-6,
+                    "lower": 0,
+                    "upper": 0.0001,
+                    "margin": 2.295360951976022e-6,
+                    "tolerance": 1.0000001e-5
+                },
+                {
+                    "name": "allocation_pwm_actual_capacitor_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.9079303561908095,
+                    "lower": 0,
+                    "upper": 1,
+                    "margin": 0.09206964380919047,
+                    "tolerance": 1.001e-5
+                },
+                {
+                    "name": "capacitor_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.9999999999667719,
+                    "lower": null,
+                    "upper": 1,
+                    "margin": 3.3228086948611235e-11,
+                    "tolerance": 1.001e-5
+                },
+                {
+                    "name": "dc_source_power_max",
+                    "passed": true,
+                    "unit": "VA",
+                    "value": 29.57391709775252,
+                    "lower": null,
+                    "upper": 5000,
+                    "margin": 4970.426082902248,
+                    "tolerance": 0.01005
+                },
+                {
+                    "name": "dc_source_power_min",
+                    "passed": true,
+                    "unit": "VA",
+                    "value": 29.57391709775252,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 29.57391709775252,
+                    "tolerance": 0.01
+                },
+                {
+                    "name": "continuous_rail_headroom",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 103.60932074575524,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 103.60932074575524,
+                    "tolerance": 1.0e-5
+                }
+            ],
+            "rail": {
+                "lower_V": 103.60932074575524,
+                "upper_V": 103.60932109908221,
+                "branch": "line_1_2",
+                "evaluations": 234,
+                "angle_rad": 0.5211699726841466,
+                "converged": true
+            }
+        },
+        "pv_ld868_load_a": {
+            "checked": true,
+            "passed": true,
+            "checks": [
+                {
+                    "name": "converter_current_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.8717902384008718,
+                    "lower": null,
+                    "upper": 10,
+                    "margin": 6.128209761599129,
+                    "tolerance": 1.0100000000000002e-5
+                },
+                {
+                    "name": "converter_peak_current_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 9.414978327448198,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 4.585021672551802,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "grid_peak_current_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 9.414978327448198,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 4.585021672551802,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "converter_current_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.929799603071539,
+                    "lower": null,
+                    "upper": 10,
+                    "margin": 6.0702003969284615,
+                    "tolerance": 1.0100000000000002e-5
+                },
+                {
+                    "name": "converter_peak_current_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 9.583558741410252,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 4.416441258589748,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "grid_peak_current_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 9.583558741410252,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 4.416441258589748,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "converter_current_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.688935087513266,
+                    "lower": null,
+                    "upper": 10,
+                    "margin": 6.311064912486734,
+                    "tolerance": 1.0100000000000002e-5
+                },
+                {
+                    "name": "converter_peak_current_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.813802136729226,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.186197863270774,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "grid_peak_current_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.813802136729226,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.186197863270774,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "neutral_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.4390201077410323,
+                    "lower": null,
+                    "upper": 10,
+                    "margin": 6.560979892258968,
+                    "tolerance": 1.0100000000000002e-5
+                },
+                {
+                    "name": "neutral_peak_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 7.473211472461215,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 6.526788527538785,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "converter_filter_kvl_1",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.112884370092863e-14,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -1.112884370092863e-14,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "converter_filter_kvl_2",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 9.333965272501098e-15,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -9.333965272501098e-15,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "converter_filter_kvl_3",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.040534282191528e-14,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -1.040534282191528e-14,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "grid_filter_kvl_1",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "grid_filter_kvl_2",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "grid_filter_kvl_3",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "filter_kcl_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "filter_kcl_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "filter_kcl_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "poc_apparent_power",
+                    "passed": true,
+                    "unit": "VA",
+                    "value": 1307.7528704995746,
+                    "lower": null,
+                    "upper": 6000,
+                    "margin": 4692.247129500425,
+                    "tolerance": 0.01006
+                },
+                {
+                    "name": "dc_energy_quadrature",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.0231815394945443e-12,
+                    "lower": 0,
+                    "upper": 1.0e-6,
+                    "margin": 1.0231815394945443e-12,
+                    "tolerance": 1.000000001e-5
+                },
+                {
+                    "name": "dc_energy_positive_voltage",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 748.9928594785556,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 748.9928594785556,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_energy_maximum_voltage",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 751.0064647533626,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 751.0064647533626,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_switching_frozen_voltage_bound",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0.3344475447944797,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 0.3344475447944797,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_switching_ac_variation_bound",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 2.271567466915115,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 2.271567466915115,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_switching_voltage_bound",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 2.606015011709595,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 2.606015011709595,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_voltage_min",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 746.386844466846,
+                    "lower": 735,
+                    "upper": null,
+                    "margin": 11.386844466846014,
+                    "tolerance": 1.735e-5
+                },
+                {
+                    "name": "dc_voltage_max",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 753.6124797650722,
+                    "lower": null,
+                    "upper": 765,
+                    "margin": 11.38752023492782,
+                    "tolerance": 1.7650000000000002e-5
+                },
+                {
+                    "name": "dc_voltage_ripple",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.006802410615026,
+                    "lower": null,
+                    "upper": 7.5,
+                    "margin": 6.493197589384974,
+                    "tolerance": 1.0075000000000001e-5
+                },
+                {
+                    "name": "capacitor_low_frequency_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.134193187794379,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 0.134193187794379,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "allocation_pwm_carrier_prediction",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.8985576253591255,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 0.8985576253591255,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "allocation_pwm_modulation",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 105.02357473589439,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 105.02357473589439,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "allocation_pwm_quadrature",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.968227446082828e-6,
+                    "lower": 0,
+                    "upper": 0.0001,
+                    "margin": 3.968227446082828e-6,
+                    "tolerance": 1.0000001e-5
+                },
+                {
+                    "name": "allocation_pwm_actual_capacitor_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.9085227667711184,
+                    "lower": 0,
+                    "upper": 1,
+                    "margin": 0.09147723322888157,
+                    "tolerance": 1.001e-5
+                },
+                {
+                    "name": "capacitor_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.9999999999201815,
+                    "lower": null,
+                    "upper": 1,
+                    "margin": 7.981848515470347e-11,
+                    "tolerance": 1.001e-5
+                },
+                {
+                    "name": "dc_source_power_max",
+                    "passed": true,
+                    "unit": "VA",
+                    "value": 30.92436197470333,
+                    "lower": null,
+                    "upper": 5000,
+                    "margin": 4969.075638025297,
+                    "tolerance": 0.01005
+                },
+                {
+                    "name": "dc_source_power_min",
+                    "passed": true,
+                    "unit": "VA",
+                    "value": 30.92436197470333,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 30.92436197470333,
+                    "tolerance": 0.01
+                },
+                {
+                    "name": "continuous_rail_headroom",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 102.52170192139829,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 102.52170192139829,
+                    "tolerance": 1.0e-5
+                }
+            ],
+            "rail": {
+                "lower_V": 102.52170192139829,
+                "upper_V": 102.52170227643141,
+                "branch": "line_1_2",
+                "evaluations": 458,
+                "angle_rad": 0.5205947298886895,
+                "converged": true
+            }
+        },
+        "pv_ld248_load_b": {
+            "checked": true,
+            "passed": true,
+            "checks": [
+                {
+                    "name": "converter_current_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.885224263042841,
+                    "lower": null,
+                    "upper": 10,
+                    "margin": 6.114775736957159,
+                    "tolerance": 1.0100000000000002e-5
+                },
+                {
+                    "name": "converter_peak_current_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 9.45474988950599,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 4.54525011049401,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "grid_peak_current_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 9.45474988950599,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 4.54525011049401,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "converter_current_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.9203210089349394,
+                    "lower": null,
+                    "upper": 10,
+                    "margin": 6.079678991065061,
+                    "tolerance": 1.0100000000000002e-5
+                },
+                {
+                    "name": "converter_peak_current_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 9.55655382283793,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 4.44344617716207,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "grid_peak_current_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 9.55655382283793,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 4.44344617716207,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "converter_current_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.68039090536623,
+                    "lower": null,
+                    "upper": 10,
+                    "margin": 6.31960909463377,
+                    "tolerance": 1.0100000000000002e-5
+                },
+                {
+                    "name": "converter_peak_current_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.78205341854637,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.21794658145363,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "grid_peak_current_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.78205341854637,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.21794658145363,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "neutral_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.441776423177942,
+                    "lower": null,
+                    "upper": 10,
+                    "margin": 6.5582235768220585,
+                    "tolerance": 1.0100000000000002e-5
+                },
+                {
+                    "name": "neutral_peak_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 7.501408661765961,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 6.498591338234039,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "converter_filter_kvl_1",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.0060850605250586e-14,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -1.0060850605250586e-14,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "converter_filter_kvl_2",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 4.440892098500626e-16,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -4.440892098500626e-16,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "converter_filter_kvl_3",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.4607767620765455e-14,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -1.4607767620765455e-14,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "grid_filter_kvl_1",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "grid_filter_kvl_2",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "grid_filter_kvl_3",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "filter_kcl_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "filter_kcl_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "filter_kcl_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "poc_apparent_power",
+                    "passed": true,
+                    "unit": "VA",
+                    "value": 1305.2326974342368,
+                    "lower": null,
+                    "upper": 6000,
+                    "margin": 4694.767302565763,
+                    "tolerance": 0.01006
+                },
+                {
+                    "name": "dc_energy_quadrature",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.5916157281026244e-12,
+                    "lower": 0,
+                    "upper": 1.0e-6,
+                    "margin": 1.5916157281026244e-12,
+                    "tolerance": 1.000000001e-5
+                },
+                {
+                    "name": "dc_energy_positive_voltage",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 748.9562429124873,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 748.9562429124873,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_energy_maximum_voltage",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 751.0430313061062,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 751.0430313061062,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_switching_frozen_voltage_bound",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0.33483150790311966,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 0.33483150790311966,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_switching_ac_variation_bound",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 2.271567466915115,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 2.271567466915115,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_switching_voltage_bound",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 2.6063989748182346,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 2.6063989748182346,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_voltage_min",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 746.349843937669,
+                    "lower": 735,
+                    "upper": null,
+                    "margin": 11.349843937668993,
+                    "tolerance": 1.735e-5
+                },
+                {
+                    "name": "dc_voltage_max",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 753.6494302809244,
+                    "lower": null,
+                    "upper": 765,
+                    "margin": 11.350569719075565,
+                    "tolerance": 1.7650000000000002e-5
+                },
+                {
+                    "name": "dc_voltage_ripple",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.0433939443838205,
+                    "lower": null,
+                    "upper": 7.5,
+                    "margin": 6.456606055616179,
+                    "tolerance": 1.0075000000000001e-5
+                },
+                {
+                    "name": "capacitor_low_frequency_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.13907034824334644,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 0.13907034824334644,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "allocation_pwm_carrier_prediction",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.8979160619992211,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 0.8979160619992211,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "allocation_pwm_modulation",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 104.54795260773903,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 104.54795260773903,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "allocation_pwm_quadrature",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.3712163260979366e-6,
+                    "lower": 0,
+                    "upper": 0.0001,
+                    "margin": 3.3712163260979366e-6,
+                    "tolerance": 1.0000001e-5
+                },
+                {
+                    "name": "allocation_pwm_actual_capacitor_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.9086219324651561,
+                    "lower": 0,
+                    "upper": 1,
+                    "margin": 0.0913780675348439,
+                    "tolerance": 1.001e-5
+                },
+                {
+                    "name": "capacitor_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.999999999921068,
+                    "lower": null,
+                    "upper": 1,
+                    "margin": 7.893197206954028e-11,
+                    "tolerance": 1.001e-5
+                },
+                {
+                    "name": "dc_source_power_max",
+                    "passed": true,
+                    "unit": "VA",
+                    "value": 30.579017313061005,
+                    "lower": null,
+                    "upper": 3000,
+                    "margin": 2969.420982686939,
+                    "tolerance": 0.01003
+                },
+                {
+                    "name": "dc_source_power_min",
+                    "passed": true,
+                    "unit": "VA",
+                    "value": 30.579017313061005,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 30.579017313061005,
+                    "tolerance": 0.01
+                },
+                {
+                    "name": "continuous_rail_headroom",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 102.04540304729083,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 102.04540304729083,
+                    "tolerance": 1.0e-5
+                }
+            ],
+            "rail": {
+                "lower_V": 102.04540304729083,
+                "upper_V": 102.04540340266391,
+                "branch": "line_1_2",
+                "evaluations": 460,
+                "angle_rad": 0.5211699726841466,
+                "converged": true
+            }
+        },
+        "pv_ld1291_load_b": {
+            "checked": true,
+            "passed": true,
+            "checks": [
+                {
+                    "name": "converter_current_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.5159815003387958,
+                    "lower": null,
+                    "upper": 10,
+                    "margin": 6.484018499661204,
+                    "tolerance": 1.0100000000000002e-5
+                },
+                {
+                    "name": "converter_peak_current_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.582888160664284,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.417111839335716,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "grid_peak_current_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.582888160664284,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.417111839335716,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "converter_current_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.5159815003387958,
+                    "lower": null,
+                    "upper": 10,
+                    "margin": 6.484018499661204,
+                    "tolerance": 1.0100000000000002e-5
+                },
+                {
+                    "name": "converter_peak_current_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.582888160664282,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.417111839335718,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "grid_peak_current_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.582888160664282,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.417111839335718,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "converter_current_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.5159815003387953,
+                    "lower": null,
+                    "upper": 10,
+                    "margin": 6.484018499661205,
+                    "tolerance": 1.0100000000000002e-5
+                },
+                {
+                    "name": "converter_peak_current_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.582888160664282,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.417111839335718,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "grid_peak_current_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.582888160664282,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.417111839335718,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "three_leg_zero_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 1.1102230246251565e-16,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -1.1102230246251565e-16,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "converter_filter_kvl_1",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.807312143953211e-15,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -1.807312143953211e-15,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "converter_filter_kvl_2",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 3.9968028886505635e-15,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -3.9968028886505635e-15,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "converter_filter_kvl_3",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.3763183674796884e-14,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -1.3763183674796884e-14,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "grid_filter_kvl_1",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "grid_filter_kvl_2",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "grid_filter_kvl_3",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "filter_kcl_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "filter_kcl_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "filter_kcl_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "poc_apparent_power",
+                    "passed": true,
+                    "unit": "VA",
+                    "value": 1344.4976443513724,
+                    "lower": null,
+                    "upper": 6000,
+                    "margin": 4655.502355648628,
+                    "tolerance": 0.01006
+                },
+                {
+                    "name": "dc_energy_quadrature",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 9.094947017729282e-13,
+                    "lower": 0,
+                    "upper": 1.0e-6,
+                    "margin": 9.094947017729282e-13,
+                    "tolerance": 1.000000001e-5
+                },
+                {
+                    "name": "dc_energy_positive_voltage",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 749.9066426293913,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 749.9066426293913,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_energy_maximum_voltage",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 750.0933515605703,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 750.0933515605703,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_switching_frozen_voltage_bound",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0.3156718644446639,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 0.3156718644446639,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_switching_ac_variation_bound",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.5143783112767433,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 1.5143783112767433,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_switching_voltage_bound",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.8300501757214072,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 1.8300501757214072,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_voltage_min",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 748.0765924536698,
+                    "lower": 735,
+                    "upper": null,
+                    "margin": 13.076592453669832,
+                    "tolerance": 1.735e-5
+                },
+                {
+                    "name": "dc_voltage_max",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 751.9234017362918,
+                    "lower": null,
+                    "upper": 765,
+                    "margin": 13.076598263708206,
+                    "tolerance": 1.7650000000000002e-5
+                },
+                {
+                    "name": "dc_voltage_ripple",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0.09335446540838932,
+                    "lower": null,
+                    "upper": 7.5,
+                    "margin": 7.406645534591611,
+                    "tolerance": 1.0075000000000001e-5
+                },
+                {
+                    "name": "capacitor_low_frequency_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.012442888871057559,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 0.012442888871057559,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "allocation_pwm_carrier_prediction",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.907845000328903,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 0.907845000328903,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "allocation_pwm_modulation",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 104.90728659320678,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 104.90728659320678,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "allocation_pwm_quadrature",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 2.694547453607754e-6,
+                    "lower": 0,
+                    "upper": 0.0001,
+                    "margin": 2.694547453607754e-6,
+                    "tolerance": 1.0000001e-5
+                },
+                {
+                    "name": "allocation_pwm_actual_capacitor_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.9079302672042845,
+                    "lower": 0,
+                    "upper": 1,
+                    "margin": 0.09206973279571551,
+                    "tolerance": 1.001e-5
+                },
+                {
+                    "name": "capacitor_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.9999999999667374,
+                    "lower": null,
+                    "upper": 1,
+                    "margin": 3.326261488467708e-11,
+                    "tolerance": 1.001e-5
+                },
+                {
+                    "name": "dc_source_power_max",
+                    "passed": true,
+                    "unit": "VA",
+                    "value": 29.57021586554652,
+                    "lower": null,
+                    "upper": 1250,
+                    "margin": 1220.4297841344535,
+                    "tolerance": 0.0100125
+                },
+                {
+                    "name": "dc_source_power_min",
+                    "passed": true,
+                    "unit": "VA",
+                    "value": 29.57021586554652,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 29.57021586554652,
+                    "tolerance": 0.01
+                },
+                {
+                    "name": "continuous_rail_headroom",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 103.14976674477803,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 103.14976674477803,
+                    "tolerance": 1.0e-5
+                }
+            ],
+            "rail": {
+                "lower_V": 103.14976674477803,
+                "upper_V": 103.1497677348049,
+                "branch": "line_1_2",
+                "evaluations": 226,
+                "angle_rad": 0.5215055309814965,
+                "converged": true
+            }
+        },
+        "pv_ld2186_load_b": {
+            "checked": true,
+            "passed": true,
+            "checks": [
+                {
+                    "name": "converter_current_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.516436293133732,
+                    "lower": null,
+                    "upper": 10,
+                    "margin": 6.483563706866268,
+                    "tolerance": 1.0100000000000002e-5
+                },
+                {
+                    "name": "converter_peak_current_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.58415430588569,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.41584569411431,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "grid_peak_current_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.58415430588569,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.41584569411431,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "converter_current_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.516436293133732,
+                    "lower": null,
+                    "upper": 10,
+                    "margin": 6.483563706866268,
+                    "tolerance": 1.0100000000000002e-5
+                },
+                {
+                    "name": "converter_peak_current_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.58415430588569,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.41584569411431,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "grid_peak_current_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.58415430588569,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.41584569411431,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "converter_current_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 3.5164362931337316,
+                    "lower": null,
+                    "upper": 10,
+                    "margin": 6.483563706866269,
+                    "tolerance": 1.0100000000000002e-5
+                },
+                {
+                    "name": "converter_peak_current_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.58415430588569,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.41584569411431,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "grid_peak_current_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 8.58415430588569,
+                    "lower": null,
+                    "upper": 14,
+                    "margin": 5.41584569411431,
+                    "tolerance": 1.0140000000000001e-5
+                },
+                {
+                    "name": "three_leg_zero_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 2.220446049250313e-16,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -2.220446049250313e-16,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "converter_filter_kvl_1",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 5.197930934883577e-15,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -5.197930934883577e-15,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "converter_filter_kvl_2",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 6.217248937900877e-15,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -6.217248937900877e-15,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "converter_filter_kvl_3",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.0791459175350286e-14,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": -1.0791459175350286e-14,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "grid_filter_kvl_1",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "grid_filter_kvl_2",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "grid_filter_kvl_3",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "filter_kcl_1",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "filter_kcl_2",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "filter_kcl_3",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "margin": 0,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "poc_apparent_power",
+                    "passed": true,
+                    "unit": "VA",
+                    "value": 1343.8585464376733,
+                    "lower": null,
+                    "upper": 6000,
+                    "margin": 4656.141453562326,
+                    "tolerance": 0.01006
+                },
+                {
+                    "name": "dc_energy_quadrature",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.1368683772161603e-13,
+                    "lower": 0,
+                    "upper": 1.0e-6,
+                    "margin": 1.1368683772161603e-13,
+                    "tolerance": 1.000000001e-5
+                },
+                {
+                    "name": "dc_energy_positive_voltage",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 749.9089070164322,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 749.9089070164322,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_energy_maximum_voltage",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 750.0910874519492,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 750.0910874519492,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_switching_frozen_voltage_bound",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0.3158301325973397,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 0.3158301325973397,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_switching_ac_variation_bound",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.5143783112767433,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 1.5143783112767433,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_switching_voltage_bound",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 1.830208443874083,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 1.830208443874083,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "dc_voltage_min",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 748.0786985725581,
+                    "lower": 735,
+                    "upper": null,
+                    "margin": 13.078698572558096,
+                    "tolerance": 1.735e-5
+                },
+                {
+                    "name": "dc_voltage_max",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 751.9212958958233,
+                    "lower": null,
+                    "upper": 765,
+                    "margin": 13.078704104176722,
+                    "tolerance": 1.7650000000000002e-5
+                },
+                {
+                    "name": "dc_voltage_ripple",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 0.09109021759086121,
+                    "lower": null,
+                    "upper": 7.5,
+                    "margin": 7.408909782409139,
+                    "tolerance": 1.0075000000000001e-5
+                },
+                {
+                    "name": "capacitor_low_frequency_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.012141095229377797,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 0.012141095229377797,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "allocation_pwm_carrier_prediction",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.9078487902055475,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 0.9078487902055475,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "allocation_pwm_modulation",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 105.67113074084307,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 105.67113074084307,
+                    "tolerance": 1.0e-5
+                },
+                {
+                    "name": "allocation_pwm_quadrature",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 2.3694070995228245e-6,
+                    "lower": 0,
+                    "upper": 0.0001,
+                    "margin": 2.3694070995228245e-6,
+                    "tolerance": 1.0000001e-5
+                },
+                {
+                    "name": "allocation_pwm_actual_capacitor_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.9079299709069225,
+                    "lower": 0,
+                    "upper": 1,
+                    "margin": 0.09207002909307749,
+                    "tolerance": 1.001e-5
+                },
+                {
+                    "name": "capacitor_current",
+                    "passed": true,
+                    "unit": "A",
+                    "value": 0.9999999999668161,
+                    "lower": null,
+                    "upper": 1,
+                    "margin": 3.3183900072231154e-11,
+                    "tolerance": 1.001e-5
+                },
+                {
+                    "name": "dc_source_power_max",
+                    "passed": true,
+                    "unit": "VA",
+                    "value": 29.576413442165443,
+                    "lower": null,
+                    "upper": 1250,
+                    "margin": 1220.4235865578346,
+                    "tolerance": 0.0100125
+                },
+                {
+                    "name": "dc_source_power_min",
+                    "passed": true,
+                    "unit": "VA",
+                    "value": 29.576413442165443,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 29.576413442165443,
+                    "tolerance": 0.01
+                },
+                {
+                    "name": "continuous_rail_headroom",
+                    "passed": true,
+                    "unit": "V",
+                    "value": 103.9139064223474,
+                    "lower": 0,
+                    "upper": null,
+                    "margin": 103.9139064223474,
+                    "tolerance": 1.0e-5
+                }
+            ],
+            "rail": {
+                "lower_V": 103.9139064223474,
+                "upper_V": 103.91390677549782,
+                "branch": "line_1_2",
+                "evaluations": 234,
+                "angle_rad": 0.520882351286418,
+                "converged": true
+            }
+        }
+    },
+    "solve": {
+        "has_primal": true,
+        "termination_status": "LOCALLY_SOLVED",
+        "primal_status": "FEASIBLE_POINT",
+        "publishable": true,
+        "optimal": true,
+        "feasible": true
+    },
+    "accepted": true,
+    "network_accepted": true,
+    "reason": "CONVERGED"
+}
