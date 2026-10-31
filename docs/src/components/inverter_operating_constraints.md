@@ -221,8 +221,9 @@ P-before-I₂ ordering may leave little support when DC availability binds.
 These are solver-based local control references. They change allocation relative
 to the algebraic limiters and do not replace the fixed-structure controller stamp.
 Nonconvex local solutions do not prove globally best service allocation. Solver
-latency, feeder equilibria, four-leg control, dynamic stability and response times
-require separate validation.
+latency, dynamic stability and response times require separate validation.
+The voltage-aware fleet solver couples the local references to feeder equations;
+its independent closure checks are described in the verification guide.
 
 Reproduce seven fixed-boundary examples with the unchanged Australian hardware
 and the separately declared synthetic rail fixture:
@@ -236,6 +237,44 @@ records per-stage checks and source fingerprints. Six cases issue accepted
 commands; the strict synthetic Q-ray case remains unresolved while its independent
 diagnostic finds feasible plant operation. The local Australian comparisons are
 fixed-measurement tests, not new feeder or chronological results.
+
+## Four-leg phase control
+
+[`PerPhaseVoltVarWatt`](@ref) uses each sensed phase-neutral RMS voltage to
+evaluate its exact VV and VW curves. Each phase's Q base and rated P base are
+one third of the total request bases. It requires an explicit neutral,
+`topology=:FOUR_LEG`, a non-GFM plant and disabled PWM. Use
+`evaluate_voltage_aware` at fixed physical phasors or
+`solve_voltage_aware_inverter_fleet` for network feedback. The implicit
+`solve_controlled_inverter` path does not implement this policy.
+
+The allocation first maximizes one common fraction of the three requested
+reactive powers, then fixes that fraction and maximizes total active power.
+POC phase active powers are equal; phase currents generally are not balanced.
+Consequently the most restrictive phase VW ceiling also constrains the other
+phases' active export. With `volt_watt_basis=:available`, each phase uses one
+third of the shared AC availability after total solved losses. There are no
+independent phase PV sources or inferred phase VA ratings. The total VA bound
+does not by itself bound large opposing phase reactive powers; declare phase
+and neutral current ratings when these engineering bounds are required.
+
+```julia
+policy = PerPhaseVoltVarWatt(volt_var=vv, volt_watt=vw,
+    volt_watt_basis=:rated, current_target=:converter)
+controlled = ControlledDevice(four_leg_plant, policy)
+allocation = evaluate_voltage_aware(controlled,
+    InverterControlMeasurement(sensed_phase_neutral), request;
+    grid_voltage=physical_phase_neutral)
+```
+
+`allocate_phase_inverter_services` exposes the same allocation with explicit
+three-element Q requests and VW fractions. Only `reactive_mode=:within_request`
+is supported. Hardware, source, continuous rails and phase-policy checks gate
+every stage; a failed stage returns no command. Optional unrestricted projection
+is a separate physical witness and never substitutes another policy. Neutral
+ratings are RMS bounds, not peak switching-current ratings. Neither this
+quasi-static reference nor its per-phase curves establish connection-standard
+conformity, dynamic stability or an EMT-validated controller.
 
 ## [Compare saturation at a fixed 207 V POC](@id inverter-saturation-comparison)
 

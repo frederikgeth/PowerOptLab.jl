@@ -1,6 +1,9 @@
 # Solver-based local control reference. Each stage retains the physical plant;
 # no weighted sum is used to trade reactive support against active export.
 
+"""Common result interface for solver-based local inverter service allocation."""
+abstract type AbstractInverterServiceAllocationResult <: AbstractSolveResult end
+
 """
     InverterServiceAllocationResult
 
@@ -13,7 +16,7 @@ an independent diagnostic witness; otherwise it is `:unresolved`.
 failure is inconclusive, even if the unrestricted plant diagnostic succeeds.
 These are local nonconvex results, not global lexicographic optimality proofs.
 """
-struct InverterServiceAllocationResult <: AbstractSolveResult
+struct InverterServiceAllocationResult <: AbstractInverterServiceAllocationResult
     reactive_request_var::Float64
     negative_sequence_request_A::ComplexF64
     target::Symbol

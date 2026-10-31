@@ -47,6 +47,7 @@ const _HALF_SQRT3 = _SQRT3 / 2
 const _MAGNITUDE_EPS_REL = 1e-9      # of the per-leg current rating
 const _MAGNITUDE_EPS_FLOOR_SI = 1e-3 # A, used only when no rating is declared
 const _LOSS_MAGNITUDE_POWER_BUDGET_W = 1e-4 # total one-sided loss bias per inverter
+const _NEUTRAL_MAGNITUDE_EPS_MAX_SI = 1e-3 # A, also cap the neutral width at small loss coefficients
 
 """
     _magnitude_epsilon(rating, ib) -> ε in working units
@@ -68,11 +69,16 @@ function _push_magnitude(ctx, total, x, y, rating, ib; name,
 end
 
 # Divide the absolute watt error budget among all conducting semiconductor legs.
-# Keep the established smaller rating-relative width whenever it already fits.
-function _loss_magnitude_epsilon(inv,rating)
+# Phase paths retain any smaller rating-relative width; the cancelling neutral
+# channel uses its absolute watt share for conditioning near balanced operation.
+function _loss_magnitude_epsilon(inv,rating;neutral::Bool=false)
     legs=inv.topology===:FOUR_LEG ? 4 : length(inv.phase_terminals)
-    min(_magnitude_epsilon(rating,1.),inv.a_loss>0 ?
-        (_LOSS_MAGNITUDE_POWER_BUDGET_W/legs)/inv.a_loss : Inf)
+    budget=inv.a_loss>0 ? (_LOSS_MAGNITUDE_POWER_BUDGET_W/legs)/inv.a_loss : Inf
+    # The fourth-leg current commonly vanishes while all phase currents remain
+    # nonzero. A rating-relative nanampere width then gives a needlessly stiff
+    # Hessian on that cancelling channel. Allocate its absolute watt share,
+    # retaining the same total loss-error guarantee and exact current limits.
+    neutral ? min(_NEUTRAL_MAGNITUDE_EPS_MAX_SI,budget) : min(_magnitude_epsilon(rating,1.),budget)
 end
 
 # A numerical current characteristic is not a hardware rating. In particular,
@@ -763,9 +769,12 @@ zero filter) it is a plain grid-following converter at the POC.
   non-differentiable at zero current. It is stamped as the shifted smooth norm
   `sqrt(|I|² + ε²) − ε`, which underestimates the exact norm by at most `ε`.
   The modelled loss is therefore biased LOW by at most `a_loss·ε` per
-  conducting leg — a closed-form, one-sided budget, not a tuning knob. `ε` is
-  `1e-9` of the leg's own current rating, so the relative bias is identical
+  conducting leg — a closed-form, one-sided budget, not a tuning knob. Phase `ε`
+  is `1e-9` of the leg's own current rating, so the phase-relative bias is identical
   for every device in a heterogeneous fleet and identical in SI and per-unit.
+  The fourth-leg norm instead uses its share of the absolute watt budget below,
+  capped at 1 mA, because its current can vanish while all three phase currents
+  remain nonzero. This avoids a needlessly stiff neutral-channel Hessian.
   If no rating is supplied the initial width is 1 mA. Every width is additionally
   capped so the sum of all conducting-leg linear-loss deficits is at most
   0.0001 W per inverter. That absolute watt budget is independent of solver
@@ -1958,7 +1967,7 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
                 ctx, imag_terms, sumcr, sumci,
                 inv.In_max === nothing ? inv.i_max : inv.In_max, ib;
                 name="loss_$(inv.id)_neutral",
-                epsilon_SI=_loss_magnitude_epsilon(inv,inv.In_max===nothing ? inv.i_max : inv.In_max),
+                epsilon_SI=_loss_magnitude_epsilon(inv,inv.In_max===nothing ? inv.i_max : inv.In_max;neutral=true),
                 scale_SI=something(inv.In_max,inv.i_max,3characteristic_current))
         elseif retain_lossless_magnitude_epigraph
             # Same retained epigraph as the per-phase branch; the fourth leg is

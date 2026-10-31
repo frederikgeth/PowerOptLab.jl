@@ -17,7 +17,7 @@ struct VoltageAwareInverterFleetResult <: AbstractSolveResult
     reason::Symbol
     converged::Bool
     iterations::Int
-    devices::Dict{String,InverterServiceAllocationResult}
+    devices::Dict{String,AbstractInverterServiceAllocationResult}
     spec::ControlledInverterFleetSpec
     operating_modes::Dict{String,Symbol}
     grid_currents::Dict{String,NTuple{3,ComplexF64}}
@@ -163,6 +163,28 @@ function _voltage_aware_coupling_report(point,controlled,request,allocation,sens
     _extend_inverter_feasibility(point.physical_feasibility,checks)
 end
 
+function _voltage_aware_coupling_report(point,
+        controlled::ControlledDevice{<:AdvancedInverter,<:PerPhaseVoltVarWatt},request,
+        allocation::PhaseInverterServiceAllocationResult,sensed,mode)
+    inv=controlled.device;c=controlled.controller
+    actual=c.current_target isa ConverterCurrentTarget ? point.state.converter_current : point.state.grid_current
+    checks=InverterLimitCheck[_inverter_limit_check("equilibrium_current_$k",:A,
+        abs(actual[k]-allocation.current_command[k]),0.,0.) for k in 1:3]
+    local_v=collect(allocation.allocation.plant.poc_phase_voltage)
+    local_i=collect(allocation.allocation.grid_phase_current)
+    reference=local_v.*conj.(local_i).+im*inv.b_filter_shunt.*abs2.(local_v)
+    power=point.state.grid_voltage.*conj.(point.state.grid_current).+
+        im*inv.b_filter_shunt.*abs2.(point.state.grid_voltage)
+    for k in 1:3,(label,value) in (("P",real(power[k]-reference[k])),("Q",imag(power[k]-reference[k])))
+        push!(checks,_inverter_limit_check("equilibrium_phase_$(label)_$k",:VA,abs(value),0.,0.))
+    end
+    q,f=_phase_voltage_requests(c,InverterControlMeasurement(sensed),request)
+    append!(checks,_phase_service_checks(inv,request,point.state.grid_voltage,point.state.grid_current,
+        point.p_dc,q,f,allocation.reactive_scale,c.volt_watt_basis,
+        allocation.allocation.operation.effective_dc_availability_W))
+    _extend_inverter_feasibility(point.physical_feasibility,checks)
+end
+
 function _voltage_aware_voltage_residual(old,new,spec,ids)
     residual=0.
     for id in ids
@@ -211,7 +233,8 @@ means an open grid-side contactor: the entire converter, filter and POC shunt ar
 absent from the AC model. DC standby losses are outside this disconnected model.
 All-disconnected operation is a pure network power flow with zero iterations.
 Unselected native IBRs remain native. Inputs are not mutated; inverter sizing is
-unchanged. Only the three-leg local control family is currently supported.
+unchanged. Supports three-leg sequence control and four-leg per-phase Q→P
+allocation; the latter has equal POC phase P and a shared DC source.
 
 This is a quasi-static numerical fixed point, not an EMT/time-domain controller
 simulation, global uniqueness proof or latency/stability certificate. Registered
@@ -233,12 +256,17 @@ function solve_voltage_aware_inverter_fleet(net::Dict{String,Any},spec::Controll
     active=[id for id in ids if modes[id]===:energized]
     for id in active
         controlled=spec.devices[id];c=controlled.controller
-        c isa SequenceController || throw(ArgumentError("voltage-aware coupling requires SequenceController requests"))
-        c.limiter.pq_priority===:var || throw(ArgumentError("voltage-aware coupling requires reactive priority"))
-        c.limiter isa SequencePriorityLimiter && c.limiter.priority!==:power &&
-            throw(ArgumentError("voltage-aware coupling requires Q-P-I2 order"))
-        c.unbalance isa NegativeSequenceAdmittanceDroop && !iszero(c.unbalance.ripple_blend) &&
-            throw(ArgumentError("current-dependent ripple compensation is not supported"))
+        if c isa SequenceController
+            c.limiter.pq_priority===:var || throw(ArgumentError("voltage-aware coupling requires reactive priority"))
+            c.limiter isa SequencePriorityLimiter && c.limiter.priority!==:power &&
+                throw(ArgumentError("voltage-aware coupling requires Q-P-I2 order"))
+            c.unbalance isa NegativeSequenceAdmittanceDroop && !iszero(c.unbalance.ripple_blend) &&
+                throw(ArgumentError("current-dependent ripple compensation is not supported"))
+        elseif c isa PerPhaseVoltVarWatt
+            reactive_mode===:within_request || throw(ArgumentError("phase allocation supports within-request Q only"))
+        else
+            throw(ArgumentError("unsupported voltage-aware controller"))
+        end
         validate_device(ConstrainedInverter(controlled.device,InverterOperatingConstraints();dc_source),(net,);periods=1)
     end
     zero=ntuple(_->0.0im,3)
@@ -251,7 +279,7 @@ function solve_voltage_aware_inverter_fleet(net::Dict{String,Any},spec::Controll
         end
     end
     solved=_solve_voltage_aware_current_network(net,spec,currents,modes;s_base,optimizer,verbose,solver_options)
-    devices=Dict{String,InverterServiceAllocationResult}();points=Dict{String,NamedTuple}()
+    devices=Dict{String,AbstractInverterServiceAllocationResult}();points=Dict{String,NamedTuple}()
     reports=Dict(id=>_unchecked_inverter_feasibility() for id in active)
     history=NamedTuple[];converged=false;iterations=0;reason=:NETWORK_SOLVE_FAILED
     if solved.status.publishable
@@ -263,11 +291,13 @@ function solve_voltage_aware_inverter_fleet(net::Dict{String,Any},spec::Controll
         end
     end
     function allocations(bus)
-        result=Dict{String,InverterServiceAllocationResult}()
+        result=Dict{String,AbstractInverterServiceAllocationResult}()
         for id in active
             controlled=spec.devices[id]
             physical=_network_phase_state(bus,controlled.device);sensed=_network_phase_state(bus,controlled)
-            abs(_phasor_sequences(sensed)[2])>=controlled.controller.power_voltage_floor || return result,:CONTROLLER_VOLTAGE_DOMAIN
+            c=controlled.controller
+            voltage=c isa PerPhaseVoltVarWatt ? minimum(abs,sensed) : abs(_phasor_sequences(sensed)[2])
+            voltage>=c.power_voltage_floor || return result,:CONTROLLER_VOLTAGE_DOMAIN
             allocation=evaluate_voltage_aware(controlled,InverterControlMeasurement(sensed),spec.requests[id];
                 grid_voltage=physical,reactive_mode,dc_source,s_base,optimizer,verbose,solver_options)
             result[id]=allocation
@@ -394,14 +424,19 @@ function voltage_aware_inverter_rows(result::VoltageAwareInverterFleetResult)
             filter_loss_W=!active ? nothing : point===nothing ? NaN : point.p_conv-point.p_poc,
             maximum_converter_current_A=!active ? 0. : current===nothing ? NaN : maximum(abs,current),
             maximum_grid_current_A=!active ? 0. : grid===nothing ? NaN : maximum(abs,grid),
+            neutral_total_rms_current_A=!active ? 0. : current===nothing ? NaN :
+                hypot(abs(sum(current)),inv.pwm_ac_neutral_reserve),
+            neutral_current_rating_A=inv.In_max,
             converter_negative_sequence_A=!active ? 0. : current===nothing ? NaN : abs(_phasor_sequences(Tuple(current))[3]),
             capacitor_thermal_current_A=check_value("capacitor_current"),
             dc_ripple_voltage_V=check_value("dc_voltage_ripple"),
             continuous_rail_lower_V=report===nothing ? nothing : report.rail.lower_V,
             vmin_sensed_V=sensed===nothing ? NaN : minimum(abs,sensed),
             vmax_sensed_V=sensed===nothing ? NaN : maximum(abs,sensed),vuf_percent=vuf,
-            reactive_request_var=allocation===nothing ? nothing : allocation.reactive_request_var,
-            negative_sequence_scale=allocation===nothing ? nothing : allocation.negative_scale,
+            reactive_request_var=allocation===nothing ? nothing : allocation isa PhaseInverterServiceAllocationResult ?
+                sum(allocation.phase_reactive_request_var) : allocation.reactive_request_var,
+            negative_sequence_scale=allocation isa InverterServiceAllocationResult ? allocation.negative_scale : nothing,
+            phase_reactive_service_scale=allocation isa PhaseInverterServiceAllocationResult ? allocation.reactive_scale : nothing,
             local_termination=allocation===nothing ? "NOT_RUN" : solve_status(allocation).termination_status))
     end
     rows

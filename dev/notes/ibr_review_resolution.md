@@ -1,5 +1,54 @@
 # Advanced IBR review: resolution plan
 
+## Four-leg local control and green integration checkpoint
+
+The complete offline suite now passes **20,664/20,664** assertions (8m17.3s).
+The new phase-controller regressions account for 221 assertions, including
+analytic neutral saturation at three numerical bases, mixed fleets, independent
+neutral KCL, full LCL losses, shared-source VW bases, separate sensing and
+zero-sequence-only voltages. Twelve additional assertions bound the neutral
+loss approximation. No independent physical tolerance was widened.
+
+Balanced lossy four-leg operation exposed cancellation in expanded quadratic
+current sums inside a square root. Composite norms now evaluate the conductor
+sum before squaring it. The fourth-leg loss norm uses its share of the existing
+100 µW total loss-error budget (at most 1 mA width), avoiding excessive curvature
+at zero neutral current. Exact current ratings and post-solve loss checks remain.
+
+The Australian four-wire driver passes 106 setup/solve checks. Eleven candidate
+cases pass a fresh saved-phasor audit: 567 conditions, 3,348 hardware/policy
+inequalities, 108 energized records and 58 source/setup hashes. Five Julia
+corruption tests and five CSV tests check evidence and publication gates. The
+phase/DC sizing is unchanged; the new 10 A neutral and neutral-arm R/X are
+explicit counterfactual assumptions. Publication follows the committed driver.
+The full goal remains active; representative EMT validation is still pending.
+
+## Four-leg control implementation contract
+
+The first four-leg controller uses individual phase-neutral VV requests,
+equal active power at the three POC phases, and the existing shared DC-link
+availability. Equal phase power is a declared control choice, not balanced
+current under unbalanced voltage. A common bounded Q-service coordinate
+preserves the phase request vector: maximize that service first, then preserve
+it while maximizing active export. Neutral/phase current, total VA, filter,
+thermal and continuous-rail constraints remain physical plant constraints.
+No phase receives a separate PV source or an invented per-phase VA rating.
+Failed strict service retains separate plant/policy diagnostics and issues no
+alternative command. Four-leg neutral-current limits are explicit RMS ratings.
+
+This extends local reference allocation and its feeder coupling; it does not
+claim a new state-of-the-art control law or dynamic/firmware validation. A live
+primary-source search on 31 October 2026 verified the publisher metadata and
+indexed abstracts of:
+
+- [ECCE 2022, power-oscillation suppression with phase/neutral peak-current limitation](https://doi.org/10.1109/ECCE50734.2022.9947526): extra zero/negative-sequence control requires current limits on both phase and neutral paths.
+- [Mandrioli et al., Energies 2023, neutral-inductor current-ripple RMS](https://doi.org/10.3390/en16041710): neutral inductance and PWM affect phase/neutral ripple. This informs the later EMT checks, not a claim that fundamental RMS bounds cover switching peaks.
+- [Tan et al., EPSR September 2026, four-leg active-power ripple mitigation](https://doi.org/10.1016/j.epsr.2026.113067): phase-current allocation and power-ripple control remain coupled research concerns. Its ripple-control algorithm is not implemented by adding per-phase VV.
+
+Full publisher pages were rate/access limited during this check; these are
+metadata/abstract checks, not verification of their detailed derivations or an
+exhaustive state-of-the-art survey. Representative EMT remains required.
+
 ## Published coordinated benchmark checkpoint
 
 The production run at committed driver source `67f3ed8` accepts all 24 cases.
@@ -624,7 +673,7 @@ Status: `todo`, `doing`, `done`, `deferred` (with reason).
 | C1 | Power-priority sequence allocation | Covered by A2; add as an Australian study mode. Mode `sequence_droop_power`. | done |
 | C2 | Grid-forming passive negative-sequence admittance (balanced EMF behind `Z_v` gives `I2 = -U2/Z_v`) | Constructor `VirtualImpedanceNegativeSequence(r, x)` for a flat admittance at `arg Z_v`, documented as the steady-state negative-sequence equivalent of a balanced-EMF voltage source. Add a study mode. Done as `negative_sequence_virtual_impedance(r, x)`; verified against a grid-forming plant solve. | done |
 | C3 | Status quo: single-phase PV with per-phase Volt-var | Australian study variant keeping native single-phase BMOPF PV (PN_PER_PHASE) at the original customer phases. Mode `single_phase_native`: native BMOPFTools single-phase PV on the original phases with the same loads, solved around upstream bug A10. | done |
-| C4 | Four-leg per-phase Volt-var | Needs a FOUR_LEG controller with I0 enabled (new policy and stamp). Larger API change; planned as a follow-up PR unless time allows. Deferred to a follow-up PR: needs a FOUR_LEG controller with I0 enabled. | deferred (follow-up PR) |
+| C4 | Four-leg per-phase Volt-var | Implemented as solver-based `PerPhaseVoltVarWatt` Q-vector → equal-phase-P allocation with shared DC and explicit neutral physics, including voltage-aware fleet coupling. Implicit firmware stamping is not supplied; representative EMT remains separate. | implemented, EMT pending |
 
 ## D. Literature
 

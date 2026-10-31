@@ -104,7 +104,15 @@ terminal-voltage starts (with declared voltage-rating fallback), rather than
 the numerical coordinate voltage base. Three-leg KCL, LCL KCL and balanced-arm
 equations retain physical scaling in SI and at different per-unit bases.
 The shifted current norm's one-sided loss deficit is capped at 0.0001 W in
-total across conducting legs, as well as the existing rating-relative width.
+total across conducting legs. Phase paths retain any smaller rating-relative
+width. The fourth leg instead uses its share of the absolute watt budget,
+capped at 1 mA: its current often vanishes while the three phase currents are
+nonzero. This avoids needless neutral-channel curvature without changing its
+exact current bounds or the independent physical acceptance floors.
+Composite current norms evaluate conductor sums before squaring them. Expanding
+the square into a quadratic polynomial can otherwise produce a small negative
+number through floating-point cancellation at balanced neutral current. Tests
+exercise this cancellation in plain and staged models at different bases.
 The unrated 1 mA fallback alone once understated demand by about 0.30 W for
 `a_loss=100 W/A`; the unchanged exact-norm physical gate correctly rejected
 that raw solver success. Regression solves now accept the corrected point in
@@ -150,10 +158,17 @@ keep their native physics. `voltage_aware_inverter_rows(result)` records modes,
 acceptance, powers, losses, current/ripple/rail quantities and sensed voltages.
 Only accepted rows support equilibrium comparisons.
 
-The current implementation supports three-leg reactive-priority local control,
-with Q→P→I₂ ordering and optional voltage-admittance negative-sequence requests.
-Four-leg control, current-dependent ripple blending, dynamic stability, global
-uniqueness and real-time computational guarantees are outside this capability.
+Three-leg reactive-priority control uses Q→P→I₂ ordering and optional
+voltage-admittance negative-sequence requests. Four-leg
+[`PerPhaseVoltVarWatt`](@ref) instead preserves the direction of its three Q
+requests, maximizes their common service fraction, then maximizes equal POC
+phase active powers. The shared DC source, neutral path and full filter remain
+coupled physical constraints. Independent regressions cover a closed-form
+binding neutral rating, mixed three/four-leg fleets, neutral KCL, full LCL losses,
+night operation and an extreme zero-sequence-only voltage boundary. This is
+solver-based quasi-static reference allocation; implicit controller stamping is
+not provided for this family. Current-dependent ripple blending, dynamic
+stability, global uniqueness and real-time guarantees remain outside this capability.
 Warm starts and damping are numerical choices, not a transient inverter model.
 
 ## Tests implemented in the package

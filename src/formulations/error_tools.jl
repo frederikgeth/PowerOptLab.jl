@@ -55,6 +55,12 @@ function magnitude_expression(target,components,r::MagnitudeApproximation;
                               component_scale::Real=1,output_scale::Real=1,
                               name::AbstractString="",eps_rel::Union{Nothing,Real}=nothing)
     isempty(components) && throw(ArgumentError("Provide at least one component"))
+    # Preserve evaluation order for cancelling component sums. Squaring an
+    # AffExpr expands it into a quadratic polynomial: evaluating (ΣI)^2 that
+    # way can become negative by cancellation when ΣI≈0, overwhelming epsilon².
+    # An explicit nonlinear component evaluates the sum before its square.
+    components=[c isa Union{JuMP.GenericAffExpr,JuMP.GenericQuadExpr} ?
+        JuMP.NonlinearExpr(:+,Any[c,0.]) : c for c in components]
     si,so = _pwl_scale(component_scale),_pwl_scale(output_scale)
     scale = r.scale===nothing ? 1. : r.scale/si
     relative = eps_rel===nothing ? (r.epsilon/si)/scale : Float64(eps_rel)

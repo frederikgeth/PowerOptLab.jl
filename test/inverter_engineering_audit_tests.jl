@@ -95,6 +95,11 @@ end
         legs=topology===:FOUR_LEG ? 4 : 3
         @test 0<epsilon<=PowerOptLab._magnitude_epsilon(rating,1.)
         @test coefficient*legs*epsilon <= 1e-4*(1+eps(Float64))
+        if topology===:FOUR_LEG
+            neutral=PowerOptLab._loss_magnitude_epsilon(plant,rating;neutral=true)
+            @test 0<neutral<=1e-3
+            @test coefficient*(3epsilon+neutral)<=1e-4*(1+eps(Float64))
+        end
         m=Model();@variable(m,x)
         for ib in (1.,4000.)
             expression=PowerOptLab._push_magnitude(m,nothing,x,0.,rating,ib;

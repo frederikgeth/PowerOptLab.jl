@@ -1437,13 +1437,14 @@ end
     pu = solve_advanced_inverter(net, inv; per_unit=true)
     @test solve_status(pu).publishable
     exact = a * (sum(pu.i_mag) + pu.i_neutral)
-    budget = 4 * a * PowerOptLab._MAGNITUDE_EPS_REL * 40.0
+    budget = a*(3*PowerOptLab._loss_magnitude_epsilon(inv,inv.i_max)+
+        PowerOptLab._loss_magnitude_epsilon(inv,inv.In_max;neutral=true))
     # Allow for numerical solve error separately from the physical smoothing
     # budget. The latter stays fixed when solver tolerances change.
     floor_abs = 1e-8 * exact
     @test pu.p_loss <= exact + floor_abs           # one-sided: never inflated
     @test exact - pu.p_loss <= budget + floor_abs  # within the closed form
-    @test isapprox(pu.p_loss, exact; rtol=1e-6)
+    @test isapprox(pu.p_loss, exact; atol=budget+floor_abs,rtol=0.)
 
     # a_loss != 0 must converge in SI as well as per-unit. The previous lifted
     # formulation hit ITERATION_LIMIT here, so this is the regression that the
