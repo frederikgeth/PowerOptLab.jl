@@ -1,5 +1,37 @@
 # Advanced IBR review: resolution plan
 
+## Representative switched-circuit validation checkpoint
+
+The independent event-aligned circuit passes 24 analytic/energy/neutral/mean-DC
+initialization assertions. Three fixed-sizing reference points are run in
+averaged and switched modes at 32/64/128 substeps per carrier. All 18 runs meet
+the predeclared mechanism/convergence bands; independent Python reconstruction
+passes 308 provenance, coverage, waveform, energy, spectrum and physical-flag
+checks. Six corruption tests reject false acceptance and damaged records.
+
+All switched cases violate the existing 1 A capacitor budget: approximately
+3.99–4.17 A total RMS at 10 kHz. Fifteen Julia cross-check assertions confirm
+that the existing `i_sw` validation rejects the measured non-2ω reserve. No
+sizing is increased and no failed engineering flag is turned into acceptance.
+A synthetic binding 7.5 V 2ω point also exceeds that first-order bound by about
+0.000094 V under nonlinear capacitor integration with mean DC voltage matched.
+That limit failure is retained, distinct from passing mechanism agreement.
+
+The input is constant power at the regulated DC-link boundary, with zero 2ω
+input power but possible source-current ripple. Converter loss is a lumped mean;
+the PWM is ideal sampled feedforward at fixed POC voltage. This validates L-filter
+mechanisms, not the optional small-signal source impedance, LCL/split-link dynamics,
+service-controller timing, protection, semiconductor losses or feeder stability.
+Full publisher Section 3 KVL/neutral-inductor material from Mandrioli et al.
+(Energies 2023, DOI 10.3390/en16041710) is now available for the circuit check;
+the earlier metadata-only source limitation remains specific to the first search.
+
+The next scientific priorities are dispatch-dependent PWM thermal allocation
+(or a certified conservative reserve) and nonlinear energy-based voltage bounds.
+Measured stress at one point is not a valid global reserve. This checkpoint
+finishes the representative validation implementation; committed-source result
+publication follows before closing the active goal.
+
 ## Published four-wire checkpoint
 
 Core `38f1034` passes the full 20,664-assertion suite and the complete docs build.
@@ -689,7 +721,7 @@ Status: `todo`, `doing`, `done`, `deferred` (with reason).
 | C1 | Power-priority sequence allocation | Covered by A2; add as an Australian study mode. Mode `sequence_droop_power`. | done |
 | C2 | Grid-forming passive negative-sequence admittance (balanced EMF behind `Z_v` gives `I2 = -U2/Z_v`) | Constructor `VirtualImpedanceNegativeSequence(r, x)` for a flat admittance at `arg Z_v`, documented as the steady-state negative-sequence equivalent of a balanced-EMF voltage source. Add a study mode. Done as `negative_sequence_virtual_impedance(r, x)`; verified against a grid-forming plant solve. | done |
 | C3 | Status quo: single-phase PV with per-phase Volt-var | Australian study variant keeping native single-phase BMOPF PV (PN_PER_PHASE) at the original customer phases. Mode `single_phase_native`: native BMOPFTools single-phase PV on the original phases with the same loads, solved around upstream bug A10. | done |
-| C4 | Four-leg per-phase Volt-var | Implemented as solver-based `PerPhaseVoltVarWatt` Q-vector → equal-phase-P allocation with shared DC and explicit neutral physics, including voltage-aware fleet coupling. Implicit firmware stamping is not supplied; representative EMT remains separate. | implemented, EMT pending |
+| C4 | Four-leg per-phase Volt-var | Implemented as solver-based `PerPhaseVoltVarWatt` Q-vector → equal-phase-P allocation with shared DC and explicit neutral physics, including voltage-aware fleet coupling. Representative L-filter switched-circuit validation is supplied; implicit firmware stamping and service-controller dynamics are not. | implemented, representative circuit validation supplied |
 
 ## D. Literature
 

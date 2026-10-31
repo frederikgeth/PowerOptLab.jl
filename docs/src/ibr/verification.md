@@ -400,7 +400,30 @@ uniqueness. Conversely, cycling or a failed plant solve does not establish that
 no equilibrium exists. Hardware and dynamic-model validation remain separate
 requirements.
 
-## Recommended higher-fidelity test harness
+## Representative time-domain circuit checks
+
+The Australian time-domain extension (`studies/australian_pv/emt.md`)
+adds an independent event-aligned RK4 circuit for three-leg and four-leg L
+filters. It integrates phase currents, physical neutral return and DC-capacitor
+voltage with explicit centered PWM at fixed POC voltage. Three fixed-sizing
+cases cover a balanced boundary, a binding DC-link limit and a saved Australian
+four-leg unbalanced point. Averaged and switched runs use three time-step
+resolutions, analytic energy/orbit tests and independent saved-record audits.
+
+Mechanism agreement passes, while switched capacitor RMS is about 4 A against
+the unchanged 1 A study budget. The existing `i_sw` configuration gate rejects
+the measured point-specific non-2ω reserve. A first-order 7.5 V ripple-boundary
+point also slightly exceeds that limit under nonlinear capacitor integration;
+the failure is retained. Fundamental certification does not include these
+switching thermal stresses or an exact nonlinear energy certificate.
+
+This experiment has a constant-power DC input and a fixed lumped mean converter
+loss, sampled feedforward modulation and a finite Fourier window. It does not
+validate the optional small-signal source impedance, LCL/split-link dynamics,
+service-controller response, semiconductor losses or feeder stability. Measured
+stress at one point is not a conservative reserve over other dispatches.
+
+## Further higher-fidelity validation
 
 For each topology, build one parameter-identical averaged or switched model in
 PLECS, PSCAD, or an open EMT tool and export machine-readable sweeps. A compact

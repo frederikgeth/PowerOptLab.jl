@@ -18,6 +18,11 @@ neutral path and per-phase VV+VW with one shared DC source. Its
 [eleven accepted cases and phase/neutral teaching figure](four_leg_results.md)
 keep phase/DC sizing fixed and state the additional neutral assumptions.
 
+The [representative switched-circuit extension](emt.md) integrates AC currents
+and DC voltage. Its [results and figures](emt_results.md) show close fundamental
+agreement while retaining capacitor thermal failures under the fixed 1 A budget.
+The fundamental study does not provide switching-thermal certification.
+
 This is the Australian successor to the ENWL showcase. It starts with a small
 real feeder, preserves a converted reference, and makes the teaching experiment's
 changes explicit. The campaign compares **local control laws for 12 PV systems at
