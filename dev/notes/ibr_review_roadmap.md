@@ -89,18 +89,29 @@ was not representative of certifiable hardware.
 - [U] **D3 LCL filters.** The embedded PWM thermal bound supports only L
   filters; LCL is the common commercial topology.
 
-## Temporary/bloat files (R9)
+## Temporary/bloat files (R9) — done
 
-| Item | Action |
-|---|---|
-| `dev/notes/switching_engineering_opf_acceptance.md` | delete (stale release review) |
-| `dev/notes/switching_engineering_opf_goal.md` | delete (agent goal record) |
-| `dev/notes/ibr_review_resolution.md` | delete; this roadmap replaces it |
-| `dev/notes/inverter_pr_review.md`, `inverter_full_opf_validation.md`, `ibr_formulation_design.md`, `equilibrium_workbook_design.md`, `inverter_control_implementation.md` | delete (pre-implementation plans / old reviews) |
-| `dev/notes/documentation_branch_review.md`, `documentation_tutorial_audit.md`, `doe_documentation_workflow.md`, `dsse_review_resolution.md` | delete (historical records, not from this PR) |
-| `evidence/current-35d5cac.json` | byte-identical to `current.json`; check references first |
-| `results/experimental_*` | delete (debugging artefacts) |
-| `studies/australian_pv/*_results.md` twins and superseded study pages | merge into one current page + archive |
+Deleted: 12 temporary dev notes (agent goal/acceptance/review logs, old plans);
+29 superseded study scripts; 10 superseded study pages and 14 figures; all
+tracked historical result folders (`experimental_*`, `sensitivity_*`,
+`coordinated`, `four_leg`, `thermal_energy`, `voltage_aware_*`, ...). All
+historical records remain in `evidence/historical-d2c9a97.json`; pages and
+scripts remain in Git history. `HISTORY.md` summarises them. Kept: the DOE and
+operability roadmaps (forward-looking, not from this PR).
+
+## New items found during the work
+
+- [ ] **R18 Ripple-limit margin.** Switched EMT exceeds the 7.5 V 2ω DC-link
+  ripple limit by 4 mV at one released-OPF four-leg site placed exactly on
+  that limit (averaged model 7.500 V). Options: a small OPF margin on active
+  ripple limits, or a switching correction in the 2ω model. Reported, not fixed.
+- [ ] **R19 Evidence brittleness.** Any edit to a hashed shared script makes
+  all saved records stale (full rerun ~15 min). Consider hashing only the
+  functions a campaign uses, or separating study helpers from campaign runners.
+- [ ] **R20 Equal-service on weak hardware.** Same-service OPF is infeasible
+  when hardware cannot deliver its own volt-var request (legacy fixture). A
+  "same service fraction" variant (match the local λ) would make the
+  comparison defined there too.
 
 ## Log
 
@@ -113,3 +124,9 @@ was not representative of certifiable hardware.
   condition. Releasing volt-var gains only losses unless 253 V binds.
   Superseded scripts/pages/results removed (archived in the historical
   bundle); temporary dev notes deleted.
+- 2026-11-01: campaign regenerated from clean commits and sealed as
+  `evidence/current-05db2db.json`. 60 EMT references / 360 integrations: every
+  thermal bound encloses the switched value (max 4.65 A vs 7 A); one 2ω ripple
+  finding retained (R18). Carrier-domain (972 points) and DC-boundary
+  validations regenerated under the legacy limits. All study CI checks pass
+  locally; package `src/` unchanged; GitHub CI not yet run.
