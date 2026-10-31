@@ -86,6 +86,7 @@ const _HAS_ODS = true
     include("inverter_engineering_audit_tests.jl")
     include("inverter_phase_allocation_tests.jl")
     include("inverter_pwm_allocation_tests.jl")
+    include("inverter_solver_continuation_tests.jl")
     include("inverter_switching_envelope_tests.jl")
     include("inverter_current_envelope_tests.jl")
     include("inverter_dc_voltage_envelope_tests.jl")

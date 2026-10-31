@@ -292,9 +292,22 @@ dispatch-dependent expression, not a factor calibrated at another point.
 Independent numerical integration of exact carrier dwell probabilities checks
 actual frozen-current RMS and modulation feasibility after each solve.
 
+AC switching ripple also produces bridge DC current at zero fundamental
+current. The allocation now includes an all-duty bound on that contribution,
+plus a passive-damping residual. It requires an L filter with proportional
+passive R/L; LCL dynamics are rejected by this embedded thermal model. The
+bound is computed once per filter geometry with exact rational event integrals
+and outward-rounded Bernstein subdivision. It enters the smooth NLP as a bus
+voltage squared coefficient. See the [derivation](../ibr/foundations.md).
+
+This uniform bound can be conservative. For example, the retained four-leg
+fixture with zero neutral inductance exhausts its 1 A budget with the all-duty
+reserve alone. Such a result remains unresolved: infeasibility of a sufficient
+bound does not prove physical infeasibility. No hardware rating is enlarged.
+
 `ConstrainedInverter(...; pwm_thermal_headroom=0.10)` reserves an additional
-validation allowance on the switching component. This allowance does not prove
-a universal bound on AC switching ripple or semiconductor dynamics. The local
+validation allowance on the frozen-current component. This allowance does not
+bound semiconductor dynamics. The local
 allocators and voltage-aware fleet use the same default. Representative EMT at
 the declared filter, switching frequency and source assumptions is still required.
 Capacitor ESR weights, any independent `i_sw`, and calibrated AC RMS reserves

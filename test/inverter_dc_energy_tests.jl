@@ -73,6 +73,13 @@ end
             p_loss_fixed=15.,a_loss=2.,c_loss=.3,In_max=four ? 10. : nothing)
         result=four ? allocate_phase_inverter_services(plant,req;grid_voltage=v,reactive_request=fill(-600.,3)) :
             allocate_inverter_services(plant,req;grid_voltage=v,reactive_request=-1800.)
+        if four
+            # Preserve the original zero-neutral-inductance hardware. Its
+            # all-duty coupled thermal bound exhausts the 1 A budget.
+            @test !solve_status(result).publishable
+            @test result.current_command===nothing
+            continue
+        end
         @test solve_status(result).publishable
         @test result.allocation.plant.i_cap_thermal<=1.00001
         @test all(c.passed for c in physical_feasibility(result).checks)

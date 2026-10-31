@@ -175,75 +175,38 @@ function solve_engineering_coordinated(net,mixed;local_point=nothing,minimum_p_W
             JuMP.set_start_value(h.dre,real(e.voltage_2omega));JuMP.set_start_value(h.dim,imag(e.voltage_2omega))
         end
     end
-    attempts=Any[]
-    accepted_start=Ref{Any}(nothing)
-    function warm_values!()
-        if accepted_start[]!==nothing
-            variables,primal_values,constraints,dual_values=accepted_start[]
-            for (variable,value) in zip(variables,primal_values)
-                isfinite(value) && JuMP.set_start_value(variable,value)
-            end
-            for (constraint,value) in zip(constraints,dual_values)
-                JuMP.is_valid(m,constraint) && isfinite(value) && JuMP.set_dual_start_value(constraint,value)
-            end
-            JuMP.set_attribute(m,"warm_start_init_point","yes")
-            JuMP.set_attribute(m,"warm_start_bound_push",1e-9)
-            JuMP.set_attribute(m,"warm_start_bound_frac",1e-9)
-            JuMP.set_attribute(m,"warm_start_mult_bound_push",1e-9)
-        end
-    end
     function run_stage!(name,weight)
         @objective(m,Max,objective_scale*(objectives[:export]-weight*objectives[:regularizer]))
         PowerOptLab._optimize_inverter_rails!(ctx,[(d.device,handles[id].plant) for (id,d) in devices])
         stage=solve_status(m)
         stage_devices=Dict(id=>extract_device(d,handles[id],stage) for (id,d) in devices)
-        if stage.publishable && all(d.plant.physical_feasibility.passed for d in values(stage_devices))
-            variables=JuMP.all_variables(m)
-            constraints=JuMP.all_constraints(m;include_variable_in_set_constraints=true)
-            accepted_start[]=(variables,JuMP.value.(variables),constraints,JuMP.dual.(constraints))
-        end
-        push!(attempts,(stage=name,weight=weight,raw=stage,raw_solver_status=JuMP.raw_status(m),
+        result=(stage=name,weight=weight,raw=stage,raw_solver_status=JuMP.raw_status(m),
             devices=stage_devices,bus=stage.has_primal ? engineering_bus_voltages(ctx) : Dict(),
             phasors=stage.has_primal ? engineering_device_phasors(handles) : Dict(),
-            total_p_W=stage.has_primal ? sum(JuMP.value(h.plant.p_poc)*h.plant.sb for h in values(handles)) : NaN))
+            total_p_W=stage.has_primal ? sum(JuMP.value(h.plant.p_poc)*h.plant.sb for h in values(handles)) : NaN)
         println("OPF stage=",name," weight=",weight," raw=",stage.termination_status,
-            " P=",last(attempts).total_p_W);flush(stdout)
+            " P=",result.total_p_W);flush(stdout)
+        result
     end
     # The fitted fourth-leg norm is very sharp at cancellation. Start on its
     # zero-current subspace, then remove every temporary row before solving
     # the original problem. This changes neither the final feasible set nor
     # its objective; initialization records cannot be accepted as the result.
-    neutral_cuts=JuMP.ConstraintRef[]
     neutral_groups=Dict{String,Vector{JuMP.ConstraintRef}}()
     if initialize_neutral
         for (id,d) in devices
             d.device.topology===:FOUR_LEG || continue
             h=handles[id].plant
             group=JuMP.ConstraintRef[@constraint(m,sum(h.cri)==0.),@constraint(m,sum(h.cii)==0.)]
-            append!(neutral_cuts,group);neutral_groups[id]=group
-        end
-        if !isempty(neutral_cuts)
-            run_stage!(:neutral_initialization,first(continuation_weights))
-            # Let voltage/current redispatch settle before freeing a sharp,
-            # nearly cancelling low-availability neutral channel. Every row
-            # is still removed before the final full-capability solve.
-            order=sort!(collect(keys(neutral_groups));by=id->(-mixed.spec.requests[id].p_available,id))
-            for (index,id) in enumerate(order)
-                warm_values!()
-                for cut in neutral_groups[id]
-                    JuMP.delete(m,cut)
-                end
-                if index<length(order)
-                    run_stage!(Symbol("neutral_release_"*id),first(continuation_weights))
-                end
-            end
+            neutral_groups[id]=group
         end
     end
-    all(c->!JuMP.is_valid(m,c),neutral_cuts) || error("temporary neutral constraint survived initialization")
-    for weight in continuation_weights
-        warm_values!()
-        run_stage!(:full_capability,weight)
-    end
+    order=sort!(collect(keys(neutral_groups));by=id->(-mixed.spec.requests[id].p_available,id))
+    continuation=PowerOptLab._inverter_solver_continuation!(m,
+        [id=>neutral_groups[id] for id in order],continuation_weights;
+        solve_stage! = run_stage!,accepted=r->r.raw.publishable &&
+            all(d.plant.physical_feasibility.passed for d in values(r.devices)))
+    attempts=continuation.attempts
     raw=solve_status(m)
     extracted=Dict(id=>extract_device(d,handles[id],raw) for (id,d) in devices)
     outcome=PowerOptLab._solve_outcome(m)
@@ -266,7 +229,7 @@ function solve_engineering_coordinated(net,mixed;local_point=nothing,minimum_p_W
         network_checks=equations,voltage_checks=voltage_checks,
         raw_solver_status=JuMP.raw_status(m),model_candidate_accepted=candidate,
         model_context=ctx,handles=handles,attempts=attempts,
-        temporary_neutral_constraints_remaining=count(c->JuMP.is_valid(m,c),neutral_cuts),
+        temporary_neutral_constraints_remaining=continuation.temporary_constraints_remaining,
         scope="matched local current capabilities; released VV/VW commands; independent network audit still required")
     replay=mixed_thermal_replay(net,result)
     accepted=candidate && replay.accepted

@@ -119,8 +119,8 @@ phase-neutral phasors. Hardware/source/continuous rails and phase-policy checks
 gate every stage. A failed stage issues no command and proves no global plant or
 policy infeasibility. A separate unrestricted projection may supply a physical
 witness without replacing the failed policy. Current limits are RMS. The
-optional centered-PWM term uses frozen fundamental currents; full switching
-dynamics still require representative EMT validation.
+optional centered-PWM term includes an all-duty AC-ripple-induced DC thermal
+reserve; full switching dynamics still require representative EMT validation.
 """
 function allocate_phase_inverter_services(inv::AdvancedInverter,request::InverterControlRequest;
         grid_voltage,reactive_request,active_fraction=(1.,1.,1.),volt_watt_basis::Symbol=:rated,

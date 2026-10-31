@@ -20,6 +20,7 @@ function _validate_allocation_pwm(inv,headroom)
     inv.pwm_dc_source_r===nothing && iszero(inv.pwm_dc_source_l) ||
         throw(ArgumentError("embedded PWM allocation requires an open carrier-frequency DC source"))
     !inv.pwm_ac_ripple || throw(ArgumentError("automatic AC-ripple reserve closure is separate from embedded DC thermal allocation"))
+    _switching_envelope_geometry(inv)
 end
 
 # For RMS phasors z=Uj-Uk, let a_j(t)=sqrt(2)Re(Ij exp(jwt)). Then
@@ -47,13 +48,16 @@ function _allocation_pwm_variance(inv,ur,ui,ir,ii,dr,di,pconv,s2r,s2i;headroom=_
     # mean-square denominator upwards over the complete line cycle.
     lo,hi=voltage_bounds===nothing ? (inv.v_dc-ripple,inv.v_dc+ripple) : voltage_bounds
     upper=second/lo-(pconv^2+(s2r^2+s2i^2)/2)/hi^2
-    (1+headroom)^2*upper
+    _allocation_coupled_pwm_variance(inv,(1+headroom)^2*upper,hi)
 end
 
 # Independent numerical integration of exact carrier dwell probabilities.
 # Common-mode injection cancels because all bridge-leg currents sum to zero.
 function _allocation_pwm_carrier(inv,u,i,d;angles=2048,energy=nothing)
-    total=0.;margin=Inf
+    total=0.;ac_total=0.;bus_max=0.;margin=Inf
+    geometry=_switching_envelope_geometry(inv)
+    K=inv.topology===:THREE_LEG ? geometry.gate_map :
+        [geometry.gate_map;geometry.neutral_gate_map']
     for k in 0:angles-1
         th=2pi*(k+.5)/angles;rot=cis(th)
         v=energy===nothing ? inv.v_dc+real(d*rot^2) :
@@ -71,8 +75,13 @@ function _allocation_pwm_carrier(inv,u,i,d;angles=2048,energy=nothing)
         moment=sum(min(duties[j],duties[l])*current[j]*current[l]
             for j in eachindex(current),l in eachindex(current))
         total+=max(0.,moment-average^2)
+        ac_total+=v^2/inv.f_sw^2*_carrier_ac_bridge_variance(duties,K)
+        bus_max=max(bus_max,v)
     end
-    (rms=sqrt(total/angles),modulation_margin=margin)
+    bound=_carrier_thermal_bound(inv)
+    (rms=sqrt((total+ac_total)/angles)+bound.damping_rms_per_V*bus_max,
+        frozen_rms=sqrt(total/angles),ac_lossless_rms=sqrt(ac_total/angles),
+        damping_reserve=bound.damping_rms_per_V*bus_max,modulation_margin=margin)
 end
 
 function _allocation_pwm_checks(inv,u,i,d,i2sq,base_switching;headroom=_PWM_ALLOCATION_HEADROOM,energy=nothing)
@@ -82,6 +91,9 @@ function _allocation_pwm_checks(inv,u,i,d,i2sq,base_switching;headroom=_PWM_ALLO
     actual=sqrt(max(0.,w2*i2sq+ws*(base_switching+carrier.rms^2)))
     checks=InverterLimitCheck[
         _inverter_limit_check("allocation_pwm_carrier_prediction",:A,carrier.rms,0.,Inf),
+        _inverter_limit_check("allocation_pwm_frozen_current",:A,carrier.frozen_rms,0.,Inf),
+        _inverter_limit_check("allocation_pwm_ac_induced_current",:A,carrier.ac_lossless_rms,0.,Inf),
+        _inverter_limit_check("allocation_pwm_damping_reserve",:A,carrier.damping_reserve,0.,Inf),
         _inverter_limit_check("allocation_pwm_modulation",:V,carrier.modulation_margin,0.,Inf),
         _inverter_limit_check("allocation_pwm_quadrature",:A,abs(carrier.rms-coarse.rms),0.,1e-4)]
     inv.i_cap_max===nothing || push!(checks,

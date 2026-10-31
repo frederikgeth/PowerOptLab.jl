@@ -33,7 +33,8 @@ end
             @test all(a.raw.publishable for a in r.attempts)
             @test r.devices["pv"].plant.physical_feasibility.passed
             @test r.devices["pv"].plant.p_dc<=available+1e-4
-            @test r.devices["pv"].plant.p_poc>1000.
+            @test r.devices["pv"].plant.p_poc>500.
+            @test r.devices["pv"].plant.i_cap_thermal<=1.00001
             @test JuMP.objective_sense(PowerOptLab._opf_model(r.model_context))===JuMP.MOI.MAX_SENSE
             reference===nothing || @test r.devices["pv"].plant.p_poc≈reference atol=.005
             reference=r.devices["pv"].plant.p_poc

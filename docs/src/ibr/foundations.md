@@ -494,6 +494,62 @@ electrical impedances or solve the capacitor temperature.
 
 ## 9. Carrier-level PWM ripple and sequential closure
 
+### Coupled thermal allocation in constrained dispatch
+
+Embedded centered-PWM allocation additionally includes DC current caused by
+AC switching ripple. This term remains present when fundamental current is
+zero. The following bound applies to a monolithic three/four-leg L filter with
+proportional passive R/L and an open carrier-frequency DC source.
+
+Let ``t`` be normalized carrier time, ``a_j=(1-d_j)/2`` and
+``h_j(t)=-d_jt+(t-a_j)_+`` on ``0\le t\le1/2``. The lossless periodic leg
+ripple is ``i_L=V_{dc}T_{sw}Kh``, where ``K`` maps physical leg voltages to
+current derivatives and includes the fourth neutral leg. Thus
+
+```math
+B(d,K)=2\int_0^{1/2}(g(t)^TKh(t))^2\,dt,\qquad
+I_{dc,AC,L}^2=(V_{dc}T_{sw})^2 B(d,K).
+```
+
+On each gate interval, the bridge current is affine and its square integrates
+exactly. Centered gates are even about mid-carrier and the lossless ripple is
+odd. This contribution therefore has zero carrier mean and is orthogonal to
+the even frozen-fundamental carrier current. Their variances add.
+
+For each duty ordering, write the extreme duties as ``(1\pm r)/2``, with
+``0\le r\le m_{max}``. The middle duties use one unit-box coordinate for
+three legs and two ordered unit-box coordinates for four legs. The event
+integral is polynomial of degree at most five in each coordinate. Exact
+rational interpolation and a tensor Bernstein basis give an upper bound on
+the entire box. Subdivision rounds coefficients upward; stopping early only
+makes the bound more conservative. All duty permutations are covered. The
+result is cached per geometry and enters the NLP as a constant times the
+upper bus-voltage bound squared, without event sorting inside the NLP.
+
+For damping rate ``\alpha``, the periodic passive response differs from its
+lossless primitive by at most ``\alpha/\omega_{sw}`` times the primitive RMS.
+Because leg currents sum to zero, ``g^T\delta i=(g-1/2)^T\delta i``. A
+separate residual ``D\le\alpha\sum_j I_{L,j,bound}/(2\omega_{sw})`` bounds
+the mean-subtracted damped bridge current. Young's inequality gives
+
+```math
+I_{sw}^2\le(1+\eta)(F+V_{upper}^2T_{sw}^2B_{upper})
+ +(1+1/\eta)D^2,\qquad \eta=\alpha/\omega_{sw},
+```
+
+where ``F`` is the frozen-current variance enclosure including the declared
+10% validation allowance. At zero damping the residual vanishes and the
+lossless sum is used directly. No thermal rating is enlarged. An all-duty
+bound can exhaust a rating even if a particular waveform would fit; rejection
+by this sufficient bound does not prove physical infeasibility.
+
+This remains a periodic carrier model with frozen slow quantities. The slow
+energy balance retains the declared fitted mean converter-loss model; it does
+not infer extra filter/semiconductor heating from an ideal switched orbit.
+Carrier-scale bus variation, low-frequency dynamics of switching losses,
+dead time, semiconductor drops and transients require separate validation.
+The independent switched EMT comparison must therefore remain a separate gate.
+
 The low-frequency model above cannot infer switching stress from line-frequency
 RMS current alone: the DC-link current depends on correlated switch states. For
 an ideal two-level leg ``\ell`` with top-switch function

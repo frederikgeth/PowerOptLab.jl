@@ -191,10 +191,11 @@ for a standalone dispatch solve. There is no implicit dispatch objective.
 Supports THREE_LEG, FOUR_LEG and SPLIT_DC with `grid_forming=false` and
 `pwm_strategy=:NONE`; fixed RMS current reserves remain supported. Monolithic
 THREE_LEG/FOUR_LEG also support `:CENTERED` with an open carrier-frequency DC
-source through embedded shared-carrier thermal allocation. Its analytic
-frozen-fundamental variance enclosure participates in every objective stage;
-`pwm_thermal_headroom=0.10` is a validation allowance, not a universal bound on
-AC ripple or unmodeled dynamics. Independent carrier-dwell quadrature gates
+source and an inductive filter with proportional passive R/L through embedded
+shared-carrier thermal allocation. Frozen-current variance and an all-duty
+AC-ripple-induced DC-current bound participate in every objective stage.
+`pwm_thermal_headroom=0.10` is an additional frozen-current validation allowance,
+not a bound on unmodeled dynamics. Independent carrier/event quadrature gates
 publication. Automatic AC reserve closure and split-link PWM allocation are
 not provided by this wrapper. Representative EMT is still required. The default
 DC source retains the request availability upper bound. Supply
