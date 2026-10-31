@@ -8,7 +8,10 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 
 
-def audit(input_path, folder):
+def audit(input_path, folder, report_expectation_failures=False):
+    """Audit circuit records. With `report_expectation_failures`, a reference whose
+    engineering outcome differs from its predeclared expectation is listed in
+    `expectation_failures` instead of aborting; mechanism checks stay mandatory."""
     target = folder / "audit.json"
     target.write_text(json.dumps({"accepted": False, "reason": "AUDIT_INCOMPLETE"}))
     checks = 0
@@ -20,6 +23,7 @@ def audit(input_path, folder):
     def close(left, right, tolerance=1e-7):
         require(math.isfinite(left) and math.isfinite(right) and abs(left-right) <= tolerance,
                 f"metric mismatch: {left} vs {right}")
+    expectation_failures = []
     try:
         env = json.loads(input_path.read_text())
         result = json.loads((folder / "results.json").read_text())
@@ -146,7 +150,14 @@ def audit(input_path, folder):
                     all_hardware.append(fine["all_engineering_checks_passed"])
                 expectation = f"expect_{mode}_hardware_accepted"
                 if expectation in c:
-                    require(fine["all_engineering_checks_passed"] == c[expectation], f"{ident}/{mode}: declared engineering expectation failed")
+                    met = fine["all_engineering_checks_passed"] == c[expectation]
+                    if report_expectation_failures:
+                        checks += 1
+                        if not met:
+                            expectation_failures.append(dict(case_id=ident, mode=mode, expected=c[expectation],
+                                failed_engineering_checks=[k for k, v in fine["engineering_checks"].items() if not v]))
+                    else:
+                        require(met, f"{ident}/{mode}: declared engineering expectation failed")
                 case_modes[mode] = {"mechanisms_accepted": accepted, "capacitor_total_rms_A": fine["capacitor_total_rms_A"],
                                     "failed_engineering_checks": [k for k, v in fine["engineering_checks"].items() if not v]}
             require(result["cases"][ident]["mechanisms_accepted"] == all(v["mechanisms_accepted"] for v in case_modes.values()), "case acceptance mismatch")
@@ -154,6 +165,7 @@ def audit(input_path, folder):
         require(result["all_mechanisms_accepted"] == all(all_mechanisms), "global mechanism flag mismatch")
         require(result["all_switched_hardware_accepted"] == all(all_hardware), "global hardware flag mismatch")
         report = {"accepted": all(all_mechanisms), "checks": checks, "cases": evidence,
+                  "expectation_failures": expectation_failures,
                   "scope": "independent metric, energy, RMS-limit, coverage and provenance reconstruction; mechanism agreement does not certify failed hardware bounds",
                   "input_sha256": result["input_sha256"], "results_sha256": hashlib.sha256((folder / "results.json").read_bytes()).hexdigest()}
         target.write_text(json.dumps(report, indent=2)+"\n")

@@ -21,6 +21,7 @@ REPO = Path(__file__).resolve().parents[2]
 ROOT = REPO/"studies/australian_pv"
 CONDITIONS = ["nominal", "high_source", "rotated_unbalance", "night", "oversized_dc"]
 LABELS = ["Nominal", "High source", "Rotated 2% U₂", "Night", "Oversized DC"]
+TICKS = ["Nominal", "High\nsource", "Rotated\n2% U₂", "Night", "Oversized\nDC"]
 MODES = ["local", "opf_equal_service", "opf_vv_released"]
 MODE_LABELS = {"local": "Local control", "opf_equal_service": "OPF, same volt-var service",
                "opf_vv_released": "OPF, volt-var released"}
@@ -198,7 +199,7 @@ def publish():
     axes[1, 0].axhline(PLANNING_V, color="#b2182b", ls="--", lw=1, label="253 V planning limit")
     axes[1, 0].axhline(SUSTAINED_V, color="#7f0000", ls=":", lw=1, label="258 V sustained-overvoltage setting")
     for ax in (axes[0, 0], axes[0, 1], axes[1, 0]):
-        ax.set_xticks(x, LABELS)
+        ax.set_xticks(x, TICKS)
         ax.spines[["top", "right"]].set_visible(False)
     axes[0, 0].axhline(0, color="#777", lw=.7);axes[0, 1].axhline(0, color="#777", lw=.7)
     axes[0, 0].set(title="a  Export: nearly identical unless the feeder limit binds", ylabel="Total PV export at POC (kW)")
@@ -262,7 +263,7 @@ def publish():
     axes[2].axhline(env["agreement_tolerance"]["reactive_var"], color="#c47832", ls="--", lw=1, label="tolerance, var")
     axes[2].set(yscale="log", xticks=x, title="c  PF/OPF agreement at equal service",
                 ylabel="Local fixed point vs OPF difference")
-    axes[2].set_xticks(x, LABELS, rotation=20)
+    axes[2].set_xticks(x, TICKS)
     axes[2].legend(frameon=False, fontsize=8)
     fig.suptitle(f"Checks: {emt['references']} fixed-POC EMT references ({emt['integrations']} integrations) and the "
                  "simulation/optimisation agreement", fontsize=12)
@@ -336,6 +337,11 @@ def publish():
             if l and r:
                 lines.append(f"| {label} | {kw(float(l['p_poc_W']))} | {kw(float(r['p_poc_W']))} | "
                              f"{kw(float(r['p_poc_W'])-float(l['p_poc_W']))} |")
+        infeasible = [LABELS[CONDITIONS.index(c)] for c in CONDITIONS
+                      if legacy.get((c, "opf_equal_service"), {}).get("accepted") == "false"]
+        if infeasible:
+            lines += ["", "With this fixture, same-service OPF has no accepted solution in: " + ", ".join(infeasible) +
+                      ". The hardware cannot deliver its own volt-var request there, so 'same service' is unattainable."]
         lines.append("")
     cov = emt["thermal_prediction_coverage"]
     margin = min(v["predicted_A"]-v["switched_A"] for v in cov.values())
@@ -348,7 +354,23 @@ def publish():
         f"{margin:.3f} A). The EMT circuit is separately coded in this repository and holds the POC voltage fixed; it is not a "
         "PSCAD/PLECS comparison or a hardware test, and it omits PLL, controller and feeder dynamics. The thermal bound was "
         "revised after earlier night-time misses and is checked here with the same selection rule, so this is not an "
-        "out-of-sample validation.", "",
+        "out-of-sample validation.", ""]
+    findings = emt.get("switched_hardware_findings", [])
+    if findings:
+        lines.append("**Retained EMT finding.** The switched circuit fails a hardware check that the model passes at:")
+        for f in findings:
+            text = f"- `{f['case_id']}`: {', '.join(f['failed_engineering_checks'])}"
+            if "dc_2omega_peak_V" in f:
+                text += (f" — switched 2ω DC-link ripple {f['dc_2omega_peak_V']:.4f} V against the {f['limit_V']:g} V limit "
+                         f"(averaged model {f['averaged_dc_2omega_peak_V']:.4f} V). The OPF places this site exactly on the "
+                         "ripple limit; switching adds a few millivolts the averaged model omits.")
+            lines.append(text)
+        lines += ["", "This point is not counted as hardware-feasible. A small margin on active ripple limits in the OPF, "
+                  "or a switching correction in the 2ω model, would close the gap; neither is applied here.", ""]
+    else:
+        lines.append("All switched references pass every declared hardware check.")
+        lines.append("")
+    lines += [
         "**Solve times** (diagnostic, this machine): " + "; ".join(
             f"{MODE_LABELS[m]} median {np.median([float(cases[(c, m)]['elapsed_s']) for c in CONDITIONS]):.1f} s"
             for m in MODES) +

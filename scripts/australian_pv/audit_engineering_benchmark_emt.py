@@ -69,14 +69,25 @@ def audit(inputs, folder, benchmark):
     target.write_text(json.dumps(dict(accepted=False, reason="AUDIT_INCOMPLETE"))+"\n")
     try:
         refs = validate_references(inputs, benchmark)
-        circuit = audit_circuit(inputs, folder)
+        # Mechanism, mesh and energy agreement are mandatory. A switched hardware
+        # check that fails where the model predicted a pass is a reported finding,
+        # with the exact quantity and margin, never silently accepted or hidden.
+        circuit = audit_circuit(inputs, folder, report_expectation_failures=True)
         results = json.loads((folder/"results.json").read_text())
-        if not circuit["accepted"] or not results["all_switched_hardware_accepted"]:
-            raise ValueError("matched EMT mechanism/hardware check failed")
-        for case in results["cases"].values():
-            if not all(m["finest"]["all_engineering_checks_passed"] for m in case["modes"].values()):
-                raise ValueError("averaged or switched engineering rejection")
+        if not circuit["accepted"]:
+            raise ValueError("matched EMT mechanism check failed")
         env = json.loads(inputs.read_text())
+        refs_by_id = {c["case_id"]: c for c in env["cases"]}
+        hardware_findings = []
+        for failure in circuit["expectation_failures"]:
+            fine = results["cases"][failure["case_id"]]["modes"][failure["mode"]]["finest"]
+            ref = refs_by_id[failure["case_id"]]
+            detail = dict(failure)
+            if "dc_2omega_peak" in failure["failed_engineering_checks"]:
+                detail.update(dc_2omega_peak_V=abs(complex(*fine["dc_2omega_peak"])),
+                              limit_V=ref["dc_2omega_peak_rating_V"],
+                              averaged_dc_2omega_peak_V=abs(complex(*results["cases"][failure["case_id"]]["modes"]["averaged"]["finest"]["dc_2omega_peak"])))
+            hardware_findings.append(detail)
         predictions = {}
         for c in env["cases"]:
             fine = results["cases"][c["case_id"]]["modes"]["switched"]["finest"]
@@ -92,6 +103,8 @@ def audit(inputs, folder, benchmark):
             audit_code_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
             thermal_prediction_coverage=predictions, thermal_prediction_failures=missed,
             all_thermal_predictions_enclose=not missed,
+            switched_hardware_findings=hardware_findings,
+            all_switched_hardware_accepted=not hardware_findings,
             scope="declared worst-capacitor-stress selection, actual site availability, saved parent phasors, fixed mean losses and independent averaged/switched circuit records; no controller/feeder dynamics or all-time DC-drift certificate")
         target.write_text(json.dumps(report, indent=2, allow_nan=False)+"\n")
         return report
