@@ -109,6 +109,20 @@ model is built to expose; if that is deliberate, say so. Switching ripple,
 hold-up energy and control requirements add further lower bounds that the 2ω
 formula does not cover.
 
+**Size `i_cap_max` for switching ripple, not only 2ω.** With centred PWM
+enabled, the carrier-frequency capacitor current dominates. For a two-level
+three-phase bridge at unity power factor and modulation index ``M``, Kolar and
+Round (2006) give
+``I_{C,rms}\approx I_{ph}\sqrt{2M\left[\tfrac{\sqrt3}{4\pi}+\cos^2\varphi\left(\tfrac{\sqrt3}{\pi}-\tfrac{9M}{16}\right)\right]}``,
+about ``0.59\,I_{ph}`` at ``M\approx0.87`` (no filter ripple). For the 6 kVA
+example this is about 5.4 A at rated current. A 2ω-only budget of order 1 A
+then caps the inverter near 20% of its nameplate. Check the declared nameplate
+is deliverable before any study: the Australian study's `rated_capability.jl`
+solves the AS/NZS 4777.2 volt-var corners and requires apparent power or phase
+current, never an internal budget, to be the limit. Declared peak-current limits
+need the same check, since the conservative carrier envelope adds to
+``\sqrt2\,I_{max}``.
+
 ## Current rating and headroom
 
 `i_max` is the per-leg semiconductor (or inductor) rating, distinct from

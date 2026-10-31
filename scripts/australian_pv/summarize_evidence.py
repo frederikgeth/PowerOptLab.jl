@@ -14,7 +14,7 @@ from plot_engineering_benchmark import audited_records, ROOT
 
 def summarize(*, check=False):
     folder = ROOT/"results/engineering_benchmark"
-    env, benchmark = audited_records(folder)
+    env, benchmark, _ = audited_records(folder)
     inputs = ROOT/"results/engineering_benchmark_emt_inputs.json"
     refs = json.loads(inputs.read_text())
     # Replay audits separately: cross-platform floating arithmetic may alter
@@ -33,7 +33,7 @@ def summarize(*, check=False):
         raise ValueError("complete current acceptance gates required")
     if not retained_failure:
         raise ValueError("retained LF-only hardware failure is missing")
-    compact = [c for c in refs["cases"] if c["parent_case_id"] == "night" and c["parent_mode"] == "coordinated"
+    compact = [c for c in refs["cases"] if c["parent_case_id"] == "night" and c["parent_mode"] == "opf_vv_released"
                and c["local_controller"] in ("mean_vv_vw", "phase_vv_vw")]
     if len(compact) != 2 or {c["topology"] for c in compact} != {"THREE_LEG", "FOUR_LEG"}:
         raise ValueError("compact reference coverage changed")
@@ -44,11 +44,13 @@ def summarize(*, check=False):
         description="Fixed-size three/four-leg night references; full records restored from current.json",
         inputs_sha256=digest(inputs), cases=compact)}
     summary = dict(
-        status="current", thermal_model=env["pwm_thermal_model"], sizing_changed=env["sizing_changed"],
+        status="current", thermal_model=env["pwm_thermal_model"], fixture_limits=env["fixture_limits"],
+        operating_limits=env["operating_limits"], rated_capability_accepted=env["rated_capability_accepted"],
         generation_revision=env["git_revision"], generation_julia=env["julia_version"],
         pf_opf=dict(points=benchmark["accepted"], inverter_rows=sum(len(c["devices"]) for c in benchmark["cases"].values()),
             record_checks=benchmark["conditions"], physical_checks=benchmark["physical_checks"],
-            independent_network_checks=benchmark["network_conditions"]),
+            separately_coded_network_checks=benchmark["network_conditions"],
+            agreement=benchmark["agreement"]),
         carrier_domain=dict(points=domain["cases"], checks=domain["checks"],
             retained_engineering_failures=domain["engineering_limit_failures"]),
         boundary=dict(checks=boundary["checks"], retained_lf_only_hardware_failure=retained_failure),
@@ -57,13 +59,13 @@ def summarize(*, check=False):
             all_thermal_predictions_enclose=emt["all_thermal_predictions_enclose"],
             thermal_prediction_failures=emt["thermal_prediction_failures"],
             maximum_switched_capacitor_A=max(r["switched_A"] for r in emt["thermal_prediction_coverage"].values()),
-            capacitor_rating_A=1., minimum_prediction_margin_A=min(r["predicted_A"]-r["switched_A"] for r in emt["thermal_prediction_coverage"].values())),
+            capacitor_rating_A=env["operating_limits"]["capacitor_rms_A"], minimum_prediction_margin_A=min(r["predicted_A"]-r["switched_A"] for r in emt["thermal_prediction_coverage"].values())),
         input_sha256={str(p.relative_to(ROOT)): digest(p) for p in (
             folder/"environment.json", folder/"audit.json", inputs,
             ROOT/"results/engineering_benchmark_emt/matched_audit.json",
             ROOT/"results/engineering_domain_inputs.json", ROOT/"results/engineering_domain_audit.json",
             ROOT/"results/engineering_boundary_emt_inputs.json", ROOT/"results/engineering_boundary_emt/audit.json")},
-        scope="Service choices differ: free-Q OPF releases VV/VW. Periodic frozen-slow-quantity carrier bounds and fixed-POC EMT; no global optimality, regional conformity, feeder/controller dynamic or all-time transient certificate.")
+        scope="Local control, same-service OPF and volt-var-released OPF under identical hardware; carrier-domain and DC-boundary validations use the legacy fixture limits. Periodic frozen-slow-quantity carrier bounds and fixed-POC EMT; no global optimality, regional conformity, feeder/controller dynamic or all-time transient certificate.")
     artifacts["current_summary.json"] = summary
     for name, value in artifacts.items():
         encoded = json.dumps(value, indent=2, sort_keys=True, allow_nan=False)+"\n"

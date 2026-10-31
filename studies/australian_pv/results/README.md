@@ -1,25 +1,24 @@
-# Review data and full evidence
+# Results
 
-The current coupled thermal campaign is summarized in
-[`engineering_benchmark/cases.csv`](engineering_benchmark/cases.csv),
-[`devices.csv`](engineering_benchmark/devices.csv), and the
-[compact evidence summary](../evidence/current_summary.json). Its
-[report and teaching figures](../engineering_benchmark.md) describe the service
-tradeoff and model scope. Hardware sizing is unchanged.
+Tracked here (compact, reviewable):
 
-Other retained case/summary files and metadata belong to the historical
-experiments identified in the [evidence index](../evidence/README.md).
-They have not been relabeled as current-source validation.
+- `engineering_benchmark/` — current matched PF/OPF benchmark: `cases.csv`,
+  `devices.csv`, `agreement.json`, `rated_capability.csv`, `environment.json`,
+  `summary.json`. Report: [engineering_benchmark.md](../engineering_benchmark.md).
+- `engineering_benchmark_legacy_fixture/cases.csv` — the same benchmark with the
+  legacy 1 A / 14 A fixture, kept as a sensitivity. That fixture fails the
+  rated-capability gate.
+- `engineering_domain_summary.csv`, `engineering_boundary_emt/comparison.csv` —
+  carrier-model validation summaries.
+- `validation.json`, `modified_validation.json` — network conversion checks for
+  the CSIRO feeder import.
 
-Full raw records, failed outcomes, phasors and waveforms are distributed in
-checksum-verified compressed bundles. Restore current records from the repository
-root before running saved-record tests or publication scripts:
+Full raw records (saved phasors, EMT waveforms, solver stages) are in
+checksum-verified bundles. Restore them from the repository root before running
+saved-record tests or the report generator:
 
 ```sh
 python scripts/australian_pv/evidence.py restore studies/australian_pv/evidence/current.json
 ```
 
-Generated payloads remain ignored locally after restoration. The Git review tree
-retains compact tables and fixtures; the bundles preserve the complete result
-bytes. Historical records should be restored into a separate directory using
-the evidence index instructions.
+Earlier campaigns: [study history](../HISTORY.md).

@@ -1,4 +1,4 @@
-"""Use the committed historical phasor point as an input fixture, not as a new run."""
+"""Use a restored current-benchmark phasor point as an input fixture, not as a new run."""
 import json
 from pathlib import Path
 import unittest
@@ -11,13 +11,13 @@ ROOT = Path(__file__).resolve().parents[2] / "studies/australian_pv"
 class NetworkSIAuditTests(unittest.TestCase):
     def setUp(self):
         self.net = json.loads((ROOT / "networks/LV3_55bus.bmopf.json").read_text())
-        self.point = json.loads((ROOT / "results/thermal_energy/points/fundamental_s1.json").read_text())
+        self.point = json.loads((ROOT / "results/engineering_benchmark/points/nominal_opf_vv_released.json").read_text())
         self.case = dict(source_pu=1., source_vuf=.01, source_negative_angle_rad=0., phase_shares=[.6, .25, .15], load_scale=1.)
 
     def audit(self):
         return audit_network(self.net, self.point, self.case)
 
-    def test_independent_circuit_and_limits(self):
+    def test_circuit_and_limits(self):
         r = self.audit()
         self.assertTrue(r["accepted"])
         self.assertGreater(len(r["checks"]), 800)

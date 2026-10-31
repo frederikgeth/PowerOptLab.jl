@@ -34,22 +34,25 @@ jobs:
       - run: julia --project=. scripts/instantiate_pinned.jl
       - name: Restore checksum-verified current evidence
         run: python scripts/australian_pv/evidence.py restore studies/australian_pv/evidence/current.json
-      - name: Coupled OPF solver and failed-record gates
+      - name: Rated-capability gate for the study fixture
+        run: julia --project=. scripts/australian_pv/rated_capability.jl
+      - name: OPF solver, rated-capability and PF/OPF agreement tests
         run: julia --project=. scripts/australian_pv/test_coordinated_engineering.jl
       - name: Saved-point SI audit and corruption gates
         run: julia --project=. scripts/australian_pv/test_engineering_benchmark.jl
       - name: Python evidence, selection and publication corruption gates
         run: |
           python scripts/australian_pv/test_evidence.py
+          python scripts/australian_pv/test_network_si_audit.py
           python scripts/australian_pv/test_engineering_domain.py
           python scripts/australian_pv/test_engineering_benchmark_emt.py
           python scripts/australian_pv/test_plot_engineering_benchmark.py
           python scripts/australian_pv/summarize_evidence.py --check
-      - name: Independent EMT circuit regression
+      - name: EMT circuit regression
         run: julia --project=. scripts/australian_pv/test_emt_circuit.jl
   full-emt:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    name: Regenerate fixed-sizing mixed PF/OPF and full EMT
+    name: Regenerate matched PF/OPF benchmark and full EMT
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -66,7 +69,7 @@ jobs:
         run: |
           julia --project=. scripts/australian_pv/run_engineering_benchmark.jl /tmp/engineering-benchmark python
           julia --project=. scripts/australian_pv/audit_engineering_benchmark.jl /tmp/engineering-benchmark python
-      - name: Select and integrate all 32 averaged/switched EMT references
+      - name: Select and integrate all averaged/switched EMT references
         run: |
           julia --project=. scripts/australian_pv/prepare_engineering_benchmark_emt.jl /tmp/engineering-benchmark /tmp/engineering-emt-inputs.json
           julia --project=. scripts/australian_pv/emt_circuit.jl /tmp/engineering-emt-inputs.json /tmp/engineering-emt

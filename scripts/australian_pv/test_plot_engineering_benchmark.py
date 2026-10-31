@@ -1,4 +1,4 @@
-"""Publication must match audited phasors and retain thermal-prediction misses."""
+"""Publication must match audited phasors, derived limit counts and the PF/OPF agreement."""
 import csv
 import json
 from pathlib import Path
@@ -28,8 +28,30 @@ class BenchmarkPublicationTests(unittest.TestCase):
             writer.writerows(rows)
 
     def test_complete_saved_point_publication(self):
-        _, truth = audited_records(self.folder)
+        _, truth, cases = audited_records(self.folder)
         self.assertTrue(truth["all_planned_accepted"])
+        self.assertEqual(len(cases), 15)
+
+    def test_binding_summary_corrupted(self):
+        self.change_csv("cases.csv", lambda rows: rows[0].update(binding_counts="capacitor_current=12"))
+        with self.assertRaises(ValueError):
+            audited_records(self.folder)
+
+    def test_planning_exceedance_hidden(self):
+        def hide(rows):
+            row = next(r for r in rows if r["planning_253V_exceeded"] == "true")
+            row["planning_253V_exceeded"] = "false"
+        self.change_csv("cases.csv", hide)
+        with self.assertRaises(ValueError):
+            audited_records(self.folder)
+
+    def test_agreement_rejected(self):
+        path = self.folder/"audit.json"
+        audit = json.loads(path.read_text())
+        audit["agreement"]["nominal"]["accepted"] = False
+        path.write_text(json.dumps(audit))
+        with self.assertRaises(ValueError):
+            audited_records(self.folder)
 
     def test_case_export_corrupted(self):
         self.change_csv("cases.csv", lambda rows: rows[0].update(p_poc_W="12345"))

@@ -6,8 +6,8 @@ One network solve can contain mean-voltage, worst-phase, positive-sequence and
 per-phase four-leg VV+VW controllers. Each site owns its plant, controller,
 available-power request and operating mode. Unselected native devices retain
 their network equations. Run this example from a repository checkout; it uses
-the prepared Australian feeder and its fixed hardware rather than resizing
-devices to make the comparison pass.
+the prepared Australian feeder and the declared fixture, which passes the
+rated-capability gate (`scripts/australian_pv/rated_capability.jl`).
 
 ```julia
 using PowerOptLab, Test
@@ -39,25 +39,32 @@ local_result = solve_voltage_aware_inverter_fleet(network, mixed.spec;
 @test all(r.passed for r in values(physical_feasibility(local_result)))
 @test mixed_thermal_replay(network, local_result).accepted
 
-local_point = engineering_point(local_result, condition)
+# Local controllers do not enforce the 253 V planning limit.
+local_point = engineering_point(local_result, condition; voltage_max=nothing)
 local_export = sum(row.p_poc_W for row in voltage_aware_inverter_rows(local_result))
-coordinated = solve_engineering_coordinated(network, mixed;
+
+# Same reactive service: each site's exact local volt-var request and volt-watt
+# ceiling, evaluated at the OPF's own voltages. Without the 253 V row this must
+# reproduce the local fixed point.
+same = solve_engineering_equal_service(network, mixed; local_point, voltage_max=nothing)
+@test same.service_converged
+agreement = engineering_agreement(local_point,
+    engineering_point(same, condition; coordinated=true), mixed)
+@test agreement["accepted"]
+
+# Volt-var released: Q free, 253 V planning limit enforced.
+released = solve_engineering_coordinated(network, mixed;
     local_point, minimum_p_W=local_export)
-@test coordinated.model_candidate_accepted
-@test coordinated.temporary_neutral_constraints_remaining == 0
-@test last(coordinated.attempts).stage === :full_capability
-@test last(coordinated.attempts).weight == 0.
+@test released.model_candidate_accepted
+@test released.temporary_neutral_constraints_remaining == 0
 ```
 
-The coordinated solve releases the VV/VW commands and maximizes total active
-export with free Q. Hardware, availability, physical current capabilities and
-network limits stay fixed. This compares two service choices; it cannot show
-that coordination improves export while delivering the same reactive service.
-The final solve removes every temporary neutral row and uses no regularizer.
-Only raw solver success plus physical/network/replay acceptance can publish it.
-Accepted-stage primal/dual warm starts and exception-safe row cleanup live in
-package solver infrastructure; the neutral-release ordering and dispatch policy
-remain choices of this case study.
+The agreement check is the main test that simulation and optimisation describe
+the same physics: two separately built formulations, one equilibrium. The
+released OPF answers a different question (what Q freedom buys) and needs
+network-operator agreement under AS/NZS 4777.2. With the declared fixture, all
+sites in this nominal condition are limited by PV availability, so the released
+OPF gains only converter and filter losses.
 
 | Path | Supported scope | Explicit boundary |
 |---|---|---|

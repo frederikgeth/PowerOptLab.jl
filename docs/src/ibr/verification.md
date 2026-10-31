@@ -400,87 +400,34 @@ uniqueness. Conversely, cycling or a failed plant solve does not establish that
 no equilibrium exists. Hardware and dynamic-model validation remain separate
 requirements.
 
-## Representative time-domain circuit checks
+## Australian study checks
 
-The Australian time-domain extension (`studies/australian_pv/emt.md`)
-adds an independent event-aligned RK4 circuit for three-leg and four-leg L
-filters. It integrates phase currents, physical neutral return and DC-capacitor
-voltage with explicit centered PWM at fixed POC voltage. Three fixed-sizing
-cases cover a balanced boundary, a binding DC-link limit and a saved Australian
-four-leg unbalanced point. Averaged and switched runs use three time-step
-resolutions, analytic energy/orbit tests and independent saved-record audits.
+The Australian LV study (`studies/australian_pv/README.md`) combines four kinds
+of check. Numbers are in the generated report
+(`studies/australian_pv/engineering_benchmark.md`); earlier campaigns are listed
+in `studies/australian_pv/HISTORY.md`.
 
-Mechanism agreement passes, while switched capacitor RMS is about 4 A against
-the unchanged 1 A study budget. The existing `i_sw` configuration gate rejects
-the measured point-specific non-2ω reserve. A first-order 7.5 V ripple-boundary
-point also slightly exceeds that limit under nonlinear capacitor integration;
-the failure is retained. Fundamental certification does not include these
-switching thermal stresses or an exact nonlinear energy certificate.
+- **Rated-capability gate.** Before any feeder run, each fixture plant must
+  deliver its nameplate at the AS/NZS 4777.2 Australia A volt-var corners with
+  apparent power or phase current, not an internal budget, as the limit. The
+  earlier 1 A capacitor budget failed this gate (about 1.2 kVA of 6 kVA) and
+  made every earlier export comparison capacitor-limited.
+- **PF/OPF agreement.** The OPF with each site's local volt-var request and
+  volt-watt ceiling imposed at its own voltages, and without the 253 V row, must
+  reproduce the local fixed point. The two formulations are built separately.
+- **Saved-point and network audits.** Every saved point is rebuilt in SI, and a
+  separately coded Python script reconstructs feeder currents and limits.
+- **Fixed-POC EMT.** A separately coded averaged/switched circuit checks that
+  the modelled capacitor-current bound encloses the switched value at the
+  highest-stress site per condition, mode and controller group. The bound was
+  revised after earlier misses and is checked with the same selection rule, so
+  this is not out-of-sample validation. It omits PLL, controller and feeder
+  dynamics, and is not a PSCAD/PLECS or hardware comparison.
 
-This experiment has a constant-power DC input and a fixed lumped mean converter
-loss, sampled feedforward modulation and a finite Fourier window. It does not
-validate the optional small-signal source impedance, LCL/split-link dynamics,
-service-controller response, semiconductor losses or feeder stability. Measured
-stress at one point is not a conservative reserve over other dispatches.
-
-### Earlier PWM-aware allocation and nonlinear energy extension
-
-This earlier frozen-current campaign is retained in the pinned historical
-archive described in `studies/australian_pv/evidence/README.md`. It does not
-validate the current coupled thermal allocator; current evidence follows below.
-
-The fixed-sizing follow-up (`studies/australian_pv/thermal_energy.md`) embeds
-shared-carrier switching stress in dispatch and introduces nonlinear monolithic
-DC energy. Eight coupled Australian cases mix mean, worst-phase, sequence and
-four-leg controllers, including night operation and partial disconnection.
-Saved phasors receive physical/policy reconstruction and fixed-PQ network replay.
-
-The EMT matrix adds all 24 energized inverter points from both nonlinear daytime
-cases and four boundary references, plus three retained failed calibration
-points. All 27 current PWM-allocated references must meet the unchanged
-engineering limits at the finest mesh. The LF-only boundary and the three old
-5% allowance points are explicit switching-thermal negative controls. The
-nonlinear boundary's averaged trajectory separately checks the actual 2ω
-voltage limit. This remains fixed-POC circuit validation with the source, loss
-and dynamics restrictions above.
-
-The package regression files cover analytic variance bounds, independent carrier
-integration, supported configurations, dispatch/service preservation, energy
-integration, mean/Fourier voltage, complete rails, active voltage extrema,
-capacitor RMS, PWM composition, night operation and numerical bases.
-Separate study tests reject corrupted metrics, missing meshes and false
-engineering acceptance. The calibrated 10% allowance is explicit model
-headroom; neither it nor these tests establish a universal switching-error bound.
-
-### Switching engineering and matched coordinated benchmark
-
-`studies/australian_pv/engineering_domain.md` declares 972 P/Q, sequence and
-modulation points for analytical AC-current and combined DC-voltage envelopes.
-Independent sampled carrier integration and periodic passive R/L orbits pass
-36,033 checks. The 855 dispatches rejected by engineering constraints remain in that domain
-record; carrier agreement does not make them feasible operating points.
-
-The matched benchmark in `studies/australian_pv/engineering_benchmark.md`
-accepts eight coupled PF/OPF points with identical physical models and network
-ceilings. It records 375 saved-point conditions, 3,960 SI inverter checks and
-6,608 independent SI feeder checks. Coordination releases the local VV/VW
-commands, so export recovery is reported alongside the lost reactive support.
-Temporary neutral initialization equalities are removed before the final
-full-capability export solve. A source-pinned historical iteration-limit ablation
-stays rejected even when its independent feeder residuals pass.
-
-Thirty-two maximum-capacitor-stress representatives cover all four controller
-groups, conditions and modes. All 192 averaged/switched integrations pass the
-declared mechanism, mesh and hardware checks, with a largest switched
-capacitor RMS of 0.880211 A against 1 A. All 32 coupled thermal predictions
-enclose the switched measurements within the predeclared 0.01 A mesh band.
-Night coordinated reserves are about 0.395 A for three-leg and 0.603 A for
-four-leg, versus 0.276 A and 0.316 A measured. The former frozen-current
-predictions near 0.012 A and their failures remain in the historical archive.
-The new all-duty AC-induced DC-current bound and passive-damping residual are
-separate from the 10% frozen-current allowance. These are fixed-POC snapshots
-with finite-window DC drift; they do not validate feeder/controller dynamics,
-periodic steady state or all-time transients.
+The carrier-domain and DC-boundary experiments
+(`studies/australian_pv/engineering_domain.md`, `engineering_boundary.md`) check
+the carrier approximations across P/Q, sequence and modulation under the legacy
+fixture limits; those limits only decide which points are labelled infeasible.
 
 ## Further higher-fidelity validation
 
@@ -511,6 +458,10 @@ discard interval, RMS/peak convention, switching frequency, controller bandwidth
 and whether the DC source absorbs 2ω power.
 
 ## Model-risk checks before publication
+
+Before comparing controllers or dispatch on a feeder, check that the device
+fixture can deliver its declared nameplate (the rated-capability gate above).
+An internal budget that binds below nameplate dominates every comparison.
 
 For every claimed boundary point:
 

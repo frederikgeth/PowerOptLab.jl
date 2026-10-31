@@ -20,7 +20,7 @@ def publish(root=ROOT):
     folder = root / "results/engineering_boundary_emt"
     receipt = audit(inputs, folder)
     if not receipt["accepted"]:
-        raise ValueError("Independent EMT record audit must pass before publication")
+        raise ValueError("EMT record audit must pass before publication")
     env = json.loads(inputs.read_text())
     refs = {r["case_id"]: r for r in env["cases"]}
     result = json.loads((folder / "results.json").read_text())
@@ -95,8 +95,9 @@ def publish(root=ROOT):
     lines = ["# Combined switching and nonlinear DC-voltage boundary", "",
         "This boundary experiment compares the existing LF-only voltage guard with the combined LF/carrier guard, "
         "and exercises the four-leg implementation. It is separate from the matched feeder PF/OPF benchmark. "
-        "All three retain 6 kVA, 10 A phase RMS, 750 V, 300 µF and the 1 A capacitor RMS budget. "
-        "The shared 747–753 V validation band and 14 A peak ceilings are declared operating assumptions, not inferred manufacturer ratings.", "",
+        "All three use 6 kVA, 10 A phase RMS, 750 V, 300 µF and the legacy 1 A capacitor / 14 A peak limits, with a deliberately "
+        "narrow 747–753 V band so the DC-voltage bound binds. The legacy limits do not affect the DC-voltage comparison; the current "
+        "study fixture is in the [study README](README.md).", "",
         "![DC extrema, capacitor RMS and phase/neutral peaks](figures/engineering_boundary.png)", "",
         "The grey rows show averaged integration; blue rows show switched integration. Red identifies the reference that fails the upper DC-voltage check. "
         "The voltage segments span measured minimum to maximum, with a dot at the measured mean. "
@@ -118,7 +119,7 @@ def publish(root=ROOT):
         "Q and P have priority; the combined guard reduces the remaining sequence service to leave voltage headroom. "
         "The four-leg reference has a different declared request (600 W total and per-phase Q of [−600, 0, 0] var); "
         "its row demonstrates that topology and is not a matched controller performance comparison.", "",
-        f"The independent record audit passes **{receipt['checks']} checks** covering provenance, mechanism agreement, energy, "
+        "The record audit covers provenance, mechanism agreement, energy, "
         "mesh convergence, extrema witnesses and engineering flags. The LF-only switched reference fails only the upper DC-voltage check; "
         "its failure remains in the results and is not accepted as hardware-feasible.", "",
         "These are fixed-POC, feedforward L-filter circuits with a constant-power DC input and fixed mean converter loss. "
@@ -137,4 +138,4 @@ def publish(root=ROOT):
 
 
 if __name__ == "__main__":
-    print(f"Boundary publication: {publish()['checks']} independent checks")
+    print(f"Boundary publication: {publish()['checks']} checks")
