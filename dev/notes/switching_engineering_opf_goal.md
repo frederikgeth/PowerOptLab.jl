@@ -223,3 +223,30 @@ night attempt remains rejected and saved. These are development probes, not
 publication artifacts: committed-source reproduction, matched-case/source
 manifests, saved-point/corruption gates, representative mixed-case EMT, service
 tradeoff tables and the final binding/recovery figures remain required.
+
+## Matched benchmark records and audit checkpoint
+
+The new runner saves the complete four-case/two-mode plan, identical per-site
+physical-model fingerprints, allocation/OPF stages, rejected candidates, solver
+and source metadata, network receipts and incremental CSV/status checkpoints.
+Its saved-point oracle reconstructs hardware, source bounds, current capability,
+local controller rays/VW ceilings, source curtailment, losses and binding limits.
+The publication gate separately checks successful raw statuses, complete removal
+of neutral initialization rows, the zero-regularization final objective,
+independent SI feeder inequalities and fixed-PQ replay. Corrupted record hashes
+are recomputed in tests so deeper physics/status gates are actually exercised.
+
+The development runner accepts all eight points. A fresh-process audit passes
+367 initial record conditions, 3,672 SI inverter checks and 6,608 independent
+network conditions; five subsequent metadata checks also pass. Twenty-five
+campaign/corruption assertions pass, including rejected raw statuses promoted
+by forged flags, relaxed planning ceilings, missing/changed sites, altered
+operating conditions, failed local stages, surviving temporary constraints and
+changed final objectives. Publication from a clean committed runner is next.
+
+The free-Q coordinated objective trades away local VV/VW obligations. Nominal
+fleet Q changes from -9.740 kvar to +0.192 kvar; high-source Q from -16.018 kvar
+to +0.277 kvar; rotated-unbalance Q from -10.700 kvar to +0.191 kvar; night Q
+from -16.013 kvar to approximately zero. Export recovery must be presented
+alongside that reactive-service reduction, not as an equal-service dominance
+claim. Hardware and network limits stay matched; service obligations differ.
