@@ -1,0 +1,1010 @@
+{
+    "planned": 8,
+    "scope": "saved-phasor SI energy/PWM/plant/policy reconstruction; same-engine fixed-PQ replay; no global optimality or switching-dynamics certificate",
+    "accepted": 8,
+    "all_planned_accepted": true,
+    "cases": {
+        "fundamental_s1": {
+            "devices": {
+                "pv_ld1895_load_b": {
+                    "p_available_W": 1250,
+                    "vmax_sensed_V": 245.4467759702165,
+                    "capacitor_carrier_audit_current_A": null,
+                    "p_dc_W": 1250.0000249988543,
+                    "controller": "phase_vv_vw",
+                    "capacitor_thermal_current_A": 0.20512743704372177,
+                    "q_poc_var": -807.3992763574214,
+                    "p_poc_W": 1215.5562450332764
+                },
+                "pv_ld1970_load_c": {
+                    "p_available_W": 3000,
+                    "vmax_sensed_V": 245.53831446420293,
+                    "capacitor_carrier_audit_current_A": null,
+                    "p_dc_W": 2999.9999999976644,
+                    "controller": "mean_vv_vw",
+                    "capacitor_thermal_current_A": 0.027719394057469666,
+                    "q_poc_var": -821.0860571213444,
+                    "p_poc_W": 2937.5126261554333
+                },
+                "pv_ld1668_load_a": {
+                    "p_available_W": 5000,
+                    "vmax_sensed_V": 245.4377194286194,
+                    "capacitor_carrier_audit_current_A": null,
+                    "p_dc_W": 4999.999999996655,
+                    "controller": "sequence_vv_vw",
+                    "capacitor_thermal_current_A": 0.045816725408660705,
+                    "q_poc_var": -820.4811989092714,
+                    "p_poc_W": 4885.081730646523
+                },
+                "pv_ld1446_load_c": {
+                    "p_available_W": 3000,
+                    "vmax_sensed_V": 245.44498050540176,
+                    "capacitor_carrier_audit_current_A": null,
+                    "p_dc_W": 2999.9999999988963,
+                    "controller": "worst_vv_vw",
+                    "capacitor_thermal_current_A": 0.028877349137443525,
+                    "q_poc_var": -1088.9961010051024,
+                    "p_poc_W": 2935.6389310300915
+                },
+                "pv_ld2050_load_a": {
+                    "p_available_W": 5000,
+                    "vmax_sensed_V": 245.64749410827693,
+                    "capacitor_carrier_audit_current_A": null,
+                    "p_dc_W": 4999.999999993915,
+                    "controller": "worst_vv_vw",
+                    "capacitor_thermal_current_A": 0.045887422648416616,
+                    "q_poc_var": -1129.4988215188855,
+                    "p_poc_W": 4883.277152290475
+                },
+                "pv_ld2804_load_c": {
+                    "p_available_W": 1250,
+                    "vmax_sensed_V": 245.43009306229385,
+                    "capacitor_carrier_audit_current_A": null,
+                    "p_dc_W": 1250.000000001604,
+                    "controller": "worst_vv_vw",
+                    "capacitor_thermal_current_A": 0.014916011932110264,
+                    "q_poc_var": -1086.0186123575174,
+                    "p_poc_W": 1215.2155188841755
+                },
+                "pv_ld626_load_c": {
+                    "p_available_W": 3000,
+                    "vmax_sensed_V": 245.63063238929718,
+                    "capacitor_carrier_audit_current_A": null,
+                    "p_dc_W": 2999.9999999963516,
+                    "controller": "sequence_vv_vw",
+                    "capacitor_thermal_current_A": 0.027792778055302492,
+                    "q_poc_var": -834.4229289602254,
+                    "p_poc_W": 2937.4521836257873
+                },
+                "pv_ld24_load_a": {
+                    "p_available_W": 5000,
+                    "vmax_sensed_V": 245.55518397904123,
+                    "capacitor_carrier_audit_current_A": null,
+                    "p_dc_W": 4999.999999994874,
+                    "controller": "mean_vv_vw",
+                    "capacitor_thermal_current_A": 0.04537608215412948,
+                    "q_poc_var": -831.8854732489355,
+                    "p_poc_W": 4885.05408772345
+                },
+                "pv_ld868_load_a": {
+                    "p_available_W": 5000,
+                    "vmax_sensed_V": 245.63909702351563,
+                    "capacitor_carrier_audit_current_A": null,
+                    "p_dc_W": 5000.000024991239,
+                    "controller": "phase_vv_vw",
+                    "capacitor_thermal_current_A": 0.20328280010099453,
+                    "q_poc_var": -852.0347705543683,
+                    "p_poc_W": 4882.83863933482
+                },
+                "pv_ld248_load_b": {
+                    "p_available_W": 3000,
+                    "vmax_sensed_V": 245.40227768298203,
+                    "capacitor_carrier_audit_current_A": null,
+                    "p_dc_W": 3000.0000249970976,
+                    "controller": "phase_vv_vw",
+                    "capacitor_thermal_current_A": 0.21594424601701218,
+                    "q_poc_var": -818.7665186645097,
+                    "p_poc_W": 2935.1555662205724
+                },
+                "pv_ld1291_load_b": {
+                    "p_available_W": 1250,
+                    "vmax_sensed_V": 245.25489397622113,
+                    "capacitor_carrier_audit_current_A": null,
+                    "p_dc_W": 1249.9999999999593,
+                    "controller": "mean_vv_vw",
+                    "capacitor_thermal_current_A": 0.013413878017135741,
+                    "q_poc_var": -787.7313575359572,
+                    "p_poc_W": 1218.012058007264
+                },
+                "pv_ld2186_load_b": {
+                    "p_available_W": 1250,
+                    "vmax_sensed_V": 245.55542742234624,
+                    "capacitor_carrier_audit_current_A": null,
+                    "p_dc_W": 1250.0000000013488,
+                    "controller": "sequence_vv_vw",
+                    "capacitor_thermal_current_A": 0.013375709123869007,
+                    "q_poc_var": -820.6857324927862,
+                    "p_poc_W": 1217.7539219215878
+                }
+            },
+            "vmax_sensed_V": 245.64749410827693,
+            "maximum_capacitor_model_A": 0.21594424601701218,
+            "accepted": true,
+            "q_poc_var": -10699.006848726325,
+            "fixed_PQ_replay_difference_V": 3.1460181134980034e-8,
+            "p_poc_W": 36148.54866087346
+        },
+        "energy_s2": {
+            "devices": {
+                "pv_ld1895_load_b": {
+                    "p_available_W": 1250,
+                    "vmax_sensed_V": 252.2295062282027,
+                    "capacitor_carrier_audit_current_A": 0.9101735656331236,
+                    "p_dc_W": 31.091579067702074,
+                    "controller": "phase_vv_vw",
+                    "capacitor_thermal_current_A": 1.000000000001077,
+                    "q_poc_var": -1310.2172533684288,
+                    "p_poc_W": 0.6273369283876411
+                },
+                "pv_ld1970_load_c": {
+                    "p_available_W": 3000,
+                    "vmax_sensed_V": 252.21990492197713,
+                    "capacitor_carrier_audit_current_A": 0.9090402704965871,
+                    "p_dc_W": 29.615338605289075,
+                    "controller": "mean_vv_vw",
+                    "capacitor_thermal_current_A": 1.0000000000000262,
+                    "q_poc_var": -1345.534826817227,
+                    "p_poc_W": -0.2664411546398515
+                },
+                "pv_ld1668_load_a": {
+                    "p_available_W": 5000,
+                    "vmax_sensed_V": 252.3320415249296,
+                    "capacitor_carrier_audit_current_A": 0.9090409208101972,
+                    "p_dc_W": 29.609809744012722,
+                    "controller": "sequence_vv_vw",
+                    "capacitor_thermal_current_A": 0.9999999999999966,
+                    "q_poc_var": -1346.1152148191945,
+                    "p_poc_W": -0.2633301116083633
+                },
+                "pv_ld1446_load_c": {
+                    "p_available_W": 3000,
+                    "vmax_sensed_V": 252.30086556374033,
+                    "capacitor_carrier_audit_current_A": 0.9090406272051196,
+                    "p_dc_W": 29.610892300086153,
+                    "controller": "worst_vv_vw",
+                    "capacitor_thermal_current_A": 1.0000000000000155,
+                    "q_poc_var": -1346.0013811807,
+                    "p_poc_W": -0.2639367207745158
+                },
+                "pv_ld2050_load_a": {
+                    "p_available_W": 5000,
+                    "vmax_sensed_V": 252.24894343587442,
+                    "capacitor_carrier_audit_current_A": 0.9090405388994257,
+                    "p_dc_W": 29.613863853356662,
+                    "controller": "worst_vv_vw",
+                    "capacitor_thermal_current_A": 1.0000000000000453,
+                    "q_poc_var": -1345.6901475811098,
+                    "p_poc_W": -0.2656046950692996
+                },
+                "pv_ld2804_load_c": {
+                    "p_available_W": 1250,
+                    "vmax_sensed_V": 252.26232821958868,
+                    "capacitor_carrier_audit_current_A": 0.9090405490697759,
+                    "p_dc_W": 29.613323057913814,
+                    "controller": "worst_vv_vw",
+                    "capacitor_thermal_current_A": 0.9999999999986705,
+                    "q_poc_var": -1345.745507744915,
+                    "p_poc_W": -0.2653177872980077
+                },
+                "pv_ld626_load_c": {
+                    "p_available_W": 3000,
+                    "vmax_sensed_V": 252.2153362926831,
+                    "capacitor_carrier_audit_current_A": 0.9090403394947631,
+                    "p_dc_W": 29.615866969659756,
+                    "controller": "sequence_vv_vw",
+                    "capacitor_thermal_current_A": 1.000000000000049,
+                    "q_poc_var": -1345.4793990167987,
+                    "p_poc_W": -0.26673650649123637
+                },
+                "pv_ld24_load_a": {
+                    "p_available_W": 5000,
+                    "vmax_sensed_V": 252.26787173607377,
+                    "capacitor_carrier_audit_current_A": 0.909040653748905,
+                    "p_dc_W": 29.613120070709364,
+                    "controller": "mean_vv_vw",
+                    "capacitor_thermal_current_A": 1.0000000000000107,
+                    "q_poc_var": -1345.7674971321358,
+                    "p_poc_W": -0.26519543863889705
+                },
+                "pv_ld868_load_a": {
+                    "p_available_W": 5000,
+                    "vmax_sensed_V": 252.23354845438539,
+                    "capacitor_carrier_audit_current_A": 0.9101804727131183,
+                    "p_dc_W": 31.00457466306102,
+                    "controller": "phase_vv_vw",
+                    "capacitor_thermal_current_A": 1.0000000000010834,
+                    "q_poc_var": -1310.1505284125326,
+                    "p_poc_W": 0.5415829112890291
+                },
+                "pv_ld248_load_b": {
+                    "p_available_W": 3000,
+                    "vmax_sensed_V": 252.30142161797843,
+                    "capacitor_carrier_audit_current_A": 0.9102855714813044,
+                    "p_dc_W": 30.648944178386998,
+                    "controller": "phase_vv_vw",
+                    "capacitor_thermal_current_A": 1.0000000000005784,
+                    "q_poc_var": -1307.6340667158274,
+                    "p_poc_W": 0.17893316411763394
+                },
+                "pv_ld1291_load_b": {
+                    "p_available_W": 1250,
+                    "vmax_sensed_V": 252.32974294292416,
+                    "capacitor_carrier_audit_current_A": 0.9090405244626281,
+                    "p_dc_W": 29.609471148021022,
+                    "controller": "mean_vv_vw",
+                    "capacitor_thermal_current_A": 0.9999999999999868,
+                    "q_poc_var": -1346.1494776737452,
+                    "p_poc_W": -0.2631441882718031
+                },
+                "pv_ld2186_load_b": {
+                    "p_available_W": 1250,
+                    "vmax_sensed_V": 252.22052207142403,
+                    "capacitor_carrier_audit_current_A": 0.9090403064451402,
+                    "p_dc_W": 29.61558113923696,
+                    "controller": "sequence_vv_vw",
+                    "capacitor_thermal_current_A": 1.0000000000000486,
+                    "q_poc_var": -1345.509398324119,
+                    "p_poc_W": -0.26657645705116195
+                }
+            },
+            "vmax_sensed_V": 252.3320415249296,
+            "maximum_capacitor_model_A": 1.0000000000010834,
+            "accepted": true,
+            "q_poc_var": -16039.994698786733,
+            "fixed_PQ_replay_difference_V": 7.00742688022292e-8,
+            "p_poc_W": -1.0384300560488322
+        },
+        "fundamental_s2": {
+            "devices": {
+                "pv_ld1895_load_b": {
+                    "p_available_W": 1250,
+                    "vmax_sensed_V": 252.64878010959046,
+                    "capacitor_carrier_audit_current_A": null,
+                    "p_dc_W": 1250.0000250007959,
+                    "controller": "phase_vv_vw",
+                    "capacitor_thermal_current_A": 0.22240106071792953,
+                    "q_poc_var": -2245.2906651604903,
+                    "p_poc_W": 1197.940141001059
+                },
+                "pv_ld1970_load_c": {
+                    "p_available_W": 3000,
+                    "vmax_sensed_V": 252.7346602997498,
+                    "capacitor_carrier_audit_current_A": null,
+                    "p_dc_W": 3000.0000000020723,
+                    "controller": "mean_vv_vw",
+                    "capacitor_thermal_current_A": 0.03380319484841792,
+                    "q_poc_var": -2258.205779141599,
+                    "p_poc_W": 2924.4408481916385
+                },
+                "pv_ld1668_load_a": {
+                    "p_available_W": 5000,
+                    "vmax_sensed_V": 252.7183936702337,
+                    "capacitor_carrier_audit_current_A": null,
+                    "p_dc_W": 4999.999999999512,
+                    "controller": "sequence_vv_vw",
+                    "capacitor_thermal_current_A": 0.04990107697120875,
+                    "q_poc_var": -2271.614019399185,
+                    "p_poc_W": 4876.205641943478
+                },
+                "pv_ld1446_load_c": {
+                    "p_available_W": 3000,
+                    "vmax_sensed_V": 252.7186568683135,
+                    "capacitor_carrier_audit_current_A": null,
+                    "p_dc_W": 2999.9999999999877,
+                    "controller": "worst_vv_vw",
+                    "capacitor_thermal_current_A": 0.03583246540495522,
+                    "q_poc_var": -2543.73137352973,
+                    "p_poc_W": 2919.98362254831
+                },
+                "pv_ld2050_load_a": {
+                    "p_available_W": 5000,
+                    "vmax_sensed_V": 252.86223634474328,
+                    "capacitor_carrier_audit_current_A": null,
+                    "p_dc_W": 4999.999999999951,
+                    "controller": "worst_vv_vw",
+                    "capacitor_thermal_current_A": 0.05071631865341503,
+                    "q_poc_var": -2572.4472687234243,
+                    "p_poc_W": 4871.999446259499
+                },
+                "pv_ld2804_load_c": {
+                    "p_available_W": 1250,
+                    "vmax_sensed_V": 252.65977438586188,
+                    "capacitor_carrier_audit_current_A": null,
+                    "p_dc_W": 1250.000000001737,
+                    "controller": "worst_vv_vw",
+                    "capacitor_thermal_current_A": 0.025756831252579212,
+                    "q_poc_var": -2531.954876998453,
+                    "p_poc_W": 1194.8202399298962
+                },
+                "pv_ld626_load_c": {
+                    "p_available_W": 3000,
+                    "vmax_sensed_V": 252.81343809573406,
+                    "capacitor_carrier_audit_current_A": null,
+                    "p_dc_W": 3000.000000002503,
+                    "controller": "sequence_vv_vw",
+                    "capacitor_thermal_current_A": 0.03392278339295317,
+                    "q_poc_var": -2269.240090034804,
+                    "p_poc_W": 2924.298858500387
+                },
+                "pv_ld24_load_a": {
+                    "p_available_W": 5000,
+                    "vmax_sensed_V": 252.78251902173233,
+                    "capacitor_carrier_audit_current_A": null,
+                    "p_dc_W": 5000.000000000288,
+                    "controller": "mean_vv_vw",
+                    "capacitor_thermal_current_A": 0.0495219272258202,
+                    "q_poc_var": -2274.1692366876746,
+                    "p_poc_W": 4876.1752748607805
+                },
+                "pv_ld868_load_a": {
+                    "p_available_W": 5000,
+                    "vmax_sensed_V": 252.85470576429609,
+                    "capacitor_carrier_audit_current_A": null,
+                    "p_dc_W": 5000.00002499876,
+                    "controller": "phase_vv_vw",
+                    "capacitor_thermal_current_A": 0.22207677077355598,
+                    "q_poc_var": -2291.9024326343797,
+                    "p_poc_W": 4873.987633490044
+                },
+                "pv_ld248_load_b": {
+                    "p_available_W": 3000,
+                    "vmax_sensed_V": 252.68009548370424,
+                    "capacitor_carrier_audit_current_A": null,
+                    "p_dc_W": 3000.000024999283,
+                    "controller": "phase_vv_vw",
+                    "capacitor_thermal_current_A": 0.2333779007801709,
+                    "q_poc_var": -2269.1414593003683,
+                    "p_poc_W": 2922.1422932398955
+                },
+                "pv_ld1291_load_b": {
+                    "p_available_W": 1250,
+                    "vmax_sensed_V": 252.5610950471048,
+                    "capacitor_carrier_audit_current_A": null,
+                    "p_dc_W": 1250.0000000000196,
+                    "controller": "mean_vv_vw",
+                    "capacitor_thermal_current_A": 0.023579799085243776,
+                    "q_poc_var": -2243.4354963217147,
+                    "p_poc_W": 1199.965685776392
+                },
+                "pv_ld2186_load_b": {
+                    "p_available_W": 1250,
+                    "vmax_sensed_V": 252.7442923334674,
+                    "capacitor_carrier_audit_current_A": null,
+                    "p_dc_W": 1250.0000000037035,
+                    "controller": "sequence_vv_vw",
+                    "capacitor_thermal_current_A": 0.02343570513351795,
+                    "q_poc_var": -2256.5569615432946,
+                    "p_poc_W": 1199.7551364182086
+                }
+            },
+            "vmax_sensed_V": 252.86223634474328,
+            "maximum_capacitor_model_A": 0.2333779007801709,
+            "accepted": true,
+            "q_poc_var": -28027.689659475116,
+            "fixed_PQ_replay_difference_V": 4.829726834349106e-8,
+            "p_poc_W": 35981.714822159585
+        },
+        "pwm_s2": {
+            "devices": {
+                "pv_ld1895_load_b": {
+                    "p_available_W": 1250,
+                    "vmax_sensed_V": 252.2295061299354,
+                    "capacitor_carrier_audit_current_A": 0.9101737492616521,
+                    "p_dc_W": 31.091381801924836,
+                    "controller": "phase_vv_vw",
+                    "capacitor_thermal_current_A": 1.000000000001077,
+                    "q_poc_var": -1310.2175489191113,
+                    "p_poc_W": 0.6271352403636756
+                },
+                "pv_ld1970_load_c": {
+                    "p_available_W": 3000,
+                    "vmax_sensed_V": 252.21990483086685,
+                    "capacitor_carrier_audit_current_A": 0.9090402722034119,
+                    "p_dc_W": 29.615327112412086,
+                    "controller": "mean_vv_vw",
+                    "capacitor_thermal_current_A": 1.000000000000027,
+                    "q_poc_var": -1345.5348291592397,
+                    "p_poc_W": -0.2664526871903128
+                },
+                "pv_ld1668_load_a": {
+                    "p_available_W": 5000,
+                    "vmax_sensed_V": 252.33204147632995,
+                    "capacitor_carrier_audit_current_A": 0.9090409225868786,
+                    "p_dc_W": 29.60980222542443,
+                    "controller": "sequence_vv_vw",
+                    "capacitor_thermal_current_A": 0.9999999999987955,
+                    "q_poc_var": -1346.115217368363,
+                    "p_poc_W": -0.2633376698089718
+                },
+                "pv_ld1446_load_c": {
+                    "p_available_W": 3000,
+                    "vmax_sensed_V": 252.30086552258265,
+                    "capacitor_carrier_audit_current_A": 0.9090406289705851,
+                    "p_dc_W": 29.610883249359162,
+                    "controller": "worst_vv_vw",
+                    "capacitor_thermal_current_A": 1.0000000000000164,
+                    "q_poc_var": -1346.0013837368629,
+                    "p_poc_W": -0.26394581054689326
+                },
+                "pv_ld2050_load_a": {
+                    "p_available_W": 5000,
+                    "vmax_sensed_V": 252.24894336791186,
+                    "capacitor_carrier_audit_current_A": 0.9090405406234541,
+                    "p_dc_W": 29.613855748264363,
+                    "controller": "worst_vv_vw",
+                    "capacitor_thermal_current_A": 0.9999999999986242,
+                    "q_poc_var": -1345.690150007686,
+                    "p_poc_W": -0.2656128392828627
+                },
+                "pv_ld2804_load_c": {
+                    "p_available_W": 1250,
+                    "vmax_sensed_V": 252.26232811682067,
+                    "capacitor_carrier_audit_current_A": 0.9090405508188397,
+                    "p_dc_W": 29.612789288380064,
+                    "controller": "worst_vv_vw",
+                    "capacitor_thermal_current_A": 1.0000000000000115,
+                    "q_poc_var": -1345.745510311232,
+                    "p_poc_W": -0.2658516021719457
+                },
+                "pv_ld626_load_c": {
+                    "p_available_W": 3000,
+                    "vmax_sensed_V": 252.21533621503042,
+                    "capacitor_carrier_audit_current_A": 0.9090403411955147,
+                    "p_dc_W": 29.615855991274785,
+                    "controller": "sequence_vv_vw",
+                    "capacitor_thermal_current_A": 1.0000000000000495,
+                    "q_poc_var": -1345.4794013835162,
+                    "p_poc_W": -0.2667475239165329
+                },
+                "pv_ld24_load_a": {
+                    "p_available_W": 5000,
+                    "vmax_sensed_V": 252.2678715999688,
+                    "capacitor_carrier_audit_current_A": 0.9090406555267525,
+                    "p_dc_W": 29.61149889847922,
+                    "controller": "mean_vv_vw",
+                    "capacitor_thermal_current_A": 1.000000000000011,
+                    "q_poc_var": -1345.767500066983,
+                    "p_poc_W": -0.26681666698953777
+                },
+                "pv_ld868_load_a": {
+                    "p_available_W": 5000,
+                    "vmax_sensed_V": 252.23354834727482,
+                    "capacitor_carrier_audit_current_A": 0.9101806567661659,
+                    "p_dc_W": 31.003675118693643,
+                    "controller": "phase_vv_vw",
+                    "capacitor_thermal_current_A": 1.0000000000010834,
+                    "q_poc_var": -1310.150825418332,
+                    "p_poc_W": 0.5406789117117725
+                },
+                "pv_ld248_load_b": {
+                    "p_available_W": 3000,
+                    "vmax_sensed_V": 252.30142157304866,
+                    "capacitor_carrier_audit_current_A": 0.9102857659901218,
+                    "p_dc_W": 30.648940160771232,
+                    "controller": "phase_vv_vw",
+                    "capacitor_thermal_current_A": 1.0000000000005789,
+                    "q_poc_var": -1307.6343850455316,
+                    "p_poc_W": 0.1789243814121635
+                },
+                "pv_ld1291_load_b": {
+                    "p_available_W": 1250,
+                    "vmax_sensed_V": 252.32974287845718,
+                    "capacitor_carrier_audit_current_A": 0.909040526261817,
+                    "p_dc_W": 29.608930535110883,
+                    "controller": "mean_vv_vw",
+                    "capacitor_thermal_current_A": 0.9999999999999872,
+                    "q_poc_var": -1346.1494804168128,
+                    "p_poc_W": -0.2636848463075028
+                },
+                "pv_ld2186_load_b": {
+                    "p_available_W": 1250,
+                    "vmax_sensed_V": 252.22052197116872,
+                    "capacitor_carrier_audit_current_A": 0.9090403081501431,
+                    "p_dc_W": 29.61494045529938,
+                    "controller": "sequence_vv_vw",
+                    "capacitor_thermal_current_A": 1.0000000000000484,
+                    "q_poc_var": -1345.509400900497,
+                    "p_poc_W": -0.26721718647624826
+                }
+            },
+            "vmax_sensed_V": 252.33204147632995,
+            "maximum_capacitor_model_A": 1.0000000000010834,
+            "accepted": true,
+            "q_poc_var": -16039.995632734166,
+            "fixed_PQ_replay_difference_V": 7.00742601844598e-8,
+            "p_poc_W": -1.0429282992031963
+        },
+        "energy_mixed_disconnection": {
+            "devices": {
+                "pv_ld1446_load_c": {
+                    "p_available_W": 3000,
+                    "vmax_sensed_V": 252.32513389633004,
+                    "capacitor_carrier_audit_current_A": 0.9090411591609207,
+                    "p_dc_W": 29.610488879054273,
+                    "controller": "worst_vv_vw",
+                    "capacitor_thermal_current_A": 0.9999999999999867,
+                    "q_poc_var": -1346.045010515334,
+                    "p_poc_W": -0.2637073936898835
+                },
+                "pv_ld248_load_b": {
+                    "p_available_W": 3000,
+                    "vmax_sensed_V": 252.32570912439658,
+                    "capacitor_carrier_audit_current_A": 0.9102859015044424,
+                    "p_dc_W": 30.67362487761445,
+                    "controller": "phase_vv_vw",
+                    "capacitor_thermal_current_A": 1.00000000000009,
+                    "q_poc_var": -1307.6501675328236,
+                    "p_poc_W": 0.20394050902898186
+                },
+                "pv_ld1895_load_b": {
+                    "p_available_W": 1250,
+                    "vmax_sensed_V": 252.2621806664911,
+                    "capacitor_carrier_audit_current_A": 0.9101699404514544,
+                    "p_dc_W": 31.107152291047683,
+                    "controller": "phase_vv_vw",
+                    "capacitor_thermal_current_A": 1.0000000000008826,
+                    "q_poc_var": -1310.3724872680768,
+                    "p_poc_W": 0.644089665478992
+                },
+                "pv_ld1970_load_c": {
+                    "p_available_W": 3000,
+                    "vmax_sensed_V": 252.25255646187895,
+                    "capacitor_carrier_audit_current_A": 0.9090412624424561,
+                    "p_dc_W": 29.61465739814027,
+                    "controller": "mean_vv_vw",
+                    "capacitor_thermal_current_A": 1.0000000000000102,
+                    "q_poc_var": -1345.6087377228835,
+                    "p_poc_W": -0.26605624249414195
+                },
+                "pv_ld2804_load_c": {
+                    "p_available_W": 1250,
+                    "vmax_sensed_V": 252.29498109554007,
+                    "capacitor_carrier_audit_current_A": 0.9090414201045941,
+                    "p_dc_W": 29.61265167318986,
+                    "controller": "worst_vv_vw",
+                    "capacitor_thermal_current_A": 0.9999999999999991,
+                    "q_poc_var": -1345.8193865915644,
+                    "p_poc_W": -0.2649238709855508
+                },
+                "pv_ld626_load_c": {
+                    "p_available_W": 3000,
+                    "vmax_sensed_V": 252.27216337815992,
+                    "capacitor_carrier_audit_current_A": 0.9090414651596739,
+                    "p_dc_W": 29.61492981769434,
+                    "controller": "sequence_vv_vw",
+                    "capacitor_thermal_current_A": 0.9999999999999877,
+                    "q_poc_var": -1345.5805236294511,
+                    "p_poc_W": -0.26620705315939475
+                },
+                "pv_ld1291_load_b": {
+                    "p_available_W": 1250,
+                    "vmax_sensed_V": 252.3338468471152,
+                    "capacitor_carrier_audit_current_A": 0.9090408065583561,
+                    "p_dc_W": 29.609386037711744,
+                    "controller": "mean_vv_vw",
+                    "capacitor_thermal_current_A": 0.999999999999984,
+                    "q_poc_var": -1346.1586843072607,
+                    "p_poc_W": -0.2630958113134314
+                },
+                "pv_ld2186_load_b": {
+                    "p_available_W": 1250,
+                    "vmax_sensed_V": 252.27735531778143,
+                    "capacitor_carrier_audit_current_A": 0.9090415027482119,
+                    "p_dc_W": 29.614644201998324,
+                    "controller": "sequence_vv_vw",
+                    "capacitor_thermal_current_A": 0.9999999999999879,
+                    "q_poc_var": -1345.6105159734038,
+                    "p_poc_W": -0.2660469407087751
+                }
+            },
+            "vmax_sensed_V": 252.35675039092828,
+            "maximum_capacitor_model_A": 1.0000000000008826,
+            "accepted": true,
+            "q_poc_var": -10692.845513540797,
+            "fixed_PQ_replay_difference_V": 6.320289501735086e-8,
+            "p_poc_W": -0.7420071378432036
+        },
+        "energy_night": {
+            "devices": {
+                "pv_ld1895_load_b": {
+                    "p_available_W": 0,
+                    "vmax_sensed_V": 252.2231663800722,
+                    "capacitor_carrier_audit_current_A": 0.9101712392198839,
+                    "p_dc_W": 2.5058889306706078e-5,
+                    "controller": "phase_vv_vw",
+                    "capacitor_thermal_current_A": 0.9999999311812902,
+                    "q_poc_var": -1309.776816551227,
+                    "p_poc_W": -30.46402646486465
+                },
+                "pv_ld1970_load_c": {
+                    "p_available_W": 0,
+                    "vmax_sensed_V": 252.21312538375324,
+                    "capacitor_carrier_audit_current_A": 0.9090407372448832,
+                    "p_dc_W": 5.955164894544396e-8,
+                    "controller": "mean_vv_vw",
+                    "capacitor_thermal_current_A": 0.9999999327589206,
+                    "q_poc_var": -1345.142019498591,
+                    "p_poc_W": -29.8814348934004
+                },
+                "pv_ld1668_load_a": {
+                    "p_available_W": 0,
+                    "vmax_sensed_V": 252.32820022037671,
+                    "capacitor_carrier_audit_current_A": 0.9090410281071634,
+                    "p_dc_W": 5.926324320171261e-8,
+                    "controller": "sequence_vv_vw",
+                    "capacitor_thermal_current_A": 0.999999932793107,
+                    "q_poc_var": -1345.7316706020601,
+                    "p_poc_W": -29.87269682683342
+                },
+                "pv_ld1446_load_c": {
+                    "p_available_W": 0,
+                    "vmax_sensed_V": 252.29627337219003,
+                    "capacitor_carrier_audit_current_A": 0.9090408756138698,
+                    "p_dc_W": 5.970603567106991e-8,
+                    "controller": "worst_vv_vw",
+                    "capacitor_thermal_current_A": 0.9999999328029591,
+                    "q_poc_var": -1345.6155621472476,
+                    "p_poc_W": -29.874411773818924
+                },
+                "pv_ld2050_load_a": {
+                    "p_available_W": 0,
+                    "vmax_sensed_V": 252.24296068330852,
+                    "capacitor_carrier_audit_current_A": 0.9090409308942631,
+                    "p_dc_W": 5.9513894257179345e-8,
+                    "controller": "worst_vv_vw",
+                    "capacitor_thermal_current_A": 0.999999932785742,
+                    "q_poc_var": -1345.2998501599072,
+                    "p_poc_W": -29.87909695476028
+                },
+                "pv_ld2804_load_c": {
+                    "p_available_W": 0,
+                    "vmax_sensed_V": 252.25660101213083,
+                    "capacitor_carrier_audit_current_A": 0.9090409170474891,
+                    "p_dc_W": 5.962637317225017e-8,
+                    "controller": "worst_vv_vw",
+                    "capacitor_thermal_current_A": 0.9999999327888665,
+                    "q_poc_var": -1345.356027860226,
+                    "p_poc_W": -29.878260823853555
+                },
+                "pv_ld626_load_c": {
+                    "p_available_W": 0,
+                    "vmax_sensed_V": 252.2083532282835,
+                    "capacitor_carrier_audit_current_A": 0.9090407397366583,
+                    "p_dc_W": 5.9519223327697546e-8,
+                    "controller": "sequence_vv_vw",
+                    "capacitor_thermal_current_A": 0.9999999327555245,
+                    "q_poc_var": -1345.085912344862,
+                    "p_poc_W": -29.882265039310738
+                },
+                "pv_ld24_load_a": {
+                    "p_available_W": 0,
+                    "vmax_sensed_V": 252.26229674411854,
+                    "capacitor_carrier_audit_current_A": 0.9090409920910419,
+                    "p_dc_W": 5.962635896139545e-8,
+                    "controller": "mean_vv_vw",
+                    "capacitor_thermal_current_A": 0.9999999350538129,
+                    "q_poc_var": -1345.3784789431938,
+                    "p_poc_W": -29.877930274587563
+                },
+                "pv_ld868_load_a": {
+                    "p_available_W": 0,
+                    "vmax_sensed_V": 252.2274186349239,
+                    "capacitor_carrier_audit_current_A": 0.910178085414141,
+                    "p_dc_W": 2.5059001501404055e-5,
+                    "controller": "phase_vv_vw",
+                    "capacitor_thermal_current_A": 0.9999999311768789,
+                    "q_poc_var": -1309.7108291988613,
+                    "p_poc_W": -30.46276351886706
+                },
+                "pv_ld248_load_b": {
+                    "p_available_W": 0,
+                    "vmax_sensed_V": 252.29713282319634,
+                    "capacitor_carrier_audit_current_A": 0.9102821507226921,
+                    "p_dc_W": 2.505933925078807e-5,
+                    "controller": "phase_vv_vw",
+                    "capacitor_thermal_current_A": 0.9999999310244879,
+                    "q_poc_var": -1307.2109982493546,
+                    "p_poc_W": -30.469635486503464
+                },
+                "pv_ld1291_load_b": {
+                    "p_available_W": 0,
+                    "vmax_sensed_V": 252.32578568920303,
+                    "capacitor_carrier_audit_current_A": 0.9090407244829622,
+                    "p_dc_W": 5.988574969251204e-8,
+                    "controller": "mean_vv_vw",
+                    "capacitor_thermal_current_A": 0.9999999327950836,
+                    "q_poc_var": -1345.7657177009046,
+                    "p_poc_W": -29.872177387606904
+                },
+                "pv_ld2186_load_b": {
+                    "p_available_W": 0,
+                    "vmax_sensed_V": 252.21369078384782,
+                    "capacitor_carrier_audit_current_A": 0.9090407882321154,
+                    "p_dc_W": 5.951859094466272e-8,
+                    "controller": "sequence_vv_vw",
+                    "capacitor_thermal_current_A": 0.9999999327572576,
+                    "q_poc_var": -1345.1163904809723,
+                    "p_poc_W": -29.88181408334544
+                }
+            },
+            "vmax_sensed_V": 252.32820022037671,
+            "maximum_capacitor_model_A": 0.9999999350538129,
+            "accepted": true,
+            "q_poc_var": -16035.190273737408,
+            "fixed_PQ_replay_difference_V": 5.723240073336035e-14,
+            "p_poc_W": -360.2965135277524
+        },
+        "pwm_s1": {
+            "devices": {
+                "pv_ld1895_load_b": {
+                    "p_available_W": 1250,
+                    "vmax_sensed_V": 245.09796014559734,
+                    "capacitor_carrier_audit_current_A": 0.907541684072251,
+                    "p_dc_W": 895.3791202134255,
+                    "controller": "phase_vv_vw",
+                    "capacitor_thermal_current_A": 0.999999999998301,
+                    "q_poc_var": -736.7930864668452,
+                    "p_poc_W": 865.6160845396184
+                },
+                "pv_ld1970_load_c": {
+                    "p_available_W": 3000,
+                    "vmax_sensed_V": 245.1140563458,
+                    "capacitor_carrier_audit_current_A": 0.9087333426726293,
+                    "p_dc_W": 1004.2269809771681,
+                    "controller": "mean_vv_vw",
+                    "capacitor_thermal_current_A": 1.0000000000160514,
+                    "q_poc_var": -735.4927814482469,
+                    "p_poc_W": 975.5767072404062
+                },
+                "pv_ld1668_load_a": {
+                    "p_available_W": 5000,
+                    "vmax_sensed_V": 245.11502507305167,
+                    "capacitor_carrier_audit_current_A": 0.9087325755934184,
+                    "p_dc_W": 992.9024710979841,
+                    "controller": "sequence_vv_vw",
+                    "capacitor_thermal_current_A": 0.9999999999841361,
+                    "q_poc_var": -755.5874922203583,
+                    "p_poc_W": 964.2140742373745
+                },
+                "pv_ld1446_load_c": {
+                    "p_available_W": 3000,
+                    "vmax_sensed_V": 245.0907029645268,
+                    "capacitor_carrier_audit_current_A": 0.9088500034319785,
+                    "p_dc_W": 778.5709302106499,
+                    "controller": "worst_vv_vw",
+                    "capacitor_thermal_current_A": 0.999999999979365,
+                    "q_poc_var": -1018.1404960891022,
+                    "p_poc_W": 749.322455960151
+                },
+                "pv_ld2050_load_a": {
+                    "p_available_W": 5000,
+                    "vmax_sensed_V": 245.09674689459547,
+                    "capacitor_carrier_audit_current_A": 0.90885354347295,
+                    "p_dc_W": 776.7890284918467,
+                    "controller": "worst_vv_vw",
+                    "capacitor_thermal_current_A": 0.9999999999859505,
+                    "q_poc_var": -1019.3492841968434,
+                    "p_poc_W": 747.5372355255406
+                },
+                "pv_ld2804_load_c": {
+                    "p_available_W": 1250,
+                    "vmax_sensed_V": 245.1070559362412,
+                    "capacitor_carrier_audit_current_A": 0.9088539819416438,
+                    "p_dc_W": 774.7067947284983,
+                    "controller": "worst_vv_vw",
+                    "capacitor_thermal_current_A": 0.9999999997936518,
+                    "q_poc_var": -1021.4110922695791,
+                    "p_poc_W": 745.4498909178949
+                },
+                "pv_ld626_load_c": {
+                    "p_available_W": 3000,
+                    "vmax_sensed_V": 245.12015835887266,
+                    "capacitor_carrier_audit_current_A": 0.9087325465688944,
+                    "p_dc_W": 1006.5662373829655,
+                    "controller": "sequence_vv_vw",
+                    "capacitor_thermal_current_A": 1.0000000000274856,
+                    "q_poc_var": -731.3771914704936,
+                    "p_poc_W": 977.923438853539
+                },
+                "pv_ld24_load_a": {
+                    "p_available_W": 5000,
+                    "vmax_sensed_V": 245.11729475136087,
+                    "capacitor_carrier_audit_current_A": 0.9087330176079301,
+                    "p_dc_W": 999.6262079685721,
+                    "controller": "mean_vv_vw",
+                    "capacitor_thermal_current_A": 1.0000000000027187,
+                    "q_poc_var": -743.7158780402,
+                    "p_poc_W": 970.9604932332171
+                },
+                "pv_ld868_load_a": {
+                    "p_available_W": 5000,
+                    "vmax_sensed_V": 245.0802259249985,
+                    "capacitor_carrier_audit_current_A": 0.9075704514228006,
+                    "p_dc_W": 893.5353915056392,
+                    "controller": "phase_vv_vw",
+                    "capacitor_thermal_current_A": 0.9999999999996129,
+                    "q_poc_var": -738.6857056690576,
+                    "p_poc_W": 863.7678087779359
+                },
+                "pv_ld248_load_b": {
+                    "p_available_W": 3000,
+                    "vmax_sensed_V": 245.0772325135898,
+                    "capacitor_carrier_audit_current_A": 0.9079676334972041,
+                    "p_dc_W": 870.8807707446932,
+                    "controller": "phase_vv_vw",
+                    "capacitor_thermal_current_A": 0.9999999999819131,
+                    "q_poc_var": -752.9997015098644,
+                    "p_poc_W": 841.0482028296418
+                },
+                "pv_ld1291_load_b": {
+                    "p_available_W": 1250,
+                    "vmax_sensed_V": 245.11575095861343,
+                    "capacitor_carrier_audit_current_A": 0.908733108611679,
+                    "p_dc_W": 990.4049866972907,
+                    "controller": "mean_vv_vw",
+                    "capacitor_thermal_current_A": 0.9999999998297266,
+                    "q_poc_var": -759.7809563125936,
+                    "p_poc_W": 961.7087654232635
+                },
+                "pv_ld2186_load_b": {
+                    "p_available_W": 1250,
+                    "vmax_sensed_V": 245.1184987512588,
+                    "capacitor_carrier_audit_current_A": 0.9087325278280136,
+                    "p_dc_W": 1006.0102164756044,
+                    "controller": "sequence_vv_vw",
+                    "capacitor_thermal_current_A": 0.999999999799402,
+                    "q_poc_var": -732.3866329263565,
+                    "p_poc_W": 977.3655373865759
+                }
+            },
+            "vmax_sensed_V": 245.12015835887266,
+            "maximum_capacitor_model_A": 1.0000000000274856,
+            "accepted": true,
+            "q_poc_var": -9745.720298619543,
+            "fixed_PQ_replay_difference_V": 1.4816722793874237e-8,
+            "p_poc_W": 10640.490694925156
+        },
+        "energy_s1": {
+            "devices": {
+                "pv_ld1895_load_b": {
+                    "p_available_W": 1250,
+                    "vmax_sensed_V": 245.0979601815986,
+                    "capacitor_carrier_audit_current_A": 0.9075420250230378,
+                    "p_dc_W": 895.3795876934203,
+                    "controller": "phase_vv_vw",
+                    "capacitor_thermal_current_A": 0.9999999999983014,
+                    "q_poc_var": -736.793093777494,
+                    "p_poc_W": 865.616547117229
+                },
+                "pv_ld1970_load_c": {
+                    "p_available_W": 3000,
+                    "vmax_sensed_V": 245.11405636948504,
+                    "capacitor_carrier_audit_current_A": 0.9087333440927235,
+                    "p_dc_W": 1004.2269803630185,
+                    "controller": "mean_vv_vw",
+                    "capacitor_thermal_current_A": 0.999999999930726,
+                    "q_poc_var": -735.4927865445952,
+                    "p_poc_W": 975.5767065919024
+                },
+                "pv_ld1668_load_a": {
+                    "p_available_W": 5000,
+                    "vmax_sensed_V": 245.11502508369986,
+                    "capacitor_carrier_audit_current_A": 0.9087325770910606,
+                    "p_dc_W": 992.9024722490901,
+                    "controller": "sequence_vv_vw",
+                    "capacitor_thermal_current_A": 0.9999999999841366,
+                    "q_poc_var": -755.5874943454202,
+                    "p_poc_W": 964.2140753582266
+                },
+                "pv_ld1446_load_c": {
+                    "p_available_W": 3000,
+                    "vmax_sensed_V": 245.09070297897892,
+                    "capacitor_carrier_audit_current_A": 0.9088500037708033,
+                    "p_dc_W": 778.5709278968261,
+                    "controller": "worst_vv_vw",
+                    "capacitor_thermal_current_A": 0.9999999999793641,
+                    "q_poc_var": -1018.1404990148507,
+                    "p_poc_W": 749.3224536334063
+                },
+                "pv_ld2050_load_a": {
+                    "p_available_W": 5000,
+                    "vmax_sensed_V": 245.09674691553369,
+                    "capacitor_carrier_audit_current_A": 0.908853543795904,
+                    "p_dc_W": 776.789024819187,
+                    "controller": "worst_vv_vw",
+                    "capacitor_thermal_current_A": 0.9999999999859499,
+                    "q_poc_var": -1019.3492884110611,
+                    "p_poc_W": 747.5372318370054
+                },
+                "pv_ld2804_load_c": {
+                    "p_available_W": 1250,
+                    "vmax_sensed_V": 245.10705595251667,
+                    "capacitor_carrier_audit_current_A": 0.9088539821459369,
+                    "p_dc_W": 774.7067916104551,
+                    "controller": "worst_vv_vw",
+                    "capacitor_thermal_current_A": 0.9999999996727619,
+                    "q_poc_var": -1021.4110956841114,
+                    "p_poc_W": 745.4498877879824
+                },
+                "pv_ld626_load_c": {
+                    "p_available_W": 3000,
+                    "vmax_sensed_V": 245.12015837984768,
+                    "capacitor_carrier_audit_current_A": 0.9087325479971878,
+                    "p_dc_W": 1006.5662371638853,
+                    "controller": "sequence_vv_vw",
+                    "capacitor_thermal_current_A": 0.9999999999426147,
+                    "q_poc_var": -731.3771959154616,
+                    "p_poc_W": 977.9234386011918
+                },
+                "pv_ld24_load_a": {
+                    "p_available_W": 5000,
+                    "vmax_sensed_V": 245.11729476777677,
+                    "capacitor_carrier_audit_current_A": 0.9087330191057873,
+                    "p_dc_W": 999.6262084562483,
+                    "controller": "mean_vv_vw",
+                    "capacitor_thermal_current_A": 1.0000000000027183,
+                    "q_poc_var": -743.7158813601673,
+                    "p_poc_W": 970.9604936884148
+                },
+                "pv_ld868_load_a": {
+                    "p_available_W": 5000,
+                    "vmax_sensed_V": 245.080225964711,
+                    "capacitor_carrier_audit_current_A": 0.9075707929934707,
+                    "p_dc_W": 893.535857360823,
+                    "controller": "phase_vv_vw",
+                    "capacitor_thermal_current_A": 0.9999999998754843,
+                    "q_poc_var": -738.685713996289,
+                    "p_poc_W": 863.7682697477718
+                },
+                "pv_ld248_load_b": {
+                    "p_available_W": 3000,
+                    "vmax_sensed_V": 245.0772325443124,
+                    "capacitor_carrier_audit_current_A": 0.9079679845800354,
+                    "p_dc_W": 870.8812266902912,
+                    "controller": "phase_vv_vw",
+                    "capacitor_thermal_current_A": 0.9999999985044782,
+                    "q_poc_var": -752.9997121154347,
+                    "p_poc_W": 841.0486540513987
+                },
+                "pv_ld1291_load_b": {
+                    "p_available_W": 1250,
+                    "vmax_sensed_V": 245.1157509650161,
+                    "capacitor_carrier_audit_current_A": 0.9087331102332267,
+                    "p_dc_W": 990.4049889372034,
+                    "controller": "mean_vv_vw",
+                    "capacitor_thermal_current_A": 0.9999999999736188,
+                    "q_poc_var": -759.7809569517455,
+                    "p_poc_W": 961.7087676334961
+                },
+                "pv_ld2186_load_b": {
+                    "p_available_W": 1250,
+                    "vmax_sensed_V": 245.11849877228283,
+                    "capacitor_carrier_audit_current_A": 0.9087325294740152,
+                    "p_dc_W": 1006.0102171100972,
+                    "controller": "sequence_vv_vw",
+                    "capacitor_thermal_current_A": 0.9999999999546618,
+                    "q_poc_var": -732.3866365067927,
+                    "p_poc_W": 977.365537985454
+                }
+            },
+            "vmax_sensed_V": 245.12015837984768,
+            "maximum_capacitor_model_A": 1.0000000000027183,
+            "accepted": true,
+            "q_poc_var": -9745.720354623425,
+            "fixed_PQ_replay_difference_V": 1.4816712343775985e-8,
+            "p_poc_W": 10640.49206403348
+        }
+    },
+    "conditions": 549,
+    "physical_checks": 2220
+}

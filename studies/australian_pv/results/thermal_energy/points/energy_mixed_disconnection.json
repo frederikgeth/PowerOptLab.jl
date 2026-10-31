@@ -1,0 +1,3108 @@
+{
+    "devices": {
+        "pv_ld1446_load_c": {
+            "phase_reactive_scale": null,
+            "converter_voltage": [
+                [
+                    127.03687221308473,
+                    -214.78881324344002
+                ],
+                [
+                    -249.92184148629954,
+                    1.8363088165464014
+                ],
+                [
+                    122.75418546316267,
+                    213.4748537310747
+                ]
+            ],
+            "converter_current": [
+                [
+                    1.547714627680601,
+                    0.8953833840404378
+                ],
+                [
+                    0.0015674428651966704,
+                    -1.788051877400393
+                ],
+                [
+                    -1.5492820705457977,
+                    0.8926684933599558
+                ]
+            ],
+            "grid_current": [
+                [
+                    1.547714627680601,
+                    0.8953833840404378
+                ],
+                [
+                    0.0015674428651966704,
+                    -1.788051877400393
+                ],
+                [
+                    -1.5492820705457977,
+                    0.8926684933599558
+                ]
+            ]
+        },
+        "pv_ld248_load_b": {
+            "phase_reactive_scale": 0.5966696750363433,
+            "converter_voltage": [
+                [
+                    127.39923160827463,
+                    -214.1550615873681
+                ],
+                [
+                    -249.30468715705106,
+                    2.385396305218563
+                ],
+                [
+                    123.51518478389751,
+                    214.47640987318312
+                ]
+            ],
+            "converter_current": [
+                [
+                    1.609979839633272,
+                    0.9498645209020696
+                ],
+                [
+                    -0.017170131731351554,
+                    -1.9430150603381675
+                ],
+                [
+                    -1.2074118368555407,
+                    0.6958789420700028
+                ]
+            ],
+            "grid_current": [
+                [
+                    1.609979839633272,
+                    0.9498645209020696
+                ],
+                [
+                    -0.017170131731351554,
+                    -1.9430150603381675
+                ],
+                [
+                    -1.2074118368555407,
+                    0.6958789420700028
+                ]
+            ]
+        },
+        "pv_ld1895_load_b": {
+            "phase_reactive_scale": 0.6067174291322741,
+            "converter_voltage": [
+                [
+                    127.28117666953578,
+                    -213.87331230904056
+                ],
+                [
+                    -249.18026727331068,
+                    2.3889798247614844
+                ],
+                [
+                    123.40959450498154,
+                    214.4563315215199
+                ]
+            ],
+            "converter_current": [
+                [
+                    1.5810034037473457,
+                    0.9325694980478725
+                ],
+                [
+                    -0.018592040108367576,
+                    -1.9660356995586799
+                ],
+                [
+                    -1.2294596480565494,
+                    0.7083340736251206
+                ]
+            ],
+            "grid_current": [
+                [
+                    1.5810034037473457,
+                    0.9325694980478725
+                ],
+                [
+                    -0.018592040108367576,
+                    -1.9660356995586799
+                ],
+                [
+                    -1.2294596480565494,
+                    0.7083340736251206
+                ]
+            ]
+        },
+        "pv_ld1970_load_c": {
+            "phase_reactive_scale": null,
+            "converter_voltage": [
+                [
+                    126.91968806012481,
+                    -214.51536182668772
+                ],
+                [
+                    -249.8027413110972,
+                    1.769707230451539
+                ],
+                [
+                    122.6812222123242,
+                    213.41316098442738
+                ]
+            ],
+            "converter_current": [
+                [
+                    1.5480818589092666,
+                    0.8959719772747728
+                ],
+                [
+                    0.001893563944293766,
+                    -1.7886642055906483
+                ],
+                [
+                    -1.5499754228535603,
+                    0.8926922283158755
+                ]
+            ],
+            "grid_current": [
+                [
+                    1.5480818589092666,
+                    0.8959719772747728
+                ],
+                [
+                    0.001893563944293766,
+                    -1.7886642055906483
+                ],
+                [
+                    -1.5499754228535603,
+                    0.8926922283158755
+                ]
+            ]
+        },
+        "pv_ld1291_load_b": {
+            "phase_reactive_scale": null,
+            "converter_voltage": [
+                [
+                    127.09547866582406,
+                    -214.85172456500743
+                ],
+                [
+                    -249.9494619820697,
+                    1.8340777757777673
+                ],
+                [
+                    122.75473751618729,
+                    213.49834708898445
+                ]
+            ],
+            "converter_current": [
+                [
+                    1.5475362016079306,
+                    0.8953699397690404
+                ],
+                [
+                    0.0016450128209662327,
+                    -1.787890633753065
+                ],
+                [
+                    -1.5491812144288968,
+                    0.8925206939840244
+                ]
+            ],
+            "grid_current": [
+                [
+                    1.5475362016079306,
+                    0.8953699397690404
+                ],
+                [
+                    0.0016450128209662327,
+                    -1.787890633753065
+                ],
+                [
+                    -1.5491812144288968,
+                    0.8925206939840244
+                ]
+            ]
+        },
+        "pv_ld2186_load_b": {
+            "phase_reactive_scale": null,
+            "converter_voltage": [
+                [
+                    126.89444061570994,
+                    -214.52456895539385
+                ],
+                [
+                    -249.80996174891777,
+                    1.7913445540855264
+                ],
+                [
+                    122.68926834151432,
+                    213.40785044488092
+                ]
+            ],
+            "converter_current": [
+                [
+                    1.5481494404328433,
+                    0.8958509759492574
+                ],
+                [
+                    0.0017549829607176092,
+                    -1.7886622322441348
+                ],
+                [
+                    -1.5499044233935606,
+                    0.8928112562948772
+                ]
+            ],
+            "grid_current": [
+                [
+                    1.5481494404328433,
+                    0.8958509759492574
+                ],
+                [
+                    0.0017549829607176092,
+                    -1.7886622322441348
+                ],
+                [
+                    -1.5499044233935606,
+                    0.8928112562948772
+                ]
+            ]
+        },
+        "pv_ld2804_load_c": {
+            "phase_reactive_scale": null,
+            "converter_voltage": [
+                [
+                    126.96026802653701,
+                    -214.65318051909074
+                ],
+                [
+                    -249.8615163129905,
+                    1.8136954290002907
+                ],
+                [
+                    122.72697007160046,
+                    213.43848643500036
+                ]
+            ],
+            "converter_current": [
+                [
+                    1.5479532778862397,
+                    0.8956052365840497
+                ],
+                [
+                    0.00164024770103945,
+                    -1.788369480812901
+                ],
+                [
+                    -1.5495935255872793,
+                    0.8927642442288514
+                ]
+            ],
+            "grid_current": [
+                [
+                    1.5479532778862397,
+                    0.8956052365840497
+                ],
+                [
+                    0.00164024770103945,
+                    -1.788369480812901
+                ],
+                [
+                    -1.5495935255872793,
+                    0.8927642442288514
+                ]
+            ]
+        },
+        "pv_ld626_load_c": {
+            "phase_reactive_scale": null,
+            "converter_voltage": [
+                [
+                    126.8893727300622,
+                    -214.50458866379194
+                ],
+                [
+                    -249.8018394260315,
+                    1.7848074322379404
+                ],
+                [
+                    122.68159766503223,
+                    213.4046293153299
+                ]
+            ],
+            "converter_current": [
+                [
+                    1.548164934684354,
+                    0.8959078484876253
+                ],
+                [
+                    0.001796488897966283,
+                    -1.7887040869287394
+                ],
+                [
+                    -1.5499614235823203,
+                    0.8927962384411142
+                ]
+            ],
+            "grid_current": [
+                [
+                    1.548164934684354,
+                    0.8959078484876253
+                ],
+                [
+                    0.001796488897966283,
+                    -1.7887040869287394
+                ],
+                [
+                    -1.5499614235823203,
+                    0.8927962384411142
+                ]
+            ]
+        }
+    },
+    "stages": {
+        "pv_ld1446_load_c": [
+            {
+                "name": "reactive_tracking",
+                "solve": {
+                    "termination_status": "LOCALLY_SOLVED",
+                    "primal_status": "FEASIBLE_POINT",
+                    "has_primal": true,
+                    "feasible": true,
+                    "optimal": true,
+                    "publishable": true
+                },
+                "operation": {
+                    "capacitor_current_margin_A": 1.7717827205387948e-11,
+                    "continuous_rail_margin_upper_V": 105.05452436201087,
+                    "power_limit_location": "poc",
+                    "dc_ripple_margin_V": 7.407131897880536,
+                    "dc_source_bounds_W": {
+                        "p_max": null,
+                        "p_min": 0
+                    },
+                    "poc_apparent_power_margin_VA": 4653.954685799508,
+                    "switching_margin_V": 105.04049754634246,
+                    "apparent_power_margin_VA": 4653.954685799508,
+                    "active_lower_margin_W": null,
+                    "converter_current_margin_A": [
+                        8.21194706648007,
+                        8.21194706648007,
+                        8.21194706648007
+                    ],
+                    "midpoint_ripple_margin_V": null,
+                    "q_exact_target_var": null,
+                    "current_allocation": "free",
+                    "dc_lower_margin_W": 29.133701015377877,
+                    "apparent_power_rating_VA": 6000,
+                    "upper_capacitor_margin_A": null,
+                    "pwm_strategy": "CENTERED",
+                    "pwm_thermal_headroom": 0.1,
+                    "reactive_lower_margin_var": null,
+                    "active_upper_margin_W": null,
+                    "q_constraint_residual_var": null,
+                    "lower_capacitor_margin_A": null,
+                    "phase_voltage": [
+                        {
+                            "re": 128.0163314789675,
+                            "im": -216.95408029108694
+                        },
+                        {
+                            "re": -252.28674738848048,
+                            "im": 2.070705734143429
+                        },
+                        {
+                            "re": 124.13963209946091,
+                            "im": 215.4057238611246
+                        }
+                    ],
+                    "midpoint_mean_margin_V": null,
+                    "grid_current_margin_A": null,
+                    "volt_watt_margin_W": null,
+                    "volt_watt_cap_W": null,
+                    "reactive_mode": "free_q",
+                    "reactive_upper_margin_var": null,
+                    "raw_solver_status": "Solve_Succeeded",
+                    "continuous_rail_margin_lower_V": 105.04049754634246,
+                    "neutral_current_margin_A": null,
+                    "dc_availability_margin_W": 2970.866298984622,
+                    "effective_dc_availability_W": 3000,
+                    "dc_upper_margin_W": null,
+                    "q_target_var": null,
+                    "allocation_stage": "reactive_tracking",
+                    "q_tracking_residual_var": null,
+                    "volt_watt_fraction": 1,
+                    "physical_failed_checks": [
+                    ],
+                    "converter_apparent_power_margin_VA": null,
+                    "exact_volt_watt_margin_W": null,
+                    "fixed_pf_residual_VA": null,
+                    "ac_available_W": 2970.125799861093,
+                    "physical_feasible": true
+                }
+            },
+            {
+                "name": "active_export",
+                "solve": {
+                    "termination_status": "LOCALLY_SOLVED",
+                    "primal_status": "FEASIBLE_POINT",
+                    "has_primal": true,
+                    "feasible": true,
+                    "optimal": true,
+                    "publishable": true
+                },
+                "operation": {
+                    "capacitor_current_margin_A": 1.887379141862766e-14,
+                    "continuous_rail_margin_upper_V": 105.0543148114274,
+                    "power_limit_location": "poc",
+                    "dc_ripple_margin_V": 7.407131917050576,
+                    "dc_source_bounds_W": {
+                        "p_max": null,
+                        "p_min": 0
+                    },
+                    "poc_apparent_power_margin_VA": 4653.954963652852,
+                    "switching_margin_V": 105.04028793222786,
+                    "apparent_power_margin_VA": 4653.954963652852,
+                    "active_lower_margin_W": null,
+                    "converter_current_margin_A": [
+                        8.211947435573503,
+                        8.211947435573503,
+                        8.211947435573503
+                    ],
+                    "midpoint_ripple_margin_V": null,
+                    "q_exact_target_var": null,
+                    "current_allocation": "free",
+                    "dc_lower_margin_W": 29.610488818815355,
+                    "apparent_power_rating_VA": 6000,
+                    "upper_capacitor_margin_A": null,
+                    "pwm_strategy": "CENTERED",
+                    "pwm_thermal_headroom": 0.1,
+                    "reactive_lower_margin_var": null,
+                    "active_upper_margin_W": null,
+                    "q_constraint_residual_var": null,
+                    "lower_capacitor_margin_A": null,
+                    "phase_voltage": [
+                        {
+                            "re": 128.0163314789675,
+                            "im": -216.95408029108694
+                        },
+                        {
+                            "re": -252.28674738848048,
+                            "im": 2.070705734143429
+                        },
+                        {
+                            "re": 124.13963209946091,
+                            "im": 215.4057238611246
+                        }
+                    ],
+                    "midpoint_mean_margin_V": null,
+                    "grid_current_margin_A": null,
+                    "volt_watt_margin_W": null,
+                    "volt_watt_cap_W": null,
+                    "reactive_mode": "free_q",
+                    "reactive_upper_margin_var": null,
+                    "raw_solver_status": "Solve_Succeeded",
+                    "continuous_rail_margin_lower_V": 105.04028793222786,
+                    "neutral_current_margin_A": null,
+                    "dc_availability_margin_W": 2970.389511181185,
+                    "effective_dc_availability_W": 3000,
+                    "dc_upper_margin_W": null,
+                    "q_target_var": null,
+                    "allocation_stage": "active_export",
+                    "q_tracking_residual_var": null,
+                    "volt_watt_fraction": 1,
+                    "physical_failed_checks": [
+                    ],
+                    "converter_apparent_power_margin_VA": null,
+                    "exact_volt_watt_margin_W": null,
+                    "fixed_pf_residual_VA": null,
+                    "ac_available_W": 2970.125803787256,
+                    "physical_feasible": true
+                }
+            }
+        ],
+        "pv_ld248_load_b": [
+            {
+                "name": "phase_reactive_tracking",
+                "solve": {
+                    "termination_status": "LOCALLY_SOLVED",
+                    "primal_status": "FEASIBLE_POINT",
+                    "has_primal": true,
+                    "feasible": true,
+                    "optimal": true,
+                    "publishable": true
+                },
+                "operation": {
+                    "reactive_service_scale": 0.5966697206654833,
+                    "capacitor_current_margin_A": 1.6687762283140728e-11,
+                    "continuous_rail_margin_upper_V": 104.5173677060184,
+                    "power_limit_location": "poc",
+                    "dc_ripple_margin_V": 6.454509129534726,
+                    "dc_source_bounds_W": {
+                        "p_max": null,
+                        "p_min": 0
+                    },
+                    "poc_apparent_power_margin_VA": 4692.349703165079,
+                    "switching_margin_V": 104.36070782456093,
+                    "apparent_power_margin_VA": 4692.349703165079,
+                    "active_lower_margin_W": null,
+                    "converter_current_margin_A": [
+                        8.130701123971711,
+                        8.056908911895347,
+                        8.606410675333116
+                    ],
+                    "midpoint_ripple_margin_V": null,
+                    "q_exact_target_var": null,
+                    "current_allocation": "free",
+                    "dc_lower_margin_W": 30.1928585963445,
+                    "apparent_power_rating_VA": 6000,
+                    "upper_capacitor_margin_A": null,
+                    "pwm_strategy": "CENTERED",
+                    "pwm_thermal_headroom": 0.1,
+                    "reactive_lower_margin_var": null,
+                    "active_upper_margin_W": null,
+                    "q_constraint_residual_var": null,
+                    "lower_capacitor_margin_A": null,
+                    "phase_voltage": [
+                        {
+                            "re": 127.99839704741358,
+                            "im": -216.88025402387953
+                        },
+                        {
+                            "re": -252.31616438038935,
+                            "im": 2.194693030455873
+                        },
+                        {
+                            "re": 124.15105434424669,
+                            "im": 215.51080752162864
+                        }
+                    ],
+                    "midpoint_mean_margin_V": null,
+                    "grid_current_margin_A": null,
+                    "volt_watt_margin_W": null,
+                    "volt_watt_cap_W": null,
+                    "reactive_mode": "free_q",
+                    "reactive_upper_margin_var": null,
+                    "raw_solver_status": "Solve_Succeeded",
+                    "continuous_rail_margin_lower_V": 104.36070782456093,
+                    "neutral_current_margin_A": 9.513272490711405,
+                    "dc_availability_margin_W": 2969.8071414036554,
+                    "effective_dc_availability_W": 3000,
+                    "dc_upper_margin_W": null,
+                    "q_target_var": null,
+                    "allocation_stage": "phase_reactive_tracking",
+                    "q_tracking_residual_var": null,
+                    "volt_watt_fraction": 1,
+                    "physical_failed_checks": [
+                    ],
+                    "converter_apparent_power_margin_VA": null,
+                    "exact_volt_watt_margin_W": null,
+                    "fixed_pf_residual_VA": null,
+                    "ac_available_W": 2969.5303347525423,
+                    "physical_feasible": true
+                }
+            },
+            {
+                "name": "phase_active_export",
+                "solve": {
+                    "termination_status": "LOCALLY_SOLVED",
+                    "primal_status": "FEASIBLE_POINT",
+                    "has_primal": true,
+                    "feasible": true,
+                    "optimal": true,
+                    "publishable": true
+                },
+                "operation": {
+                    "reactive_service_scale": 0.5966696750363433,
+                    "capacitor_current_margin_A": 1.9095836023552692e-14,
+                    "continuous_rail_margin_upper_V": 104.51715664450765,
+                    "power_limit_location": "poc",
+                    "dc_ripple_margin_V": 6.454513530654037,
+                    "dc_source_bounds_W": {
+                        "p_max": null,
+                        "p_min": 0
+                    },
+                    "poc_apparent_power_margin_VA": 4692.34981655938,
+                    "switching_margin_V": 104.36049748449867,
+                    "apparent_power_margin_VA": 4692.34981655938,
+                    "active_lower_margin_W": null,
+                    "converter_current_margin_A": [
+                        8.1307012833384,
+                        8.05690907622031,
+                        8.606410804480563
+                    ],
+                    "midpoint_ripple_margin_V": null,
+                    "q_exact_target_var": null,
+                    "current_allocation": "free",
+                    "dc_lower_margin_W": 30.67359981673136,
+                    "apparent_power_rating_VA": 6000,
+                    "upper_capacitor_margin_A": null,
+                    "pwm_strategy": "CENTERED",
+                    "pwm_thermal_headroom": 0.1,
+                    "reactive_lower_margin_var": null,
+                    "active_upper_margin_W": null,
+                    "q_constraint_residual_var": null,
+                    "lower_capacitor_margin_A": null,
+                    "phase_voltage": [
+                        {
+                            "re": 127.99839704741358,
+                            "im": -216.88025402387953
+                        },
+                        {
+                            "re": -252.31616438038935,
+                            "im": 2.194693030455873
+                        },
+                        {
+                            "re": 124.15105434424669,
+                            "im": 215.51080752162864
+                        }
+                    ],
+                    "midpoint_mean_margin_V": null,
+                    "grid_current_margin_A": null,
+                    "volt_watt_margin_W": null,
+                    "volt_watt_cap_W": null,
+                    "reactive_mode": "free_q",
+                    "reactive_upper_margin_var": null,
+                    "raw_solver_status": "Solve_Succeeded",
+                    "continuous_rail_margin_lower_V": 104.36049748449867,
+                    "neutral_current_margin_A": 9.513274285070427,
+                    "dc_availability_margin_W": 2969.3264001832686,
+                    "effective_dc_availability_W": 3000,
+                    "dc_upper_margin_W": null,
+                    "q_target_var": null,
+                    "allocation_stage": "phase_active_export",
+                    "q_tracking_residual_var": null,
+                    "volt_watt_fraction": 1,
+                    "physical_failed_checks": [
+                    ],
+                    "converter_apparent_power_margin_VA": null,
+                    "exact_volt_watt_margin_W": null,
+                    "fixed_pf_residual_VA": null,
+                    "ac_available_W": 2969.530340691123,
+                    "physical_feasible": true
+                }
+            }
+        ],
+        "pv_ld1895_load_b": [
+            {
+                "name": "phase_reactive_tracking",
+                "solve": {
+                    "termination_status": "LOCALLY_SOLVED",
+                    "primal_status": "FEASIBLE_POINT",
+                    "has_primal": true,
+                    "feasible": true,
+                    "optimal": true,
+                    "publishable": true
+                },
+                "operation": {
+                    "reactive_service_scale": 0.6067174754334048,
+                    "capacitor_current_margin_A": 1.641198288382384e-11,
+                    "continuous_rail_margin_upper_V": 105.0624459610812,
+                    "power_limit_location": "poc",
+                    "dc_ripple_margin_V": 6.49504875464287,
+                    "dc_source_bounds_W": {
+                        "p_max": null,
+                        "p_min": 0
+                    },
+                    "poc_apparent_power_margin_VA": 4689.6274023848255,
+                    "switching_margin_V": 104.91202381963683,
+                    "apparent_power_margin_VA": 4689.6274023848255,
+                    "active_lower_margin_W": null,
+                    "converter_current_margin_A": [
+                        8.164446278837628,
+                        8.033876415659803,
+                        8.581089221439996
+                    ],
+                    "midpoint_ripple_margin_V": null,
+                    "q_exact_target_var": null,
+                    "current_allocation": "free",
+                    "dc_lower_margin_W": 30.6274262298246,
+                    "apparent_power_rating_VA": 6000,
+                    "upper_capacitor_margin_A": null,
+                    "pwm_strategy": "CENTERED",
+                    "pwm_thermal_headroom": 0.1,
+                    "reactive_lower_margin_var": null,
+                    "active_upper_margin_W": null,
+                    "q_constraint_residual_var": null,
+                    "lower_capacitor_margin_A": null,
+                    "phase_voltage": [
+                        {
+                            "re": 127.83139202704389,
+                            "im": -216.48485154655816
+                        },
+                        {
+                            "re": -252.2519107921873,
+                            "im": 2.2762460991265923
+                        },
+                        {
+                            "re": 124.03494225229164,
+                            "im": 215.59128480489292
+                        }
+                    ],
+                    "midpoint_mean_margin_V": null,
+                    "grid_current_margin_A": null,
+                    "volt_watt_margin_W": null,
+                    "volt_watt_cap_W": null,
+                    "reactive_mode": "free_q",
+                    "reactive_upper_margin_var": null,
+                    "raw_solver_status": "Solve_Succeeded",
+                    "continuous_rail_margin_lower_V": 104.91202381963683,
+                    "neutral_current_margin_A": 9.534628138107593,
+                    "dc_availability_margin_W": 1219.3725737701754,
+                    "effective_dc_availability_W": 1250,
+                    "dc_upper_margin_W": null,
+                    "q_target_var": null,
+                    "allocation_stage": "phase_reactive_tracking",
+                    "q_tracking_residual_var": null,
+                    "volt_watt_fraction": 1,
+                    "physical_failed_checks": [
+                    ],
+                    "converter_apparent_power_margin_VA": null,
+                    "exact_volt_watt_margin_W": null,
+                    "fixed_pf_residual_VA": null,
+                    "ac_available_W": 1219.5369547996538,
+                    "physical_feasible": true
+                }
+            },
+            {
+                "name": "phase_active_export",
+                "solve": {
+                    "termination_status": "LOCALLY_SOLVED",
+                    "primal_status": "FEASIBLE_POINT",
+                    "has_primal": true,
+                    "feasible": true,
+                    "optimal": true,
+                    "publishable": true
+                },
+                "operation": {
+                    "reactive_service_scale": 0.6067174291322741,
+                    "capacitor_current_margin_A": 1.865174681370263e-14,
+                    "continuous_rail_margin_upper_V": 105.06223494837143,
+                    "power_limit_location": "poc",
+                    "dc_ripple_margin_V": 6.495057866992861,
+                    "dc_source_bounds_W": {
+                        "p_max": null,
+                        "p_min": 0
+                    },
+                    "poc_apparent_power_margin_VA": 4689.627354400026,
+                    "switching_margin_V": 104.91181398050138,
+                    "apparent_power_margin_VA": 4689.627354400026,
+                    "active_lower_margin_W": null,
+                    "converter_current_margin_A": [
+                        8.164446233204297,
+                        8.0338763934945,
+                        8.58108908426658
+                    ],
+                    "midpoint_ripple_margin_V": null,
+                    "q_exact_target_var": null,
+                    "current_allocation": "free",
+                    "dc_lower_margin_W": 31.10712723392545,
+                    "apparent_power_rating_VA": 6000,
+                    "upper_capacitor_margin_A": null,
+                    "pwm_strategy": "CENTERED",
+                    "pwm_thermal_headroom": 0.1,
+                    "reactive_lower_margin_var": null,
+                    "active_upper_margin_W": null,
+                    "q_constraint_residual_var": null,
+                    "lower_capacitor_margin_A": null,
+                    "phase_voltage": [
+                        {
+                            "re": 127.83139202704389,
+                            "im": -216.48485154655816
+                        },
+                        {
+                            "re": -252.2519107921873,
+                            "im": 2.2762460991265923
+                        },
+                        {
+                            "re": 124.03494225229164,
+                            "im": 215.59128480489292
+                        }
+                    ],
+                    "midpoint_mean_margin_V": null,
+                    "grid_current_margin_A": null,
+                    "volt_watt_margin_W": null,
+                    "volt_watt_cap_W": null,
+                    "reactive_mode": "free_q",
+                    "reactive_upper_margin_var": null,
+                    "raw_solver_status": "Solve_Succeeded",
+                    "continuous_rail_margin_lower_V": 104.91181398050138,
+                    "neutral_current_margin_A": 9.534631602676209,
+                    "dc_availability_margin_W": 1218.8928727660746,
+                    "effective_dc_availability_W": 1250,
+                    "dc_upper_margin_W": null,
+                    "q_target_var": null,
+                    "allocation_stage": "phase_active_export",
+                    "q_tracking_residual_var": null,
+                    "volt_watt_fraction": 1,
+                    "physical_failed_checks": [
+                    ],
+                    "converter_apparent_power_margin_VA": null,
+                    "exact_volt_watt_margin_W": null,
+                    "fixed_pf_residual_VA": null,
+                    "ac_available_W": 1219.5369624343355,
+                    "physical_feasible": true
+                }
+            }
+        ],
+        "pv_ld1970_load_c": [
+            {
+                "name": "reactive_tracking",
+                "solve": {
+                    "termination_status": "LOCALLY_SOLVED",
+                    "primal_status": "FEASIBLE_POINT",
+                    "has_primal": true,
+                    "feasible": true,
+                    "optimal": true,
+                    "publishable": true
+                },
+                "operation": {
+                    "capacitor_current_margin_A": 1.5906387318409543e-11,
+                    "continuous_rail_margin_upper_V": 105.58552697263043,
+                    "power_limit_location": "poc",
+                    "dc_ripple_margin_V": 7.408810018430693,
+                    "dc_source_bounds_W": {
+                        "p_max": null,
+                        "p_min": 0
+                    },
+                    "poc_apparent_power_margin_VA": 4654.390957570003,
+                    "switching_margin_V": 105.57168682923923,
+                    "apparent_power_margin_VA": 4654.390957570003,
+                    "active_lower_margin_W": null,
+                    "converter_current_margin_A": [
+                        8.211334422029465,
+                        8.211334422029465,
+                        8.211334422029465
+                    ],
+                    "midpoint_ripple_margin_V": null,
+                    "q_exact_target_var": null,
+                    "current_allocation": "free",
+                    "dc_lower_margin_W": 29.1384833080334,
+                    "apparent_power_rating_VA": 6000,
+                    "upper_capacitor_margin_A": null,
+                    "pwm_strategy": "CENTERED",
+                    "pwm_thermal_headroom": 0.1,
+                    "reactive_lower_margin_var": null,
+                    "active_upper_margin_W": null,
+                    "q_constraint_residual_var": null,
+                    "lower_capacitor_margin_A": null,
+                    "phase_voltage": [
+                        {
+                            "re": 127.8998771742299,
+                            "im": -216.68119237908982
+                        },
+                        {
+                            "re": -252.16850014682248,
+                            "im": 2.0037538333245553
+                        },
+                        {
+                            "re": 124.0667919339443,
+                            "im": 215.34494493395644
+                        }
+                    ],
+                    "midpoint_mean_margin_V": null,
+                    "grid_current_margin_A": null,
+                    "volt_watt_margin_W": null,
+                    "volt_watt_cap_W": null,
+                    "reactive_mode": "free_q",
+                    "reactive_upper_margin_var": null,
+                    "raw_solver_status": "Solve_Succeeded",
+                    "continuous_rail_margin_lower_V": 105.57168682923923,
+                    "neutral_current_margin_A": null,
+                    "dc_availability_margin_W": 2970.8615166919667,
+                    "effective_dc_availability_W": 3000,
+                    "dc_upper_margin_W": null,
+                    "q_target_var": null,
+                    "allocation_stage": "reactive_tracking",
+                    "q_tracking_residual_var": null,
+                    "volt_watt_fraction": 1,
+                    "physical_failed_checks": [
+                    ],
+                    "converter_apparent_power_margin_VA": null,
+                    "exact_volt_watt_margin_W": null,
+                    "fixed_pf_residual_VA": null,
+                    "ac_available_W": 2970.119282482202,
+                    "physical_feasible": true
+                }
+            },
+            {
+                "name": "active_export",
+                "solve": {
+                    "termination_status": "LOCALLY_SOLVED",
+                    "primal_status": "FEASIBLE_POINT",
+                    "has_primal": true,
+                    "feasible": true,
+                    "optimal": true,
+                    "publishable": true
+                },
+                "operation": {
+                    "capacitor_current_margin_A": 1.8762769116165146e-14,
+                    "continuous_rail_margin_upper_V": 105.58531635330202,
+                    "power_limit_location": "poc",
+                    "dc_ripple_margin_V": 7.408810037297793,
+                    "dc_source_bounds_W": {
+                        "p_max": null,
+                        "p_min": 0
+                    },
+                    "poc_apparent_power_margin_VA": 4654.391235974593,
+                    "switching_margin_V": 105.57147608768017,
+                    "apparent_power_margin_VA": 4654.391235974593,
+                    "active_lower_margin_W": null,
+                    "converter_current_margin_A": [
+                        8.21133479210182,
+                        8.21133479210182,
+                        8.21133479210182
+                    ],
+                    "midpoint_ripple_margin_V": null,
+                    "q_exact_target_var": null,
+                    "current_allocation": "free",
+                    "dc_lower_margin_W": 29.614657341653864,
+                    "apparent_power_rating_VA": 6000,
+                    "upper_capacitor_margin_A": null,
+                    "pwm_strategy": "CENTERED",
+                    "pwm_thermal_headroom": 0.1,
+                    "reactive_lower_margin_var": null,
+                    "active_upper_margin_W": null,
+                    "q_constraint_residual_var": null,
+                    "lower_capacitor_margin_A": null,
+                    "phase_voltage": [
+                        {
+                            "re": 127.8998771742299,
+                            "im": -216.68119237908982
+                        },
+                        {
+                            "re": -252.16850014682248,
+                            "im": 2.0037538333245553
+                        },
+                        {
+                            "re": 124.0667919339443,
+                            "im": 215.34494493395644
+                        }
+                    ],
+                    "midpoint_mean_margin_V": null,
+                    "grid_current_margin_A": null,
+                    "volt_watt_margin_W": null,
+                    "volt_watt_cap_W": null,
+                    "reactive_mode": "free_q",
+                    "reactive_upper_margin_var": null,
+                    "raw_solver_status": "Solve_Succeeded",
+                    "continuous_rail_margin_lower_V": 105.57147608768017,
+                    "neutral_current_margin_A": null,
+                    "dc_availability_margin_W": 2970.385342658346,
+                    "effective_dc_availability_W": 3000,
+                    "dc_upper_margin_W": null,
+                    "q_target_var": null,
+                    "allocation_stage": "active_export",
+                    "q_tracking_residual_var": null,
+                    "volt_watt_fraction": 1,
+                    "physical_failed_checks": [
+                    ],
+                    "converter_apparent_power_margin_VA": null,
+                    "exact_volt_watt_margin_W": null,
+                    "fixed_pf_residual_VA": null,
+                    "ac_available_W": 2970.1192864193663,
+                    "physical_feasible": true
+                }
+            }
+        ],
+        "pv_ld1291_load_b": [
+            {
+                "name": "reactive_tracking",
+                "solve": {
+                    "termination_status": "LOCALLY_SOLVED",
+                    "primal_status": "FEASIBLE_POINT",
+                    "has_primal": true,
+                    "feasible": true,
+                    "optimal": true,
+                    "publishable": true
+                },
+                "operation": {
+                    "capacitor_current_margin_A": 1.6142975844957164e-11,
+                    "continuous_rail_margin_upper_V": 104.90544240813632,
+                    "power_limit_location": "poc",
+                    "dc_ripple_margin_V": 7.40653357065457,
+                    "dc_source_bounds_W": {
+                        "p_max": null,
+                        "p_min": 0
+                    },
+                    "poc_apparent_power_margin_VA": 4653.8410122762225,
+                    "switching_margin_V": 104.89134514583937,
+                    "apparent_power_margin_VA": 4653.8410122762225,
+                    "active_lower_margin_W": null,
+                    "converter_current_margin_A": [
+                        8.212108240636582,
+                        8.212108240636582,
+                        8.212108240636582
+                    ],
+                    "midpoint_ripple_margin_V": null,
+                    "q_exact_target_var": null,
+                    "current_allocation": "free",
+                    "dc_lower_margin_W": 29.132443834888466,
+                    "apparent_power_rating_VA": 6000,
+                    "upper_capacitor_margin_A": null,
+                    "pwm_strategy": "CENTERED",
+                    "pwm_thermal_headroom": 0.1,
+                    "reactive_lower_margin_var": null,
+                    "active_upper_margin_W": null,
+                    "q_constraint_residual_var": null,
+                    "lower_capacitor_margin_A": null,
+                    "phase_voltage": [
+                        {
+                            "re": 128.074943748506,
+                            "im": -217.01675386616836
+                        },
+                        {
+                            "re": -252.3141648981537,
+                            "im": 2.0683507826358576
+                        },
+                        {
+                            "re": 124.1399753495894,
+                            "im": 215.42910338328727
+                        }
+                    ],
+                    "midpoint_mean_margin_V": null,
+                    "grid_current_margin_A": null,
+                    "volt_watt_margin_W": null,
+                    "volt_watt_cap_W": null,
+                    "reactive_mode": "free_q",
+                    "reactive_upper_margin_var": null,
+                    "raw_solver_status": "Solve_Succeeded",
+                    "continuous_rail_margin_lower_V": 104.89134514583937,
+                    "neutral_current_margin_A": null,
+                    "dc_availability_margin_W": 1220.8675561651116,
+                    "effective_dc_availability_W": 1250,
+                    "dc_upper_margin_W": null,
+                    "q_target_var": null,
+                    "allocation_stage": "reactive_tracking",
+                    "q_tracking_residual_var": null,
+                    "volt_watt_fraction": 1,
+                    "physical_failed_checks": [
+                    ],
+                    "converter_apparent_power_margin_VA": null,
+                    "exact_volt_watt_margin_W": null,
+                    "fixed_pf_residual_VA": null,
+                    "ac_available_W": 1220.1275142877253,
+                    "physical_feasible": true
+                }
+            },
+            {
+                "name": "active_export",
+                "solve": {
+                    "termination_status": "LOCALLY_SOLVED",
+                    "primal_status": "FEASIBLE_POINT",
+                    "has_primal": true,
+                    "feasible": true,
+                    "optimal": true,
+                    "publishable": true
+                },
+                "operation": {
+                    "capacitor_current_margin_A": 1.865174681370263e-14,
+                    "continuous_rail_margin_upper_V": 104.90523317532963,
+                    "power_limit_location": "poc",
+                    "dc_ripple_margin_V": 7.406533589936226,
+                    "dc_source_bounds_W": {
+                        "p_max": null,
+                        "p_min": 0
+                    },
+                    "poc_apparent_power_margin_VA": 4653.84128998277,
+                    "switching_margin_V": 104.89113586651335,
+                    "apparent_power_margin_VA": 4653.84128998277,
+                    "active_lower_margin_W": null,
+                    "converter_current_margin_A": [
+                        8.212108609470613,
+                        8.212108609470613,
+                        8.212108609470613
+                    ],
+                    "midpoint_ripple_margin_V": null,
+                    "q_exact_target_var": null,
+                    "current_allocation": "free",
+                    "dc_lower_margin_W": 29.609385977104488,
+                    "apparent_power_rating_VA": 6000,
+                    "upper_capacitor_margin_A": null,
+                    "pwm_strategy": "CENTERED",
+                    "pwm_thermal_headroom": 0.1,
+                    "reactive_lower_margin_var": null,
+                    "active_upper_margin_W": null,
+                    "q_constraint_residual_var": null,
+                    "lower_capacitor_margin_A": null,
+                    "phase_voltage": [
+                        {
+                            "re": 128.074943748506,
+                            "im": -217.01675386616836
+                        },
+                        {
+                            "re": -252.3141648981537,
+                            "im": 2.0683507826358576
+                        },
+                        {
+                            "re": 124.1399753495894,
+                            "im": 215.42910338328727
+                        }
+                    ],
+                    "midpoint_mean_margin_V": null,
+                    "grid_current_margin_A": null,
+                    "volt_watt_margin_W": null,
+                    "volt_watt_cap_W": null,
+                    "reactive_mode": "free_q",
+                    "reactive_upper_margin_var": null,
+                    "raw_solver_status": "Solve_Succeeded",
+                    "continuous_rail_margin_lower_V": 104.89113586651335,
+                    "neutral_current_margin_A": null,
+                    "dc_availability_margin_W": 1220.3906140228955,
+                    "effective_dc_availability_W": 1250,
+                    "dc_upper_margin_W": null,
+                    "q_target_var": null,
+                    "allocation_stage": "active_export",
+                    "q_tracking_residual_var": null,
+                    "volt_watt_fraction": 1,
+                    "physical_failed_checks": [
+                    ],
+                    "converter_apparent_power_margin_VA": null,
+                    "exact_volt_watt_margin_W": null,
+                    "fixed_pf_residual_VA": null,
+                    "ac_available_W": 1220.1275182109748,
+                    "physical_feasible": true
+                }
+            }
+        ],
+        "pv_ld2186_load_b": [
+            {
+                "name": "reactive_tracking",
+                "solve": {
+                    "termination_status": "LOCALLY_SOLVED",
+                    "primal_status": "FEASIBLE_POINT",
+                    "has_primal": true,
+                    "feasible": true,
+                    "optimal": true,
+                    "publishable": true
+                },
+                "operation": {
+                    "capacitor_current_margin_A": 1.587663334134959e-11,
+                    "continuous_rail_margin_upper_V": 105.58594446439828,
+                    "power_limit_location": "poc",
+                    "dc_ripple_margin_V": 7.408842887626271,
+                    "dc_source_bounds_W": {
+                        "p_max": null,
+                        "p_min": 0
+                    },
+                    "poc_apparent_power_margin_VA": 4654.389179323591,
+                    "switching_margin_V": 105.57210905048454,
+                    "apparent_power_margin_VA": 4654.389179323591,
+                    "active_lower_margin_W": null,
+                    "converter_current_margin_A": [
+                        8.211336536718745,
+                        8.211336536718745,
+                        8.211336536718745
+                    ],
+                    "midpoint_ripple_margin_V": null,
+                    "q_exact_target_var": null,
+                    "current_allocation": "free",
+                    "dc_lower_margin_W": 29.138467824957726,
+                    "apparent_power_rating_VA": 6000,
+                    "upper_capacitor_margin_A": null,
+                    "pwm_strategy": "CENTERED",
+                    "pwm_thermal_headroom": 0.1,
+                    "reactive_lower_margin_var": null,
+                    "active_upper_margin_W": null,
+                    "q_constraint_residual_var": null,
+                    "lower_capacitor_margin_A": null,
+                    "phase_voltage": [
+                        {
+                            "re": 127.87446076790559,
+                            "im": -216.69047288193556
+                        },
+                        {
+                            "re": -252.1756996475572,
+                            "im": 2.025574169334292
+                        },
+                        {
+                            "re": 124.0749860879581,
+                            "im": 215.33952475617392
+                        }
+                    ],
+                    "midpoint_mean_margin_V": null,
+                    "grid_current_margin_A": null,
+                    "volt_watt_margin_W": null,
+                    "volt_watt_cap_W": null,
+                    "reactive_mode": "free_q",
+                    "reactive_upper_margin_var": null,
+                    "raw_solver_status": "Solve_Succeeded",
+                    "continuous_rail_margin_lower_V": 105.57210905048454,
+                    "neutral_current_margin_A": null,
+                    "dc_availability_margin_W": 1220.8615321750424,
+                    "effective_dc_availability_W": 1250,
+                    "dc_upper_margin_W": null,
+                    "q_target_var": null,
+                    "allocation_stage": "reactive_tracking",
+                    "q_tracking_residual_var": null,
+                    "volt_watt_fraction": 1,
+                    "physical_failed_checks": [
+                    ],
+                    "converter_apparent_power_margin_VA": null,
+                    "exact_volt_watt_margin_W": null,
+                    "fixed_pf_residual_VA": null,
+                    "ac_available_W": 1220.1193049801727,
+                    "physical_feasible": true
+                }
+            },
+            {
+                "name": "active_export",
+                "solve": {
+                    "termination_status": "LOCALLY_SOLVED",
+                    "primal_status": "FEASIBLE_POINT",
+                    "has_primal": true,
+                    "feasible": true,
+                    "optimal": true,
+                    "publishable": true
+                },
+                "operation": {
+                    "capacitor_current_margin_A": 1.8540724511240114e-14,
+                    "continuous_rail_margin_upper_V": 105.58573386975469,
+                    "power_limit_location": "poc",
+                    "dc_ripple_margin_V": 7.408842906486443,
+                    "dc_source_bounds_W": {
+                        "p_max": null,
+                        "p_min": 0
+                    },
+                    "poc_apparent_power_margin_VA": 4654.389457725913,
+                    "switching_margin_V": 105.57189833481009,
+                    "apparent_power_margin_VA": 4654.389457725913,
+                    "active_lower_margin_W": null,
+                    "converter_current_margin_A": [
+                        8.21133690678716,
+                        8.21133690678716,
+                        8.21133690678716
+                    ],
+                    "midpoint_ripple_margin_V": null,
+                    "q_exact_target_var": null,
+                    "current_allocation": "free",
+                    "dc_lower_margin_W": 29.61464414072531,
+                    "apparent_power_rating_VA": 6000,
+                    "upper_capacitor_margin_A": null,
+                    "pwm_strategy": "CENTERED",
+                    "pwm_thermal_headroom": 0.1,
+                    "reactive_lower_margin_var": null,
+                    "active_upper_margin_W": null,
+                    "q_constraint_residual_var": null,
+                    "lower_capacitor_margin_A": null,
+                    "phase_voltage": [
+                        {
+                            "re": 127.87446076790559,
+                            "im": -216.69047288193556
+                        },
+                        {
+                            "re": -252.1756996475572,
+                            "im": 2.025574169334292
+                        },
+                        {
+                            "re": 124.0749860879581,
+                            "im": 215.33952475617392
+                        }
+                    ],
+                    "midpoint_mean_margin_V": null,
+                    "grid_current_margin_A": null,
+                    "volt_watt_margin_W": null,
+                    "volt_watt_cap_W": null,
+                    "reactive_mode": "free_q",
+                    "reactive_upper_margin_var": null,
+                    "raw_solver_status": "Solve_Succeeded",
+                    "continuous_rail_margin_lower_V": 105.57189833481009,
+                    "neutral_current_margin_A": null,
+                    "dc_availability_margin_W": 1220.3853558592748,
+                    "effective_dc_availability_W": 1250,
+                    "dc_upper_margin_W": null,
+                    "q_target_var": null,
+                    "allocation_stage": "active_export",
+                    "q_tracking_residual_var": null,
+                    "volt_watt_fraction": 1,
+                    "physical_failed_checks": [
+                    ],
+                    "converter_apparent_power_margin_VA": null,
+                    "exact_volt_watt_margin_W": null,
+                    "fixed_pf_residual_VA": null,
+                    "ac_available_W": 1220.119308917293,
+                    "physical_feasible": true
+                }
+            }
+        ],
+        "pv_ld2804_load_c": [
+            {
+                "name": "reactive_tracking",
+                "solve": {
+                    "termination_status": "LOCALLY_SOLVED",
+                    "primal_status": "FEASIBLE_POINT",
+                    "has_primal": true,
+                    "feasible": true,
+                    "optimal": true,
+                    "publishable": true
+                },
+                "operation": {
+                    "capacitor_current_margin_A": 1.7237544724935105e-11,
+                    "continuous_rail_margin_upper_V": 105.33488774357569,
+                    "power_limit_location": "poc",
+                    "dc_ripple_margin_V": 7.408088312938538,
+                    "dc_source_bounds_W": {
+                        "p_max": null,
+                        "p_min": 0
+                    },
+                    "poc_apparent_power_margin_VA": 4654.1803091937,
+                    "switching_margin_V": 105.32096928009634,
+                    "apparent_power_margin_VA": 4654.1803091937,
+                    "active_lower_margin_W": null,
+                    "converter_current_margin_A": [
+                        8.211629397388824,
+                        8.211629397388824,
+                        8.211629397388824
+                    ],
+                    "midpoint_ripple_margin_V": null,
+                    "q_exact_target_var": null,
+                    "current_allocation": "free",
+                    "dc_lower_margin_W": 29.13618039112173,
+                    "apparent_power_rating_VA": 6000,
+                    "upper_capacitor_margin_A": null,
+                    "pwm_strategy": "CENTERED",
+                    "pwm_thermal_headroom": 0.1,
+                    "reactive_lower_margin_var": null,
+                    "active_upper_margin_W": null,
+                    "q_constraint_residual_var": null,
+                    "lower_capacitor_margin_A": null,
+                    "phase_voltage": [
+                        {
+                            "re": 127.93998913091893,
+                            "im": -216.81879252163353
+                        },
+                        {
+                            "re": -252.226851874124,
+                            "im": 2.0480380652531527
+                        },
+                        {
+                            "re": 124.11258452835202,
+                            "im": 215.36975580129024
+                        }
+                    ],
+                    "midpoint_mean_margin_V": null,
+                    "grid_current_margin_A": null,
+                    "volt_watt_margin_W": null,
+                    "volt_watt_cap_W": null,
+                    "reactive_mode": "free_q",
+                    "reactive_upper_margin_var": null,
+                    "raw_solver_status": "Solve_Succeeded",
+                    "continuous_rail_margin_lower_V": 105.32096928009634,
+                    "neutral_current_margin_A": null,
+                    "dc_availability_margin_W": 1220.8638196088782,
+                    "effective_dc_availability_W": 1250,
+                    "dc_upper_margin_W": null,
+                    "q_target_var": null,
+                    "allocation_stage": "reactive_tracking",
+                    "q_tracking_residual_var": null,
+                    "volt_watt_fraction": 1,
+                    "physical_failed_checks": [
+                    ],
+                    "converter_apparent_power_margin_VA": null,
+                    "exact_volt_watt_margin_W": null,
+                    "fixed_pf_residual_VA": null,
+                    "ac_available_W": 1220.1224205839537,
+                    "physical_feasible": true
+                }
+            },
+            {
+                "name": "active_export",
+                "solve": {
+                    "termination_status": "LOCALLY_SOLVED",
+                    "primal_status": "FEASIBLE_POINT",
+                    "has_primal": true,
+                    "feasible": true,
+                    "optimal": true,
+                    "publishable": true
+                },
+                "operation": {
+                    "capacitor_current_margin_A": 1.887379141862766e-14,
+                    "continuous_rail_margin_upper_V": 105.33467763175055,
+                    "power_limit_location": "poc",
+                    "dc_ripple_margin_V": 7.408088331933929,
+                    "dc_source_bounds_W": {
+                        "p_max": null,
+                        "p_min": 0
+                    },
+                    "poc_apparent_power_margin_VA": 4654.180587333394,
+                    "switching_margin_V": 105.32075907403559,
+                    "apparent_power_margin_VA": 4654.180587333394,
+                    "active_lower_margin_W": null,
+                    "converter_current_margin_A": [
+                        8.211629766990232,
+                        8.211629766990232,
+                        8.211629766990232
+                    ],
+                    "midpoint_ripple_margin_V": null,
+                    "q_exact_target_var": null,
+                    "current_allocation": "free",
+                    "dc_lower_margin_W": 29.612651613437784,
+                    "apparent_power_rating_VA": 6000,
+                    "upper_capacitor_margin_A": null,
+                    "pwm_strategy": "CENTERED",
+                    "pwm_thermal_headroom": 0.1,
+                    "reactive_lower_margin_var": null,
+                    "active_upper_margin_W": null,
+                    "q_constraint_residual_var": null,
+                    "lower_capacitor_margin_A": null,
+                    "phase_voltage": [
+                        {
+                            "re": 127.93998913091893,
+                            "im": -216.81879252163353
+                        },
+                        {
+                            "re": -252.226851874124,
+                            "im": 2.0480380652531527
+                        },
+                        {
+                            "re": 124.11258452835202,
+                            "im": 215.36975580129024
+                        }
+                    ],
+                    "midpoint_mean_margin_V": null,
+                    "grid_current_margin_A": null,
+                    "volt_watt_margin_W": null,
+                    "volt_watt_cap_W": null,
+                    "reactive_mode": "free_q",
+                    "reactive_upper_margin_var": null,
+                    "raw_solver_status": "Solve_Succeeded",
+                    "continuous_rail_margin_lower_V": 105.32075907403559,
+                    "neutral_current_margin_A": null,
+                    "dc_availability_margin_W": 1220.3873483865623,
+                    "effective_dc_availability_W": 1250,
+                    "dc_upper_margin_W": null,
+                    "q_target_var": null,
+                    "allocation_stage": "active_export",
+                    "q_tracking_residual_var": null,
+                    "volt_watt_fraction": 1,
+                    "physical_failed_checks": [
+                    ],
+                    "converter_apparent_power_margin_VA": null,
+                    "exact_volt_watt_margin_W": null,
+                    "fixed_pf_residual_VA": null,
+                    "ac_available_W": 1220.1224245158248,
+                    "physical_feasible": true
+                }
+            }
+        ],
+        "pv_ld626_load_c": [
+            {
+                "name": "reactive_tracking",
+                "solve": {
+                    "termination_status": "LOCALLY_SOLVED",
+                    "primal_status": "FEASIBLE_POINT",
+                    "has_primal": true,
+                    "feasible": true,
+                    "optimal": true,
+                    "publishable": true
+                },
+                "operation": {
+                    "capacitor_current_margin_A": 1.5879519921213614e-11,
+                    "continuous_rail_margin_upper_V": 105.6208914197663,
+                    "power_limit_location": "poc",
+                    "dc_ripple_margin_V": 7.408934503614427,
+                    "dc_source_bounds_W": {
+                        "p_max": null,
+                        "p_min": 0
+                    },
+                    "poc_apparent_power_margin_VA": 4654.419171597638,
+                    "switching_margin_V": 105.60706565414297,
+                    "apparent_power_margin_VA": 4654.419171597638,
+                    "active_lower_margin_W": null,
+                    "converter_current_margin_A": [
+                        8.21129464078232,
+                        8.21129464078232,
+                        8.21129464078232
+                    ],
+                    "midpoint_ripple_margin_V": null,
+                    "q_exact_target_var": null,
+                    "current_allocation": "free",
+                    "dc_lower_margin_W": 29.138795102959918,
+                    "apparent_power_rating_VA": 6000,
+                    "upper_capacitor_margin_A": null,
+                    "pwm_strategy": "CENTERED",
+                    "pwm_thermal_headroom": 0.1,
+                    "reactive_lower_margin_var": null,
+                    "active_upper_margin_W": null,
+                    "q_constraint_residual_var": null,
+                    "lower_capacitor_margin_A": null,
+                    "phase_voltage": [
+                        {
+                            "re": 127.86946604707508,
+                            "im": -216.6705206028745
+                        },
+                        {
+                            "re": -252.16763816665153,
+                            "im": 2.0189876911667226
+                        },
+                        {
+                            "re": 124.06730308863936,
+                            "im": 215.3363809954837
+                        }
+                    ],
+                    "midpoint_mean_margin_V": null,
+                    "grid_current_margin_A": null,
+                    "volt_watt_margin_W": null,
+                    "volt_watt_cap_W": null,
+                    "reactive_mode": "free_q",
+                    "reactive_upper_margin_var": null,
+                    "raw_solver_status": "Solve_Succeeded",
+                    "continuous_rail_margin_lower_V": 105.60706565414297,
+                    "neutral_current_margin_A": null,
+                    "dc_availability_margin_W": 2970.86120489704,
+                    "effective_dc_availability_W": 3000,
+                    "dc_upper_margin_W": null,
+                    "q_target_var": null,
+                    "allocation_stage": "reactive_tracking",
+                    "q_tracking_residual_var": null,
+                    "volt_watt_fraction": 1,
+                    "physical_failed_checks": [
+                    ],
+                    "converter_apparent_power_margin_VA": null,
+                    "exact_volt_watt_margin_W": null,
+                    "fixed_pf_residual_VA": null,
+                    "ac_available_W": 2970.1188592512735,
+                    "physical_feasible": true
+                }
+            },
+            {
+                "name": "active_export",
+                "solve": {
+                    "termination_status": "LOCALLY_SOLVED",
+                    "primal_status": "FEASIBLE_POINT",
+                    "has_primal": true,
+                    "feasible": true,
+                    "optimal": true,
+                    "publishable": true
+                },
+                "operation": {
+                    "capacitor_current_margin_A": 1.8540724511240114e-14,
+                    "continuous_rail_margin_upper_V": 105.62068075618028,
+                    "power_limit_location": "poc",
+                    "dc_ripple_margin_V": 7.408934522458522,
+                    "dc_source_bounds_W": {
+                        "p_max": null,
+                        "p_min": 0
+                    },
+                    "poc_apparent_power_margin_VA": 4654.419450037613,
+                    "switching_margin_V": 105.60685486570695,
+                    "apparent_power_margin_VA": 4654.419450037613,
+                    "active_lower_margin_W": null,
+                    "converter_current_margin_A": [
+                        8.211295010917706,
+                        8.211295010917706,
+                        8.211295010917706
+                    ],
+                    "midpoint_ripple_margin_V": null,
+                    "q_exact_target_var": null,
+                    "current_allocation": "free",
+                    "dc_lower_margin_W": 29.61492975845063,
+                    "apparent_power_rating_VA": 6000,
+                    "upper_capacitor_margin_A": null,
+                    "pwm_strategy": "CENTERED",
+                    "pwm_thermal_headroom": 0.1,
+                    "reactive_lower_margin_var": null,
+                    "active_upper_margin_W": null,
+                    "q_constraint_residual_var": null,
+                    "lower_capacitor_margin_A": null,
+                    "phase_voltage": [
+                        {
+                            "re": 127.86946604707508,
+                            "im": -216.6705206028745
+                        },
+                        {
+                            "re": -252.16763816665153,
+                            "im": 2.0189876911667226
+                        },
+                        {
+                            "re": 124.06730308863936,
+                            "im": 215.3363809954837
+                        }
+                    ],
+                    "midpoint_mean_margin_V": null,
+                    "grid_current_margin_A": null,
+                    "volt_watt_margin_W": null,
+                    "volt_watt_cap_W": null,
+                    "reactive_mode": "free_q",
+                    "reactive_upper_margin_var": null,
+                    "raw_solver_status": "Solve_Succeeded",
+                    "continuous_rail_margin_lower_V": 105.60685486570695,
+                    "neutral_current_margin_A": null,
+                    "dc_availability_margin_W": 2970.3850702415493,
+                    "effective_dc_availability_W": 3000,
+                    "dc_upper_margin_W": null,
+                    "q_target_var": null,
+                    "allocation_stage": "active_export",
+                    "q_tracking_residual_var": null,
+                    "volt_watt_fraction": 1,
+                    "physical_failed_checks": [
+                    ],
+                    "converter_apparent_power_margin_VA": null,
+                    "exact_volt_watt_margin_W": null,
+                    "fixed_pf_residual_VA": null,
+                    "ac_available_W": 2970.1188631891464,
+                    "physical_feasible": true
+                }
+            }
+        ]
+    },
+    "bus": {
+        "b718": {
+            "c": {
+                "vi": 215.43453678680882,
+                "va": 1.0476567089558702,
+                "vm": 248.69647367549544,
+                "vr": 124.24933149952766
+            },
+            "b": {
+                "vi": 2.1737793152070637,
+                "va": 3.132980499998335,
+                "vm": 252.41145128174762,
+                "vr": -252.4020907632241
+            },
+            "a": {
+                "vi": -217.25924274858139,
+                "va": -1.0381413551655874,
+                "vm": 252.1983319543515,
+                "vr": 128.071933228441
+            },
+            "n": {
+                "vi": 0.037059877794478426,
+                "va": 1.7249356322632392,
+                "vm": 0.03750453004344445,
+                "vr": -0.005758057974521605
+            }
+        },
+        "b2531": {
+            "c": {
+                "vi": 215.33759521478822,
+                "va": 1.0478594700986108,
+                "vm": 248.55550384860058,
+                "vr": 124.13524310421967
+            },
+            "b": {
+                "vi": 2.084711324356345,
+                "va": 3.133327366088945,
+                "vm": 252.227773141518,
+                "vr": -252.2191577232451
+            },
+            "a": {
+                "vi": -216.81686707160566,
+                "va": -1.0379602360894382,
+                "vm": 251.7116933327095,
+                "vr": 127.86407905926382
+            },
+            "n": {
+                "vi": -0.2270528094020103,
+                "va": -1.2068461773548105,
+                "vm": 0.24296768093553378,
+                "vr": 0.08648881847872429
+            }
+        },
+        "b1396": {
+            "c": {
+                "vi": 215.44786070443018,
+                "va": 1.0476152943596817,
+                "vm": 248.71779566701727,
+                "vr": 124.26890680835893
+            },
+            "b": {
+                "vi": 2.1901404476288233,
+                "va": 3.1329166434093674,
+                "vm": 252.43952909070595,
+                "vr": -252.4300281906989
+            },
+            "a": {
+                "vi": -217.32377858017117,
+                "va": -1.0381882830265907,
+                "vm": 252.26626799784702,
+                "vr": 128.09623426626686
+            },
+            "n": {
+                "vi": 0.07210879927576207,
+                "va": 1.8231945203079414,
+                "vm": 0.07446822724636909,
+                "vr": -0.018596718426236503
+            }
+        },
+        "b1384": {
+            "c": {
+                "vi": 215.44778980740352,
+                "va": 1.0476152692908856,
+                "vm": 248.71771741825302,
+                "vr": 124.26887311330553
+            },
+            "b": {
+                "vi": 2.1901268264693368,
+                "va": 3.132916693977818,
+                "vm": 252.43943040711545,
+                "vr": -252.42992962157413
+            },
+            "a": {
+                "vi": -217.32358246895265,
+                "va": -1.0381884395530634,
+                "vm": 252.26601708056373,
+                "vr": 128.09607283813034
+            },
+            "n": {
+                "vi": 0.07199329696801761,
+                "va": 1.822638014293981,
+                "vm": 0.07433828800405744,
+                "vr": -0.018524207271810963
+            }
+        },
+        "b605": {
+            "c": {
+                "vi": 215.39339349843726,
+                "va": 1.047696215485112,
+                "vm": 248.64331295879475,
+                "vr": 124.21426293446547
+            },
+            "b": {
+                "vi": 2.1466514610430174,
+                "va": 3.1330852856840874,
+                "vm": 252.33155297252276,
+                "vr": -252.3224217405775
+            },
+            "a": {
+                "vi": -217.0665979031329,
+                "va": -1.038051670319573,
+                "vm": 251.9880296201413,
+                "vr": 127.98460511561863
+            },
+            "n": {
+                "vi": -0.08897209986380264,
+                "va": -1.3028642747548707,
+                "vm": 0.09226404194835129,
+                "vr": 0.02442578314962815
+            }
+        },
+        "b1320": {
+            "c": {
+                "vi": 215.40312710288373,
+                "va": 1.0477050063892954,
+                "vm": 248.65328856352193,
+                "vr": 124.21735284473348
+            },
+            "b": {
+                "vi": 2.1471271343803644,
+                "va": 3.133084103721477,
+                "vm": 252.35240726782106,
+                "vr": -252.34327274356463
+            },
+            "a": {
+                "vi": -217.11754832851707,
+                "va": -1.038093073026984,
+                "vm": 252.04102442362984,
+                "vr": 128.00253200748344
+            },
+            "n": {
+                "vi": -0.04890270321302862,
+                "va": -1.1406769421070464,
+                "vm": 0.05380332676175442,
+                "vr": 0.022434874394356655
+            }
+        },
+        "b1804": {
+            "c": {
+                "vi": 215.3409239413095,
+                "va": 1.047990635473994,
+                "vm": 248.54055539195926,
+                "vr": 124.09953324105098
+            },
+            "b": {
+                "vi": 2.0258852355431616,
+                "va": 3.1335595706423294,
+                "vm": 252.19545689925508,
+                "vr": -252.18731980342795
+            },
+            "a": {
+                "vi": -216.73521241014151,
+                "va": -1.0376862133259088,
+                "vm": 251.65757443408648,
+                "vr": 127.89598301580324
+            },
+            "n": {
+                "vi": -0.2503608635833941,
+                "va": -1.3183104567867125,
+                "vm": 0.2585586158748767,
+                "vr": 0.06459098875934005
+            }
+        },
+        "b1656": {
+            "c": {
+                "vi": 215.44807926656378,
+                "va": 1.047615371641896,
+                "vm": 248.71803689317605,
+                "vr": 124.26901068385361
+            },
+            "b": {
+                "vi": 2.190182439102148,
+                "va": 3.1329164875165896,
+                "vm": 252.43983331357745,
+                "vr": -252.43033206069
+            },
+            "a": {
+                "vi": -217.32438315400597,
+                "va": -1.0381878004870642,
+                "vm": 252.26704152845562,
+                "vr": 128.09673191869635
+            },
+            "n": {
+                "vi": 0.07246487106177112,
+                "va": 1.824897963912241,
+                "vm": 0.07486894948403995,
+                "vr": -0.018820256609425226
+            }
+        },
+        "b1006": {
+            "c": {
+                "vi": 215.44778980740352,
+                "va": 1.0476152692908856,
+                "vm": 248.71771741825302,
+                "vr": 124.26887311330553
+            },
+            "b": {
+                "vi": 2.1901268264693368,
+                "va": 3.132916693977818,
+                "vm": 252.43943040711545,
+                "vr": -252.42992962157413
+            },
+            "a": {
+                "vi": -217.32358246895265,
+                "va": -1.0381884395530634,
+                "vm": 252.26601708056373,
+                "vr": 128.09607283813034
+            },
+            "n": {
+                "vi": 0.07199329696801761,
+                "va": 1.822638014293981,
+                "vm": 0.07433828800405744,
+                "vr": -0.018524207271810963
+            }
+        },
+        "b3008": {
+            "c": {
+                "vi": 215.4259272123392,
+                "va": 1.0476924785448642,
+                "vm": 248.6814047679286,
+                "vr": 124.23409742117619
+            },
+            "b": {
+                "vi": 2.1609421768190664,
+                "va": 3.1330307013173178,
+                "vm": 252.39203750678053,
+                "vr": -252.38278650837609
+            },
+            "a": {
+                "vi": -217.21486910835955,
+                "va": -1.0380992144945749,
+                "vm": 252.1530863312322,
+                "vr": 128.05811018675885
+            },
+            "n": {
+                "vi": 0.014161613317140975,
+                "va": 1.387605654691063,
+                "vm": 0.014402605472895718,
+                "vr": 0.0026236906570060964
+            }
+        },
+        "b641": {
+            "c": {
+                "vi": 215.449137354506,
+                "va": 1.0476157570953823,
+                "vm": 248.71920307636927,
+                "vr": 124.2695103078121
+            },
+            "b": {
+                "vi": 2.190385585691406,
+                "va": 3.132915733730178,
+                "vm": 252.4413163510358,
+                "vr": -252.43181339131905
+            },
+            "a": {
+                "vi": -217.32731572934733,
+                "va": -1.038185480184295,
+                "vm": 252.2707906383038,
+                "vr": 128.09913991573669
+            },
+            "n": {
+                "vi": 0.07418625487654179,
+                "va": 1.833032705197505,
+                "vm": 0.07681226396754758,
+                "vr": -0.019912897408789747
+            }
+        },
+        "b1877": {
+            "c": {
+                "vi": 215.4259264097275,
+                "va": 1.0476924648870516,
+                "vm": 248.68140580011436,
+                "vr": 124.23410087907355
+            },
+            "b": {
+                "vi": 2.1609461735963746,
+                "va": 3.133030685546111,
+                "vm": 252.3920394218142,
+                "vr": -252.38278838925888
+            },
+            "a": {
+                "vi": -217.21487327365244,
+                "va": -1.0380992282277406,
+                "vm": 252.1530891249827,
+                "vr": 128.0581086225412
+            },
+            "n": {
+                "vi": 0.014162646914671515,
+                "va": 1.3876166996375658,
+                "vm": 0.014403627186575294,
+                "vr": 0.002623720354800843
+            }
+        },
+        "b828": {
+            "c": {
+                "vi": 215.42910338328727,
+                "va": 1.0480267894574444,
+                "vm": 248.63714940515976,
+                "vr": 124.13997534958939
+            },
+            "b": {
+                "vi": 2.0683507826358825,
+                "va": 3.1333953157402767,
+                "vm": 252.32264243070364,
+                "vr": -252.3141648981537
+            },
+            "a": {
+                "vi": -217.0167538661684,
+                "va": -1.0376423900708693,
+                "vm": 251.99099720980524,
+                "vr": 128.07494374850597
+            },
+            "n": {
+                "vi": -0.0941742629086828,
+                "va": -1.4606483889037423,
+                "vm": 0.09474845305822849,
+                "vr": 0.01041525623946022
+            }
+        },
+        "b783": {
+            "c": {
+                "vi": 215.36066675846808,
+                "va": 1.0477605507143477,
+                "vm": 248.59631153981715,
+                "vr": 124.17692750487058
+            },
+            "b": {
+                "vi": 2.1188509202387666,
+                "va": 3.1331936334634616,
+                "vm": 252.27655136516944,
+                "vr": -252.26765317709837
+            },
+            "a": {
+                "vi": -216.93224453787212,
+                "va": -1.038062454613244,
+                "vm": 251.830460379766,
+                "vr": 127.90223631682817
+            },
+            "n": {
+                "vi": -0.1669124676565846,
+                "va": -1.1897777314740856,
+                "vm": 0.17980709311223972,
+                "vr": 0.06686418229712561
+            }
+        },
+        "b2024": {
+            "c": {
+                "vi": 215.4421253396409,
+                "va": 1.0476257675634033,
+                "vm": 248.70967222413762,
+                "vr": 124.26259166368786
+            },
+            "b": {
+                "vi": 2.184917390755004,
+                "va": 3.132936954131621,
+                "vm": 252.428435656745,
+                "vr": -252.41897960356908
+            },
+            "a": {
+                "vi": -217.29796354270002,
+                "va": -1.038177615059925,
+                "vm": 252.23788835913751,
+                "vr": 128.08414173531446
+            },
+            "n": {
+                "vi": 0.057029217884115996,
+                "va": 1.7971824422741611,
+                "vm": 0.05852248224978996,
+                "vr": -0.013135799793046691
+            }
+        },
+        "b2698": {
+            "c": {
+                "vi": 215.34267401738796,
+                "va": 1.0478636750536694,
+                "vm": 248.56076359104685,
+                "vr": 124.13696445461063
+            },
+            "b": {
+                "vi": 2.072605992851761,
+                "va": 3.133375357785569,
+                "vm": 252.22766315175699,
+                "vr": -252.21914749557493
+            },
+            "a": {
+                "vi": -216.82843040226976,
+                "va": -1.0379024595722852,
+                "vm": 251.73369535560613,
+                "vr": 127.88778341451213
+            },
+            "n": {
+                "vi": -0.2059144655493375,
+                "va": -1.2502806667277504,
+                "vm": 0.21696376111826432,
+                "vr": 0.06835573506381126
+            }
+        },
+        "b1821": {
+            "c": {
+                "vi": 215.34213707374215,
+                "va": 1.0477819422939374,
+                "vm": 248.5718563288041,
+                "vr": 124.16010534491856
+            },
+            "b": {
+                "vi": 2.1081306694186344,
+                "va": 3.1332347992159413,
+                "vm": 252.23641365171198,
+                "vr": -252.22760387586092
+            },
+            "a": {
+                "vi": -216.83340349637658,
+                "va": -1.0379661395196533,
+                "vm": 251.73001477347168,
+                "vr": 127.87210589503017
+            },
+            "n": {
+                "vi": -0.23617727305474492,
+                "va": -1.2740464257794524,
+                "vm": 0.24697194462171304,
+                "vr": 0.07221798337432955
+            }
+        },
+        "b1713": {
+            "c": {
+                "vi": 215.42604877531085,
+                "va": 1.0476919734241132,
+                "vm": 248.68161753725678,
+                "vr": 124.23431253081353
+            },
+            "b": {
+                "vi": 2.1611234437989872,
+                "va": 3.1330299923948575,
+                "vm": 252.39231162519548,
+                "vr": -252.3830590847382
+            },
+            "a": {
+                "vi": -217.21549566461968,
+                "va": -1.0380998096466632,
+                "vm": 252.1537251937925,
+                "vr": 128.058305362363
+            },
+            "n": {
+                "vi": 0.014484935165923071,
+                "va": 1.3995288842206213,
+                "vm": 0.014700002875499779,
+                "vr": 0.002505341848671937
+            }
+        },
+        "b2473": {
+            "c": {
+                "vi": 215.40312715622204,
+                "va": 1.0477050067289735,
+                "vm": 248.65328857638661,
+                "vr": 124.21735277799246
+            },
+            "b": {
+                "vi": 2.147127037525576,
+                "va": 3.1330841041050626,
+                "vm": 252.35240726082708,
+                "vr": -252.3432727373945
+            },
+            "a": {
+                "vi": -217.1175482625216,
+                "va": -1.0380930726877529,
+                "vm": 252.04102439742593,
+                "vr": 128.00253206782847
+            },
+            "n": {
+                "vi": -0.04890272579842593,
+                "va": -1.1406771157923925,
+                "vm": 0.05380334732337744,
+                "vr": 0.022434874474441636
+            }
+        },
+        "b3015": {
+            "c": {
+                "vi": 215.44913735450726,
+                "va": 1.0476157570953415,
+                "vm": 248.71920307637657,
+                "vr": 124.26951030782456
+            },
+            "b": {
+                "vi": 2.1903855857031123,
+                "va": 3.1329157337301323,
+                "vm": 252.44131635104583,
+                "vr": -252.43181339132897
+            },
+            "a": {
+                "vi": -217.3273157293628,
+                "va": -1.0381854801843315,
+                "vm": 252.27079063831627,
+                "vr": 128.09913991573504
+            },
+            "n": {
+                "vi": 0.07418625487986726,
+                "va": 1.8330327051901134,
+                "vm": 0.07681226397083835,
+                "vr": -0.019912897409094493
+            }
+        },
+        "b2560": {
+            "c": {
+                "vi": 215.40050858440853,
+                "va": 1.047874041910098,
+                "vm": 248.6260337365523,
+                "vr": 124.1673288475974
+            },
+            "b": {
+                "vi": 2.0843940932357192,
+                "va": 3.1333312680072294,
+                "vm": 252.3084999176638,
+                "vr": -252.29988987703865
+            },
+            "a": {
+                "vi": -216.99055296109967,
+                "va": -1.0377955638164105,
+                "vm": 251.93780225804514,
+                "vr": 128.0146715507643
+            },
+            "n": {
+                "vi": -0.11029893722010749,
+                "va": -1.4243042543306823,
+                "vm": 0.11149311642965935,
+                "vr": 0.016274503350712916
+            }
+        },
+        "b804": {
+            "c": {
+                "vi": 6508.671657168867,
+                "va": 1.5794998799205466,
+                "vm": 6508.9181868674095,
+                "vr": -56.64999999999464
+            },
+            "b": {
+                "vi": -3205.275489460038,
+                "va": -2.6266974311171465,
+                "vm": 6508.9181868674095,
+                "vr": -5665.000000000004
+            },
+            "a": {
+                "vi": -3303.3961677088264,
+                "va": -0.5235987755982997,
+                "vm": 6606.792335417644,
+                "vr": 5721.649999999997
+            },
+            "n": {
+                "vi": 0,
+                "va": 0,
+                "vm": 0,
+                "vr": 0
+            }
+        },
+        "b2443": {
+            "c": {
+                "vi": 215.36975580129027,
+                "va": 1.0480030592546326,
+                "vm": 248.57205263708698,
+                "vr": 124.11258452835203
+            },
+            "b": {
+                "vi": 2.0480380652531722,
+                "va": 3.1334730063686687,
+                "vm": 252.23516659309823,
+                "vr": -252.226851874124
+            },
+            "a": {
+                "vi": -216.81879252163353,
+                "va": -1.0377043946969653,
+                "vm": 251.75192076597713,
+                "vr": 127.93998913091896
+            },
+            "n": {
+                "vi": -0.21633396185887763,
+                "va": -1.308992511182475,
+                "vm": 0.22396566344779087,
+                "vr": 0.05796753703626555
+            }
+        },
+        "b2526": {
+            "c": {
+                "vi": 215.44743658302468,
+                "va": 1.0476151306118227,
+                "vm": 248.71732954287506,
+                "vr": 124.26870919399893
+            },
+            "b": {
+                "vi": 2.1900591324101253,
+                "va": 3.132916944820858,
+                "vm": 252.43892626119515,
+                "vr": -252.42942604399684
+            },
+            "a": {
+                "vi": -217.32259839548297,
+                "va": -1.0381892003026734,
+                "vm": 252.2647616657856,
+                "vr": 128.0952700334062
+            },
+            "n": {
+                "vi": 0.0714207685492998,
+                "va": 1.8196588429903409,
+                "vm": 0.07369094996157878,
+                "vr": -0.018150204573702693
+            }
+        },
+        "b3304": {
+            "c": {
+                "vi": 215.42592565959401,
+                "va": 1.0476924601414597,
+                "vm": 248.681405614758,
+                "vr": 124.23410180879833
+            },
+            "b": {
+                "vi": 2.1609475265217784,
+                "va": 3.1330306801885732,
+                "vm": 252.392039512329,
+                "vr": -252.382788468193
+            },
+            "a": {
+                "vi": -217.2148741893662,
+                "va": -1.038099232971618,
+                "vm": 252.15308948278079,
+                "vr": 128.0581077738113
+            },
+            "n": {
+                "vi": 0.01416296084212887,
+                "va": 1.3876206934313071,
+                "vm": 0.014403935798564332,
+                "vr": 0.0026237200066865757
+            }
+        },
+        "b2740": {
+            "c": {
+                "vi": 215.43453678680882,
+                "va": 1.0476567089558702,
+                "vm": 248.69647367549544,
+                "vr": 124.24933149952766
+            },
+            "b": {
+                "vi": 2.1737793152070637,
+                "va": 3.132980499998335,
+                "vm": 252.41145128174762,
+                "vr": -252.4020907632241
+            },
+            "a": {
+                "vi": -217.25924274858139,
+                "va": -1.0381413551655874,
+                "vm": 252.1983319543515,
+                "vr": 128.071933228441
+            },
+            "n": {
+                "vi": 0.037059877794478426,
+                "va": 1.7249356322632392,
+                "vm": 0.03750453004344445,
+                "vr": -0.005758057974521605
+            }
+        },
+        "b2236": {
+            "c": {
+                "vi": 215.44807926656367,
+                "va": 1.0476153716418994,
+                "vm": 248.71803689317542,
+                "vr": 124.26901068385258
+            },
+            "b": {
+                "vi": 2.1901824391011924,
+                "va": 3.1329164875165936,
+                "vm": 252.43983331357666,
+                "vr": -252.4303320606892
+            },
+            "a": {
+                "vi": -217.3243831540047,
+                "va": -1.0381878004870613,
+                "vm": 252.2670415284546,
+                "vr": 128.0967319186965
+            },
+            "n": {
+                "vi": 0.07246487106149976,
+                "va": 1.8248979639128307,
+                "vm": 0.07486894948377106,
+                "vr": -0.018820256609400357
+            }
+        },
+        "b3020": {
+            "c": {
+                "vi": 215.3676558787533,
+                "va": 1.047775562311004,
+                "vm": 248.6022274652615,
+                "vr": 124.17664958429394
+            },
+            "b": {
+                "vi": 2.1109706860490234,
+                "va": 3.133225054584014,
+                "vm": 252.28208458170477,
+                "vr": -252.2732526520659
+            },
+            "a": {
+                "vi": -216.9533616244075,
+                "va": -1.0380142497409415,
+                "vm": 251.86213316249626,
+                "vr": 127.92878097219585
+            },
+            "n": {
+                "vi": -0.14296283656624242,
+                "va": -1.2158543597663856,
+                "vm": 0.15246658842229163,
+                "vr": 0.052987620686971125
+            }
+        },
+        "b2973": {
+            "c": {
+                "vi": 215.44807926656367,
+                "va": 1.0476153716418994,
+                "vm": 248.71803689317542,
+                "vr": 124.26901068385258
+            },
+            "b": {
+                "vi": 2.1901824391011924,
+                "va": 3.1329164875165936,
+                "vm": 252.43983331357666,
+                "vr": -252.4303320606892
+            },
+            "a": {
+                "vi": -217.3243831540047,
+                "va": -1.0381878004870613,
+                "vm": 252.2670415284546,
+                "vr": 128.0967319186965
+            },
+            "n": {
+                "vi": 0.07246487106149976,
+                "va": 1.8248979639128307,
+                "vm": 0.07486894948377106,
+                "vr": -0.018820256609400357
+            }
+        },
+        "b1452": {
+            "c": {
+                "vi": 215.40630681746833,
+                "va": 1.0476816507756144,
+                "vm": 248.66030827380507,
+                "vr": 124.2258905948453
+            },
+            "b": {
+                "vi": 2.1540972905522238,
+                "va": 3.1330567304362087,
+                "vm": 252.3597519154946,
+                "vr": -252.35055825520342
+            },
+            "a": {
+                "vi": -217.1356257217904,
+                "va": -1.0381194320173146,
+                "vm": 252.05809266773718,
+                "vr": 128.00547692073232
+            },
+            "n": {
+                "vi": -0.04040026493145753,
+                "va": -1.101918123430657,
+                "vm": 0.04528792972023892,
+                "vr": 0.020464974268572703
+            }
+        },
+        "b1754": {
+            "c": {
+                "vi": 215.33952475617392,
+                "va": 1.0480734013180333,
+                "vm": 248.5270872459214,
+                "vr": 124.0749860879581
+            },
+            "b": {
+                "vi": 2.025574169334264,
+                "va": 3.1335604339470713,
+                "vm": 252.18383461960929,
+                "vr": -252.1756996475572
+            },
+            "a": {
+                "vi": -216.69047288193556,
+                "va": -1.0376695141433325,
+                "vm": 251.60810550234564,
+                "vr": 127.87446076790559
+            },
+            "n": {
+                "vi": -0.295835771824876,
+                "va": -1.2724565580939886,
+                "vm": 0.30950804062303555,
+                "vr": 0.09097484992617762
+            }
+        },
+        "b260": {
+            "c": {
+                "vi": 215.40572386112464,
+                "va": 1.0479810340406044,
+                "vm": 248.61672134014756,
+                "vr": 124.1396320994609
+            },
+            "b": {
+                "vi": 2.070705734143381,
+                "va": 3.1333850911303873,
+                "vm": 252.29524515950828,
+                "vr": -252.28674738848048
+            },
+            "a": {
+                "vi": -216.95408029108697,
+                "va": -1.0377163196785733,
+                "vm": 251.9072330844914,
+                "vr": 128.01633147896746
+            },
+            "n": {
+                "vi": -0.13820238017326758,
+                "va": -1.3659174026776624,
+                "vm": 0.14115453922182292,
+                "vr": 0.028717695892406823
+            }
+        },
+        "b1393": {
+            "c": {
+                "vi": 215.42591553985912,
+                "va": 1.0476923957099396,
+                "vm": 248.68140317309923,
+                "vr": 124.23411446923507
+            },
+            "b": {
+                "vi": 2.1609659028667223,
+                "va": 3.1330306074221506,
+                "vm": 252.39204083823003,
+                "vr": -252.38278963680037
+            },
+            "a": {
+                "vi": -217.2148867128581,
+                "va": -1.0380992973241474,
+                "vm": 252.15309445425495,
+                "vr": 128.05809632028993
+            },
+            "n": {
+                "vi": 0.014167247880973342,
+                "va": 1.387675609280787,
+                "vm": 0.01440814922254893,
+                "vr": 0.002623709491977666
+            }
+        },
+        "b1118": {
+            "c": {
+                "vi": 215.34267186126684,
+                "va": 1.0478636613113368,
+                "vm": 248.56076307141234,
+                "vr": 124.13696715440385
+            },
+            "b": {
+                "vi": 2.0726099084743144,
+                "va": 3.1333753422701163,
+                "vm": 252.2276634350924,
+                "vr": -252.21914774674332
+            },
+            "a": {
+                "vi": -216.82843306960504,
+                "va": -1.0379024732934694,
+                "vm": 251.733696415075,
+                "vr": 127.88778097760924
+            },
+            "n": {
+                "vi": -0.20591355339191547,
+                "va": -1.2502793678981694,
+                "vm": 0.21696289356109952,
+                "vr": 0.06835572918139175
+            }
+        },
+        "b2004": {
+            "c": {
+                "vi": 215.44807926656117,
+                "va": 1.0476153716419807,
+                "vm": 248.71803689316087,
+                "vr": 124.2690106838278
+            },
+            "b": {
+                "vi": 2.1901824390778897,
+                "va": 3.132916487516685,
+                "vm": 252.43983331355673,
+                "vr": -252.43033206066949
+            },
+            "a": {
+                "vi": -217.32438315397397,
+                "va": -1.0381878004869882,
+                "vm": 252.2670415284298,
+                "vr": 128.09673191869973
+            },
+            "n": {
+                "vi": 0.07246487105488016,
+                "va": 1.8248979639272134,
+                "vm": 0.07486894947721151,
+                "vr": -0.018820256608793693
+            }
+        },
+        "b1473": {
+            "c": {
+                "vi": 215.4475071936943,
+                "va": 1.0476151570934844,
+                "vm": 248.71740725838563,
+                "vr": 124.26874231823825
+            },
+            "b": {
+                "vi": 2.1900726799343846,
+                "va": 3.132916894577351,
+                "vm": 252.43902591767068,
+                "vr": -252.4295255866853
+            },
+            "a": {
+                "vi": -217.32279448421028,
+                "va": -1.0381890465058243,
+                "vm": 252.265012150832,
+                "vr": 128.095430648533
+            },
+            "n": {
+                "vi": 0.07153548251558975,
+                "va": 1.8202426316995863,
+                "vm": 0.07382027467792762,
+                "vr": -0.018223822178303786
+            }
+        },
+        "b1069": {
+            "c": {
+                "vi": 215.42592641456287,
+                "va": 1.0476924649482846,
+                "vm": 248.68140579691456,
+                "vr": 124.23410086428382
+            },
+            "b": {
+                "vi": 2.160946155579887,
+                "va": 3.133030685617212,
+                "vm": 252.39203941341196,
+                "vr": -252.38278838101058
+            },
+            "a": {
+                "vi": -217.2148732550683,
+                "va": -1.0380992281706864,
+                "vm": 252.15308911189078,
+                "vr": 128.05810862828537
+            },
+            "n": {
+                "vi": 0.014162641013503863,
+                "va": 1.3876165952187642,
+                "vm": 0.014403621463625376,
+                "vr": 0.0026237207911719335
+            }
+        },
+        "b1599": {
+            "c": {
+                "vi": 215.44743658302468,
+                "va": 1.0476151306118227,
+                "vm": 248.71732954287506,
+                "vr": 124.26870919399893
+            },
+            "b": {
+                "vi": 2.1900591324101253,
+                "va": 3.132916944820858,
+                "vm": 252.43892626119515,
+                "vr": -252.42942604399684
+            },
+            "a": {
+                "vi": -217.32259839548297,
+                "va": -1.0381892003026734,
+                "vm": 252.2647616657856,
+                "vr": 128.0952700334062
+            },
+            "n": {
+                "vi": 0.0714207685492998,
+                "va": 1.8196588429903409,
+                "vm": 0.07369094996157878,
+                "vr": -0.018150204573702693
+            }
+        },
+        "b2925": {
+            "c": {
+                "vi": 215.44862006706697,
+                "va": 1.0476155686519062,
+                "vm": 248.71863294235854,
+                "vr": 124.26926604721017
+            },
+            "b": {
+                "vi": 2.1902862695812453,
+                "va": 3.132916102246872,
+                "vm": 252.44059131048203,
+                "vr": -252.4310891852331
+            },
+            "a": {
+                "vi": -217.32588202584571,
+                "va": -1.0381866145459233,
+                "vm": 252.26895773998416,
+                "vr": 128.0979626727377
+            },
+            "n": {
+                "vi": 0.07334468945503535,
+                "va": 1.8291077912667986,
+                "vm": 0.07586157236519296,
+                "vr": -0.0193787174617887
+            }
+        },
+        "b2190": {
+            "c": {
+                "vi": 215.34011742976884,
+                "va": 1.0477843104254363,
+                "vm": 248.56918563613488,
+                "vr": 124.15826139707596
+            },
+            "b": {
+                "vi": 2.106960957744364,
+                "va": 3.1332392922255297,
+                "vm": 252.23205001500196,
+                "vr": -252.22324986069978
+            },
+            "a": {
+                "vi": -216.8226244146777,
+                "va": -1.0379556803265262,
+                "vm": 251.71905356325504,
+                "vr": 127.86880569049067
+            },
+            "n": {
+                "vi": -0.24370912413984122,
+                "va": -1.2805533870428818,
+                "vm": 0.25434736068600355,
+                "vr": 0.07279040251933949
+            }
+        },
+        "b2055": {
+            "c": {
+                "vi": 215.3363809954837,
+                "va": 1.0480938726227067,
+                "vm": 248.52052767512063,
+                "vr": 124.06730308863936
+            },
+            "b": {
+                "vi": 2.0189876911667057,
+                "va": 3.1335862949411313,
+                "vm": 252.17572057960768,
+                "vr": -252.16763816665153
+            },
+            "a": {
+                "vi": -216.6705206028745,
+                "va": -1.0376463065667523,
+                "vm": 251.5883837649997,
+                "vr": 127.86946604707508
+            },
+            "n": {
+                "vi": -0.3063057028476365,
+                "va": -1.2736086823904715,
+                "vm": 0.3203485606905469,
+                "vr": 0.09380840441836986
+            }
+        },
+        "b2710": {
+            "c": {
+                "vi": 215.36066668520718,
+                "va": 1.0477605502475686,
+                "vm": 248.59631152215857,
+                "vr": 124.17692759657575
+            },
+            "b": {
+                "vi": 2.1188510532731817,
+                "va": 3.1331936329364276,
+                "vm": 252.27655137479076,
+                "vr": -252.26765318560263
+            },
+            "a": {
+                "vi": -216.93224462849216,
+                "va": -1.0380624550793331,
+                "vm": 251.83046041576023,
+                "vr": 127.9022362339995
+            },
+            "n": {
+                "vi": -0.16691243666337485,
+                "va": -1.1897776682718295,
+                "vm": 0.1798070642771251,
+                "vr": 0.0668641821235635
+            }
+        },
+        "b2972": {
+            "c": {
+                "vi": 215.44862006706697,
+                "va": 1.0476155686519062,
+                "vm": 248.71863294235854,
+                "vr": 124.26926604721017
+            },
+            "b": {
+                "vi": 2.1902862695812453,
+                "va": 3.132916102246872,
+                "vm": 252.44059131048203,
+                "vr": -252.4310891852331
+            },
+            "a": {
+                "vi": -217.32588202584571,
+                "va": -1.0381866145459233,
+                "vm": 252.26895773998416,
+                "vr": 128.0979626727377
+            },
+            "n": {
+                "vi": 0.07334468945503535,
+                "va": 1.8291077912667986,
+                "vm": 0.07586157236519296,
+                "vr": -0.0193787174617887
+            }
+        },
+        "b101": {
+            "c": {
+                "vi": 215.42592721377636,
+                "va": 1.047692478563064,
+                "vm": 248.68140476697758,
+                "vr": 124.23409741678037
+            },
+            "b": {
+                "vi": 2.1609421714641943,
+                "va": 3.1330307013384506,
+                "vm": 252.3920375042832,
+                "vr": -252.3827865059245
+            },
+            "a": {
+                "vi": -217.21486910283593,
+                "va": -1.0380992144776173,
+                "vm": 252.153086327341,
+                "vr": 128.05811018846615
+            },
+            "n": {
+                "vi": 0.014161611563192057,
+                "va": 1.3876056236521375,
+                "vm": 0.014402603771921723,
+                "vr": 0.0026236907867046477
+            }
+        },
+        "b956": {
+            "c": {
+                "vi": 215.44212539430146,
+                "va": 1.047625767911329,
+                "vm": 248.70967223732845,
+                "vr": 124.26259159532054
+            },
+            "b": {
+                "vi": 2.184917291504106,
+                "va": 3.132936954524575,
+                "vm": 252.42843564958787,
+                "vr": -252.4189795972708
+            },
+            "a": {
+                "vi": -217.29796347505695,
+                "va": -1.0381776147124058,
+                "vm": 252.23788833228673,
+                "vr": 128.08414179719506
+            },
+            "n": {
+                "vi": 0.0570291947226029,
+                "va": 1.7971825304718385,
+                "vm": 0.05852245967069364,
+                "vr": -0.013135799754845705
+            }
+        },
+        "b2492": {
+            "c": {
+                "vi": 215.34494493395644,
+                "va": 1.0481128573147829,
+                "vm": 248.52769296275488,
+                "vr": 124.06679193394433
+            },
+            "b": {
+                "vi": 2.003753833324574,
+                "va": 3.1336467298872877,
+                "vm": 252.17646102624758,
+                "vr": -252.16850014682248
+            },
+            "a": {
+                "vi": -216.68119237908982,
+                "va": -1.0375637732370975,
+                "vm": 251.61303168160276,
+                "vr": 127.89987717422994
+            },
+            "n": {
+                "vi": -0.28602380063581206,
+                "va": -1.3187305771742959,
+                "vm": 0.29535730406932004,
+                "vr": 0.07366357673193737
+            }
+        },
+        "b837": {
+            "c": {
+                "vi": 215.43470193686875,
+                "va": 1.0476565985031248,
+                "vm": 248.6966801663958,
+                "vr": 124.24945845821252
+            },
+            "b": {
+                "vi": 2.173851050532647,
+                "va": 3.132980224197607,
+                "vm": 252.41169774780002,
+                "vr": -252.40233662059637
+            },
+            "a": {
+                "vi": -217.2597071352092,
+                "va": -1.0381412994062267,
+                "vm": 252.19887931213677,
+                "vr": 128.07222330318487
+            },
+            "n": {
+                "vi": 0.0372873129725224,
+                "va": 1.727968330071821,
+                "vm": 0.03775265650391256,
+                "vr": -0.0059092609006181325
+            }
+        },
+        "b1606": {
+            "c": {
+                "vi": 215.4475071936943,
+                "va": 1.0476151570934844,
+                "vm": 248.71740725838563,
+                "vr": 124.26874231823825
+            },
+            "b": {
+                "vi": 2.1900726799343846,
+                "va": 3.132916894577351,
+                "vm": 252.43902591767068,
+                "vr": -252.4295255866853
+            },
+            "a": {
+                "vi": -217.32279448421028,
+                "va": -1.0381890465058243,
+                "vm": 252.265012150832,
+                "vr": 128.095430648533
+            },
+            "n": {
+                "vi": 0.07153548251558975,
+                "va": 1.8202426316995863,
+                "vm": 0.07382027467792762,
+                "vr": -0.018223822178303786
+            }
+        },
+        "b690": {
+            "c": {
+                "vi": 215.33439546963322,
+                "va": 1.0478732076534898,
+                "vm": 248.54984220405214,
+                "vr": 124.12945737167634
+            },
+            "b": {
+                "vi": 2.0799768212111673,
+                "va": 3.133345916590439,
+                "vm": 252.22101755368928,
+                "vr": -252.21244099417788
+            },
+            "a": {
+                "vi": -216.80087241782687,
+                "va": -1.0379460837573886,
+                "vm": 251.69522517408708,
+                "vr": 127.85878184271728
+            },
+            "n": {
+                "vi": -0.23539066141629467,
+                "va": -1.2085648010675039,
+                "vm": 0.25172553810273657,
+                "vr": 0.08920192291151353
+            }
+        },
+        "b1892": {
+            "c": {
+                "vi": 215.33759505665876,
+                "va": 1.0478594690907133,
+                "vm": 248.555503810494,
+                "vr": 124.13524330222647
+            },
+            "b": {
+                "vi": 2.0847116115307136,
+                "va": 3.1333273649510356,
+                "vm": 252.22777316230327,
+                "vr": -252.2191577416574
+            },
+            "a": {
+                "vi": -216.8168672672082,
+                "va": -1.037960237095763,
+                "vm": 251.71169341041107,
+                "vr": 127.86407888054637
+            },
+            "n": {
+                "vi": -0.2270527425270987,
+                "va": -1.2068460811083241,
+                "vm": 0.2429676182808588,
+                "vr": 0.08648881802866852
+            }
+        },
+        "b628": {
+            "c": {
+                "vi": 215.42592631866844,
+                "va": 1.0476924643377328,
+                "vm": 248.68140577377747,
+                "vr": 124.2341009842539
+            },
+            "b": {
+                "vi": 2.160946329713816,
+                "va": 3.1330306849276783,
+                "vm": 252.39203942597615,
+                "vr": -252.3827883920843
+            },
+            "a": {
+                "vi": -217.21487337374072,
+                "va": -1.0380992287804898,
+                "vm": 252.1530891590004,
+                "vr": 128.058108519752
+            },
+            "n": {
+                "vi": 0.01416268163741028,
+                "va": 1.387617115774368,
+                "vm": 0.014403661389722771,
+                "vr": 0.0026237206915279976
+            }
+        },
+        "b1044": {
+            "c": {
+                "vi": 215.35068139253465,
+                "va": 1.0477950865861032,
+                "vm": 248.57983526112122,
+                "vr": 124.16126015072972
+            },
+            "b": {
+                "vi": 2.101160873448968,
+                "va": 3.1332627237150925,
+                "vm": 252.2452414825758,
+                "vr": -252.2364901706073
+            },
+            "a": {
+                "vi": -216.86274211698995,
+                "va": -1.0379258057217644,
+                "vm": 251.77006384713155,
+                "vr": 127.90119675393424
+            },
+            "n": {
+                "vi": -0.20650980032433694,
+                "va": -1.2971213042181164,
+                "vm": 0.2144923149404037,
+                "vr": 0.0579711612657174
+            }
+        },
+        "b1141": {
+            "c": {
+                "vi": 215.44786070443018,
+                "va": 1.0476152943596817,
+                "vm": 248.71779566701727,
+                "vr": 124.26890680835893
+            },
+            "b": {
+                "vi": 2.1901404476288233,
+                "va": 3.1329166434093674,
+                "vm": 252.43952909070595,
+                "vr": -252.4300281906989
+            },
+            "a": {
+                "vi": -217.32377858017117,
+                "va": -1.0381882830265907,
+                "vm": 252.26626799784702,
+                "vr": 128.09623426626686
+            },
+            "n": {
+                "vi": 0.07210879927576207,
+                "va": 1.8231945203079414,
+                "vm": 0.07446822724636909,
+                "vr": -0.018596718426236503
+            }
+        },
+        "b608": {
+            "c": {
+                "vi": 215.44807926656378,
+                "va": 1.047615371641896,
+                "vm": 248.71803689317605,
+                "vr": 124.26901068385361
+            },
+            "b": {
+                "vi": 2.190182439102148,
+                "va": 3.1329164875165896,
+                "vm": 252.43983331357745,
+                "vr": -252.43033206069
+            },
+            "a": {
+                "vi": -217.32438315400597,
+                "va": -1.0381878004870642,
+                "vm": 252.26704152845562,
+                "vr": 128.09673191869635
+            },
+            "n": {
+                "vi": 0.07246487106177112,
+                "va": 1.824897963912241,
+                "vm": 0.07486894948403995,
+                "vr": -0.018820256609425226
+            }
+        },
+        "b121": {
+            "c": {
+                "vi": 215.3676558281285,
+                "va": 1.0477755619884617,
+                "vm": 248.60222745305742,
+                "vr": 124.17664964766317
+            },
+            "b": {
+                "vi": 2.1109707779800675,
+                "va": 3.133225054219824,
+                "vm": 252.28208458835144,
+                "vr": -252.27325265794357
+            },
+            "a": {
+                "vi": -216.95336168703574,
+                "va": -1.0380142500630165,
+                "vm": 251.8621331873693,
+                "vr": 127.92878091495436
+            },
+            "n": {
+                "vi": -0.14296281514293482,
+                "va": -1.2158543116249667,
+                "vm": 0.15246656829530048,
+                "vr": 0.05298762057455095
+            }
+        },
+        "b1479": {
+            "c": {
+                "vi": 215.40630686795808,
+                "va": 1.0476816510971299,
+                "vm": 248.66030828598284,
+                "vr": 124.22589053167262
+            },
+            "b": {
+                "vi": 2.1540971988722744,
+                "va": 3.1330567307992885,
+                "vm": 252.359751908875,
+                "vr": -252.35055824936617
+            },
+            "a": {
+                "vi": -217.13562565932122,
+                "va": -1.0381194316962186,
+                "vm": 252.05809264293353,
+                "vr": 128.00547697785743
+            },
+            "n": {
+                "vi": -0.040400286311187764,
+                "va": -1.101918335336054,
+                "vm": 0.04528794882522005,
+                "vr": 0.020464974340804944
+            }
+        }
+    }
+}

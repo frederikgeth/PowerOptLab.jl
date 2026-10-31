@@ -1,8 +1,8 @@
 {
-    "results_sha256": "4fe60181bab1b76e7dd19deca198db72e4f6170462b4427338034efa199df445",
+    "results_sha256": "b3473a36ddcad2850633709375d69e0ecae949476035d0322120455e8fdd79a4",
     "scope": "point-specific measured non-2omega stress includes other harmonics and any DC drift; not a conservative reserve over dispatch or a PWM-aware allocator",
     "crosscheck_code_sha256": "30c59f5f2cd36866fa18f701ed10de8241c7856bb83d88d802808bb318593025",
-    "input_sha256": "48ef985e26a8471826ddf477d19d15b1899eed01d728bc6709a3b35bd26d9bd5",
+    "input_sha256": "b1e6e7fd11f45838503c7ab39c2a0abe301d05d448f96fd667d6700d014bd493",
     "cases": {
         "four_leg_unbalanced": {
             "measured_total_capacitor_rms_A": 3.9853917815832074,

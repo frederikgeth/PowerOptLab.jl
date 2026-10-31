@@ -423,6 +423,32 @@ validate the optional small-signal source impedance, LCL/split-link dynamics,
 service-controller response, semiconductor losses or feeder stability. Measured
 stress at one point is not a conservative reserve over other dispatches.
 
+### PWM-aware allocation and nonlinear energy extension
+
+The fixed-sizing follow-up (`studies/australian_pv/thermal_energy.md`) embeds
+shared-carrier switching stress in dispatch and introduces nonlinear monolithic
+DC energy. Eight coupled Australian cases mix mean, worst-phase, sequence and
+four-leg controllers, including night operation and partial disconnection.
+Saved phasors receive physical/policy reconstruction and fixed-PQ network replay.
+
+The EMT matrix adds all 24 energized inverter points from both nonlinear daytime
+cases and four boundary references, plus three retained failed calibration
+points. All 27 current PWM-allocated references must meet the unchanged
+engineering limits at the finest mesh. The LF-only boundary and the three old
+5% allowance points are explicit switching-thermal negative controls. The
+nonlinear boundary's averaged trajectory separately checks the actual 2ω
+voltage limit. This remains fixed-POC circuit validation with the source, loss
+and dynamics restrictions above.
+
+`inverter_pwm_allocation_tests.jl` adds 87 assertions for analytic variance
+bounds, independent carrier integration, supported configurations, dispatch and
+service preservation. `inverter_dc_energy_tests.jl` adds 155 assertions for
+energy integration, mean/Fourier voltage, complete rail bounds, active voltage
+extrema, capacitor RMS, PWM composition, night operation and numerical bases.
+Separate study tests reject corrupted metrics, missing meshes and false
+engineering acceptance. The calibrated 10% allowance is explicit model
+headroom; neither it nor these tests establish a universal switching-error bound.
+
 ## Further higher-fidelity validation
 
 For each topology, build one parameter-identical averaged or switched model in

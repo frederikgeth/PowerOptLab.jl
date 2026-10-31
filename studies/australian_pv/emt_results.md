@@ -8,7 +8,7 @@ All three representative cases pass the predeclared mechanism and time-step conv
 | binding_dc_capacitor | 0.00499 | 0.00491 | 0.99967 | 4.04630 |
 | four_leg_unbalanced | 0.00702 | 0.00937 | 0.50168 | 3.98539 |
 
-The independent Python record audit passes 308 coverage, source, waveform, energy, spectral, mesh and engineering-flag checks. The Julia cross-check maps the measured non-2ω RMS stress to the existing `i_sw` bound: all three configurations are rejected because that reserve alone exceeds the 1 A budget. This point-specific measurement is not a conservative reserve over other dispatches.
+The independent Python record audit passes 310 coverage, source, waveform, energy, spectral, mesh and engineering-flag checks. The Julia cross-check maps the measured non-2ω RMS stress to the existing `i_sw` bound: all three configurations are rejected because that reserve alone exceeds the 1 A budget. This point-specific measurement is not a conservative reserve over other dispatches.
 
 The synthetic DC-link boundary also exceeds the 7.5 V peak 2ω limit by 0.0000938 V in the averaged nonlinear capacitor integration with its mean DC voltage matched to 750 V. That first-order boundary approximation is retained as a failed engineering check; its tolerance is not enlarged. Practical boundary certification needs a model-error allowance or a nonlinear energy-based bound.
 

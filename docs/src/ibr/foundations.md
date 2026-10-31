@@ -569,6 +569,32 @@ It assumes ideal complementary switches, no dead time, sinusoidal current frozen
 within each switching period, and a shared triangular carrier. The optional
 finite source branch below relaxes the final open-source assumption.
 
+### Embedded thermal allocation
+
+`ConstrainedInverter`, three-leg service allocation and four-leg phase-service
+allocation embed a dispatch-dependent switching-current bound when
+`pwm_strategy=:CENTERED`. This avoids fitting a reserve to one prior dispatch.
+For shared-carrier duties, the instantaneous second moment uses
+`min(dj, dk)` cross terms. Their line-cycle integrals have analytic expressions
+in the voltage and current phasors; a norm-smoothing error enclosure and complete
+low-frequency DC-voltage extrema bound the resulting variance. Independent
+carrier-dwell quadrature checks the actual frozen-current RMS and modulation.
+
+`pwm_thermal_headroom` defaults to 0.10 in the constrained allocator. The
+service allocators use the same default. This is an explicit model validation
+allowance, not a larger capacitor rating or a universal AC-ripple bound. The
+Australian mixed-controller campaign retains three failed points from the
+initial 5% allowance and validates the accepted 10% commands independently in
+switched circuits. Manual `i_sw` remains an additional quadrature reserve.
+
+This embedded formulation currently requires a monolithic three/four-leg link,
+centered PWM and an open carrier-frequency source. Finite source sharing, SPWM,
+split banks and automatic output-current ripple closure are rejected here.
+The standalone sequential solver above supports a different scope; nonlinear
+DC energy combined with PWM requires the constrained or service allocator.
+PWM/nonlinear service stages preserve preceding services within an explicit
+100 µvar or 100 µW numerical budget, independently of the hardware acceptance limits.
+
 ### 9.1 DC-source current sharing and split-bank voltage
 
 Hammami et al. and Vujacic et al. explicitly place a source R–L impedance in

@@ -508,11 +508,30 @@ rating proxy. Convert conventions before comparing a paper table or datasheet.
 
 The neutral term appears **only** for the split link, whose half-banks sit in the
 neutral path; the 4-leg's neutral current flows through its fourth leg, so its
-bank carries the 2ω component alone. Writing `I_{2ω,rms}` through the ripple
+bank has no low-frequency neutral-current term. Writing `I_{2ω,rms}` through the ripple
 phasor `D` (rather than the bilinear `\tilde S`) keeps the constraint quadratic
 in variables the model already has. `i_sw` optionally reserves an independent
 constant allowance, for unmodelled spectral content or a conservative design
 margin.
+
+Set `dc_energy_model=:nonlinear` for a monolithic three/four-leg link with
+constant DC input power and fixed mean converter loss. It preserves the declared
+cycle-mean `v_dc`, constrains the actual Fourier 2ω voltage using `dv2_max`, and
+uses total low-frequency capacitor RMS. Optional `v_dc_min` and `v_dc_max`
+bound the complete low-frequency voltage waveform. Full-cycle modulation is
+checked in squared energy coordinates. Finite small-signal DC sources and
+split banks require separate dynamics and are rejected by this option.
+`dc_link_energy_diagnostics` independently reconstructs these quantities from
+converter phasors. See the [energy derivation](../ibr/foundations.md).
+
+For dispatch and service studies, centered PWM also embeds switching stress
+directly in `ConstrainedInverter` and the three/four-leg service allocators.
+The constrained keyword `pwm_thermal_headroom=0.10` declares a model validation
+allowance; physical ratings remain unchanged. Independent carrier-dwell checks
+gate acceptance. Nonlinear energy and PWM compose in these allocators and in
+voltage-aware mixed fleets. Fixed-structure implicit controller stamping does
+not support nonlinear energy. These capabilities and their source/topology
+restrictions are described under [embedded thermal allocation](../ibr/foundations.md).
 
 ### Carrier-level PWM closure
 

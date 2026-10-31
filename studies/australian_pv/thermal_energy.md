@@ -23,7 +23,7 @@ and the same 60/25/15% load split. Profiles are:
 
 All controllers are active in one voltage-aware feeder fixed point. Exact local
 curves produce requests; physical allocation retains each declared priority.
-Higher-priority service is preserved within an explicit 100 µvar/W numerical
+Higher-priority service is preserved within an explicit 100 µvar or 100 µW numerical
 budget in PWM/nonlinear stages. Hardware bounds are not relaxed. Night PV has
 one exact zero-DC-power equality; loss imports and reactive support remain.
 Disconnection removes the entire selected AC model.

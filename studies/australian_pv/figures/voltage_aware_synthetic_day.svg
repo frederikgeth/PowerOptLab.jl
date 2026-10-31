@@ -1157,7 +1157,7 @@ L 429.707104 263.775483
    </g>
    <g id="patch_10">
     <path d="M 49.305469 275.60226
-L 49.305469 57.125167
+L 49.305469 57.125168
 " style="fill: none; stroke: #000000; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
    </g>
    <g id="patch_11">
@@ -3497,7 +3497,7 @@ z
     <g id="ytick_29">
      <g id="line2d_93">
       <g>
-       <use xlink:href="#m2cde184137" x="484.797885" y="395.987235" style="stroke: #000000; stroke-width: 0.8"/>
+       <use xlink:href="#m2cde184137" x="484.797885" y="395.987236" style="stroke: #000000; stroke-width: 0.8"/>
       </g>
      </g>
      <g id="text_74">

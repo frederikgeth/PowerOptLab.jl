@@ -3,7 +3,7 @@
   "cases_checked": 24,
   "accepted": 24,
   "device_rows_checked": 288,
-  "source_hashes_verified": 59,
+  "source_hashes_verified": 61,
   "code_sha256": "83ee9289a7a4d617c9911470c929c9870b93bd2fadd0c1a17fe60687f42d6c0b",
   "scope": "CSV completeness, source freshness, physical/network inequalities and metrics compared with independent saved-phasor audit"
 }

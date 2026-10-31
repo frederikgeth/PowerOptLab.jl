@@ -1,5 +1,37 @@
 # Advanced IBR review: resolution plan
 
+## Fixed-sizing PWM and energy milestone: validation published
+
+Committed driver `ffbec99` passes **20,906/20,906** package assertions
+(8m05.5s). All eight mixed-controller Australian equilibria pass 549 saved-point
+conditions and 2,220 SI physical checks, including night and partial
+disconnection. Each coupled feeder includes mean, worst-phase, sequence and
+four-leg VV+VW with reactive priority. The existing 77 three-leg, 24 coordinated
+and 11 four-leg extension cases were reproduced against current source hashes.
+Three-leg changes are numerical noise: below 1.7 µvar Q and 0.2 nV voltage.
+
+The new independent EMT campaign completes **186 runs / 31 references** and
+passes 2,551 record-reconstruction conditions. All **27 current PWM-allocated
+references** satisfy the unchanged engineering bounds; the largest switched
+capacitor RMS is **0.965688462 A** against 1 A. Three earlier 5% calibration
+points and one LF-only boundary remain explicit switching-thermal negative
+controls. At the matched averaged-circuit boundary, the nonlinear allocation
+gives **7.499999997 V** 2ω voltage versus **7.500093753 V** for the original
+linearized allocation. Nominal mean voltage stays 750 V.
+
+The standalone circuit passes 32 analytic/KCL/energy assertions. Mixed setup
+tests pass 418 checks, saved-point corruption tests five, mixed CSV tests six,
+and new EMT corruption tests five. Refreshed baseline EMT passes 310 record
+conditions, 15 stress-gate assertions and six corruption tests. Package and
+documentation builds pass. Generated tables, the four-panel teaching figure,
+source fingerprints and complete metrics/waveform evidence are published under
+`studies/australian_pv/thermal_energy_results.md`.
+
+Sizing is unchanged. The 10% validation allowance is scoped to this model and
+campaign, not a universal switching-error guarantee. EMT fixes POC voltages and
+does not validate dynamic feeder/service loops, LCL/split links or semiconductor
+losses. The nonlinear energy option rejects unsupported source/topology modes.
+
 ## Expanded EMT calibration and common-mode regression
 
 The first committed core passes 20,906/20,906 package assertions (8m12.2s).
@@ -17,9 +49,9 @@ analytic common-mode/KCL/energy oracle passes; the standalone circuit now has
 32 assertions. A separate explicit three-wire KCL engineering check prevents
 this error from masquerading as an inverter/controller discrepancy.
 
-All 242 new model assertions pass with the 10% allowance; the full suite and
-31-reference EMT validation are being rerun before publication. The calibration
-failures are never reclassified as accepted current commands.
+All 242 new model assertions pass with the 10% allowance. The completed full
+suite and 31-reference EMT results are recorded above. The calibration failures
+are never reclassified as accepted current commands.
 
 ## Nonlinear monolithic DC energy implementation (31 October 2026)
 
@@ -62,7 +94,7 @@ The 5% default validation allowance is explicitly not a universal bound on AC
 switching ripple or device dynamics; fixed-size EMT validation follows.
 
 An exact service lock at the four-leg maximum-Q thermal boundary produced
-`ALMOST_LOCALLY_SOLVED`. A declared 100 µvar/W preservation budget regularizes
+`ALMOST_LOCALLY_SOLVED`. A declared 100 µvar or 100 µW preservation budget regularizes
 the next stage, independently of numerical bases, without relaxing hardware
 bounds or raw solver acceptance. Unsupported source/topology/AC-closure modes
 are rejected explicitly. Nonlinear energy bounds and mixed Australian/EMT

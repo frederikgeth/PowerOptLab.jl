@@ -100,6 +100,8 @@ def publish():
     ax.axhline(37, color="#888", ls=":", label="Available DC: 37 kW")
     ax.axhline(0, color="#aaa", lw=.6)
     ax.set(xticks=[0, 1], xticklabels=["1.00 pu source", "1.03 pu source"], ylabel="Fleet POC net active injection (kW)", ylim=(-2, 45), title="a  Thermal feasibility changes the dispatch")
+    ax.annotate("≈0 kW under reactive priority", xy=(1, 0), xytext=(1, 5),
+                ha="center", fontsize=8, arrowprops={"arrowstyle": "->", "color": "#555"})
     ax.legend(frameon=False, fontsize=8)
     ax = axes[0, 1]
     groups = [[], [], [], []]

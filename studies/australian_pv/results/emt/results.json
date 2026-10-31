@@ -2,237 +2,240 @@
     "metrics": [
         {
             "mode": "averaged",
-            "capacitor_2omega_error_A": 6.2586294234135145e-15,
+            "capacitor_2omega_error_A": 7.20150126082007e-15,
             "current_peak_A": [
-                9.997424934244139,
-                9.997426004770508,
-                9.99742600477036
+                9.99742493424412,
+                9.99742600477049,
+                9.997426004770377
             ],
             "expected_dc_2omega_peak": [
                 -3.2166795000677937e-15,
                 4.82501925010169e-15
             ],
             "capacitor_2omega_peak": [
-                -8.856269109594802e-16,
-                5.6522541111882465e-15
+                -5.734904853185218e-16,
+                6.587328626636116e-15
             ],
-            "window_net_energy_J": -4.802195930666164e-9,
+            "window_net_energy_J": -4.802169802509094e-9,
             "dc_2omega_error_V": 8.102040920637773e-10,
             "minimum_modulation_margin": 0.20515741707298873,
             "window_s": 0.08,
             "v_dc_max_V": 749.9999999776358,
-            "neutral_total_rms_A": 4.8036684216442815e-14,
-            "fundamental_current_max_error_A": 1.332275031016459e-13,
-            "capacitor_total_rms_A": 6.423818083718767e-7,
+            "neutral_total_rms_A": 1.5415341610315248e-14,
+            "fundamental_current_max_error_A": 1.279747680337551e-13,
+            "capacitor_total_rms_A": 6.423818083730449e-7,
             "v_dc_min_V": 749.9999999449711,
             "engineering_checks": {
                 "neutral_rms": true,
+                "three_wire_kcl": true,
                 "phase_rms": true,
                 "dc_2omega_peak": true,
                 "mean_dc_source": true,
                 "modulation": true,
                 "capacitor_total_rms": true
             },
-            "energy_residual_J": 2.1834263373060547e-10,
+            "energy_residual_J": 2.1831650557353537e-10,
             "dc_2omega_peak": [
                 2.0816817236993246e-13,
                 -8.101992394690331e-10
             ],
-            "capacitor_peak_A": 7.868119331561205e-7,
+            "capacitor_peak_A": 7.868119307362153e-7,
             "window_initial_state": [
-                9.997424934125686,
-                -4.99871246706281,
-                -4.998712467062828,
+                9.997424934125673,
+                -4.998712467062814,
+                -4.998712467062839,
                 749.999999969441
             ],
-            "energy_relative_residual": 5.458565843332906e-13,
+            "energy_relative_residual": 5.457912639406145e-13,
             "current_fundamental": [
                 [
-                    7.069246965323722,
-                    -2.0339627846897783e-14
+                    7.069246965323712,
+                    -1.1954061515597528e-14
                 ],
                 [
-                    -3.534623482661854,
-                    -6.122147457596512
+                    -3.5346234826618588,
+                    -6.1221474575965065
                 ],
                 [
-                    -3.534623482661888,
-                    6.122147457596458
+                    -3.534623482661899,
+                    6.122147457596472
                 ]
             ],
             "case_id": "balanced_L",
             "current_total_rms_A": [
-                7.069246965323794,
-                7.069246965323781,
-                7.069246965323807
+                7.069246965323786,
+                7.069246965323778,
+                7.069246965323822
             ],
             "all_engineering_checks_passed": true,
             "steps_per_carrier": 32,
             "v_dc_mean_V": 749.9999999591546,
             "p_grid_mean_W": 4877.780406069653,
             "window_final_state": [
-                9.997424934125661,
-                -4.998712467062798,
-                -4.998712467062844,
+                9.997424934125657,
+                -4.998712467062803,
+                -4.998712467062852,
                 749.9999999490683
             ],
-            "capacitor_mean_A": -8.003613512028222e-11
+            "capacitor_mean_A": -8.003571311315662e-11
         },
         {
             "mode": "averaged",
-            "capacitor_2omega_error_A": 1.7336381467446478e-14,
+            "capacitor_2omega_error_A": 1.7682045073551183e-14,
             "current_peak_A": [
-                9.997424934140422,
-                9.99742520178684,
-                9.99742520178685
+                9.997424934140408,
+                9.997425201786843,
+                9.997425201786863
             ],
             "expected_dc_2omega_peak": [
                 -3.2166795000677937e-15,
                 4.82501925010169e-15
             ],
             "capacitor_2omega_peak": [
-                1.5261133478724677e-14,
-                5.643542728151614e-15
+                1.53492779478138e-14,
+                6.343996084137829e-15
             ],
-            "window_net_energy_J": -4.800677022751001e-9,
+            "window_net_energy_J": -4.800660202156955e-9,
             "dc_2omega_error_V": 9.26116762726624e-10,
             "minimum_modulation_margin": 0.205157417065977,
             "window_s": 0.08,
             "v_dc_max_V": 749.9999999660994,
-            "neutral_total_rms_A": 4.022883399874766e-14,
-            "fundamental_current_max_error_A": 1.3491617301975302e-13,
-            "capacitor_total_rms_A": 1.6059430248921338e-7,
+            "neutral_total_rms_A": 2.3414819991785968e-14,
+            "fundamental_current_max_error_A": 1.2541884407897792e-13,
+            "capacitor_total_rms_A": 1.6059430248941254e-7,
             "v_dc_min_V": 749.9999999412804,
             "engineering_checks": {
                 "neutral_rms": true,
+                "three_wire_kcl": true,
                 "phase_rms": true,
                 "dc_2omega_peak": true,
                 "mean_dc_source": true,
                 "modulation": true,
                 "capacitor_total_rms": true
             },
-            "energy_residual_J": -4.380124594610654e-10,
+            "energy_residual_J": -4.380292800551118e-10,
             "dc_2omega_peak": [
                 3.164108515127384e-14,
                 -9.261119370513747e-10
             ],
-            "capacitor_peak_A": 1.9676432082908384e-7,
+            "capacitor_peak_A": 1.967643232490576e-7,
             "window_initial_state": [
-                9.997424934125613,
-                -4.998712467062788,
-                -4.998712467062823,
+                9.997424934125602,
+                -4.998712467062786,
+                -4.998712467062834,
                 749.9999999650754
             ],
-            "energy_relative_residual": 1.0950311486662584e-12,
+            "energy_relative_residual": 1.095073200151375e-12,
             "current_fundamental": [
                 [
-                    7.0692469653238135,
-                    -2.5561939401674406e-14
+                    7.069246965323806,
+                    -1.7445541914603758e-14
                 ],
                 [
-                    -3.534623482661893,
-                    -6.122147457596476
+                    -3.5346234826618983,
+                    -6.122147457596467
                 ],
                 [
-                    -3.534623482661772,
-                    6.122147457596271
+                    -3.534623482661776,
+                    6.12214745759628
                 ]
             ],
             "case_id": "balanced_L",
             "current_total_rms_A": [
-                7.069246965323857,
-                7.069246965323841,
-                7.069246965323697
+                7.069246965323851,
+                7.069246965323832,
+                7.0692469653237096
             ],
             "all_engineering_checks_passed": true,
             "steps_per_carrier": 64,
             "v_dc_mean_V": 749.9999999538151,
             "p_grid_mean_W": 4877.780406068951,
             "window_final_state": [
-                9.997424934125599,
-                -4.998712467062782,
-                -4.998712467062827,
+                9.997424934125593,
+                -4.9987124670627905,
+                -4.998712467062837,
                 749.9999999417923
             ],
-            "capacitor_mean_A": -8.001119960123497e-11
+            "capacitor_mean_A": -8.00109257422778e-11
         },
         {
             "mode": "averaged",
-            "capacitor_2omega_error_A": 6.226462190690846e-15,
+            "capacitor_2omega_error_A": 6.876617801849638e-15,
             "current_peak_A": [
-                9.997424934127542,
-                9.997425001040991,
-                9.997425001040979
+                9.99742493412754,
+                9.99742500104099,
+                9.997425001040988
             ],
             "expected_dc_2omega_peak": [
                 -3.2166795000677937e-15,
                 4.82501925010169e-15
             ],
             "capacitor_2omega_peak": [
-                -5.8677371540942274e-15,
-                3.159923402746525e-15
+                -6.0545969889232285e-15,
+                3.956103195309733e-15
             ],
-            "window_net_energy_J": -4.801364291411001e-9,
+            "window_net_energy_J": -4.801386164722051e-9,
             "dc_2omega_error_V": 9.271100177840554e-10,
             "minimum_modulation_margin": 0.205157417065977,
             "window_s": 0.08,
             "v_dc_max_V": 749.9999999652033,
-            "neutral_total_rms_A": 3.9376793270902826e-14,
-            "fundamental_current_max_error_A": 1.1038096158821287e-13,
-            "capacitor_total_rms_A": 4.014850406414346e-8,
+            "neutral_total_rms_A": 3.2282550835219084e-14,
+            "fundamental_current_max_error_A": 1.0577902948909501e-13,
+            "capacitor_total_rms_A": 4.014850406443871e-8,
             "v_dc_min_V": 749.9999999417284,
             "engineering_checks": {
                 "neutral_rms": true,
+                "three_wire_kcl": true,
                 "phase_rms": true,
                 "dc_2omega_peak": true,
                 "mean_dc_source": true,
                 "modulation": true,
                 "capacitor_total_rms": true
             },
-            "energy_residual_J": -4.3732519080106534e-10,
+            "energy_residual_J": -4.37303317490016e-10,
             "dc_2omega_peak": [
                 6.791666025147275e-13,
                 -9.271049416365693e-10
             ],
-            "capacitor_peak_A": 4.925128329851901e-8,
+            "capacitor_peak_A": 4.925128572383818e-8,
             "window_initial_state": [
-                9.997424934125656,
-                -4.998712467062815,
-                -4.998712467062869,
+                9.99742493412565,
+                -4.998712467062821,
+                -4.998712467062875,
                 749.9999999650754
             ],
-            "energy_relative_residual": 1.093312977016237e-12,
+            "energy_relative_residual": 1.093258293738613e-12,
             "current_fundamental": [
                 [
-                    7.069246965323689,
-                    -3.700621533237186e-14
+                    7.069246965323682,
+                    -3.151242746916811e-14
                 ],
                 [
-                    -3.5346234826619174,
-                    -6.122147457596469
+                    -3.5346234826619236,
+                    -6.1221474575964585
                 ],
                 [
-                    -3.53462348266192,
-                    6.12214745759644
+                    -3.534623482661927,
+                    6.122147457596446
                 ]
             ],
             "case_id": "balanced_L",
             "current_total_rms_A": [
-                7.0692469653237335,
+                7.069246965323727,
                 7.069246965323793,
-                7.069246965323904
+                7.069246965323913
             ],
             "all_engineering_checks_passed": true,
             "steps_per_carrier": 128,
             "v_dc_mean_V": 749.9999999518137,
             "p_grid_mean_W": 4877.780406074361,
             "window_final_state": [
-                9.99742493412567,
-                -4.998712467062805,
-                -4.998712467062907,
+                9.997424934125677,
+                -4.998712467062819,
+                -4.99871246706291,
                 749.9999999417923
             ],
-            "capacitor_mean_A": -8.002268324684519e-11
+            "capacitor_mean_A": -8.00230164637596e-11
         },
         {
             "mode": "switched",
@@ -261,6 +264,7 @@
             "v_dc_min_V": 749.9044935143427,
             "engineering_checks": {
                 "neutral_rms": true,
+                "three_wire_kcl": true,
                 "phase_rms": true,
                 "dc_2omega_peak": true,
                 "mean_dc_source": true,
@@ -339,6 +343,7 @@
             "v_dc_min_V": 749.9044935130952,
             "engineering_checks": {
                 "neutral_rms": true,
+                "three_wire_kcl": true,
                 "phase_rms": true,
                 "dc_2omega_peak": true,
                 "mean_dc_source": true,
@@ -417,6 +422,7 @@
             "v_dc_min_V": 749.9044935129905,
             "engineering_checks": {
                 "neutral_rms": true,
+                "three_wire_kcl": true,
                 "phase_rms": true,
                 "dc_2omega_peak": true,
                 "mean_dc_source": true,
@@ -470,237 +476,240 @@
         },
         {
             "mode": "averaged",
-            "capacitor_2omega_error_A": 1.7672864712679274e-5,
+            "capacitor_2omega_error_A": 1.7672864714324636e-5,
             "current_peak_A": [
-                11.228273476768488,
-                7.79035994216733,
-                9.31274685471441
+                11.228273476768459,
+                7.790359942167358,
+                9.312746854714407
             ],
             "expected_dc_2omega_peak": [
                 -0.7656109875615268,
                 7.460820313901791
             ],
             "capacitor_2omega_peak": [
-                -1.4063490778169028,
-                -0.14431607531334054
+                -1.4063490778169043,
+                -0.1443160753133415
             ],
-            "window_net_energy_J": -4.801784749333682e-9,
-            "dc_2omega_error_V": 9.375661281513593e-5,
-            "minimum_modulation_margin": 0.20729779138785365,
+            "window_net_energy_J": -4.8017648650658384e-9,
+            "dc_2omega_error_V": 9.375661279186599e-5,
+            "minimum_modulation_margin": 0.20729779138785243,
             "window_s": 0.08,
-            "v_dc_max_V": 757.4814370168607,
-            "neutral_total_rms_A": 4.024741834943366e-14,
-            "fundamental_current_max_error_A": 8.039486682433186e-14,
-            "capacitor_total_rms_A": 0.999673654487163,
-            "v_dc_min_V": 742.4810598290294,
+            "v_dc_max_V": 757.4814370168601,
+            "neutral_total_rms_A": 2.9601945672615825e-14,
+            "fundamental_current_max_error_A": 9.892953110386736e-14,
+            "capacitor_total_rms_A": 0.9996736544871644,
+            "v_dc_min_V": 742.4810598290283,
             "engineering_checks": {
                 "neutral_rms": true,
+                "three_wire_kcl": true,
                 "phase_rms": true,
                 "dc_2omega_peak": false,
                 "mean_dc_source": true,
                 "modulation": true,
                 "capacitor_total_rms": true
             },
-            "energy_residual_J": -1.5978312423170493e-12,
+            "energy_residual_J": -1.8593000403188675e-12,
             "dc_2omega_peak": [
-                -0.7656205584583622,
-                7.460913580725369
+                -0.7656205584582987,
+                7.460913580725352
             ],
-            "capacitor_peak_A": 1.4137522572445687,
+            "capacitor_peak_A": 1.413752257244578,
             "window_initial_state": [
-                10.604882738242557,
-                -2.1074547481316355,
-                -8.497427990110886,
+                10.604882738242546,
+                -2.107454748131638,
+                -8.4974279901109,
                 749.2527673286147
             ],
-            "energy_relative_residual": 4.629596875400617e-15,
+            "energy_relative_residual": 5.38718322005652e-15,
             "current_fundamental": [
                 [
-                    7.498784497899473,
-                    2.6086956521477798
+                    7.4987844978994636,
+                    2.6086956521477633
                 ],
                 [
-                    -1.4901955434476812,
-                    -5.303222651482178
+                    -1.4901955434476877,
+                    -5.303222651482198
                 ],
                 [
-                    -6.00858895445181,
-                    2.694526999334276
+                    -6.008588954451816,
+                    2.6945269993342533
                 ]
             ],
             "case_id": "binding_dc_capacitor",
             "current_total_rms_A": [
-                7.939588273422789,
-                5.508616273521369,
-                6.585105691915843
+                7.939588273422774,
+                5.508616273521389,
+                6.585105691915848
             ],
             "all_engineering_checks_passed": false,
             "steps_per_carrier": 32,
-            "v_dc_mean_V": 749.9999999573129,
-            "p_grid_mean_W": 4199.999999970067,
+            "v_dc_mean_V": 749.999999957312,
+            "p_grid_mean_W": 4199.999999970066,
             "window_final_state": [
-                10.604882738242546,
-                -2.107454748131636,
-                -8.497427990110891,
-                749.2527673072451
+                10.60488273824253,
+                -2.107454748131635,
+                -8.497427990110914,
+                749.252767307244
             ],
-            "capacitor_mean_A": -8.01094610821298e-11
+            "capacitor_mean_A": -8.01092394731645e-11
         },
         {
             "mode": "averaged",
-            "capacitor_2omega_error_A": 1.7672864704104787e-5,
+            "capacitor_2omega_error_A": 1.7672864703476133e-5,
             "current_peak_A": [
-                11.228273446000971,
-                7.79035989168769,
-                9.312745960991952
+                11.228273446000946,
+                7.7903598916877135,
+                9.312745960991958
             ],
             "expected_dc_2omega_peak": [
                 -0.7656109875615268,
                 7.460820313901791
             ],
             "capacitor_2omega_peak": [
-                -1.4063490778168934,
-                -0.14431607531334742
+                -1.4063490778168928,
+                -0.14431607531334775
             ],
-            "window_net_energy_J": -4.800915408926729e-9,
-            "dc_2omega_error_V": 9.375661321631612e-5,
-            "minimum_modulation_margin": 0.20729779138786042,
+            "window_net_energy_J": -4.800922390538198e-9,
+            "dc_2omega_error_V": 9.375661315120673e-5,
+            "minimum_modulation_margin": 0.2072977913878602,
             "window_s": 0.08,
-            "v_dc_max_V": 757.4814364415355,
-            "neutral_total_rms_A": 5.5609778405210203e-14,
-            "fundamental_current_max_error_A": 1.3903609776759738e-13,
-            "capacitor_total_rms_A": 0.9996736544869971,
-            "v_dc_min_V": 742.481060415984,
+            "v_dc_max_V": 757.4814364415357,
+            "neutral_total_rms_A": 2.460763995579434e-14,
+            "fundamental_current_max_error_A": 1.2887159748221469e-13,
+            "capacitor_total_rms_A": 0.9996736544869969,
+            "v_dc_min_V": 742.4810604159837,
             "engineering_checks": {
                 "neutral_rms": true,
+                "three_wire_kcl": true,
                 "phase_rms": true,
                 "dc_2omega_peak": false,
                 "mean_dc_source": true,
                 "modulation": true,
                 "capacitor_total_rms": true
             },
-            "energy_residual_J": -7.902907928764025e-13,
+            "energy_residual_J": -8.685743096981113e-13,
             "dc_2omega_peak": [
-                -0.765620558457679,
-                7.460913580725842
+                -0.7656205584576903,
+                7.460913580725776
             ],
-            "capacitor_peak_A": 1.413752151022819,
+            "capacitor_peak_A": 1.4137521510228153,
             "window_initial_state": [
                 10.60488273824255,
-                -2.1074547481316364,
-                -8.497427990110873,
-                749.2527673286168
+                -2.107454748131653,
+                -8.497427990110875,
+                749.252767328617
             ],
-            "energy_relative_residual": 2.2898086409005682e-15,
+            "energy_relative_residual": 2.5166292933416863e-15,
             "current_fundamental": [
                 [
-                    7.498784497899514,
-                    2.60869565214781
+                    7.498784497899498,
+                    2.608695652147794
                 ],
                 [
-                    -1.490195543447677,
-                    -5.303222651481996
+                    -1.4901955434476868,
+                    -5.303222651482008
                 ],
                 [
-                    -6.008588954451632,
-                    2.694526999334338
+                    -6.008588954451637,
+                    2.6945269993343257
                 ]
             ],
             "case_id": "binding_dc_capacitor",
             "current_total_rms_A": [
-                7.939588273422748,
-                5.50861627352134,
-                6.58510569191578
+                7.939588273422738,
+                5.508616273521365,
+                6.585105691915782
             ],
             "all_engineering_checks_passed": false,
             "steps_per_carrier": 64,
-            "v_dc_mean_V": 749.9999999573209,
+            "v_dc_mean_V": 749.9999999573208,
             "p_grid_mean_W": 4199.99999997011,
             "window_final_state": [
-                10.604882738242537,
-                -2.107454748131637,
-                -8.497427990110884,
-                749.2527673072547
+                10.604882738242527,
+                -2.107454748131652,
+                -8.497427990110891,
+                749.2527673072544
             ],
-            "capacitor_mean_A": -8.009529776282418e-11
+            "capacitor_mean_A": -8.00954533627766e-11
         },
         {
             "mode": "averaged",
-            "capacitor_2omega_error_A": 1.7672864659983715e-5,
+            "capacitor_2omega_error_A": 1.7672864658584742e-5,
             "current_peak_A": [
-                11.228273430617033,
-                7.79035986644786,
-                9.312745846860059
+                11.228273430617001,
+                7.79035986644789,
+                9.312745846860064
             ],
             "expected_dc_2omega_peak": [
                 -0.7656109875615268,
                 7.460820313901791
             ],
             "capacitor_2omega_peak": [
-                -1.4063490778168506,
-                -0.14431607531333282
+                -1.4063490778168493,
+                -0.1443160753133321
             ],
-            "window_net_energy_J": -4.800827134812148e-9,
-            "dc_2omega_error_V": 9.375661492144215e-5,
-            "minimum_modulation_margin": 0.20729779138789373,
+            "window_net_energy_J": -4.800780150152062e-9,
+            "dc_2omega_error_V": 9.375661489372192e-5,
+            "minimum_modulation_margin": 0.20729779138789417,
             "window_s": 0.08,
-            "v_dc_max_V": 757.4814361538791,
-            "neutral_total_rms_A": 7.551300983557458e-14,
-            "fundamental_current_max_error_A": 3.008395484875555e-13,
-            "capacitor_total_rms_A": 0.9996736544869628,
-            "v_dc_min_V": 742.481060709494,
+            "v_dc_max_V": 757.4814361538793,
+            "neutral_total_rms_A": 3.063349409334958e-14,
+            "fundamental_current_max_error_A": 2.790071528517428e-13,
+            "capacitor_total_rms_A": 0.9996736544869617,
+            "v_dc_min_V": 742.4810607094944,
             "engineering_checks": {
                 "neutral_rms": true,
+                "three_wire_kcl": true,
                 "phase_rms": true,
                 "dc_2omega_peak": false,
                 "mean_dc_source": true,
                 "modulation": true,
                 "capacitor_total_rms": true
             },
-            "energy_residual_J": 5.772115099257624e-12,
+            "energy_residual_J": 5.796184712747454e-12,
             "dc_2omega_peak": [
-                -0.7656205584584915,
-                7.460913580727473
+                -0.7656205584584537,
+                7.460913580727449
             ],
-            "capacitor_peak_A": 1.413752065309482,
+            "capacitor_peak_A": 1.4137520653094833,
             "window_initial_state": [
-                10.604882738242555,
-                -2.1074547481316093,
+                10.604882738242543,
+                -2.1074547481316195,
                 -8.497427990110847,
                 749.2527673286194
             ],
-            "energy_relative_residual": 1.672427307731501e-14,
+            "energy_relative_residual": 1.679401298754672e-14,
             "current_fundamental": [
                 [
-                    7.4987844978992095,
-                    2.608695652147785
+                    7.498784497899201,
+                    2.608695652147767
                 ],
                 [
-                    -1.4901955434477212,
-                    -5.303222651481853
+                    -1.4901955434477296,
+                    -5.303222651481865
                 ],
                 [
-                    -6.008588954451775,
-                    2.6945269993345744
+                    -6.008588954451784,
+                    2.6945269993345518
                 ]
             ],
             "case_id": "binding_dc_capacitor",
             "current_total_rms_A": [
-                7.939588273422457,
-                5.508616273521305,
+                7.939588273422435,
+                5.508616273521325,
                 6.585105691915686
             ],
             "all_engineering_checks_passed": false,
             "steps_per_carrier": 128,
-            "v_dc_mean_V": 749.9999999573586,
-            "p_grid_mean_W": 4199.999999969922,
+            "v_dc_mean_V": 749.9999999573587,
+            "p_grid_mean_W": 4199.99999996992,
             "window_final_state": [
-                10.604882738242553,
-                -2.1074547481315884,
-                -8.49742799011085,
-                749.2527673072867
+                10.604882738242525,
+                -2.1074547481315946,
+                -8.497427990110863,
+                749.2527673072871
             ],
-            "capacitor_mean_A": -8.009178500204838e-11
+            "capacitor_mean_A": -8.009097136105896e-11
         },
         {
             "mode": "switched",
@@ -729,6 +738,7 @@
             "v_dc_min_V": 742.4506569177862,
             "engineering_checks": {
                 "neutral_rms": true,
+                "three_wire_kcl": true,
                 "phase_rms": true,
                 "dc_2omega_peak": false,
                 "mean_dc_source": true,
@@ -807,6 +817,7 @@
             "v_dc_min_V": 742.4506569165948,
             "engineering_checks": {
                 "neutral_rms": true,
+                "three_wire_kcl": true,
                 "phase_rms": true,
                 "dc_2omega_peak": false,
                 "mean_dc_source": true,
@@ -885,6 +896,7 @@
             "v_dc_min_V": 742.4506569164863,
             "engineering_checks": {
                 "neutral_rms": true,
+                "three_wire_kcl": true,
                 "phase_rms": true,
                 "dc_2omega_peak": false,
                 "mean_dc_source": true,
@@ -963,6 +975,7 @@
             "v_dc_min_V": 746.2313672966685,
             "engineering_checks": {
                 "neutral_rms": true,
+                "three_wire_kcl": true,
                 "phase_rms": true,
                 "dc_2omega_peak": true,
                 "mean_dc_source": true,
@@ -1041,6 +1054,7 @@
             "v_dc_min_V": 746.2313690497507,
             "engineering_checks": {
                 "neutral_rms": true,
+                "three_wire_kcl": true,
                 "phase_rms": true,
                 "dc_2omega_peak": true,
                 "mean_dc_source": true,
@@ -1119,6 +1133,7 @@
             "v_dc_min_V": 746.2313690848498,
             "engineering_checks": {
                 "neutral_rms": true,
+                "three_wire_kcl": true,
                 "phase_rms": true,
                 "dc_2omega_peak": true,
                 "mean_dc_source": true,
@@ -1197,6 +1212,7 @@
             "v_dc_min_V": 746.2481669314337,
             "engineering_checks": {
                 "neutral_rms": true,
+                "three_wire_kcl": true,
                 "phase_rms": true,
                 "dc_2omega_peak": true,
                 "mean_dc_source": true,
@@ -1275,6 +1291,7 @@
             "v_dc_min_V": 746.2481669295165,
             "engineering_checks": {
                 "neutral_rms": true,
+                "three_wire_kcl": true,
                 "phase_rms": true,
                 "dc_2omega_peak": true,
                 "mean_dc_source": true,
@@ -1353,6 +1370,7 @@
             "v_dc_min_V": 746.2481669293882,
             "engineering_checks": {
                 "neutral_rms": true,
+                "three_wire_kcl": true,
                 "phase_rms": true,
                 "dc_2omega_peak": true,
                 "mean_dc_source": true,
@@ -1410,19 +1428,19 @@
     "waveform_sha256": {
         "binding_dc_capacitor_switched_carrier.csv": "2df2e4b3911d8204356370c4583bed987b5a07de576cbfc2567c0152510d7bf6",
         "four_leg_unbalanced_averaged_switching.csv": "828d2909b428b7551663859f7992688a47ebd0b81b14c2d289be1b8816f87da3",
-        "balanced_L_averaged_switching.csv": "5e4897c705b7f3eed699e689983b13e660551b7ef327b871d8957f2ab2594b8a",
+        "balanced_L_averaged_switching.csv": "5a6640cf2c44e3f86f77036e4b8e31c13bfa8014f81aa83c1a48cfc2fae4f12f",
         "balanced_L_switched_switching.csv": "43a1078d3351ebd30e15bd17351f9d4a6b76fba5eb3a2f9f412ebd9ac9ce8cfc",
-        "binding_dc_capacitor_averaged_switching.csv": "2e5c330e96d45a59357bfa8cf7c02be1dd77d06fe89c78beb886f98ed46c5de8",
+        "binding_dc_capacitor_averaged_switching.csv": "b8fdcdef44226867aab2d51dd6f8050d2b62e23528b1a3eaf7876061e76be8ec",
         "four_leg_unbalanced_switched_switching.csv": "acbabb66849bd7bb56939247c27e459bcc2092d706a3e4d3eef13d4a23ab2a24",
-        "balanced_L_averaged_carrier.csv": "a5bd28a70383a2bf688dddf11ca6ba1b7ac03bc7d7d7f6e45d654dde572e8b85",
+        "balanced_L_averaged_carrier.csv": "4c4f24299948f501949e660e4f4a0d88d48a16fac9857c2140ca8a87cc674073",
         "binding_dc_capacitor_switched_switching.csv": "0b8d5b8219d846e432ab878dccc2f2abd1cad87b94b10d153b12fe8d2d77e316",
         "four_leg_unbalanced_averaged_carrier.csv": "e41b43501aee3bf926304990664006edc87c2c28761cd347be6150c94d4d3275",
         "balanced_L_switched_carrier.csv": "7f636c3132de2548e9e5f2e9f80d44edd1043a720a7cf605f850736abbd41cb7",
         "four_leg_unbalanced_switched_carrier.csv": "89375e60ff25cb89b2cb1591b88ce73cdffed74437840edc469854e0a089b12e",
-        "binding_dc_capacitor_averaged_carrier.csv": "8efa2968c06ab881128071f8583cdd98414bb1c16fc5b1e466616f8052b4bc78"
+        "binding_dc_capacitor_averaged_carrier.csv": "ed7407b53177f5c589f269fe7d9a6f2b9e80c61aa3682c0b7430d649b8f0e774"
     },
-    "circuit_sha256": "16a769ea15de45c4a4127ff049996f9c7ec5ef55565cce8d9e82b57a847c9949",
-    "input_sha256": "48ef985e26a8471826ddf477d19d15b1899eed01d728bc6709a3b35bd26d9bd5",
+    "circuit_sha256": "443e28c9f1b5545a5a899e58350b0d8a059eba69591c9e303c015f0c72edad60",
+    "input_sha256": "b1e6e7fd11f45838503c7ab39c2a0abe301d05d448f96fd667d6700d014bd493",
     "cases": {
         "four_leg_unbalanced": {
             "modes": {
@@ -1457,6 +1475,7 @@
                         "v_dc_min_V": 746.2481669293882,
                         "engineering_checks": {
                             "neutral_rms": true,
+                            "three_wire_kcl": true,
                             "phase_rms": true,
                             "dc_2omega_peak": true,
                             "mean_dc_source": true,
@@ -1541,6 +1560,7 @@
                         "v_dc_min_V": 746.2313690848498,
                         "engineering_checks": {
                             "neutral_rms": true,
+                            "three_wire_kcl": true,
                             "phase_rms": true,
                             "dc_2omega_peak": true,
                             "mean_dc_source": true,
@@ -1630,6 +1650,7 @@
                         "v_dc_min_V": 742.4506569164863,
                         "engineering_checks": {
                             "neutral_rms": true,
+                            "three_wire_kcl": true,
                             "phase_rms": true,
                             "dc_2omega_peak": false,
                             "mean_dc_source": true,
@@ -1684,86 +1705,87 @@
                     "mechanisms_accepted": true
                 },
                 "averaged": {
-                    "mesh_dc_difference_V": 1.8219335063973746e-12,
-                    "mesh_capacitor_rms_difference_A": 3.430589146091734e-14,
-                    "mesh_current_difference_A": 3.056585735555934e-13,
+                    "mesh_dc_difference_V": 1.839236356627486e-12,
+                    "mesh_capacitor_rms_difference_A": 3.519406988061746e-14,
+                    "mesh_current_difference_A": 2.987704017226437e-13,
                     "finest": {
                         "mode": "averaged",
-                        "capacitor_2omega_error_A": 1.7672864659983715e-5,
+                        "capacitor_2omega_error_A": 1.7672864658584742e-5,
                         "current_peak_A": [
-                            11.228273430617033,
-                            7.79035986644786,
-                            9.312745846860059
+                            11.228273430617001,
+                            7.79035986644789,
+                            9.312745846860064
                         ],
                         "expected_dc_2omega_peak": [
                             -0.7656109875615268,
                             7.460820313901791
                         ],
                         "capacitor_2omega_peak": [
-                            -1.4063490778168506,
-                            -0.14431607531333282
+                            -1.4063490778168493,
+                            -0.1443160753133321
                         ],
-                        "window_net_energy_J": -4.800827134812148e-9,
-                        "dc_2omega_error_V": 9.375661492144215e-5,
-                        "minimum_modulation_margin": 0.20729779138789373,
+                        "window_net_energy_J": -4.800780150152062e-9,
+                        "dc_2omega_error_V": 9.375661489372192e-5,
+                        "minimum_modulation_margin": 0.20729779138789417,
                         "window_s": 0.08,
-                        "v_dc_max_V": 757.4814361538791,
-                        "neutral_total_rms_A": 7.551300983557458e-14,
-                        "fundamental_current_max_error_A": 3.008395484875555e-13,
-                        "capacitor_total_rms_A": 0.9996736544869628,
-                        "v_dc_min_V": 742.481060709494,
+                        "v_dc_max_V": 757.4814361538793,
+                        "neutral_total_rms_A": 3.063349409334958e-14,
+                        "fundamental_current_max_error_A": 2.790071528517428e-13,
+                        "capacitor_total_rms_A": 0.9996736544869617,
+                        "v_dc_min_V": 742.4810607094944,
                         "engineering_checks": {
                             "neutral_rms": true,
+                            "three_wire_kcl": true,
                             "phase_rms": true,
                             "dc_2omega_peak": false,
                             "mean_dc_source": true,
                             "modulation": true,
                             "capacitor_total_rms": true
                         },
-                        "energy_residual_J": 5.772115099257624e-12,
+                        "energy_residual_J": 5.796184712747454e-12,
                         "dc_2omega_peak": [
-                            -0.7656205584584915,
-                            7.460913580727473
+                            -0.7656205584584537,
+                            7.460913580727449
                         ],
-                        "capacitor_peak_A": 1.413752065309482,
+                        "capacitor_peak_A": 1.4137520653094833,
                         "window_initial_state": [
-                            10.604882738242555,
-                            -2.1074547481316093,
+                            10.604882738242543,
+                            -2.1074547481316195,
                             -8.497427990110847,
                             749.2527673286194
                         ],
-                        "energy_relative_residual": 1.672427307731501e-14,
+                        "energy_relative_residual": 1.679401298754672e-14,
                         "current_fundamental": [
                             [
-                                7.4987844978992095,
-                                2.608695652147785
+                                7.498784497899201,
+                                2.608695652147767
                             ],
                             [
-                                -1.4901955434477212,
-                                -5.303222651481853
+                                -1.4901955434477296,
+                                -5.303222651481865
                             ],
                             [
-                                -6.008588954451775,
-                                2.6945269993345744
+                                -6.008588954451784,
+                                2.6945269993345518
                             ]
                         ],
                         "case_id": "binding_dc_capacitor",
                         "current_total_rms_A": [
-                            7.939588273422457,
-                            5.508616273521305,
+                            7.939588273422435,
+                            5.508616273521325,
                             6.585105691915686
                         ],
                         "all_engineering_checks_passed": false,
                         "steps_per_carrier": 128,
-                        "v_dc_mean_V": 749.9999999573586,
-                        "p_grid_mean_W": 4199.999999969922,
+                        "v_dc_mean_V": 749.9999999573587,
+                        "p_grid_mean_W": 4199.99999996992,
                         "window_final_state": [
-                            10.604882738242553,
-                            -2.1074547481315884,
-                            -8.49742799011085,
-                            749.2527673072867
+                            10.604882738242525,
+                            -2.1074547481315946,
+                            -8.497427990110863,
+                            749.2527673072871
                         ],
-                        "capacitor_mean_A": -8.009178500204838e-11
+                        "capacitor_mean_A": -8.009097136105896e-11
                     },
                     "mechanisms_accepted": true
                 }
@@ -1803,6 +1825,7 @@
                         "v_dc_min_V": 749.9044935129905,
                         "engineering_checks": {
                             "neutral_rms": true,
+                            "three_wire_kcl": true,
                             "phase_rms": true,
                             "dc_2omega_peak": true,
                             "mean_dc_source": true,
@@ -1858,85 +1881,86 @@
                 },
                 "averaged": {
                     "mesh_dc_difference_V": 1.18547349268314e-12,
-                    "mesh_capacitor_rms_difference_A": 1.2044579842506993e-7,
-                    "mesh_current_difference_A": 2.2438109971261333e-13,
+                    "mesh_capacitor_rms_difference_A": 1.2044579842497382e-7,
+                    "mesh_current_difference_A": 2.244632646014951e-13,
                     "finest": {
                         "mode": "averaged",
-                        "capacitor_2omega_error_A": 6.226462190690846e-15,
+                        "capacitor_2omega_error_A": 6.876617801849638e-15,
                         "current_peak_A": [
-                            9.997424934127542,
-                            9.997425001040991,
-                            9.997425001040979
+                            9.99742493412754,
+                            9.99742500104099,
+                            9.997425001040988
                         ],
                         "expected_dc_2omega_peak": [
                             -3.2166795000677937e-15,
                             4.82501925010169e-15
                         ],
                         "capacitor_2omega_peak": [
-                            -5.8677371540942274e-15,
-                            3.159923402746525e-15
+                            -6.0545969889232285e-15,
+                            3.956103195309733e-15
                         ],
-                        "window_net_energy_J": -4.801364291411001e-9,
+                        "window_net_energy_J": -4.801386164722051e-9,
                         "dc_2omega_error_V": 9.271100177840554e-10,
                         "minimum_modulation_margin": 0.205157417065977,
                         "window_s": 0.08,
                         "v_dc_max_V": 749.9999999652033,
-                        "neutral_total_rms_A": 3.9376793270902826e-14,
-                        "fundamental_current_max_error_A": 1.1038096158821287e-13,
-                        "capacitor_total_rms_A": 4.014850406414346e-8,
+                        "neutral_total_rms_A": 3.2282550835219084e-14,
+                        "fundamental_current_max_error_A": 1.0577902948909501e-13,
+                        "capacitor_total_rms_A": 4.014850406443871e-8,
                         "v_dc_min_V": 749.9999999417284,
                         "engineering_checks": {
                             "neutral_rms": true,
+                            "three_wire_kcl": true,
                             "phase_rms": true,
                             "dc_2omega_peak": true,
                             "mean_dc_source": true,
                             "modulation": true,
                             "capacitor_total_rms": true
                         },
-                        "energy_residual_J": -4.3732519080106534e-10,
+                        "energy_residual_J": -4.37303317490016e-10,
                         "dc_2omega_peak": [
                             6.791666025147275e-13,
                             -9.271049416365693e-10
                         ],
-                        "capacitor_peak_A": 4.925128329851901e-8,
+                        "capacitor_peak_A": 4.925128572383818e-8,
                         "window_initial_state": [
-                            9.997424934125656,
-                            -4.998712467062815,
-                            -4.998712467062869,
+                            9.99742493412565,
+                            -4.998712467062821,
+                            -4.998712467062875,
                             749.9999999650754
                         ],
-                        "energy_relative_residual": 1.093312977016237e-12,
+                        "energy_relative_residual": 1.093258293738613e-12,
                         "current_fundamental": [
                             [
-                                7.069246965323689,
-                                -3.700621533237186e-14
+                                7.069246965323682,
+                                -3.151242746916811e-14
                             ],
                             [
-                                -3.5346234826619174,
-                                -6.122147457596469
+                                -3.5346234826619236,
+                                -6.1221474575964585
                             ],
                             [
-                                -3.53462348266192,
-                                6.12214745759644
+                                -3.534623482661927,
+                                6.122147457596446
                             ]
                         ],
                         "case_id": "balanced_L",
                         "current_total_rms_A": [
-                            7.0692469653237335,
+                            7.069246965323727,
                             7.069246965323793,
-                            7.069246965323904
+                            7.069246965323913
                         ],
                         "all_engineering_checks_passed": true,
                         "steps_per_carrier": 128,
                         "v_dc_mean_V": 749.9999999518137,
                         "p_grid_mean_W": 4877.780406074361,
                         "window_final_state": [
-                            9.99742493412567,
-                            -4.998712467062805,
-                            -4.998712467062907,
+                            9.997424934125677,
+                            -4.998712467062819,
+                            -4.99871246706291,
                             749.9999999417923
                         ],
-                        "capacitor_mean_A": -8.002268324684519e-11
+                        "capacitor_mean_A": -8.00230164637596e-11
                     },
                     "mechanisms_accepted": true
                 }
