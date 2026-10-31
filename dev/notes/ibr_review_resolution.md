@@ -1,5 +1,44 @@
 # Advanced IBR review: resolution plan
 
+## Local voltage-aware Q→P→I₂ allocation
+
+`allocate_inverter_services` now supplies staged physical allocation at a fixed
+measured voltage. Q tracking runs first, then achieved Q is fixed while P is
+maximized, then both powers are fixed while requested I₂ ray support is maximized.
+Every stage independently audits fixed voltage, currents/sequence requests,
+preserved powers, source and volt-watt conditions, thermal limits and continuous
+rails. No finite priority weight or per-case retry is used. Ipopt uses one common
+adaptive/no-scaling profile with explicit caller overrides preserved.
+
+Within-request mode maximizes a bounded Q-service coordinate and fixes that
+coordinate for P allocation. The initial equality-plus-Q-interval representation
+produced a false P-stage infeasibility at the Australian worst-phase request;
+removing that redundancy recovers it without changing hardware or the service law.
+Protective Q override is an explicit different mode; the strict failed request
+never silently acquires it. A failed stage issues no command. An independent
+unrestricted plant projection can provide a feasible witness, but a failed local
+policy NLP still establishes no global policy infeasibility.
+
+`evaluate_voltage_aware` supplies exact mean/worst/positive-sequence VV+VW requests
+from separately supplied sensed and physical POC phasors. It supports reactive
+priority and voltage-admittance negative-sequence requests, and explicitly rejects
+current-dependent ripple blending and balance-first ordering. The existing
+fixed-structure stamp remains unchanged. This is a solver-based local reference;
+feeder feedback, response times and dynamic stability remain unverified.
+
+Validation: 117 new assertions cover analytic Q/P capability at three bases,
+saturated Q, the Australian active-Q boundary regression, rail protection,
+explicit override versus unresolved strict request, PV ceilings/night loss import,
+preserved P/Q under I₂ service, separate sensing boundaries, LCL passive I₀ and
+admittance support. The seven-case reference records six accepted commands and
+one explicit unresolved strict policy with an accepted physical diagnostic.
+Australian hardware is imported unchanged from the study builder.
+
+Remaining goal work includes network coupling of this allocator, the optional-arm
+SI/DC-source audit, full controlled-unbalance/disconnection/chronological studies,
+coordinated Australian OPF, four-leg control and representative EMT. The active
+goal is not complete; inverter sizing is unchanged.
+
 ## Fixed-current replay acceptance
 
 The replay helpers underpinning the fixed-point and network-sensitivity oracles

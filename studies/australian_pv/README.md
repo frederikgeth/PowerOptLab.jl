@@ -58,6 +58,14 @@ the declared averaged model; this campaign disables PWM and is not EMT validatio
 The separate current 1 MVA scaling diagnostic retains a mean-control iteration
 limit and is excluded from matched scientific comparisons.
 
+A separate [local voltage-aware allocation reference](../../scripts/formulations/inverter_service_allocation_reference.json)
+uses these unchanged three-leg hardware parameters at a fixed unbalanced terminal
+voltage. Mean, worst-phase and sequence VV+VW all issue accepted Q-priority
+commands, and energized zero-PV operation imports its losses. The allocator uses
+staged physical solves and differs from the main campaign's algebraic limiters.
+These local measurements are teaching inputs, not additional feeder equilibria;
+source/phase perturbation campaigns and chronological integration remain pending.
+
 - [Feeder schematic](figures/feeder.png), [phase voltages](figures/phase_voltages.png)
   and [benefits and effort](figures/tradeoffs.png) (generated locally).
 - [Sensing and requests](figures/sensing_and_requests.png) explains a deliberately

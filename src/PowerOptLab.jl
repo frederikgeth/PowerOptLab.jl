@@ -127,6 +127,7 @@ include("components/inverter_pcc_control.jl")
 include("formulations/control_intent.jl")
 include("components/inverter_operating_constraints.jl")
 include("components/inverter_current_projection.jl")
+include("components/inverter_service_allocation.jl")
 include("formulations/relations.jl")
 include("formulations/hull_bounds.jl")
 include("formulations/cases.jl")
@@ -302,6 +303,7 @@ export VoltVarWattConstraints, ConstrainedInverter, ConstrainedInverterResult,
 export InverterOperatingConstraints, FreeReactivePower, FixedReactivePower,
     FixedPowerFactor, DCSourceBounds
 export project_inverter_current, InverterCurrentProjectionResult
+export allocate_inverter_services, evaluate_voltage_aware, InverterServiceAllocationResult
 export evaluate_exact, evaluate_smooth, dc_power_offset, sensing_terminal, stamp_smooth_control!, solve_controlled_inverter
 export inverter_spec, inverter_handles
 export ControlledInverterFleetSpec, ControlledInverterFleetResult

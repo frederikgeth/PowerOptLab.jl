@@ -99,6 +99,7 @@ feasible. A separate common-mode case retains and tests that distinction.
 | Balanced switching hull | closed form | `Vdc_min = sqrt(6) U/m` for 3-leg and `2sqrt(2) U/m` for split DC |
 | Sample resolution and audit | nested grids, full-cycle Taylor enclosure and adaptive separating cuts | a coarse-grid false optimum cannot publish; feasible dispatch remains available after refinement |
 | Offline current allocation | analytic VA-circle projection across bases; primitive LCL reconstruction; rail-conflict witness | accepted alternatives meet all declared bounds; a failed solve never establishes plant infeasibility; inconclusive rail enclosures remain unresolved |
+| Local Q→P→I₂ allocation | analytic Q-priority circle; fixed-boundary Australian mean/worst/sequence laws; primitive LCL/grid commands | every stage passes physical and policy checks; lower-priority stages preserve achieved powers; explicit override is distinct from a failed strict request |
 | 2ω power | Deakin et al. Table V | six prescribed current patterns produce `[0,1,1.5,3,0,1] Vph Iref` |
 | 2ω PLECS comparison | Deakin et al. Table VII | all six rows are retained; non-cancelling analytical powers agree with PLECS within 0.3% and reported currents within 1% |
 | Bus capacitance | capacitor energy balance | open line-frequency source: `dv2 = ripple/(2ω Ceq Vdc)`, with `Ceq=Cu Cl/(Cu+Cl)` for a split link; ideal stiff source: `dv2 = 0` |

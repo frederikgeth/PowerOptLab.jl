@@ -15,4 +15,7 @@ ConstrainedInverterResult
 solve_constrained_inverter
 project_inverter_current
 InverterCurrentProjectionResult
+allocate_inverter_services
+evaluate_voltage_aware
+InverterServiceAllocationResult
 ```

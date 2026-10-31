@@ -164,8 +164,78 @@ The reference uses a local nonconvex solve; it does not certify a globally neare
 point or implement reactive-priority VV+VW. Voltage is fixed, so there is no
 feeder feedback or dynamic stability claim. For split links, the explicit
 `midpoint_charge` (default zero) is fixed in both the request audit and the solve;
-these results are conditional on that actuator state. PWM is disabled. Online
-voltage-aware allocation, optimized balancing charge and EMT remain separate work.
+these results are conditional on that actuator state. PWM is disabled. The local
+priority-aware reference below adds measured-voltage allocation; feeder feedback,
+optimized balancing charge and EMT remain separate work.
+
+## Local voltage-aware reactive priority
+
+[`allocate_inverter_services`](@ref) selects a command through staged physical
+solves at a fixed measured POC voltage:
+
+1. Track total POC Q as closely as locally feasible.
+2. Hold that achieved reactive service and maximize POC active export.
+3. Hold both powers and allocate requested negative-sequence current along its
+   declared complex ray on the selected converter or grid arm.
+
+The stages share the full filter, source, current, power, thermal and modulation
+model. Each stage must pass its own SI audit before the next runs. Fixed voltage,
+sequence-command, preserved-power and volt-watt conditions receive independent
+checks. The available-power ceiling uses a conservative enclosure of recomputed
+DC power. A failed stage retains its diagnostics and issues no command.
+
+```julia
+r = allocate_inverter_services(plant, request;
+    grid_voltage=poc_rms_phasors, reactive_request=-2600.,
+    active_fraction=1., volt_watt_basis=:rated, target=:converter)
+r.current_command              # nothing unless every stage publishes
+r.stages                       # all stage results, including failures
+r.plant_feasibility            # :feasible or :unresolved
+r.policy_feasibility           # :feasible or :unresolved
+```
+
+Default `reactive_mode=:within_request` permits Q between zero and the requested
+value. Explicit `:protective_override` permits a different Q when protection
+requires it, while minimizing tracking error before considering P. This changes
+the controller policy. It is never a fallback hidden inside a failed strict
+solve. An optional unrestricted physical projection can demonstrate feasible
+plant operation after a failed first stage, but it is returned only as a diagnostic.
+Local solver failure establishes no global infeasibility of either feasible set.
+
+Within the requested Q ray, the model maximizes a bounded service coordinate and
+then fixes that coordinate. Adding a nearly coincident Q equality to the active
+Q interval produced a spurious `LOCALLY_INFEASIBLE` P stage for the Australian
+worst-phase request; fixing the service coordinate preserves Q without that
+redundancy. No per-case solver retry is used. In protective-override mode, the
+tracking epigraph is removed after fixing achieved Q, leaving no unused tracking
+variable in the P objective.
+
+[`evaluate_voltage_aware`](@ref) evaluates the exact mean, worst-phase or
+positive-sequence VV+VW laws and calls this allocator. Supply sensed phasors as
+`InverterControlMeasurement` and the physical `grid_voltage` separately. The
+adapter requires reactive priority and Q→P→I₂ sequence order. Voltage-admittance
+droop is supported; current-dependent ripple blending is explicitly rejected.
+All three-leg hard limits remain active. More I₂ can increase losses, so strict
+P-before-I₂ ordering may leave little support when DC availability binds.
+
+These are solver-based local control references. They change allocation relative
+to the algebraic limiters and do not replace the fixed-structure controller stamp.
+Nonconvex local solutions do not prove globally best service allocation. Solver
+latency, feeder equilibria, four-leg control, dynamic stability and response times
+require separate validation.
+
+Reproduce seven fixed-boundary examples with the unchanged Australian hardware
+and the separately declared synthetic rail fixture:
+
+```sh
+julia --project=. scripts/formulations/inverter_service_allocation.jl /tmp/service_allocation.json
+```
+
+The saved `scripts/formulations/inverter_service_allocation_reference.json`
+records per-stage checks and source fingerprints. Six cases issue accepted
+commands; the strict synthetic Q-ray case remains unresolved while its independent
+diagnostic finds feasible plant operation. The local Australian comparisons are
+fixed-measurement tests, not new feeder or chronological results.
 
 ## [Compare saturation at a fixed 207 V POC](@id inverter-saturation-comparison)
 

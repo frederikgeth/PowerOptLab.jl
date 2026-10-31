@@ -92,3 +92,20 @@ case-study parameters. See the
 `python3 scripts/formulations/plot_current_projection.py` uses Matplotlib/NumPy
 to regenerate the standalone capability-slice and full-cycle voltage figure
 from that saved reference.
+
+## Local reactive-priority allocation
+
+```sh
+julia --project=. scripts/formulations/inverter_service_allocation.jl /tmp/service_allocation.json
+```
+
+`allocate_inverter_services` uses staged Q tracking, P export and requested I₂
+support on the full physical plant. `evaluate_voltage_aware` supplies exact
+mean/worst/sequence VV+VW requests from separate sensed and physical voltage
+phasors. The [measured reference](inverter_service_allocation_reference.json)
+contains six accepted local commands and one explicitly unresolved strict policy
+with a feasible unrestricted-plant diagnostic. Four cases use the unchanged
+Australian hardware; the 620 V synthetic rail fixture is separate. Every stage
+has solver provenance and independently checked physical/policy bounds.
+These are local control-reference results, not global lexicographic optima,
+network equilibria, measured response times or EMT.
