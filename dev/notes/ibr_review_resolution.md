@@ -1,5 +1,30 @@
 # Advanced IBR review: resolution plan
 
+## Published coordinated benchmark checkpoint
+
+The production run at committed driver source `67f3ed8` accepts all 24 cases.
+Its saved-point audit verifies 58 source/setup hashes, 1,148 conditions and
+5,472 independently recomputed physical checks across 288 inverter records.
+CSV metrics match the saved-phasor evidence. No benchmark solver failures remain
+under the declared common profile; the earlier fixed-structure 1 MVA/300-iteration
+mean-controller diagnostic remains retained separately.
+
+At full PV / 1.03 pu source / 1% aligned VUF, the added 253 V customer upper
+criterion yields accepted feasible references of 55.9572 kW with balanced
+converter currents and 58.5455 kW with free I₂. The balanced reference leaves
+2.3198 kW of available DC unused; the free-I₂ reference uses essentially all of
+it within tolerance. The three autonomous controller points exceed the added
+criterion, so their higher export than the balanced constrained reference is
+not a feasible improvement under that criterion. The benchmark releases VV+VW
+Q laws; free I₂ additionally releases actuation. No global-optimality, regional
+connection-conformity or dynamic claim follows.
+
+The generated table/PNG/SVG explain these different feasible sets. Sizing is
+unchanged. Full integration is green at `2ead3b4` (20,431 assertions), and all 77
+voltage-aware scenario/chronology cases have matching fresh source fingerprints
+and unchanged reported metrics. Four-leg control and representative EMT remain
+the next work in the active goal.
+
 ## Green integration and coordinated Australian capability reference
 
 At `2ead3b4`, the complete offline suite passes 20,431/20,431 assertions
@@ -20,8 +45,8 @@ missing records, stale source hashes, changed metrics and false success flags.
 The benchmark releases autonomous VV+VW Q laws, and distinguishes balanced
 converter currents from additional free I₂ actuation on unchanged three-leg
 hardware. A 253 V upper phase-neutral bound is an illustrative extra planning
-criterion, not regional conformity. Source/table/figure publication follows
-the committed-driver rerun; local feasible solutions are not global upper bounds.
+criterion, not regional conformity. Source/table/figure publication is recorded
+at the committed-driver checkpoint above; local feasible solutions are not global upper bounds.
 The full goal remains active; four-leg control and representative EMT follow
 completion and commit of this benchmark.
 

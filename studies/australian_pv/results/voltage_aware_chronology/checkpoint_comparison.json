@@ -1,0 +1,13 @@
+{
+  "prior_source_revision": "0874954b67552c6a3a7722dc04973d403f6158d1",
+  "current_source_revision": "2b6d4de7ea67eaf93944c2323d40bdea39541900",
+  "device_rows": 432,
+  "maximum_absolute_differences": {
+    "p_poc_W": 0.0,
+    "q_poc_var": 0.0,
+    "p_dc_W": 0.0,
+    "maximum_converter_current_A": 0.0,
+    "vmin_sensed_V": 0.0,
+    "vmax_sensed_V": 0.0
+  }
+}

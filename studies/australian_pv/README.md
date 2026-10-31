@@ -7,6 +7,12 @@ operation and a synthetic 24-hour comparison using unchanged hardware. Its
 accepted cases. It uses staged Q→P→I₂ allocation and retains its own campaign
 labels, distinct from the fixed-structure controller results below.
 
+The [coordinated capability benchmark](coordinated.md) adds matched balanced-
+current and free-I₂ dispatch references with fixed hardware and an explicit
+customer phase-to-neutral voltage criterion. Its [generated comparison and
+figure](coordinated_results.md) distinguish feasible local OPF results from
+global upper bounds and distinguish extra sequence actuation from coordination.
+
 This is the Australian successor to the ENWL showcase. It starts with a small
 real feeder, preserves a converted reference, and makes the teaching experiment's
 changes explicit. The campaign compares **local control laws for 12 PV systems at

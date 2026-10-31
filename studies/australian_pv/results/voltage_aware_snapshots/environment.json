@@ -14,7 +14,7 @@
         "src/formulations/experiments.jl": "aa8d24ef1b6b283c56ab7c32107d6e1be7afd4dd212494fd893ac4fea81de75d",
         "src/interfaces.jl": "e940c50d72678d8597b112a2bc8abad7c2aae0314e8871c7bf8132b856ab1786",
         "src/problems/bilevel.jl": "bd6956207345b46b2f21b3c3c9e2aa06095e8a15fea15e0781470217d552a207",
-        "src/components/inverter_operating_constraints.jl": "00c4f5240ff3c70f808be20c9c1444b968adad50fe449e6af5035400edfecaf1",
+        "src/components/inverter_operating_constraints.jl": "232450da71d7c689c57c6215b8fc392e643a37ea5eff87414c56fefa32512312",
         "src/problems/state_estimation_patterns.jl": "196e073470c207b4b991f0924cbc86d7f4ecfc7ae9f922f3b06a36092b8eec07",
         "scripts/australian_pv/audit.jl": "4cf28ca4836fe4580df5d43b593750f5fb6f1df7a3773d2ffb28b50d5b9ca030",
         "src/problems/operating_envelope.jl": "62b293c4870ed3f94d7cce67c2a2b79381b873d5cf1718bcd760534930f0a72e",
@@ -39,7 +39,7 @@
         "src/problems/inverter_control_sizing.jl": "a39390cb83cb6d9c31155be2c72686f9c6cf5e3c4fc80a1c79ab6a9fa8eb4647",
         "src/problems/state_estimation_injections.jl": "a5f04ef35308546b1673e23cf6a3e49874c2d12e764863264bc55378ae30c9ec",
         "src/components/battery_chemistry.jl": "71ecea656c1d432c0460c2edcbe69fa9a4a538131d3249e129e00ba1263f1188",
-        "src/PowerOptLab.jl": "af13336d6ec23e8e351fdb467bcc0f36d083aaa928e5e2ff577d44e0ff7739c8",
+        "src/PowerOptLab.jl": "6c529e8ecaff61c46647e4c54ec48077cd5a90827562309d0587399987f5fc5b",
         "src/components/inverter_feasibility.jl": "7bbceb6c135595ee3d5b3be5f52b001cdad4d4e6b3eda799495eab80f64145d1",
         "src/formulations/jump.jl": "8d1480ed914a90b20302cd7b495fc470e18697dc15083897bf1d1f1808991e26",
         "src/problems/voltage_aware_inverter_fleet.jl": "81fe947549b3940755d6a84559aac278342a388314a94feeb01dcce6bc184db7",
@@ -47,7 +47,7 @@
         "src/formulations/cases.jl": "eb901e45c2db22d0d331292019446b2767673000a454a5262d6bce41a135b7fc",
         "src/formulations/control_intent.jl": "9429c437e8dea0ce4f50b227b7c5187395d28b404d127d0103a43805834b0664",
         "src/problems/constrained_state_estimation.jl": "c2ed0c2541dfc9846244033e0c189d9a3b24f0da6bb569eb05c9298232d0ce08",
-        "src/components/advanced_inverter.jl": "fa151406d0484d838c56312451a0791d277c1e321cdf0c5f204e780759cd4382",
+        "src/components/advanced_inverter.jl": "d9b5e571318bed576f2060f4533afdcf4234828ec2c4c22dc3965d235ccd5d00",
         "src/formulations/error_tools.jl": "d4aebb519ea2c5f5aaac97a5f790a678fadff57158522a46eedb1c061fb135be",
         "src/problems/generator_opf.jl": "b0540ace7f36b5c5fb5067b7a1efbc6af4db42e1623d5af403307060f6a782fb",
         "src/formulations/primitives.jl": "d919b895117a6e1ae3e68c7bb1723dd57ba852bad679e96219d3ebb164040506",
@@ -65,7 +65,7 @@
         "src/problems/ipopt_state_estimation.jl": "3b7a42d19f65e9f9ebfe66d629d5d128b2bfcff4b6189d7abc422db1cf005464",
         "src/components/evse.jl": "dfafe56bccafa827a7c80088a57a20cc25493c389f811a6db4a80fce8333d047",
         "src/problems/state_estimation_measurements.jl": "bbf861c3106fe812f8f52c296588f2d8a2e4884c3dacb079739fa64667da958b",
-        "src/components/inverter_controls.jl": "7a8d2b3c1331ac5acf3f4f966f64f62f564d604e373af675be41144bbfd1ad40"
+        "src/components/inverter_controls.jl": "4013e1d037a4f9c0a8ac4cf04525db62f2771e1a6466f522b4dbd8df043784a9"
     },
     "planned_cases": [
         {
@@ -878,8 +878,8 @@
     "voltage_tolerance_V": 1.0e-7,
     "disconnection_model": "open grid-side contactor; complete AC model absent; DC standby excluded",
     "chronology": "synthetic piecewise-constant quasi-static intervals; no measured yield, DC state transitions or dynamic response",
-    "git_status": "",
-    "git_revision": "e1f73275d7fbf2f24d09cd81510b8543fc2fa2ec",
+    "git_status": " M studies/australian_pv/results/voltage_aware_chronology/environment.json\n M studies/australian_pv/results/voltage_aware_snapshots/environment.json\n M studies/australian_pv/voltage_aware_results.md\n?? scripts/australian_pv/audit_coordinated.jl\n?? scripts/australian_pv/coordinated.jl\n?? scripts/australian_pv/plot_coordinated.py\n?? scripts/australian_pv/test_coordinated.jl\n?? scripts/australian_pv/test_coordinated_csv.py\n?? scripts/australian_pv/test_coordinated_records.jl\n?? studies/australian_pv/coordinated.md\n?? studies/australian_pv/results/voltage_aware_chronology/checkpoint_comparison.json\n?? studies/australian_pv/results/voltage_aware_snapshots/checkpoint_comparison.json\n",
+    "git_revision": "2b6d4de7ea67eaf93944c2323d40bdea39541900",
     "reactive_mode": "within_request",
     "control_settings": {
         "pq_priority": "var",

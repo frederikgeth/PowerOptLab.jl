@@ -1,0 +1,3132 @@
+{
+    "accepted_saved_points": 24,
+    "planned": 24,
+    "source_hashes_verified": 58,
+    "scope": "independent SI inverter/current-allocation/voltage checks from saved phasors; fixed-PQ replay uses same network engine; no global-optimality proof",
+    "audit_code_sha256": "675b879e139e187935f68d91635e01c42896caa2927cca3a1965656945548d43",
+    "all_planned_accepted": true,
+    "cases": {
+        "s1_p1_balanced_converter_253V": {
+            "devices": {
+                "pv_ld1895_load_b": {
+                    "filter_loss_W": 0.00017001685392159516,
+                    "p_dc_W": 6.000001206984962e-8,
+                    "maximum_converter_current_A": 0.020700818617357827,
+                    "converter_loss_W": 15.124590583206434,
+                    "continuous_rail_lower_V": 117.75467397759755,
+                    "q_poc_var": 7.914605144179743e-5,
+                    "converter_negative_sequence_A": 2.5859730762992427e-18,
+                    "p_poc_W": -15.124760540060343
+                },
+                "pv_ld1970_load_c": {
+                    "filter_loss_W": 0.00017005155945248873,
+                    "p_dc_W": 6.000002272799065e-8,
+                    "maximum_converter_current_A": 0.02070293133789522,
+                    "converter_loss_W": 15.124603338256755,
+                    "continuous_rail_lower_V": 117.82770539421905,
+                    "q_poc_var": 8.036691239791255e-5,
+                    "converter_negative_sequence_A": 3.657118196434064e-18,
+                    "p_poc_W": -15.124773329816184
+                },
+                "pv_ld1668_load_a": {
+                    "filter_loss_W": 0.00016982052109248968,
+                    "p_dc_W": 5.999999430628122e-8,
+                    "maximum_converter_current_A": 0.020688862672165017,
+                    "converter_loss_W": 15.12451840216779,
+                    "continuous_rail_lower_V": 117.27807773208744,
+                    "q_poc_var": 3.4037453580514077e-5,
+                    "converter_negative_sequence_A": 2.384149374230332e-18,
+                    "p_poc_W": -15.124688162688889
+                },
+                "pv_ld1446_load_c": {
+                    "filter_loss_W": 0.0001698768927624883,
+                    "p_dc_W": 5.999999963535174e-8,
+                    "maximum_converter_current_A": 0.02069229620592734,
+                    "converter_loss_W": 15.12453913124561,
+                    "continuous_rail_lower_V": 117.39968138967578,
+                    "q_poc_var": 3.770078546375816e-5,
+                    "converter_negative_sequence_A": 2.8912057932946782e-18,
+                    "p_poc_W": -15.124708948138373
+                },
+                "pv_ld2050_load_a": {
+                    "filter_loss_W": 0.00016998914833976642,
+                    "p_dc_W": 6.000001206984962e-8,
+                    "maximum_converter_current_A": 0.020699131867921598,
+                    "converter_loss_W": 15.124580399861607,
+                    "continuous_rail_lower_V": 117.68010254323436,
+                    "q_poc_var": 6.830128418641723e-5,
+                    "converter_negative_sequence_A": 3.517303653366802e-18,
+                    "p_poc_W": -15.124750329009935
+                },
+                "pv_ld2804_load_c": {
+                    "filter_loss_W": 0.00016996902634680566,
+                    "p_dc_W": 6.00000067407791e-8,
+                    "maximum_converter_current_A": 0.02069790673075178,
+                    "converter_loss_W": 15.124573003393241,
+                    "continuous_rail_lower_V": 117.6297875091375,
+                    "q_poc_var": 6.280364363903806e-5,
+                    "converter_negative_sequence_A": 3.517303653366802e-18,
+                    "p_poc_W": -15.124742912419581
+                },
+                "pv_ld626_load_c": {
+                    "filter_loss_W": 0.00017006978829492425,
+                    "p_dc_W": 6.000002450434749e-8,
+                    "maximum_converter_current_A": 0.020704040943450113,
+                    "converter_loss_W": 15.12461003724095,
+                    "continuous_rail_lower_V": 117.8753350042637,
+                    "q_poc_var": 8.659311922361995e-5,
+                    "converter_negative_sequence_A": 3.517303653366802e-18,
+                    "p_poc_W": -15.12478004702922
+                },
+                "pv_ld24_load_a": {
+                    "filter_loss_W": 0.00016995757424531632,
+                    "p_dc_W": 6.000000318806542e-8,
+                    "maximum_converter_current_A": 0.02069720943166612,
+                    "converter_loss_W": 15.124568793620428,
+                    "continuous_rail_lower_V": 117.60567402993411,
+                    "q_poc_var": 6.240044646044912e-5,
+                    "converter_negative_sequence_A": 3.657118196434064e-18,
+                    "p_poc_W": -15.12473869119467
+                },
+                "pv_ld868_load_a": {
+                    "filter_loss_W": 0.00016999793715655187,
+                    "p_dc_W": 6.000001206984962e-8,
+                    "maximum_converter_current_A": 0.020699666956559056,
+                    "converter_loss_W": 15.124583630330257,
+                    "continuous_rail_lower_V": 117.69860352313042,
+                    "q_poc_var": 6.861045287723244e-5,
+                    "converter_negative_sequence_A": 2.384149374230332e-18,
+                    "p_poc_W": -15.124753568267401
+                },
+                "pv_ld248_load_b": {
+                    "filter_loss_W": 0.00016985285877169076,
+                    "p_dc_W": 5.999999963535174e-8,
+                    "maximum_converter_current_A": 0.020690832392760185,
+                    "converter_loss_W": 15.124530293847156,
+                    "continuous_rail_lower_V": 117.34903210457158,
+                    "q_poc_var": 3.685432128804761e-5,
+                    "converter_negative_sequence_A": 3.469446951953614e-18,
+                    "p_poc_W": -15.124700086705928
+                },
+                "pv_ld1291_load_b": {
+                    "filter_loss_W": 0.00016982600425663463,
+                    "p_dc_W": 5.999999608263806e-8,
+                    "maximum_converter_current_A": 0.02068919667064004,
+                    "converter_loss_W": 15.124520418596829,
+                    "continuous_rail_lower_V": 117.26895009226212,
+                    "q_poc_var": 2.1701762330399166e-5,
+                    "converter_negative_sequence_A": 1.635512977795599e-18,
+                    "p_poc_W": -15.12469018460109
+                },
+                "pv_ld2186_load_b": {
+                    "filter_loss_W": 0.00017005770838451895,
+                    "p_dc_W": 6.000002805706117e-8,
+                    "maximum_converter_current_A": 0.020703305635293674,
+                    "converter_loss_W": 15.124605597989568,
+                    "continuous_rail_lower_V": 117.84681188808719,
+                    "q_poc_var": 8.428617603731953e-5,
+                    "converter_negative_sequence_A": 4.661929261783135e-18,
+                    "p_poc_W": -15.124775595697924
+                }
+            },
+            "vmax_sensed_V": 245.03775487389453,
+            "accepted": true,
+            "physical_devices": 12,
+            "fixed_PQ_replay_difference_V": 6.584955206641748e-8,
+            "q_poc_var": 0.0007228024089265053,
+            "p_poc_W": -181.49686239562953
+        },
+        "s1_p1_free_253V": {
+            "devices": {
+                "pv_ld1895_load_b": {
+                    "filter_loss_W": 0.0001700169048390876,
+                    "p_dc_W": 6.02440515251601e-8,
+                    "maximum_converter_current_A": 0.0209175304701234,
+                    "converter_loss_W": 15.124579041485603,
+                    "continuous_rail_lower_V": 117.75498191218587,
+                    "q_poc_var": 7.888711945111537e-5,
+                    "converter_negative_sequence_A": 0.0003975521019236376,
+                    "p_poc_W": -15.12474899814639
+                },
+                "pv_ld1970_load_c": {
+                    "filter_loss_W": 0.0001700516064051527,
+                    "p_dc_W": 6.025528875852615e-8,
+                    "maximum_converter_current_A": 0.02092057031545837,
+                    "converter_loss_W": 15.124591838888033,
+                    "continuous_rail_lower_V": 117.82802691614182,
+                    "q_poc_var": 8.010504293367443e-5,
+                    "converter_negative_sequence_A": 0.0003968258908087525,
+                    "p_poc_W": -15.12476183023915
+                },
+                "pv_ld1668_load_a": {
+                    "filter_loss_W": 0.00016982060471981697,
+                    "p_dc_W": 6.0196004625368e-8,
+                    "maximum_converter_current_A": 0.020902217838314332,
+                    "converter_loss_W": 15.124506353487025,
+                    "continuous_rail_lower_V": 117.27832047450308,
+                    "q_poc_var": 3.392963167887786e-5,
+                    "converter_negative_sequence_A": 0.00040619962998378345,
+                    "p_poc_W": -15.12467611389574
+                },
+                "pv_ld1446_load_c": {
+                    "filter_loss_W": 0.00016987697009440694,
+                    "p_dc_W": 6.021164189462525e-8,
+                    "maximum_converter_current_A": 0.020907071066548592,
+                    "converter_loss_W": 15.124527167802134,
+                    "continuous_rail_lower_V": 117.39994523357211,
+                    "q_poc_var": 3.7582365166682896e-5,
+                    "converter_negative_sequence_A": 0.00040476957493445164,
+                    "p_poc_W": -15.124696984560586
+                },
+                "pv_ld2050_load_a": {
+                    "filter_loss_W": 0.00016998920532884654,
+                    "p_dc_W": 6.023774012930971e-8,
+                    "maximum_converter_current_A": 0.02091559192371553,
+                    "converter_loss_W": 15.124568758313279,
+                    "continuous_rail_lower_V": 117.6804021895797,
+                    "q_poc_var": 6.807940816592334e-5,
+                    "converter_negative_sequence_A": 0.00039927531543262884,
+                    "p_poc_W": -15.124738687280868
+                },
+                "pv_ld2804_load_c": {
+                    "filter_loss_W": 0.00016996908702182623,
+                    "p_dc_W": 6.023328680271334e-8,
+                    "maximum_converter_current_A": 0.02091406373476668,
+                    "converter_loss_W": 15.124561304539174,
+                    "continuous_rail_lower_V": 117.63008094581345,
+                    "q_poc_var": 6.260089066091601e-5,
+                    "converter_negative_sequence_A": 0.00040025938165157366,
+                    "p_poc_W": -15.12473121339291
+                },
+                "pv_ld626_load_c": {
+                    "filter_loss_W": 0.00017006983148881716,
+                    "p_dc_W": 6.025913279472661e-8,
+                    "maximum_converter_current_A": 0.02092189314471961,
+                    "converter_loss_W": 15.124598597126882,
+                    "continuous_rail_lower_V": 117.87566085866972,
+                    "q_poc_var": 8.630952624646276e-5,
+                    "converter_negative_sequence_A": 0.0003957977532810537,
+                    "p_poc_W": -15.124768606699238
+                },
+                "pv_ld24_load_a": {
+                    "filter_loss_W": 0.00016995763617977389,
+                    "p_dc_W": 6.022942500294448e-8,
+                    "maximum_converter_current_A": 0.02091306097398229,
+                    "converter_loss_W": 15.12455708040346,
+                    "continuous_rail_lower_V": 117.60596309107723,
+                    "q_poc_var": 6.219892742802963e-5,
+                    "converter_negative_sequence_A": 0.0004005033515343184,
+                    "p_poc_W": -15.124726977810214
+                },
+                "pv_ld868_load_a": {
+                    "filter_loss_W": 0.00016999799316508302,
+                    "p_dc_W": 6.023969234547621e-8,
+                    "maximum_converter_current_A": 0.020916361578218683,
+                    "converter_loss_W": 15.124571999685356,
+                    "continuous_rail_lower_V": 117.69890651011782,
+                    "q_poc_var": 6.83883182328246e-5,
+                    "converter_negative_sequence_A": 0.0003990894425170374,
+                    "p_poc_W": -15.124741937438829
+                },
+                "pv_ld248_load_b": {
+                    "filter_loss_W": 0.00016985293858873263,
+                    "p_dc_W": 6.020431264630588e-8,
+                    "maximum_converter_current_A": 0.02090496759627734,
+                    "converter_loss_W": 15.124518299113396,
+                    "continuous_rail_lower_V": 117.34928651848344,
+                    "q_poc_var": 3.673730098843753e-5,
+                    "converter_negative_sequence_A": 0.0004052939672281284,
+                    "p_poc_W": -15.124688091847672
+                },
+                "pv_ld1291_load_b": {
+                    "filter_loss_W": 0.0001698260913300942,
+                    "p_dc_W": 6.020302301124048e-8,
+                    "maximum_converter_current_A": 0.02090330683905762,
+                    "converter_loss_W": 15.124508291685965,
+                    "continuous_rail_lower_V": 117.26919861468127,
+                    "q_poc_var": 2.163699236042843e-5,
+                    "converter_negative_sequence_A": 0.0004075310359520079,
+                    "p_poc_W": -15.124678057574272
+                },
+                "pv_ld2186_load_b": {
+                    "filter_loss_W": 0.00017005775353418073,
+                    "p_dc_W": 6.025474696969013e-8,
+                    "maximum_converter_current_A": 0.02092092784452518,
+                    "converter_loss_W": 15.124594130831822,
+                    "continuous_rail_lower_V": 117.8471338732282,
+                    "q_poc_var": 8.401162760516417e-5,
+                    "converter_negative_sequence_A": 0.00039626623722771137,
+                    "p_poc_W": -15.12476412833061
+                }
+            },
+            "vmax_sensed_V": 245.03772306378264,
+            "accepted": true,
+            "physical_devices": 12,
+            "fixed_PQ_replay_difference_V": 6.585161365261648e-8,
+            "q_poc_var": 0.000720467150918537,
+            "p_poc_W": -181.49672162721646
+        },
+        "s1_p2_balanced_converter_253V": {
+            "devices": {
+                "pv_ld1895_load_b": {
+                    "filter_loss_W": 4.442874950538226,
+                    "p_dc_W": 2499.999999326278,
+                    "maximum_converter_current_A": 3.3463670641661443,
+                    "converter_loss_W": 45.15655766031921,
+                    "continuous_rail_lower_V": 115.15569827033393,
+                    "q_poc_var": 2.1146981307246726,
+                    "converter_negative_sequence_A": 4.739263971955564e-16,
+                    "p_poc_W": 2450.4005667154206
+                },
+                "pv_ld1970_load_c": {
+                    "filter_loss_W": 4.442343797736157,
+                    "p_dc_W": 2499.9999993262923,
+                    "maximum_converter_current_A": 3.346167026421435,
+                    "converter_loss_W": 45.15415255036768,
+                    "continuous_rail_lower_V": 115.12990484891569,
+                    "q_poc_var": 2.1470032272901847,
+                    "converter_negative_sequence_A": 4.965068306494546e-16,
+                    "p_poc_W": 2450.4035029781885
+                },
+                "pv_ld1668_load_a": {
+                    "filter_loss_W": 4.445444904157284,
+                    "p_dc_W": 2499.9999993261727,
+                    "maximum_converter_current_A": 3.347334766942726,
+                    "converter_loss_W": 45.16819363944151,
+                    "continuous_rail_lower_V": 115.24818794923603,
+                    "q_poc_var": 0.9335395265240338,
+                    "converter_negative_sequence_A": 4.502148676309507e-16,
+                    "p_poc_W": 2450.386360782574
+                },
+                "pv_ld1446_load_c": {
+                    "filter_loss_W": 4.444597566166976,
+                    "p_dc_W": 2499.9999993261954,
+                    "maximum_converter_current_A": 3.347015737110559,
+                    "converter_loss_W": 45.16435733268251,
+                    "continuous_rail_lower_V": 115.2084673616972,
+                    "q_poc_var": 1.0295115803773252,
+                    "converter_negative_sequence_A": 9.155133597044475e-16,
+                    "p_poc_W": 2450.391044427346
+                },
+                "pv_ld2050_load_a": {
+                    "filter_loss_W": 4.443185308324701,
+                    "p_dc_W": 2499.9999993262595,
+                    "maximum_converter_current_A": 3.346483942645633,
+                    "converter_loss_W": 45.157962956420356,
+                    "continuous_rail_lower_V": 115.16245395096286,
+                    "q_poc_var": 1.8303783718036666,
+                    "converter_negative_sequence_A": 5.337288056648962e-16,
+                    "p_poc_W": 2450.3988510615145
+                },
+                "pv_ld2804_load_c": {
+                    "filter_loss_W": 4.443437907123553,
+                    "p_dc_W": 2499.9999993262477,
+                    "maximum_converter_current_A": 3.3465790664985504,
+                    "converter_loss_W": 45.15910670248497,
+                    "continuous_rail_lower_V": 115.1706634838386,
+                    "q_poc_var": 1.6868564498979257,
+                    "converter_negative_sequence_A": 7.548065156004902e-16,
+                    "p_poc_W": 2450.397454716639
+                },
+                "pv_ld626_load_c": {
+                    "filter_loss_W": 4.442130055956113,
+                    "p_dc_W": 2499.9999993263036,
+                    "maximum_converter_current_A": 3.3460865256395786,
+                    "converter_loss_W": 45.15318468719754,
+                    "continuous_rail_lower_V": 115.12425573836452,
+                    "q_poc_var": 2.309472354728146,
+                    "converter_negative_sequence_A": 7.548065156004902e-16,
+                    "p_poc_W": 2450.40468458315
+                },
+                "pv_ld24_load_a": {
+                    "filter_loss_W": 4.44361347079348,
+                    "p_dc_W": 2499.9999993262427,
+                    "maximum_converter_current_A": 3.3466451788099048,
+                    "converter_loss_W": 45.15990163042585,
+                    "continuous_rail_lower_V": 115.179187143644,
+                    "q_poc_var": 1.6762127594044367,
+                    "converter_negative_sequence_A": 6.620091075326061e-16,
+                    "p_poc_W": 2450.3964842250234
+                },
+                "pv_ld868_load_a": {
+                    "filter_loss_W": 4.443050682231842,
+                    "p_dc_W": 2499.9999993262627,
+                    "maximum_converter_current_A": 3.3464332439421103,
+                    "converter_loss_W": 45.15735337419749,
+                    "continuous_rail_lower_V": 115.15591797107051,
+                    "q_poc_var": 1.8385506347800353,
+                    "converter_negative_sequence_A": 5.780746012175156e-16,
+                    "p_poc_W": 2450.3995952698333
+                },
+                "pv_ld248_load_b": {
+                    "filter_loss_W": 4.44496683804573,
+                    "p_dc_W": 2499.999999326186,
+                    "maximum_converter_current_A": 3.347154774796276,
+                    "converter_loss_W": 45.166029226575006,
+                    "continuous_rail_lower_V": 115.22638829246758,
+                    "q_poc_var": 1.00722620283587,
+                    "converter_negative_sequence_A": 4.739263971955564e-16,
+                    "p_poc_W": 2450.389003261565
+                },
+                "pv_ld1291_load_b": {
+                    "filter_loss_W": 4.44521353317532,
+                    "p_dc_W": 2499.999999326166,
+                    "maximum_converter_current_A": 3.3472476568530074,
+                    "converter_loss_W": 45.16714612979519,
+                    "continuous_rail_lower_V": 115.22632065816772,
+                    "q_poc_var": 0.6115478685582509,
+                    "converter_negative_sequence_A": 4.502148676309507e-16,
+                    "p_poc_W": 2450.3876396631954
+                },
+                "pv_ld2186_load_b": {
+                    "filter_loss_W": 4.442293033820079,
+                    "p_dc_W": 2499.9999993262977,
+                    "maximum_converter_current_A": 3.3461479075696614,
+                    "converter_loss_W": 45.15392268281751,
+                    "continuous_rail_lower_V": 115.1305838080871,
+                    "q_poc_var": 2.249023873307456,
+                    "converter_negative_sequence_A": 4.681111291435602e-16,
+                    "p_poc_W": 2450.40378360966
+                }
+            },
+            "vmax_sensed_V": 245.6122122301849,
+            "accepted": true,
+            "physical_devices": 12,
+            "fixed_PQ_replay_difference_V": 8.81586928999735e-9,
+            "q_poc_var": 19.434020980232,
+            "p_poc_W": 29404.758971294115
+        },
+        "s1_p3_balanced_converter_unrestricted": {
+            "devices": {
+                "pv_ld1895_load_b": {
+                    "filter_loss_W": 17.598521140009325,
+                    "p_dc_W": 5000.000000132126,
+                    "maximum_converter_current_A": 6.660082660599749,
+                    "converter_loss_W": 94.8815269050178,
+                    "continuous_rail_lower_V": 112.40428269034635,
+                    "q_poc_var": 8.380029069498484,
+                    "converter_negative_sequence_A": 9.930136612989092e-16,
+                    "p_poc_W": 4887.519952087099
+                },
+                "pv_ld1970_load_c": {
+                    "filter_loss_W": 17.591026437394248,
+                    "p_dc_W": 5000.0000001591525,
+                    "maximum_converter_current_A": 6.658664341013571,
+                    "converter_loss_W": 94.85601577173856,
+                    "continuous_rail_lower_V": 112.28159773502726,
+                    "q_poc_var": 8.510073359075264,
+                    "converter_negative_sequence_A": 9.004297352619014e-16,
+                    "p_poc_W": 4887.55295795002
+                },
+                "pv_ld1668_load_a": {
+                    "filter_loss_W": 17.6376468677272,
+                    "p_dc_W": 4999.999999828152,
+                    "maximum_converter_current_A": 6.6674820297344555,
+                    "converter_loss_W": 95.01467713355542,
+                    "continuous_rail_lower_V": 113.0617475995039,
+                    "q_poc_var": 3.6964836255215463,
+                    "converter_negative_sequence_A": 1.22068447960593e-15,
+                    "p_poc_W": 4887.347675826869
+                },
+                "pv_ld1446_load_c": {
+                    "filter_loss_W": 17.625541813765267,
+                    "p_dc_W": 4999.999999881113,
+                    "maximum_converter_current_A": 6.665193626883204,
+                    "converter_loss_W": 94.97348723675924,
+                    "continuous_rail_lower_V": 112.8634117976005,
+                    "q_poc_var": 4.077431819235633,
+                    "converter_negative_sequence_A": 1.7825140739435562e-15,
+                    "p_poc_W": 4887.400970830588
+                },
+                "pv_ld2050_load_a": {
+                    "filter_loss_W": 17.603632016112897,
+                    "p_dc_W": 5000.000000072573,
+                    "maximum_converter_current_A": 6.661049684648396,
+                    "converter_loss_W": 94.89892271910941,
+                    "continuous_rail_lower_V": 112.4926806628978,
+                    "q_poc_var": 7.2510213107400805,
+                    "converter_negative_sequence_A": 5.337288056648962e-16,
+                    "p_poc_W": 4887.497445337351
+                },
+                "pv_ld2804_load_c": {
+                    "filter_loss_W": 17.607545885686704,
+                    "p_dc_W": 5000.000000037885,
+                    "maximum_converter_current_A": 6.661790129312021,
+                    "converter_loss_W": 94.9122437301713,
+                    "continuous_rail_lower_V": 112.55899237293887,
+                    "q_poc_var": 6.683818168585278,
+                    "converter_negative_sequence_A": 1.2647666240713459e-15,
+                    "p_poc_W": 4887.480210422027
+                },
+                "pv_ld626_load_c": {
+                    "filter_loss_W": 17.587606194234468,
+                    "p_dc_W": 5000.000000198822,
+                    "maximum_converter_current_A": 6.658016983727304,
+                    "converter_loss_W": 94.84437304240492,
+                    "continuous_rail_lower_V": 112.22288344428044,
+                    "q_poc_var": 9.151922104811698,
+                    "converter_negative_sequence_A": 6.620091075326061e-16,
+                    "p_poc_W": 4887.568020962182
+                },
+                "pv_ld24_load_a": {
+                    "filter_loss_W": 17.610025492522254,
+                    "p_dc_W": 5000.000000029831,
+                    "maximum_converter_current_A": 6.662259190671548,
+                    "converter_loss_W": 94.92068291534804,
+                    "continuous_rail_lower_V": 112.59953157353154,
+                    "q_poc_var": 6.6411046398485905,
+                    "converter_negative_sequence_A": 6.10342239802965e-16,
+                    "p_poc_W": 4887.469291621961
+                },
+                "pv_ld868_load_a": {
+                    "filter_loss_W": 17.60173139506969,
+                    "p_dc_W": 5000.0000000790005,
+                    "maximum_converter_current_A": 6.6606900863301455,
+                    "converter_loss_W": 94.89245370150388,
+                    "continuous_rail_lower_V": 112.46159130190831,
+                    "q_poc_var": 7.2838460669548315,
+                    "converter_negative_sequence_A": 9.004297352619014e-16,
+                    "p_poc_W": 4887.505814982427
+                },
+                "pv_ld248_load_b": {
+                    "filter_loss_W": 17.63076412788905,
+                    "p_dc_W": 4999.999999862754,
+                    "maximum_converter_current_A": 6.666180976868038,
+                    "converter_loss_W": 94.9912577959298,
+                    "continuous_rail_lower_V": 112.94864190629328,
+                    "q_poc_var": 3.988429763220923,
+                    "converter_negative_sequence_A": 9.362222582871203e-16,
+                    "p_poc_W": 4887.377977938935
+                },
+                "pv_ld1291_load_b": {
+                    "filter_loss_W": 17.63529095083777,
+                    "p_dc_W": 4999.999999752111,
+                    "maximum_converter_current_A": 6.667036716416146,
+                    "converter_loss_W": 95.00666101873377,
+                    "continuous_rail_lower_V": 113.02919392517178,
+                    "q_poc_var": 2.425019648574361,
+                    "converter_negative_sequence_A": 1.2647666240713459e-15,
+                    "p_poc_W": 4887.358047782539
+                },
+                "pv_ld2186_load_b": {
+                    "filter_loss_W": 17.590043194799364,
+                    "p_dc_W": 5000.000000181056,
+                    "maximum_converter_current_A": 6.658478246873165,
+                    "converter_loss_W": 94.8526687889138,
+                    "continuous_rail_lower_V": 112.26371321844101,
+                    "q_poc_var": 8.911855122012794,
+                    "converter_negative_sequence_A": 6.620091075326061e-16,
+                    "p_poc_W": 4887.557288197343
+                }
+            },
+            "vmax_sensed_V": 246.19905036765576,
+            "accepted": true,
+            "physical_devices": 12,
+            "fixed_PQ_replay_difference_V": 1.797546735911271e-13,
+            "q_poc_var": 77.00103469807948,
+            "p_poc_W": 58649.635653939346
+        },
+        "s1_p2_free_253V": {
+            "devices": {
+                "pv_ld1895_load_b": {
+                    "filter_loss_W": 4.442508594473566,
+                    "p_dc_W": 2499.9999993357414,
+                    "maximum_converter_current_A": 3.3683163839803423,
+                    "converter_loss_W": 45.154165346187135,
+                    "continuous_rail_lower_V": 115.12141474482155,
+                    "q_poc_var": 2.1102578971753427,
+                    "converter_negative_sequence_A": 0.04032994354622729,
+                    "p_poc_W": 2450.4033253950806
+                },
+                "pv_ld1970_load_c": {
+                    "filter_loss_W": 4.441979041956529,
+                    "p_dc_W": 2499.999999335955,
+                    "maximum_converter_current_A": 3.3682141891959727,
+                    "converter_loss_W": 45.15177009045677,
+                    "continuous_rail_lower_V": 115.09425084830129,
+                    "q_poc_var": 2.1425049096687534,
+                    "converter_negative_sequence_A": 0.04025609713364954,
+                    "p_poc_W": 2450.4062502035417
+                },
+                "pv_ld1668_load_a": {
+                    "filter_loss_W": 4.4450612005944095,
+                    "p_dc_W": 2499.999999335524,
+                    "maximum_converter_current_A": 3.368913399893099,
+                    "converter_loss_W": 45.165691041506406,
+                    "continuous_rail_lower_V": 115.22072991433957,
+                    "q_poc_var": 0.9316843343760279,
+                    "converter_negative_sequence_A": 0.04120196795765882,
+                    "p_poc_W": 2450.3892470934234
+                },
+                "pv_ld1446_load_c": {
+                    "filter_loss_W": 4.444216940612932,
+                    "p_dc_W": 2499.9999993358488,
+                    "maximum_converter_current_A": 3.368745721634649,
+                    "converter_loss_W": 45.16187395271911,
+                    "continuous_rail_lower_V": 115.17879246657016,
+                    "q_poc_var": 1.0274664772772644,
+                    "converter_negative_sequence_A": 0.04105608659374868,
+                    "p_poc_W": 2450.393908442517
+                },
+                "pv_ld2050_load_a": {
+                    "filter_loss_W": 4.442815565581441,
+                    "p_dc_W": 2499.9999993358365,
+                    "maximum_converter_current_A": 3.368402827562743,
+                    "converter_loss_W": 45.15554903769169,
+                    "continuous_rail_lower_V": 115.12903315967056,
+                    "q_poc_var": 1.82656883152191,
+                    "converter_negative_sequence_A": 0.04050271296943376,
+                    "p_poc_W": 2450.4016347325633
+                },
+                "pv_ld2804_load_c": {
+                    "filter_loss_W": 4.443066244474721,
+                    "p_dc_W": 2499.999999335842,
+                    "maximum_converter_current_A": 3.368464048912742,
+                    "converter_loss_W": 45.1566804987181,
+                    "continuous_rail_lower_V": 115.13789336426036,
+                    "q_poc_var": 1.6833678343498937,
+                    "converter_negative_sequence_A": 0.0406017054634856,
+                    "p_poc_W": 2450.400252592649
+                },
+                "pv_ld626_load_c": {
+                    "filter_loss_W": 4.441767271923254,
+                    "p_dc_W": 2499.999999335913,
+                    "maximum_converter_current_A": 3.3681582956243172,
+                    "converter_loss_W": 45.150814873030114,
+                    "continuous_rail_lower_V": 115.08805706685798,
+                    "q_poc_var": 2.3046069209980864,
+                    "converter_negative_sequence_A": 0.040153022161545864,
+                    "p_poc_W": 2450.4074171909597
+                },
+                "pv_ld24_load_a": {
+                    "filter_loss_W": 4.443241269647842,
+                    "p_dc_W": 2499.999999335769,
+                    "maximum_converter_current_A": 3.3684978552732123,
+                    "converter_loss_W": 45.1574721032499,
+                    "continuous_rail_lower_V": 115.14687206106204,
+                    "q_poc_var": 1.6727427867623987,
+                    "converter_negative_sequence_A": 0.04062657693136054,
+                    "p_poc_W": 2450.3992859628715
+                },
+                "pv_ld868_load_a": {
+                    "filter_loss_W": 4.442681349286886,
+                    "p_dc_W": 2499.9999993358906,
+                    "maximum_converter_current_A": 3.3683769143302977,
+                    "converter_loss_W": 45.1549419827263,
+                    "continuous_rail_lower_V": 115.12214842286271,
+                    "q_poc_var": 1.8347266736798709,
+                    "converter_negative_sequence_A": 0.040483784749054355,
+                    "p_poc_W": 2450.4023760038776
+                },
+                "pv_ld248_load_b": {
+                    "filter_loss_W": 4.4445850520173735,
+                    "p_dc_W": 2499.999999335692,
+                    "maximum_converter_current_A": 3.3688169056168826,
+                    "converter_loss_W": 45.16353866183316,
+                    "continuous_rail_lower_V": 115.19767861810725,
+                    "q_poc_var": 1.0052185345326459,
+                    "converter_negative_sequence_A": 0.04110973357511121,
+                    "p_poc_W": 2450.3918756218413
+                },
+                "pv_ld1291_load_b": {
+                    "filter_loss_W": 4.4448275337654195,
+                    "p_dc_W": 2499.999999335914,
+                    "maximum_converter_current_A": 3.368901447696951,
+                    "converter_loss_W": 45.164628137666654,
+                    "continuous_rail_lower_V": 115.19824756080804,
+                    "q_poc_var": 0.6104266458782535,
+                    "converter_negative_sequence_A": 0.04133476596676889,
+                    "p_poc_W": 2450.390543664482
+                },
+                "pv_ld2186_load_b": {
+                    "filter_loss_W": 4.441929302590779,
+                    "p_dc_W": 2499.99999933589,
+                    "maximum_converter_current_A": 3.3681947100658247,
+                    "converter_loss_W": 45.15154689195194,
+                    "continuous_rail_lower_V": 115.09481171062873,
+                    "q_poc_var": 2.2442911334370343,
+                    "converter_negative_sequence_A": 0.04020013678526685,
+                    "p_poc_W": 2450.4065231413474
+                }
+            },
+            "vmax_sensed_V": 245.61882155700903,
+            "accepted": true,
+            "physical_devices": 12,
+            "fixed_PQ_replay_difference_V": 8.097618682495556e-9,
+            "q_poc_var": 19.39386297965748,
+            "p_poc_W": 29404.79264004515
+        },
+        "s2_p2_balanced_converter_253V": {
+            "devices": {
+                "pv_ld1895_load_b": {
+                    "filter_loss_W": 4.19295222322171,
+                    "p_dc_W": 2499.999999402393,
+                    "maximum_converter_current_A": 3.2508841212133466,
+                    "converter_loss_W": 44.016727539881444,
+                    "continuous_rail_lower_V": 97.10083368958641,
+                    "q_poc_var": 1.995475759516987,
+                    "converter_negative_sequence_A": 3.3100455376630307e-16,
+                    "p_poc_W": 2451.79031963929
+                },
+                "pv_ld1970_load_c": {
+                    "filter_loss_W": 4.192478492871032,
+                    "p_dc_W": 2499.9999994036266,
+                    "maximum_converter_current_A": 3.2507004694692174,
+                    "converter_loss_W": 44.01455100480196,
+                    "continuous_rail_lower_V": 97.07577329727177,
+                    "q_poc_var": 2.025931898035088,
+                    "converter_negative_sequence_A": 2.9605947323337506e-16,
+                    "p_poc_W": 2451.7929699059537
+                },
+                "pv_ld1668_load_a": {
+                    "filter_loss_W": 4.195244587680918,
+                    "p_dc_W": 2499.999999357319,
+                    "maximum_converter_current_A": 3.251772658995019,
+                    "converter_loss_W": 44.027258837178884,
+                    "continuous_rail_lower_V": 97.1905141046147,
+                    "q_poc_var": 0.8809237356390858,
+                    "converter_negative_sequence_A": 2.9605947323337506e-16,
+                    "p_poc_W": 2451.7774959324593
+                },
+                "pv_ld1446_load_c": {
+                    "filter_loss_W": 4.194488905975049,
+                    "p_dc_W": 2499.999999403553,
+                    "maximum_converter_current_A": 3.2514797778855384,
+                    "converter_loss_W": 44.023787338711955,
+                    "continuous_rail_lower_V": 97.15193310501532,
+                    "q_poc_var": 0.9714398366924186,
+                    "converter_negative_sequence_A": 4.965068306494546e-16,
+                    "p_poc_W": 2451.781723158866
+                },
+                "pv_ld2050_load_a": {
+                    "filter_loss_W": 4.193229109863751,
+                    "p_dc_W": 2499.999999562437,
+                    "maximum_converter_current_A": 3.2509914574623457,
+                    "converter_loss_W": 44.017999655617906,
+                    "continuous_rail_lower_V": 97.10734866074041,
+                    "q_poc_var": 1.7271176106360686,
+                    "converter_negative_sequence_A": 5.967269455082413e-16,
+                    "p_poc_W": 2451.7887707969553
+                },
+                "pv_ld2804_load_c": {
+                    "filter_loss_W": 4.193454452603419,
+                    "p_dc_W": 2499.999999382791,
+                    "maximum_converter_current_A": 3.251078809889434,
+                    "converter_loss_W": 44.01903494463748,
+                    "continuous_rail_lower_V": 97.11530533976108,
+                    "q_poc_var": 1.5917570501278782,
+                    "converter_negative_sequence_A": 4.502148676309507e-16,
+                    "p_poc_W": 2451.78750998555
+                },
+                "pv_ld626_load_c": {
+                    "filter_loss_W": 4.1922877895649435,
+                    "p_dc_W": 2499.999999806084,
+                    "maximum_converter_current_A": 3.2506265363080726,
+                    "converter_loss_W": 44.01367480854363,
+                    "continuous_rail_lower_V": 97.07030807955837,
+                    "q_poc_var": 2.179115299132243,
+                    "converter_negative_sequence_A": 4.440892098500626e-16,
+                    "p_poc_W": 2451.794037207975
+                },
+                "pv_ld24_load_a": {
+                    "filter_loss_W": 4.193611030570992,
+                    "p_dc_W": 2499.9999993819256,
+                    "maximum_converter_current_A": 3.251139504785009,
+                    "converter_loss_W": 44.01975430032639,
+                    "continuous_rail_lower_V": 97.12358620522791,
+                    "q_poc_var": 1.5817205848034455,
+                    "converter_negative_sequence_A": 3.700743415417188e-16,
+                    "p_poc_W": 2451.786634051028
+                },
+                "pv_ld868_load_a": {
+                    "filter_loss_W": 4.193109040220406,
+                    "p_dc_W": 2499.9999995649814,
+                    "maximum_converter_current_A": 3.250944912405009,
+                    "converter_loss_W": 44.01744801557286,
+                    "continuous_rail_lower_V": 97.1009984831817,
+                    "q_poc_var": 1.7348230321763927,
+                    "converter_negative_sequence_A": 3.700743415417188e-16,
+                    "p_poc_W": 2451.789442509188
+                },
+                "pv_ld248_load_b": {
+                    "filter_loss_W": 4.19481822874468,
+                    "p_dc_W": 2499.9999994023224,
+                    "maximum_converter_current_A": 3.2516074174303857,
+                    "converter_loss_W": 44.025300221961785,
+                    "continuous_rail_lower_V": 97.16934312687005,
+                    "q_poc_var": 0.9504209768287843,
+                    "converter_negative_sequence_A": 1.6550227688315153e-16,
+                    "p_poc_W": 2451.7798809516157
+                },
+                "pv_ld1291_load_b": {
+                    "filter_loss_W": 4.195038385413227,
+                    "p_dc_W": 2499.9999993465253,
+                    "maximum_converter_current_A": 3.2516927433758505,
+                    "converter_loss_W": 44.02631158784595,
+                    "continuous_rail_lower_V": 97.16921693834475,
+                    "q_poc_var": 0.5770455349264658,
+                    "converter_negative_sequence_A": 4.440892098500626e-16,
+                    "p_poc_W": 2451.778649373266
+                },
+                "pv_ld2186_load_b": {
+                    "filter_loss_W": 4.192433168191656,
+                    "p_dc_W": 2499.9999997628056,
+                    "maximum_converter_current_A": 3.2506828978400613,
+                    "converter_loss_W": 44.01434275911924,
+                    "continuous_rail_lower_V": 97.07644728186328,
+                    "q_poc_var": 2.1220922255904746,
+                    "converter_negative_sequence_A": 1.4802973661668753e-16,
+                    "p_poc_W": 2451.7932238354947
+                }
+            },
+            "vmax_sensed_V": 252.9519576858338,
+            "accepted": true,
+            "physical_devices": 12,
+            "fixed_PQ_replay_difference_V": 7.186436030507926e-9,
+            "q_poc_var": 18.337863544105332,
+            "p_poc_W": 29421.440657347644
+        },
+        "s1_p2_balanced_converter_unrestricted": {
+            "devices": {
+                "pv_ld1895_load_b": {
+                    "filter_loss_W": 4.442874950576879,
+                    "p_dc_W": 2499.999999336996,
+                    "maximum_converter_current_A": 3.3463670641808236,
+                    "converter_loss_W": 45.15655766049571,
+                    "continuous_rail_lower_V": 115.15569825980805,
+                    "q_poc_var": 2.1147004586644806,
+                    "converter_negative_sequence_A": 4.502148676309507e-16,
+                    "p_poc_W": 2450.4005667259235
+                },
+                "pv_ld1970_load_c": {
+                    "filter_loss_W": 4.44234379777572,
+                    "p_dc_W": 2499.9999993371785,
+                    "maximum_converter_current_A": 3.3461670264363845,
+                    "converter_loss_W": 45.15415255054741,
+                    "continuous_rail_lower_V": 115.12990483819955,
+                    "q_poc_var": 2.1470055969820105,
+                    "converter_negative_sequence_A": 5.337288056648962e-16,
+                    "p_poc_W": 2450.4035029888555
+                },
+                "pv_ld1668_load_a": {
+                    "filter_loss_W": 4.445444904188662,
+                    "p_dc_W": 2499.9999993354168,
+                    "maximum_converter_current_A": 3.347334766954638,
+                    "converter_loss_W": 45.16819363958476,
+                    "continuous_rail_lower_V": 115.2481879453647,
+                    "q_poc_var": 0.9335403804690889,
+                    "converter_negative_sequence_A": 5.967269455082413e-16,
+                    "p_poc_W": 2450.3863607916433
+                },
+                "pv_ld1446_load_c": {
+                    "filter_loss_W": 4.444597566199263,
+                    "p_dc_W": 2499.999999335701,
+                    "maximum_converter_current_A": 3.347015737122836,
+                    "converter_loss_W": 45.16435733283014,
+                    "continuous_rail_lower_V": 115.20846735728118,
+                    "q_poc_var": 1.0295125558775124,
+                    "converter_negative_sequence_A": 7.438402206124973e-16,
+                    "p_poc_W": 2450.3910444366716
+                },
+                "pv_ld2050_load_a": {
+                    "filter_loss_W": 4.44318530836108,
+                    "p_dc_W": 2499.9999993366955,
+                    "maximum_converter_current_A": 3.34648394265953,
+                    "converter_loss_W": 45.15796295658744,
+                    "continuous_rail_lower_V": 115.16245394202386,
+                    "q_poc_var": 1.8303803467653568,
+                    "converter_negative_sequence_A": 4.502148676309507e-16,
+                    "p_poc_W": 2450.398851071747
+                },
+                "pv_ld2804_load_c": {
+                    "filter_loss_W": 4.443437907159932,
+                    "p_dc_W": 2499.999999336511,
+                    "maximum_converter_current_A": 3.34657906651216,
+                    "converter_loss_W": 45.159106702648614,
+                    "continuous_rail_lower_V": 115.17066347573264,
+                    "q_poc_var": 1.6868582435651778,
+                    "converter_negative_sequence_A": 4.965068306494546e-16,
+                    "p_poc_W": 2450.3974547267026
+                },
+                "pv_ld626_load_c": {
+                    "filter_loss_W": 4.442130055996586,
+                    "p_dc_W": 2499.9999993373613,
+                    "maximum_converter_current_A": 3.346086525654887,
+                    "converter_loss_W": 45.1531846873816,
+                    "continuous_rail_lower_V": 115.12425572669632,
+                    "q_poc_var": 2.309474930574847,
+                    "converter_negative_sequence_A": 4.502148676309507e-16,
+                    "p_poc_W": 2450.404684593983
+                },
+                "pv_ld24_load_a": {
+                    "filter_loss_W": 4.443613470829405,
+                    "p_dc_W": 2499.9999993364495,
+                    "maximum_converter_current_A": 3.3466451788234277,
+                    "converter_loss_W": 45.15990163058844,
+                    "continuous_rail_lower_V": 115.17918713559871,
+                    "q_poc_var": 1.6762145394844392,
+                    "converter_negative_sequence_A": 2.9605947323337506e-16,
+                    "p_poc_W": 2450.3964842350315
+                },
+                "pv_ld868_load_a": {
+                    "filter_loss_W": 4.443050682268677,
+                    "p_dc_W": 2499.9999993367423,
+                    "maximum_converter_current_A": 3.3464332439560756,
+                    "converter_loss_W": 45.1573533743654,
+                    "continuous_rail_lower_V": 115.1559179620842,
+                    "q_poc_var": 1.8385526202195859,
+                    "converter_negative_sequence_A": 2.9605947323337506e-16,
+                    "p_poc_W": 2450.3995952801083
+                },
+                "pv_ld248_load_b": {
+                    "filter_loss_W": 4.444966838078017,
+                    "p_dc_W": 2499.999999335584,
+                    "maximum_converter_current_A": 3.347154774808397,
+                    "converter_loss_W": 45.16602922672077,
+                    "continuous_rail_lower_V": 115.22638828817668,
+                    "q_poc_var": 1.00722715007237,
+                    "converter_negative_sequence_A": 5.921189464667501e-16,
+                    "p_poc_W": 2450.3890032707855
+                },
+                "pv_ld1291_load_b": {
+                    "filter_loss_W": 4.445213533207152,
+                    "p_dc_W": 2499.9999993353167,
+                    "maximum_converter_current_A": 3.3472476568651177,
+                    "converter_loss_W": 45.16714612994082,
+                    "continuous_rail_lower_V": 115.22632065615059,
+                    "q_poc_var": 0.6115483195593212,
+                    "converter_negative_sequence_A": 3.3100455376630307e-16,
+                    "p_poc_W": 2450.387639672169
+                },
+                "pv_ld2186_load_b": {
+                    "filter_loss_W": 4.442293033860096,
+                    "p_dc_W": 2499.99999933727,
+                    "maximum_converter_current_A": 3.3461479075847667,
+                    "converter_loss_W": 45.153922682999124,
+                    "continuous_rail_lower_V": 115.13058379676427,
+                    "q_poc_var": 2.2490263731476094,
+                    "converter_negative_sequence_A": 4.965068306494546e-16,
+                    "p_poc_W": 2450.4037836204106
+                }
+            },
+            "vmax_sensed_V": 245.61221223042432,
+            "accepted": true,
+            "physical_devices": 12,
+            "fixed_PQ_replay_difference_V": 8.81586928999735e-9,
+            "q_poc_var": 19.4340415153818,
+            "p_poc_W": 29404.758971414034
+        },
+        "s2_p1_balanced_converter_253V": {
+            "devices": {
+                "pv_ld1895_load_b": {
+                    "filter_loss_W": 0.00016015253853396416,
+                    "p_dc_W": 6.000000141170858e-8,
+                    "maximum_converter_current_A": 0.020091318839588024,
+                    "converter_loss_W": 15.12091120802097,
+                    "continuous_rail_lower_V": 99.61923747451118,
+                    "q_poc_var": 7.394954436185097e-5,
+                    "converter_negative_sequence_A": 3.469446951953614e-18,
+                    "p_poc_W": -15.121071300559503
+                },
+                "pv_ld1970_load_c": {
+                    "filter_loss_W": 0.0001601833378845896,
+                    "p_dc_W": 6.000000851713594e-8,
+                    "maximum_converter_current_A": 0.020093250653472464,
+                    "converter_loss_W": 15.120922868770474,
+                    "continuous_rail_lower_V": 99.69012632227121,
+                    "q_poc_var": 7.507269361867186e-5,
+                    "converter_negative_sequence_A": 0,
+                    "p_poc_W": -15.12108299210835
+                },
+                "pv_ld1668_load_a": {
+                    "filter_loss_W": 0.00015997828857372554,
+                    "p_dc_W": 5.99999889772107e-8,
+                    "maximum_converter_current_A": 0.02008038593672067,
+                    "converter_loss_W": 15.120845215329755,
+                    "continuous_rail_lower_V": 99.15662554668408,
+                    "q_poc_var": 3.1605800863900024e-5,
+                    "converter_negative_sequence_A": 2.384149374230332e-18,
+                    "p_poc_W": -15.12100513361834
+                },
+                "pv_ld1446_load_c": {
+                    "filter_loss_W": 0.00016002832257910882,
+                    "p_dc_W": 5.999999430628122e-8,
+                    "maximum_converter_current_A": 0.02008352581148024,
+                    "converter_loss_W": 15.120864168077,
+                    "continuous_rail_lower_V": 99.27466600604751,
+                    "q_poc_var": 3.503317957248564e-5,
+                    "converter_negative_sequence_A": 2.384149374230332e-18,
+                    "p_poc_W": -15.121024136399585
+                },
+                "pv_ld2050_load_a": {
+                    "filter_loss_W": 0.0001601279492966512,
+                    "p_dc_W": 5.999999963535174e-8,
+                    "maximum_converter_current_A": 0.020089776406570517,
+                    "converter_loss_W": 15.120901897643883,
+                    "continuous_rail_lower_V": 99.54685168647187,
+                    "q_poc_var": 6.375802512507273e-5,
+                    "converter_negative_sequence_A": 3.657118196434064e-18,
+                    "p_poc_W": -15.12106196559318
+                },
+                "pv_ld2804_load_c": {
+                    "filter_loss_W": 0.00016011009251037933,
+                    "p_dc_W": 5.999999608263806e-8,
+                    "maximum_converter_current_A": 0.020088656212157822,
+                    "converter_loss_W": 15.120895135970516,
+                    "continuous_rail_lower_V": 99.4980191578182,
+                    "q_poc_var": 5.862381161866881e-5,
+                    "converter_negative_sequence_A": 1.2929865381496214e-18,
+                    "p_poc_W": -15.12105518606303
+                },
+                "pv_ld626_load_c": {
+                    "filter_loss_W": 0.00016019951347345796,
+                    "p_dc_W": 6.000001384620646e-8,
+                    "maximum_converter_current_A": 0.020094265153563,
+                    "converter_loss_W": 15.120928992464234,
+                    "continuous_rail_lower_V": 99.7363496603494,
+                    "q_poc_var": 8.094571933247446e-5,
+                    "converter_negative_sequence_A": 2.5859730762992427e-18,
+                    "p_poc_W": -15.121089131977694
+                },
+                "pv_ld24_load_a": {
+                    "filter_loss_W": 0.00016009992878096568,
+                    "p_dc_W": 6.000000141170858e-8,
+                    "maximum_converter_current_A": 0.020088018591624787,
+                    "converter_loss_W": 15.120891287191593,
+                    "continuous_rail_lower_V": 99.4746125591092,
+                    "q_poc_var": 5.823369125002725e-5,
+                    "converter_negative_sequence_A": 3.657118196434064e-18,
+                    "p_poc_W": -15.121051327120373
+                },
+                "pv_ld868_load_a": {
+                    "filter_loss_W": 0.00016013574915874074,
+                    "p_dc_W": 5.999999963535174e-8,
+                    "maximum_converter_current_A": 0.020090265688847923,
+                    "converter_loss_W": 15.120904851030991,
+                    "continuous_rail_lower_V": 99.56481063899793,
+                    "q_poc_var": 6.403526360317102e-5,
+                    "converter_negative_sequence_A": 2.384149374230332e-18,
+                    "p_poc_W": -15.12106492678015
+                },
+                "pv_ld248_load_b": {
+                    "filter_loss_W": 0.00016000699075391367,
+                    "p_dc_W": 5.999999075356754e-8,
+                    "maximum_converter_current_A": 0.020082187196706562,
+                    "converter_loss_W": 15.120856087998582,
+                    "continuous_rail_lower_V": 99.22549941108161,
+                    "q_poc_var": 3.427794898271802e-5,
+                    "converter_negative_sequence_A": 2.384149374230332e-18,
+                    "p_poc_W": -15.121016034989346
+                },
+                "pv_ld1291_load_b": {
+                    "filter_loss_W": 0.00015998315895693338,
+                    "p_dc_W": 5.999999075356754e-8,
+                    "maximum_converter_current_A": 0.020080691598265275,
+                    "converter_loss_W": 15.120847060347149,
+                    "continuous_rail_lower_V": 99.14778002632485,
+                    "q_poc_var": 2.003865702511487e-5,
+                    "converter_negative_sequence_A": 2.384149374230332e-18,
+                    "p_poc_W": -15.121006983506115
+                },
+                "pv_ld2186_load_b": {
+                    "filter_loss_W": 0.00016018879334289693,
+                    "p_dc_W": 6.000001029349278e-8,
+                    "maximum_converter_current_A": 0.020093592814407105,
+                    "converter_loss_W": 15.120924934111414,
+                    "continuous_rail_lower_V": 99.70866421300936,
+                    "q_poc_var": 7.877155605489489e-5,
+                    "converter_negative_sequence_A": 2.5859730762992427e-18,
+                    "p_poc_W": -15.121085062904747
+                }
+            },
+            "vmax_sensed_V": 252.39395227503644,
+            "accepted": true,
+            "physical_devices": 12,
+            "fixed_PQ_replay_difference_V": 5.345924870494267e-8,
+            "q_poc_var": 0.0006743458914090505,
+            "p_poc_W": -181.4526141816204
+        },
+        "s1_p2_free_unrestricted": {
+            "devices": {
+                "pv_ld1895_load_b": {
+                    "filter_loss_W": 4.442508594483115,
+                    "p_dc_W": 2499.9999993539527,
+                    "maximum_converter_current_A": 3.3683163810372516,
+                    "converter_loss_W": 45.154165346539585,
+                    "continuous_rail_lower_V": 115.12141473853532,
+                    "q_poc_var": 2.1102601755912493,
+                    "converter_negative_sequence_A": 0.04032993510871336,
+                    "p_poc_W": 2450.40332541293
+                },
+                "pv_ld1970_load_c": {
+                    "filter_loss_W": 4.4419790419678975,
+                    "p_dc_W": 2499.999999354348,
+                    "maximum_converter_current_A": 3.368214186330222,
+                    "converter_loss_W": 45.15177009081159,
+                    "continuous_rail_lower_V": 115.09425084197314,
+                    "q_poc_var": 2.1425072297571166,
+                    "converter_negative_sequence_A": 0.04025608881887087,
+                    "p_poc_W": 2450.4062502215684
+                },
+                "pv_ld1668_load_a": {
+                    "filter_loss_W": 4.445061200591226,
+                    "p_dc_W": 2499.9999993522483,
+                    "maximum_converter_current_A": 3.3689133964120477,
+                    "converter_loss_W": 45.16569104183199,
+                    "continuous_rail_lower_V": 115.22072991405328,
+                    "q_poc_var": 0.9316851401011315,
+                    "converter_negative_sequence_A": 0.04120195878916213,
+                    "p_poc_W": 2450.389247109825
+                },
+                "pv_ld1446_load_c": {
+                    "filter_loss_W": 4.444216940612023,
+                    "p_dc_W": 2499.9999993528054,
+                    "maximum_converter_current_A": 3.368745718303889,
+                    "converter_loss_W": 45.16187395304671,
+                    "continuous_rail_lower_V": 115.17879246596291,
+                    "q_poc_var": 1.0274674044150816,
+                    "converter_negative_sequence_A": 0.04105607765756375,
+                    "p_poc_W": 2450.3939084591466
+                },
+                "pv_ld2050_load_a": {
+                    "filter_loss_W": 4.442815565588262,
+                    "p_dc_W": 2499.9999993537335,
+                    "maximum_converter_current_A": 3.36840282455439,
+                    "converter_loss_W": 45.155549038035154,
+                    "continuous_rail_lower_V": 115.12903315487056,
+                    "q_poc_var": 1.826570757198449,
+                    "converter_negative_sequence_A": 0.04050270444538531,
+                    "p_poc_W": 2450.40163475011
+                },
+                "pv_ld2804_load_c": {
+                    "filter_loss_W": 4.443066244480633,
+                    "p_dc_W": 2499.9999993535403,
+                    "maximum_converter_current_A": 3.3684640458371646,
+                    "converter_loss_W": 45.156680499058275,
+                    "continuous_rail_lower_V": 115.13789336026062,
+                    "q_poc_var": 1.6833695790679997,
+                    "converter_negative_sequence_A": 0.040601696873039946,
+                    "p_poc_W": 2450.400252610001
+                },
+                "pv_ld626_load_c": {
+                    "filter_loss_W": 4.441767271936442,
+                    "p_dc_W": 2499.9999993545107,
+                    "maximum_converter_current_A": 3.3681582928211937,
+                    "converter_loss_W": 45.150814873389294,
+                    "continuous_rail_lower_V": 115.08805705959136,
+                    "q_poc_var": 2.304609446893026,
+                    "converter_negative_sequence_A": 0.04015301390343193,
+                    "p_poc_W": 2450.407417209185
+                },
+                "pv_ld24_load_a": {
+                    "filter_loss_W": 4.4432412696528445,
+                    "p_dc_W": 2499.9999993534075,
+                    "maximum_converter_current_A": 3.368497852171893,
+                    "converter_loss_W": 45.15747210358933,
+                    "continuous_rail_lower_V": 115.14687205707438,
+                    "q_poc_var": 1.67274451795676,
+                    "converter_negative_sequence_A": 0.04062656829938886,
+                    "p_poc_W": 2450.399285980165
+                },
+                "pv_ld868_load_a": {
+                    "filter_loss_W": 4.442681349294162,
+                    "p_dc_W": 2499.999999353836,
+                    "maximum_converter_current_A": 3.3683769113416333,
+                    "converter_loss_W": 45.15494198307037,
+                    "continuous_rail_lower_V": 115.12214841804334,
+                    "q_poc_var": 1.8347286098122053,
+                    "converter_negative_sequence_A": 0.04048377625643113,
+                    "p_poc_W": 2450.4023760214714
+                },
+                "pv_ld248_load_b": {
+                    "filter_loss_W": 4.4445850520155545,
+                    "p_dc_W": 2499.9999993525503,
+                    "maximum_converter_current_A": 3.3688169022287706,
+                    "converter_loss_W": 45.16353866215983,
+                    "continuous_rail_lower_V": 115.1976786175175,
+                    "q_poc_var": 1.005219433434128,
+                    "converter_negative_sequence_A": 0.04110972454216198,
+                    "p_poc_W": 2450.391875638375
+                },
+                "pv_ld1291_load_b": {
+                    "filter_loss_W": 4.444827533762236,
+                    "p_dc_W": 2499.999999352654,
+                    "maximum_converter_current_A": 3.3689014441645733,
+                    "converter_loss_W": 45.164628137996516,
+                    "continuous_rail_lower_V": 115.19824756255437,
+                    "q_poc_var": 0.6104270485900543,
+                    "converter_negative_sequence_A": 0.04133475677634855,
+                    "p_poc_W": 2450.390543680895
+                },
+                "pv_ld2186_load_b": {
+                    "filter_loss_W": 4.441929302603057,
+                    "p_dc_W": 2499.9999993543934,
+                    "maximum_converter_current_A": 3.3681947072338905,
+                    "converter_loss_W": 45.15154689230889,
+                    "continuous_rail_lower_V": 115.09481170366936,
+                    "q_poc_var": 2.2442935833999753,
+                    "converter_negative_sequence_A": 0.04020012848690102,
+                    "p_poc_W": 2450.4065231594814
+                }
+            },
+            "vmax_sensed_V": 245.61882155606637,
+            "accepted": true,
+            "physical_devices": 12,
+            "fixed_PQ_replay_difference_V": 8.097587317148192e-9,
+            "q_poc_var": 19.393882926217177,
+            "p_poc_W": 29404.792640253152
+        },
+        "s1_p3_balanced_converter_253V": {
+            "devices": {
+                "pv_ld1895_load_b": {
+                    "filter_loss_W": 17.598521151368914,
+                    "p_dc_W": 5000.000001767569,
+                    "maximum_converter_current_A": 6.660082662749101,
+                    "converter_loss_W": 94.88152694368064,
+                    "continuous_rail_lower_V": 112.40428276076146,
+                    "q_poc_var": 8.380013063374763,
+                    "converter_negative_sequence_A": 1.5096130312009803e-15,
+                    "p_poc_W": 4887.5199536725195
+                },
+                "pv_ld1970_load_c": {
+                    "filter_loss_W": 17.591026449419587,
+                    "p_dc_W": 5000.000001891988,
+                    "maximum_converter_current_A": 6.658664343289679,
+                    "converter_loss_W": 94.85601581267571,
+                    "continuous_rail_lower_V": 112.28159780652975,
+                    "q_poc_var": 8.510057080082568,
+                    "converter_negative_sequence_A": 1.4876804412249946e-15,
+                    "p_poc_W": 4887.552959629893
+                },
+                "pv_ld1668_load_a": {
+                    "filter_loss_W": 17.6376468735898,
+                    "p_dc_W": 5000.000000666874,
+                    "maximum_converter_current_A": 6.667482030842516,
+                    "converter_loss_W": 95.01467715350213,
+                    "continuous_rail_lower_V": 113.06174764562408,
+                    "q_poc_var": 3.6964730520793943,
+                    "converter_negative_sequence_A": 1.4876804412249946e-15,
+                    "p_poc_W": 4887.347676639783
+                },
+                "pv_ld1446_load_c": {
+                    "filter_loss_W": 17.625541820479157,
+                    "p_dc_W": 5000.000000843173,
+                    "maximum_converter_current_A": 6.665193628152708,
+                    "converter_loss_W": 94.97348725960694,
+                    "continuous_rail_lower_V": 112.86341184705236,
+                    "q_poc_var": 4.077420469792687,
+                    "converter_negative_sequence_A": 1.22068447960593e-15,
+                    "p_poc_W": 4887.400971763087
+                },
+                "pv_ld2050_load_a": {
+                    "filter_loss_W": 17.603632026214655,
+                    "p_dc_W": 5000.000001524857,
+                    "maximum_converter_current_A": 6.661049686559625,
+                    "converter_loss_W": 94.8989227534922,
+                    "continuous_rail_lower_V": 112.49268072752014,
+                    "q_poc_var": 7.2510065954980245,
+                    "converter_negative_sequence_A": 1.3965097422251387e-15,
+                    "p_poc_W": 4887.49744674515
+                },
+                "pv_ld2804_load_c": {
+                    "filter_loss_W": 17.607545895086332,
+                    "p_dc_W": 5000.000001388593,
+                    "maximum_converter_current_A": 6.661790131090156,
+                    "converter_loss_W": 94.91224376216212,
+                    "continuous_rail_lower_V": 112.55899243475466,
+                    "q_poc_var": 6.683804070749181,
+                    "converter_negative_sequence_A": 9.478527943911129e-16,
+                    "p_poc_W": 4887.480211731345
+                },
+                "pv_ld626_load_c": {
+                    "filter_loss_W": 17.587606207220233,
+                    "p_dc_W": 5000.000002070876,
+                    "maximum_converter_current_A": 6.658016986185201,
+                    "converter_loss_W": 94.84437308660881,
+                    "continuous_rail_lower_V": 112.22288351965936,
+                    "q_poc_var": 9.1519049674343,
+                    "converter_negative_sequence_A": 9.004297352619014e-16,
+                    "p_poc_W": 4887.568022777046
+                },
+                "pv_ld24_load_a": {
+                    "filter_loss_W": 17.610025501752716,
+                    "p_dc_W": 5000.0000013557255,
+                    "maximum_converter_current_A": 6.662259192417343,
+                    "converter_loss_W": 94.92068294675849,
+                    "continuous_rail_lower_V": 112.59953163509437,
+                    "q_poc_var": 6.6410906059236865,
+                    "converter_negative_sequence_A": 1.1842378929335002e-15,
+                    "p_poc_W": 4887.469292907214
+                },
+                "pv_ld868_load_a": {
+                    "filter_loss_W": 17.60173140531606,
+                    "p_dc_W": 5000.00000155231,
+                    "maximum_converter_current_A": 6.660690088268765,
+                    "converter_loss_W": 94.89245373637817,
+                    "continuous_rail_lower_V": 112.46159136674895,
+                    "q_poc_var": 7.283831296715849,
+                    "converter_negative_sequence_A": 1.2647666240713459e-15,
+                    "p_poc_W": 4887.505816410616
+                },
+                "pv_ld248_load_b": {
+                    "filter_loss_W": 17.630764134295532,
+                    "p_dc_W": 5000.000000779934,
+                    "maximum_converter_current_A": 6.666180978078939,
+                    "converter_loss_W": 94.99125781772494,
+                    "continuous_rail_lower_V": 112.94864195483031,
+                    "q_poc_var": 3.988418633331854,
+                    "converter_negative_sequence_A": 1.5943290560751511e-15,
+                    "p_poc_W": 4887.377978827914
+                },
+                "pv_ld1291_load_b": {
+                    "filter_loss_W": 17.635290955774508,
+                    "p_dc_W": 5000.000000459812,
+                    "maximum_converter_current_A": 6.667036717349389,
+                    "converter_loss_W": 95.00666103553274,
+                    "continuous_rail_lower_V": 113.02919396391162,
+                    "q_poc_var": 2.425010678724279,
+                    "converter_negative_sequence_A": 1.2647666240713459e-15,
+                    "p_poc_W": 4887.358048468505
+                },
+                "pv_ld2186_load_b": {
+                    "filter_loss_W": 17.590043207344934,
+                    "p_dc_W": 5000.000001988851,
+                    "maximum_converter_current_A": 6.658478249247513,
+                    "converter_loss_W": 94.85266883161707,
+                    "continuous_rail_lower_V": 112.26371329229237,
+                    "q_poc_var": 8.911838333158052,
+                    "converter_negative_sequence_A": 8.881784197001252e-16,
+                    "p_poc_W": 4887.557289949889
+                }
+            },
+            "vmax_sensed_V": 246.19905036632224,
+            "accepted": true,
+            "physical_devices": 12,
+            "fixed_PQ_replay_difference_V": 5.022285747336438e-13,
+            "q_poc_var": 77.00086884686462,
+            "p_poc_W": 58649.635669522955
+        },
+        "s2_p2_free_unrestricted": {
+            "devices": {
+                "pv_ld1895_load_b": {
+                    "filter_loss_W": 4.192605352279315,
+                    "p_dc_W": 2499.9999993741403,
+                    "maximum_converter_current_A": 3.2722423728657097,
+                    "converter_loss_W": 44.014411253891176,
+                    "continuous_rail_lower_V": 97.06733422254166,
+                    "q_poc_var": 1.9913790615558504,
+                    "converter_negative_sequence_A": 0.039455086128688595,
+                    "p_poc_W": 2451.79298276797
+                },
+                "pv_ld1970_load_c": {
+                    "filter_loss_W": 4.192133055086288,
+                    "p_dc_W": 2499.9999993747074,
+                    "maximum_converter_current_A": 3.272148710982312,
+                    "converter_loss_W": 44.01224373629162,
+                    "continuous_rail_lower_V": 97.04092590563705,
+                    "q_poc_var": 2.0217835040439684,
+                    "converter_negative_sequence_A": 0.0393866900435966,
+                    "p_poc_W": 2451.7956225833295
+                },
+                "pv_ld1668_load_a": {
+                    "filter_loss_W": 4.194882246365069,
+                    "p_dc_W": 2499.9999993720066,
+                    "maximum_converter_current_A": 3.2727899585435383,
+                    "converter_loss_W": 44.024842024906945,
+                    "continuous_rail_lower_V": 97.1637540144965,
+                    "q_poc_var": 0.8792064306800267,
+                    "converter_negative_sequence_A": 0.04025912359292505,
+                    "p_poc_W": 2451.780275100735
+                },
+                "pv_ld1446_load_c": {
+                    "filter_loss_W": 4.194129311508732,
+                    "p_dc_W": 2499.9999993727984,
+                    "maximum_converter_current_A": 3.272636287348501,
+                    "converter_loss_W": 44.02138804771802,
+                    "continuous_rail_lower_V": 97.12299086793472,
+                    "q_poc_var": 0.969576965506608,
+                    "converter_negative_sequence_A": 0.04012453890869235,
+                    "p_poc_W": 2451.7844820135715
+                },
+                "pv_ld2050_load_a": {
+                    "filter_loss_W": 4.192879219828683,
+                    "p_dc_W": 2499.999999373891,
+                    "maximum_converter_current_A": 3.27232170442725,
+                    "converter_loss_W": 44.01566367747921,
+                    "continuous_rail_lower_V": 97.07470326918869,
+                    "q_poc_var": 1.7236743198400921,
+                    "converter_negative_sequence_A": 0.03961439347003965,
+                    "p_poc_W": 2451.7914564765833
+                },
+                "pv_ld2804_load_c": {
+                    "filter_loss_W": 4.193102849414572,
+                    "p_dc_W": 2499.9999993736606,
+                    "maximum_converter_current_A": 3.2723778766398146,
+                    "converter_loss_W": 44.01668776139753,
+                    "continuous_rail_lower_V": 97.08330452903733,
+                    "q_poc_var": 1.5885316766967055,
+                    "converter_negative_sequence_A": 0.039705673571902696,
+                    "p_poc_W": 2451.7902087628486
+                },
+                "pv_ld626_load_c": {
+                    "filter_loss_W": 4.191944111353678,
+                    "p_dc_W": 2499.999999374889,
+                    "maximum_converter_current_A": 3.2720974111468837,
+                    "converter_loss_W": 44.011379077922314,
+                    "continuous_rail_lower_V": 97.03491738203276,
+                    "q_poc_var": 2.1747657177711037,
+                    "converter_negative_sequence_A": 0.03929161850943856,
+                    "p_poc_W": 2451.796676185613
+                },
+                "pv_ld24_load_a": {
+                    "filter_loss_W": 4.193258945726939,
+                    "p_dc_W": 2499.999999373467,
+                    "maximum_converter_current_A": 3.2724088578816057,
+                    "converter_loss_W": 44.01740408001672,
+                    "continuous_rail_lower_V": 97.0920331009034,
+                    "q_poc_var": 1.5785123139784183,
+                    "converter_negative_sequence_A": 0.039728677500385064,
+                    "p_poc_W": 2451.7893363477233
+                },
+                "pv_ld868_load_a": {
+                    "filter_loss_W": 4.192759516913156,
+                    "p_dc_W": 2499.999999374038,
+                    "maximum_converter_current_A": 3.272297955784195,
+                    "converter_loss_W": 44.01511434822753,
+                    "continuous_rail_lower_V": 97.06800952929814,
+                    "q_poc_var": 1.7313667149690222,
+                    "converter_negative_sequence_A": 0.0395968767554628,
+                    "p_poc_W": 2451.7921255088972
+                },
+                "pv_ld248_load_b": {
+                    "filter_loss_W": 4.194457598018744,
+                    "p_dc_W": 2499.999999372423,
+                    "maximum_converter_current_A": 3.272701515971228,
+                    "converter_loss_W": 44.02289437704914,
+                    "continuous_rail_lower_V": 97.141350440774,
+                    "q_poc_var": 0.9485929287100587,
+                    "converter_negative_sequence_A": 0.04017406936566656,
+                    "p_poc_W": 2451.7826473973555
+                },
+                "pv_ld1291_load_b": {
+                    "filter_loss_W": 4.194674000560553,
+                    "p_dc_W": 2499.9999993727965,
+                    "maximum_converter_current_A": 3.272779202170949,
+                    "converter_loss_W": 44.023880765023584,
+                    "continuous_rail_lower_V": 97.14186309448029,
+                    "q_poc_var": 0.5760003242300904,
+                    "converter_negative_sequence_A": 0.040381203894360986,
+                    "p_poc_W": 2451.7814446072125
+                },
+                "pv_ld2186_load_b": {
+                    "filter_loss_W": 4.192088643913394,
+                    "p_dc_W": 2499.9999993747347,
+                    "maximum_converter_current_A": 3.272130806932633,
+                    "converter_loss_W": 44.012041570990654,
+                    "continuous_rail_lower_V": 97.04147888064207,
+                    "q_poc_var": 2.11785235030562,
+                    "converter_negative_sequence_A": 0.0393351388899224,
+                    "p_poc_W": 2451.7958691598305
+                }
+            },
+            "vmax_sensed_V": 252.95840700686705,
+            "accepted": true,
+            "physical_devices": 12,
+            "fixed_PQ_replay_difference_V": 6.597312808213503e-9,
+            "q_poc_var": 18.301242308287563,
+            "p_poc_W": 29421.473126911667
+        },
+        "s2_p2_free_253V": {
+            "devices": {
+                "pv_ld1895_load_b": {
+                    "filter_loss_W": 4.192605350143367,
+                    "p_dc_W": 2499.9999993262822,
+                    "maximum_converter_current_A": 3.2722420649818784,
+                    "converter_loss_W": 44.01441125494375,
+                    "continuous_rail_lower_V": 97.06733522780193,
+                    "q_poc_var": 1.9912753432412167,
+                    "converter_negative_sequence_A": 0.039454790083044436,
+                    "p_poc_W": 2451.792982721195
+                },
+                "pv_ld1970_load_c": {
+                    "filter_loss_W": 4.192133052705685,
+                    "p_dc_W": 2499.999999326297,
+                    "maximum_converter_current_A": 3.2721483484863625,
+                    "converter_loss_W": 44.0122437375415,
+                    "continuous_rail_lower_V": 97.04092703305803,
+                    "q_poc_var": 2.021676561889705,
+                    "converter_negative_sequence_A": 0.039386357404974724,
+                    "p_poc_W": 2451.7956225360494
+                },
+                "pv_ld1668_load_a": {
+                    "filter_loss_W": 4.194882245491954,
+                    "p_dc_W": 2499.999999326253,
+                    "maximum_converter_current_A": 3.272789822390676,
+                    "converter_loss_W": 44.02484202514121,
+                    "continuous_rail_lower_V": 97.16375444420771,
+                    "q_poc_var": 0.8791686286050036,
+                    "converter_negative_sequence_A": 0.040259010277034414,
+                    "p_poc_W": 2451.7802750556198
+                },
+                "pv_ld1446_load_c": {
+                    "filter_loss_W": 4.19412931036004,
+                    "p_dc_W": 2499.999999326444,
+                    "maximum_converter_current_A": 3.2726361083021063,
+                    "converter_loss_W": 44.02138804829431,
+                    "continuous_rail_lower_V": 97.12299143394017,
+                    "q_poc_var": 0.9695263192684598,
+                    "converter_negative_sequence_A": 0.0401243820832804,
+                    "p_poc_W": 2451.78448196779
+                },
+                "pv_ld2050_load_a": {
+                    "filter_loss_W": 4.1928792176190655,
+                    "p_dc_W": 2499.999999327139,
+                    "maximum_converter_current_A": 3.2723213794419204,
+                    "converter_loss_W": 44.015663678901035,
+                    "continuous_rail_lower_V": 97.07470433460398,
+                    "q_poc_var": 1.723565911904851,
+                    "converter_negative_sequence_A": 0.039614079436988546,
+                    "p_poc_W": 2451.791456430619
+                },
+                "pv_ld2804_load_c": {
+                    "filter_loss_W": 4.193102847824321,
+                    "p_dc_W": 2499.999999326271,
+                    "maximum_converter_current_A": 3.272377639400291,
+                    "converter_loss_W": 44.016687762187146,
+                    "continuous_rail_lower_V": 97.08330529563382,
+                    "q_poc_var": 1.5884568735112943,
+                    "converter_negative_sequence_A": 0.03970545443403332,
+                    "p_poc_W": 2451.7902087162593
+                },
+                "pv_ld626_load_c": {
+                    "filter_loss_W": 4.191944107847576,
+                    "p_dc_W": 2499.9999993305396,
+                    "maximum_converter_current_A": 3.2720968806453725,
+                    "converter_loss_W": 44.01137908012972,
+                    "continuous_rail_lower_V": 97.03491903472464,
+                    "q_poc_var": 2.174604702073034,
+                    "converter_negative_sequence_A": 0.03929111733321442,
+                    "p_poc_W": 2451.7966761425623
+                },
+                "pv_ld24_load_a": {
+                    "filter_loss_W": 4.1932589441703385,
+                    "p_dc_W": 2499.99999932627,
+                    "maximum_converter_current_A": 3.2724086275466058,
+                    "converter_loss_W": 44.01740408078038,
+                    "continuous_rail_lower_V": 97.0920338511963,
+                    "q_poc_var": 1.5784379685161811,
+                    "converter_negative_sequence_A": 0.03972846333695382,
+                    "p_poc_W": 2451.789336301319
+                },
+                "pv_ld868_load_a": {
+                    "filter_loss_W": 4.192759514668978,
+                    "p_dc_W": 2499.9999993271463,
+                    "maximum_converter_current_A": 3.272297623504644,
+                    "converter_loss_W": 44.01511434967642,
+                    "continuous_rail_lower_V": 97.0680106121655,
+                    "q_poc_var": 1.7312578482331773,
+                    "converter_negative_sequence_A": 0.039596557605708294,
+                    "p_poc_W": 2451.792125462801
+                },
+                "pv_ld248_load_b": {
+                    "filter_loss_W": 4.194457596909615,
+                    "p_dc_W": 2499.9999993264387,
+                    "maximum_converter_current_A": 3.2727013441146227,
+                    "converter_loss_W": 44.02289437759508,
+                    "continuous_rail_lower_V": 97.14135098882039,
+                    "q_poc_var": 0.9485428558301852,
+                    "converter_negative_sequence_A": 0.04017391842359915,
+                    "p_poc_W": 2451.782647351934
+                },
+                "pv_ld1291_load_b": {
+                    "filter_loss_W": 4.194673999986662,
+                    "p_dc_W": 2499.9999993262504,
+                    "maximum_converter_current_A": 3.2727791076188457,
+                    "converter_loss_W": 44.02388076480404,
+                    "continuous_rail_lower_V": 97.14186335821252,
+                    "q_poc_var": 0.5759849424531724,
+                    "converter_negative_sequence_A": 0.04038113953310487,
+                    "p_poc_W": 2451.78144456146
+                },
+                "pv_ld2186_load_b": {
+                    "filter_loss_W": 4.192088640673774,
+                    "p_dc_W": 2499.9999993289116,
+                    "maximum_converter_current_A": 3.2721303258417067,
+                    "converter_loss_W": 44.01204157300912,
+                    "continuous_rail_lower_V": 97.04148040836778,
+                    "q_poc_var": 2.1176996097299847,
+                    "converter_negative_sequence_A": 0.03933467698162992,
+                    "p_poc_W": 2451.795869115229
+                }
+            },
+            "vmax_sensed_V": 252.95840690690352,
+            "accepted": true,
+            "physical_devices": 12,
+            "fixed_PQ_replay_difference_V": 6.597321304576347e-9,
+            "q_poc_var": 18.300197565256266,
+            "p_poc_W": 29421.473126362842
+        },
+        "s2_p1_free_unrestricted": {
+            "devices": {
+                "pv_ld1895_load_b": {
+                    "filter_loss_W": 0.00016015261364721312,
+                    "p_dc_W": 6.027206644887428e-8,
+                    "maximum_converter_current_A": 0.020301167682298036,
+                    "converter_loss_W": 15.12089995029017,
+                    "continuous_rail_lower_V": 99.619538171339,
+                    "q_poc_var": 7.400799102889877e-5,
+                    "converter_negative_sequence_A": 0.0003869736091342439,
+                    "p_poc_W": -15.12106004263175
+                },
+                "pv_ld1970_load_c": {
+                    "filter_loss_W": 0.00016018340945578302,
+                    "p_dc_W": 6.028519017320377e-8,
+                    "maximum_converter_current_A": 0.020303947082023887,
+                    "converter_loss_W": 15.120911650167416,
+                    "continuous_rail_lower_V": 99.6904400154121,
+                    "q_poc_var": 7.515589626952424e-5,
+                    "converter_negative_sequence_A": 0.00038630448410483317,
+                    "p_poc_W": -15.121071773291682
+                },
+                "pv_ld1668_load_a": {
+                    "filter_loss_W": 0.00015997839349424225,
+                    "p_dc_W": 6.021921095111793e-8,
+                    "maximum_converter_current_A": 0.020287166343350992,
+                    "converter_loss_W": 15.12083349180968,
+                    "continuous_rail_lower_V": 99.156861683042,
+                    "q_poc_var": 3.1648943943335395e-5,
+                    "converter_negative_sequence_A": 0.00039490558599143656,
+                    "p_poc_W": -15.120993409983964
+                },
+                "pv_ld1446_load_c": {
+                    "filter_loss_W": 0.00016002842181173094,
+                    "p_dc_W": 6.023729604009986e-8,
+                    "maximum_converter_current_A": 0.020291604564868906,
+                    "converter_loss_W": 15.120852522905762,
+                    "continuous_rail_lower_V": 99.27492327221519,
+                    "q_poc_var": 3.509096583043797e-5,
+                    "converter_negative_sequence_A": 0.00039359271179389255,
+                    "p_poc_W": -15.121012491090278
+                },
+                "pv_ld2050_load_a": {
+                    "filter_loss_W": 0.0001601280299716734,
+                    "p_dc_W": 6.026645493761862e-8,
+                    "maximum_converter_current_A": 0.020299395243804936,
+                    "converter_loss_W": 15.12089054816069,
+                    "continuous_rail_lower_V": 99.54714435483594,
+                    "q_poc_var": 6.382493822994911e-5,
+                    "converter_negative_sequence_A": 0.0003885540294418785,
+                    "p_poc_W": -15.121050615924206
+                },
+                "pv_ld2804_load_c": {
+                    "filter_loss_W": 0.00016011017654093962,
+                    "p_dc_W": 6.02610708000384e-8,
+                    "maximum_converter_current_A": 0.02029799814927929,
+                    "converter_loss_W": 15.120883733820575,
+                    "continuous_rail_lower_V": 99.49830567436528,
+                    "q_poc_var": 5.866241786937898e-5,
+                    "converter_negative_sequence_A": 0.0003894566408578741,
+                    "p_poc_W": -15.121043783736045
+                },
+                "pv_ld626_load_c": {
+                    "filter_loss_W": 0.00016019958161805903,
+                    "p_dc_W": 6.029010890529207e-8,
+                    "maximum_converter_current_A": 0.020305156280759042,
+                    "converter_loss_W": 15.1209178283551,
+                    "continuous_rail_lower_V": 99.73666846943573,
+                    "q_poc_var": 8.100195893592094e-5,
+                    "converter_negative_sequence_A": 0.00038536129494280854,
+                    "p_poc_W": -15.12107796764661
+                },
+                "pv_ld24_load_a": {
+                    "filter_loss_W": 0.0001601000139341835,
+                    "p_dc_W": 6.025687682154057e-8,
+                    "maximum_converter_current_A": 0.02029708123193507,
+                    "converter_loss_W": 15.120879871796,
+                    "continuous_rail_lower_V": 99.47489467003905,
+                    "q_poc_var": 5.8284933069301104e-5,
+                    "converter_negative_sequence_A": 0.00038968115631751363,
+                    "p_poc_W": -15.121039911553057
+                },
+                "pv_ld868_load_a": {
+                    "filter_loss_W": 0.00016013582895268996,
+                    "p_dc_W": 6.026969501249368e-8,
+                    "maximum_converter_current_A": 0.020300098980854994,
+                    "converter_loss_W": 15.12089351161017,
+                    "continuous_rail_lower_V": 99.5651065495365,
+                    "q_poc_var": 6.411531843011908e-5,
+                    "converter_negative_sequence_A": 0.0003883828915369585,
+                    "p_poc_W": -15.121053587169428
+                },
+                "pv_ld248_load_b": {
+                    "filter_loss_W": 0.0001600070922211927,
+                    "p_dc_W": 6.022917453663013e-8,
+                    "maximum_converter_current_A": 0.02028968096164586,
+                    "converter_loss_W": 15.120844414039228,
+                    "continuous_rail_lower_V": 99.22574733405105,
+                    "q_poc_var": 3.42930076407677e-5,
+                    "converter_negative_sequence_A": 0.0003940745265620086,
+                    "p_poc_W": -15.121004360902274
+                },
+                "pv_ld1291_load_b": {
+                    "filter_loss_W": 0.00015998326710686683,
+                    "p_dc_W": 6.022547260897682e-8,
+                    "maximum_converter_current_A": 0.02028816317162996,
+                    "converter_loss_W": 15.120835265235344,
+                    "continuous_rail_lower_V": 99.1480222082904,
+                    "q_poc_var": 2.0067846906828002e-5,
+                    "converter_negative_sequence_A": 0.0003961231651922106,
+                    "p_poc_W": -15.120995188276979
+                },
+                "pv_ld2186_load_b": {
+                    "filter_loss_W": 0.0001601888632531967,
+                    "p_dc_W": 6.028628973808736e-8,
+                    "maximum_converter_current_A": 0.020304273741639928,
+                    "converter_loss_W": 15.12091374509067,
+                    "continuous_rail_lower_V": 99.70897919855993,
+                    "q_poc_var": 7.883571928221644e-5,
+                    "converter_negative_sequence_A": 0.0003857917072246734,
+                    "p_poc_W": -15.121073873667633
+                }
+            },
+            "vmax_sensed_V": 252.39392140336187,
+            "accepted": true,
+            "physical_devices": 12,
+            "fixed_PQ_replay_difference_V": 5.3461017944311955e-8,
+            "q_poc_var": 0.0006749899374366777,
+            "p_poc_W": -181.4524770058739
+        },
+        "s2_p3_balanced_converter_253V": {
+            "devices": {
+                "pv_ld1895_load_b": {
+                    "filter_loss_W": 25.082252799034904,
+                    "p_dc_W": 4999.999997305815,
+                    "maximum_converter_current_A": 7.951055824129462,
+                    "converter_loss_W": 119.60369479135747,
+                    "continuous_rail_lower_V": 110.18898860510639,
+                    "q_poc_var": -3525.0426176309247,
+                    "converter_negative_sequence_A": 5.921189464667501e-16,
+                    "p_poc_W": 4855.314049715423
+                },
+                "pv_ld1970_load_c": {
+                    "filter_loss_W": 25.08192809358252,
+                    "p_dc_W": 3994.4627283442655,
+                    "maximum_converter_current_A": 7.951004358267394,
+                    "converter_loss_W": 119.60264942427273,
+                    "continuous_rail_lower_V": 115.3014827643922,
+                    "q_poc_var": -4602.087370380003,
+                    "converter_negative_sequence_A": 6.620091075326061e-16,
+                    "p_poc_W": 3849.77815082641
+                },
+                "pv_ld1668_load_a": {
+                    "filter_loss_W": 25.094068212230923,
+                    "p_dc_W": 4999.999999065328,
+                    "maximum_converter_current_A": 7.952928342313654,
+                    "converter_loss_W": 119.64173235006012,
+                    "continuous_rail_lower_V": 110.3267968228,
+                    "q_poc_var": -3525.1112703965277,
+                    "converter_negative_sequence_A": 1.0674576113297923e-15,
+                    "p_poc_W": 4855.264198503037
+                },
+                "pv_ld1446_load_c": {
+                    "filter_loss_W": 25.081034412276495,
+                    "p_dc_W": 4999.999998937621,
+                    "maximum_converter_current_A": 7.9508627079279695,
+                    "converter_loss_W": 119.59977226785551,
+                    "continuous_rail_lower_V": 110.17502466336836,
+                    "q_poc_var": -3525.0355290710163,
+                    "converter_negative_sequence_A": 1.4802973661668753e-15,
+                    "p_poc_W": 4855.319192257489
+                },
+                "pv_ld2050_load_a": {
+                    "filter_loss_W": 25.079402078192288,
+                    "p_dc_W": 4999.999997357657,
+                    "maximum_converter_current_A": 7.9506039730774,
+                    "converter_loss_W": 119.59451702150712,
+                    "continuous_rail_lower_V": 110.15561581029121,
+                    "q_poc_var": -3525.026049701085,
+                    "converter_negative_sequence_A": 1.0674576113297923e-15,
+                    "p_poc_W": 4855.326078257957
+                },
+                "pv_ld2804_load_c": {
+                    "filter_loss_W": 25.07772660345927,
+                    "p_dc_W": 4999.999998669964,
+                    "maximum_converter_current_A": 7.950338391415695,
+                    "converter_loss_W": 119.58912283271061,
+                    "continuous_rail_lower_V": 110.13466563666535,
+                    "q_poc_var": -3525.01630790921,
+                    "converter_negative_sequence_A": 1.22068447960593e-15,
+                    "p_poc_W": 4855.333149233794
+                },
+                "pv_ld626_load_c": {
+                    "filter_loss_W": 25.0838615731127,
+                    "p_dc_W": 4255.359555541491,
+                    "maximum_converter_current_A": 7.951310810144874,
+                    "converter_loss_W": 119.6088741004433,
+                    "continuous_rail_lower_V": 114.20341149403146,
+                    "q_poc_var": -4370.631336201202,
+                    "converter_negative_sequence_A": 6.620091075326061e-16,
+                    "p_poc_W": 4110.666819867935
+                },
+                "pv_ld24_load_a": {
+                    "filter_loss_W": 25.080844008031818,
+                    "p_dc_W": 4999.999998669982,
+                    "maximum_converter_current_A": 7.950832528134433,
+                    "converter_loss_W": 119.59915927020312,
+                    "continuous_rail_lower_V": 110.17102938492825,
+                    "q_poc_var": -3525.0344258476207,
+                    "converter_negative_sequence_A": 1.22068447960593e-15,
+                    "p_poc_W": 4855.319995391747
+                },
+                "pv_ld868_load_a": {
+                    "filter_loss_W": 25.077139705443187,
+                    "p_dc_W": 4985.52178255058,
+                    "maximum_converter_current_A": 7.95024535935578,
+                    "converter_loss_W": 119.58723330269696,
+                    "continuous_rail_lower_V": 110.22131130530046,
+                    "q_poc_var": -3544.8694644924026,
+                    "converter_negative_sequence_A": 5.921189464667501e-16,
+                    "p_poc_W": 4840.857409542439
+                },
+                "pv_ld248_load_b": {
+                    "filter_loss_W": 25.08758757350097,
+                    "p_dc_W": 4999.99999893764,
+                    "maximum_converter_current_A": 7.951901338978985,
+                    "converter_loss_W": 119.6208694482441,
+                    "continuous_rail_lower_V": 110.25143185017481,
+                    "q_poc_var": -3525.073613822237,
+                    "converter_negative_sequence_A": 9.362222582871203e-16,
+                    "p_poc_W": 4855.291541915895
+                },
+                "pv_ld1291_load_b": {
+                    "filter_loss_W": 21.966937738105116,
+                    "p_dc_W": 4999.999999238067,
+                    "maximum_converter_current_A": 7.440914115118614,
+                    "converter_loss_W": 109.47596727242593,
+                    "continuous_rail_lower_V": 107.0546727371242,
+                    "q_poc_var": -2798.838896582676,
+                    "converter_negative_sequence_A": 1.1934538910164828e-15,
+                    "p_poc_W": 4868.557094227536
+                },
+                "pv_ld2186_load_b": {
+                    "filter_loss_W": 25.082913859380824,
+                    "p_dc_W": 4444.819955368195,
+                    "maximum_converter_current_A": 7.951160601262725,
+                    "converter_loss_W": 119.60582302394168,
+                    "continuous_rail_lower_V": 113.29837068219774,
+                    "q_poc_var": -4184.360343583578,
+                    "converter_negative_sequence_A": 1.3240182150652123e-15,
+                    "p_poc_W": 4300.131218484873
+                }
+            },
+            "vmax_sensed_V": 252.99999999991556,
+            "accepted": true,
+            "physical_devices": 12,
+            "fixed_PQ_replay_difference_V": 5.688677041670493e-14,
+            "q_poc_var": -44176.127225618475,
+            "p_poc_W": 55957.15889822454
+        },
+        "s2_p3_free_253V": {
+            "devices": {
+                "pv_ld1895_load_b": {
+                    "filter_loss_W": 21.207950796157093,
+                    "p_dc_W": 4999.999999302017,
+                    "maximum_converter_current_A": 8.652483338013317,
+                    "converter_loss_W": 106.56112821626266,
+                    "continuous_rail_lower_V": 106.89625131814938,
+                    "q_poc_var": -2313.3468868105783,
+                    "converter_negative_sequence_A": 1.5029750394623853,
+                    "p_poc_W": 4872.230920289598
+                },
+                "pv_ld1970_load_c": {
+                    "filter_loss_W": 23.032704986782846,
+                    "p_dc_W": 4999.999999286512,
+                    "maximum_converter_current_A": 8.960554471636957,
+                    "converter_loss_W": 112.55266236790723,
+                    "continuous_rail_lower_V": 109.33197626691626,
+                    "q_poc_var": -2835.46080902829,
+                    "converter_negative_sequence_A": 1.5146289165062514,
+                    "p_poc_W": 4864.414631931822
+                },
+                "pv_ld1668_load_a": {
+                    "filter_loss_W": 17.81571538990829,
+                    "p_dc_W": 4999.999999311644,
+                    "maximum_converter_current_A": 7.814471069746996,
+                    "converter_loss_W": 95.14385106073163,
+                    "continuous_rail_lower_V": 100.38477175845316,
+                    "q_poc_var": -637.6292116331399,
+                    "converter_negative_sequence_A": 1.453674670561647,
+                    "p_poc_W": 4887.040432861005
+                },
+                "pv_ld1446_load_c": {
+                    "filter_loss_W": 17.779224384926238,
+                    "p_dc_W": 4999.999999311835,
+                    "maximum_converter_current_A": 7.7978606079726465,
+                    "converter_loss_W": 95.01881961615068,
+                    "continuous_rail_lower_V": 100.15273431551671,
+                    "q_poc_var": -611.4491717695263,
+                    "converter_negative_sequence_A": 1.451511094951067,
+                    "p_poc_W": 4887.201955310758
+                },
+                "pv_ld2050_load_a": {
+                    "filter_loss_W": 19.034260734012605,
+                    "p_dc_W": 4999.99999930671,
+                    "maximum_converter_current_A": 8.197597698046506,
+                    "converter_loss_W": 99.29939482888872,
+                    "continuous_rail_lower_V": 103.46337863004594,
+                    "q_poc_var": -1478.8781288946125,
+                    "converter_negative_sequence_A": 1.4785182081806547,
+                    "p_poc_W": 4881.666343743809
+                },
+                "pv_ld2804_load_c": {
+                    "filter_loss_W": 18.81074431925026,
+                    "p_dc_W": 4999.9999993073525,
+                    "maximum_converter_current_A": 8.143068707233624,
+                    "converter_loss_W": 98.54354054054133,
+                    "continuous_rail_lower_V": 103.00969707037163,
+                    "q_poc_var": -1364.0144241380042,
+                    "converter_negative_sequence_A": 1.475333616177523,
+                    "p_poc_W": 4882.645714447561
+                },
+                "pv_ld626_load_c": {
+                    "filter_loss_W": 24.459057121879596,
+                    "p_dc_W": 4999.999999285645,
+                    "maximum_converter_current_A": 9.219995008340025,
+                    "converter_loss_W": 117.19209793698725,
+                    "continuous_rail_lower_V": 110.7611238243377,
+                    "q_poc_var": -3182.084626116495,
+                    "converter_negative_sequence_A": 1.5255707008708992,
+                    "p_poc_W": 4858.348844226778
+                },
+                "pv_ld24_load_a": {
+                    "filter_loss_W": 18.81312419772712,
+                    "p_dc_W": 4999.999999307345,
+                    "maximum_converter_current_A": 8.143692562286441,
+                    "converter_loss_W": 98.55143082820547,
+                    "continuous_rail_lower_V": 103.03527538765445,
+                    "q_poc_var": -1363.7914579518674,
+                    "converter_negative_sequence_A": 1.4755849946419952,
+                    "p_poc_W": 4882.635444281413
+                },
+                "pv_ld868_load_a": {
+                    "filter_loss_W": 19.03248492083185,
+                    "p_dc_W": 4999.999999306718,
+                    "maximum_converter_current_A": 8.197127533589601,
+                    "converter_loss_W": 99.29352162303815,
+                    "continuous_rail_lower_V": 103.44400406413472,
+                    "q_poc_var": -1479.0710828563142,
+                    "converter_negative_sequence_A": 1.4783234644438619,
+                    "p_poc_W": 4881.673992762848
+                },
+                "pv_ld248_load_b": {
+                    "filter_loss_W": 17.78464552767764,
+                    "p_dc_W": 4999.999999311821,
+                    "maximum_converter_current_A": 7.799157341622414,
+                    "converter_loss_W": 95.03698466512353,
+                    "continuous_rail_lower_V": 100.2115733532109,
+                    "q_poc_var": -611.2900706884866,
+                    "converter_negative_sequence_A": 1.4519864455050397,
+                    "p_poc_W": 4887.178369119019
+                },
+                "pv_ld1291_load_b": {
+                    "filter_loss_W": 17.221185792377582,
+                    "p_dc_W": 4999.99999931544,
+                    "maximum_converter_current_A": 7.237661608147076,
+                    "converter_loss_W": 93.26154593899237,
+                    "continuous_rail_lower_V": 97.90522668127367,
+                    "q_poc_var": -111.58704337184457,
+                    "converter_negative_sequence_A": 1.1627022421070907,
+                    "p_poc_W": 4889.5172675840695
+                },
+                "pv_ld2186_load_b": {
+                    "filter_loss_W": 21.516624042656076,
+                    "p_dc_W": 4999.999999301654,
+                    "maximum_converter_current_A": 8.710179855867485,
+                    "converter_loss_W": 107.58165773084076,
+                    "continuous_rail_lower_V": 107.24809909947933,
+                    "q_poc_var": -2411.28562404901,
+                    "converter_negative_sequence_A": 1.5049939405607882,
+                    "p_poc_W": 4870.901717528157
+                }
+            },
+            "vmax_sensed_V": 252.99999999857113,
+            "accepted": true,
+            "physical_devices": 12,
+            "fixed_PQ_replay_difference_V": 6.355287432313019e-14,
+            "q_poc_var": -18399.88853730817,
+            "p_poc_W": 58545.45563408685
+        },
+        "s2_p1_free_253V": {
+            "devices": {
+                "pv_ld1895_load_b": {
+                    "filter_loss_W": 0.00016015261380353252,
+                    "p_dc_W": 6.01893770380002e-8,
+                    "maximum_converter_current_A": 0.020301168532978697,
+                    "converter_loss_W": 15.120899950290678,
+                    "continuous_rail_lower_V": 99.61953817402609,
+                    "q_poc_var": 7.370323504585219e-5,
+                    "converter_negative_sequence_A": 0.00038697464433096787,
+                    "p_poc_W": -15.121060042715104
+                },
+                "pv_ld1970_load_c": {
+                    "filter_loss_W": 0.00016018340962631328,
+                    "p_dc_W": 6.019551079816665e-8,
+                    "maximum_converter_current_A": 0.020303948021187655,
+                    "converter_loss_W": 15.12091165016797,
+                    "continuous_rail_lower_V": 99.69044001838955,
+                    "q_poc_var": 7.482681249060263e-5,
+                    "converter_negative_sequence_A": 0.0003863055738964396,
+                    "p_poc_W": -15.121071773382086
+                },
+                "pv_ld1668_load_a": {
+                    "filter_loss_W": 0.00015997839359016552,
+                    "p_dc_W": 6.018023590570465e-8,
+                    "maximum_converter_current_A": 0.020287166873674965,
+                    "converter_loss_W": 15.120833491809902,
+                    "continuous_rail_lower_V": 99.15686168452574,
+                    "q_poc_var": 3.1504790192316e-5,
+                    "converter_negative_sequence_A": 0.00039490619188626023,
+                    "p_poc_W": -15.120993410023257
+                },
+                "pv_ld1446_load_c": {
+                    "filter_loss_W": 0.000160028421916536,
+                    "p_dc_W": 6.019041620675125e-8,
+                    "maximum_converter_current_A": 0.020291605138030504,
+                    "converter_loss_W": 15.120852522906038,
+                    "continuous_rail_lower_V": 99.27492327383422,
+                    "q_poc_var": 3.493334514830665e-5,
+                    "converter_negative_sequence_A": 0.0003935933835487705,
+                    "p_poc_W": -15.121012491137538
+                },
+                "pv_ld2050_load_a": {
+                    "filter_loss_W": 0.00016012803011911103,
+                    "p_dc_W": 6.019218368180645e-8,
+                    "maximum_converter_current_A": 0.02029939600559009,
+                    "converter_loss_W": 15.120890548161144,
+                    "continuous_rail_lower_V": 99.5471443571137,
+                    "q_poc_var": 6.35845197344484e-5,
+                    "converter_negative_sequence_A": 0.00038855496697924683,
+                    "p_poc_W": -15.12105061599908
+                },
+                "pv_ld2804_load_c": {
+                    "filter_loss_W": 0.0001601101766812718,
+                    "p_dc_W": 6.019118892197639e-8,
+                    "maximum_converter_current_A": 0.020297998899143837,
+                    "converter_loss_W": 15.120883733821001,
+                    "continuous_rail_lower_V": 99.4983056765495,
+                    "q_poc_var": 5.843931370746319e-5,
+                    "converter_negative_sequence_A": 0.00038945754168704034,
+                    "p_poc_W": -15.121043783806494
+                },
+                "pv_ld626_load_c": {
+                    "filter_loss_W": 0.0001601995817956947,
+                    "p_dc_W": 6.019592646566707e-8,
+                    "maximum_converter_current_A": 0.020305157289463773,
+                    "converter_loss_W": 15.12091782835568,
+                    "continuous_rail_lower_V": 99.73666847258208,
+                    "q_poc_var": 8.06605863771237e-5,
+                    "converter_negative_sequence_A": 0.00038536246708671467,
+                    "p_poc_W": -15.121077967741549
+                },
+                "pv_ld24_load_a": {
+                    "filter_loss_W": 0.00016010001406385754,
+                    "p_dc_W": 6.01890928209059e-8,
+                    "maximum_converter_current_A": 0.020297081910301815,
+                    "converter_loss_W": 15.120879871796417,
+                    "continuous_rail_lower_V": 99.47489467214862,
+                    "q_poc_var": 5.805122011545705e-5,
+                    "converter_negative_sequence_A": 0.00038968199096734476,
+                    "p_poc_W": -15.121039911621388
+                },
+                "pv_ld868_load_a": {
+                    "filter_loss_W": 0.00016013582910545665,
+                    "p_dc_W": 6.019376108667984e-8,
+                    "maximum_converter_current_A": 0.020300099792015046,
+                    "converter_loss_W": 15.120893511610634,
+                    "continuous_rail_lower_V": 99.56510655202835,
+                    "q_poc_var": 6.384709916150422e-5,
+                    "converter_negative_sequence_A": 0.0003883838564737166,
+                    "p_poc_W": -15.121053587245978
+                },
+                "pv_ld248_load_b": {
+                    "filter_loss_W": 0.00016000709231711596,
+                    "p_dc_W": 6.018564135956694e-8,
+                    "maximum_converter_current_A": 0.020289681453817127,
+                    "converter_loss_W": 15.120844414039489,
+                    "continuous_rail_lower_V": 99.22574733547381,
+                    "q_poc_var": 3.414978917363337e-5,
+                    "converter_negative_sequence_A": 0.0003940751194990343,
+                    "p_poc_W": -15.121004360946165
+                },
+                "pv_ld1291_load_b": {
+                    "filter_loss_W": 0.00015998326719213196,
+                    "p_dc_W": 6.019317133620916e-8,
+                    "maximum_converter_current_A": 0.020288163690911725,
+                    "converter_loss_W": 15.12083526523552,
+                    "continuous_rail_lower_V": 99.14802220949971,
+                    "q_poc_var": 1.9988507413061518e-5,
+                    "converter_negative_sequence_A": 0.0003961237098620993,
+                    "p_poc_W": -15.120995188309541
+                },
+                "pv_ld2186_load_b": {
+                    "filter_loss_W": 0.00016018886343083238,
+                    "p_dc_W": 6.019503295817685e-8,
+                    "maximum_converter_current_A": 0.02030427470694781,
+                    "converter_loss_W": 15.120913745091231,
+                    "continuous_rail_lower_V": 99.70897920150836,
+                    "q_poc_var": 7.852303220189788e-5,
+                    "converter_negative_sequence_A": 0.0003857928395609405,
+                    "p_poc_W": -15.121073873759629
+                }
+            },
+            "vmax_sensed_V": 252.39392140326586,
+            "accepted": true,
+            "physical_devices": 12,
+            "fixed_PQ_replay_difference_V": 5.346101051306755e-8,
+            "q_poc_var": 0.0006722122507616668,
+            "p_poc_W": -181.4524770066878
+        },
+        "s2_p2_balanced_converter_unrestricted": {
+            "devices": {
+                "pv_ld1895_load_b": {
+                    "filter_loss_W": 4.192952223069369,
+                    "p_dc_W": 2499.9999993456486,
+                    "maximum_converter_current_A": 3.2508841211542086,
+                    "converter_loss_W": 44.016727539180565,
+                    "continuous_rail_lower_V": 97.10083322878215,
+                    "q_poc_var": 1.9955808648983808,
+                    "converter_negative_sequence_A": 3.051711199014825e-16,
+                    "p_poc_W": 2451.7903195833987
+                },
+                "pv_ld1970_load_c": {
+                    "filter_loss_W": 4.192478492723694,
+                    "p_dc_W": 2499.999999345969,
+                    "maximum_converter_current_A": 3.2507004694120925,
+                    "converter_loss_W": 44.014551004124954,
+                    "continuous_rail_lower_V": 97.07577282327222,
+                    "q_poc_var": 2.0260400558407063,
+                    "converter_negative_sequence_A": 2.9605947323337506e-16,
+                    "p_poc_W": 2451.7929698491207
+                },
+                "pv_ld1668_load_a": {
+                    "filter_loss_W": 4.195244587583602,
+                    "p_dc_W": 2499.9999993429155,
+                    "maximum_converter_current_A": 3.2517726589571367,
+                    "converter_loss_W": 44.02725883672987,
+                    "continuous_rail_lower_V": 97.19051393185,
+                    "q_poc_var": 0.8809630734510954,
+                    "converter_negative_sequence_A": 3.3100455376630307e-16,
+                    "p_poc_W": 2451.777495918602
+                },
+                "pv_ld1446_load_c": {
+                    "filter_loss_W": 4.194488905673097,
+                    "p_dc_W": 2499.999999343405,
+                    "maximum_converter_current_A": 3.2514797777685542,
+                    "converter_loss_W": 44.02378733732538,
+                    "continuous_rail_lower_V": 97.15193278140468,
+                    "q_poc_var": 0.9715132791134966,
+                    "converter_negative_sequence_A": 4.965068306494546e-16,
+                    "p_poc_W": 2451.7817231004065
+                },
+                "pv_ld2050_load_a": {
+                    "filter_loss_W": 4.193229109097047,
+                    "p_dc_W": 2499.9999993451265,
+                    "maximum_converter_current_A": 3.2509914571652963,
+                    "converter_loss_W": 44.01799965209734,
+                    "continuous_rail_lower_V": 97.10734794826976,
+                    "q_poc_var": 1.72727958603741,
+                    "converter_negative_sequence_A": 1.4802973661668753e-16,
+                    "p_poc_W": 2451.788770583932
+                },
+                "pv_ld2804_load_c": {
+                    "filter_loss_W": 4.193454452455171,
+                    "p_dc_W": 2499.9999993448105,
+                    "maximum_converter_current_A": 3.251078809831926,
+                    "converter_loss_W": 44.019034943955916,
+                    "continuous_rail_lower_V": 97.11530500410096,
+                    "q_poc_var": 1.59183350948868,
+                    "converter_negative_sequence_A": 6.323833120356729e-16,
+                    "p_poc_W": 2451.7875099483995
+                },
+                "pv_ld626_load_c": {
+                    "filter_loss_W": 4.192287788199337,
+                    "p_dc_W": 2499.9999993462807,
+                    "maximum_converter_current_A": 3.250626535778598,
+                    "converter_loss_W": 44.01367480226876,
+                    "continuous_rail_lower_V": 97.0703069678017,
+                    "q_poc_var": 2.179369290283418,
+                    "converter_negative_sequence_A": 3.3100455376630307e-16,
+                    "p_poc_W": 2451.7940367558126
+                },
+                "pv_ld24_load_a": {
+                    "filter_loss_W": 4.193611030424108,
+                    "p_dc_W": 2499.999999344702,
+                    "maximum_converter_current_A": 3.251139504728075,
+                    "converter_loss_W": 44.01975429965161,
+                    "continuous_rail_lower_V": 97.1235858717349,
+                    "q_poc_var": 1.5817965471298914,
+                    "converter_negative_sequence_A": 3.700743415417188e-16,
+                    "p_poc_W": 2451.786634014626
+                },
+                "pv_ld868_load_a": {
+                    "filter_loss_W": 4.193109039447336,
+                    "p_dc_W": 2499.99999934521,
+                    "maximum_converter_current_A": 3.250944912105297,
+                    "converter_loss_W": 44.017448012020765,
+                    "continuous_rail_lower_V": 97.1009977681421,
+                    "q_poc_var": 1.7349855887749124,
+                    "converter_negative_sequence_A": 3.051711199014825e-16,
+                    "p_poc_W": 2451.789442293742
+                },
+                "pv_ld248_load_b": {
+                    "filter_loss_W": 4.194818228445911,
+                    "p_dc_W": 2499.9999993432016,
+                    "maximum_converter_current_A": 3.2516074173144287,
+                    "converter_loss_W": 44.025300220587354,
+                    "continuous_rail_lower_V": 97.16934280596278,
+                    "q_poc_var": 0.950493812315524,
+                    "converter_negative_sequence_A": 3.3100455376630307e-16,
+                    "p_poc_W": 2451.7798808941684
+                },
+                "pv_ld1291_load_b": {
+                    "filter_loss_W": 4.195038385382759,
+                    "p_dc_W": 2499.9999993427605,
+                    "maximum_converter_current_A": 3.251692743363991,
+                    "converter_loss_W": 44.026311587705386,
+                    "continuous_rail_lower_V": 97.16921686454582,
+                    "q_poc_var": 0.5770624904185429,
+                    "converter_negative_sequence_A": 6.10342239802965e-16,
+                    "p_poc_W": 2451.778649369672
+                },
+                "pv_ld2186_load_b": {
+                    "filter_loss_W": 4.192433166925639,
+                    "p_dc_W": 2499.9999993461215,
+                    "maximum_converter_current_A": 3.2506828973494746,
+                    "converter_loss_W": 44.01434275330518,
+                    "continuous_rail_lower_V": 97.07644623792021,
+                    "q_poc_var": 2.122330495974585,
+                    "converter_negative_sequence_A": 4.965068306494546e-16,
+                    "p_poc_W": 2451.7932234258906
+                }
+            },
+            "vmax_sensed_V": 252.95195770668744,
+            "accepted": true,
+            "physical_devices": 12,
+            "fixed_PQ_replay_difference_V": 7.186436030507926e-9,
+            "q_poc_var": 18.33924859372664,
+            "p_poc_W": 29421.440655737773
+        },
+        "s2_p3_free_unrestricted": {
+            "devices": {
+                "pv_ld1895_load_b": {
+                    "filter_loss_W": 16.621644870973796,
+                    "p_dc_W": 4999.999999318417,
+                    "maximum_converter_current_A": 6.511610673309114,
+                    "converter_loss_W": 91.53943868492497,
+                    "continuous_rail_lower_V": 94.37725283641562,
+                    "q_poc_var": 7.899539189695766,
+                    "converter_negative_sequence_A": 0.07160334750490989,
+                    "p_poc_W": 4891.838915762519
+                },
+                "pv_ld1970_load_c": {
+                    "filter_loss_W": 16.61495736647339,
+                    "p_dc_W": 4999.999999318432,
+                    "maximum_converter_current_A": 6.510465580394183,
+                    "converter_loss_W": 91.51645944973666,
+                    "continuous_rail_lower_V": 94.25556076023807,
+                    "q_poc_var": 8.021948717209655,
+                    "converter_negative_sequence_A": 0.07147116495191523,
+                    "p_poc_W": 4891.868582502222
+                },
+                "pv_ld1668_load_a": {
+                    "filter_loss_W": 16.656520480504696,
+                    "p_dc_W": 4999.999999318341,
+                    "maximum_converter_current_A": 6.517813843673627,
+                    "converter_loss_W": 91.65922332934835,
+                    "continuous_rail_lower_V": 95.02785603925706,
+                    "q_poc_var": 3.485131263272544,
+                    "converter_negative_sequence_A": 0.0731017216012714,
+                    "p_poc_W": 4891.684255508488
+                },
+                "pv_ld1446_load_c": {
+                    "filter_loss_W": 16.64572315947771,
+                    "p_dc_W": 4999.999999318363,
+                    "maximum_converter_current_A": 6.515956902053143,
+                    "converter_loss_W": 91.62213621589214,
+                    "continuous_rail_lower_V": 94.8311578549616,
+                    "q_poc_var": 3.844175484867046,
+                    "converter_negative_sequence_A": 0.07284449310381211,
+                    "p_poc_W": 4891.732139942993
+                },
+                "pv_ld2050_load_a": {
+                    "filter_loss_W": 16.626196656284264,
+                    "p_dc_W": 4999.999999318407,
+                    "maximum_converter_current_A": 6.512451384140371,
+                    "converter_loss_W": 91.55507153259708,
+                    "continuous_rail_lower_V": 94.4645455722714,
+                    "q_poc_var": 6.835527468705765,
+                    "converter_negative_sequence_A": 0.07189727905552581,
+                    "p_poc_W": 4891.818731129526
+                },
+                "pv_ld2804_load_c": {
+                    "filter_loss_W": 16.62968532924606,
+                    "p_dc_W": 4999.999999318398,
+                    "maximum_converter_current_A": 6.51307766943199,
+                    "converter_loss_W": 91.56705455432655,
+                    "continuous_rail_lower_V": 94.53009476024629,
+                    "q_poc_var": 6.3008056333685385,
+                    "converter_negative_sequence_A": 0.07206643628980458,
+                    "p_poc_W": 4891.803259434826
+                },
+                "pv_ld626_load_c": {
+                    "filter_loss_W": 16.611909364610256,
+                    "p_dc_W": 4999.999999318438,
+                    "maximum_converter_current_A": 6.509909508895973,
+                    "converter_loss_W": 91.50598938731702,
+                    "continuous_rail_lower_V": 94.197594766431,
+                    "q_poc_var": 8.627049090681602,
+                    "converter_negative_sequence_A": 0.07129590308222145,
+                    "p_poc_W": 4891.882100566511
+                },
+                "pv_ld24_load_a": {
+                    "filter_loss_W": 16.631897655386638,
+                    "p_dc_W": 4999.999999318395,
+                    "maximum_converter_current_A": 6.513456340071409,
+                    "converter_loss_W": 91.57465542429148,
+                    "continuous_rail_lower_V": 94.57030977710262,
+                    "q_poc_var": 6.260585632343139,
+                    "converter_negative_sequence_A": 0.07211086276697301,
+                    "p_poc_W": 4891.793446238717
+                },
+                "pv_ld868_load_a": {
+                    "filter_loss_W": 16.624500827206248,
+                    "p_dc_W": 4999.999999318411,
+                    "maximum_converter_current_A": 6.512161073225564,
+                    "converter_loss_W": 91.54924485296978,
+                    "continuous_rail_lower_V": 94.4337059793696,
+                    "q_poc_var": 6.866432510261278,
+                    "converter_negative_sequence_A": 0.07186344423622283,
+                    "p_poc_W": 4891.826253638235
+                },
+                "pv_ld248_load_b": {
+                    "filter_loss_W": 16.650381925232978,
+                    "p_dc_W": 4999.999999318354,
+                    "maximum_converter_current_A": 6.516753895171628,
+                    "converter_loss_W": 91.63813937903194,
+                    "continuous_rail_lower_V": 94.91571782586192,
+                    "q_poc_var": 3.760324076869523,
+                    "converter_negative_sequence_A": 0.0729400601322494,
+                    "p_poc_W": 4891.711478014089
+                },
+                "pv_ld1291_load_b": {
+                    "filter_loss_W": 16.65440982186192,
+                    "p_dc_W": 4999.999999318344,
+                    "maximum_converter_current_A": 6.517528934367667,
+                    "converter_loss_W": 91.65196470016178,
+                    "continuous_rail_lower_V": 94.99495069992501,
+                    "q_poc_var": 2.2863608041740786,
+                    "converter_negative_sequence_A": 0.07331969382199306,
+                    "p_poc_W": 4891.69362479632
+                },
+                "pv_ld2186_load_b": {
+                    "filter_loss_W": 16.614082454746494,
+                    "p_dc_W": 4999.999999318434,
+                    "maximum_converter_current_A": 6.5102933192517,
+                    "converter_loss_W": 91.5134555666317,
+                    "continuous_rail_lower_V": 94.23801215080387,
+                    "q_poc_var": 8.400815545838736,
+                    "converter_negative_sequence_A": 0.07137729128820286,
+                    "p_poc_W": 4891.872461297055
+                }
+            },
+            "vmax_sensed_V": 253.53422511808145,
+            "accepted": true,
+            "physical_devices": 12,
+            "fixed_PQ_replay_difference_V": 6.355287432313019e-14,
+            "q_poc_var": 72.58869541728767,
+            "p_poc_W": 58701.5252488315
+        },
+        "s1_p1_balanced_converter_unrestricted": {
+            "devices": {
+                "pv_ld1895_load_b": {
+                    "filter_loss_W": 0.00017001685392337151,
+                    "p_dc_W": 6.000001206984962e-8,
+                    "maximum_converter_current_A": 0.02070081861735785,
+                    "converter_loss_W": 15.124590583206434,
+                    "continuous_rail_lower_V": 117.75467397744228,
+                    "q_poc_var": 7.918020584359031e-5,
+                    "converter_negative_sequence_A": 2.384149374230332e-18,
+                    "p_poc_W": -15.124760540060345
+                },
+                "pv_ld1970_load_c": {
+                    "filter_loss_W": 0.00017005155945248873,
+                    "p_dc_W": 6.000001917527698e-8,
+                    "maximum_converter_current_A": 0.02070293133789526,
+                    "converter_loss_W": 15.124603338256756,
+                    "continuous_rail_lower_V": 117.82770539405449,
+                    "q_poc_var": 8.040315161837036e-5,
+                    "converter_negative_sequence_A": 4.661929261783135e-18,
+                    "p_poc_W": -15.12477332981619
+                },
+                "pv_ld1668_load_a": {
+                    "filter_loss_W": 0.00016982052109071333,
+                    "p_dc_W": 5.999999075356754e-8,
+                    "maximum_converter_current_A": 0.02068886267216498,
+                    "converter_loss_W": 15.12451840216779,
+                    "continuous_rail_lower_V": 117.27807773201819,
+                    "q_poc_var": 3.405274928688917e-5,
+                    "converter_negative_sequence_A": 3.657118196434064e-18,
+                    "p_poc_W": -15.12468816268889
+                },
+                "pv_ld1446_load_c": {
+                    "filter_loss_W": 0.00016987689276426465,
+                    "p_dc_W": 5.999999963535174e-8,
+                    "maximum_converter_current_A": 0.020692296205927305,
+                    "converter_loss_W": 15.12453913124561,
+                    "continuous_rail_lower_V": 117.39968138959594,
+                    "q_poc_var": 3.7718484997582846e-5,
+                    "converter_negative_sequence_A": 2.384149374230332e-18,
+                    "p_poc_W": -15.124708948138375
+                },
+                "pv_ld2050_load_a": {
+                    "filter_loss_W": 0.00016998914834154277,
+                    "p_dc_W": 6.00000067407791e-8,
+                    "maximum_converter_current_A": 0.020699131867921598,
+                    "converter_loss_W": 15.124580399861607,
+                    "continuous_rail_lower_V": 117.68010254309412,
+                    "q_poc_var": 6.833216921020568e-5,
+                    "converter_negative_sequence_A": 3.657118196434064e-18,
+                    "p_poc_W": -15.124750329009942
+                },
+                "pv_ld2804_load_c": {
+                    "filter_loss_W": 0.00016996902634680566,
+                    "p_dc_W": 6.000000496442226e-8,
+                    "maximum_converter_current_A": 0.020697906730751767,
+                    "converter_loss_W": 15.124573003393241,
+                    "continuous_rail_lower_V": 117.62978750901244,
+                    "q_poc_var": 6.283124436906595e-5,
+                    "converter_negative_sequence_A": 3.469446951953614e-18,
+                    "p_poc_W": -15.124742912419583
+                },
+                "pv_ld626_load_c": {
+                    "filter_loss_W": 0.0001700697882931479,
+                    "p_dc_W": 6.000002628070433e-8,
+                    "maximum_converter_current_A": 0.020704040943450148,
+                    "converter_loss_W": 15.12461003724095,
+                    "continuous_rail_lower_V": 117.87533500408642,
+                    "q_poc_var": 8.66320589834324e-5,
+                    "converter_negative_sequence_A": 3.469446951953614e-18,
+                    "p_poc_W": -15.124780047029217
+                },
+                "pv_ld24_load_a": {
+                    "filter_loss_W": 0.00016995757424886904,
+                    "p_dc_W": 6.000000141170858e-8,
+                    "maximum_converter_current_A": 0.020697209431666117,
+                    "converter_loss_W": 15.124568793620428,
+                    "continuous_rail_lower_V": 117.6056740298012,
+                    "q_poc_var": 6.24298358220185e-5,
+                    "converter_negative_sequence_A": 4.768298748460664e-18,
+                    "p_poc_W": -15.124738691194676
+                },
+                "pv_ld868_load_a": {
+                    "filter_loss_W": 0.00016999793715299916,
+                    "p_dc_W": 6.000000851713594e-8,
+                    "maximum_converter_current_A": 0.020699666956559053,
+                    "converter_loss_W": 15.124583630330257,
+                    "continuous_rail_lower_V": 117.6986035229876,
+                    "q_poc_var": 6.864192119589163e-5,
+                    "converter_negative_sequence_A": 2.5859730762992427e-18,
+                    "p_poc_W": -15.124753568267401
+                },
+                "pv_ld248_load_b": {
+                    "filter_loss_W": 0.00016985285877169076,
+                    "p_dc_W": 5.99999978589949e-8,
+                    "maximum_converter_current_A": 0.02069083239276014,
+                    "converter_loss_W": 15.124530293847156,
+                    "continuous_rail_lower_V": 117.34903210450081,
+                    "q_poc_var": 3.686992654303167e-5,
+                    "converter_negative_sequence_A": 3.469446951953614e-18,
+                    "p_poc_W": -15.12470008670593
+                },
+                "pv_ld1291_load_b": {
+                    "filter_loss_W": 0.00016982600425663463,
+                    "p_dc_W": 5.999999252992438e-8,
+                    "maximum_converter_current_A": 0.020689196670640033,
+                    "converter_loss_W": 15.124520418596829,
+                    "continuous_rail_lower_V": 117.26895009221495,
+                    "q_poc_var": 2.1712359759847033e-5,
+                    "converter_negative_sequence_A": 3.517303653366802e-18,
+                    "p_poc_W": -15.124690184601093
+                },
+                "pv_ld2186_load_b": {
+                    "filter_loss_W": 0.00017005770838096623,
+                    "p_dc_W": 6.000002272799065e-8,
+                    "maximum_converter_current_A": 0.02070330563529371,
+                    "converter_loss_W": 15.124605597989568,
+                    "continuous_rail_lower_V": 117.84681188791119,
+                    "q_poc_var": 8.432486706673459e-5,
+                    "converter_negative_sequence_A": 3.469446951953614e-18,
+                    "p_poc_W": -15.124775595697926
+                }
+            },
+            "vmax_sensed_V": 245.03775487389575,
+            "accepted": true,
+            "physical_devices": 12,
+            "fixed_PQ_replay_difference_V": 6.584955206641748e-8,
+            "q_poc_var": 0.0007231289746966602,
+            "p_poc_W": -181.4968623956296
+        },
+        "s1_p3_free_unrestricted": {
+            "devices": {
+                "pv_ld1895_load_b": {
+                    "filter_loss_W": 17.597020433508987,
+                    "p_dc_W": 4999.99999931727,
+                    "maximum_converter_current_A": 6.699925377260124,
+                    "converter_loss_W": 94.8752036250558,
+                    "continuous_rail_lower_V": 112.33692575009644,
+                    "q_poc_var": 8.363897454023633,
+                    "converter_negative_sequence_A": 0.07325462911224243,
+                    "p_poc_W": 4887.527775258704
+                },
+                "pv_ld1970_load_c": {
+                    "filter_loss_W": 17.589533300744733,
+                    "p_dc_W": 4999.999999317286,
+                    "maximum_converter_current_A": 6.698679258190198,
+                    "converter_loss_W": 94.84972240198807,
+                    "continuous_rail_lower_V": 112.21175092341562,
+                    "q_poc_var": 8.493724912411096,
+                    "converter_negative_sequence_A": 0.0731117222731321,
+                    "p_poc_W": 4887.560743614553
+                },
+                "pv_ld1668_load_a": {
+                    "filter_loss_W": 17.636069736781792,
+                    "p_dc_W": 4999.999999317187,
+                    "maximum_converter_current_A": 6.7066762010489,
+                    "converter_loss_W": 95.00804233792819,
+                    "continuous_rail_lower_V": 113.00694945567426,
+                    "q_poc_var": 3.689755516237156,
+                    "converter_negative_sequence_A": 0.07488108222678969,
+                    "p_poc_W": 4887.3558872424765
+                },
+                "pv_ld1446_load_c": {
+                    "filter_loss_W": 17.623978853028348,
+                    "p_dc_W": 4999.999999317213,
+                    "maximum_converter_current_A": 6.704655133905415,
+                    "converter_loss_W": 94.96690909355931,
+                    "continuous_rail_lower_V": 112.8045791539685,
+                    "q_poc_var": 4.0700114771669895,
+                    "converter_negative_sequence_A": 0.0746019772407395,
+                    "p_poc_W": 4887.409111370625
+                },
+                "pv_ld2050_load_a": {
+                    "filter_loss_W": 17.602116558853595,
+                    "p_dc_W": 4999.999999317259,
+                    "maximum_converter_current_A": 6.700840294446012,
+                    "converter_loss_W": 94.89253900989955,
+                    "continuous_rail_lower_V": 112.42693264402271,
+                    "q_poc_var": 7.23718768702029,
+                    "converter_negative_sequence_A": 0.07357365820884136,
+                    "p_poc_W": 4887.505343748506
+                },
+                "pv_ld2804_load_c": {
+                    "filter_loss_W": 17.60602209881563,
+                    "p_dc_W": 4999.9999993172505,
+                    "maximum_converter_current_A": 6.701521771911394,
+                    "converter_loss_W": 94.90582585044623,
+                    "continuous_rail_lower_V": 112.49444624680162,
+                    "q_poc_var": 6.671147547450079,
+                    "converter_negative_sequence_A": 0.07375723990685283,
+                    "p_poc_W": 4887.488151367988
+                },
+                "pv_ld626_load_c": {
+                    "filter_loss_W": 17.586121549603376,
+                    "p_dc_W": 4999.999999317293,
+                    "maximum_converter_current_A": 6.698074237941827,
+                    "converter_loss_W": 94.83811461333289,
+                    "continuous_rail_lower_V": 112.15202309051035,
+                    "q_poc_var": 9.134243785664102,
+                    "converter_negative_sequence_A": 0.07292158186940055,
+                    "p_poc_W": 4887.5757631543565
+                },
+                "pv_ld24_load_a": {
+                    "filter_loss_W": 17.608499167734408,
+                    "p_dc_W": 4999.999999317245,
+                    "maximum_converter_current_A": 6.701933877221498,
+                    "converter_loss_W": 94.914254991679,
+                    "continuous_rail_lower_V": 112.53581365774076,
+                    "q_poc_var": 6.628503312615372,
+                    "converter_negative_sequence_A": 0.07380533300728906,
+                    "p_poc_W": 4887.477245157832
+                },
+                "pv_ld868_load_a": {
+                    "filter_loss_W": 17.600217871399764,
+                    "p_dc_W": 4999.999999317262,
+                    "maximum_converter_current_A": 6.70052436035953,
+                    "converter_loss_W": 94.88607764049863,
+                    "continuous_rail_lower_V": 112.39521048801895,
+                    "q_poc_var": 7.269958767631694,
+                    "converter_negative_sequence_A": 0.07353705028809918,
+                    "p_poc_W": 4887.513703805364
+                },
+                "pv_ld248_load_b": {
+                    "filter_loss_W": 17.6291957263702,
+                    "p_dc_W": 4999.9999993172005,
+                    "maximum_converter_current_A": 6.7055225712323505,
+                    "converter_loss_W": 94.9846580714865,
+                    "continuous_rail_lower_V": 112.8915646983469,
+                    "q_poc_var": 3.981147451619435,
+                    "converter_negative_sequence_A": 0.07470560493554776,
+                    "p_poc_W": 4887.386145519344
+                },
+                "pv_ld1291_load_b": {
+                    "filter_loss_W": 17.63370496501102,
+                    "p_dc_W": 4999.999999317191,
+                    "maximum_converter_current_A": 6.706365846112075,
+                    "converter_loss_W": 94.99998781401084,
+                    "continuous_rail_lower_V": 112.97332944110744,
+                    "q_poc_var": 2.4209464224173125,
+                    "converter_negative_sequence_A": 0.0751183443575236,
+                    "p_poc_W": 4887.36630653817
+                },
+                "pv_ld2186_load_b": {
+                    "filter_loss_W": 17.588554315085275,
+                    "p_dc_W": 4999.99999931729,
+                    "maximum_converter_current_A": 6.698491892129544,
+                    "converter_loss_W": 94.84639321543875,
+                    "continuous_rail_lower_V": 112.19363613123757,
+                    "q_poc_var": 8.894660580672744,
+                    "converter_negative_sequence_A": 0.07300977051480344,
+                    "p_poc_W": 4887.565051786765
+                }
+            },
+            "vmax_sensed_V": 246.21104728637587,
+            "accepted": true,
+            "physical_devices": 12,
+            "fixed_PQ_replay_difference_V": 4.0194366942304644e-14,
+            "q_poc_var": 76.85518491492991,
+            "p_poc_W": 58649.73122856468
+        },
+        "s2_p1_balanced_converter_unrestricted": {
+            "devices": {
+                "pv_ld1895_load_b": {
+                    "filter_loss_W": 0.00016015253853396416,
+                    "p_dc_W": 6.000000496442226e-8,
+                    "maximum_converter_current_A": 0.020091318839588167,
+                    "converter_loss_W": 15.12091120802097,
+                    "continuous_rail_lower_V": 99.61923747318501,
+                    "q_poc_var": 7.425031776792101e-5,
+                    "converter_negative_sequence_A": 2.384149374230332e-18,
+                    "p_poc_W": -15.1210713005595
+                },
+                "pv_ld1970_load_c": {
+                    "filter_loss_W": 0.0001601833378845896,
+                    "p_dc_W": 6.00000067407791e-8,
+                    "maximum_converter_current_A": 0.020093250653472776,
+                    "converter_loss_W": 15.120922868770476,
+                    "continuous_rail_lower_V": 99.69012632083196,
+                    "q_poc_var": 7.539985556451884e-5,
+                    "converter_negative_sequence_A": 2.5859730762992427e-18,
+                    "p_poc_W": -15.121082992108354
+                },
+                "pv_ld1668_load_a": {
+                    "filter_loss_W": 0.00015997828857017282,
+                    "p_dc_W": 5.999999075356754e-8,
+                    "maximum_converter_current_A": 0.02008038593672036,
+                    "converter_loss_W": 15.120845215329753,
+                    "continuous_rail_lower_V": 99.15662554605824,
+                    "q_poc_var": 3.1748862651441445e-5,
+                    "converter_negative_sequence_A": 1.1564823173178713e-18,
+                    "p_poc_W": -15.121005133618333
+                },
+                "pv_ld1446_load_c": {
+                    "filter_loss_W": 0.00016002832258088517,
+                    "p_dc_W": 5.999999608263806e-8,
+                    "maximum_converter_current_A": 0.02008352581147997,
+                    "converter_loss_W": 15.120864168076999,
+                    "continuous_rail_lower_V": 99.2746660053089,
+                    "q_poc_var": 3.520227718196989e-5,
+                    "converter_negative_sequence_A": 3.469446951953614e-18,
+                    "p_poc_W": -15.121024136399583
+                },
+                "pv_ld2050_load_a": {
+                    "filter_loss_W": 0.0001601279493002039,
+                    "p_dc_W": 6.000000318806542e-8,
+                    "maximum_converter_current_A": 0.020089776406570475,
+                    "converter_loss_W": 15.120901897643883,
+                    "continuous_rail_lower_V": 99.54685168526265,
+                    "q_poc_var": 6.403275448121915e-5,
+                    "converter_negative_sequence_A": 1.635512977795599e-18,
+                    "p_poc_W": -15.12106196559318
+                },
+                "pv_ld2804_load_c": {
+                    "filter_loss_W": 0.0001601100925121557,
+                    "p_dc_W": 5.99999978589949e-8,
+                    "maximum_converter_current_A": 0.020088656212157642,
+                    "converter_loss_W": 15.120895135970514,
+                    "continuous_rail_lower_V": 99.49801915680234,
+                    "q_poc_var": 5.8854374908802465e-5,
+                    "converter_negative_sequence_A": 2.384149374230332e-18,
+                    "p_poc_W": -15.121055186063028
+                },
+                "pv_ld626_load_c": {
+                    "filter_loss_W": 0.00016019951347701067,
+                    "p_dc_W": 6.000001029349278e-8,
+                    "maximum_converter_current_A": 0.020094265153563207,
+                    "converter_loss_W": 15.120928992464234,
+                    "continuous_rail_lower_V": 99.73634965892963,
+                    "q_poc_var": 8.126670645854095e-5,
+                    "converter_negative_sequence_A": 2.384149374230332e-18,
+                    "p_poc_W": -15.121089131977701
+                },
+                "pv_ld24_load_a": {
+                    "filter_loss_W": 0.00016009992877918933,
+                    "p_dc_W": 5.99999978589949e-8,
+                    "maximum_converter_current_A": 0.020088018591624655,
+                    "converter_loss_W": 15.120891287191592,
+                    "continuous_rail_lower_V": 99.47461255805221,
+                    "q_poc_var": 5.847401097768684e-5,
+                    "converter_negative_sequence_A": 3.657118196434064e-18,
+                    "p_poc_W": -15.121051327120373
+                },
+                "pv_ld868_load_a": {
+                    "filter_loss_W": 0.00016013574915696438,
+                    "p_dc_W": 6.000000141170858e-8,
+                    "maximum_converter_current_A": 0.020090265688847957,
+                    "converter_loss_W": 15.120904851030991,
+                    "continuous_rail_lower_V": 99.56481063772345,
+                    "q_poc_var": 6.4325280626297e-5,
+                    "converter_negative_sequence_A": 2.8912057932946782e-18,
+                    "p_poc_W": -15.121064926780146
+                },
+                "pv_ld248_load_b": {
+                    "filter_loss_W": 0.0001600069907521373,
+                    "p_dc_W": 5.999999075356754e-8,
+                    "maximum_converter_current_A": 0.020082187196706174,
+                    "converter_loss_W": 15.12085608799858,
+                    "continuous_rail_lower_V": 99.2254994105279,
+                    "q_poc_var": 3.440354507142779e-5,
+                    "converter_negative_sequence_A": 5.782411586589357e-19,
+                    "p_poc_W": -15.121016034989342
+                },
+                "pv_ld1291_load_b": {
+                    "filter_loss_W": 0.00015998315895693338,
+                    "p_dc_W": 5.999999252992438e-8,
+                    "maximum_converter_current_A": 0.020080691598265175,
+                    "converter_loss_W": 15.120847060347149,
+                    "continuous_rail_lower_V": 99.14778002593917,
+                    "q_poc_var": 2.0127947091622134e-5,
+                    "converter_negative_sequence_A": 3.878959614448864e-18,
+                    "p_poc_W": -15.121006983506113
+                },
+                "pv_ld2186_load_b": {
+                    "filter_loss_W": 0.00016018879334112057,
+                    "p_dc_W": 6.00000067407791e-8,
+                    "maximum_converter_current_A": 0.020093592814407313,
+                    "converter_loss_W": 15.120924934111414,
+                    "continuous_rail_lower_V": 99.70866421159141,
+                    "q_poc_var": 7.90925412768248e-5,
+                    "converter_negative_sequence_A": 2.384149374230332e-18,
+                    "p_poc_W": -15.121085062904749
+                }
+            },
+            "vmax_sensed_V": 252.39395227504673,
+            "accepted": true,
+            "physical_devices": 12,
+            "fixed_PQ_replay_difference_V": 5.345924127363743e-8,
+            "q_poc_var": 0.0006771784740582723,
+            "p_poc_W": -181.4526141816204
+        },
+        "s1_p1_free_unrestricted": {
+            "devices": {
+                "pv_ld1895_load_b": {
+                    "filter_loss_W": 0.00017001690483020582,
+                    "p_dc_W": 6.030143673285693e-8,
+                    "maximum_converter_current_A": 0.020917530443567697,
+                    "converter_loss_W": 15.124579041485132,
+                    "continuous_rail_lower_V": 117.75498191198672,
+                    "q_poc_var": 7.892264780612335e-5,
+                    "converter_negative_sequence_A": 0.0003975520597965127,
+                    "p_poc_W": -15.124748998088526
+                },
+                "pv_ld1970_load_c": {
+                    "filter_loss_W": 0.00017005160639627093,
+                    "p_dc_W": 6.031493526847953e-8,
+                    "maximum_converter_current_A": 0.020920570275264585,
+                    "converter_loss_W": 15.124591838887543,
+                    "continuous_rail_lower_V": 117.82802691591145,
+                    "q_poc_var": 8.01421366655175e-5,
+                    "converter_negative_sequence_A": 0.00039682584096321607,
+                    "p_poc_W": -15.124761830179004
+                },
+                "pv_ld1668_load_a": {
+                    "filter_loss_W": 0.00016982060471626426,
+                    "p_dc_W": 6.024549570327054e-8,
+                    "maximum_converter_current_A": 0.020902217806099875,
+                    "converter_loss_W": 15.124506353486618,
+                    "continuous_rail_lower_V": 117.27832047438285,
+                    "q_poc_var": 3.394610027802197e-5,
+                    "converter_negative_sequence_A": 0.000406199589718767,
+                    "p_poc_W": -15.124676113845839
+                },
+                "pv_ld1446_load_c": {
+                    "filter_loss_W": 0.0001698769700837488,
+                    "p_dc_W": 6.026541399251073e-8,
+                    "maximum_converter_current_A": 0.020907071033415346,
+                    "converter_loss_W": 15.124527167801693,
+                    "continuous_rail_lower_V": 117.39994523344649,
+                    "q_poc_var": 3.760022994441642e-5,
+                    "converter_negative_sequence_A": 0.00040476952756243197,
+                    "p_poc_W": -15.124696984506363
+                },
+                "pv_ld2050_load_a": {
+                    "filter_loss_W": 0.00016998920532529382,
+                    "p_dc_W": 6.029482335634384e-8,
+                    "maximum_converter_current_A": 0.020915591891268265,
+                    "converter_loss_W": 15.124568758312812,
+                    "continuous_rail_lower_V": 117.68040218939603,
+                    "q_poc_var": 6.810939568225455e-5,
+                    "converter_negative_sequence_A": 0.0003992752700604982,
+                    "p_poc_W": -15.124738687223314
+                },
+                "pv_ld2804_load_c": {
+                    "filter_loss_W": 0.00016996908701294444,
+                    "p_dc_W": 6.029043397859368e-8,
+                    "maximum_converter_current_A": 0.020914063704409337,
+                    "converter_loss_W": 15.124561304538705,
+                    "continuous_rail_lower_V": 117.63008094563583,
+                    "q_poc_var": 6.26309285630608e-5,
+                    "converter_negative_sequence_A": 0.0004002593350560129,
+                    "p_poc_W": -15.124731213335284
+                },
+                "pv_ld626_load_c": {
+                    "filter_loss_W": 0.00017006983147993537,
+                    "p_dc_W": 6.031852528565196e-8,
+                    "maximum_converter_current_A": 0.020921893101414877,
+                    "converter_loss_W": 15.124598597126395,
+                    "continuous_rail_lower_V": 117.87566085842401,
+                    "q_poc_var": 8.634870390047261e-5,
+                    "converter_negative_sequence_A": 0.0003957977007960363,
+                    "p_poc_W": -15.12476860663935
+                },
+                "pv_ld24_load_a": {
+                    "filter_loss_W": 0.00016995763616911574,
+                    "p_dc_W": 6.028544596858865e-8,
+                    "maximum_converter_current_A": 0.02091306094184342,
+                    "converter_loss_W": 15.124557080403,
+                    "continuous_rail_lower_V": 117.60596309090683,
+                    "q_poc_var": 6.222672874582613e-5,
+                    "converter_negative_sequence_A": 0.00040050330386960864,
+                    "p_poc_W": -15.124726977753722
+                },
+                "pv_ld868_load_a": {
+                    "filter_loss_W": 0.00016999799315620123,
+                    "p_dc_W": 6.02978378339003e-8,
+                    "maximum_converter_current_A": 0.020916361542767537,
+                    "converter_loss_W": 15.12457199968488,
+                    "continuous_rail_lower_V": 117.6989065099195,
+                    "q_poc_var": 6.842063915376423e-5,
+                    "converter_negative_sequence_A": 0.000399089394069543,
+                    "p_poc_W": -15.124741937380199
+                },
+                "pv_ld248_load_b": {
+                    "filter_loss_W": 0.00016985293857985084,
+                    "p_dc_W": 6.025652332652953e-8,
+                    "maximum_converter_current_A": 0.02090496756286486,
+                    "converter_loss_W": 15.12451829911297,
+                    "continuous_rail_lower_V": 117.34928651835851,
+                    "q_poc_var": 3.6754689968256093e-5,
+                    "converter_negative_sequence_A": 0.0004052939224177703,
+                    "p_poc_W": -15.124688091795026
+                },
+                "pv_ld1291_load_b": {
+                    "filter_loss_W": 0.00016982609132298876,
+                    "p_dc_W": 6.025286403144037e-8,
+                    "maximum_converter_current_A": 0.020903306815032604,
+                    "converter_loss_W": 15.124508291685556,
+                    "continuous_rail_lower_V": 117.26919861459837,
+                    "q_poc_var": 2.164896917075665e-5,
+                    "converter_negative_sequence_A": 0.00040753099578170126,
+                    "p_poc_W": -15.124678057524015
+                },
+                "pv_ld2186_load_b": {
+                    "filter_loss_W": 0.00017005775352529895,
+                    "p_dc_W": 6.031525678906746e-8,
+                    "maximum_converter_current_A": 0.02092092781121038,
+                    "converter_loss_W": 15.124594130831326,
+                    "continuous_rail_lower_V": 117.8471338730061,
+                    "q_poc_var": 8.404953590725184e-5,
+                    "converter_negative_sequence_A": 0.0003962661901220971,
+                    "p_poc_W": -15.124764128269595
+                }
+            },
+            "vmax_sensed_V": 245.03772306378804,
+            "accepted": true,
+            "physical_devices": 12,
+            "fixed_PQ_replay_difference_V": 6.585159685783686e-8,
+            "q_poc_var": 0.0007208007057857221,
+            "p_poc_W": -181.49672162654025
+        },
+        "s2_p3_balanced_converter_unrestricted": {
+            "devices": {
+                "pv_ld1895_load_b": {
+                    "filter_loss_W": 16.623071142004846,
+                    "p_dc_W": 5000.000002373072,
+                    "maximum_converter_current_A": 6.472874161980614,
+                    "converter_loss_W": 91.54553489703629,
+                    "continuous_rail_lower_V": 94.4427717590641,
+                    "q_poc_var": 7.914769037684506,
+                    "converter_negative_sequence_A": 5.921189464667501e-16,
+                    "p_poc_W": 4891.831396334031
+                },
+                "pv_ld1970_load_c": {
+                    "filter_loss_W": 16.616376842292084,
+                    "p_dc_W": 5000.00000247824,
+                    "maximum_converter_current_A": 6.471570680732638,
+                    "converter_loss_W": 91.52252845254228,
+                    "continuous_rail_lower_V": 94.32352913705171,
+                    "q_poc_var": 8.037382501365705,
+                    "converter_negative_sequence_A": 8.373826446313467e-16,
+                    "p_poc_W": 4891.861097183406
+                },
+                "pv_ld1668_load_a": {
+                    "filter_loss_W": 16.658015137008988,
+                    "p_dc_W": 5000.000001118392,
+                    "maximum_converter_current_A": 6.479674028730899,
+                    "converter_loss_W": 91.66560213913414,
+                    "continuous_rail_lower_V": 95.08099391370153,
+                    "q_poc_var": 3.4914785307728486,
+                    "converter_negative_sequence_A": 9.930136612989092e-16,
+                    "p_poc_W": 4891.6763838422485
+                },
+                "pv_ld1446_load_c": {
+                    "filter_loss_W": 16.647205127030247,
+                    "p_dc_W": 5000.000001326888,
+                    "maximum_converter_current_A": 6.477571235937749,
+                    "converter_loss_W": 91.62846362060975,
+                    "continuous_rail_lower_V": 94.88826173125476,
+                    "q_poc_var": 3.851175543742597,
+                    "converter_negative_sequence_A": 6.620091075326061e-16,
+                    "p_poc_W": 4891.724332579248
+                },
+                "pv_ld2050_load_a": {
+                    "filter_loss_W": 16.627636111864376,
+                    "p_dc_W": 5000.000002118026,
+                    "maximum_converter_current_A": 6.473762880041608,
+                    "converter_loss_W": 91.56122252455378,
+                    "continuous_rail_lower_V": 94.52847451225398,
+                    "q_poc_var": 6.84858627381627,
+                    "converter_negative_sequence_A": 2.9605947323337506e-16,
+                    "p_poc_W": 4891.811143481607
+                },
+                "pv_ld2804_load_c": {
+                    "filter_loss_W": 16.631132249001894,
+                    "p_dc_W": 5000.000001969529,
+                    "maximum_converter_current_A": 6.474443432980022,
+                    "converter_loss_W": 91.57323658805242,
+                    "continuous_rail_lower_V": 94.59283561248617,
+                    "q_poc_var": 6.312765845418372,
+                    "converter_negative_sequence_A": 9.362222582871203e-16,
+                    "p_poc_W": 4891.795633132475
+                },
+                "pv_ld626_load_c": {
+                    "filter_loss_W": 16.613321228356654,
+                    "p_dc_W": 5000.000002658853,
+                    "maximum_converter_current_A": 6.470975619278581,
+                    "converter_loss_W": 91.51202663443951,
+                    "continuous_rail_lower_V": 94.26656816048353,
+                    "q_poc_var": 8.64373876697104,
+                    "converter_negative_sequence_A": 6.620091075326061e-16,
+                    "p_poc_W": 4891.874654796057
+                },
+                "pv_ld24_load_a": {
+                    "filter_loss_W": 16.63334685121572,
+                    "p_dc_W": 5000.000001939705,
+                    "maximum_converter_current_A": 6.474874487199858,
+                    "converter_loss_W": 91.5808465856916,
+                    "continuous_rail_lower_V": 94.63223696394455,
+                    "q_poc_var": 6.2724805629522,
+                    "converter_negative_sequence_A": 1.22068447960593e-15,
+                    "p_poc_W": 4891.785808502797
+                },
+                "pv_ld868_load_a": {
+                    "filter_loss_W": 16.62593854795432,
+                    "p_dc_W": 5000.000002142212,
+                    "maximum_converter_current_A": 6.473432408931432,
+                    "converter_loss_W": 91.55538889129198,
+                    "continuous_rail_lower_V": 94.49825746536915,
+                    "q_poc_var": 6.879541861168036,
+                    "converter_negative_sequence_A": 3.3100455376630307e-16,
+                    "p_poc_W": 4891.818674702966
+                },
+                "pv_ld248_load_b": {
+                    "filter_loss_W": 16.651868766060943,
+                    "p_dc_W": 5000.000001257142,
+                    "maximum_converter_current_A": 6.478478503505486,
+                    "converter_loss_W": 91.64448636937732,
+                    "continuous_rail_lower_V": 94.97109732477857,
+                    "q_poc_var": 3.7671941293425064,
+                    "converter_negative_sequence_A": 6.10342239802965e-16,
+                    "p_poc_W": 4891.703646121703
+                },
+                "pv_ld1291_load_b": {
+                    "filter_loss_W": 16.655912404775336,
+                    "p_dc_W": 5000.000000792989,
+                    "maximum_converter_current_A": 6.479265052951821,
+                    "converter_loss_W": 91.6583783814734,
+                    "continuous_rail_lower_V": 95.0491168289328,
+                    "q_poc_var": 2.2902003854131276,
+                    "converter_negative_sequence_A": 1.4802973661668753e-16,
+                    "p_poc_W": 4891.685710006741
+                },
+                "pv_ld2186_load_b": {
+                    "filter_loss_W": 16.615498112520072,
+                    "p_dc_W": 5000.000002581772,
+                    "maximum_converter_current_A": 6.471399559282279,
+                    "converter_loss_W": 91.51950838598466,
+                    "continuous_rail_lower_V": 94.30621229358432,
+                    "q_poc_var": 8.417048499704189,
+                    "converter_negative_sequence_A": 9.362222582871203e-16,
+                    "p_poc_W": 4891.864996083267
+                }
+            },
+            "vmax_sensed_V": 253.52252827889538,
+            "accepted": true,
+            "physical_devices": 12,
+            "fixed_PQ_replay_difference_V": 5.662985485392731e-13,
+            "q_poc_var": 72.7263619383514,
+            "p_poc_W": 58701.43347676656
+        },
+        "s1_p3_free_253V": {
+            "devices": {
+                "pv_ld1895_load_b": {
+                    "filter_loss_W": 17.597020433494436,
+                    "p_dc_W": 4999.999999317324,
+                    "maximum_converter_current_A": 6.699925376361031,
+                    "converter_loss_W": 94.87520362504966,
+                    "continuous_rail_lower_V": 112.33692576777035,
+                    "q_poc_var": 8.363893849653943,
+                    "converter_negative_sequence_A": 0.07325462779453483,
+                    "p_poc_W": 4887.52777525878
+                },
+                "pv_ld1970_load_c": {
+                    "filter_loss_W": 17.589533300728363,
+                    "p_dc_W": 4999.9999993173415,
+                    "maximum_converter_current_A": 6.698679257198598,
+                    "converter_loss_W": 94.84972240198081,
+                    "continuous_rail_lower_V": 112.21175094151339,
+                    "q_poc_var": 8.4937212509228,
+                    "converter_negative_sequence_A": 0.07311172083446811,
+                    "p_poc_W": 4887.560743614632
+                },
+                "pv_ld1668_load_a": {
+                    "filter_loss_W": 17.636069736781792,
+                    "p_dc_W": 4999.999999317234,
+                    "maximum_converter_current_A": 6.706676200484876,
+                    "converter_loss_W": 95.00804233795753,
+                    "continuous_rail_lower_V": 113.0069494636296,
+                    "q_poc_var": 3.689753938496585,
+                    "converter_negative_sequence_A": 0.07488108135484814,
+                    "p_poc_W": 4887.355887242495
+                },
+                "pv_ld1446_load_c": {
+                    "filter_loss_W": 17.62397885302653,
+                    "p_dc_W": 4999.999999317263,
+                    "maximum_converter_current_A": 6.704655133219106,
+                    "converter_loss_W": 94.9669090935893,
+                    "continuous_rail_lower_V": 112.80457916287659,
+                    "q_poc_var": 4.070009732819292,
+                    "converter_negative_sequence_A": 0.07460197619092238,
+                    "p_poc_W": 4887.409111370647
+                },
+                "pv_ld2050_load_a": {
+                    "filter_loss_W": 17.60211655884541,
+                    "p_dc_W": 4999.999999317313,
+                    "maximum_converter_current_A": 6.700840293567292,
+                    "converter_loss_W": 94.89253900991284,
+                    "continuous_rail_lower_V": 112.42693265951591,
+                    "q_poc_var": 7.237184563136056,
+                    "converter_negative_sequence_A": 0.07357365692262402,
+                    "p_poc_W": 4887.505343748555
+                },
+                "pv_ld2804_load_c": {
+                    "filter_loss_W": 17.606022098809262,
+                    "p_dc_W": 4999.999999317305,
+                    "maximum_converter_current_A": 6.701521771079376,
+                    "converter_loss_W": 94.90582585046204,
+                    "continuous_rail_lower_V": 112.49444626102412,
+                    "q_poc_var": 6.67114468066567,
+                    "converter_negative_sequence_A": 0.07375723867096878,
+                    "p_poc_W": 4887.488151368034
+                },
+                "pv_ld626_load_c": {
+                    "filter_loss_W": 17.586121549585187,
+                    "p_dc_W": 4999.99999931735,
+                    "maximum_converter_current_A": 6.698074236906147,
+                    "converter_loss_W": 94.83811461331936,
+                    "continuous_rail_lower_V": 112.15202311005565,
+                    "q_poc_var": 9.134239829670653,
+                    "converter_negative_sequence_A": 0.07292158038676984,
+                    "p_poc_W": 4887.575763154445
+                },
+                "pv_ld24_load_a": {
+                    "filter_loss_W": 17.608499167727132,
+                    "p_dc_W": 4999.999999317298,
+                    "maximum_converter_current_A": 6.701933876417744,
+                    "converter_loss_W": 94.91425499169497,
+                    "continuous_rail_lower_V": 112.53581367182987,
+                    "q_poc_var": 6.628500464322032,
+                    "converter_negative_sequence_A": 0.07380533181034964,
+                    "p_poc_W": 4887.477245157876
+                },
+                "pv_ld868_load_a": {
+                    "filter_loss_W": 17.60021787139158,
+                    "p_dc_W": 4999.999999317318,
+                    "maximum_converter_current_A": 6.700524359458303,
+                    "converter_loss_W": 94.88607764051172,
+                    "continuous_rail_lower_V": 112.3952105036167,
+                    "q_poc_var": 7.269955629429528,
+                    "converter_negative_sequence_A": 0.0735370489717167,
+                    "p_poc_W": 4887.5137038054145
+                },
+                "pv_ld248_load_b": {
+                    "filter_loss_W": 17.6291957263702,
+                    "p_dc_W": 4999.9999993172505,
+                    "maximum_converter_current_A": 6.705522570599454,
+                    "converter_loss_W": 94.9846580715165,
+                    "continuous_rail_lower_V": 112.89156470699797,
+                    "q_poc_var": 3.9811457451819567,
+                    "converter_negative_sequence_A": 0.07470560396485021,
+                    "p_poc_W": 4887.386145519364
+                },
+                "pv_ld1291_load_b": {
+                    "filter_loss_W": 17.633704965005563,
+                    "p_dc_W": 4999.99999931724,
+                    "maximum_converter_current_A": 6.706365845525157,
+                    "converter_loss_W": 94.99998781402547,
+                    "continuous_rail_lower_V": 112.97332944649635,
+                    "q_poc_var": 2.4209454055976405,
+                    "converter_negative_sequence_A": 0.0751183434152542,
+                    "p_poc_W": 4887.366306538209
+                },
+                "pv_ld2186_load_b": {
+                    "filter_loss_W": 17.588554315067995,
+                    "p_dc_W": 4999.999999317343,
+                    "maximum_converter_current_A": 6.698491891119465,
+                    "converter_loss_W": 94.8463932154293,
+                    "continuous_rail_lower_V": 112.1936361502596,
+                    "q_poc_var": 8.894656729931306,
+                    "converter_negative_sequence_A": 0.07300976906422804,
+                    "p_poc_W": 4887.565051786846
+                }
+            },
+            "vmax_sensed_V": 246.21104728576682,
+            "accepted": true,
+            "physical_devices": 12,
+            "fixed_PQ_replay_difference_V": 5.685035733124713e-14,
+            "q_poc_var": 76.85515181982746,
+            "p_poc_W": 58649.731228565295
+        }
+    },
+    "assertions": 1148,
+    "physical_checks_recomputed": 5472
+}
