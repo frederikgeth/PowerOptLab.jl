@@ -72,8 +72,11 @@ def generate(input_path, folder, figure_dir):
     fig.suptitle("Time-domain validation exposes a switching-frequency capacitor limit\nFixed phase/DC sizing · 10 kHz centered PWM · fixed POC voltage · ideal feedforward", fontsize=13)
     figure_dir.mkdir(parents=True, exist_ok=True)
     for extension in ("png", "svg"):
-        fig.savefig(figure_dir / f"emt_capacitor_stress.{extension}", dpi=180,
+        path = figure_dir / f"emt_capacitor_stress.{extension}"
+        fig.savefig(path, dpi=180,
                     metadata={"Date": None} if extension == "svg" else {})
+        if extension == "svg":
+            path.write_text("\n".join(line.rstrip() for line in path.read_text().splitlines())+"\n")
     plt.close(fig)
     lines = ["# Representative switched-circuit validation", "",
              "All three representative cases pass the predeclared mechanism and time-step convergence bands. All three switched cases fail the unchanged 1 A capacitor RMS budget. Agreement with a fundamental-frequency model therefore does not certify switching thermal feasibility.", "",

@@ -121,8 +121,11 @@ def generate(folder, destination):
     fig.tight_layout(rect=(0, .07, 1, .92))
     destination.mkdir(parents=True, exist_ok=True)
     for ext in ("png", "svg"):
-        fig.savefig(destination / f"four_leg_phase_control.{ext}", dpi=180,
+        path = destination / f"four_leg_phase_control.{ext}"
+        fig.savefig(path, dpi=180,
                     metadata={"Date": None} if ext == "svg" else {})
+        if ext == "svg":
+            path.write_text("\n".join(line.rstrip() for line in path.read_text().splitlines())+"\n")
     plt.close(fig)
     lines = ["# Australian four-leg research-control results", "",
              "Generated from eleven accepted saved-point audits. This is an explicit four-wire topology and policy counterfactual; phase and DC sizing are unchanged. Neutral rating is 10 A RMS and neutral filter R/X equals the phase arm. These assumptions do not establish Australian connection conformity or dynamic stability.", "",
