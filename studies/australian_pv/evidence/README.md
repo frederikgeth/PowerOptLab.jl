@@ -1,28 +1,20 @@
 # Australian PV evidence and provenance
 
-The **coupled inductive thermal campaign** is the current model-validation
-campaign. It compares local reactive-priority mean/worst/sequence/four-leg
-control with coordinated export with Q free, using identical fixed hardware.
-Older tables in this study are historical experiments, not current-source
-validation of the updated thermal allocator.
-
-Full evidence is stored as immutable, content-addressed bundles. Each manifest
-lists every original file's SHA256 and size, the bundle SHA256, and a full Git
-commit identifying the original bytes. Compressed bundles in `bundles/` retain
-those bytes through squash merges and branch deletion. An ignored local cache
-and reconstruction from the pinned Git tree provide additional restore paths;
-the distributed bundles do not require that intermediate Git history.
-No source manifest is re-signed to make an old result appear current.
+Full raw records (saved phasors, solver stages, network audits, EMT waveforms)
+are stored as immutable, content-addressed bundles in `bundles/`. Each manifest
+lists every file's SHA256 and size, the bundle SHA256, and the Git commit the
+bytes were packed from. The Git tree keeps only compact review files.
 
 | Manifest | Status | Contents |
 |---|---|---|
-| `current.json` | Current | Complete benchmark, domain/boundary records and matched EMT, including failures and raw statuses |
-| `historical-d2c9a97.json` | Pinned historical archive | All 546 pre-update result files, including four night thermal-prediction misses, the unsuccessful solver control and earlier failed hardware controls |
+| `current.json` (= `current-05db2db.json`) | Current | Matched benchmark with the declared 7 A / 23 A fixture (15 points, PF/OPF agreement), legacy-fixture sensitivity, 60 matched EMT references, regenerated carrier-domain and DC-boundary validations |
+| `current-35d5cac.json` | Superseded | First matched benchmark (1 A capacitor budget, 8 points, 32 EMT references) |
+| `historical-d2c9a97.json` | Historical | 546 files from all earlier campaigns, including failed predictions and solver controls (see [study history](../HISTORY.md)) |
 
 ## Restore current records
 
-From a checkout, restore current records into their canonical
-paths before running saved-evidence tests:
+From the repository root, before running saved-record tests or the report
+generators:
 
 ```sh
 python scripts/australian_pv/evidence.py restore studies/australian_pv/evidence/current.json
@@ -32,49 +24,39 @@ python scripts/australian_pv/test_plot_engineering_benchmark.py
 python scripts/australian_pv/summarize_evidence.py --check
 ```
 
-## Restore historical records
+## Restore superseded or historical records
 
-Restore historical results into a separate directory; they deliberately differ
-from the current source and must not overwrite it:
+Restore into a separate directory; they deliberately differ from the current
+source and must not overwrite it:
 
 ```sh
 python scripts/australian_pv/evidence.py restore studies/australian_pv/evidence/historical-d2c9a97.json --output /tmp/australian-pv-history
 ```
 
-The normal restore uses a distributed bundle or a verified local cache. If both
-are unavailable, fetching the pinned Git history enables the reconstruction
-fallback. Rebuilding compressed bytes also requires a compatible compression
-implementation; distributing the original bundle avoids that dependency.
-Restoration verifies the entire bundle and destination before writing any files.
-It refuses conflicting files, unsafe paths and checksum failures. Archive tests
-exercise cached and Git-only restoration and corruption rejection.
+Reproducing an old campaign needs the source bytes matching its recorded hashes
+(each campaign's `environment.json`), not just the archive commit.
+`dependency_manifest-b61f2440.toml` is the dependency lock for the historical
+records; current records carry their own `dependency_manifest.toml`.
 
-For historical replay, use each campaign's own generation `git_revision`,
-`git_status`, Julia version and source hashes. The bundle's `source_revision`
-identifies the archived evidence tree; it need not be the source revision that
-generated every experiment inside it. Some historical preparations used dirty
-working trees: reproducing them requires the source bytes matching their hashes,
-not merely checking out the archive commit. Auditing old points against current
-equations answers a different question and should fail when sources differ.
+## How a campaign is sealed
 
-`dependency_manifest-b61f2440.toml` preserves the original dependency lock and
-matches all 30 historical environment fingerprints. Use it with the recorded
-Julia version. Current records also retain their generation
-`dependency_manifest.toml` inside the full bundle. Supported-version validation
-resolves separate Julia-compatible environments; replay audits verify the
-recorded lock and report their separate runtime environment without replacing it.
+1. Generate from a clean commit (`run_engineering_benchmark.jl`, audit, EMT,
+   domain, boundary).
+2. Commit the full records once and pack them:
+   `python scripts/australian_pv/evidence.py pack <commit> studies/australian_pv/evidence/current-<short>.json <roots...>`.
+3. Copy the new manifest to `current.json`, then untrack the raw files so only
+   compact files remain in the tree. A squash merge keeps only the bundle.
 
-Normal PR CI runs solver, independent SI record, corruption and circuit tests
-on Julia 1.10 and current stable. The `Australian PV evidence` scheduled/manual
-workflow regenerates eight coupled points and 32 representative EMT references
-at three meshes in averaged and switched modes. It requires every thermal
-prediction to enclose its switched reference. Hardware, raw solver, physical/
-replay, mesh and prediction acceptance remain separate gates.
+Saved-record audits compare source hashes: editing any hashed script makes the
+records stale until the campaign is regenerated. That is deliberate (no
+re-signing of old results), but it means any change to the shared study
+scripts requires a rerun (about 15 minutes on a laptop for everything).
 
-`current-35d5cac.json` is the immutable manifest for this campaign;
-`current.json` is its active copy. For a future campaign, create a new versioned
-manifest and retain prior bundles/manifests before updating the active copy.
-Regenerate data when source hashes change; do not edit old provenance to make
-it appear current. `summarize_evidence.py --check` independently replays the
-audits in temporary directories and checks the compact fixtures and summary
-without changing original receipts.
+Restoration verifies the bundle and destination before writing, and refuses
+conflicting files, unsafe paths and checksum failures. If a distributed bundle
+is missing, restoration falls back to the local cache, then to the pinned Git
+history.
+
+**Open decision (roadmap D1):** the bundles are about 34 MB of binary in the
+repository. Moving them to a GitHub Release or Zenodo, keeping only manifests
+and a download step, would keep the repository small.
