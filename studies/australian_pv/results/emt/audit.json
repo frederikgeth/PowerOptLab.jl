@@ -1,0 +1,54 @@
+{
+  "accepted": true,
+  "checks": 308,
+  "cases": {
+    "balanced_L": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 4.014850406414346e-08,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 4.170668563891433,
+        "failed_engineering_checks": [
+          "capacitor_total_rms"
+        ]
+      }
+    },
+    "binding_dc_capacitor": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.9996736544869628,
+        "failed_engineering_checks": [
+          "dc_2omega_peak"
+        ]
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 4.046300689795355,
+        "failed_engineering_checks": [
+          "dc_2omega_peak",
+          "capacitor_total_rms"
+        ]
+      }
+    },
+    "four_leg_unbalanced": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.5016781470055004,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 3.9853917815832074,
+        "failed_engineering_checks": [
+          "capacitor_total_rms"
+        ]
+      }
+    }
+  },
+  "scope": "independent metric, energy, RMS-limit, coverage and provenance reconstruction; mechanism agreement does not certify failed hardware bounds",
+  "input_sha256": "48ef985e26a8471826ddf477d19d15b1899eed01d728bc6709a3b35bd26d9bd5",
+  "results_sha256": "4fe60181bab1b76e7dd19deca198db72e4f6170462b4427338034efa199df445"
+}

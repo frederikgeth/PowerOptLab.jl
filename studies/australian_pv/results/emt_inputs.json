@@ -1,0 +1,295 @@
+{
+    "dc_source": "constant mean input power at regulated DC-link boundary; no 2omega input power, nonzero source current ripple allowed; not a validation of the optional R-L small-signal source model",
+    "timing": {
+        "discard_cycles": 6,
+        "switching_Hz": 10000,
+        "pwm": "centered carrier PWM, sampled sinusoidal feedforward with measured DC compensation; no current/PLL/service feedback",
+        "steps_per_carrier": [
+            32,
+            64,
+            128
+        ],
+        "cycles": 10
+    },
+    "git_revision": "ec3309e2d0174b9b163786ef87cc4e327065048f",
+    "scope": "independent switched L-filter circuit at fixed POC voltage; not feeder EMT or service-controller dynamics",
+    "validation_bands": {
+        "fundamental_absolute_A": 0.01,
+        "energy_relative": 1.0e-6,
+        "mesh_current_A": 0.01,
+        "mesh_dc_2omega_V": 0.01,
+        "dc_2omega_relative": 0.02,
+        "fundamental_relative": 0.01,
+        "dc_2omega_absolute_V": 0.05
+    },
+    "cases": [
+        {
+            "dc_2omega_peak_rating_V": 7.5,
+            "dc_voltage_V": 750,
+            "mean_converter_loss_W": 102.3923091830068,
+            "p_available_W": 5000,
+            "current": [
+                [
+                    7.069246965323705,
+                    -5.942603072006967e-16
+                ],
+                [
+                    -3.5346234826618543,
+                    -6.122147457596379
+                ],
+                [
+                    -3.5346234826618526,
+                    6.1221474575963795
+                ]
+            ],
+            "frequency_Hz": 50,
+            "converter_voltage": [
+                [
+                    230.9349079111641,
+                    9.349079111640604
+                ],
+                [
+                    -107.37091394291085,
+                    -204.67003642750828
+                ],
+                [
+                    -123.5639939682532,
+                    195.3209573158677
+                ]
+            ],
+            "phase_current_rating_A": 10,
+            "capacitor_current_rating_A": 1,
+            "phase_L_H": 0.004209648244780632,
+            "phase_R_ohm": 0.13225000000000003,
+            "neutral_R_ohm": 0,
+            "neutral_current_rating_A": null,
+            "scope": "balanced fixed 230 V boundary, unchanged Australian hardware",
+            "topology": "THREE_LEG",
+            "dc_capacitance_F": 0.0003,
+            "neutral_L_H": 0,
+            "case_id": "balanced_L",
+            "modulation_utilization": 0.96,
+            "p_dc_W": 4999.999999937924,
+            "grid_voltage": [
+                [
+                    230,
+                    0
+                ],
+                [
+                    -115.00000000000007,
+                    -199.18584287042083
+                ],
+                [
+                    -114.99999999999994,
+                    199.1858428704209
+                ]
+            ],
+            "fundamental_reference_accepted": true,
+            "reference_physical_check_count": 19
+        },
+        {
+            "dc_2omega_peak_rating_V": 7.5,
+            "dc_voltage_V": 750,
+            "mean_converter_loss_W": 96.09028012994284,
+            "p_available_W": 5000,
+            "current": [
+                [
+                    7.498784497899451,
+                    2.608695652147825
+                ],
+                [
+                    -1.490195543447696,
+                    -5.303222651482099
+                ],
+                [
+                    -6.0085889544517554,
+                    2.694526999334274
+                ]
+            ],
+            "frequency_Hz": 50,
+            "converter_voltage": [
+                [
+                    232.14171424988172,
+                    10.262142498468576
+                ],
+                [
+                    -110.48356640403595,
+                    -197.8742608148805
+                ],
+                [
+                    -121.65814784584583,
+                    187.61211831641197
+                ]
+            ],
+            "phase_current_rating_A": 10,
+            "capacitor_current_rating_A": 1,
+            "phase_L_H": 0.004209648244780632,
+            "phase_R_ohm": 0.13225000000000003,
+            "neutral_R_ohm": 0,
+            "neutral_current_rating_A": null,
+            "scope": "synthetic fixed 2% U2 boundary, Q=-1800 var, 70% rated VW ceiling and 2 A I2 request; unchanged hardware",
+            "topology": "THREE_LEG",
+            "dc_capacitance_F": 0.0003,
+            "neutral_L_H": 0,
+            "case_id": "binding_dc_capacitor",
+            "modulation_utilization": 0.96,
+            "p_dc_W": 4314.174876669966,
+            "grid_voltage": [
+                [
+                    234.6,
+                    0.0
+                ],
+                [
+                    -117.30000000000007,
+                    -195.20212601301242
+                ],
+                [
+                    -117.29999999999994,
+                    195.2021260130125
+                ]
+            ],
+            "fundamental_reference_accepted": true,
+            "reference_physical_check_count": 19
+        },
+        {
+            "dc_2omega_peak_rating_V": 7.5,
+            "dc_voltage_V": 750,
+            "mean_converter_loss_W": 109.15949997508471,
+            "p_available_W": 5000,
+            "current": [
+                [
+                    6.424193012458194,
+                    -3.5892389432378393
+                ],
+                [
+                    -6.4458202361918255,
+                    -3.592552314445233
+                ],
+                [
+                    1.6895541504189848,
+                    6.616610715805981
+                ]
+            ],
+            "frequency_Hz": 50,
+            "converter_voltage": [
+                [
+                    137.8489477530789,
+                    -207.136724093895
+                ],
+                [
+                    -249.17467028563405,
+                    -2.914526818863595
+                ],
+                [
+                    115.54393850660473,
+                    219.1432563723206
+                ]
+            ],
+            "phase_current_rating_A": 10,
+            "capacitor_current_rating_A": 1,
+            "phase_L_H": 0.004209648244780632,
+            "phase_R_ohm": 0.13225000000000003,
+            "neutral_R_ohm": 0.13225000000000003,
+            "neutral_current_rating_A": 10,
+            "scope": "saved Australian vuf2 point, greatest neutral-current customer pv_ld1668_load_a, physical POC PN voltage held fixed",
+            "topology": "FOUR_LEG",
+            "dc_capacitance_F": 0.0003,
+            "neutral_L_H": 0.004209648244780632,
+            "case_id": "four_leg_unbalanced",
+            "modulation_utilization": 0.96,
+            "p_dc_W": 5000.00002500914,
+            "grid_voltage": [
+                [
+                    131.28454512206267,
+                    -217.28913073650588
+                ],
+                [
+                    -254.0413955979381,
+                    3.954097253207343
+                ],
+                [
+                    123.10292803917864,
+                    213.902686007348
+                ]
+            ],
+            "fundamental_reference_accepted": true,
+            "reference_physical_check_count": 19
+        }
+    ],
+    "source_sha256": {
+        "src/formulations/experiments.jl": "aa8d24ef1b6b283c56ab7c32107d6e1be7afd4dd212494fd893ac4fea81de75d",
+        "src/interfaces.jl": "e940c50d72678d8597b112a2bc8abad7c2aae0314e8871c7bf8132b856ab1786",
+        "src/problems/bilevel.jl": "bd6956207345b46b2f21b3c3c9e2aa06095e8a15fea15e0781470217d552a207",
+        "src/components/inverter_operating_constraints.jl": "232450da71d7c689c57c6215b8fc392e643a37ea5eff87414c56fefa32512312",
+        "src/problems/state_estimation_patterns.jl": "196e073470c207b4b991f0924cbc86d7f4ecfc7ae9f922f3b06a36092b8eec07",
+        "scripts/australian_pv/audit.jl": "4cf28ca4836fe4580df5d43b593750f5fb6f1df7a3773d2ffb28b50d5b9ca030",
+        "src/problems/operating_envelope.jl": "62b293c4870ed3f94d7cce67c2a2b79381b873d5cf1718bcd760534930f0a72e",
+        "src/components/generalized_generator.jl": "19e87be2a42f03a37e36a7c2c5fe61494312d32148724393305de83cbb3e9470",
+        "src/problems/inverter_control_experiments.jl": "2208b92c43f7e88df036ab879a64cf7d0078b9a0eabe41dcde8df5a2c022e147",
+        "src/problems/state_estimation.jl": "46e9087b01d54f1ddc55902baa333104822ef314c07a9f58e2abb27801be22a7",
+        "scripts/australian_pv/prepare_emt.jl": "624fc348fba5f0322e61501b454f61b64ac331226e38294ddf93564974c96172",
+        "src/formulations/hull_bounds.jl": "84ee2f82ee0c80463f8babfdf99b465b56e133bc274410461d38deb80d843e89",
+        "src/components/inverter_pcc_control.jl": "f28efff574a3541b30ddcbe72cad264070e2d62ace1561733993876997bb4b8d",
+        "src/problems/multiperiod.jl": "f23022abe0f5536d0c121c1ffceeec258dc9d09cd5d0004cb0134ea75d0ab6ba",
+        "scripts/australian_pv/prepare.jl": "7d7596dc22eca47c17bdc831ba5db56bfffbe75159eec4065fd4275c4f589fe8",
+        "src/algorithms/pade.jl": "c0d89a18564a94f08b11098689371b705f313ffd9aecc71e3537422d2b772c29",
+        "src/components/generator_data.jl": "3caa922fc4941205fef9e17f48b8cb8b5d834d84f155509cbc84ce77deea6af8",
+        "src/algorithms/operability_continuation.jl": "a27fc6f1a7d6741858e3f38482a165f5628e72944d5c3ab26018861fc0f245e5",
+        "src/contracts.jl": "9d09adcd53e2e27fa4eedcd7976d95c391f2eb5b3bd3861d3ad054a23de7c95b",
+        "src/problems/operability.jl": "946802878ef44899c80c124474349fe13f7988fdd10b672c22fb261a6613e35f",
+        "src/problems/state_estimation_support.jl": "ee6226399e097fa6c4fa88c731377a27f1f8c908421baeee21c9c95a4d2b6bc9",
+        "src/algorithms/helm.jl": "601a68fb0148ba3f43dd8fbca99764b5c330ae23131bcd808db646462fde2dfb",
+        "src/formulations/selectors.jl": "5377fbd4669921dc792ec4d29c8c166efb931f8c9bfe658f38b92a29548a08eb",
+        "src/problems/closed_loop_evidence.jl": "88e744648e7f1fb0df0d2e926089e604ad48957d6bb89a160a6ac6cac1814d97",
+        "src/io/kron_reduction.jl": "09134072501eba3434c2a08a0d8e3daaf14eec1e485ad106d304b5b4b726a830",
+        "src/problems/inverter_control_sizing.jl": "a39390cb83cb6d9c31155be2c72686f9c6cf5e3c4fc80a1c79ab6a9fa8eb4647",
+        "src/problems/state_estimation_injections.jl": "a5f04ef35308546b1673e23cf6a3e49874c2d12e764863264bc55378ae30c9ec",
+        "src/components/battery_chemistry.jl": "71ecea656c1d432c0460c2edcbe69fa9a4a538131d3249e129e00ba1263f1188",
+        "src/PowerOptLab.jl": "ca3795f7cf404b8c7e7018c337dc416ac3bd87c2ee49543ed6e36c83f6c94334",
+        "src/components/inverter_feasibility.jl": "7bbceb6c135595ee3d5b3be5f52b001cdad4d4e6b3eda799495eab80f64145d1",
+        "src/formulations/jump.jl": "8d1480ed914a90b20302cd7b495fc470e18697dc15083897bf1d1f1808991e26",
+        "src/problems/voltage_aware_inverter_fleet.jl": "076bf23893ec5157b90219ed884365d8edc1ce854cffd1d65ce7e7fdcad98fcc",
+        "src/components/devices.jl": "295ee2aed266b01165ccc0c1ea0238e7d22ed41d4a0fb5f77420d2d1792fe793",
+        "src/formulations/cases.jl": "eb901e45c2db22d0d331292019446b2767673000a454a5262d6bce41a135b7fc",
+        "src/formulations/control_intent.jl": "9429c437e8dea0ce4f50b227b7c5187395d28b404d127d0103a43805834b0664",
+        "src/problems/constrained_state_estimation.jl": "c2ed0c2541dfc9846244033e0c189d9a3b24f0da6bb569eb05c9298232d0ce08",
+        "src/components/advanced_inverter.jl": "24143ead11ecb3fb30a2895101525bcb5bda97597b17686cdf5a7d64ac38049c",
+        "src/formulations/error_tools.jl": "a4e6292df32cbaea08e25fecfa54f2e76a92b87c935ca8dca1ac05ed6ff4c1ff",
+        "src/problems/generator_opf.jl": "b0540ace7f36b5c5fb5067b7a1efbc6af4db42e1623d5af403307060f6a782fb",
+        "src/formulations/primitives.jl": "d919b895117a6e1ae3e68c7bb1723dd57ba852bad679e96219d3ebb164040506",
+        "scripts/australian_pv/four_leg.jl": "f935d962f17cc6114af1983a4d8add3960b32bdc38d4b6d349682de8c42b1031",
+        "src/formulations/relations.jl": "d0846f193d6705ee59a83729cf0e8eb928294dcab0f9136e70a87070951f4d8c",
+        "src/upstream.jl": "313bf70a703b43b2134aef1f9f96c30bda4bc301e17b9f5f990244105d57b238",
+        "src/components/inverter_phase_allocation.jl": "9ddd253fc9796bd001d347e064c5808e6c159e49cc6c3204749e25e08f2f7a99",
+        "src/components/inverter_service_allocation.jl": "ae8e6db78e26e2b43a0877f61ad2498cf89aa57176457a8df7843d27ae79ac6a",
+        "src/components/ivq_battery.jl": "2e3f74858ef64f95ce8b7ed125f1e19db739bb7843edbb35e9f3e3dfaa649c95",
+        "src/problems/inverter_control_study.jl": "3c10d89ec926f4b4700f1e18d2d23da47c03b91819f0455994943c3d75441cc4",
+        "scripts/australian_pv/run.jl": "176dd9c5615ecb0a0e75885cd17ecb75eefc1e24608db5ad6448dec7460ec9ab",
+        "src/problems/parameter_estimation.jl": "61c0cd98dd1c1dfe21be96000354d748cde3ad5ccb9c77e1da3a11848a032365",
+        "src/problems/inverse_carson.jl": "4fb49831f9ddc6339bec733c4399e3a979ed75ee9dae7ddde88296c820058d51",
+        "scripts/enwl_advanced_ibr/common.jl": "22fc5aed51e469e8d314c39980fcc6fd8b4a02c7f664dfb2310f5944e37f3054",
+        "scripts/australian_pv/voltage_aware.jl": "57efa97a6c14b98264b9bec20b4c8e10d868a518cc855dfb2404a46d017521ee",
+        "src/components/inverter_current_projection.jl": "a8da54e2d743fa8c09923d0a204f67749092c88a0950d94b2084c5b865a25091",
+        "src/problems/ipopt_state_estimation.jl": "3b7a42d19f65e9f9ebfe66d629d5d128b2bfcff4b6189d7abc422db1cf005464",
+        "src/components/evse.jl": "dfafe56bccafa827a7c80088a57a20cc25493c389f811a6db4a80fce8333d047",
+        "src/problems/state_estimation_measurements.jl": "bbf861c3106fe812f8f52c296588f2d8a2e4884c3dacb079739fa64667da958b",
+        "src/components/inverter_controls.jl": "4013e1d037a4f9c0a8ac4cf04525db62f2771e1a6466f522b4dbd8df043784a9"
+    },
+    "hardware": {
+        "s_max": 6000,
+        "v_nom": 230,
+        "i_max": 10,
+        "v_dc": 750,
+        "m_max": 0.96,
+        "c_dc": 0.0003,
+        "dv2_max": 7.5,
+        "i_cap_max": 1,
+        "x_pu": 0.05,
+        "x_over_r": 10,
+        "p_loss_fixed": 15,
+        "a_loss": 2,
+        "c_loss": 0.3,
+        "single_phase_i_max": 28.7
+    },
+    "converter_loss": "constant lumped mean loss from accepted RMS fundamental operating point; no device-level switching-loss or thermal model"
+}

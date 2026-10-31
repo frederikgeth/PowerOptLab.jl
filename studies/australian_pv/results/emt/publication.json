@@ -1,0 +1,20 @@
+{
+  "driver_commit": "ec3309e",
+  "julia_version": "1.12.6",
+  "package_suite_assertions": 20664,
+  "standalone_circuit_assertions": 24,
+  "stress_gate_assertions": 15,
+  "corruption_tests": 6,
+  "audit_conditions": 308,
+  "Project_sha256": "2724f9784cf88c1b37a76368436c396b5d7ba9a05d19bb28a73bbbabc9eafb24",
+  "Manifest_sha256": "b61f2440eecd083978dd5bffb99893c75454a70aa2438d97e2b9b45aa0117e07",
+  "workflow_source_sha256": {
+    "prepare_emt.jl": "624fc348fba5f0322e61501b454f61b64ac331226e38294ddf93564974c96172",
+    "emt_circuit.jl": "16a769ea15de45c4a4127ff049996f9c7ec5ef55565cce8d9e82b57a847c9949",
+    "test_emt_circuit.jl": "04d088b7ca4bc21bea00e3e35ff6cd083a22c89e6515b2e3a49899f9865047aa",
+    "audit_emt.py": "440cdb3a41f89b14131a99d85700b46f9832f5cff73a7f78f9de91b955874b82",
+    "crosscheck_emt.jl": "30c59f5f2cd36866fa18f701ed10de8241c7856bb83d88d802808bb318593025",
+    "test_emt_records.py": "bb300df59bcec9e3fc4e07ae00c266d9e0c1cc749fb2a194256483d054209a29",
+    "plot_emt.py": "9fb33af37dbdb7ab02c847ed87ac9b3851ca07bc8f8cb7ae0b3eafea3238e8a4"
+  }
+}

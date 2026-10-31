@@ -1,5 +1,27 @@
 # Advanced IBR review: resolution plan
 
+## Goal milestone closure: committed-source validation published
+
+The resumed goal's ordered milestones are delivered on this branch: LCL
+regression correction and green integration, coordinated OPF, four-leg local
+control and representative switched-circuit validation. Final committed driver
+`ec3309e` reproduces all 18 circuit runs; 308 independent record conditions,
+24 analytic circuit assertions, 15 stress-gate assertions and six corruption
+tests pass. The complete documentation build passes. Package code remains the
+source that passed 20,664/20,664 assertions at `38f1034`.
+
+All 77 three-leg extension, 24 coordinated and 11 four-leg cases have matching
+current source fingerprints and complete accepted equilibrium records. The
+EMT report preserves three switched capacitor-overload failures and the small
+nonlinear DC ripple-boundary failure, while accepting mechanism agreement.
+No full switching-thermal, firmware/dynamic-stability or connection-conformity
+claim is made. The phase/DC sizing is unchanged. Generated PNG/SVG figures and
+machine-readable evidence are published with reproducible commands.
+
+The newly quantified next priorities are PWM-aware thermal command allocation
+and nonlinear energy-based voltage bounds; these remain explicit capabilities
+to develop, rather than being hidden by sizing changes or relaxed checks.
+
 ## Representative switched-circuit validation checkpoint
 
 The independent event-aligned circuit passes 24 analytic/energy/neutral/mean-DC

@@ -1,0 +1,32 @@
+{
+    "results_sha256": "4fe60181bab1b76e7dd19deca198db72e4f6170462b4427338034efa199df445",
+    "scope": "point-specific measured non-2omega stress includes other harmonics and any DC drift; not a conservative reserve over dispatch or a PWM-aware allocator",
+    "crosscheck_code_sha256": "30c59f5f2cd36866fa18f701ed10de8241c7856bb83d88d802808bb318593025",
+    "input_sha256": "48ef985e26a8471826ddf477d19d15b1899eed01d728bc6709a3b35bd26d9bd5",
+    "cases": {
+        "four_leg_unbalanced": {
+            "measured_total_capacitor_rms_A": 3.9853917815832074,
+            "fundamental_reference_accepted": true,
+            "phasor_gate_with_reserve_rms_A": 3.985359692582858,
+            "configuration_rejection": "ArgumentError: inverter 'emt' weighted i_sw must be smaller than every supplied capacitor-current rating",
+            "point_specific_non_2omega_reserve_A": 3.9536583167350443,
+            "phasor_gate_with_reserve_accepted": false
+        },
+        "binding_dc_capacitor": {
+            "measured_total_capacitor_rms_A": 4.046300689795355,
+            "fundamental_reference_accepted": true,
+            "phasor_gate_with_reserve_rms_A": 4.046309908114967,
+            "configuration_rejection": "ArgumentError: inverter 'emt' weighted i_sw must be smaller than every supplied capacitor-current rating",
+            "point_specific_non_2omega_reserve_A": 3.9208833734190858,
+            "phasor_gate_with_reserve_accepted": false
+        },
+        "balanced_L": {
+            "measured_total_capacitor_rms_A": 4.170668563891433,
+            "fundamental_reference_accepted": true,
+            "phasor_gate_with_reserve_rms_A": 4.170668563891086,
+            "configuration_rejection": "ArgumentError: inverter 'emt' weighted i_sw must be smaller than every supplied capacitor-current rating",
+            "point_specific_non_2omega_reserve_A": 4.170668563891086,
+            "phasor_gate_with_reserve_accepted": false
+        }
+    }
+}
