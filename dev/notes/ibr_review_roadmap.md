@@ -85,7 +85,7 @@ was not representative of certifiable hardware.
 - [U] **D1 Evidence bundles** (`studies/australian_pv/evidence/bundles`,
   18 MB binary). Move to a GitHub Release or Zenodo and keep only manifests
   with checksums and a download step. Creating a release is an external action.
-- [U] **D2 Split PR #75** into core models + tests, and the case study.
+- [x] **D2 Split PR #75** — decided 2026-11-01: keep as one PR.
 - [U] **D3 LCL filters.** The embedded PWM thermal bound supports only L
   filters; LCL is the common commercial topology.
 
