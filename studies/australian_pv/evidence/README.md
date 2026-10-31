@@ -8,7 +8,6 @@ bytes were packed from. The Git tree keeps only compact review files.
 | Manifest | Status | Contents |
 |---|---|---|
 | `current.json` (= `current-05db2db.json`) | Current | Matched benchmark with the declared 7 A / 23 A fixture (15 points, PF/OPF agreement), legacy-fixture sensitivity, 60 matched EMT references, regenerated carrier-domain and DC-boundary validations |
-| `current-35d5cac.json` | Superseded | First matched benchmark (1 A capacitor budget, 8 points, 32 EMT references) |
 | `historical-d2c9a97.json` | Historical | 546 files from all earlier campaigns, including failed predictions and solver controls (see [study history](../HISTORY.md)) |
 
 ## Restore current records
@@ -57,6 +56,6 @@ conflicting files, unsafe paths and checksum failures. If a distributed bundle
 is missing, restoration falls back to the local cache, then to the pinned Git
 history.
 
-**Open decision (roadmap D1):** the bundles are about 34 MB of binary in the
+**Open decision (roadmap D1):** the bundles are about 27 MB of binary in the
 repository. Moving them to a GitHub Release or Zenodo, keeping only manifests
 and a download step, would keep the repository small.

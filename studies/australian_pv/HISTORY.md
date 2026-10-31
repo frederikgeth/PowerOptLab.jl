@@ -37,7 +37,7 @@ sensitivity table).
 | Four-leg counterfactual (`four_leg/`) | Per-phase VV/VW with a neutral leg | Research counterfactual; STNW1170 §4.3.3 requires balanced output. Used the 1 A budget. |
 | First switched-circuit EMT (`emt/`) | Three fixed-POC references | Retained capacitor thermal failures under the 1 A budget. |
 | PWM thermal and nonlinear DC energy (`thermal_energy/`, `thermal_energy_emt/`) | Embedded PWM thermal bound with fixed sizing; four night prediction misses | The misses led to the all-duty thermal term. 1 A budget. |
-| Matched PF/OPF benchmark, first version (`engineering_benchmark` at `35d5cac`) | Local versus free-Q OPF, 4 conditions, 32 EMT references | Superseded: 1 A budget made every site capacitor-limited; no same-service OPF. |
+| Matched PF/OPF benchmark, first version (generated at `35d5cac`) | Local versus free-Q OPF, 4 conditions, 32 EMT references | Superseded: 1 A budget made every site capacitor-limited; no same-service OPF. Its bundle was dropped; the legacy-fixture sensitivity in the current report reproduces its numbers, and the records remain in Git history at `1f4cc19`. |
 
 The carrier-domain and DC-boundary validations ([domain](engineering_domain.md),
 [boundary](engineering_boundary.md)) check the carrier approximations, not the
