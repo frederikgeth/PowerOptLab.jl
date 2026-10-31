@@ -1,5 +1,21 @@
 # Advanced IBR review: resolution plan
 
+## Published four-wire checkpoint
+
+Core `38f1034` passes the full 20,664-assertion suite and the complete docs build.
+Driver `4128f8b` produces eleven accepted four-leg cases, independently
+reconstructed from saved phasors (567 conditions, 3,348 hardware/policy checks,
+108 energized records). The generated phase-voltage/Q/neutral-vector figure is
+visually checked; all requested Q is delivered, but the full-PV headline still
+reaches 253.121 V. This local control is not a voltage-constrained OPF.
+
+All 77 three-leg extension cases and 24 coordinated references are rerun against
+the matching core source. The 77 cases' reported powers, currents and voltages
+are exactly unchanged; their checkpoint comparison records this. The refreshed
+coordinated audit passes 1,149 conditions and 5,472 physical inequalities at 59
+source/setup hashes. CSV corruption tests pass for every publication workflow.
+Representative EMT remains the next active step, with phase/DC sizing fixed.
+
 ## Four-leg local control and green integration checkpoint
 
 The complete offline suite now passes **20,664/20,664** assertions (8m17.3s).

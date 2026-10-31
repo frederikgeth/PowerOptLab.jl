@@ -1,7 +1,7 @@
 {
     "accepted_saved_points": 24,
     "planned": 24,
-    "source_hashes_verified": 58,
+    "source_hashes_verified": 59,
     "scope": "independent SI inverter/current-allocation/voltage checks from saved phasors; fixed-PQ replay uses same network engine; no global-optimality proof",
     "audit_code_sha256": "675b879e139e187935f68d91635e01c42896caa2927cca3a1965656945548d43",
     "all_planned_accepted": true,
@@ -3127,6 +3127,6 @@
             "p_poc_W": 58649.731228565295
         }
     },
-    "assertions": 1148,
+    "assertions": 1149,
     "physical_checks_recomputed": 5472
 }

@@ -13,6 +13,11 @@ customer phase-to-neutral voltage criterion. Its [generated comparison and
 figure](coordinated_results.md) distinguish feasible local OPF results from
 global upper bounds and distinguish extra sequence actuation from coordination.
 
+The [four-leg research-control counterfactual](four_leg.md) adds an explicit
+neutral path and per-phase VV+VW with one shared DC source. Its
+[eleven accepted cases and phase/neutral teaching figure](four_leg_results.md)
+keep phase/DC sizing fixed and state the additional neutral assumptions.
+
 This is the Australian successor to the ENWL showcase. It starts with a small
 real feeder, preserves a converted reference, and makes the teaching experiment's
 changes explicit. The campaign compares **local control laws for 12 PV systems at
