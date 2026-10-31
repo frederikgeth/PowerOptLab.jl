@@ -128,3 +128,21 @@ study operating assumptions, not manufacturer ratings or sizing choices. Its
 constructor checks every other physical field remains unchanged. The boundary
 preparation driver records all stages, requests, source hashes and runtime
 fingerprints. The full-domain and coordinated campaigns remain outstanding.
+
+## Audited boundary publication checkpoint
+
+The clean-source `693b2cb` boundary campaign is now preserved under
+`studies/australian_pv/results/engineering_boundary_emt*`. It contains all 18
+averaged/switched integrations and passes **747 independent record checks**.
+The publication script reaudits source/input/waveform fingerprints before
+regenerating its table and three-panel voltage/capacitor/peak figure. It retains
+the LF-only upper-voltage failure and explicitly separates finite-window DC
+drift from the periodic carrier approximation. The four-leg reference has a
+different declared service request and is not labeled as a matched performance
+comparison. The wider operating-domain campaign remains required.
+
+The coordinated prototype still rejects pure-export attempts. A regularized
+initialization can achieve raw `LOCALLY_SOLVED`; it is not substituted for the
+intended final export objective. Failed/ALMOST/iteration-limit candidates remain
+rejected. Investigation now includes primal/dual continuation and independent
+candidate-voltage retention (native failed extraction masks those voltages).
