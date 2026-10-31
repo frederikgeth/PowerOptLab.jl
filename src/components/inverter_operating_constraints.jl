@@ -189,7 +189,14 @@ Use [`stamp_device!`](@ref) with an `InverterControlRequest` to compose this
 device with an external OPF objective, or [`solve_constrained_inverter`](@ref)
 for a standalone dispatch solve. There is no implicit dispatch objective.
 Supports THREE_LEG, FOUR_LEG and SPLIT_DC with `grid_forming=false` and
-`pwm_strategy=:NONE`; fixed RMS current reserves remain supported. The default
+`pwm_strategy=:NONE`; fixed RMS current reserves remain supported. Monolithic
+THREE_LEG/FOUR_LEG also support `:CENTERED` with an open carrier-frequency DC
+source through embedded shared-carrier thermal allocation. Its analytic
+frozen-fundamental variance enclosure participates in every objective stage;
+`pwm_thermal_headroom=0.05` is a validation allowance, not a universal bound on
+AC ripple or unmodeled dynamics. Independent carrier-dwell quadrature gates
+publication. Automatic AC reserve closure and split-link PWM allocation are
+not provided by this wrapper. Representative EMT is still required. The default
 DC source retains the request availability upper bound. Supply
 `dc_source=DCSourceBounds(p_min=0)` for non-charging PV.
 """
@@ -198,12 +205,15 @@ struct ConstrainedInverter{P<:_AbstractInverterOperatingPolicy} <: AbstractDevic
     policy::P
     current_allocation::Symbol
     dc_source::DCSourceBounds
+    pwm_thermal_headroom::Float64
     function ConstrainedInverter(device::AdvancedInverter, policy::P;
             current_allocation::Symbol=:balanced_converter,
-            dc_source::DCSourceBounds=DCSourceBounds()) where {P<:_AbstractInverterOperatingPolicy}
+            dc_source::DCSourceBounds=DCSourceBounds(),
+            pwm_thermal_headroom::Real=_PWM_ALLOCATION_HEADROOM) where {P<:_AbstractInverterOperatingPolicy}
         current_allocation in (:balanced_converter, :balanced_grid, :free) ||
             throw(ArgumentError("current_allocation must be :balanced_converter, :balanced_grid or :free"))
-        new{P}(device, policy, current_allocation, dc_source)
+        _validate_allocation_pwm(device,pwm_thermal_headroom)
+        new{P}(device, policy, current_allocation, dc_source,Float64(pwm_thermal_headroom))
     end
 end
 
@@ -221,8 +231,7 @@ function validate_device(device::ConstrainedInverter, nets=();
         throw(ArgumentError("ConstrainedInverter requires a supported three-phase plant"))
     inv.grid_forming && throw(ArgumentError(
         "ConstrainedInverter does not yet support grid-forming voltage laws"))
-    inv.pwm_strategy === :NONE || throw(ArgumentError(
-        "ConstrainedInverter requires pwm_strategy=:NONE; carrier-reserve iteration is not implemented"))
+    _validate_allocation_pwm(inv,device.pwm_thermal_headroom)
     reference = sensing_terminal(device.policy, inv)
     if reference !== nothing
         reference in inv.phase_terminals && throw(ArgumentError(
@@ -370,8 +379,9 @@ function stamp_device!(ctx, device::ConstrainedInverter;
     # At large network s_base, an unnormalised squared per-unit bound can be
     # smaller than the solver's constraint-bound relaxation. Normalise to the
     # device rating rather than relying on a current-command backoff for safety.
-    h = stamp_device!(ctx, inv; retain_lossless_magnitude_epigraph=false,
-        normalize_capability_constraints=true)
+    h = _stamp_inverter!(ctx, inv; retain_lossless_magnitude_epigraph=false,
+        normalize_capability_constraints=true,
+        pwm_thermal_headroom=inv.pwm_strategy===:NONE ? nothing : device.pwm_thermal_headroom)
     m = _opf_model(ctx)
     phase_voltage = ntuple(k -> _dv(ctx, inv.bus, inv.phase_terminals[k],
         sensing_terminal(policy, inv)), 3)
@@ -462,6 +472,8 @@ function extract_device(device::ConstrainedInverter,
     current_margin(limit, current, reserve) = limit === nothing ? nothing :
         ntuple(k -> limit - hypot(current[k], reserve[k]), 3)
     operation = (
+        pwm_strategy=inv.pwm_strategy,
+        pwm_thermal_headroom=inv.pwm_strategy===:NONE ? nothing : device.pwm_thermal_headroom,
         reactive_mode=_reactive_mode(policy),
         current_allocation=device.current_allocation,
         dc_source_bounds_W=(p_min=device.dc_source.p_min, p_max=device.dc_source.p_max),

@@ -169,7 +169,7 @@ end
         @test_throws ArgumentError project_inverter_current(_projection_test_plant(topology=:SPLIT_DC),
             _PROJECTION_REQUEST;grid_voltage=v,requested_current=i,midpoint_charge=charge)
     end
-    @test_throws ArgumentError project_inverter_current(_projection_test_plant(pwm_strategy=:CENTERED,f_sw=1e4),
+    @test_throws ArgumentError project_inverter_current(_projection_test_plant(pwm_strategy=:SPWM,f_sw=1e4),
         _PROJECTION_REQUEST;grid_voltage=v,requested_current=i)
     # A failed enclosure alone must not become a proof of request infeasibility.
     check=InverterLimitCheck("continuous_rail_headroom",:V,-1.,0.,Inf,1e-5,-1.,false)

@@ -276,6 +276,37 @@ ratings are RMS bounds, not peak switching-current ratings. Neither this
 quasi-static reference nor its per-phase curves establish connection-standard
 conformity, dynamic stability or an EMT-validated controller.
 
+## Embedded PWM thermal allocation
+
+Set `pwm_strategy=:CENTERED` and `f_sw` on a monolithic three/four-leg plant to
+include switching-current stress inside the constrained dispatch and Q→P→I₂
+allocation stages. The phase/DC ratings are unchanged. An open carrier-frequency
+DC source is required; automatic AC-current reserve closure, finite carrier
+source branches and split-link PWM allocation are explicitly rejected here.
+The existing standalone inverter reserve-loop solver retains its separate scope.
+
+The formulation integrates the ideal shared-carrier second moment analytically
+for fundamental current/voltage phasors. It bounds the DC voltage denominator
+over the whole cycle and encloses the voltage-norm smoothing error. This is a
+dispatch-dependent expression, not a factor calibrated at another point.
+Independent numerical integration of exact carrier dwell probabilities checks
+actual frozen-current RMS and modulation feasibility after each solve.
+
+`ConstrainedInverter(...; pwm_thermal_headroom=0.05)` reserves an additional
+validation allowance on the switching component. This allowance does not prove
+a universal bound on AC switching ripple or semiconductor dynamics. The local
+allocators and voltage-aware fleet use the same default. Representative EMT at
+the declared filter, switching frequency and source assumptions is still required.
+Capacitor ESR weights, any independent `i_sw`, and calibrated AC RMS reserves
+continue to compose with the new term.
+
+At a maximum-Q thermal boundary, an exact Q lock can make the P-stage feasible
+set tangent and singular. PWM stages therefore preserve higher-priority service
+within a declared **0.0001 var/W SI budget**. Hardware limits and physical
+acceptance tolerances are unchanged; raw `ALMOST_LOCALLY_SOLVED` points remain
+unpublishable. This is bounded numerical lexicographic preservation, not a
+weighted objective or a hidden protective-Q override.
+
 ## [Compare saturation at a fixed 207 V POC](@id inverter-saturation-comparison)
 
 This ideal, lossless example fixes POC voltage to isolate capability allocation

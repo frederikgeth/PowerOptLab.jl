@@ -190,7 +190,7 @@ The optional `reported` values audit consistency of the NLP's SI quantities.
 function inverter_physical_feasibility(inv; converter_voltage,converter_current,
         grid_voltage,grid_current=converter_current,filter_voltage=grid_voltage,
         midpoint_charge=0.,reported=(;),dc_min=nothing,dc_max=nothing,
-        tolerances=InverterFeasibilityTolerances())
+        tolerances=InverterFeasibilityTolerances(),pwm_thermal_headroom=nothing)
     t=tolerances; _validate_feasibility_tolerances(t)
     validate_device(inv)
     n=length(inv.phase_terminals)
@@ -266,6 +266,12 @@ function inverter_physical_feasibility(inv; converter_voltage,converter_current,
         i2sq=abs2(2*(2pi*inv.f)*_dc_link_capacitance(inv)*d)/2
         wn,w2,ws=inv.cap_thermal_weights
         switching=inv.i_sw^2+inv.pwm_current_factor^2*sum(abs2,loss_currents)
+        if pwm_thermal_headroom!==nothing
+            _validate_allocation_pwm(inv,pwm_thermal_headroom)
+            append!(checks,_allocation_pwm_checks(inv,u,ic,d,i2sq,switching;headroom=pwm_thermal_headroom))
+            switching+=max(0.,_allocation_pwm_variance(inv,real.(u),imag.(u),real.(ic),imag.(ic),
+                real(d),imag(d),real(sconv),real(ripple),imag(ripple);headroom=pwm_thermal_headroom))
+        end
         if inv.topology===:SPLIT_DC
             share=_split_fundamental_coefficients(inv)
             midpoint=share.midpoint*(-ineutral); bus=share.bus*(-ineutral)

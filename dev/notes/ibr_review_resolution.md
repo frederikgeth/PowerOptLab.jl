@@ -1,5 +1,29 @@
 # Advanced IBR review: resolution plan
 
+## PWM thermal allocation implementation (31 October 2026)
+
+The first checkpoint passes 87 new allocation/enclosure assertions and the
+existing service, phase, current-projection and operating-constraint regressions.
+Four independent switched-circuit probes add 12 checks: balanced three/four-leg
+plants at zero/requested −1800 var, unchanged 6 kVA / 10 A / 750 V / 300 µF / 1 A
+hardware. Their accepted commands yield 0.9907–0.9974 A capacitor RMS at 10 kHz;
+zero-Q active export is about 1.113 kW. These are representative validation
+points, not a global error bound. Reproducible campaign publication follows.
+
+Centered shared-carrier DC variance is now embedded in constrained dispatch,
+three-leg Q→P→I₂ and four-leg Q-vector→P allocation. The analytic line-cycle
+second moment has an explicit norm-smoothing enclosure and worst-case bus
+denominators. Independent exact dwell integration audits the resulting point.
+The 5% default validation allowance is explicitly not a universal bound on AC
+switching ripple or device dynamics; fixed-size EMT validation follows.
+
+An exact service lock at the four-leg maximum-Q thermal boundary produced
+`ALMOST_LOCALLY_SOLVED`. A declared 100 µvar/W preservation budget regularizes
+the next stage, independently of numerical bases, without relaxing hardware
+bounds or raw solver acceptance. Unsupported source/topology/AC-closure modes
+are rejected explicitly. Nonlinear energy bounds and mixed Australian/EMT
+publication are the next steps in the newly authorized implementation task.
+
 ## Goal milestone closure: committed-source validation published
 
 The resumed goal's ordered milestones are delivered on this branch: LCL

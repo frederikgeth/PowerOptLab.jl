@@ -1588,6 +1588,7 @@ struct _InvHandles
     icap_sq; icap_thermal_sq
     icap_upper_sq; icap_lower_sq
     icap_thermal_upper_sq; icap_thermal_lower_sq
+    pwm_thermal_headroom::Union{Nothing,Float64}
     sb::Float64; vb::Float64; ib::Float64
 end
 
@@ -1612,6 +1613,7 @@ function inverter_physical_feasibility(inv::AdvancedInverter,h::_InvHandles,stat
         grid_current=phasors(h.gri,h.gii,h.ib),
         filter_voltage=phasors(h.vrmid,h.vimid,h.vb),
         midpoint_charge=scalar(h.qbal),tolerances=tolerances,dc_min=dc_min,dc_max=dc_max,
+        pwm_thermal_headroom=h.pwm_thermal_headroom,
         reported=(p_conv=scalar(h.p_conv,h.sb),q_conv=scalar(h.q_conv,h.sb),
             p_poc=scalar(h.p_poc,h.sb),q_poc=scalar(h.q_poc,h.sb),p_dc=scalar(h.p_dc,h.sb),
             dc_ripple=complex(scalar(h.dre),scalar(h.dim)),
@@ -1709,7 +1711,7 @@ end
 # Stamp the inverter's internal-node model into `ctx`. Returns `_InvHandles`.
 function _stamp_inverter!(ctx, inv::AdvancedInverter;
         retain_lossless_magnitude_epigraph::Bool=true,
-        normalize_capability_constraints::Bool=true)
+        normalize_capability_constraints::Bool=true,pwm_thermal_headroom=nothing)
     m = _opf_model(ctx)
     vr, vi = _opf_voltage_maps(ctx)
     bus = inv.bus; phases = inv.phase_terminals; neutral = inv.neutral
@@ -2204,6 +2206,15 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
         wn, w2, wsw = inv.cap_thermal_weights
         pwm_model_sq = JuMP.@expression(m,
             inv.pwm_current_factor^2 * ib^2 * isq_sum)
+        if pwm_thermal_headroom!==nothing
+            _validate_allocation_pwm(inv,pwm_thermal_headroom)
+            # A physical positive-bus domain is part of the embedded model.
+            JuMP.@constraint(m,(dre^2+dim^2)/(inv.v_dc^2)<=.99^2)
+            extra=_allocation_pwm_variance(inv,UreSI,UimSI,
+                [cri[k]*ib for k in 1:3],[cii[k]*ib for k in 1:3],
+                dre,dim,Pconv*sb,S2re_SI,S2im_SI;headroom=pwm_thermal_headroom)
+            pwm_model_sq=JuMP.@expression(m,pwm_model_sq+extra)
+        end
         switching_sq = JuMP.@expression(m, inv.i_sw^2 + pwm_model_sq)
         if inv.topology == :SPLIT_DC
             neutral_sq = JuMP.@expression(m, in_re^2 + in_im^2)
@@ -2294,6 +2305,7 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
                        icap_sq, icap_thermal_sq,
                        icap_upper_sq, icap_lower_sq,
                        icap_thermal_upper_sq, icap_thermal_lower_sq,
+                       pwm_thermal_headroom,
                        sb, vb, ib)
 end
 

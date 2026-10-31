@@ -126,7 +126,8 @@ function _voltage_aware_replayed(inv,voltage,grid_current,source,request)
     state=_projection_requested_state(inv,collect(voltage),collect(grid_current),:grid,0.)
     state===nothing && return nothing
     available=min(request.p_available,something(source.p_max,request.p_available))
-    report=inverter_physical_feasibility(inv;state...,dc_min=source.p_min,dc_max=available)
+    report=inverter_physical_feasibility(inv;state...,dc_min=source.p_min,dc_max=available,
+        pwm_thermal_headroom=inv.pwm_strategy===:NONE ? nothing : _PWM_ALLOCATION_HEADROOM)
     power=sum(state.grid_voltage.*conj.(state.grid_current))+im*inv.b_filter_shunt*sum(abs2,state.grid_voltage)
     conv=sum(state.converter_voltage.*conj.(state.converter_current))
     pdc=only(c.value for c in report.checks if c.name=="dc_source_power_max")

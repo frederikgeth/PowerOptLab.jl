@@ -64,8 +64,11 @@ The volt-watt ceiling uses `p_rated*active_fraction` for `:rated` and
 `active_fraction*(available_dc - (p_dc-p_poc))` for `:available`; DC availability
 also remains a hard bound. Default source bounds prevent DC charging and allow
 AC loss imports at zero PV. `grid_voltage` refers to the plant neutral or earth
-when absent, in phase-terminal order. Supports THREE_LEG, non-grid-forming,
-PWM-disabled plants; four-leg zero-sequence control is separate work.
+when absent, in phase-terminal order. Supports THREE_LEG, non-grid-forming
+plants, including centered-PWM thermal allocation with an open carrier-frequency
+source. PWM stages preserve prior service within an explicit 0.0001 var/W SI
+budget to avoid a singular tangent lock, without relaxing hardware constraints.
+Four-leg phase service uses `allocate_phase_inverter_services`.
 
 This solver-based local reference can be re-evaluated at successive measurements.
 Its solve time, feeder equilibrium, stability and response time are not certified.
@@ -203,7 +206,10 @@ function allocate_inverter_services(inv::AdvancedInverter,request::InverterContr
             # Fix the achieved service coordinate instead of adding a Q equality
             # almost coincident with an active Q interval bound. The latter
             # produces a spurious infeasibility at ordinary Australian requests.
-            reactive_scale[]===nothing || JuMP.fix(reactive_scale[],qscale;force=true)
+            if reactive_scale[]!==nothing
+                inv.pwm_strategy===:NONE ? JuMP.fix(reactive_scale[],qscale;force=true) :
+                    _lock_pwm_service!(m,reactive_scale[],qscale,abs(q))
+            end
         else
             JuMP.@constraint(m,h.q_poc/(inv.s_max/h.sb)==qlock/inv.s_max)
             for row in error_rows;JuMP.delete(m,row);end
@@ -218,7 +224,12 @@ function allocate_inverter_services(inv::AdvancedInverter,request::InverterContr
     if solve_status(result).publishable && !iszero(i2)
         plock=real(sum(result.plant.poc_phase_voltage.*conj.(result.grid_phase_current)))
         starts=[(x,JuMP.value(x)) for x in JuMP.all_variables(m)]
-        JuMP.@constraint(m,h.p_poc/(inv.s_max/h.sb)==plock/inv.s_max)
+        if inv.pwm_strategy===:NONE
+            JuMP.@constraint(m,h.p_poc/(inv.s_max/h.sb)==plock/inv.s_max)
+        else
+            JuMP.@constraint(m,(plock-_PWM_SERVICE_PRESERVATION_VA)/inv.s_max<=
+                h.p_poc/(inv.s_max/h.sb)<=(plock+_PWM_SERVICE_PRESERVATION_VA)/inv.s_max)
+        end
         JuMP.@objective(m,Max,negative[])
         for (x,value) in starts; JuMP.set_start_value(x,value); end
         _optimize_inverter_rails!(ctx,((inv,h),))

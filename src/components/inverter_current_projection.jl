@@ -165,7 +165,8 @@ function project_inverter_current(inv::AdvancedInverter,request::InverterControl
     validate_device(device,(net,);periods=1)
     state=_projection_requested_state(inv,v,desired,target,charge)
     report=state===nothing ? nothing : inverter_physical_feasibility(inv;state...,
-        dc_min=dc_source.p_min,dc_max=_available_dc(device,request))
+        dc_min=dc_source.p_min,dc_max=_available_dc(device,request),
+        pwm_thermal_headroom=inv.pwm_strategy===:NONE ? nothing : device.pwm_thermal_headroom)
     handles=Ref{_ConstrainedInverterHandles}()
     # A common scale preserves the SI metric and is independent of the OPF base.
     current_scale=inv.i_max===nothing ? inv.s_max/(3max(1.,maximum(abs,v))) : inv.i_max

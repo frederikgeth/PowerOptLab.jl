@@ -17,7 +17,8 @@ neutral current follow from the phase powers and full physical filter.
 Use [`evaluate_voltage_aware`](@ref); fixed-graph implicit controller stamping is
 not provided. This is an exact-curve, solver-based quasi-static reference, not a
 firmware timing, global-optimality or dynamic-stability guarantee. Requires an
-explicit neutral, FOUR_LEG, non-GFM and PWM-disabled plant. Omitted current limits
+explicit neutral, FOUR_LEG and non-GFM plant. Centered-PWM capacitor allocation
+is supported with an open carrier-frequency DC source. Omitted current limits
 remain omitted; in particular no neutral rating is inferred from a phase rating.
 """
 struct PerPhaseVoltVarWatt <: AbstractInverterControlLaw
@@ -186,7 +187,13 @@ function allocate_phase_inverter_services(inv::AdvancedInverter,request::Inverte
     _optimize_inverter_rails!(ctx,((inv,h),));result=capture(:phase_reactive_tracking)
     if solve_status(result).publishable
         starts=[(x,JuMP.value(x)) for x in JuMP.all_variables(m)]
-        coordinate[] isa Real || JuMP.fix(coordinate[],lambda_value;force=true)
+        if !(coordinate[] isa Real)
+            if inv.pwm_strategy===:NONE
+                JuMP.fix(coordinate[],lambda_value;force=true)
+            else
+                _lock_pwm_service!(m,coordinate[],lambda_value,sum(abs,q))
+            end
+        end
         JuMP.@objective(m,Max,h.p_poc/(inv.s_max/h.sb))
         for (x,value) in starts;JuMP.set_start_value(x,value);end
         _optimize_inverter_rails!(ctx,((inv,h),));result=capture(:phase_active_export)
