@@ -12,8 +12,9 @@ parameter has one of three kinds of justification:
 
 Bibliography entries marked † in [IBR references](@ref ibr-references) have not
 been checked against live sources, and standard clauses have not been read
-from the licensed text. Treat every value attributed to them here as
-*to be verified* before publication.
+from the licensed text. Values attributed only to those entries remain
+*to be verified* before publication; public primary-source checks are identified
+explicitly below.
 
 ## Work in per unit of each device's rating
 
@@ -69,8 +70,9 @@ V_{dc}\ge\frac{2\sqrt2\,|U|}{m}\quad(\text{split link}).
 ```
 
 Size ``|U|`` at the highest supply voltage the inverter must operate at plus the
-filter drop at rated current. At 253 V (230 V +10%), a 5% filter, full reactive
-absorption and ``m=0.96``, ``|U|\approx266`` V. That requires ``V_{dc}\ge679`` V for a
+filter drop at rated current. At 253 V (230 V +10%), a conservative filter-drop
+magnitude allowance gives ``|U|\approx266`` V for the 5% example. With ``m=0.96``
+that requires ``V_{dc}\ge679`` V for a
 three-leg bridge and ``784`` V for a split link (**derived**). Unbalance increases
 the largest line-to-line or phase voltage; `switching_margin` reports the
 remaining headroom. Use the bus voltage of the actual product when it is known,
@@ -107,6 +109,20 @@ model is built to expose; if that is deliberate, say so. Switching ripple,
 hold-up energy and control requirements add further lower bounds that the 2ω
 formula does not cover.
 
+**Size `i_cap_max` for switching ripple, not only 2ω.** With centred PWM
+enabled, the carrier-frequency capacitor current dominates. For a two-level
+three-phase bridge at unity power factor and modulation index ``M``, Kolar and
+Round (2006) give
+``I_{C,rms}\approx I_{ph}\sqrt{2M\left[\tfrac{\sqrt3}{4\pi}+\cos^2\varphi\left(\tfrac{\sqrt3}{\pi}-\tfrac{9M}{16}\right)\right]}``,
+about ``0.59\,I_{ph}`` at ``M\approx0.87`` (no filter ripple). For the 6 kVA
+example this is about 5.4 A at rated current. A 2ω-only budget of order 1 A
+then caps the inverter near 20% of its nameplate. Check the declared nameplate
+is deliverable before any study: the Australian study's `rated_capability.jl`
+solves the AS/NZS 4777.2 volt-var corners and requires apparent power or phase
+current, never an internal budget, to be the limit. Declared peak-current limits
+need the same check, since the conservative carrier envelope adds to
+``\sqrt2\,I_{max}``.
+
 ## Current rating and headroom
 
 `i_max` is the per-leg semiconductor (or inductor) rating, distinct from
@@ -129,9 +145,12 @@ frequency weights come from the capacitor datasheet.
 ## Volt-var and Volt-watt curves
 
 Use the curve and the *basis* of the jurisdiction being studied. The AS/NZS
-4777.2:2020 Australia A settings are commonly reported as follows; the
-remaining regional settings differ (**sourced, to be verified** against the
-licensed text, reference 47):
+4777.2:2020 Australia A curve values below are publicly confirmed by
+[Energex STNW1170 v10 (2025), Tables 8–9](https://www.energex.com.au/__data/assets/pdf_file/0010/1072549/STNW1170-Standard-for-Small-IES-Connections.pdf).
+The product standard includes Amendment 2:2024, effective August 2025.
+This checks curve knots and bases; multiphase monitored-voltage semantics,
+priority requirements and complete conformance still require the applicable
+licensed standard. Other regional profiles differ.
 
 | curve | knots (V) | ordinates | basis |
 | --- | --- | --- | --- |

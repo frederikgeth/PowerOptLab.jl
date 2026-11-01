@@ -106,7 +106,7 @@ severity and is part of both the firmware and JuMP laws. `volt_watt_basis` is
 `:available` or `:rated`.
 
 Both curve inputs are phase magnitudes and therefore move with the local
-zero-sequence voltage — a component a three-leg bridge cannot control, and one
+zero-sequence voltage — a component without an independent three-leg current actuator, and one
 whose measured value depends on the sensing reference documented in
 [`SequenceController`](@ref).
 """
@@ -390,7 +390,7 @@ The exact law uses the rationalised root of the per-phase quadratic,
 selector denominators, so its scale never exceeds the exact one. All other
 keywords and their defaults are those of [`CommonScaleLimiter`](@ref).
 The plant-aware protection (selected-location apparent power, both
-filter-side ratings and `dv2_max`) honours the same priority. It first scales
+filter-side ratings, `dv2_max` and `i_cap_max`) honours the same priority. It first scales
 only the lower-priority sequence, holding the reserved one as an offset, and
 scales the reserved sequence only if that alone still violates a limit.
 
@@ -550,7 +550,13 @@ function InverterControlMeasurement(phase_voltage::AbstractVector{<:Complex})
     InverterControlMeasurement(Tuple(phase_voltage))
 end
 
-"""Per-operating-point active availability, rated active power, and reactive-power base, in SI."""
+"""Per-point DC-link input availability, rated active power and reactive-power base, in SI.
+
+`p_available` applies at the regulated DC-link input, including modeled converter
+and capacitor ESR loss. It is not lossless POC power or upstream PV/DC–DC input.
+Source-path mean and harmonic dissipation outside that boundary is excluded;
+see [`dc_source_line_frequency_diagnostics`](@ref).
+"""
 struct InverterControlRequest
     p_available::Float64
     p_rated::Float64
@@ -1300,9 +1306,19 @@ _smooth_symmetric_clip(a, limit, epsilon) = symmetric_clip_value(a,limit,Algebra
 # defining row has derivative 1 with respect to its normalized output, even
 # when the physical quantity is zero. This also avoids exponential expression
 # expansion when a scale is reused in successive capability checks.
-function _defined_control_expression!(m, expression; scale=1.0, start=scale)
+function _control_expression_start(expression,fallback)
+    value=try
+        JuMP.value(v->something(JuMP.start_value(v),0.),expression)
+    catch
+        fallback
+    end
+    isfinite(value) ? Float64(value) : Float64(fallback)
+end
+
+function _defined_control_expression!(m, expression; scale=1.0, start=scale,initialize::Bool=false)
     expression isa Real && return expression
-    output = JuMP.@variable(m, start=Float64(start/scale))
+    initial=initialize ? _control_expression_start(expression,start) : start
+    output = JuMP.@variable(m, start=Float64(initial/scale))
     JuMP.@constraint(m, output == expression/scale)
     return scale*output
 end
@@ -1517,12 +1533,13 @@ function _limit_positive_power_smooth!(
     return p_limited, q_limited, scale
 end
 
-function _combine_safe_scale_implicit!(m, scale, candidate, epsilon)
+function _combine_safe_scale_implicit!(m, scale, candidate, epsilon;initialize::Bool=false)
     # For nonnegative inputs this stays in [0, min(scale, candidate)], including
     # at zero. The ordinary smooth minimum can be negative there. Its deficit
     # from the hard minimum is <= epsilon/2; epsilon is dimensionless.
     return _defined_control_expression!(m,
-        selector_expression(m,scale,candidate,AlgebraicFormulation(epsilon);kind=:nonnegative_min))
+        selector_expression(m,scale,candidate,AlgebraicFormulation(epsilon);kind=:nonnegative_min);
+        initialize=initialize)
 end
 
 function _worst_phase_smooth(ctx, policy::WorstPhaseVoltVarWatt,
@@ -1629,8 +1646,8 @@ function _unbalance_smooth(ctx, policy::NegativeSequenceAdmittanceDroop,
     product = _cmul(ratio[1], ratio[2], i1[1], i1[2])
     i2r = (-product[1], -product[2])
     blend = policy.ripple_blend
-    i2 = ((1-blend)*i2v[1] + blend*i2r[1],
-          (1-blend)*i2v[2] + blend*i2r[2])
+    i2 = iszero(blend) ? i2v : blend == 1 ? i2r :
+        ((1-blend)*i2v[1] + blend*i2r[1], (1-blend)*i2v[2] + blend*i2r[2])
     return i2v, i2r, i2, eta
 end
 
@@ -1686,6 +1703,75 @@ function _target_limit_smooth!(
     return power ?
         (_scale_pair(s, i1), _scale_pair(t, i2), s) :
         (_scale_pair(t, i1), _scale_pair(s, i2), t)
+end
+
+# A voltage-ripple bound can already imply a looser thermal bound when no
+# carrier allowance is declared. Avoid duplicating the same controller
+# intersection; the plant still enforces both physical inequalities.
+function _control_needs_thermal_backoff(inv)
+    inv.i_cap_max === nothing && return false
+    inv.dv2_max === nothing && return true
+    (inv.i_sw > 0 || inv.pwm_current_factor > 0) && return true
+    _,w2,_ = inv.cap_thermal_weights
+    implied = sqrt(w2)*2*(2pi*inv.f)*_dc_link_capacitance(inv)*inv.dv2_max/sqrt(2)
+    return implied > inv.i_cap_max
+end
+
+_control_has_carrier_budget(inv) = inv.cap_thermal_weights[3] > 0 &&
+    (inv.i_sw > 0 || inv.pwm_current_factor > 0)
+
+_control_has_sequence_limits(inv) =
+    inv.i_positive_max !== nothing || inv.i_negative_max !== nothing
+
+# The plant's sequence ratings refer to converter current, including mandatory
+# loss import and the LCL shunt offset. Limit the independent sequence services
+# before applying coupled phase-current/power/ripple protection. A common-scale
+# policy retains its ray; a sequence-priority policy clips each sequence alone.
+function _sequence_service_scales_smooth!(m,inv,limiter,offset,i1,i2,ib,ieps)
+    _,o1,o2=_sequence_pair([x[1] for x in offset],[x[2] for x in offset])
+    scales=map(((o1,i1,inv.i_positive_max),(o2,i2,inv.i_negative_max))) do (a,b,rating)
+        rating === nothing && return 1.0
+        limit=rating/ib
+        _pcc_segment_smooth!(m,a,b,limit,ieps/limit)
+    end
+    if limiter isa CommonScaleLimiter
+        width=ieps/maximum(x/ib for x in (inv.i_positive_max,inv.i_negative_max) if x!==nothing)
+        t=_combine_safe_scale_implicit!(m,scales[1],scales[2],width)
+        return t,t
+    end
+    return scales
+end
+
+function _sequence_service_scales_exact(inv,limiter,offset,i1,i2)
+    _,o1,o2=_phasor_sequences(offset)
+    s1=inv.i_positive_max===nothing ? 1. :
+        _pcc_segment_exact(reim(o1),reim(i1),inv.i_positive_max,0.)
+    s2=inv.i_negative_max===nothing ? 1. :
+        _pcc_segment_exact(reim(o2),reim(i2),inv.i_negative_max,0.)
+    return limiter isa CommonScaleLimiter ? (min(s1,s2),min(s1,s2)) : (s1,s2)
+end
+
+# Three-leg capacitor thermal geometry in amperes. The 2ω and declared carrier
+# allowances occupy orthogonal RMS channels, exactly as in the physical plant.
+# Retain the fixed carrier allowance in the anchor so no limiter scales it away.
+function _control_capacitor_geometry(inv, voltage, offset, direction;
+                                     current_scale=1.0, power_scale=1.0)
+    _, w2, wsw = inv.cap_thermal_weights
+    factor = sqrt(w2)*2*(2pi*inv.f)*_dc_link_capacitance(inv)*
+             abs(_dc_ripple_factor(inv))/(sqrt(2)*inv.v_dc)*power_scale
+    ripple(i) = (sum(voltage[k][1]*i[k][1]-voltage[k][2]*i[k][2] for k in 1:3),
+                 sum(voltage[k][1]*i[k][2]+voltage[k][2]*i[k][1] for k in 1:3))
+    carrier = sqrt(wsw)*inv.pwm_current_factor*current_scale
+    a = iszero(factor) ? Any[0.,0.] : Any[factor*x for x in ripple(offset)]
+    b = iszero(factor) ? Any[0.,0.] : Any[factor*x for x in ripple(direction)]
+    if !iszero(carrier)
+        append!(a, [carrier*offset[k][j] for k in 1:3 for j in 1:2])
+        append!(b, [carrier*direction[k][j] for k in 1:3 for j in 1:2])
+    end
+    if !iszero(wsw*inv.i_sw)
+        push!(a, sqrt(wsw)*inv.i_sw); push!(b, 0.0)
+    end
+    return (offset=a, direction=b)
 end
 
 # Plant-aware capability scale for one command direction. `converter_offset`
@@ -1766,6 +1852,27 @@ function _plant_capability_scale!(m, inverter::AdvancedInverter, handles,
             seps/smax)
     end
 
+    if _control_needs_thermal_backoff(inverter)
+        voltage = ntuple(k -> (handles.vrint[k], handles.viint[k]), 3)
+        geometry = _control_capacitor_geometry(inverter, voltage,
+            converter_offset, direction; current_scale=ib, power_scale=sb)
+        width = ieps*ib
+        # Joint carrier/ripple budgets need the RMS sphere: adding orthogonal
+        # channels as magnitudes would unnecessarily curtail reserved power.
+        candidate = if _control_has_carrier_budget(inverter)
+            _pcc_segment_smooth!(m, geometry.offset, geometry.direction,
+                inverter.i_cap_max, width/inverter.i_cap_max)
+        else
+            # A pure 2ω current cap is the same protection geometry as dv2_max.
+            # Reuse its conservative scale instead of adding a second quadratic
+            # segment graph even when this extra protection is inactive.
+            _safe_direction_scale_implicit!(m,geometry.offset,geometry.direction,
+                inverter.i_cap_max,width;magnitude_start=inverter.i_cap_max/2,
+                scale=inverter.i_cap_max)
+        end
+        capability_scale = _combine_safe_scale_implicit!(
+            m, capability_scale, candidate, width/inverter.i_cap_max)
+    end
     return capability_scale
 end
 
@@ -1787,15 +1894,20 @@ translating to converter current. It uses the PCC-terminal loss offset
 In converter mode the subsequent capability backoff is deliberately wider than
 [`evaluate_exact`](@ref): it also reads converter-terminal internal voltage and
 physical POC voltage and both filter-arm currents so that a declared per-leg,
-selected-location apparent-power, or `dv2_max` limit
+selected-location apparent-power, `dv2_max`, or capacitor thermal-current limit
 saturates the command instead of making the controller equality infeasible.
 [`solve_controlled_inverter`](@ref) applies the same backoff to the exact law at
 the solved point, which is why the two commands are comparable.
+The three-leg capacitor budget includes the source-dependent 2ω current,
+frequency weights, fixed `i_sw` and current-dependent `pwm_current_factor`
+allowances. It does not infer a thermal rating from capacitance. An infeasible
+mandatory loss-import or fixed-ripple anchor still lies outside the controller domain.
 """
 function stamp_smooth_control!(ctx, controller::SequenceController,
                                request::InverterControlRequest,
                                inverter::AdvancedInverter,
                                handles::_InvHandles)
+    inverter.dc_energy_model===:linearized || throw(ArgumentError("nonlinear capacitor energy uses the voltage-aware allocator; implicit controller backoff is linearized"))
     inverter.topology == :THREE_LEG || throw(ArgumentError(
         "smooth SequenceController stamping currently supports THREE_LEG only"))
     if inverter.power_limit_location === :poc
@@ -1820,6 +1932,12 @@ function stamp_smooth_control!(ctx, controller::SequenceController,
     p_fraction, q_raw, vmin, vmax = _positive_smooth(
         ctx, controller.positive, magnitudes, u1, request, sb, vb)
     smax = ratings.s_max / sb
+    if controller.positive isa WorstPhaseVoltVarWatt &&
+            get(m.ext,:PowerOptLabCompactController,false)
+        # Fleet export otherwise copies the conflict-selection tree into every
+        # current and capability expression. One equality preserves the law.
+        q_raw = _defined_control_expression!(m,q_raw;scale=smax,start=0.)
+    end
     power_epsilon = _power_epsilon(controller.limiter, ratings)
     seps = power_epsilon / sb
 
@@ -1896,6 +2014,15 @@ function stamp_smooth_control!(ctx, controller::SequenceController,
                      import_phase[k][2] - shunt[k][2]), 3) :
         import_phase
 
+    if _control_has_sequence_limits(inverter)
+        sequence_s1,sequence_s2=_sequence_service_scales_smooth!(m,inverter,
+            controller.limiter,converter_offset,i1_pre,i2_pre,ib,ieps)
+        i1_pre=_scale_pair(sequence_s1,i1_pre)
+        i2_pre=_scale_pair(sequence_s2,i2_pre)
+        phase_pre=_phase_pairs(i1_pre,i2_pre)
+        target_scale=sequence_s1*target_scale
+    end
+
     plant_scale(offset_c, offset_g, dir) = _plant_capability_scale!(m, inverter,
         handles, offset_c, offset_g, dir, ib, ieps, imax, smax, seps, sb)
     add_phase(a, b) = ntuple(k -> (a[k][1] + b[k][1], a[k][2] + b[k][2]), 3)
@@ -1910,12 +2037,21 @@ function stamp_smooth_control!(ctx, controller::SequenceController,
                            _phase_pairs((0.0, 0.0), i2_pre)
         other = power ? _phase_pairs((0.0, 0.0), i2_pre) :
                         _phase_pairs(i1_pre, (0.0, 0.0))
+        thermal_reserved_scale = 1.0
+        if _control_needs_thermal_backoff(inverter) && _control_has_carrier_budget(inverter)
+            voltage = ntuple(k -> (handles.vrint[k],handles.viint[k]),3)
+            geometry = _control_capacitor_geometry(inverter,voltage,
+                converter_offset,reserved;current_scale=ib,power_scale=sb)
+            thermal_reserved_scale = _pcc_segment_smooth!(m,geometry.offset,
+                geometry.direction,inverter.i_cap_max,ieps*ib/inverter.i_cap_max)
+            reserved = scale_phase(thermal_reserved_scale,reserved)
+        end
         other_scale = plant_scale(add_phase(converter_offset, reserved),
             add_phase(grid_offset, reserved), other)
         capability_scale = plant_scale(converter_offset, grid_offset,
             add_phase(reserved, scale_phase(other_scale, other)))
-        s1, s2 = power ? (capability_scale, capability_scale*other_scale) :
-                         (capability_scale*other_scale, capability_scale)
+        s1, s2 = power ? (capability_scale*thermal_reserved_scale, capability_scale*other_scale) :
+                         (capability_scale*other_scale, capability_scale*thermal_reserved_scale)
     else
         capability_scale = plant_scale(converter_offset, grid_offset, phase_pre)
         s1 = s2 = capability_scale
@@ -1932,14 +2068,17 @@ function stamp_smooth_control!(ctx, controller::SequenceController,
         # equalities would repeat those two rows and make the Jacobian rank
         # deficient, especially at zero dispatch. Command only I1 and I2.
         for (target, command) in ((target_i1, i1), (target_i2, i2)), j in 1:2
-            JuMP.@constraint(m, target[j] == command[j])
+            JuMP.@constraint(m, (target[j] - command[j])/(ratings.i_scale/ib) == 0)
         end
     else
         # An LCL shunt can carry zero sequence, so a grid-current target must
         # also enforce the controller's zero grid-current sum explicitly.
-        for k in 1:3
-            JuMP.@constraint(m, target_re[k] == phase_current[k][1])
-            JuMP.@constraint(m, target_im[k] == phase_current[k][2])
+        target_i0,_,_=_sequence_pair(collect(target_re),collect(target_im))
+        for (target,command) in ((target_i1,i1),(target_i2,i2)),j in 1:2
+            JuMP.@constraint(m,(target[j]-command[j])/(ratings.i_scale/ib)==0)
+        end
+        for j in 1:2
+            JuMP.@constraint(m,target_i0[j]/(ratings.i_scale/ib)==0)
         end
     end
 
@@ -2088,6 +2227,17 @@ function _plant_scale_exact(converter_voltage, converter_offset, grid_offset,
         scale = min(scale, _safe_direction_scale_exact(
             ripple_offset, ripple_direction, ripple_limit))
     end
+    if _control_needs_thermal_backoff(inverter)
+        geometry = _control_capacitor_geometry(inverter,
+            reim.(converter_voltage), reim.(converter_offset), reim.(direction))
+        candidate = if _control_has_carrier_budget(inverter)
+            _pcc_segment_exact(geometry.offset,geometry.direction,inverter.i_cap_max,0.0)
+        else
+            _safe_direction_scale_exact(complex(geometry.offset...),
+                complex(geometry.direction...),inverter.i_cap_max)
+        end
+        scale = min(scale,candidate)
+    end
     return scale
 end
 
@@ -2107,34 +2257,51 @@ function _apply_plant_capability_exact(
         shunt .+ imported
     grid_offset = target isa ConverterCurrentTarget ? imported .- shunt : imported
     i1_service = result.i1 - i1_import
+    i2_service = result.i2
+    sequence_s1=1.0
+    if _control_has_sequence_limits(inverter)
+        sequence_s1,sequence_s2=_sequence_service_scales_exact(inverter,limiter,
+            converter_offset,i1_service,i2_service)
+        i1_service=sequence_s1*i1_service
+        i2_service=sequence_s2*i2_service
+    end
     plant_scale(offset_c, offset_g, direction) = _plant_scale_exact(
         converter_voltage, offset_c, offset_g, direction, inverter)
     if limiter isa SequencePriorityLimiter
         power = limiter.priority === :power
         reserved = power ? _phase_from_sequences(i1_service, 0.0im) :
-                           _phase_from_sequences(0.0im, result.i2)
-        other = power ? _phase_from_sequences(0.0im, result.i2) :
+                           _phase_from_sequences(0.0im, i2_service)
+        other = power ? _phase_from_sequences(0.0im, i2_service) :
                         _phase_from_sequences(i1_service, 0.0im)
+        thermal_reserved_scale = 1.0
+        if _control_needs_thermal_backoff(inverter) && _control_has_carrier_budget(inverter)
+            geometry = _control_capacitor_geometry(inverter,reim.(converter_voltage),
+                reim.(converter_offset),reim.(reserved))
+            thermal_reserved_scale = _pcc_segment_exact(geometry.offset,
+                geometry.direction,inverter.i_cap_max,0.0)
+            reserved = thermal_reserved_scale .* reserved
+        end
         other_scale = plant_scale(converter_offset .+ reserved,
                                   grid_offset .+ reserved, other)
         scale = plant_scale(converter_offset, grid_offset,
                             reserved .+ other_scale .* other)
-        s1, s2 = power ? (scale, scale*other_scale) : (scale*other_scale, scale)
+        s1, s2 = power ? (scale*thermal_reserved_scale, scale*other_scale) :
+                         (scale*other_scale, scale*thermal_reserved_scale)
     else
         scale = plant_scale(converter_offset, grid_offset,
-                            result.phase_current .- imported)
+                            _phase_from_sequences(i1_service,i2_service))
         s1 = s2 = scale
     end
 
     i1 = s1*i1_service + i1_import
-    i2 = s2*result.i2
+    i2 = s2*i2_service
     u1, u2 = result.voltage_sequence[2], result.voltage_sequence[3]
     return InverterControlResult(
         result.phase_voltage, result.voltage_sequence,
         result.voltage_min, result.voltage_max, result.eta,
         result.p_request, result.q_request, result.power_scale,
         result.i1_request, result.i2_voltage, result.i2_ripple,
-        result.i2_request, result.current_scale*s1,
+        result.i2_request, result.current_scale*sequence_s1*s1,
         i1, i2, _phase_from_sequences(i1, i2),
         3u1*conj(i1), 3(u1*conj(i1) + u2*conj(i2)), 3(u1*i2 + u2*i1))
 end
@@ -2173,10 +2340,23 @@ end
 
 function extract_device(controlled::ControlledDevice{<:AdvancedInverter},
                         handles::_ControlledHandles, status::SolveStatus)
-    return (plant=extract_device(controlled.device, handles.plant, status),
-            control=_extract_control(handles.control, status),
-            converter_terminal=_extract_converter_terminal(
-                handles.plant, status))
+    plant=extract_device(controlled.device,handles.plant,status;
+        dc_max=handles.control.request.p_available)
+    if status.has_primal
+        h=handles.plant
+        re,im=controlled.controller.current_target isa ConverterCurrentTarget ?
+            (h.cri,h.cii) : (h.gri,h.gii)
+        # Evaluate the hard target equality in amperes, independently of its
+        # model-unit residual. Failed candidates remain diagnostic evidence.
+        value_or_nan(e)=try Float64(JuMP.value(e)) catch; NaN end
+        tracking=[_inverter_limit_check("command_current_$k",:A,
+            hypot(value_or_nan(re[k]-handles.control.phase_current[k][1]),
+                  value_or_nan(im[k]-handles.control.phase_current[k][2]))*h.ib,0.,0.) for k in 1:3]
+        plant=merge(plant,(physical_feasibility=
+            _extend_inverter_feasibility(plant.physical_feasibility,tracking),))
+    end
+    return (plant=plant,control=_extract_control(handles.control,status),
+        converter_terminal=_extract_converter_terminal(handles.plant,status))
 end
 
 """Result of [`solve_controlled_inverter`](@ref)."""
@@ -2193,6 +2373,7 @@ struct ControlledInverterResult <: AbstractSolveResult
 end
 
 solve_status(result::ControlledInverterResult) = result.solve
+physical_feasibility(result::ControlledInverterResult) = result.plant.physical_feasibility
 solve_diagnostics(result::ControlledInverterResult) = (
     current_scale=result.control.current_scale,
     power_scale=result.control.power_scale,
@@ -2206,6 +2387,11 @@ solve_diagnostics(result::ControlledInverterResult) = (
     converter_positive_sequence_power=
         result.converter_terminal.positive_sequence_power,
     exact_smooth_current_residual=result.exact_smooth_current_residual,
+    physical_feasible=result.plant.physical_feasibility.passed,
+    physical_failed_checks=[c.name for c in result.plant.physical_feasibility.checks if !c.passed],
+    numerical_attempts=get(result.plant,:numerical_attempts,()),
+    continuous_rail_margin_lower_V=result.plant.physical_feasibility.rail.lower_V,
+    continuous_rail_margin_upper_V=result.plant.physical_feasibility.rail.upper_V,
 )
 
 """
@@ -2221,6 +2407,19 @@ requires `per_unit=true`; controller configuration and returned results remain
 SI. This is a controlled power flow: the controller equalities determine the
 command, while `selection_objective` only selects remaining plant allocation
 freedom (`:loss`, the default, or `:zero` for an objective-invariance check).
+
+`initialization=:automatic` permits one cold rebuild after a numerical
+termination. `:spread` selects one start policy; `:consistent` selects the
+fallback directly. The fallback uses consistent graph starts and tries Ipopt
+gradient scaling unless the caller explicitly sets a scaling option. For a
+zero objective, it instead uses spread starts for a loss-objective seed and
+transfers only a raw-successful, physically accepted seed into the final zero
+objective. At most three objective stages are recorded, each with the supplied
+iteration budget. Zero-iteration and time-limit outcomes are not retried.
+Failed primals/duals never transfer between cold models. Stages, objectives,
+scaling and raw outcomes are retained in
+`solve_diagnostics(result).numerical_attempts`. Final raw and physical gates
+remain unchanged.
 
 `exact_smooth_current_residual` compares the exact law with the stamped smooth
 law **at the smooth model's own solved operating point**, using the same solved
@@ -2238,7 +2437,8 @@ function solve_controlled_inverter(
         optimizer=Ipopt.Optimizer,
         verbose::Bool=false,
         selection_objective::Symbol=:loss,
-        solver_options=())
+        solver_options=(),rail_refinement::Bool=true,initialization::Symbol=:automatic)
+    _validate_inverter_initialization(initialization)
     selection_objective in (:loss, :zero) || throw(ArgumentError(
         "selection_objective must be :loss or :zero"))
     per_unit || throw(ArgumentError(
@@ -2247,6 +2447,8 @@ function solve_controlled_inverter(
     validate_device(controlled, (net,); periods=1)
     handles = Ref{_ControlledHandles}()
     hook! = ctx -> begin
+        _opf_model(ctx).ext[:PowerOptLabConsistentControllerStart]=
+            initialization===:consistent && selection_objective!==:zero
         handles[] = stamp_device!(ctx, controlled; request=request)
         if selection_objective === :loss
             JuMP.@objective(_opf_model(ctx), Min,
@@ -2258,8 +2460,17 @@ function solve_controlled_inverter(
     ctx = build_opf_model(net; per_unit=per_unit, s_base=Float64(s_base),
                           add_objective=false, model_hook! = hook!,
                           optimizer=optimizer, verbose=verbose)
-    _set_solver_options!(_opf_model(ctx), solver_options)
-    BMOPFTools.optimize_opf!(ctx)
+    m=_opf_model(ctx);plants=((controlled.device,handles[].plant),)
+    _set_inverter_solver_options!(m,solver_options;controller_graph=true,
+        controller_scaling=initialization===:consistent ? "gradient-based" : "none")
+    seed=(attempts=(),continue_final=true)
+    if initialization===:consistent && selection_objective===:zero &&
+            _inverter_positive_iteration_budget(solver_options)
+        seed=_inverter_zero_objective_seed!(ctx,plants,
+            handles[].plant.p_loss+handles[].plant.p_cap_loss,
+            s->extract_device(controlled,handles[],s).plant.physical_feasibility.passed;rail_refinement)
+    end
+    seed.continue_final && _optimize_inverter_rails!(ctx,plants;enabled=rail_refinement)
     outcome = _solve_outcome(_opf_model(ctx))
     status = SolveStatus(outcome)
     extracted = extract_device(controlled, handles[], status)
@@ -2269,9 +2480,24 @@ function solve_controlled_inverter(
         controlled, request, extracted, grid_current) : extracted.control
     residual = status.publishable ? maximum(abs,
         exact_control.phase_current .- extracted.control.phase_current) : NaN
-    return ControlledInverterResult(string(outcome.termination_status),
-                                    extracted.plant, extracted.control,
+    attempt=_inverter_numerical_attempt(m,status,initialization,selection_objective,
+        extracted.plant.physical_feasibility.passed)
+    attempts=seed.continue_final ? (seed.attempts...,attempt) : seed.attempts
+    plant=merge(extracted.plant,(numerical_attempts=attempts,))
+    solved=ControlledInverterResult(string(outcome.termination_status),
+                                    plant, extracted.control,
                                     extracted.converter_terminal,
                                     grid_current,
-                                    exact_control, residual, result["bus"], status)
+                                    exact_control, residual, result["bus"],
+                                    _physical_solve_status(status,extracted.plant.physical_feasibility))
+    if initialization===:automatic && _inverter_numerical_restart(status,solver_options)
+        # Rebuild cold: failed primals/duals never become continuation starts.
+        retry=solve_controlled_inverter(net,controlled,request;per_unit,s_base,optimizer,verbose,
+            selection_objective,solver_options,rail_refinement,initialization=:consistent)
+        retry_plant=merge(retry.plant,(numerical_attempts=(attempts...,retry.plant.numerical_attempts...),))
+        return ControlledInverterResult(retry.termination_status,retry_plant,retry.control,
+            retry.converter_terminal,retry.grid_phase_current,retry.exact_control,
+            retry.exact_smooth_current_residual,retry.bus,retry.solve)
+    end
+    solved
 end

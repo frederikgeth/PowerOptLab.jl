@@ -24,11 +24,12 @@ optimization problem.
     model. A solved equilibrium is not evidence that the physical closed loop
     is stable or meets a standardised response time.
 
-This initial API deliberately supports three-leg, three-wire inverters only.
+The forward controller described on this page supports three-leg, three-wire inverters.
 The Fortescue transform ensures `I0 = 0`, and a common algebraic scale enforces
 the conductor-current limit after positive- and negative-sequence requests are
-combined. Four-leg and split-link policies need an explicit zero-sequence and
-neutral allocation and are not silently approximated by this implementation.
+combined. A separate solver-based four-leg policy, [`PerPhaseVoltVarWatt`](@ref),
+is described in the [allocation guide](inverter_operating_constraints.md#four-leg-phase-control).
+Split-link control is not provided by either family.
 
 ## Construct a controller
 

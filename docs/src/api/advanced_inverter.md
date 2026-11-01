@@ -10,4 +10,12 @@ the derivations and validation studies.
 AdvancedInverter
 solve_advanced_inverter
 InverterResult
+InverterFeasibilityTolerances
+InverterLimitCheck
+InverterFeasibilityReport
+physical_feasibility
+inverter_physical_feasibility
+continuous_rail_margin
+dc_source_line_frequency_diagnostics
+dc_link_energy_diagnostics
 ```

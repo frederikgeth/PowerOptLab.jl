@@ -1,0 +1,86 @@
+name: Australian PV evidence
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * 6'
+permissions:
+  contents: read
+  actions: write
+jobs:
+  regression:
+    name: Solver and saved evidence — Julia ${{ matrix.julia }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        julia: ['1.10', '1']
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1 # distributed evidence survives squash merges and branch deletion
+      - uses: julia-actions/setup-julia@v3
+        with:
+          version: ${{ matrix.julia }}
+      - uses: julia-actions/cache@v3
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: scripts/requirements-australian-pv.txt
+      - run: python -m pip install -r scripts/requirements-australian-pv.txt
+      - run: julia --project=. scripts/instantiate_pinned.jl
+      - name: Restore checksum-verified current evidence
+        run: python scripts/australian_pv/evidence.py restore studies/australian_pv/evidence/current.json
+      - name: Rated-capability gate for the study fixture
+        run: julia --project=. scripts/australian_pv/rated_capability.jl
+      - name: OPF solver, rated-capability and PF/OPF agreement tests
+        run: julia --project=. scripts/australian_pv/test_coordinated_engineering.jl
+      - name: Saved-point SI audit and corruption gates
+        run: julia --project=. scripts/australian_pv/test_engineering_benchmark.jl
+      - name: Python evidence, selection and publication corruption gates
+        run: |
+          python scripts/australian_pv/test_evidence.py
+          python scripts/australian_pv/test_network_si_audit.py
+          python scripts/australian_pv/test_engineering_domain.py
+          python scripts/australian_pv/test_engineering_benchmark_emt.py
+          python scripts/australian_pv/test_plot_engineering_benchmark.py
+          python scripts/australian_pv/summarize_evidence.py --check
+      - name: EMT circuit regression
+        run: julia --project=. scripts/australian_pv/test_emt_circuit.jl
+  full-emt:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    name: Regenerate matched PF/OPF benchmark and full EMT
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: julia-actions/setup-julia@v3
+        with:
+          version: '1'
+      - uses: julia-actions/cache@v3
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r scripts/requirements-australian-pv.txt
+      - run: julia --project=. scripts/instantiate_pinned.jl
+      - name: Regenerate coupled benchmark and audit all saved points
+        run: |
+          julia --project=. scripts/australian_pv/run_engineering_benchmark.jl /tmp/engineering-benchmark python
+          julia --project=. scripts/australian_pv/audit_engineering_benchmark.jl /tmp/engineering-benchmark python
+      - name: Select and integrate all averaged/switched EMT references
+        run: |
+          julia --project=. scripts/australian_pv/prepare_engineering_benchmark_emt.jl /tmp/engineering-benchmark /tmp/engineering-emt-inputs.json
+          julia --project=. scripts/australian_pv/emt_circuit.jl /tmp/engineering-emt-inputs.json /tmp/engineering-emt
+          python scripts/australian_pv/audit_engineering_benchmark_emt.py /tmp/engineering-emt-inputs.json /tmp/engineering-emt /tmp/engineering-benchmark
+      - name: Require every thermal prediction to enclose its switched reference
+        run: python -c 'import json; r=json.load(open("/tmp/engineering-emt/matched_audit.json")); assert r["all_thermal_predictions_enclose"]'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mixed-pf-opf-and-emt
+          path: |
+            /tmp/engineering-benchmark
+            /tmp/engineering-emt-inputs.json
+            /tmp/engineering-emt

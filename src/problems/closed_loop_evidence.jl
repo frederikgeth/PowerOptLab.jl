@@ -409,36 +409,77 @@ function inverter_control_fixed_point_oracle(
         oracle, reference, final_measurement, final_control, sensitivity)
 end
 
+# Fixed-current replays retain the same engineering and publication contract as
+# standalone solves. A solver-successful sampled hull is not a physical witness.
+function _stamp_replay_current!(ctx,inv,h,current,target,source::DCSourceBounds)
+    target_re,target_im=target isa ConverterCurrentTarget ? (h.cri,h.cii) : (h.gri,h.gii)
+    scale=InverterControlRatings(inv,target).i_scale/h.ib
+    for k in 1:3
+        JuMP.@constraint(_opf_model(ctx),(target_re[k]-real(current[k])/h.ib)/scale==0)
+        JuMP.@constraint(_opf_model(ctx),(target_im[k]-imag(current[k])/h.ib)/scale==0)
+    end
+    power_scale=inv.s_max/h.sb
+    source.p_min===nothing || JuMP.@constraint(_opf_model(ctx),h.p_dc/power_scale>=source.p_min/inv.s_max)
+    source.p_max===nothing || JuMP.@constraint(_opf_model(ctx),h.p_dc/power_scale<=source.p_max/inv.s_max)
+end
+
+function _extract_replayed_plant(inv,h,status,current,target,source)
+    plant=extract_device(inv,h,status;dc_min=source.p_min,dc_max=source.p_max)
+    checks=InverterLimitCheck[]
+    if status.has_primal
+        re,im=target isa ConverterCurrentTarget ? (h.cri,h.cii) : (h.gri,h.gii)
+        for k in 1:3
+            actual=complex(JuMP.value(re[k]),JuMP.value(im[k]))*h.ib
+            push!(checks,_inverter_limit_check("replayed_current_$k",:A,
+                abs(actual-current[k]),0.,0.))
+        end
+    end
+    merge(plant,(physical_feasibility=_extend_inverter_feasibility(plant.physical_feasibility,checks),))
+end
+
+# A fixed-point iteration is a sequence of virtual imposed-current probes, not
+# a time simulation. Check request availability on the returned point; imposing
+# it on a deliberately perturbed voltage start can prevent the map from being
+# evaluated even when its final equilibrium respects the source bound.
+function _replay_availability_plant(plant,available)
+    report=plant.physical_feasibility
+    report.checked || return plant
+    # The SI auditor recomputed the exact fitted losses independently. Its
+    # absolute reported-Pdc residual gives an upper enclosure without recovering
+    # a sign from the optimization's power auxiliary.
+    residual=only(c.value for c in report.checks if c.name=="reported_p_dc_residual")
+    check=_inverter_limit_check("replay_dc_availability",:VA,plant.p_dc+residual,-Inf,available)
+    merge(plant,(physical_feasibility=_extend_inverter_feasibility(report,[check]),))
+end
+
 function _solve_exact_current_plant(
         net::Dict{String,Any}, inverter::AdvancedInverter,
         current::NTuple{3,ComplexF64}, target::AbstractCurrentTarget;
         s_base::Float64=1e6, optimizer=Ipopt.Optimizer,
-        verbose::Bool=false, solver_options=())
+        verbose::Bool=false, solver_options=(),rail_refinement::Bool=true,
+        dc_source::DCSourceBounds=DCSourceBounds())
+    validate_device(inverter,(net,);periods=1)
+    all(isfinite,current) || throw(ArgumentError("replay currents must be finite"))
     handles = Ref{_InvHandles}()
     hook! = ctx -> begin
         h = stamp_device!(ctx, inverter)
         handles[] = h
-        target_re, target_im = target isa ConverterCurrentTarget ?
-            (h.cri, h.cii) : (h.gri, h.gii)
-        for k in 1:3
-            JuMP.@constraint(_opf_model(ctx),
-                target_re[k] == real(current[k]) / h.ib)
-            JuMP.@constraint(_opf_model(ctx),
-                target_im[k] == imag(current[k]) / h.ib)
-        end
-        JuMP.@objective(_opf_model(ctx), Min, h.p_loss + h.p_cap_loss)
+        _stamp_replay_current!(ctx,inverter,h,current,target,dc_source)
+        JuMP.@objective(_opf_model(ctx), Min, (h.p_loss + h.p_cap_loss)*h.sb)
     end
     ctx = build_opf_model(
         net; per_unit=true, s_base=s_base, add_objective=false,
         model_hook! = hook!, optimizer=optimizer, verbose=verbose)
-    _set_solver_options!(_opf_model(ctx), solver_options)
-    BMOPFTools.optimize_opf!(ctx)
+    _set_inverter_solver_options!(_opf_model(ctx),solver_options)
+    _optimize_inverter_rails!(ctx,((inverter,handles[]),);enabled=rail_refinement)
     outcome = _solve_outcome(_opf_model(ctx))
     status = SolveStatus(outcome)
     h = handles[]
-    plant = extract_device(inverter, h, status)
+    plant = _extract_replayed_plant(inverter,h,status,current,target,dc_source)
     network = _extract_result(ctx, outcome)
-    (status=status, plant=plant, network=network,
+    network["raw_solver_status"]=JuMP.raw_status(_opf_model(ctx))
+    accepted=_physical_solve_status(status,plant.physical_feasibility)
+    (status=accepted, plant=plant, network=network,
      converter_terminal=_extract_converter_terminal(h, status),
      grid_phase_current=_extract_grid_current(h, status))
 end
@@ -549,6 +590,10 @@ Failed plus/minus solves leave the corresponding column as `NaN` and retain
 their full `SolveStatus`; the function does not turn a physically infeasible
 perturbation into a numerical sensitivity. Use the returned matrix with
 [`inverter_control_loop_gain`](@ref) only when all required columns are finite.
+These are imposed-current capability probes: no per-operating-point DC
+availability is supplied or inferred. Fixed-point controller replays additionally
+audit request availability on their returned operating point. Neither calculation
+is an EMT simulation.
 """
 function inverter_control_network_voltage_sensitivity(
         net::Dict{String,Any},
@@ -655,7 +700,9 @@ differences of simultaneous physical fleet solves. Four-leg fleets return a
 `4N × 4N` positive/negative-sequence matrix. Blocks are ordered by sorted
 device id. A column is retained only when both fresh solves are publishable;
 failed perturbations remain `NaN` while their `SolveStatus` values are
-preserved for auditability.
+preserved for auditability. These are imposed-current capability probes; the
+fleet's request availability is not imposed on perturbations. Physical plant
+limits and full-cycle rails remain enforced and independently checked.
 """
 function controlled_inverter_fleet_network_voltage_sensitivity(
         net::Dict{String,Any}, spec::ControlledInverterFleetSpec,
@@ -941,6 +988,13 @@ solve, and feeds the resulting POC voltage into the next iteration. Physical
 limits therefore remain part of the oracle rather than being replaced by a
 linear sensitivity.
 
+Every imposed-current solve uses adaptive full-cycle rail refinement and an
+independent SI report, including current-command residuals. Iteration states are
+virtual imposed-current probes without a PV-availability bound, not transient
+dispatches. The returned plant additionally audits request DC availability and
+cannot publish or report convergence if it violates that bound. Raw MOI status
+remains available separately.
+
 The result retains non-publishable final solves and cycling diagnostics. This
 is a quasi-static equilibrium comparison: it is not a dynamic stability or
 response-time simulation.
@@ -1065,7 +1119,11 @@ function solve_inverter_control_network_fixed_point(
         voltage = next_voltage
     end
     final_bus = last_bus
-    final_plant = last_plant === nothing ? nothing : last_plant
+    final_plant = last_plant === nothing ? nothing : _replay_availability_plant(last_plant,request.p_available)
+    if final_plant!==nothing
+        last_status=_physical_solve_status(last_status,final_plant.physical_feasibility)
+        converged &= last_status.publishable
+    end
     InverterControlNetworkFixedPointResult(
         smooth, converged, cycled, iterations, cycle_period,
         Float64(residual_voltage), Float64(residual_current), exact_control,
@@ -1088,11 +1146,21 @@ struct ControlledInverterFleetNetworkFixedPointResult
     voltage_trajectory::Matrix{Float64}
 end
 
+physical_feasibility(r::InverterControlNetworkFixedPointResult)=
+    r.plant===nothing ? _unchecked_inverter_feasibility() : r.plant.physical_feasibility
+physical_feasibility(r::ControlledInverterFleetNetworkFixedPointResult)=
+    Dict(id=>p.physical_feasibility for (id,p) in r.plants)
+
 function _solve_exact_current_fleet_plant(
         net::Dict{String,Any}, spec::ControlledInverterFleetSpec,
         currents::Dict{String,NTuple{3,ComplexF64}};
         s_base::Float64=1e6, optimizer=Ipopt.Optimizer,
-        verbose::Bool=false, solver_options=())
+        verbose::Bool=false, solver_options=(),rail_refinement::Bool=true,
+        respect_availability::Bool=false)
+    _validate_controlled_fleet(net,spec)
+    currents,ids=_validated_fleet_currents(spec,currents)
+    sources=Dict(id=>DCSourceBounds(p_max=respect_availability ? spec.requests[id].p_available : nothing)
+        for id in ids)
     handles = Dict{String,_InvHandles}()
     builder = BMOPFTools.OpfDeviceBuilder(:PowerOptLab, function (ctx, ids)
         for id in ids
@@ -1101,40 +1169,37 @@ function _solve_exact_current_fleet_plant(
             h = stamp_device!(ctx, inverter)
             handles[id] = h
             target = spec.devices[id].controller.current_target
-            target_re, target_im = target isa ConverterCurrentTarget ?
-                (h.cri, h.cii) : (h.gri, h.gii)
-            current = currents[id]
-            for k in 1:3
-                JuMP.@constraint(_opf_model(ctx),
-                    target_re[k] == real(current[k]) / h.ib)
-                JuMP.@constraint(_opf_model(ctx),
-                    target_im[k] == imag(current[k]) / h.ib)
-            end
+            _stamp_replay_current!(ctx,inverter,h,currents[id],target,sources[id])
         end
         ctx
     end)
     build_spec = BMOPFTools.OpfBuildSpec(component_builders=Dict(
         (:ibr, id) => builder for id in keys(spec.devices)))
     hook! = ctx -> JuMP.@objective(_opf_model(ctx), Min,
-        sum(h.p_loss + h.p_cap_loss
+        sum((h.p_loss + h.p_cap_loss)*h.sb
             for h in values(handles)))
     ctx = build_opf_model(
         net; per_unit=true, s_base=s_base, add_objective=false,
         build_spec=build_spec, model_hook! = hook!, optimizer=optimizer,
         verbose=verbose)
-    _set_solver_options!(_opf_model(ctx), solver_options)
-    BMOPFTools.optimize_opf!(ctx)
+    _set_inverter_solver_options!(_opf_model(ctx),solver_options)
+    _optimize_inverter_rails!(ctx,[(inverter_spec(spec.devices[id]),handles[id]) for id in ids];
+        enabled=rail_refinement)
     outcome = _solve_outcome(_opf_model(ctx))
     status = SolveStatus(outcome)
     plants = Dict{String,Any}()
     for id in sort!(collect(keys(spec.devices)))
-        plants[id] = extract_device(
-            inverter_spec(spec.devices[id]), handles[id], status)
+        plants[id] = _extract_replayed_plant(inverter_spec(spec.devices[id]),handles[id],
+            status,currents[id],spec.devices[id].controller.current_target,sources[id])
     end
     measurements = Dict(id => (plant=plants[id],
         converter_terminal=_extract_converter_terminal(handles[id], status),
         grid_phase_current=_extract_grid_current(handles[id], status)) for id in keys(plants))
-    (status=status, plants=plants, network=_extract_result(ctx, outcome), measurements=measurements)
+    accepted=SolveStatus(status.termination_status,status.primal_status,status.has_primal,
+        status.feasible,status.optimal,status.publishable && all(p.physical_feasibility.passed for p in values(plants)))
+    network=_network_without_replaced_ibrs(_extract_result(ctx,outcome),ids)
+    network["raw_solver_status"]=JuMP.raw_status(_opf_model(ctx))
+    (status=accepted, plants=plants, network=network, measurements=measurements)
 end
 
 function _fleet_voltage_state(voltage_by_id::Dict{String,NTuple{3,ComplexF64}}, ids)
@@ -1150,6 +1215,11 @@ The smooth fleet solve is used as the initial state; each exact iteration fixes
 all selected converter/grid current targets in one fresh network solve. This
 preserves feeder coupling and native unselected IBRs, and is the campaign-scale
 equilibrium comparison for [`solve_controlled_inverter_fleet`](@ref).
+Each replay requires passing plant/current SI reports and full-cycle rails.
+Virtual iteration probes do not impose request availability; every returned
+plant is additionally audited against it. `physical_feasibility(result)` returns
+the per-device reports. Check both `converged` and `solve.publishable` before
+using a result as an accepted controller equilibrium.
 """
 function solve_controlled_inverter_fleet_network_fixed_point(
         net::Dict{String,Any}, spec::ControlledInverterFleetSpec;
@@ -1300,6 +1370,13 @@ function solve_controlled_inverter_fleet_network_fixed_point(
         cycled && break
         push!(history, next_state)
     end
+    for id in keys(plants)
+        plants[id]=_replay_availability_plant(plants[id],spec.requests[id].p_available)
+    end
+    physical_pass=all(p.physical_feasibility.passed for p in values(plants))
+    last_status=SolveStatus(last_status.termination_status,last_status.primal_status,last_status.has_primal,
+        last_status.feasible,last_status.optimal,last_status.publishable && physical_pass)
+    converged &= last_status.publishable
     ControlledInverterFleetNetworkFixedPointResult(
         smooth, converged, cycled, iterations, cycle_period,
         Float64(residual_voltage), Float64(residual_current), exact_controls,

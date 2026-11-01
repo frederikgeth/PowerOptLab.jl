@@ -96,7 +96,7 @@ voltage curve feasible.
 This path normalises capability rows and operating power rows by the
 device rating. This keeps the solver's constraint-bound relaxation small in
 physical units when a small inverter is embedded in a large network power base.
-Existing forward-controller stamping retains its original numerical defaults.
+Forward-controller stamping also normalises engineering capability rows.
 
 The wrapper supports three-phase THREE_LEG, FOUR_LEG and SPLIT_DC plants with
 `grid_forming=false`. The default `:balanced_converter` imposes zero and negative
@@ -109,6 +109,234 @@ Q tracking includes the filter and optional POC
 shunt through the plant's total POC exchange. `pwm_strategy=:NONE` is required;
 fixed calibrated RMS current reserves are supported, but automatic carrier
 reserve iteration is not part of this solve.
+
+## Offline voltage-aware current allocation
+
+[`project_inverter_current`](@ref) supplies an offline allocation reference at a
+fixed terminal voltage. It minimizes the sum of squared complex-current errors
+while retaining the physical plant, source bounds and full-cycle rail checks.
+The requested converter-arm or grid-arm current is independently reconstructed
+through the filter and audited before solving for an alternative.
+
+```julia
+allocation = project_inverter_current(plant, request;
+    grid_voltage=poc_rms_phasors, requested_current=command_rms_phasors,
+    target=:converter, dc_source=DCSourceBounds(p_min=0.))
+allocation.request_feasibility  # :feasible, :violated or :unresolved
+allocation.plant_feasibility    # :feasible or :unresolved
+solve_status(allocation)        # status of the local allocation solve
+```
+
+A violated request and an accepted alternative distinguish a command outside
+capability from an impossible operating boundary. An unsuccessful NLP establishes
+neither plant infeasibility nor controller-policy infeasibility. If the direct
+request audit passes, that point itself establishes conditional plant feasibility
+even if the allocation solver fails. A singular converter-to-grid filter transfer
+leaves the direct request audit unresolved; it is not labelled infeasible.
+The allocated point's report also independently verifies that the fixed voltage
+and balancing charge match the requested boundary in SI units.
+For continuous rails, a negative conservative lower enclosure alone also does not
+prove a violation: the direct diagnostic requires a violating sampled witness.
+
+Voltage feasibility can require changing the direction of current, rather than
+scaling it toward zero. For example, a synthetic balanced 253 V boundary with a
+620 V DC link rejects a 4.8 kW unity-PF command but admits a point near
+1.886 kW / -5.956 kvar on the same 6 kVA plant. These values are a regression
+fixture, not changes to the Australian study's 750 V hardware.
+Reproduce this case, a feasible nominal request and energized zero-PV operation
+with the same fixed plant:
+
+```sh
+julia --project=. scripts/formulations/inverter_current_projection.jl /tmp/current_projection.json
+```
+
+The optional JSON artifact records hardware, solver settings, source fingerprints,
+requested-point failures and the allocated point's individual physical checks.
+
+![A rail-infeasible unity-PF request and a feasible local allocation](../assets/ibr/generated-current-projection.svg)
+
+The left panel restricts the capability slice to balanced currents; it is not a
+projection of the full sequence-current feasible set. The right panel uses the
+saved requested and allocated phasors to show their instantaneous line-voltage
+envelopes. Regenerate with `scripts/formulations/plot_current_projection.py`.
+
+The reference uses a local nonconvex solve; it does not certify a globally nearest
+point or implement reactive-priority VV+VW. Voltage is fixed, so there is no
+feeder feedback or dynamic stability claim. For split links, the explicit
+`midpoint_charge` (default zero) is fixed in both the request audit and the solve;
+these results are conditional on that actuator state. PWM is disabled. The local
+priority-aware reference below adds measured-voltage allocation; feeder feedback,
+optimized balancing charge and EMT remain separate work.
+
+## Local voltage-aware reactive priority
+
+[`allocate_inverter_services`](@ref) selects a command through staged physical
+solves at a fixed measured POC voltage:
+
+1. Track total POC Q as closely as locally feasible.
+2. Hold that achieved reactive service and maximize POC active export.
+3. Hold both powers and allocate requested negative-sequence current along its
+   declared complex ray on the selected converter or grid arm.
+
+The stages share the full filter, source, current, power, thermal and modulation
+model. Each stage must pass its own SI audit before the next runs. Fixed voltage,
+sequence-command, preserved-power and volt-watt conditions receive independent
+checks. The available-power ceiling uses a conservative enclosure of recomputed
+DC power. A failed stage retains its diagnostics and issues no command.
+
+```julia
+r = allocate_inverter_services(plant, request;
+    grid_voltage=poc_rms_phasors, reactive_request=-2600.,
+    active_fraction=1., volt_watt_basis=:rated, target=:converter)
+r.current_command              # nothing unless every stage publishes
+r.stages                       # all stage results, including failures
+r.plant_feasibility            # :feasible or :unresolved
+r.policy_feasibility           # :feasible or :unresolved
+```
+
+Default `reactive_mode=:within_request` permits Q between zero and the requested
+value. Explicit `:protective_override` permits a different Q when protection
+requires it, while minimizing tracking error before considering P. This changes
+the controller policy. It is never a fallback hidden inside a failed strict
+solve. An optional unrestricted physical projection can demonstrate feasible
+plant operation after a failed first stage, but it is returned only as a diagnostic.
+Local solver failure establishes no global infeasibility of either feasible set.
+
+Within the requested Q ray, the model maximizes a bounded service coordinate and
+then fixes that coordinate. Adding a nearly coincident Q equality to the active
+Q interval produced a spurious `LOCALLY_INFEASIBLE` P stage for the Australian
+worst-phase request; fixing the service coordinate preserves Q without that
+redundancy. No per-case solver retry is used. In protective-override mode, the
+tracking epigraph is removed after fixing achieved Q, leaving no unused tracking
+variable in the P objective.
+
+[`evaluate_voltage_aware`](@ref) evaluates the exact mean, worst-phase or
+positive-sequence VV+VW laws and calls this allocator. Supply sensed phasors as
+`InverterControlMeasurement` and the physical `grid_voltage` separately. The
+adapter requires reactive priority and Q→P→I₂ sequence order. Voltage-admittance
+droop is supported; current-dependent ripple blending is explicitly rejected.
+All three-leg hard limits remain active. More I₂ can increase losses, so strict
+P-before-I₂ ordering may leave little support when DC availability binds.
+
+These are solver-based local control references. They change allocation relative
+to the algebraic limiters and do not replace the fixed-structure controller stamp.
+Nonconvex local solutions do not prove globally best service allocation. Solver
+latency, dynamic stability and response times require separate validation.
+The voltage-aware fleet solver couples the local references to feeder equations;
+its independent closure checks are described in the verification guide.
+
+Reproduce seven fixed-boundary examples with the unchanged Australian hardware
+and the separately declared synthetic rail fixture:
+
+```sh
+julia --project=. scripts/formulations/inverter_service_allocation.jl /tmp/service_allocation.json
+```
+
+The saved `scripts/formulations/inverter_service_allocation_reference.json`
+records per-stage checks and source fingerprints. Six cases issue accepted
+commands; the strict synthetic Q-ray case remains unresolved while its independent
+diagnostic finds feasible plant operation. The local Australian comparisons are
+fixed-measurement tests, not new feeder or chronological results.
+
+## Four-leg phase control
+
+[`PerPhaseVoltVarWatt`](@ref) uses each sensed phase-neutral RMS voltage to
+evaluate its exact VV and VW curves. Each phase's Q base and rated P base are
+one third of the total request bases. It requires an explicit neutral,
+`topology=:FOUR_LEG`, a non-GFM plant and disabled PWM. Use
+`evaluate_voltage_aware` at fixed physical phasors or
+`solve_voltage_aware_inverter_fleet` for network feedback. The implicit
+`solve_controlled_inverter` path does not implement this policy.
+
+The allocation first maximizes one common fraction of the three requested
+reactive powers, then fixes that fraction and maximizes total active power.
+POC phase active powers are equal; phase currents generally are not balanced.
+Consequently the most restrictive phase VW ceiling also constrains the other
+phases' active export. With `volt_watt_basis=:available`, each phase uses one
+third of the shared AC availability after total solved losses. There are no
+independent phase PV sources or inferred phase VA ratings. The total VA bound
+does not by itself bound large opposing phase reactive powers; declare phase
+and neutral current ratings when these engineering bounds are required.
+
+```julia
+policy = PerPhaseVoltVarWatt(volt_var=vv, volt_watt=vw,
+    volt_watt_basis=:rated, current_target=:converter)
+controlled = ControlledDevice(four_leg_plant, policy)
+allocation = evaluate_voltage_aware(controlled,
+    InverterControlMeasurement(sensed_phase_neutral), request;
+    grid_voltage=physical_phase_neutral)
+```
+
+`allocate_phase_inverter_services` exposes the same allocation with explicit
+three-element Q requests and VW fractions. Only `reactive_mode=:within_request`
+is supported. Hardware, source, continuous rails and phase-policy checks gate
+every stage; a failed stage returns no command. Optional unrestricted projection
+is a separate physical witness and never substitutes another policy. Neutral
+ratings are RMS bounds, not peak switching-current ratings. Neither this
+quasi-static reference nor its per-phase curves establish connection-standard
+conformity, dynamic stability or an EMT-validated controller.
+
+## Embedded PWM thermal allocation
+
+Set `pwm_strategy=:CENTERED` and `f_sw` on a monolithic three/four-leg plant to
+include switching-current stress inside the constrained dispatch and Q→P→I₂
+allocation stages. The phase/DC ratings are unchanged. An open carrier-frequency
+DC source is required; automatic AC-current reserve closure, finite carrier
+source branches and split-link PWM allocation are explicitly rejected here.
+The existing standalone inverter reserve-loop solver retains its separate scope.
+
+The formulation integrates the ideal shared-carrier second moment analytically
+for fundamental current/voltage phasors. It bounds the DC voltage denominator
+over the whole cycle and encloses the voltage-norm smoothing error. This is a
+dispatch-dependent expression, not a factor calibrated at another point.
+Independent numerical integration of exact carrier dwell probabilities checks
+actual frozen-current RMS and modulation feasibility after each solve.
+
+AC switching ripple also produces bridge DC current at zero fundamental
+current. The allocation now includes an all-duty bound on that contribution,
+plus a passive-damping residual. It requires an L filter with proportional
+passive R/L; LCL dynamics are rejected by this embedded thermal model. The
+bound is computed once per filter geometry with exact rational event integrals
+and outward-rounded Bernstein subdivision. It enters the smooth NLP as a bus
+voltage squared coefficient. See the [derivation](../ibr/foundations.md).
+
+This uniform bound can be conservative. For example, the retained four-leg
+fixture with zero neutral inductance exhausts its 1 A budget with the all-duty
+reserve alone. Such a result remains unresolved: infeasibility of a sufficient
+bound does not prove physical infeasibility. No hardware rating is enlarged.
+
+`ConstrainedInverter(...; pwm_thermal_headroom=0.10)` reserves an additional
+validation allowance on the frozen-current component. This allowance does not
+bound semiconductor dynamics. The local
+allocators and voltage-aware fleet use the same default. Representative EMT at
+the declared filter, switching frequency and source assumptions is still required.
+Capacitor ESR weights, any independent `i_sw`, and calibrated AC RMS reserves
+continue to compose with the new term.
+
+At a maximum-Q thermal boundary, an exact Q lock can make the P-stage feasible
+set tangent and singular. PWM stages therefore preserve higher-priority service
+within a declared **0.0001 var/W SI budget**. Hardware limits and physical
+acceptance tolerances are unchanged; raw `ALMOST_LOCALLY_SOLVED` points remain
+unpublishable. This is bounded numerical lexicographic preservation, not a
+weighted objective or a hidden protective-Q override.
+
+## Nonlinear capacitor energy
+
+Set `dc_energy_model=:nonlinear` on a monolithic three/four-leg plant to keep
+the specified mean DC voltage while bounding the actual nonlinear capacitor
+waveform. `dv2_max` still means the peak Fourier 2ω voltage coefficient.
+Optional `v_dc_min` and `v_dc_max` independently bound voltage extrema. Total
+low-frequency capacitor current includes the waveform's higher even harmonics;
+the declared low-frequency ESR weight applies to this group.
+
+The nonlinear option composes with embedded centered PWM in constrained models
+and voltage-aware allocation. It assumes constant input power and a fixed mean
+loss. Finite small-signal source branches and split links are rejected. Implicit
+forward-controller backoff and standalone PWM reserve closure retain their
+linearized scope; use the voltage-aware allocator for the nonlinear option.
+Both PWM and nonlinear-energy stages use the explicit 100 µvar/W service
+preservation budget. See the energy equations in the foundations chapter and
+[`dc_link_energy_diagnostics`](@ref) for independently reconstructed quantities.
 
 ## [Compare saturation at a fixed 207 V POC](@id inverter-saturation-comparison)
 

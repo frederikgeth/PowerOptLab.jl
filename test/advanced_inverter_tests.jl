@@ -860,6 +860,8 @@ end
         pwm_strategy=:CENTERED, f_sw=10e3, pwm_fundamental_samples=72,
         pwm_carrier_samples=128, common...); solve_kw...)
     @test pwm.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+    @test solve_status(pwm).publishable
+    @test physical_feasibility(pwm).passed
     @test pwm.pwm_iterations >= 2
     @test pwm.i_cap_switching > 1.0
     @test pwm.i_cap_switching_reserved + 2e-2 >= pwm.i_cap_switching
@@ -879,6 +881,8 @@ end
     finite = solve_advanced_inverter(net, AdvancedInverter(; finite_parameters...);
         solve_kw...)
     @test finite.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+    @test solve_status(finite).publishable
+    @test physical_feasibility(finite).passed
     @test finite.i_dc_bridge_switching_rms > 0.0
     @test finite.i_dc_source_switching_rms > 0.0
     @test finite.i_cap_switching < finite.i_dc_bridge_switching_rms
@@ -896,6 +900,8 @@ end
         pwm_fundamental_samples=72, pwm_carrier_samples=128, _TOPO_COMMON...);
         solve_kw...)
     @test split.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+    @test solve_status(split).publishable
+    @test physical_feasibility(split).passed
     @test split.i_cap_switching > 0.0
     @test split.pwm_reserve_margin >= -2e-2
     @test split.dv_switching_pp > split.dv_switching_rms > 0.0
@@ -1006,6 +1012,8 @@ end
     r = solve_advanced_inverter(inv_grid3_unbal(),
         AdvancedInverter(; id="i", common...); per_unit=true, s_base=100e3)
     @test r.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+    @test solve_status(r).publishable
+    @test physical_feasibility(r).passed
     @test all(r.i_ac_switching_reserved .+ 3e-2 .>= r.i_ac_switching_rms)
     @test r.i_neutral_switching_reserved + 3e-2 >= r.i_neutral_switching_rms
     @test maximum(r.i_ac_total_rms) <= 30.0 + 0.05
@@ -1130,7 +1138,7 @@ end
             AdvancedInverter(; id="i", topology=:THREE_LEG, v_dc=vdc, c_dc=50e-3,
                 bus="poc", phase_terminals=["a","b","c"], neutral="n",
                 s_max=20e3, m_max=0.96, n_samples=N, c_loss=0.01);
-            objective=:min_loss, p_set=0.0)
+            objective=:min_loss, p_set=0.0,rail_refinement=false)
     loose = coarse(550.0, 6)
     fine_bad = coarse(550.0, 36)
     fine_good = coarse(650.0, 36)
@@ -1429,13 +1437,14 @@ end
     pu = solve_advanced_inverter(net, inv; per_unit=true)
     @test solve_status(pu).publishable
     exact = a * (sum(pu.i_mag) + pu.i_neutral)
-    budget = 4 * a * PowerOptLab._MAGNITUDE_EPS_REL * 40.0
+    budget = a*(3*PowerOptLab._loss_magnitude_epsilon(inv,inv.i_max)+
+        PowerOptLab._loss_magnitude_epsilon(inv,inv.In_max;neutral=true))
     # Allow for numerical solve error separately from the physical smoothing
     # budget. The latter stays fixed when solver tolerances change.
     floor_abs = 1e-8 * exact
     @test pu.p_loss <= exact + floor_abs           # one-sided: never inflated
     @test exact - pu.p_loss <= budget + floor_abs  # within the closed form
-    @test isapprox(pu.p_loss, exact; rtol=1e-6)
+    @test isapprox(pu.p_loss, exact; atol=budget+floor_abs,rtol=0.)
 
     # a_loss != 0 must converge in SI as well as per-unit. The previous lifted
     # formulation hit ITERATION_LIMIT here, so this is the regression that the

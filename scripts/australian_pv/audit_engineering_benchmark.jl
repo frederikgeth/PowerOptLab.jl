@@ -1,0 +1,155 @@
+include("run_engineering_benchmark.jl")
+
+function read_csv_rows(path)
+    lines=readlines(path);header=split(lines[1],",")
+    [Dict(String(h)=>String(v) for (h,v) in zip(header,split(line,","))) for line in lines[2:end]]
+end
+
+function audit_engineering_benchmark(output;python="python3")
+    target=joinpath(output,"audit.json")
+    writejson(target,Dict("all_planned_accepted"=>false,"reason"=>"AUDIT_INCOMPLETE"))
+    checked=Ref(0);physical=0;network_conditions=0
+    function require(condition,message)
+        checked[]+=1;condition || throw(ArgumentError(message))
+    end
+    read_record(file)=JSON3.read(read(file,String),Dict{String,Any})
+    raw_accepted(s)=s["termination_status"] in ("LOCALLY_SOLVED","OPTIMAL") &&
+        s["primal_status"]=="FEASIBLE_POINT" && all(s[k] for k in ("has_primal","feasible","optimal","publishable"))
+    try
+        env=read_record(joinpath(output,"environment.json"));summary=read_record(joinpath(output,"summary.json"))
+        repo=normpath(joinpath(ROOT,"..",".."))
+        for (file,digest) in env["source_sha256"]
+            require(bytes2hex(sha256(read(joinpath(repo,file))))==digest,"stale source: $file")
+        end
+        require(bytes2hex(sha256(read(joinpath(repo,"Project.toml"))))==env["Project_sha256"],"Project mismatch")
+        require(bytes2hex(sha256(read(joinpath(output,"dependency_manifest.toml"))))==env["Manifest_sha256"],"recorded Manifest mismatch")
+        require(bytes2hex(sha256(read(joinpath(ROOT,"networks","LV3_55bus.bmopf.json"))))==env["network_sha256"],"network mismatch")
+        require(env["s_base_VA"]==VA_BASE,"base metadata changed")
+        fixture=engineering_limits(env["fixture_limits"])
+        require(env["fixture_limits"]=="legacy" || env["rated_capability_accepted"],"fixture failed the rated-capability gate")
+        capability=read_csv_rows(joinpath(output,"rated_capability.csv"))
+        require(!isempty(capability) && all(r["accepted"]=="true" for r in capability)==env["rated_capability_accepted"],
+            "rated-capability record mismatch")
+        require(env["controllers"]==collect(MIXED_CONTROLLERS),"controller coverage changed")
+        require(env["planned_modes"]==collect(ENGINEERING_MODES),"mode plan changed")
+        require(env["site_availability_fractions"]==collect(MIXED_PV_FRACTIONS),"site availability metadata changed")
+        require(env["pwm_thermal_allowance"]==PowerOptLab._PWM_ALLOCATION_HEADROOM,"thermal allowance changed")
+        require(env["pwm_thermal_model"]==String(PowerOptLab._PWM_ALLOCATION_MODEL),"thermal model changed")
+        canonical(x)=JSON3.read(JSON3.write(_engineering_json_safe(x)),Dict{String,Any})
+        require(env["control_settings"]==canonical(TERMINAL_CONTROL_SETTINGS),"controller settings changed")
+        require(env["local_solver_options"]==canonical(ENGINEERING_OPTIONS),"local solver profile changed")
+        require(env["coordinated_solver_options"]==canonical(ENGINEERING_COORDINATED_OPTIONS),"coordinated solver profile changed")
+        require(env["planning_voltage_max_V"]==253.,"planning ceiling changed")
+        for field in keys(HARDWARE)
+            require(env["hardware"][string(field)]==getproperty(HARDWARE,field),"hardware changed: $field")
+        end
+        for field in keys(fixture)
+            require(env["operating_limits"][string(field)]==getproperty(fixture,field),"engineering ceiling changed")
+        end
+        plan=engineering_conditions()
+        require(length(env["planned_cases"])==length(plan),"case plan changed")
+        for condition in plan
+            saved=only(c for c in env["planned_cases"] if c["case_id"]==condition.case_id)
+            for field in keys(condition)
+                expected=getproperty(condition,field);actual=saved[string(field)]
+                require(expected isa Tuple ? Tuple(actual)==expected : actual==(expected isa Symbol ? String(expected) : expected),"case condition changed")
+            end
+        end
+        planned=Set(c.case_id*"_"*mode for c in plan for mode in ENGINEERING_MODES)
+        require(Set(keys(summary["cases"]))==planned,"missing or extra result")
+        require(summary["planned"]==summary["completed"]==length(planned),"incomplete plan")
+        require(summary["accepted"]==count(r->get(r,"accepted",false),values(summary["cases"])),"acceptance count mismatch")
+        evidence=Dict{String,Any}();hashes=Dict{String,String}()
+        agreement=read_record(joinpath(output,"agreement.json"))
+        require(Set(keys(agreement))==Set(c.case_id for c in plan) && summary["agreement_accepted"],"agreement record incomplete")
+        base=parse_bmopf(joinpath(ROOT,"networks","LV3_55bus.bmopf.json"))
+        for condition in plan
+            net=voltage_aware_network(base,condition);mixed=engineering_fleet(net,condition;limits=fixture)
+            baseline_hardware=Dict(id=>engineering_hardware_sha256(c.device) for (id,c) in mixed.spec.devices)
+            for mode in ENGINEERING_MODES
+                key=condition.case_id*"_"*mode;status=summary["cases"][key]
+                if !get(status,"accepted",false)
+                    evidence[key]=Dict("accepted"=>false,"reason"=>get(status,"reason","MODEL_REJECTED"))
+                    continue
+                end
+                path=joinpath(output,"points",key*".json");point=read_record(path)
+                details=read_record(joinpath(output,key*"_status.json"))
+                digest=bytes2hex(sha256(read(path)));hashes[relpath(path,output)]=digest
+                require(digest==status["point_sha256"]==details["point_sha256"],"point digest mismatch")
+                require(details["accepted"] && raw_accepted(point["candidate_status"]),"rejected model promoted")
+                require(raw_accepted(point["solver_status"]),"raw unsuccessful solve promoted")
+                require(point["planning_voltage_max_V"]==(mode=="local" ? nothing : env["planning_voltage_max_V"]),
+                    "point planning ceiling changed")
+                for field in keys(condition)
+                    expected=getproperty(condition,field);actual=point["case"][string(field)]
+                    require(expected isa Tuple ? Tuple(actual)==expected : actual==(expected isa Symbol ? String(expected) : expected),"point condition changed")
+                end
+                require(point["mode"]==mode && point["coordinated"]==(mode!="local"),"wrong control mode")
+                require(Set(keys(point["devices"]))==Set(keys(mixed.spec.devices)),"missing or duplicated site")
+                require(point["model_hardware_sha256"]==baseline_hardware,"physical models differ between PF and OPF")
+                if mode=="local"
+                    require(Set(keys(point["allocation_stages"]))==Set(keys(mixed.spec.devices)),"local stage coverage")
+                    for stages in values(point["allocation_stages"])
+                        require(length(stages)>=2 && all(raw_accepted(s["solve"]) for s in stages),"failed allocation stage")
+                    end
+                else
+                    require(raw_accepted(details["raw"]) && details["replay"]["accepted"],"raw/replay rejection")
+                    require(details["temporary_neutral_constraints_remaining"]==0,"initialization rows survived")
+                    attempts=details["attempts"]
+                    require(last(attempts)["stage"]=="full_capability" && iszero(last(attempts)["weight"]),"wrong final objective/capabilities")
+                    require(raw_accepted(last(attempts)["raw"]),"failed final optimization")
+                    require(last(attempts)["phasors"]==point["devices"],"initialization point published as final result")
+                    mode=="opf_equal_service" && require(details["service_converged"]==true,"equal-service requests not converged")
+                end
+                require(engineering_network_audit(path,joinpath(output,"network_audits",key*".json");python),"independent network rejection")
+                network=read_record(joinpath(output,"network_audits",key*".json"))
+                network_conditions+=length(network["checks"])
+                metrics=engineering_record_metrics(point,mixed;mode)
+                require(metrics.accepted,"SI plant/current-capability/local-policy rejection")
+                physical+=sum(length(r.checks) for r in values(metrics.reports))
+                require(abs(sum(r.p_poc_W for r in metrics.rows)-network["pv_active_power_W"])<=1e-5,"network/device P mismatch")
+                currents=Dict(id=>Tuple(ComplexF64[complex(z...) for z in d["grid_current"]]) for (id,d) in point["devices"])
+                proxy=(solve=(publishable=true,),spec=mixed.spec,grid_currents=currents,
+                    operating_modes=mixed.modes,network=Dict("bus"=>point["bus"]))
+                replay=mixed_thermal_replay(net,proxy)
+                require(replay.accepted,"saved-point fixed-PQ replay failed")
+                evidence[key]=Dict("accepted"=>true,"devices"=>metrics.rows,
+                    "p_poc_W"=>sum(r.p_poc_W for r in metrics.rows),"q_poc_var"=>sum(r.q_poc_var for r in metrics.rows),
+                    "p_dc_W"=>sum(r.p_dc_W for r in metrics.rows),"curtailment_W"=>sum(r.curtailment_W for r in metrics.rows),
+                    "reactive_service_error_var"=>sum(r.reactive_service_error_var for r in metrics.rows),
+                    "maximum_sensed_V"=>maximum(r.vmax_sensed_V for r in metrics.rows),
+                    "fixed_PQ_replay_difference_V"=>replay.max_difference_V)
+            end
+            ck=condition.case_id*"_opf_vv_released"
+            if get(evidence[ck],"accepted",false)
+                anchor=read_record(joinpath(output,ck*"_status.json"))["local_export_anchor_W"]
+                anchor===nothing || require(evidence[ck]["p_poc_W"]>=anchor-.011,"released dispatch below its local-export anchor")
+            end
+            agree=agreement[condition.case_id];tol=ENGINEERING_AGREEMENT_TOL
+            require(agree["accepted"] && agree["max_voltage_difference_V"]<=tol.voltage_V &&
+                agree["max_site_P_difference_W"]<=tol.power_W && agree["max_site_Q_difference_var"]<=tol.reactive_var,
+                "PF/OPF agreement failed")
+        end
+        accepted=count(r->r["accepted"],values(evidence))
+        require(summary["all_planned_accepted"]==(accepted==length(planned)),"completion flag mismatch")
+        report=Dict("all_planned_accepted"=>accepted==length(planned),"planned"=>length(planned),"accepted"=>accepted,
+            "conditions"=>checked[],"physical_checks"=>physical,"network_conditions"=>network_conditions,
+            "cases"=>evidence,"agreement"=>agreement,"record_sha256"=>hashes,
+            "environment_sha256"=>bytes2hex(sha256(read(joinpath(output,"environment.json")))),
+            "audit_code_sha256"=>bytes2hex(sha256(read(@__FILE__))),
+            "audit_runtime"=>Dict("julia_version"=>string(VERSION),
+                "Project_sha256"=>bytes2hex(sha256(read(Base.active_project()))),
+                "Manifest_sha256"=>bytes2hex(sha256(read(joinpath(dirname(Base.active_project()),"Manifest.toml"))))),
+            "scope"=>"saved-phasor SI hardware/current-capability/local-policy reconstruction, separately coded Python SI feeder check and same-engine fixed-PQ replay; equal-service OPF keeps local VV/VW service, released OPF trades it away; no global optimality or transient guarantee")
+        write_engineering_json(target,report);report
+    catch err
+        writejson(target,Dict("all_planned_accepted"=>false,"reason"=>"AUDIT_FAILED","error"=>sprint(showerror,err)))
+        rethrow()
+    end
+end
+
+if abspath(PROGRAM_FILE)==abspath(@__FILE__)
+    length(ARGS) in (1,2) || error("usage: audit_engineering_benchmark.jl output [python]")
+    result=audit_engineering_benchmark(ARGS[1];python=length(ARGS)==2 ? ARGS[2] : "python3")
+    result["all_planned_accepted"] || exit(1)
+end

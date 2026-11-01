@@ -95,6 +95,7 @@ makedocs(
             "Control-study methodology" => "ibr/control_study_methodology.md",
             "Choosing parameters" => "ibr/parameter_selection.md",
             "Fleet and hardware studies" => "ibr/network_control_studies.md",
+            "Mixed-controller Australian feeder" => "tutorials/ibr_mixed_controller_fleet.md",
             "Closed-loop evidence diagnostics" => "ibr/closed_loop_evidence.md",
             "Phase-aware control modelling guide" => "components/inverter_controls.md",
             "Constraint-based inverter operation" => "components/inverter_operating_constraints.md",

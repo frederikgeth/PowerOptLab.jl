@@ -36,8 +36,9 @@ Primary response variables are:
 - negative-sequence voltage ratio `|U2|/|U1|`, stating which unbalance
   definition is used, and the zero-sequence voltage `|U0|`. `|U0|` is mandatory
   for any phase-magnitude comparator: those laws respond to it, a three-leg
-  bridge cannot control it, and its measured value depends on the voltage-sensing
-  reference;
+  bridge cannot inject an independent I₀, and its measured value depends on the
+  voltage-sensing reference. Network asymmetry and load responses can still
+  make U₀ change indirectly when I₁ or I₂ changes;
 - PV energy exported and curtailed;
 - converter-terminal total and zero/positive/negative-sequence complex power;
 - converter and filter losses;
@@ -90,8 +91,56 @@ The implemented policies include:
 `ConverterCurrentTarget` and `GridCurrentTarget` select which physical current
 the algebraic command constrains. In both cases the plant retains converter- and
 grid-side per-leg ratings. The final plant-aware backoff includes the solved LCL
-shunt-current offset and checks both locations, converter-terminal apparent
-power, and a configured `dv2_max` before imposing the target equality.
+shunt-current offset and checks both locations, selected-location apparent
+power, configured `dv2_max`, and the three-leg capacitor thermal-current
+rating before imposing the target equality. The thermal allocator uses the
+source-dependent 2ω current and declared fixed/current-dependent carrier
+allowances. Capacitor rating is independent of capacitance.
+
+At zero DC availability, the PCC law uses its exact loss-import identity:
+`p_import = -(p_dc-p_poc)` and active PV service is identically zero. Passive
+filter, converter and capacitor losses are nonnegative, so the Volt-watt
+ceiling cannot bind the negative import. Reactive and negative-sequence support
+remain enabled. This avoids fictitious positive service created by the tails
+of two smooth sign selectors. It is specific to total PCC loss accounting;
+the legacy positive-sequence target offset can include signed I₂ power.
+
+The controller also honours converter-arm positive- and negative-sequence
+ratings, including the LCL offset at either current target. Hard sequence
+constraints use auxiliaries and linking rows normalized by their engineering
+ratings, so a large per-unit power base cannot hide a physical violation in a
+small squared-current residual. Fleet rows expose each declared sequence rating
+and its remaining margin in amperes.
+
+The current limit-coverage distinction is:
+
+| Quantity | Physical plant | Command allocation |
+|---|---|---|
+| Converter/grid phase RMS current | Both arm ratings | Both arms, including shunt/import offsets |
+| Converter I₁ and I₂ RMS current | Separate declared ratings | Sequence disks, with explicit service priority |
+| Neutral and I₀ current | Four-wire ratings; three-leg I₀ fixed to zero | Present controller is three-leg only |
+| Apparent power | Selected converter or PCC total-P/Q magnitude | Same selected boundary; distinct profile semantics |
+| 2ω DC voltage ripple | Physical source-dependent ripple | Included |
+| Capacitor thermal RMS current | Frequency-weighted budget | Included for the three-leg controller |
+| Instantaneous rail feasibility | Sampled constraints, full-cycle enclosure and adaptive separating cuts | No modulation/voltage command allocator yet |
+| Split midpoint and individual half-banks | Split-link plant constraints | No split-link controller yet |
+
+Independent SI-model reports are attached after each standalone solve; a fleet
+publishes only when every replaced inverter passes. The report and per-bound
+margins distinguish a solver outcome from physical acceptance. See
+[verification](verification.md) for coverage, tolerances, refinement and the
+remaining network/carrier/policy checks. Hard-bound normalization and controller
+current-target equalities use physical engineering scales; changing `s_base`
+must not dilute their acceptance accuracy. Constant-service and zero-availability PCC auxiliary definitions and
+allocator roots initialize in dependency order from the same equations;
+priority stages start from the previously allocated feasible anchor. These
+starts change neither the control law nor its engineering limits.
+
+`s_max` bounds the magnitude of total complex power, not each phase's current
+or each sequence's current. These engineering limits remain distinct under
+unbalance. A physical plant can also be feasible while a particular local law
+or its mandatory-offset anchor is infeasible; solver failure alone does not
+distinguish those cases.
 
 Watt/var/proportional P/Q priority and power-versus-balance sequence priority
 are implemented. Virtual-delta and closest-feasible projection policies can be

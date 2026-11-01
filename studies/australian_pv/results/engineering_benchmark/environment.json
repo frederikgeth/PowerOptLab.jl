@@ -1,0 +1,232 @@
+{
+    "Manifest_sha256": "b61f2440eecd083978dd5bffb99893c75454a70aa2438d97e2b9b45aa0117e07",
+    "operating_limits": {
+        "dc_max_V": 765,
+        "dc_min_V": 735,
+        "phase_peak_A": 23,
+        "neutral_peak_A": 23,
+        "capacitor_rms_A": 7
+    },
+    "s_base_VA": 100000,
+    "controllers": [
+        "mean_vv_vw",
+        "worst_vv_vw",
+        "sequence_vv_vw",
+        "phase_vv_vw"
+    ],
+    "agreement_tolerance": {
+        "reactive_var": 0.5,
+        "power_W": 0.5,
+        "voltage_V": 0.001
+    },
+    "source_sha256": {
+        "src/formulations/experiments.jl": "aa8d24ef1b6b283c56ab7c32107d6e1be7afd4dd212494fd893ac4fea81de75d",
+        "src/interfaces.jl": "e940c50d72678d8597b112a2bc8abad7c2aae0314e8871c7bf8132b856ab1786",
+        "src/components/inverter_pwm_allocation.jl": "2566a2bc94f8fe87e6868aa791fc3bd36ad6307cd38d94d61263d9480692e766",
+        "scripts/australian_pv/thermal_energy.jl": "a8662324134904c79f9ec3e293856a6341ee924baebcab678f659ef8493de789",
+        "src/problems/bilevel.jl": "bd6956207345b46b2f21b3c3c9e2aa06095e8a15fea15e0781470217d552a207",
+        "src/components/inverter_operating_constraints.jl": "f39bb1034fb3ee231e559e93e09c1121fd185464a9f0f11677c6785ff8d5a45e",
+        "src/problems/state_estimation_patterns.jl": "196e073470c207b4b991f0924cbc86d7f4ecfc7ae9f922f3b06a36092b8eec07",
+        "scripts/australian_pv/audit.jl": "4cf28ca4836fe4580df5d43b593750f5fb6f1df7a3773d2ffb28b50d5b9ca030",
+        "scripts/australian_pv/rated_capability.jl": "2b16a7dcce47639a49843c2e6d04c57028439dcd52c7b6060940c93106bfcb15",
+        "scripts/australian_pv/run_engineering_benchmark.jl": "a756b6bd94af51f5443947af8722a878bfe8fe954e1b1db97bb95da76c5c3224",
+        "src/problems/operating_envelope.jl": "62b293c4870ed3f94d7cce67c2a2b79381b873d5cf1718bcd760534930f0a72e",
+        "src/components/generalized_generator.jl": "19e87be2a42f03a37e36a7c2c5fe61494312d32148724393305de83cbb3e9470",
+        "src/problems/inverter_control_experiments.jl": "2208b92c43f7e88df036ab879a64cf7d0078b9a0eabe41dcde8df5a2c022e147",
+        "src/problems/state_estimation.jl": "46e9087b01d54f1ddc55902baa333104822ef314c07a9f58e2abb27801be22a7",
+        "scripts/australian_pv/switching_engineering.jl": "e4cfd3705f3a3d40abc7952916bda1e52b5a4b6389e86cfbe6e395f6e591afe9",
+        "src/components/inverter_switching_envelope.jl": "e5bf71e71d706822f2a955b1126e0a0dd8c0ac001c3bbde03de83e7a82bb048c",
+        "src/formulations/hull_bounds.jl": "84ee2f82ee0c80463f8babfdf99b465b56e133bc274410461d38deb80d843e89",
+        "src/components/inverter_pcc_control.jl": "94415a4a246180bcc5b356c6f5ef91636c7785fa918a39c2fa90cb4a05f073b5",
+        "src/problems/multiperiod.jl": "f23022abe0f5536d0c121c1ffceeec258dc9d09cd5d0004cb0134ea75d0ab6ba",
+        "scripts/australian_pv/prepare.jl": "7d7596dc22eca47c17bdc831ba5db56bfffbe75159eec4065fd4275c4f589fe8",
+        "src/algorithms/pade.jl": "c0d89a18564a94f08b11098689371b705f313ffd9aecc71e3537422d2b772c29",
+        "src/components/generator_data.jl": "3caa922fc4941205fef9e17f48b8cb8b5d834d84f155509cbc84ce77deea6af8",
+        "src/algorithms/operability_continuation.jl": "a27fc6f1a7d6741858e3f38482a165f5628e72944d5c3ab26018861fc0f245e5",
+        "src/contracts.jl": "9d09adcd53e2e27fa4eedcd7976d95c391f2eb5b3bd3861d3ad054a23de7c95b",
+        "src/problems/operability.jl": "946802878ef44899c80c124474349fe13f7988fdd10b672c22fb261a6613e35f",
+        "src/problems/state_estimation_support.jl": "ee6226399e097fa6c4fa88c731377a27f1f8c908421baeee21c9c95a4d2b6bc9",
+        "src/algorithms/helm.jl": "601a68fb0148ba3f43dd8fbca99764b5c330ae23131bcd808db646462fde2dfb",
+        "scripts/australian_pv/engineering_records.jl": "0feb626aa06cf1e0ee42b9d1f05b8e2e46d2a82685951338c3d529060728f96a",
+        "src/formulations/selectors.jl": "5377fbd4669921dc792ec4d29c8c166efb931f8c9bfe658f38b92a29548a08eb",
+        "src/problems/closed_loop_evidence.jl": "88e744648e7f1fb0df0d2e926089e604ad48957d6bb89a160a6ac6cac1814d97",
+        "src/io/kron_reduction.jl": "09134072501eba3434c2a08a0d8e3daaf14eec1e485ad106d304b5b4b726a830",
+        "src/problems/inverter_control_sizing.jl": "a39390cb83cb6d9c31155be2c72686f9c6cf5e3c4fc80a1c79ab6a9fa8eb4647",
+        "src/problems/state_estimation_injections.jl": "a5f04ef35308546b1673e23cf6a3e49874c2d12e764863264bc55378ae30c9ec",
+        "src/components/battery_chemistry.jl": "71ecea656c1d432c0460c2edcbe69fa9a4a538131d3249e129e00ba1263f1188",
+        "src/components/inverter_carrier_thermal.jl": "3ccd458b2f0a87d27891b051de89ea50e7483383fc09efed90c0129da51d1ebd",
+        "scripts/australian_pv/coordinated_engineering.jl": "97a926930b7b8ca473b2263bb0b7a1c6ebeca95008155e30597319c6f1f306a4",
+        "src/PowerOptLab.jl": "f29426d9f6ab6c32077a1e7a95d9ad02bd1395e1da43e57bda85e08d415d8e4b",
+        "src/components/inverter_feasibility.jl": "d2e93651e245754ab54490c267d7e705cea5ce32238236843ca349d5ecc32b40",
+        "src/formulations/jump.jl": "8d1480ed914a90b20302cd7b495fc470e18697dc15083897bf1d1f1808991e26",
+        "src/problems/voltage_aware_inverter_fleet.jl": "285ef3067ce278ba7ee76b81e16d00348849cf46f72ab05ac43f3b972aef938d",
+        "src/components/devices.jl": "295ee2aed266b01165ccc0c1ea0238e7d22ed41d4a0fb5f77420d2d1792fe793",
+        "src/formulations/cases.jl": "eb901e45c2db22d0d331292019446b2767673000a454a5262d6bce41a135b7fc",
+        "src/formulations/control_intent.jl": "9429c437e8dea0ce4f50b227b7c5187395d28b404d127d0103a43805834b0664",
+        "src/problems/constrained_state_estimation.jl": "c2ed0c2541dfc9846244033e0c189d9a3b24f0da6bb569eb05c9298232d0ce08",
+        "scripts/australian_pv/network_si_audit.py": "df49f67232767f8ec6eab6c5d3808f1a9f7138f04bd7dc8d982bde760d0f3a86",
+        "src/components/advanced_inverter.jl": "61c10d063e450c9dbf895264b6875e90e534d292bd1cb515fe9911606df6b4b7",
+        "src/formulations/error_tools.jl": "a4e6292df32cbaea08e25fecfa54f2e76a92b87c935ca8dca1ac05ed6ff4c1ff",
+        "src/problems/generator_opf.jl": "b0540ace7f36b5c5fb5067b7a1efbc6af4db42e1623d5af403307060f6a782fb",
+        "src/formulations/primitives.jl": "d919b895117a6e1ae3e68c7bb1723dd57ba852bad679e96219d3ebb164040506",
+        "scripts/australian_pv/four_leg.jl": "27b0cd96f4c87c40cbbcf631d50d422c70f55c065ce10d54cf4b1dffa8f3ec8f",
+        "src/formulations/relations.jl": "d0846f193d6705ee59a83729cf0e8eb928294dcab0f9136e70a87070951f4d8c",
+        "src/upstream.jl": "313bf70a703b43b2134aef1f9f96c30bda4bc301e17b9f5f990244105d57b238",
+        "src/components/inverter_phase_allocation.jl": "a45e12737ea90f9876876de8465ae6f2f1274943a289979f7ba420b75c08c9ed",
+        "src/components/inverter_service_allocation.jl": "95183c86dfb0db01be01ce170dac10436c8e8ad5fff61da230e6e1baaf9e219f",
+        "src/components/ivq_battery.jl": "2e3f74858ef64f95ce8b7ed125f1e19db739bb7843edbb35e9f3e3dfaa649c95",
+        "src/problems/inverter_control_study.jl": "56fff25c90a46de9a5c36b20eaabd2817ba61a5a5043d121073a6f43a7f0cddf",
+        "scripts/australian_pv/run.jl": "176dd9c5615ecb0a0e75885cd17ecb75eefc1e24608db5ad6448dec7460ec9ab",
+        "src/problems/parameter_estimation.jl": "61c0cd98dd1c1dfe21be96000354d748cde3ad5ccb9c77e1da3a11848a032365",
+        "src/problems/inverse_carson.jl": "4fb49831f9ddc6339bec733c4399e3a979ed75ee9dae7ddde88296c820058d51",
+        "scripts/enwl_advanced_ibr/common.jl": "22fc5aed51e469e8d314c39980fcc6fd8b4a02c7f664dfb2310f5944e37f3054",
+        "scripts/australian_pv/voltage_aware.jl": "2ed95ccccceee8d9d526f1971c7d74aaa6b71444fe46e9d01cdb8221588d64d6",
+        "src/components/inverter_current_projection.jl": "6f37161ca071edcdcc240110d6651d6303282c6b535eab063b1448d66c4e0a9e",
+        "src/components/inverter_solver_continuation.jl": "9d238b52a6d772ee7573d512e61548ae50172ddce7129d31b8eadc75f69c864c",
+        "src/problems/ipopt_state_estimation.jl": "3b7a42d19f65e9f9ebfe66d629d5d128b2bfcff4b6189d7abc422db1cf005464",
+        "src/components/evse.jl": "dfafe56bccafa827a7c80088a57a20cc25493c389f811a6db4a80fce8333d047",
+        "src/problems/state_estimation_measurements.jl": "bbf861c3106fe812f8f52c296588f2d8a2e4884c3dacb079739fa64667da958b",
+        "src/components/inverter_controls.jl": "649615adc787acf5d1df491276cdf2fba684c3da3187a6f3139ee4f79ee68d54",
+        "src/components/inverter_dc_energy.jl": "c30e533a5865fd3df89f6bcf39ee894e9f7243c5f8ba98e9383ba96aff4343a1"
+    },
+    "planned_cases": [
+        {
+            "source_vuf": 0.01,
+            "case_id": "nominal",
+            "phase_shares": [
+                0.6,
+                0.25,
+                0.15
+            ],
+            "source_pu": 1,
+            "model": "energy",
+            "load_scale": 1,
+            "source_negative_angle_rad": 0,
+            "operation": "energized",
+            "pv_fraction": 1
+        },
+        {
+            "source_vuf": 0.01,
+            "case_id": "high_source",
+            "phase_shares": [
+                0.6,
+                0.25,
+                0.15
+            ],
+            "source_pu": 1.03,
+            "model": "energy",
+            "load_scale": 1,
+            "source_negative_angle_rad": 0,
+            "operation": "energized",
+            "pv_fraction": 1
+        },
+        {
+            "source_vuf": 0.02,
+            "case_id": "rotated_unbalance",
+            "phase_shares": [
+                0.6,
+                0.25,
+                0.15
+            ],
+            "source_pu": 1,
+            "model": "energy",
+            "load_scale": 1,
+            "source_negative_angle_rad": 1.5707963267948966,
+            "operation": "energized",
+            "pv_fraction": 1
+        },
+        {
+            "source_vuf": 0.01,
+            "case_id": "night",
+            "phase_shares": [
+                0.6,
+                0.25,
+                0.15
+            ],
+            "source_pu": 1.03,
+            "model": "energy",
+            "load_scale": 1,
+            "source_negative_angle_rad": 0,
+            "operation": "night",
+            "pv_fraction": 0
+        },
+        {
+            "source_vuf": 0.01,
+            "case_id": "oversized_dc",
+            "phase_shares": [
+                0.6,
+                0.25,
+                0.15
+            ],
+            "source_pu": 1.03,
+            "model": "energy",
+            "load_scale": 1,
+            "source_negative_angle_rad": 0,
+            "operation": "energized",
+            "pv_fraction": 1.6
+        }
+    ],
+    "julia_version": "1.12.6",
+    "planned_modes": [
+        "local",
+        "opf_equal_service",
+        "opf_vv_released"
+    ],
+    "rated_capability_accepted": true,
+    "threads": 1,
+    "cpu": "Apple M4 Max",
+    "network_sha256": "11fea1394d2fcdc1a563b87b4c2928e1edea49555d43c99ecf1cd7d7470d9fd7",
+    "fixture_limits": "declared",
+    "git_status": "",
+    "git_revision": "706d025e83593c6834993de1372cf23951ae7f27",
+    "scope": "matched physical/network limits and hardware; fixed-point PF and nonconvex local OPF; no global optimality, dynamic stability or regional conformity claim",
+    "objectives": {
+        "opf_vv_released": "maximum total POC active injection; Q free, local VV/VW commands released",
+        "opf_equal_service": "maximum total POC active injection with each site's local VV request and VW ceiling imposed at the OPF's own voltages"
+    },
+    "control_settings": {
+        "current_target": "converter",
+        "pq_priority": "var",
+        "power_limit_location": "poc"
+    },
+    "local_solver_options": {
+        "tol": 1.0e-9,
+        "bound_relax_factor": 0,
+        "nlp_scaling_method": "none",
+        "max_iter": 1000,
+        "mu_strategy": "monotone"
+    },
+    "Project_sha256": "2724f9784cf88c1b37a76368436c396b5d7ba9a05d19bb28a73bbbabc9eafb24",
+    "current_capabilities": "balanced converter current at three-leg sites; free four-leg current with equal per-phase P; all temporary initialization rows removed",
+    "site_availability_fractions": [
+        0.25,
+        0.6,
+        1.0
+    ],
+    "pwm_thermal_model": "coupled_inductive_all_duty_v1",
+    "coordinated_solver_options": {
+        "tol": 1.0e-9,
+        "bound_relax_factor": 0,
+        "nlp_scaling_method": "gradient-based",
+        "max_iter": 2000,
+        "mu_strategy": "adaptive"
+    },
+    "planning_voltage_max_V": 253,
+    "pwm_thermal_allowance": 0.1,
+    "hardware": {
+        "x_over_r": 10,
+        "v_nom": 230,
+        "s_max": 6000,
+        "m_max": 0.96,
+        "dv2_max": 7.5,
+        "c_loss": 0.3,
+        "single_phase_i_max": 28.7,
+        "a_loss": 2,
+        "i_cap_max": 1,
+        "p_loss_fixed": 15,
+        "v_dc": 750,
+        "i_max": 10,
+        "x_pu": 0.05,
+        "c_dc": 0.0003
+    }
+}

@@ -50,10 +50,33 @@ function audit()
     for mode in ["unity","worst_vv_vw","sequence_droop","sequence_droop_power"]
         net=study_network(base,1.,1.03)
         result=solve_controlled_inverter_fleet(net,fleet(net,mode,1.);
-            s_base=100000.,solver_options=OPTIONS)
+            s_base=first(SOLVE_BASES),solver_options=CONTROL_SOLVER_OPTIONS)
         @test solve_status(result).publishable
+        for device in values(result.devices)
+            certificate=physical_feasibility(device)
+            @test certificate.checked && certificate.passed
+            @test certificate.rail.converged
+            @test certificate.rail.lower_V >= -1e-5
+        end
         report[mode*"_fixed_PQ_replay_max_difference_V"]=replay(net,result)
     end
+    for mode in TERMINAL_MODES
+        net=study_network(base,1.,1.03)
+        spec=fleet(net,mode,1.;settings=TERMINAL_CONTROL_SETTINGS,
+            design=(kappa=0.,phi2=0.))
+        result=solve_controlled_inverter_fleet(net,spec;
+            s_base=only(TERMINAL_SOLVE_BASES),solver_options=TERMINAL_SOLVER_OPTIONS)
+        @test solve_status(result).publishable
+        for device in values(result.devices)
+            certificate=physical_feasibility(device)
+            @test certificate.checked && certificate.passed
+            @test certificate.rail.converged
+            @test certificate.rail.lower_V >= -1e-5
+        end
+        @test accepted_control_rows(controlled_inverter_rows(result),HARDWARE)
+        report["terminal_"*mode*"_fixed_PQ_replay_max_difference_V"]=replay(net,result)
+    end
+    report["validated_source_sha256"]=study_source_sha256()
     writejson(joinpath(ROOT,"results","modified_validation.json"),report)
 end
 if abspath(PROGRAM_FILE)==abspath(@__FILE__)

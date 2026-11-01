@@ -1,5 +1,5 @@
-# Regressions for the October 2026 advanced-IBR review
-# (dev/notes/ibr_review_resolution.md). Each testset names its finding.
+# Regressions for the October 2026 advanced-IBR review. Each testset names
+# its finding; the review record is in the Git history of dev/notes.
 
 const _REVIEW_A = cis(2pi / 3)
 _review_phases(u1::Complex, u2::Complex=0.0im) = ComplexF64[

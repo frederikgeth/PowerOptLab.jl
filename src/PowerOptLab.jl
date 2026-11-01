@@ -120,11 +120,20 @@ include("components/devices.jl")
 include("components/evse.jl")
 include("components/generalized_generator.jl")
 include("components/generator_data.jl")
+include("components/inverter_feasibility.jl")
 include("components/advanced_inverter.jl")
+include("components/inverter_dc_energy.jl")
+include("components/inverter_pwm_allocation.jl")
+include("components/inverter_switching_envelope.jl")
+include("components/inverter_carrier_thermal.jl")
+include("components/inverter_solver_continuation.jl")
 include("components/inverter_controls.jl")
 include("components/inverter_pcc_control.jl")
 include("formulations/control_intent.jl")
 include("components/inverter_operating_constraints.jl")
+include("components/inverter_current_projection.jl")
+include("components/inverter_service_allocation.jl")
+include("components/inverter_phase_allocation.jl")
 include("formulations/relations.jl")
 include("formulations/hull_bounds.jl")
 include("formulations/cases.jl")
@@ -146,6 +155,7 @@ include("problems/inverter_control_study.jl")
 include("problems/inverter_control_experiments.jl")
 include("problems/inverter_control_sizing.jl")
 include("problems/closed_loop_evidence.jl")
+include("problems/voltage_aware_inverter_fleet.jl")
 include("problems/operability.jl")
 
 # Bespoke algorithms — new solution methods (custom solve loops)
@@ -280,6 +290,9 @@ export BilevelPVResult, BilevelPVResponse, SingleLevelPVResult,
 
 # Advanced inverter (prototype internal-node IBR)
 export AdvancedInverter, solve_advanced_inverter, InverterResult
+export dc_source_line_frequency_diagnostics
+export InverterFeasibilityTolerances, InverterLimitCheck, InverterFeasibilityReport,
+    inverter_physical_feasibility, physical_feasibility, continuous_rail_margin
 
 # Local phase-aware inverter controls
 export AbstractInverterControlLaw, AbstractPositiveSequencePolicy
@@ -297,6 +310,13 @@ export VoltVarWattConstraints, ConstrainedInverter, ConstrainedInverterResult,
     solve_constrained_inverter
 export InverterOperatingConstraints, FreeReactivePower, FixedReactivePower,
     FixedPowerFactor, DCSourceBounds
+export project_inverter_current, InverterCurrentProjectionResult
+export dc_link_energy_diagnostics
+export allocate_inverter_services, evaluate_voltage_aware, InverterServiceAllocationResult
+export AbstractInverterServiceAllocationResult, PerPhaseVoltVarWatt
+export allocate_phase_inverter_services, PhaseInverterServiceAllocationResult
+export solve_voltage_aware_inverter_fleet, VoltageAwareInverterFleetResult
+export voltage_aware_inverter_rows
 export evaluate_exact, evaluate_smooth, dc_power_offset, sensing_terminal, stamp_smooth_control!, solve_controlled_inverter
 export inverter_spec, inverter_handles
 export ControlledInverterFleetSpec, ControlledInverterFleetResult

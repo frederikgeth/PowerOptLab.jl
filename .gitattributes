@@ -1,3 +1,10 @@
 # Keep generated plot geometry and data collapsed in pull-request reviews.
 docs/src/assets/studies/*.svg linguist-generated=true
 docs/src/assets/studies/study-figure-data.json linguist-generated=true
+
+# Preserve the byte contract for distributed scientific evidence.
+studies/australian_pv/evidence/bundles/*.tar.gz binary
+studies/australian_pv/evidence/*.json text eol=lf
+studies/australian_pv/evidence/dependency_manifest*.toml text eol=lf
+studies/australian_pv/results/** text eol=lf
+studies/australian_pv/figures/*.svg linguist-generated=true

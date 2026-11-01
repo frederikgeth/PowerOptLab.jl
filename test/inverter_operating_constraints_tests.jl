@@ -70,8 +70,10 @@ end
         _constraint_plant(topology=:SINGLE_PHASE, phase_terminals=["a"], neutral="n"), policy))
     @test_throws ArgumentError validate_device(ConstrainedInverter(
         _constraint_plant(grid_forming=true), policy))
-    @test_throws ArgumentError validate_device(ConstrainedInverter(
-        _constraint_plant(pwm_strategy=:CENTERED, f_sw=10000.0), policy))
+    @test_throws r"positive inductance" validate_device(ConstrainedInverter(
+        _constraint_plant(pwm_strategy=:CENTERED, f_sw=10000.0,i_cap_max=1.), policy))
+    @test validate_device(ConstrainedInverter(_constraint_plant(pwm_strategy=:CENTERED,
+        f_sw=10000.,i_cap_max=1.,r_filter=.13225,x_filter=1.3225),policy)) isa ConstrainedInverter
     for ref in ("a", "missing")
         bad = ConstrainedInverter(device.device,
             VoltVarWattConstraints(policy.positive; sensing_reference=ref))

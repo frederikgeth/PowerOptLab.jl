@@ -10,6 +10,7 @@ function _pcc_review_grid(v)
       "v_magnitude":[$v,$v,$v],"v_angle":[0,-2.0943951023931953,2.0943951023931953]}}}
     """; from_string=true)
 end
+
 _pcc_review_plant(; kwargs...) = AdvancedInverter(;
     id="pv", bus="poc", phase_terminals=["a","b","c"], neutral="n",
     topology=:THREE_LEG, power_limit_location=:poc, s_max=10e3,
@@ -168,5 +169,119 @@ end
     if changed.solve.publishable && haskey(results,:both)
         @test changed.plant.p_poc ≈ results[:both].plant.p_poc atol=.02
         @test changed.plant.q_poc ≈ results[:both].plant.q_poc atol=.02
+    end
+end
+
+@testset "PCC review: mean and worst-phase laws share var-priority semantics" begin
+    vv = PiecewiseLinearLaw([207.,220.,240.,258.],[.44,0.,0.,-.6];smoothing_epsilon=.05)
+    vw = PiecewiseLinearLaw([253.,260.],[1.,.2];smoothing_epsilon=.05)
+    for policy in (AverageVoltageVoltVarWatt(volt_var=vv,volt_watt=vw,volt_watt_basis=:rated),
+                   WorstPhaseVoltVarWatt(volt_var=vv,volt_watt=vw,volt_watt_basis=:rated,
+                       extrema_epsilon=1e-5,conflict_epsilon=1e-5)), current in (7.,15.)
+        inv = _pcc_review_plant(s_max=6000.,i_max=current)
+        ctrl = SequenceController(policy,NoUnbalanceControl(),CommonScaleLimiter(pq_priority=:var);
+            current_target=:converter,sensing_reference="n")
+        req = InverterControlRequest(p_available=7200.,p_rated=6000.,q_scale=6000.)
+        r = solve_controlled_inverter(_pcc_review_grid(250.),ControlledDevice(inv,ctrl),req;
+            solver_options=_PCC_REVIEW_OPTIONS)
+        @test r.solve.publishable
+        @test 1<=length(solve_diagnostics(r).numerical_attempts)<=3
+        if r.solve.publishable
+            @test r.plant.q_poc ≈ -2000. atol=.1
+            @test hypot(r.plant.p_poc,r.plant.q_poc) <= 6000.01
+            @test maximum(r.plant.i_mag) <= current+1e-5
+            @test r.exact_smooth_current_residual < .002
+            current == 7. ? (@test maximum(r.plant.i_mag) ≈ current atol=1e-4) :
+                            (@test hypot(r.plant.p_poc,r.plant.q_poc) ≈ 6000. atol=.1)
+        end
+    end
+end
+
+@testset "Capacitor thermal rating backs off local support" begin
+    a = cis(2pi/3)
+    voltage = 230 .* [1,a^2,a] .+ 2.3 .* [1,a,a^2]
+    net = inv_grid3_src(mags=abs.(voltage),angs=angle.(voltage))
+    request = InverterControlRequest(p_available=5000.,p_rated=6000.,q_scale=6000.)
+    for location in (:converter,:poc), target in (:converter,:grid),
+            priority in (:common,:power,:balance),
+            base in (location === :poc ? (1e4,1e6) : (1e5,))
+        @testset "$location $target $priority base=$base" begin
+            limiter = priority === :common ? CommonScaleLimiter(pq_priority=:var) :
+                SequencePriorityLimiter(priority=priority,pq_priority=:var)
+            controller = SequenceController(AverageVoltageVoltVarWatt(),
+                negative_sequence_virtual_impedance(1.,0.),limiter;
+                current_target=target,sensing_reference="n")
+            inv = AdvancedInverter(id="pv",bus="poc",phase_terminals=["a","b","c"],
+                neutral=nothing,topology=:THREE_LEG,power_limit_location=location,
+                s_max=6000.,i_max=10.,v_dc=750.,c_dc=300e-6,dv2_max=50.,
+                i_cap_max=.3,i_sw=.1,pwm_current_factor=.01,
+                cap_thermal_weights=(1.,1.5,2.),r_filter=.13225,x_filter=1.3225)
+            r = solve_controlled_inverter(net,ControlledDevice(inv,controller),request;
+                s_base=base,solver_options=("tol"=>1e-9,"bound_relax_factor"=>0.,
+                    "max_iter"=>1000,"mu_strategy"=>"adaptive"))
+            @test r.solve.publishable
+            if r.solve.publishable
+                # Independent RMS budget from physical outputs, including fixed and
+                # current-dependent carrier reserves, rather than controller replay.
+                omega = 2pi*inv.f
+                thermal = sqrt(1.5*(2omega*inv.c_dc*r.plant.dv2/sqrt(2))^2 +
+                    2*(.1^2+.01^2*sum(abs2,r.plant.i_mag)))
+                @test thermal ≈ r.plant.i_cap_thermal atol=1e-7
+                @test thermal <= .30001
+                @test r.plant.i_negative < .5
+                @test r.exact_smooth_current_residual < .005
+                @test r.plant.p_dc <= request.p_available+.01
+                priority === :power && @test r.plant.p_poc > 4900.
+            end
+        end
+    end
+end
+
+@testset "Capacitor allocator matches independent harmonic current sharing" begin
+    a=cis(2pi/3)
+    voltage=230 .* (1,a^2,a) .+ 2.3 .* (1,a,a^2)
+    current=(5+2im) .* (1,a^2,a) .+ (1-.5im) .* (1,a,a^2)
+    for source_r in (nothing,0.,2.)
+        inv=AdvancedInverter(id="pv",bus="poc",phase_terminals=["a","b","c"],
+            neutral=nothing,topology=:THREE_LEG,s_max=6000.,v_dc=750.,c_dc=300e-6,
+            dc_source_r=source_r,i_cap_max=2.,i_sw=.1,pwm_current_factor=.02,
+            cap_thermal_weights=(1.,1.5,2.))
+        geometry=PowerOptLab._control_capacitor_geometry(inv,reim.(voltage),
+            ntuple(_->(0.,0.),3),reim.(current))
+        yc=im*2*(2pi*50)*300e-6
+        bridge=sum(voltage .* current)/750.
+        capacitor=source_r === nothing ? -bridge : iszero(source_r) ? 0im :
+            -bridge*yc/(yc+1/source_r)
+        expected=sqrt(1.5abs2(capacitor)/2+2*(.1^2+.02^2*sum(abs2,current)))
+        @test sqrt(sum(abs2,geometry.offset .+ geometry.direction)) ≈ expected atol=1e-12
+    end
+end
+
+@testset "Pure line-frequency thermal protection preserves feasible support" begin
+    a = cis(2pi/3)
+    voltage = 230 .* [1,a^2,a] .+ 2.3 .* [1,a,a^2]
+    net = inv_grid3_src(mags=abs.(voltage),angs=angle.(voltage))
+    request = InverterControlRequest(p_available=5000.,p_rated=6000.,q_scale=6000.)
+    for priority in (:common,:power,:balance)
+        limiter = priority === :common ? CommonScaleLimiter() :
+            SequencePriorityLimiter(priority=priority)
+        controller = SequenceController(AverageVoltageVoltVarWatt(),
+            negative_sequence_virtual_impedance(1.,0.),limiter;
+            current_target=:grid,sensing_reference="n")
+        inv = AdvancedInverter(id="pv",bus="poc",phase_terminals=["a","b","c"],
+            neutral=nothing,topology=:THREE_LEG,power_limit_location=:converter,
+            s_max=6000.,i_max=10.,v_dc=750.,c_dc=300e-6,dv2_max=50.,
+            i_cap_max=.3,r_filter=.13225,x_filter=1.3225)
+        r = solve_controlled_inverter(net,ControlledDevice(inv,controller),request;
+            solver_options=_PCC_REVIEW_OPTIONS)
+        @test r.solve.publishable
+        if r.solve.publishable
+            @test 2*(2pi*inv.f)*inv.c_dc*r.plant.dv2/sqrt(2) ≈
+                r.plant.i_cap_thermal atol=1e-7
+            @test r.plant.i_cap_thermal <= .30001
+            @test r.plant.i_negative < .5
+            @test r.exact_smooth_current_residual < .005
+            @test r.plant.p_dc <= request.p_available+.01
+        end
     end
 end

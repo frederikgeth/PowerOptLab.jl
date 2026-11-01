@@ -74,8 +74,12 @@ struct ControlledInverterFleetResult <: AbstractSolveResult
 end
 
 solve_status(result::ControlledInverterFleetResult) = result.solve
+physical_feasibility(result::ControlledInverterFleetResult) =
+    Dict(id=>physical_feasibility(device) for (id,device) in result.devices)
 solve_diagnostics(result::ControlledInverterFleetResult) = (
     controlled_device_count=length(result.devices),
+    physical_checked_device_count=count(d->physical_feasibility(d).checked,values(result.devices)),
+    physical_failed_device_count=count(d->!physical_feasibility(d).passed,values(result.devices)),
     total_p_poc=sum(device.plant.p_poc for device in values(result.devices)),
     total_q_poc=sum(device.plant.q_poc for device in values(result.devices)),
     total_converter_loss=sum(
@@ -209,7 +213,7 @@ function _controlled_inverter_result(
     ControlledInverterResult(
         string(outcome.termination_status), extracted.plant, extracted.control,
         extracted.converter_terminal, grid_current, exact_control, residual,
-        bus, status)
+        bus, _physical_solve_status(status,extracted.plant.physical_feasibility))
 end
 
 function _network_without_replaced_ibrs(result::AbstractDict,
@@ -255,7 +259,8 @@ function solve_controlled_inverter_fleet(
         optimizer=Ipopt.Optimizer,
         verbose::Bool=false,
         selection_objective::Symbol=:loss,
-        solver_options=())
+        solver_options=(),rail_refinement::Bool=true,initialization::Symbol=:automatic)
+    _validate_inverter_initialization(initialization)
     selection_objective in (:loss, :zero, :network_cost) || throw(ArgumentError(
         "selection_objective must be :loss, :zero, or :network_cost"))
     per_unit || throw(ArgumentError(
@@ -267,6 +272,9 @@ function solve_controlled_inverter_fleet(
 
     handles = Dict{String,_ControlledHandles}()
     builder = BMOPFTools.OpfDeviceBuilder(:PowerOptLab, function (ctx, ids)
+        _opf_model(ctx).ext[:PowerOptLabCompactController] = true
+        _opf_model(ctx).ext[:PowerOptLabConsistentControllerStart]=
+            initialization===:consistent && selection_objective!==:zero
         for id in ids
             _disable_native_ibr_port!(ctx, id)
             handles[id] = stamp_device!(
@@ -292,8 +300,19 @@ function solve_controlled_inverter_fleet(
         net; per_unit=true, s_base=Float64(s_base), add_objective=false,
         build_spec=build_spec, model_hook! = hook!, optimizer=optimizer,
         verbose=verbose)
-    _set_solver_options!(_opf_model(ctx), solver_options)
-    BMOPFTools.optimize_opf!(ctx)
+    m=_opf_model(ctx)
+    plants=[(spec.devices[id].device,handles[id].plant) for id in sort!(collect(keys(spec.devices)))]
+    _set_inverter_solver_options!(m,solver_options;controller_graph=true,
+        controller_scaling=initialization===:consistent ? "gradient-based" : "none")
+    seed=(attempts=(),continue_final=true)
+    if initialization===:consistent && selection_objective===:zero &&
+            _inverter_positive_iteration_budget(solver_options)
+        seed=_inverter_zero_objective_seed!(ctx,plants,
+            sum(h.plant.p_loss+h.plant.p_cap_loss for h in values(handles)),
+            s->all(extract_device(spec.devices[id],handles[id],s).plant.physical_feasibility.passed
+                for id in keys(handles));rail_refinement)
+    end
+    seed.continue_final && _optimize_inverter_rails!(ctx,plants;enabled=rail_refinement)
 
     outcome = _solve_outcome(_opf_model(ctx))
     status = SolveStatus(outcome)
@@ -312,9 +331,23 @@ function solve_controlled_inverter_fleet(
     network = _network_without_replaced_ibrs(
         extracted_network, keys(spec.devices))
     network["bus"] = bus
-    ControlledInverterFleetResult(
+    network["raw_solver_status"] = JuMP.raw_status(_opf_model(ctx))
+    attempt=_inverter_numerical_attempt(m,status,initialization,selection_objective,
+        all(physical_feasibility(device).passed for device in values(devices)))
+    network["numerical_attempts"]=seed.continue_final ? (seed.attempts...,attempt) : seed.attempts
+    physical_pass=all(physical_feasibility(device).passed for device in values(devices))
+    fleet_status=SolveStatus(status.termination_status,status.primal_status,status.has_primal,
+        status.feasible,status.optimal,status.publishable && physical_pass)
+    solved=ControlledInverterFleetResult(
         string(outcome.termination_status), devices, deepcopy(spec), network,
-        BMOPFTools.opf_build_manifest(ctx), status)
+        BMOPFTools.opf_build_manifest(ctx), fleet_status)
+    if initialization===:automatic && _inverter_numerical_restart(status,solver_options)
+        retry=solve_controlled_inverter_fleet(net,spec;per_unit,s_base,optimizer,verbose,
+            selection_objective,solver_options,rail_refinement,initialization=:consistent)
+        retry.network["numerical_attempts"]=(network["numerical_attempts"]...,retry.network["numerical_attempts"]...)
+        return retry
+    end
+    solved
 end
 
 """
@@ -370,6 +403,13 @@ function controlled_inverter_rows(result::ControlledInverterFleetResult)
             p_converter_W=plant.p_conv,
             q_converter_var=plant.q_conv,
             converter_loss_W=plant.p_loss + plant.p_cap_loss,
+            filter_loss_W=plant.p_filter_loss,
+            switching_margin_V=plant.switching_margin,
+            physical_checked=plant.physical_feasibility.checked,
+            physical_feasible=plant.physical_feasibility.passed,
+            physical_failed_check_count=count(c->!c.passed,plant.physical_feasibility.checks),
+            continuous_rail_margin_lower_V=plant.physical_feasibility.rail.lower_V,
+            continuous_rail_margin_upper_V=plant.physical_feasibility.rail.upper_V,
             p_dc_W=plant.p_dc,
             dc_availability_margin_W=request.p_available-plant.p_dc,
             voltage_min_V=control.voltage_min,
@@ -411,6 +451,10 @@ function controlled_inverter_rows(result::ControlledInverterFleetResult)
                 grid_total_current/inverter.i_grid_max,
             positive_sequence_current_A=plant.i_positive,
             negative_sequence_current_A=plant.i_negative,
+            positive_sequence_current_rating_A=inverter.i_positive_max === nothing ? NaN : inverter.i_positive_max,
+            negative_sequence_current_rating_A=inverter.i_negative_max === nothing ? NaN : inverter.i_negative_max,
+            positive_sequence_current_margin_A=inverter.i_positive_max === nothing ? NaN : inverter.i_positive_max-plant.i_positive,
+            negative_sequence_current_margin_A=inverter.i_negative_max === nothing ? NaN : inverter.i_negative_max-plant.i_negative,
             negative_sequence_current_angle_rad=negative_current_angle,
             peak_phase_to_positive_current_ratio=peak_positive_current_ratio,
             ripple_power_VA=plant.ripple,
@@ -421,6 +465,7 @@ function controlled_inverter_rows(result::ControlledInverterFleetResult)
                 inverter.v_dc === nothing ? NaN : inverter.v_dc,
             dc_stored_energy_J=stored_energy,
             capacitor_current_A=plant.i_cap,
+            capacitor_current_rating_A=inverter.i_cap_max === nothing ? NaN : inverter.i_cap_max,
             capacitor_thermal_current_A=plant.i_cap_thermal,
             capacitor_current_utilization=
                 inverter.i_cap_max === nothing ? NaN :

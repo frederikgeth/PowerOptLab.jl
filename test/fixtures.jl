@@ -84,7 +84,7 @@ inv_grid3_src(; mags, angs, vmax=270.0) = parse_bmopf("""
 """; from_string=true)
 
 # Balanced (230 V) and magnitude+angle-unbalanced three-phase grids.
-inv_grid3_bal(v=230.0) = inv_grid3_src(mags=[v, v, v], angs=[0.0, -2.0944, 2.0944])
+inv_grid3_bal(v=230.0) = inv_grid3_src(mags=[v, v, v], angs=[0.0, -2pi/3, 2pi/3])
 inv_grid3_unbal() = inv_grid3_src(mags=[245.0, 215.0, 230.0], angs=[0.05, -2.15, 2.0])
 
 # Four-wire variant with a source-grounded neutral and an ungrounded POC

@@ -282,9 +282,55 @@ which reduces to the boxed open-source result as ``Z_s\to\infty`` and to
 so one physical source model governs every line-frequency quantity. Carrier
 frequencies use the separate `pwm_dc_source_*` branch (Section 9.1).
 
+The mean power boundary is separate from this small-signal impedance model.
+`p_dc`, request availability and `DCSourceBounds` apply at the regulated DC-link
+input, including converter and modeled capacitor ESR loss. They do not include
+upstream source/DC–DC or mean-current-path dissipation. The line-frequency source
+resistor additionally dissipates
+``R_s(|I_{s,\omega}|^2+|\widehat I_{s,2\omega}|^2/2)``: the fundamental phasor is
+RMS, while the second-harmonic phasor is peak. The public
+`dc_source_line_frequency_diagnostics` reconstructs these currents and their
+dissipation from terminal phasors. It reports a normalized cancellation screen
+for singular/ill-conditioned sharing, not a stability or source thermal rating.
+An upstream availability bound requires an explicit additional source-path
+model; setting an impedance here does not add that capability.
+
 This derivation is first order. It neglects products of ripple quantities,
 higher harmonics, ESR/ESL, and controller response. A practical small-ripple
 audit should report ``|D|/V_{dc}``.
+
+### Nonlinear energy option
+
+The optional `dc_energy_model=:nonlinear` applies to monolithic THREE_LEG and
+FOUR_LEG links with constant input power and fixed mean converter loss. It
+integrates capacitor energy for the fundamental AC power waveform:
+
+```math
+v_{dc}^2(t)=A+2V_{dc}\Re\{D_Ee^{j2\omega t}\},\qquad
+D_E=\frac{j\widetilde S}{2\omega CV_{dc}}.
+```
+
+The offset `A` is selected from `mean(vdc)=Vdc`; it is not set to `Vdc²`.
+Voltage has higher even harmonics. The actual Fourier 2ω coefficient retains
+the meaning of `dv2_max`, while optional `v_dc_min` / `v_dc_max` bound the
+complete low-frequency waveform. Total low-frequency capacitor RMS is
+
+```math
+I_{C,LF}^2=\frac{|\widetilde S|^2}{A+\sqrt{A^2-(2V_{dc}|D_E|)^2}}.
+```
+
+The solver uses positive voltage lifts at 64 angles, and independently
+reconstructed energy/Fourier integrals gate publication. The numerical domain
+excludes vanishing DC voltage; this is not a DC-collapse or protection model.
+Squaring each modulation inequality gives a degree-two trigonometric polynomial
+in energy coordinates, so its full-cycle minimum is checked without assuming a
+sinusoidal bus voltage. Nonlinear extrema also bound the denominators in
+embedded PWM thermal allocation.
+
+`dc_link_energy_diagnostics` exposes the energy offset, actual voltage extrema,
+2ω coefficient and total low-frequency RMS. Finite small-signal DC source
+branches and split banks are explicitly outside this nonlinear option; they
+need their separate energy/source dynamics.
 
 ## 6. Split-link midpoint motion
 
@@ -448,6 +494,62 @@ electrical impedances or solve the capacitor temperature.
 
 ## 9. Carrier-level PWM ripple and sequential closure
 
+### Coupled thermal allocation in constrained dispatch
+
+Embedded centered-PWM allocation additionally includes DC current caused by
+AC switching ripple. This term remains present when fundamental current is
+zero. The following bound applies to a monolithic three/four-leg L filter with
+proportional passive R/L and an open carrier-frequency DC source.
+
+Let ``t`` be normalized carrier time, ``a_j=(1-d_j)/2`` and
+``h_j(t)=-d_jt+(t-a_j)_+`` on ``0\le t\le1/2``. The lossless periodic leg
+ripple is ``i_L=V_{dc}T_{sw}Kh``, where ``K`` maps physical leg voltages to
+current derivatives and includes the fourth neutral leg. Thus
+
+```math
+B(d,K)=2\int_0^{1/2}(g(t)^TKh(t))^2\,dt,\qquad
+I_{dc,AC,L}^2=(V_{dc}T_{sw})^2 B(d,K).
+```
+
+On each gate interval, the bridge current is affine and its square integrates
+exactly. Centered gates are even about mid-carrier and the lossless ripple is
+odd. This contribution therefore has zero carrier mean and is orthogonal to
+the even frozen-fundamental carrier current. Their variances add.
+
+For each duty ordering, write the extreme duties as ``(1\pm r)/2``, with
+``0\le r\le m_{max}``. The middle duties use one unit-box coordinate for
+three legs and two ordered unit-box coordinates for four legs. The event
+integral is polynomial of degree at most five in each coordinate. Exact
+rational interpolation and a tensor Bernstein basis give an upper bound on
+the entire box. Subdivision rounds coefficients upward; stopping early only
+makes the bound more conservative. All duty permutations are covered. The
+result is cached per geometry and enters the NLP as a constant times the
+upper bus-voltage bound squared, without event sorting inside the NLP.
+
+For damping rate ``\alpha``, the periodic passive response differs from its
+lossless primitive by at most ``\alpha/\omega_{sw}`` times the primitive RMS.
+Because leg currents sum to zero, ``g^T\delta i=(g-1/2)^T\delta i``. A
+separate residual ``D\le\alpha\sum_j I_{L,j,bound}/(2\omega_{sw})`` bounds
+the mean-subtracted damped bridge current. Young's inequality gives
+
+```math
+I_{sw}^2\le(1+\eta)(F+V_{upper}^2T_{sw}^2B_{upper})
+ +(1+1/\eta)D^2,\qquad \eta=\alpha/\omega_{sw},
+```
+
+where ``F`` is the frozen-current variance enclosure including the declared
+10% validation allowance. At zero damping the residual vanishes and the
+lossless sum is used directly. No thermal rating is enlarged. An all-duty
+bound can exhaust a rating even if a particular waveform would fit; rejection
+by this sufficient bound does not prove physical infeasibility.
+
+This remains a periodic carrier model with frozen slow quantities. The slow
+energy balance retains the declared fitted mean converter-loss model; it does
+not infer extra filter/semiconductor heating from an ideal switched orbit.
+Carrier-scale bus variation, low-frequency dynamics of switching losses,
+dead time, semiconductor drops and transients require separate validation.
+The independent switched EMT comparison must therefore remain a separate gate.
+
 The low-frequency model above cannot infer switching stress from line-frequency
 RMS current alone: the DC-link current depends on correlated switch states. For
 an ideal two-level leg ``\ell`` with top-switch function
@@ -522,6 +624,44 @@ operating point, but it is not a proof of the globally optimal switched system.
 It assumes ideal complementary switches, no dead time, sinusoidal current frozen
 within each switching period, and a shared triangular carrier. The optional
 finite source branch below relaxes the final open-source assumption.
+
+### Embedded thermal allocation
+
+`ConstrainedInverter`, three-leg service allocation and four-leg phase-service
+allocation embed a dispatch-dependent switching-current bound when
+`pwm_strategy=:CENTERED`. This avoids fitting a reserve to one prior dispatch.
+For shared-carrier duties, the instantaneous second moment uses
+`min(dj, dk)` cross terms. Their line-cycle integrals have analytic expressions
+in the voltage and current phasors; a norm-smoothing error enclosure and complete
+low-frequency DC-voltage extrema bound the resulting variance. Independent
+carrier/event quadrature checks frozen-current RMS, the lossless AC-induced
+contribution, the damping reserve and modulation. The allocator additionally
+includes the all-duty coupled thermal term derived above.
+
+`pwm_thermal_headroom` defaults to 0.10 in the constrained allocator. The
+service allocators use the same default. It applies to the frozen-current
+component and does not enlarge the capacitor rating. The historical Australian
+campaign retains three failed points from the initial 5% allowance and tests
+the later 10% commands in switched circuits. Manual `i_sw` remains an additional
+quadrature reserve.
+
+The former frozen-current-only model omitted capacitor current generated by
+AC carrier ripple. Its night predictions near 0.012 A versus 0.276–0.316 A
+measured are kept in `studies/australian_pv/results/historical_night_thermal_misses.csv`
+(full records under the Git tag `evidence/historical-d2c9a97`). The
+current model corrects that omission with the all-duty term and passive-damping
+residual. The current matched PF/OPF campaign checks thermal prediction
+enclosures separately from fixed-hardware acceptance; the 10% allowance is not
+the source of the new analytical bound.
+
+This embedded formulation currently requires a monolithic three/four-leg link,
+centered PWM, an L filter with proportional passive R/L and an open
+carrier-frequency source. LCL dynamics, finite source sharing, SPWM,
+split banks and automatic output-current ripple closure are rejected here.
+The standalone sequential solver above supports a different scope; nonlinear
+DC energy combined with PWM requires the constrained or service allocator.
+PWM/nonlinear service stages preserve preceding services within an explicit
+100 µvar or 100 µW numerical budget, independently of the hardware acceptance limits.
 
 ### 9.1 DC-source current sharing and split-bank voltage
 
@@ -668,16 +808,16 @@ U_b=\alpha^2U_a,\qquad U_c=\alpha U_a,
 \qquad V_{min}\le |U_a|\le V_{max}.
 ```
 
-For `:THREE_LEG` the bridge has no zero-sequence path (``I_0=0``), so
-zero-sequence KVL across the filter gives ``U_0=V_{p,0}``: the converter cannot
+For `:THREE_LEG` the bridge has no zero-sequence path (``I_0=0``). For a
+sequence-decoupled series filter, zero-sequence KVL gives ``U_0=V_{p,0}``: the converter cannot
 set its own zero-sequence EMF. The constraint is then ``U_2=0`` with
 ``V_{min}\le|U_1|\le V_{max}``, and ``U_0`` follows the network. (Imposing the
 ground-referred balanced set above on a three-leg bridge would also force the
 POC zero-sequence voltage to zero, which is infeasible on any network with
 zero-sequence unbalance.)
 
-Because the internal negative-sequence EMF is zero, the negative-sequence
-current of a grid-forming plant is fixed by the filter,
+For a sequence-decoupled series filter, zero internal negative-sequence EMF
+fixes the grid-forming plant's negative-sequence current as
 
 ```math
 I_2=-\frac{V_{p,2}}{Z_{f,2}},
@@ -689,6 +829,11 @@ same law is available to the local controllers as
 need not equal the physical filter. With realistic filters ``|Z_f|`` is small,
 so this current can exceed the converter rating even at modest unbalance; real
 grid-forming controls must limit it.
+
+Asymmetric conductor primitives and an LCL shunt require the full coupled
+circuit. Their converter- and grid-current sequence admittances need not equal
+the scalar series-filter expression above. Derive the appropriate terminal
+admittance before treating a virtual-impedance comparator as an equivalent.
 
 This is the steady-state voltage-source property used in algebraic power flow.
 It has no PLL, droop state, virtual impedance dynamics, current-priority state

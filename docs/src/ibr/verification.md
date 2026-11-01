@@ -4,6 +4,173 @@ A circuit-aware optimisation model should be tested at four levels: algebraic
 identities, closed-form topology limits, published cases, and a higher-fidelity
 oracle. A solver returning `LOCALLY_SOLVED` is necessary, but not sufficient.
 
+## Independent physical acceptance
+
+Every standalone advanced, constrained or controlled inverter solve, including
+fleet devices, now produces `physical_feasibility(result)`. The report
+recomputes SI quantities from RMS voltage/current phasors, rather than trusting
+squared-current, sequence-power or ripple auxiliaries. It checks phase and
+neutral current reserves; converter sequence ratings; primitive/LCL KVL and
+KCL; internal/GFM voltage bounds; selected-boundary VA; source-dependent DC
+ripple; split midpoint charge/voltage; capacitor thermal budgets; and DC-source
+availability supplied by the wrapper. Reported power and ripple quantities are
+also checked against the independent calculation. Controlled-device reports
+add actual-versus-commanded current residuals in amperes; constrained-device
+reports add declared POC P/Q bounds. The exact fitted linear-loss
+norm is used in the audit, making the known one-sided smoothing deficit
+visible rather than hiding it in a reported auxiliary.
+
+`InverterFeasibilityTolerances` declares physical floors of 10 µA, 10 µV,
+0.01 VA and 1 nC, plus `1e-8` times the relevant rating. These do not depend on
+the network power base or silently grow with solver tolerances. The rail
+minimum is enclosed to 1 µV by default. All tolerances are inspectable in the
+individual `InverterLimitCheck` records.
+
+The full-cycle rail check bounds each signed inequality as a degree-two
+trigonometric polynomial. On each interval, Taylor's theorem supplies a lower
+bound using `abs(f′′) ≤ hypot(c₁,s₁) + 4 hypot(c₂,s₂)`; evaluated points supply
+upper bounds. Adaptive subdivision encloses the global minimum over the full
+electrical cycle, including split-link fundamental and 2ω displacement. Float64
+roundoff is padded. This is a numerical enclosure of the declared averaged
+waveform, not an interval-arithmetic proof of hardware behavior.
+
+The standalone solvers refine the sampled hull by adding violating angles and
+re-solving, for at most 12 refinements. `rail_refinement=false` retains the
+sampled research formulation; the physical acceptance gate still rejects a
+missed rail violation. Direct stamping remains composable: call
+`inverter_physical_feasibility(inv, handles, solve_status(model))` after an
+external solve and add/refine constraints in the host problem as appropriate.
+
+`solve_status(result).publishable` requires solver success **and** physical
+acceptance. MOI termination/primal statuses and the solver's `feasible` and
+`optimal` flags remain unchanged for diagnosis. Candidate quantities may remain present
+when a physically rejected solver-success point is returned; a termination
+string alone is insufficient to select study results. Candidate reports can
+also diagnose unsuccessful solves without promoting them to accepted results.
+No-primal outcomes have an unchecked, non-passing report.
+
+The fixed-current single-device/fleet replays used by network sensitivities and
+fixed-point comparisons use the same publication gate, full-cycle rail refinement
+and independently checked command residuals. A coarse six-angle zero-current
+replay once returned publishable `LOCALLY_SOLVED` with roughly -35 V rail
+headroom; that candidate now fails physical acceptance even when refinement is
+explicitly disabled for diagnosis. One rejected device rejects the fleet.
+
+Sensitivity perturbations and intermediate fixed-point iterates are virtual
+imposed-current capability probes. They enforce the declared plant limits but
+do not assert a PV availability bound. The returned fixed-point plant additionally
+audits request availability using an upper enclosure of independently recomputed
+DC power. An overdrawn final point cannot publish or report convergence. This
+distinction permits perturbed-voltage numerical starts without calling their
+virtual injections transient PV dispatch. Explicit source bounds can also be
+applied to an individual current replay. `physical_feasibility` exposes the final
+single-device or per-device reports; equilibrium use requires both `converged`
+and a publishable final solve.
+
+The report checks the declared inverter fundamental model and calibrated RMS
+reserves. Standalone PWM-enabled solves additionally require finite carrier
+predictions, converged reserves and actual predicted capacitor-thermal and
+AC total-RMS ratings. A numerical closure tolerance cannot relax those ratings;
+under-allocation at a binding rating triggers another update. Nonconvergence,
+nonfinite harmonic networks and modulation violations prevent publication while
+retaining the final candidate for diagnosis. These are model audits, not EMT.
+Network-wide feasibility, regional compliance and transient/dynamic stability
+remain outside this report; network replay and controller-policy checks still
+provide separate evidence.
+
+The balanced three-phase fixture uses exact ±120° angles. Rounded decimal
+angles introduce a small U₀ and can make a strict balanced-grid LCL controller
+incompatible with its passive shunt, even when a converter-target plant is
+feasible. A separate common-mode case retains and tests that distinction.
+
+Constrained-device acceptance additionally reconstructs POC P/Q from terminal
+phasors, evaluates the declared smooth VV/VW relationship numerically, checks
+fixed Q/PF and P/Q bounds, and checks zero/negative sequence on the selected
+balanced-current arm. Standalone fixed-dispatch solves also check the requested
+POC watts. These checks do not rely on the constrained model's lifted power or
+sequence auxiliaries. Exact PWL tracking errors remain separate diagnostics:
+the encoded smooth curve is the declared optimization policy, not an assertion
+of exact firmware or regional-standard behavior.
+
+A deliberately coarse Ipopt reproduction returns raw `LOCALLY_SOLVED` at
+60 W / 0 var for a 2,500 W / −600 var request. All hardware checks pass, but
+the independently reconstructed Q and fixed-dispatch checks reject publication.
+Separate raw-success reproductions similarly reject violated PF and volt-watt
+relationships. Solver tolerances do not change the physical acceptance floors.
+
+Omitting a conductor rating does not create a hidden current bound. Numerical
+current characteristics use declared ratings when present, otherwise physical
+terminal-voltage starts (with declared voltage-rating fallback), rather than
+the numerical coordinate voltage base. Three-leg KCL, LCL KCL and balanced-arm
+equations retain physical scaling in SI and at different per-unit bases.
+The shifted current norm's one-sided loss deficit is capped at 0.0001 W in
+total across conducting legs. Phase paths retain any smaller rating-relative
+width. The fourth leg instead uses its share of the absolute watt budget,
+capped at 1 mA: its current often vanishes while the three phase currents are
+nonzero. This avoids needless neutral-channel curvature without changing its
+exact current bounds or the independent physical acceptance floors.
+Composite current norms evaluate conductor sums before squaring them. Expanding
+the square into a quadratic polynomial can otherwise produce a small negative
+number through floating-point cancellation at balanced neutral current. Tests
+exercise this cancellation in plain and staged models at different bases.
+The unrated 1 mA fallback alone once understated demand by about 0.30 W for
+`a_loss=100 W/A`; the unchanged exact-norm physical gate correctly rejected
+that raw solver success. Regression solves now accept the corrected point in
+SI and at 10 kVA, 1 MVA and 100 MVA bases without widening physical tolerances.
+
+`dc_source_line_frequency_diagnostics` separately reports ω/2ω source currents,
+their RMS/peak conventions, source resistance dissipation and a normalized
+antiresonance cancellation screen. Independent capacitor-node KCL and period
+integration check these quantities. The regulated DC-link input is the mean
+power boundary for `p_dc`, request availability and `DCSourceBounds`; converter
+and modeled capacitor ESR losses are included. Upstream source/DC–DC mean-path
+loss, source-impedance harmonic dissipation and DC standby are outside that
+boundary. The source diagnostic does not add an upstream power bound, a
+component thermal rating or a dynamic-stability guarantee.
+
+## Voltage-aware feeder coupling
+
+`solve_voltage_aware_inverter_fleet(net, spec)` couples the local staged
+Q→P→I₂ allocator to the native network equations. Every local allocation uses
+separate sensed and physical terminal voltages. The feeder map imposes grid-arm
+currents and the declared POC shunt exactly once. Intermediate feeder solves
+are virtual numerical probes without inverter hardware constraints; they are
+not transient dispatch samples. Returned phasors are reconstructed through the
+full primitive/LCL filter and independently audited against hardware, source,
+volt-watt and current-command limits. Publication also requires convergence of
+the voltage/current map and successful local allocation stages.
+
+Native zero-equality rows are checked in SI with physical tolerances independent
+of the power base. This residual audit evaluates registered model rows; it is
+not an independent circuit implementation or an independent audit of all native
+operational inequalities. Small-feeder regressions separately calculate Ohm's
+law and KCL from returned phasors. A failed network solve, local allocation,
+controller voltage-domain check or iteration budget remains unpublishable and
+retains its explicit diagnostic reason. Failure of a local NLP does not prove
+plant or policy infeasibility.
+
+`operating_modes=:energized` retains reactive control and AC loss imports at
+zero PV. `:disconnected` represents an open grid-side contactor, removing the
+entire converter/filter/POC-shunt AC model. A complete per-device dictionary
+supports mixed fleets. Disconnected devices have zero AC injections and no
+inverter physical report or modeled DC standby power. Unselected native IBRs
+keep their native physics. `voltage_aware_inverter_rows(result)` records modes,
+acceptance, powers, losses, current/ripple/rail quantities and sensed voltages.
+Only accepted rows support equilibrium comparisons.
+
+Three-leg reactive-priority control uses Q→P→I₂ ordering and optional
+voltage-admittance negative-sequence requests. Four-leg
+[`PerPhaseVoltVarWatt`](@ref) instead preserves the direction of its three Q
+requests, maximizes their common service fraction, then maximizes equal POC
+phase active powers. The shared DC source, neutral path and full filter remain
+coupled physical constraints. Independent regressions cover a closed-form
+binding neutral rating, mixed three/four-leg fleets, neutral KCL, full LCL losses,
+night operation and an extreme zero-sequence-only voltage boundary. This is
+solver-based quasi-static reference allocation; implicit controller stamping is
+not provided for this family. Current-dependent ripple blending, dynamic
+stability, global uniqueness and real-time guarantees remain outside this capability.
+Warm starts and damping are numerical choices, not a transient inverter model.
+
 ## Tests implemented in the package
 
 | Mechanism | Test oracle | Expected invariant |
@@ -18,7 +185,9 @@ oracle. A solver returning `LOCALLY_SOLVED` is necessary, but not sufficient.
 | Sequence limits | unbalanced voltage sources | each of `i_zero_max`, `i_positive_max`, `i_negative_max` bounds its reported component |
 | 3-wire topology | KCL | the three phase-current phasors sum to zero under balanced and unbalanced voltage |
 | Balanced switching hull | closed form | `Vdc_min = sqrt(6) U/m` for 3-leg and `2sqrt(2) U/m` for split DC |
-| Sample resolution and audit | nested sample grids plus independent dense evaluation | increasing `n_samples` tightens the outer approximation; `switching_margin < 0` reveals a missed between-sample peak |
+| Sample resolution and audit | nested grids, full-cycle Taylor enclosure and adaptive separating cuts | a coarse-grid false optimum cannot publish; feasible dispatch remains available after refinement |
+| Offline current allocation | analytic VA-circle projection across bases; primitive LCL reconstruction; rail-conflict witness | accepted alternatives meet all declared bounds; a failed solve never establishes plant infeasibility; inconclusive rail enclosures remain unresolved |
+| Local Q→P→I₂ allocation | analytic Q-priority circle; fixed-boundary Australian mean/worst/sequence laws; primitive LCL/grid commands | every stage passes physical and policy checks; lower-priority stages preserve achieved powers; explicit override is distinct from a failed strict request |
 | 2ω power | Deakin et al. Table V | six prescribed current patterns produce `[0,1,1.5,3,0,1] Vph Iref` |
 | 2ω PLECS comparison | Deakin et al. Table VII | all six rows are retained; non-cancelling analytical powers agree with PLECS within 0.3% and reported currents within 1% |
 | Bus capacitance | capacitor energy balance | open line-frequency source: `dv2 = ripple/(2ω Ceq Vdc)`, with `Ceq=Cu Cl/(Cu+Cl)` for a split link; ideal stiff source: `dv2 = 0` |
@@ -79,7 +248,9 @@ oracle. A solver returning `LOCALLY_SOLVED` is necessary, but not sufficient.
 | Sequential-to-equilibrium workbook | guarded affine-branch enumeration, independent fixed-point formula and sequential energy replay | cycling numerical iteration can coexist with a unique equilibrium; ceilings change dispatch freedom; state and hysteresis examples preserve declared history |
 | Full multi-inverter network OPF | seven-bus four-wire feeder, three matched controls, native/hook voltage limits and independent SI radial replay | control agreement within 0.2 W / 0.1 var / 1 mV; coordinated 244 V and 12 A limits bind; KCL, KVL, power balance, base invariance and failed-output masking pass |
 
-These tests live in `test/advanced_inverter_tests.jl` and
+Physical certificate and full-cycle enclosure tests live in
+`test/inverter_feasibility_tests.jl`. The other tests live in
+`test/advanced_inverter_tests.jl` and
 `test/inverter_control_tests.jl`, with operating constraints in
 `test/inverter_operating_constraints_tests.jl`,
 `test/inverter_formulation_variants_tests.jl` and
@@ -229,7 +400,36 @@ uniqueness. Conversely, cycling or a failed plant solve does not establish that
 no equilibrium exists. Hardware and dynamic-model validation remain separate
 requirements.
 
-## Recommended higher-fidelity test harness
+## Australian study checks
+
+The Australian LV study (`studies/australian_pv/README.md`) combines four kinds
+of check. Numbers are in the generated report
+(`studies/australian_pv/engineering_benchmark.md`); earlier campaigns are listed
+in `studies/australian_pv/HISTORY.md`.
+
+- **Rated-capability gate.** Before any feeder run, each fixture plant must
+  deliver its nameplate at the AS/NZS 4777.2 Australia A volt-var corners with
+  apparent power or phase current, not an internal budget, as the limit. The
+  earlier 1 A capacitor budget failed this gate (about 1.2 kVA of 6 kVA) and
+  made every earlier export comparison capacitor-limited.
+- **PF/OPF agreement.** The OPF with each site's local volt-var request and
+  volt-watt ceiling imposed at its own voltages, and without the 253 V row, must
+  reproduce the local fixed point. The two formulations are built separately.
+- **Saved-point and network audits.** Every saved point is rebuilt in SI, and a
+  separately coded Python script reconstructs feeder currents and limits.
+- **Fixed-POC EMT.** A separately coded averaged/switched circuit checks that
+  the modelled capacitor-current bound encloses the switched value at the
+  highest-stress site per condition, mode and controller group. The bound was
+  revised after earlier misses and is checked with the same selection rule, so
+  this is not out-of-sample validation. It omits PLL, controller and feeder
+  dynamics, and is not a PSCAD/PLECS or hardware comparison.
+
+The carrier-domain and DC-boundary experiments
+(`studies/australian_pv/engineering_domain.md`, `engineering_boundary.md`) check
+the carrier approximations across P/Q, sequence and modulation under the legacy
+fixture limits; those limits only decide which points are labelled infeasible.
+
+## Further higher-fidelity validation
 
 For each topology, build one parameter-identical averaged or switched model in
 PLECS, PSCAD, or an open EMT tool and export machine-readable sweeps. A compact
@@ -258,6 +458,10 @@ discard interval, RMS/peak convention, switching frequency, controller bandwidth
 and whether the DC source absorbs 2ω power.
 
 ## Model-risk checks before publication
+
+Before comparing controllers or dispatch on a feeder, check that the device
+fixture can deliver its declared nameplate (the rated-capability gate above).
+An internal budget that binds below nameplate dominates every comparison.
 
 For every claimed boundary point:
 
@@ -295,6 +499,43 @@ limits, exact/smooth controller replay at both current targets, and location-awa
 operating, fleet and hardware-sizing reports.
 
 ### PCC terminal saturation regressions
+
+`inverter_sequence_limit_tests.jl` separately forces known converter-sequence
+currents and compares contradictory and feasible ratings at 10 kVA, 1 MVA and
+100 MVA numerical bases. This checks the plant's hard bounds independently of
+controller backoff. Controller cases cover I₁/I₂ saturation, both targets and
+power boundaries, common/power/balance allocation, LCL shunt offsets, equal
+positive/negative ratings and fleet margin reporting. Physical Fortescue sums,
+DC availability and exact/smooth command agreement are checked independently.
+
+The Australian terminal-profile fleet regression covers mean, worst-phase and
+sequence VV+VW at both source levels and zero/half/full PV. It uses a single
+100 kVA base, adaptive Ipopt profile and 300-iteration cap without retries,
+then checks that a zero selection objective preserves the stressed dispatch.
+The network audit replays all three stressed equilibria with fixed phase P/Q.
+The larger PCC graph retains squared-norm coefficients as expressions and
+normalizes its scalar root by `sqrt(d + epsilon^2)`. The quadratic, smoothing
+width and service order are unchanged; the root stays scaled to headroom for
+vanishing service. Simple constant-service graphs retain their prior root
+coordinates. The smooth maximum is anchored at a positive argument to prevent
+cancellation in its denominator on trial points. Convergence at other network
+bases remains a separate conditioning question, with failed probes retained.
+
+The Australia A review fixture also checks mean and worst-phase sensing with
+the same reactive-priority allocator, converter-arm current limit and PCC
+apparent-power circle, under separately binding current and power limits.
+Capacitor thermal regressions independently reconstruct weighted RMS stress
+from physical 2ω and declared carrier currents, cover both power boundaries,
+both current targets and common/power-priority sequence allocation, and compare
+the exact and smooth controller commands. These tests protect allocation
+semantics; they do not imply that the sensing policies agree under unbalance.
+They also do not establish equivalence to an optimisation that retains a hard
+Q-curve equality when that Q request itself exceeds the available capability:
+the forward reactive-priority allocator clips infeasible Q before allocating P.
+The PCC stamp lifts the curve outputs and phase-current service directions
+once before reusing them in capability intersections. This preserves the
+equations while avoiding repeated copies of the worst-phase conflict graph
+when exporting a fleet model to the nonlinear solver.
 
 PCC mode is checked against independently calculated terminal-circle and
 arm-current intersections for watt, var and proportional priority. Both current
