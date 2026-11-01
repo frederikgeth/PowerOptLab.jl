@@ -1,6 +1,6 @@
 {
-  "bundle_bytes": 15138769,
-  "bundle_sha256": "baa9e46099a044b2280ecc8006c785d09a6bebd8914dbd7f54f422ef56f5f14d",
+  "bundle_bytes": 15137873,
+  "bundle_sha256": "9157171d4b76abb54d855ff4133868282c58ddf6de32331d17d4fe17ead9e226",
   "files": {
     "studies/australian_pv/results/engineering_benchmark/agreement.json": {
       "bytes": 1769,
@@ -8,11 +8,11 @@
     },
     "studies/australian_pv/results/engineering_benchmark/audit.json": {
       "bytes": 355149,
-      "sha256": "a5b6c405aa2751c61dad4a459ed3404915ace90cb2eb260e75c7188a5a9c572e"
+      "sha256": "e083f56d2c87cc1ba5ae683e5507d770de02ab4d00208e4f23956373d6d693b5"
     },
     "studies/australian_pv/results/engineering_benchmark/cases.csv": {
-      "bytes": 4256,
-      "sha256": "cf447155cbc5ae87db96663fcb3f934638eb8ae6942b40ce87c99000bcc9f065"
+      "bytes": 4255,
+      "sha256": "bd4ae7df8f91dad80f597bd37406320d93e8e49147ad1d801f0eaeceaaf3291c"
     },
     "studies/australian_pv/results/engineering_benchmark/dependency_manifest.toml": {
       "bytes": 25983,
@@ -24,19 +24,19 @@
     },
     "studies/australian_pv/results/engineering_benchmark/environment.json": {
       "bytes": 12635,
-      "sha256": "83ee88fc2287af14a36aaa9fac559342fc359746bbf47207f3ee7f99c9f49888"
+      "sha256": "9d54ea3f79fd80c1703e41f5a878aa8a0fcc57ffea0a3fe6d87dfeadb77dcc5b"
     },
     "studies/australian_pv/results/engineering_benchmark/high_source_local_status.json": {
       "bytes": 188269,
-      "sha256": "77604c612cf663f89d14ba6cffbe4bd2faa7f12c0b5bb72e9ba5f86e3f9f5b60"
+      "sha256": "d48317bf6f46d9b3a1d04b64622fd6c24ec3424b34d1a0dfab88f6c665f01a3b"
     },
     "studies/australian_pv/results/engineering_benchmark/high_source_opf_equal_service_status.json": {
-      "bytes": 2394991,
-      "sha256": "1c98d3514f891874eaf5a4ee5f5043765cc494750d4048383452d2822cf7af64"
+      "bytes": 2394992,
+      "sha256": "d7563417df834c4b88a24d4d6740a922d772a391ac4ad0e384b94615919818eb"
     },
     "studies/australian_pv/results/engineering_benchmark/high_source_opf_vv_released_status.json": {
       "bytes": 2454133,
-      "sha256": "efecc2493ec532bb995169142a4e59e99ec1e9bcaca679f378b6119a1b4dd36d"
+      "sha256": "e6f26e1f24c45a8037282efabe985b3af5307a0b38a772fb19e08efb5e3d01f1"
     },
     "studies/australian_pv/results/engineering_benchmark/network_audits/high_source_local.json": {
       "bytes": 165150,
@@ -100,39 +100,39 @@
     },
     "studies/australian_pv/results/engineering_benchmark/night_local_status.json": {
       "bytes": 187955,
-      "sha256": "d85c98fb25b05b6a851b6806dc25f56c02090e18d3da884460bf2d05ef5c8191"
+      "sha256": "378006fbbec7061866d95f3cedb848608b099dcc25788d120fc64f433ce6cc42"
     },
     "studies/australian_pv/results/engineering_benchmark/night_opf_equal_service_status.json": {
       "bytes": 2395757,
-      "sha256": "9517338511141224eeab8f0c831c6bd927d36c1703b09674e65ce61a0ab7e652"
+      "sha256": "8f5a53a5b5732eafdbb407e4ab0206f9cf1c901bddbb737ab988028471b2f1ee"
     },
     "studies/australian_pv/results/engineering_benchmark/night_opf_vv_released_status.json": {
       "bytes": 2461037,
-      "sha256": "92f5c8cd3023327201bc893059f75f8cc53a0ef24027518d4880880e20337ba4"
+      "sha256": "93c0345243c4834f0e6d424cbd4757a22078868b1bb1152f90a8cc2770824936"
     },
     "studies/australian_pv/results/engineering_benchmark/nominal_local_status.json": {
-      "bytes": 188257,
-      "sha256": "c75b32f6ea1a94a41db6a7e477126582d3c7b21ee48b9297d2c9d5c2bc589b4b"
+      "bytes": 188259,
+      "sha256": "c7c5a26484a629123211ce8c1e7366be6c6f6e7aafb384d30ac27af90c629bc9"
     },
     "studies/australian_pv/results/engineering_benchmark/nominal_opf_equal_service_status.json": {
       "bytes": 2395746,
-      "sha256": "469663e76da3a62507d6ea3fb94c082274289ce171f02fad57d80218645804e4"
+      "sha256": "5434cdbb3b030ad224b9634a560f41bdfe697d30b5b4ac5179c3d059996589d3"
     },
     "studies/australian_pv/results/engineering_benchmark/nominal_opf_vv_released_status.json": {
       "bytes": 2455048,
-      "sha256": "cf4daa3fd5d97499b84297754b5564ab4bbe4f7bfea6a1ce39a5d8f892b00e3e"
+      "sha256": "1986801f3e36873534b6276b7d3df2bfecd05aadbf0a0003bbdcd6b1f18363aa"
     },
     "studies/australian_pv/results/engineering_benchmark/oversized_dc_local_status.json": {
       "bytes": 188228,
-      "sha256": "ef10f7591747786f9a978cf42e8bae1b891bd4431a9ed58019b1307b7c4ebeff"
+      "sha256": "64f9fcfbcc1b8fe36a2bafefcdf8028f6158c141d969495f13ea9b8d4ff18612"
     },
     "studies/australian_pv/results/engineering_benchmark/oversized_dc_opf_equal_service_status.json": {
-      "bytes": 2394835,
-      "sha256": "7f1aad56056aa755f9a95864e0e493091175c2506da9cbecd022a1c791ee6041"
+      "bytes": 2394833,
+      "sha256": "6d04cd9978f5d9d7ad36892fdfd32b8911f5c332fd5340952d13a836a69c76e7"
     },
     "studies/australian_pv/results/engineering_benchmark/oversized_dc_opf_vv_released_status.json": {
       "bytes": 2452536,
-      "sha256": "4a96839d640966c0701660d68915bd4766cda7c582d8d0066e5655eb03b6553c"
+      "sha256": "5af3d03d0e3dfad9a8136473fbafe20fa22fb4a0f8c9ab9b3db85dfe2d9c5c53"
     },
     "studies/australian_pv/results/engineering_benchmark/points/high_source_local.json": {
       "bytes": 1068536,
@@ -196,7 +196,7 @@
     },
     "studies/australian_pv/results/engineering_benchmark/publication.json": {
       "bytes": 854,
-      "sha256": "8c8c24e0743abd457982a83f03bcefb06053d23f825fe00123102fef9a2d22ef"
+      "sha256": "dfd695ec2dd79ad5edbd23812ee9b70cc2dd58191ef9533061a6c8277f88f6fb"
     },
     "studies/australian_pv/results/engineering_benchmark/rated_capability.csv": {
       "bytes": 1478,
@@ -204,15 +204,15 @@
     },
     "studies/australian_pv/results/engineering_benchmark/rotated_unbalance_local_status.json": {
       "bytes": 188261,
-      "sha256": "329ecece4fe071ecc0c9dbec853e5b9d3b418dca2f75bd8d8f4019bb8dc08696"
+      "sha256": "ff56697958030f52112bf7238d20920a743664672d262af6edddcb1edc591b31"
     },
     "studies/australian_pv/results/engineering_benchmark/rotated_unbalance_opf_equal_service_status.json": {
-      "bytes": 2395585,
-      "sha256": "f3588d9e14859d72bd389612d338aa073c48306558404006da3710ce34267132"
+      "bytes": 2395583,
+      "sha256": "83098b0f12a63b0693cfc9137ccb4272175ea88bcd789a4aa5280da96611ab2e"
     },
     "studies/australian_pv/results/engineering_benchmark/rotated_unbalance_opf_vv_released_status.json": {
       "bytes": 2454223,
-      "sha256": "dd1081f0b402b8dce5c23afa74a72b6175e382c60439dedd39970caaa0224242"
+      "sha256": "8191d2a6fb9e910fa14d0288a9480c10d40bd9a933c2f8143f1eed6c9d97f6f2"
     },
     "studies/australian_pv/results/engineering_benchmark/summary.json": {
       "bytes": 8200,
@@ -220,7 +220,7 @@
     },
     "studies/australian_pv/results/engineering_benchmark_emt/audit.json": {
       "bytes": 23897,
-      "sha256": "ff308ab38500400d6a37169aa851a70cbfb86a146b618b4b842d9fe0f66095c1"
+      "sha256": "d189c5bc5f2c8af79031aef13f21751dc69f29087797c345b3236fb5a44b0c91"
     },
     "studies/australian_pv/results/engineering_benchmark_emt/high_source_local_mean_vv_vw_pv_ld24_load_a_averaged_carrier.csv": {
       "bytes": 67793,
@@ -416,7 +416,7 @@
     },
     "studies/australian_pv/results/engineering_benchmark_emt/matched_audit.json": {
       "bytes": 14787,
-      "sha256": "26850327c18acf46f462dc835bbc5615d011e9643d8ea0ecb35de2f464fbbb17"
+      "sha256": "42ba2a9134f5064f9691f680f313df544a413fa0d1f496851a737f0a1e1dec06"
     },
     "studies/australian_pv/results/engineering_benchmark_emt/night_local_mean_vv_vw_pv_ld1291_load_b_averaged_carrier.csv": {
       "bytes": 68780,
@@ -996,7 +996,7 @@
     },
     "studies/australian_pv/results/engineering_benchmark_emt/results.json": {
       "bytes": 2813371,
-      "sha256": "cb3638659aa6f2b22df49d67c3255839f54cdb69af45cd258f54e8d6ae18b055"
+      "sha256": "13e8e798b3e58ef9a998cd146f87b9253cb42c546e6dc36d253bfd37f5c834af"
     },
     "studies/australian_pv/results/engineering_benchmark_emt/rotated_unbalance_local_mean_vv_vw_pv_ld24_load_a_averaged_carrier.csv": {
       "bytes": 67618,
@@ -1191,16 +1191,16 @@
       "sha256": "8bba19f20a2e147c1bf5d37fe96c138e8fc24e20e57dca9e284f2739bd56d318"
     },
     "studies/australian_pv/results/engineering_benchmark_emt_inputs.json": {
-      "bytes": 199032,
-      "sha256": "cc4d2c45c989cfef19b6fa1ba2e2a78921ee0791896943afebfbfff6b0fdc2a5"
+      "bytes": 198700,
+      "sha256": "38bce1649ec6d0547dd667ce213f5a0d1b3c1b8fa00c21facc9da1b89be9969b"
     },
     "studies/australian_pv/results/engineering_benchmark_legacy_fixture/agreement.json": {
       "bytes": 753,
       "sha256": "861771357f64a2d99a2beb5a53aa3fd27f96b46984c51a4f5c522b692ab09b7b"
     },
     "studies/australian_pv/results/engineering_benchmark_legacy_fixture/cases.csv": {
-      "bytes": 4267,
-      "sha256": "6ddf1564ed482f680936e5f790f0d1939922474cec57fef557639a2b6990ac57"
+      "bytes": 4263,
+      "sha256": "d983eebb5f5b0f6e51067bf741c279d315bf9ff9ad9c24848ec9bcb89afa2af4"
     },
     "studies/australian_pv/results/engineering_benchmark_legacy_fixture/dependency_manifest.toml": {
       "bytes": 25983,
@@ -1211,20 +1211,20 @@
       "sha256": "266e5164bd754afd4ed879053e083bfaca32d5f8c24a192ca718789a17e4140a"
     },
     "studies/australian_pv/results/engineering_benchmark_legacy_fixture/environment.json": {
-      "bytes": 17281,
-      "sha256": "da3fc318b7018d34d41635965d61a2d8ea27331f4636a6fdfe6c5af400313465"
+      "bytes": 12634,
+      "sha256": "6c95bd705ae05108c7567005ea40bc325923029faad4984baaeafd2c5fe60ed8"
     },
     "studies/australian_pv/results/engineering_benchmark_legacy_fixture/high_source_local_status.json": {
       "bytes": 188536,
-      "sha256": "b69fe67a3022790875e1bf7ceeb3d2b10d45aeac3d6d85f5b49bfce23e5804e5"
+      "sha256": "7e1671828b3c89b92e1fb94bded7cc722f09b152aaeddd1b32346d350d938135"
     },
     "studies/australian_pv/results/engineering_benchmark_legacy_fixture/high_source_opf_equal_service_status.json": {
       "bytes": 2382299,
-      "sha256": "73a825e0e0947a4771a570ab2683aff1092fb7b7668fdbae7d1e37a7c3e938b3"
+      "sha256": "659e5ac5a396dc37a0802c9b4cb04798b57a984c3fde0d24f57c4635c0630ae0"
     },
     "studies/australian_pv/results/engineering_benchmark_legacy_fixture/high_source_opf_vv_released_status.json": {
       "bytes": 2457843,
-      "sha256": "124d84fcdb76bf505e728150b8e27f964377e25223a51d085150acb68da6a0c9"
+      "sha256": "d14a95f4a55ef165048f6b2e3e230298fba22294037baa88f085d5b8a856d617"
     },
     "studies/australian_pv/results/engineering_benchmark_legacy_fixture/network_audits/high_source_local.json": {
       "bytes": 165234,
@@ -1287,40 +1287,40 @@
       "sha256": "ecadf222808e5ece3425aeddbaec6afdced3b6a8ffeae4411b6a9ddbd5a9fa86"
     },
     "studies/australian_pv/results/engineering_benchmark_legacy_fixture/night_local_status.json": {
-      "bytes": 188580,
-      "sha256": "4ee9a9cea6bf2337acda0e9b2c2c783a386cf0d4b297c111abaef3c798686079"
+      "bytes": 188579,
+      "sha256": "8dca2a759be01dc4797594e914d1811db2595d3b11788a0ed5ecf98a21ff4a82"
     },
     "studies/australian_pv/results/engineering_benchmark_legacy_fixture/night_opf_equal_service_status.json": {
-      "bytes": 2382180,
-      "sha256": "47ce37ea2e214835e76c57262f850db155e6101fa0f2835513778bce62ee5bd4"
+      "bytes": 2382178,
+      "sha256": "e70f2106e99c58115bbae59bbf4eb9c0840911a271cb4cb85c55dc6c1c1f5735"
     },
     "studies/australian_pv/results/engineering_benchmark_legacy_fixture/night_opf_vv_released_status.json": {
       "bytes": 2465221,
-      "sha256": "57037df6ac7647ab89f2ad24928711b51396637727e33d75d8e1708b49584189"
+      "sha256": "5b0d32b04b7d27cec34f35c6d42717c24b6d2af03a9dc2aa63d176646f6f3ec6"
     },
     "studies/australian_pv/results/engineering_benchmark_legacy_fixture/nominal_local_status.json": {
-      "bytes": 189212,
-      "sha256": "809a68d891b61b761853a0a833cda48a9fe9f7afc71145df7d6a8aab2d63ca87"
+      "bytes": 189214,
+      "sha256": "3a4985689035f68613d47558572d70fe34c8cf7272dd749492e405f7c5ae09f7"
     },
     "studies/australian_pv/results/engineering_benchmark_legacy_fixture/nominal_opf_equal_service_status.json": {
-      "bytes": 2400630,
-      "sha256": "a389409efb174b358306f896b43985ba591e84faa1cfb12e6450d4290c853c01"
+      "bytes": 2400628,
+      "sha256": "db7220fed350f88de7635f84ddb925db574ed2de03a706b256936b4723f51425"
     },
     "studies/australian_pv/results/engineering_benchmark_legacy_fixture/nominal_opf_vv_released_status.json": {
       "bytes": 2459581,
-      "sha256": "629f6825a7fd9d94dd244a0ef7c687d4f558837013072abec9eeb73fc9f66c46"
+      "sha256": "128286630742e6c2cea888406575cf2f65c4ddbf8eafea711dc1f377061c4d1d"
     },
     "studies/australian_pv/results/engineering_benchmark_legacy_fixture/oversized_dc_local_status.json": {
       "bytes": 188594,
-      "sha256": "0db957c4350481abfc9bf7ab7b09f0cd8480af1cdfe3b372fd1979ff063add75"
+      "sha256": "04c9548d6745e744702ad9177d5544c3694419a96ee7063708f3813c016dde0c"
     },
     "studies/australian_pv/results/engineering_benchmark_legacy_fixture/oversized_dc_opf_equal_service_status.json": {
       "bytes": 2382057,
-      "sha256": "65c5ee8efe4a8e5d7c832f595f9d983e6181d3259022bd6c5dd8c6b89630af60"
+      "sha256": "5ba173671ab39a679494a6f6b5fe40b14b30a329d748c93e7f265baeaf028ee8"
     },
     "studies/australian_pv/results/engineering_benchmark_legacy_fixture/oversized_dc_opf_vv_released_status.json": {
       "bytes": 2458176,
-      "sha256": "2a15d45f28bf6c50ba59da600f3c7d4c76089b44d4238c372a4ebba1a7df70ec"
+      "sha256": "03d8b3e266f6432e801d1fc0cd6931fde11bdc7b70687a93554ec1cd2987cf97"
     },
     "studies/australian_pv/results/engineering_benchmark_legacy_fixture/points/high_source_local.json": {
       "bytes": 1073387,
@@ -1388,15 +1388,15 @@
     },
     "studies/australian_pv/results/engineering_benchmark_legacy_fixture/rotated_unbalance_local_status.json": {
       "bytes": 188769,
-      "sha256": "f1996aa3421be4728cb2dcfe65a041058830db7b7a83d22273444ea889f7760a"
+      "sha256": "0582d0e8cc7a14e1707b553e0dde469db841bcf3b42d361d2dbcf4baab265727"
     },
     "studies/australian_pv/results/engineering_benchmark_legacy_fixture/rotated_unbalance_opf_equal_service_status.json": {
-      "bytes": 2382323,
-      "sha256": "c3eb6021319f6a7a8878b09960c132516b0098e94708fafe0367d863da9059fb"
+      "bytes": 2382322,
+      "sha256": "7d6035ddc41e9c980bce48ba711a5832e2066af8638f0385acf6e253247b6d7d"
     },
     "studies/australian_pv/results/engineering_benchmark_legacy_fixture/rotated_unbalance_opf_vv_released_status.json": {
       "bytes": 2459635,
-      "sha256": "c3dfecc57db2a237235dc8104446f8796cdcc8ba922f4d5c2683dec1c501469d"
+      "sha256": "3eba332937d25e820b410751eee53a2691ee05c826bc71c401648beed66c78b1"
     },
     "studies/australian_pv/results/engineering_benchmark_legacy_fixture/summary.json": {
       "bytes": 8246,
@@ -1404,7 +1404,7 @@
     },
     "studies/australian_pv/results/engineering_boundary_emt/audit.json": {
       "bytes": 1494,
-      "sha256": "c02a9156c62900de73de101ee5b33b8e9ca8bb13f26ae42c009ef01725525e75"
+      "sha256": "a47534645ae0d70c194019cc8a441a2be867c2086a30592000f846b50a8e2c5c"
     },
     "studies/australian_pv/results/engineering_boundary_emt/combined_averaged_carrier.csv": {
       "bytes": 69682,
@@ -1460,19 +1460,19 @@
     },
     "studies/australian_pv/results/engineering_boundary_emt/results.json": {
       "bytes": 140653,
-      "sha256": "5855e49e68d39110838aa74334981bb84fc39e8311da55c5ede50692180b071b"
+      "sha256": "a7025af98d03fbc65c2a8633f32417c1378363e39f1d7517d6c65973119b497e"
     },
     "studies/australian_pv/results/engineering_boundary_emt_inputs.json": {
-      "bytes": 21259,
-      "sha256": "9cfa9c7f78440d5db5d2b68a672ca0872f21e22ec8b4514475c1f91508044ea1"
+      "bytes": 20516,
+      "sha256": "60320d630840c1dba963bcb47253ec4f25915b696fd1430aa835cc200f265b47"
     },
     "studies/australian_pv/results/engineering_domain_audit.json": {
       "bytes": 776081,
-      "sha256": "b59f76b9f602e77e1f7f2452213d0da66033426c411b48193ca36b6eb1a9adc2"
+      "sha256": "3dd0929c346dc68e5e287450b5797b4be1101684e2d86b8e3f66b7a6b3c4d6de"
     },
     "studies/australian_pv/results/engineering_domain_inputs.json": {
-      "bytes": 2757868,
-      "sha256": "c2c81b7cfa10ba5c964b19898abc25cf05849260e350d9a7860d554232dbe97f"
+      "bytes": 2757436,
+      "sha256": "fd6b2508af2ed0c5db9739ec1df0134e49cd5bc39ef148571272ca7d083cb8aa"
     },
     "studies/australian_pv/results/engineering_domain_summary.csv": {
       "bytes": 602,
@@ -1491,5 +1491,5 @@
     "studies/australian_pv/results/engineering_boundary_emt_inputs.json",
     "studies/australian_pv/results/engineering_boundary_emt"
   ],
-  "source_revision": "05db2db8e0390f92065b5dd57f5acfa32349e247"
+  "source_revision": "116e279f1a46b8e8bb88549e9f7fb1634b85be07"
 }

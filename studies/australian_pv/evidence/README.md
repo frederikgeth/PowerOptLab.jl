@@ -7,7 +7,7 @@ bytes were packed from. The Git tree keeps only compact review files.
 
 | Manifest | Status | Contents |
 |---|---|---|
-| `current.json` (= `current-05db2db.json`) | Current | Matched benchmark with the declared 7 A / 23 A fixture (15 points, PF/OPF agreement), legacy-fixture sensitivity, 60 matched EMT references, regenerated carrier-domain and DC-boundary validations |
+| `current.json` (= `current-116e279.json`) | Current | Matched benchmark with the declared 7 A / 23 A fixture (15 points, PF/OPF agreement), legacy-fixture sensitivity, 60 matched EMT references, regenerated carrier-domain and DC-boundary validations |
 
 ## Restore current records
 
