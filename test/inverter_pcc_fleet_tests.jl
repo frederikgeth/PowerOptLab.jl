@@ -22,11 +22,19 @@ end
             r=solve_controlled_inverter_fleet(net,spec;s_base=s_base,
                 selection_objective=objective,solver_options=options)
             attempts=r.network["numerical_attempts"]
-            solve_status(r).publishable || @info "Fleet solve rejected" mode source level s_base objective attempts=[
-                (a.initialization,a.stage,a.raw.termination_status,a.raw_solver_status,a.physical_accepted,
-                 a.nlp_scaling_method) for a in attempts] failed_devices=[id for (id,d) in r.devices
-                 if !physical_feasibility(d).passed] failed_checks=unique(c.name for d in values(r.devices)
-                 for c in physical_feasibility(d).checks if !c.passed)
+            if !solve_status(r).publishable
+                println("FLEET-DIAG ",mode," source=",source," PV=",level)
+                for a in attempts
+                    println("FLEET-DIAG   attempt ",a.initialization," ",a.stage," ",a.raw.termination_status,
+                        " primal=",a.raw.primal_status," raw='",a.raw_solver_status,"' physical=",a.physical_accepted,
+                        " scaling=",a.nlp_scaling_method)
+                end
+                for (id,d) in sort!(collect(r.devices);by=first)
+                    bad=[(c.name,round(c.value;sigdigits=6),c.lower,c.upper,round(c.margin;sigdigits=3))
+                         for c in physical_feasibility(d).checks if !c.passed]
+                    isempty(bad) || println("FLEET-DIAG   ",id," ",join(string.(bad),"; "))
+                end
+            end
             @test solve_status(r).publishable
             @test 1<=length(attempts)<=3
             @test first(attempts).initialization===:spread
