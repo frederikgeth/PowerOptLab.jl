@@ -21,16 +21,16 @@
   },
   "fixture_limits": "declared",
   "generation_julia": "1.12.6",
-  "generation_revision": "4f616ca4358eb31c8ead9086354d8454f46476c2",
+  "generation_revision": "706d025e83593c6834993de1372cf23951ae7f27",
   "input_sha256": {
-    "results/engineering_benchmark/audit.json": "a5b6c405aa2751c61dad4a459ed3404915ace90cb2eb260e75c7188a5a9c572e",
-    "results/engineering_benchmark/environment.json": "83ee88fc2287af14a36aaa9fac559342fc359746bbf47207f3ee7f99c9f49888",
-    "results/engineering_benchmark_emt/matched_audit.json": "26850327c18acf46f462dc835bbc5615d011e9643d8ea0ecb35de2f464fbbb17",
-    "results/engineering_benchmark_emt_inputs.json": "cc4d2c45c989cfef19b6fa1ba2e2a78921ee0791896943afebfbfff6b0fdc2a5",
-    "results/engineering_boundary_emt/audit.json": "c02a9156c62900de73de101ee5b33b8e9ca8bb13f26ae42c009ef01725525e75",
-    "results/engineering_boundary_emt_inputs.json": "9cfa9c7f78440d5db5d2b68a672ca0872f21e22ec8b4514475c1f91508044ea1",
-    "results/engineering_domain_audit.json": "b59f76b9f602e77e1f7f2452213d0da66033426c411b48193ca36b6eb1a9adc2",
-    "results/engineering_domain_inputs.json": "c2c81b7cfa10ba5c964b19898abc25cf05849260e350d9a7860d554232dbe97f"
+    "results/engineering_benchmark/audit.json": "e083f56d2c87cc1ba5ae683e5507d770de02ab4d00208e4f23956373d6d693b5",
+    "results/engineering_benchmark/environment.json": "9d54ea3f79fd80c1703e41f5a878aa8a0fcc57ffea0a3fe6d87dfeadb77dcc5b",
+    "results/engineering_benchmark_emt/matched_audit.json": "42ba2a9134f5064f9691f680f313df544a413fa0d1f496851a737f0a1e1dec06",
+    "results/engineering_benchmark_emt_inputs.json": "38bce1649ec6d0547dd667ce213f5a0d1b3c1b8fa00c21facc9da1b89be9969b",
+    "results/engineering_boundary_emt/audit.json": "a47534645ae0d70c194019cc8a441a2be867c2086a30592000f846b50a8e2c5c",
+    "results/engineering_boundary_emt_inputs.json": "60320d630840c1dba963bcb47253ec4f25915b696fd1430aa835cc200f265b47",
+    "results/engineering_domain_audit.json": "3dd0929c346dc68e5e287450b5797b4be1101684e2d86b8e3f66b7a6b3c4d6de",
+    "results/engineering_domain_inputs.json": "fd6b2508af2ed0c5db9739ec1df0134e49cd5bc39ef148571272ca7d083cb8aa"
   },
   "operating_limits": {
     "capacitor_rms_A": 7,

@@ -72,7 +72,7 @@
         "scripts/australian_pv/four_leg.jl": "27b0cd96f4c87c40cbbcf631d50d422c70f55c065ce10d54cf4b1dffa8f3ec8f",
         "src/formulations/relations.jl": "d0846f193d6705ee59a83729cf0e8eb928294dcab0f9136e70a87070951f4d8c",
         "src/upstream.jl": "313bf70a703b43b2134aef1f9f96c30bda4bc301e17b9f5f990244105d57b238",
-        "src/components/inverter_phase_allocation.jl": "04e552cc6e2c823b5371902c8dd7a9970a12b298009ab100f8f2e514bbac9157",
+        "src/components/inverter_phase_allocation.jl": "a45e12737ea90f9876876de8465ae6f2f1274943a289979f7ba420b75c08c9ed",
         "src/components/inverter_service_allocation.jl": "95183c86dfb0db01be01ce170dac10436c8e8ad5fff61da230e6e1baaf9e219f",
         "src/components/ivq_battery.jl": "2e3f74858ef64f95ce8b7ed125f1e19db739bb7843edbb35e9f3e3dfaa649c95",
         "src/problems/inverter_control_study.jl": "56fff25c90a46de9a5c36b20eaabd2817ba61a5a5043d121073a6f43a7f0cddf",
@@ -178,7 +178,7 @@
     "network_sha256": "11fea1394d2fcdc1a563b87b4c2928e1edea49555d43c99ecf1cd7d7470d9fd7",
     "fixture_limits": "declared",
     "git_status": "",
-    "git_revision": "4f616ca4358eb31c8ead9086354d8454f46476c2",
+    "git_revision": "706d025e83593c6834993de1372cf23951ae7f27",
     "scope": "matched physical/network limits and hardware; fixed-point PF and nonconvex local OPF; no global optimality, dynamic stability or regional conformity claim",
     "objectives": {
         "opf_vv_released": "maximum total POC active injection; Q free, local VV/VW commands released",

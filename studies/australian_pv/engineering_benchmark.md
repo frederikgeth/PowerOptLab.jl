@@ -57,6 +57,6 @@ With this fixture, same-service OPF has no accepted solution in: High source, Ro
 
 This point is not counted as hardware-feasible. A small margin on active ripple limits in the OPF, or a switching correction in the 2ω model, would close the gap; neither is applied here.
 
-**Solve times** (diagnostic, this machine): Local control median 9.4 s; OPF, same volt-var service median 8.1 s; OPF, volt-var released median 2.7 s. OPF size: 2552 variables, 6025 constraints for 12 sites. Scaling beyond one feeder is not yet measured.
+**Solve times** (diagnostic, this machine): Local control median 9.1 s; OPF, same volt-var service median 7.7 s; OPF, volt-var released median 2.8 s. OPF size: 2552 variables, 6025 constraints for 12 sites. Scaling beyond one feeder is not yet measured.
 
 Per-site records: [devices.csv](results/engineering_benchmark/devices.csv) (requested and delivered Q, curtailment, losses, named limits). Reproduce: see the [study README](README.md).
