@@ -190,13 +190,10 @@ function allocate_phase_inverter_services(inv::AdvancedInverter,request::Inverte
     _optimize_inverter_rails!(ctx,((inv,h),));result=capture(:phase_reactive_tracking)
     if solve_status(result).publishable
         starts=[(x,JuMP.value(x)) for x in JuMP.all_variables(m)]
-        if !(coordinate[] isa Real)
-            if inv.pwm_strategy===:NONE && inv.dc_energy_model===:linearized
-                JuMP.fix(coordinate[],lambda_value;force=true)
-            else
-                _lock_pwm_service!(m,coordinate[],lambda_value,sum(abs,q))
-            end
-        end
+        # Always use the bounded service lock: when stage 1 ends on an active
+        # limit (e.g. the neutral current), an exact JuMP.fix of the reactive
+        # scale can be infeasible by rounding and fails platform-dependently.
+        coordinate[] isa Real || _lock_pwm_service!(m,coordinate[],lambda_value,sum(abs,q))
         JuMP.@objective(m,Max,h.p_poc/(inv.s_max/h.sb))
         for (x,value) in starts;JuMP.set_start_value(x,value);end
         _optimize_inverter_rails!(ctx,((inv,h),));result=capture(:phase_active_export)
