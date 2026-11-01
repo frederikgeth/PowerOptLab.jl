@@ -21,8 +21,13 @@ end
                 design=(kappa=0.,phi2=0.))
             r=solve_controlled_inverter_fleet(net,spec;s_base=s_base,
                 selection_objective=objective,solver_options=options)
-            @test solve_status(r).publishable
             attempts=r.network["numerical_attempts"]
+            solve_status(r).publishable || @info "Fleet solve rejected" mode source level s_base objective attempts=[
+                (a.initialization,a.stage,a.raw.termination_status,a.raw_solver_status,a.physical_accepted,
+                 a.nlp_scaling_method) for a in attempts] failed_devices=[id for (id,d) in r.devices
+                 if !physical_feasibility(d).passed] failed_checks=unique(c.name for d in values(r.devices)
+                 for c in physical_feasibility(d).checks if !c.passed)
+            @test solve_status(r).publishable
             @test 1<=length(attempts)<=3
             @test first(attempts).initialization===:spread
             @test length(attempts)==1 || last(attempts).initialization===:consistent
