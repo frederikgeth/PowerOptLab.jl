@@ -1,9 +1,9 @@
 {
     "night": {
-        "max_voltage_difference_V": 1.4270443117825405e-8,
-        "max_site_P_difference_W": 9.950971104899509e-7,
+        "max_voltage_difference_V": 1.4271322967523244e-8,
+        "max_site_P_difference_W": 9.950968262728566e-7,
         "accepted": true,
-        "max_site_Q_difference_var": 5.4257435749605065e-5,
+        "max_site_Q_difference_var": 5.425742392617394e-5,
         "tolerance": {
             "reactive_var": 0.5,
             "power_W": 0.5,
@@ -11,10 +11,10 @@
         }
     },
     "nominal": {
-        "max_voltage_difference_V": 3.1864228423952034e-8,
-        "max_site_P_difference_W": 7.815860953996889e-7,
+        "max_voltage_difference_V": 1.48192039562645e-8,
+        "max_site_P_difference_W": 7.807234396750573e-7,
         "accepted": true,
-        "max_site_Q_difference_var": 5.107284437144699e-5,
+        "max_site_Q_difference_var": 5.1072839141852455e-5,
         "tolerance": {
             "reactive_var": 0.5,
             "power_W": 0.5,
@@ -22,10 +22,10 @@
         }
     },
     "oversized_dc": {
-        "max_voltage_difference_V": 5.898535776044629e-8,
-        "max_site_P_difference_W": 4.71001394544146e-5,
+        "max_voltage_difference_V": 1.8820232760079546e-8,
+        "max_site_P_difference_W": 4.710004213848151e-5,
         "accepted": true,
-        "max_site_Q_difference_var": 9.898045664158417e-5,
+        "max_site_Q_difference_var": 9.89804739219835e-5,
         "tolerance": {
             "reactive_var": 0.5,
             "power_W": 0.5,
@@ -33,8 +33,8 @@
         }
     },
     "high_source": {
-        "max_voltage_difference_V": 5.4231914130090766e-8,
-        "max_site_P_difference_W": 1.1416141205700114e-6,
+        "max_voltage_difference_V": 1.4314192545803844e-8,
+        "max_site_P_difference_W": 1.1397589787520701e-6,
         "accepted": true,
         "max_site_Q_difference_var": 5.192856042413041e-5,
         "tolerance": {
@@ -44,10 +44,10 @@
         }
     },
     "rotated_unbalance": {
-        "max_voltage_difference_V": 2.6672404171231292e-8,
-        "max_site_P_difference_W": 1.245972043761867e-6,
+        "max_voltage_difference_V": 1.7331035202478037e-8,
+        "max_site_P_difference_W": 1.2451978363969829e-6,
         "accepted": true,
-        "max_site_Q_difference_var": 5.192866183278966e-5,
+        "max_site_Q_difference_var": 5.1928661946476495e-5,
         "tolerance": {
             "reactive_var": 0.5,
             "power_W": 0.5,

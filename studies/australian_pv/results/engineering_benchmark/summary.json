@@ -13,7 +13,7 @@
                 "optimal": true,
                 "feasible": true
             },
-            "point_sha256": "b5d956463ad8964ffd789ef982f467fe3accc03d6e7db259df85ace236229711",
+            "point_sha256": "869928981c463ccb639b58f6901b8c29dd337aa91d97b5a403d05ad1b3b7dd02",
             "accepted": true,
             "model_accepted": true,
             "network_accepted": true
@@ -27,7 +27,7 @@
                 "optimal": true,
                 "feasible": true
             },
-            "point_sha256": "a53af3a2214e96c5ef61f47cf02e3b15c702eb798e13507e43e7cecccf0f05e3",
+            "point_sha256": "dee5011c3e59b06fbdb96be2356035ae428a66df14c75d5eac48d846f70f3839",
             "accepted": true,
             "model_accepted": true,
             "network_accepted": true
@@ -41,7 +41,7 @@
                 "optimal": true,
                 "feasible": true
             },
-            "point_sha256": "3fc75b77d837764e4c2adc0cba008a939476964e5de0c0556c702814fa32bc0f",
+            "point_sha256": "6fa2a8bd845f4321400456b416aac0fa3542d99c03ac8552600e68ae30c2b4c6",
             "accepted": true,
             "model_accepted": true,
             "network_accepted": true
@@ -55,7 +55,7 @@
                 "optimal": true,
                 "feasible": true
             },
-            "point_sha256": "1f48b4cfd427a5c31788008a462b6bd95c9fa072c1bfd09d8ce09a08178b837e",
+            "point_sha256": "4978b744fe210f5e65369b19056faad32f10356a7b9ea84d927c683458e1575f",
             "accepted": true,
             "model_accepted": true,
             "network_accepted": true
@@ -69,7 +69,7 @@
                 "optimal": true,
                 "feasible": true
             },
-            "point_sha256": "fc60a9b2121c393435b5b67883931ef47f945a3cef1ebad831eb463fbc847825",
+            "point_sha256": "c61840532d72ef89e3b3e834c05f7074f5337f148dd60794b3449bf73ecebd50",
             "accepted": true,
             "model_accepted": true,
             "network_accepted": true
@@ -83,7 +83,7 @@
                 "optimal": true,
                 "feasible": true
             },
-            "point_sha256": "00d276daf79be0e8013af043a45c2ece26463b9bdeba776e00b1b8ee55d79ab8",
+            "point_sha256": "f2976ddf7a87b8f49e59ec3947507fa88bad2c56563152567b4ef0e39f79bd8b",
             "accepted": true,
             "model_accepted": true,
             "network_accepted": true
@@ -97,7 +97,7 @@
                 "optimal": true,
                 "feasible": true
             },
-            "point_sha256": "e3a74708a51f3e3bf8ed9a751da165684e243cecfc50977fea756608d105804a",
+            "point_sha256": "c2165b24edd19b8a0bf9ee500b820caadea038697de8b64057c8b814538423a9",
             "accepted": true,
             "model_accepted": true,
             "network_accepted": true
@@ -111,7 +111,7 @@
                 "optimal": true,
                 "feasible": true
             },
-            "point_sha256": "07115857fbebd3eeb35e2eafdaa6f85fd297eb1119b0d4d5e87e939a3ccb7c28",
+            "point_sha256": "1d8405d8836b16731e7237a121f0bf573297124054e2c6bcec811846867b283f",
             "accepted": true,
             "model_accepted": true,
             "network_accepted": true
@@ -125,7 +125,7 @@
                 "optimal": true,
                 "feasible": true
             },
-            "point_sha256": "36e344ac187943703818efcd382eb02e5b6503307b1433e3dc12c12421c6a072",
+            "point_sha256": "5d56cc58dfdd4b7cdb45b55dab61e0b67f7d7ed855652bf46fe734f7575223e4",
             "accepted": true,
             "model_accepted": true,
             "network_accepted": true
@@ -139,7 +139,7 @@
                 "optimal": true,
                 "feasible": true
             },
-            "point_sha256": "c2531500be31ccf1cd2c1772970bb506a2c558ad4c17f864d07eb4cb8c5547c9",
+            "point_sha256": "b197face46a87fc4c81a6ab1ffbd612d07d078b9577fadc5c1a9d579e1a93f98",
             "accepted": true,
             "model_accepted": true,
             "network_accepted": true
@@ -153,7 +153,7 @@
                 "optimal": true,
                 "feasible": true
             },
-            "point_sha256": "a7c5c06034cb4a67492c12f2c9d626bf8f3e4c97164542255abcb6aabe6af39f",
+            "point_sha256": "71f8680e23aca51a100c4f69029b42f40010b394fb439180f66822987d90b791",
             "accepted": true,
             "model_accepted": true,
             "network_accepted": true
@@ -167,7 +167,7 @@
                 "optimal": true,
                 "feasible": true
             },
-            "point_sha256": "e413ac68bec1ea6c0281d1d963d6a01a13fb08de98703661cb6e26824111393b",
+            "point_sha256": "b7ae59b00f65e8761cc2443898a00c80e570805ccba781ce9a4d976d05005a65",
             "accepted": true,
             "model_accepted": true,
             "network_accepted": true
@@ -181,7 +181,7 @@
                 "optimal": true,
                 "feasible": true
             },
-            "point_sha256": "f0e882cd70d644cc005e127b4dda41aa31893851ba4c1e7cedd9bf2e2567cbb7",
+            "point_sha256": "78a93d9f87ee6d74268100f51e693a37755996a03440ce3ba0dc624bb338b54c",
             "accepted": true,
             "model_accepted": true,
             "network_accepted": true
@@ -195,7 +195,7 @@
                 "optimal": true,
                 "feasible": true
             },
-            "point_sha256": "28bd2c23c5a002500bed1771724d06e282010164c47cae5af8c75965befb4884",
+            "point_sha256": "31e28013d59489e1546742bed63e4f053b16c8433eba96097bc518d4dc524dec",
             "accepted": true,
             "model_accepted": true,
             "network_accepted": true
@@ -209,7 +209,7 @@
                 "optimal": true,
                 "feasible": true
             },
-            "point_sha256": "a28dcd997e926c229af72e471075a6fe9325ddce4dd2d74bd6fb6d7ab186b94c",
+            "point_sha256": "2f7c97487b9c6de5e501d82ad50b104f922b770717f62bb98ad38e7f22dcac00",
             "accepted": true,
             "model_accepted": true,
             "network_accepted": true

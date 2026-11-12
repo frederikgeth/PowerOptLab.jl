@@ -1,0 +1,7864 @@
+{
+  "accepted": true,
+  "checks": [
+    {
+      "name": "source/source/a",
+      "unit": "V",
+      "value": 3.858659226461245e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-06,
+      "passed": true
+    },
+    {
+      "name": "source/source/b",
+      "unit": "V",
+      "value": 2.8760747774580336e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-06,
+      "passed": true
+    },
+    {
+      "name": "source/source/c",
+      "unit": "V",
+      "value": 4.317019327049208e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-06,
+      "passed": true
+    },
+    {
+      "name": "source/source/neutral",
+      "unit": "V",
+      "value": 0.0,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-06,
+      "passed": true
+    },
+    {
+      "name": "line/l_1232/from/a",
+      "unit": "A",
+      "value": 3.0555346033961354e-05,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1232/from/b",
+      "unit": "A",
+      "value": 3.4746056212162816e-05,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1232/from/c",
+      "unit": "A",
+      "value": 3.1249373643811155e-05,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1232/from/n",
+      "unit": "A",
+      "value": 8.085994008770722e-06,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1232/to/a",
+      "unit": "A",
+      "value": 5.825288745448901e-13,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1232/to/b",
+      "unit": "A",
+      "value": 3.9508051962433795e-13,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1232/to/c",
+      "unit": "A",
+      "value": 3.1625572036938074e-13,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1232/to/n",
+      "unit": "A",
+      "value": 1.5494150910936196e-13,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2249/from/a",
+      "unit": "A",
+      "value": 3.962262993830239,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2249/from/b",
+      "unit": "A",
+      "value": 2.64803441611278,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2249/from/c",
+      "unit": "A",
+      "value": 1.464498410307649,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2249/from/n",
+      "unit": "A",
+      "value": 1.6839581373310033,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2249/to/a",
+      "unit": "A",
+      "value": 3.9622364939599466,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2249/to/b",
+      "unit": "A",
+      "value": 2.6479870461763846,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2249/to/c",
+      "unit": "A",
+      "value": 1.464466347973549,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2249/to/n",
+      "unit": "A",
+      "value": 1.6839460902363526,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4153/from/a",
+      "unit": "A",
+      "value": 3.4516255717410056,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4153/from/b",
+      "unit": "A",
+      "value": 1.5609344382005073,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4153/from/c",
+      "unit": "A",
+      "value": 1.371614438631087,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4153/from/n",
+      "unit": "A",
+      "value": 2.7424397481018103,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4153/to/a",
+      "unit": "A",
+      "value": 3.451779607946386,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4153/to/b",
+      "unit": "A",
+      "value": 1.5611355375142155,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4153/to/c",
+      "unit": "A",
+      "value": 1.371793583775832,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4153/to/n",
+      "unit": "A",
+      "value": 2.7425066892500696,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3005/from/a",
+      "unit": "A",
+      "value": 1.7281916429084982e-05,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3005/from/b",
+      "unit": "A",
+      "value": 1.9635745514752292e-05,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3005/from/c",
+      "unit": "A",
+      "value": 1.76540684883093e-05,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3005/from/n",
+      "unit": "A",
+      "value": 4.575769039784116e-06,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3005/to/a",
+      "unit": "A",
+      "value": 1.1151526469473563e-12,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3005/to/b",
+      "unit": "A",
+      "value": 9.683604991321844e-13,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3005/to/c",
+      "unit": "A",
+      "value": 1.1373878952493497e-12,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3005/to/n",
+      "unit": "A",
+      "value": 6.506398765154779e-13,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_54/from/a",
+      "unit": "A",
+      "value": 4.743417170373418,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_54/from/b",
+      "unit": "A",
+      "value": 2.6287865166683084,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_54/from/c",
+      "unit": "A",
+      "value": 2.1857501086887523,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_54/from/n",
+      "unit": "A",
+      "value": 2.737533087051791,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_54/to/a",
+      "unit": "A",
+      "value": 4.743374945190082,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_54/to/b",
+      "unit": "A",
+      "value": 2.6287357050657456,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_54/to/c",
+      "unit": "A",
+      "value": 2.1857067460109696,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_54/to/n",
+      "unit": "A",
+      "value": 2.737518704005397,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_521/from/a",
+      "unit": "A",
+      "value": 0.00011284153487975666,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_521/from/b",
+      "unit": "A",
+      "value": 0.00012830574035967838,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_521/from/c",
+      "unit": "A",
+      "value": 0.00011539144789958468,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_521/from/n",
+      "unit": "A",
+      "value": 2.986218118037372e-05,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_521/to/a",
+      "unit": "A",
+      "value": 3.461507610261323e-13,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_521/to/b",
+      "unit": "A",
+      "value": 1.2763630914399867e-13,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_521/to/c",
+      "unit": "A",
+      "value": 2.9323566310907397e-13,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_521/to/n",
+      "unit": "A",
+      "value": 3.661840354022838e-14,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1243/from/a",
+      "unit": "A",
+      "value": 3.967524656458622,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1243/from/b",
+      "unit": "A",
+      "value": 2.6468625659044815,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1243/from/c",
+      "unit": "A",
+      "value": 1.4689534952643224,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1243/from/n",
+      "unit": "A",
+      "value": 1.6824844234292313,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1243/to/a",
+      "unit": "A",
+      "value": 3.967494946136395,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1243/to/b",
+      "unit": "A",
+      "value": 2.64680943089524,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1243/to/c",
+      "unit": "A",
+      "value": 1.4689174198718238,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1243/to/n",
+      "unit": "A",
+      "value": 1.68247092119275,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1594/from/a",
+      "unit": "A",
+      "value": 1.729579163761497e-05,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1594/from/b",
+      "unit": "A",
+      "value": 1.9660726567710793e-05,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1594/from/c",
+      "unit": "A",
+      "value": 1.7679668741599536e-05,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1594/from/n",
+      "unit": "A",
+      "value": 4.578091346333757e-06,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1594/to/a",
+      "unit": "A",
+      "value": 2.363770272224476e-12,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1594/to/b",
+      "unit": "A",
+      "value": 8.54548267281559e-13,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1594/to/c",
+      "unit": "A",
+      "value": 2.347469724852999e-12,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1594/to/n",
+      "unit": "A",
+      "value": 3.142287750640926e-13,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3919/from/a",
+      "unit": "A",
+      "value": 7.87804973836892e-07,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3919/from/b",
+      "unit": "A",
+      "value": 9.040827601689957e-07,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3919/from/c",
+      "unit": "A",
+      "value": 8.052818734256348e-07,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3919/from/n",
+      "unit": "A",
+      "value": 2.45926786895406e-07,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3919/to/a",
+      "unit": "A",
+      "value": 6.625463317248464e-10,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3919/to/b",
+      "unit": "A",
+      "value": 5.406061274766094e-10,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3919/to/c",
+      "unit": "A",
+      "value": 5.452719614622262e-10,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3919/to/n",
+      "unit": "A",
+      "value": 7.400133930213295e-11,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_613/from/a",
+      "unit": "A",
+      "value": 0.0005513777076280564,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_613/from/b",
+      "unit": "A",
+      "value": 0.0006321710484203855,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_613/from/c",
+      "unit": "A",
+      "value": 0.000563142325495977,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_613/from/n",
+      "unit": "A",
+      "value": 0.000169224218026818,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_613/to/a",
+      "unit": "A",
+      "value": 0.0003714644516257008,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_613/to/b",
+      "unit": "A",
+      "value": 0.0004227678981802965,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_613/to/c",
+      "unit": "A",
+      "value": 0.0003793470028821011,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_613/to/n",
+      "unit": "A",
+      "value": 0.00010141983022596046,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2000/from/a",
+      "unit": "A",
+      "value": 4.744371438677731,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2000/from/b",
+      "unit": "A",
+      "value": 2.6289573964445316,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2000/from/c",
+      "unit": "A",
+      "value": 2.185857077091772,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2000/from/n",
+      "unit": "A",
+      "value": 2.7375749470540787,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2000/to/a",
+      "unit": "A",
+      "value": 4.744331574959121,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2000/to/b",
+      "unit": "A",
+      "value": 2.6289094210973607,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2000/to/c",
+      "unit": "A",
+      "value": 2.185816133473916,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2000/to/n",
+      "unit": "A",
+      "value": 2.7375613691079854,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1254/from/a",
+      "unit": "A",
+      "value": 1.79907962122767e-05,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1254/from/b",
+      "unit": "A",
+      "value": 2.043205044077735e-05,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1254/from/c",
+      "unit": "A",
+      "value": 1.836701239441128e-05,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1254/from/n",
+      "unit": "A",
+      "value": 4.764809262816354e-06,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1254/to/a",
+      "unit": "A",
+      "value": 1.4717581125311708e-12,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1254/to/b",
+      "unit": "A",
+      "value": 4.671421208795396e-13,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1254/to/c",
+      "unit": "A",
+      "value": 3.523257761163835e-13,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1254/to/n",
+      "unit": "A",
+      "value": 3.836505982331619e-13,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_754/from/a",
+      "unit": "A",
+      "value": 18.74886784900279,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_754/from/b",
+      "unit": "A",
+      "value": 9.67645576007793,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_754/from/c",
+      "unit": "A",
+      "value": 7.195535902115171,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_754/from/n",
+      "unit": "A",
+      "value": 12.49164565957321,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_754/to/a",
+      "unit": "A",
+      "value": 18.749011669649388,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_754/to/b",
+      "unit": "A",
+      "value": 9.67664267311172,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_754/to/c",
+      "unit": "A",
+      "value": 7.195695564607976,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_754/to/n",
+      "unit": "A",
+      "value": 12.491712052545443,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3253/from/a",
+      "unit": "A",
+      "value": 23.85296842498116,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3253/from/b",
+      "unit": "A",
+      "value": 13.370807367514459,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3253/from/c",
+      "unit": "A",
+      "value": 9.403697675655401,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3253/from/n",
+      "unit": "A",
+      "value": 14.05518371756072,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3253/to/a",
+      "unit": "A",
+      "value": 23.8529685841106,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3253/to/b",
+      "unit": "A",
+      "value": 13.37080758095601,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3253/to/c",
+      "unit": "A",
+      "value": 9.40369785408582,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3253/to/n",
+      "unit": "A",
+      "value": 14.055183784053916,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1677/from/a",
+      "unit": "A",
+      "value": 1.111975469264456e-06,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1677/from/b",
+      "unit": "A",
+      "value": 1.275691520561369e-06,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1677/from/c",
+      "unit": "A",
+      "value": 1.136427680304397e-06,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1677/from/n",
+      "unit": "A",
+      "value": 3.4698133265538053e-07,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1677/to/a",
+      "unit": "A",
+      "value": 4.6135959829249456e-10,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1677/to/b",
+      "unit": "A",
+      "value": 5.275585852155312e-10,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1677/to/c",
+      "unit": "A",
+      "value": 1.1216821622513967e-10,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1677/to/n",
+      "unit": "A",
+      "value": 1.5305635260816725e-10,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1168/from/a",
+      "unit": "A",
+      "value": 22.186721310233022,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1168/from/b",
+      "unit": "A",
+      "value": 11.211644176603663,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1168/from/c",
+      "unit": "A",
+      "value": 8.510274368647696,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1168/from/n",
+      "unit": "A",
+      "value": 15.230465468603551,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1168/to/a",
+      "unit": "A",
+      "value": 22.186721479029156,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1168/to/b",
+      "unit": "A",
+      "value": 11.211644403146556,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1168/to/c",
+      "unit": "A",
+      "value": 8.510274571954813,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1168/to/n",
+      "unit": "A",
+      "value": 15.230465535438467,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4294/from/a",
+      "unit": "A",
+      "value": 3.3937923308306988,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4294/from/b",
+      "unit": "A",
+      "value": 1.4965486451869427,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4294/from/c",
+      "unit": "A",
+      "value": 1.3210715684508834,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4294/from/n",
+      "unit": "A",
+      "value": 2.73235093762249,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4294/to/a",
+      "unit": "A",
+      "value": 3.3937499428396873,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4294/to/b",
+      "unit": "A",
+      "value": 1.4964902477707582,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4294/to/c",
+      "unit": "A",
+      "value": 1.3210178323647188,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4294/to/n",
+      "unit": "A",
+      "value": 2.732337023641866,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2590/from/a",
+      "unit": "A",
+      "value": 3.3937499428428524,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2590/from/b",
+      "unit": "A",
+      "value": 1.496490247769581,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2590/from/c",
+      "unit": "A",
+      "value": 1.3210178323607984,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2590/from/n",
+      "unit": "A",
+      "value": 2.7323370236433018,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2590/to/a",
+      "unit": "A",
+      "value": 3.39368567045386,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2590/to/b",
+      "unit": "A",
+      "value": 1.496405614309924,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2590/to/c",
+      "unit": "A",
+      "value": 1.3209422498555987,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2590/to/n",
+      "unit": "A",
+      "value": 2.7323089965490954,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2764/from/a",
+      "unit": "A",
+      "value": 3.366603110705475e-12,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2764/from/b",
+      "unit": "A",
+      "value": 5.6170183654235524e-12,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2764/from/c",
+      "unit": "A",
+      "value": 8.857993836763565e-12,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2764/from/n",
+      "unit": "A",
+      "value": 6.6005163879305586e-12,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2764/to/a",
+      "unit": "A",
+      "value": 2.7193233102883914e-05,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2764/to/b",
+      "unit": "A",
+      "value": 3.155796519880716e-05,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2764/to/c",
+      "unit": "A",
+      "value": 2.7772816696249055e-05,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2764/to/n",
+      "unit": "A",
+      "value": 1.0218423885786385e-05,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3577/from/a",
+      "unit": "A",
+      "value": 1.1348479423125706e-06,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3577/from/b",
+      "unit": "A",
+      "value": 1.3017784735983374e-06,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3577/from/c",
+      "unit": "A",
+      "value": 1.1593687998488154e-06,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3577/from/n",
+      "unit": "A",
+      "value": 3.5402491609059264e-07,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3577/to/a",
+      "unit": "A",
+      "value": 1.2555800381576637e-10,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3577/to/b",
+      "unit": "A",
+      "value": 3.277593428795108e-10,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3577/to/c",
+      "unit": "A",
+      "value": 2.6553319544699416e-10,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3577/to/n",
+      "unit": "A",
+      "value": 8.439927357430364e-11,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4155/from/a",
+      "unit": "A",
+      "value": 3.4371176624145443,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4155/from/b",
+      "unit": "A",
+      "value": 1.5464263885747425,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4155/from/c",
+      "unit": "A",
+      "value": 1.3607647274343078,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4155/from/n",
+      "unit": "A",
+      "value": 2.7449484934901034,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4155/to/a",
+      "unit": "A",
+      "value": 3.4370886031990637,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4155/to/b",
+      "unit": "A",
+      "value": 1.5463866635516446,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4155/to/c",
+      "unit": "A",
+      "value": 1.3607281393727602,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4155/to/n",
+      "unit": "A",
+      "value": 2.744938988295912,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3877/from/a",
+      "unit": "A",
+      "value": 1.6451427535346205e-12,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3877/from/b",
+      "unit": "A",
+      "value": 2.5773613024382804e-13,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3877/from/c",
+      "unit": "A",
+      "value": 1.0468333448443713e-12,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3877/from/n",
+      "unit": "A",
+      "value": 2.373023442810179e-13,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3877/to/a",
+      "unit": "A",
+      "value": 1.7761115476353894e-05,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3877/to/b",
+      "unit": "A",
+      "value": 2.0180725428498426e-05,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3877/to/c",
+      "unit": "A",
+      "value": 1.8144610922546666e-05,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3877/to/n",
+      "unit": "A",
+      "value": 4.7025619645454835e-06,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1250/from/a",
+      "unit": "A",
+      "value": 46.01164276384783,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1250/from/b",
+      "unit": "A",
+      "value": 24.53909068908708,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1250/from/c",
+      "unit": "A",
+      "value": 17.78969997691211,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1250/from/n",
+      "unit": "A",
+      "value": 29.274469888616185,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1250/to/a",
+      "unit": "A",
+      "value": 46.01164336295592,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1250/to/b",
+      "unit": "A",
+      "value": 24.539091492596015,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1250/to/c",
+      "unit": "A",
+      "value": 17.789700677232265,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1250/to/n",
+      "unit": "A",
+      "value": 29.27447013243395,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1749/from/a",
+      "unit": "A",
+      "value": 23.85311037006467,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1749/from/b",
+      "unit": "A",
+      "value": 13.370990783860845,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1749/from/c",
+      "unit": "A",
+      "value": 9.403842943320077,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1749/from/n",
+      "unit": "A",
+      "value": 14.055251734718503,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1749/to/a",
+      "unit": "A",
+      "value": 23.852968584405858,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1749/to/b",
+      "unit": "A",
+      "value": 13.370807580921783,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1749/to/c",
+      "unit": "A",
+      "value": 9.403697853087287,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1749/to/n",
+      "unit": "A",
+      "value": 14.055183784460317,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4415/from/a",
+      "unit": "A",
+      "value": 6.78875844990494,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4415/from/b",
+      "unit": "A",
+      "value": 2.9945185762938804,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4415/from/c",
+      "unit": "A",
+      "value": 2.6432736880347703,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4415/from/n",
+      "unit": "A",
+      "value": 5.465391317593344,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4415/to/a",
+      "unit": "A",
+      "value": 6.7885265955362675,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4415/to/b",
+      "unit": "A",
+      "value": 2.9942133377287967,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4415/to/c",
+      "unit": "A",
+      "value": 2.6430011102142457,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4415/to/n",
+      "unit": "A",
+      "value": 5.465290210797042,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2641/from/a",
+      "unit": "A",
+      "value": 3.4200559488362723,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2641/from/b",
+      "unit": "A",
+      "value": 1.5257507805414015,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2641/from/c",
+      "unit": "A",
+      "value": 1.3440705713483274,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2641/from/n",
+      "unit": "A",
+      "value": 2.7379779728603975,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2641/to/a",
+      "unit": "A",
+      "value": 3.4200179291764212,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2641/to/b",
+      "unit": "A",
+      "value": 1.5256986274566933,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2641/to/c",
+      "unit": "A",
+      "value": 1.3440225503678296,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2641/to/n",
+      "unit": "A",
+      "value": 2.7379655184913347,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_474/from/a",
+      "unit": "A",
+      "value": 1.4825205733931997e-05,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_474/from/b",
+      "unit": "A",
+      "value": 1.7204769130275968e-05,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_474/from/c",
+      "unit": "A",
+      "value": 1.5141178532563014e-05,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_474/from/n",
+      "unit": "A",
+      "value": 5.570875102730341e-06,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_474/to/a",
+      "unit": "A",
+      "value": 1.809917840248466e-11,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_474/to/b",
+      "unit": "A",
+      "value": 2.3160678851615196e-11,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_474/to/c",
+      "unit": "A",
+      "value": 1.592378652028667e-11,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_474/to/n",
+      "unit": "A",
+      "value": 4.088932623005283e-12,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3254/from/a",
+      "unit": "A",
+      "value": 3.395138578502789,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3254/from/b",
+      "unit": "A",
+      "value": 1.4982035738930575,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3254/from/c",
+      "unit": "A",
+      "value": 1.3224150532729437,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3254/from/n",
+      "unit": "A",
+      "value": 2.7331039035525797,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3254/to/a",
+      "unit": "A",
+      "value": 3.3950974657496995,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3254/to/b",
+      "unit": "A",
+      "value": 1.4981469499288904,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3254/to/c",
+      "unit": "A",
+      "value": 1.3223629469475877,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3254/to/n",
+      "unit": "A",
+      "value": 2.7330904100013695,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4288/from/a",
+      "unit": "A",
+      "value": 3.451781748648281,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4288/from/b",
+      "unit": "A",
+      "value": 1.5611384010545524,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4288/from/c",
+      "unit": "A",
+      "value": 1.3717961870266797,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4288/from/n",
+      "unit": "A",
+      "value": 2.742507489557796,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4288/to/a",
+      "unit": "A",
+      "value": 3.4519578723142437,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4288/to/b",
+      "unit": "A",
+      "value": 1.561368349751864,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4288/to/c",
+      "unit": "A",
+      "value": 1.3720010375695353,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4288/to/n",
+      "unit": "A",
+      "value": 2.742584023907863,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1353/from/a",
+      "unit": "A",
+      "value": 2.382565310362788e-05,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1353/from/b",
+      "unit": "A",
+      "value": 2.706408154912502e-05,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1353/from/c",
+      "unit": "A",
+      "value": 2.433027175020099e-05,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1353/from/n",
+      "unit": "A",
+      "value": 6.309355968085344e-06,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1353/to/a",
+      "unit": "A",
+      "value": 8.501864614915999e-13,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1353/to/b",
+      "unit": "A",
+      "value": 1.520226705681664e-12,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1353/to/c",
+      "unit": "A",
+      "value": 7.222983568266577e-13,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1353/to/n",
+      "unit": "A",
+      "value": 5.159617139040165e-13,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_496/from/a",
+      "unit": "A",
+      "value": 23.852967935017993,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_496/from/b",
+      "unit": "A",
+      "value": 13.370806710275048,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_496/from/c",
+      "unit": "A",
+      "value": 9.403697124810407,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_496/from/n",
+      "unit": "A",
+      "value": 14.055183512960554,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_496/to/a",
+      "unit": "A",
+      "value": 23.852968425584983,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_496/to/b",
+      "unit": "A",
+      "value": 13.37080736827546,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_496/to/c",
+      "unit": "A",
+      "value": 9.403697674877746,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_496/to/n",
+      "unit": "A",
+      "value": 14.05518371794712,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3432/from/a",
+      "unit": "A",
+      "value": 3.4524965947861452,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3432/from/b",
+      "unit": "A",
+      "value": 1.5620919782604934,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3432/from/c",
+      "unit": "A",
+      "value": 1.3726599267998396,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3432/from/n",
+      "unit": "A",
+      "value": 2.742781118858765,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3432/to/a",
+      "unit": "A",
+      "value": 3.452431669985497,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3432/to/b",
+      "unit": "A",
+      "value": 1.5620033828212778,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3432/to/c",
+      "unit": "A",
+      "value": 1.3725783092917005,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3432/to/n",
+      "unit": "A",
+      "value": 2.7427598937015207,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1870/from/a",
+      "unit": "A",
+      "value": 15.3314017871299,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1870/from/b",
+      "unit": "A",
+      "value": 8.166776248320168,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1870/from/c",
+      "unit": "A",
+      "value": 5.921343825261683,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1870/from/n",
+      "unit": "A",
+      "value": 9.752609494388073,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1870/to/a",
+      "unit": "A",
+      "value": 15.331588467586018,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1870/to/b",
+      "unit": "A",
+      "value": 8.167018413702683,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1870/to/c",
+      "unit": "A",
+      "value": 5.921545739276732,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1870/to/n",
+      "unit": "A",
+      "value": 9.752696918523387,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2791/from/a",
+      "unit": "A",
+      "value": 3.4050761868862645,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2791/from/b",
+      "unit": "A",
+      "value": 1.5084115184018834,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2791/from/c",
+      "unit": "A",
+      "value": 1.330301960308206,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2791/from/n",
+      "unit": "A",
+      "value": 2.733881938981902,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2791/to/a",
+      "unit": "A",
+      "value": 3.405028259300182,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2791/to/b",
+      "unit": "A",
+      "value": 1.5083455973022364,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2791/to/c",
+      "unit": "A",
+      "value": 1.3302412814908866,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_2791/to/n",
+      "unit": "A",
+      "value": 2.733866219646816,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1021/from/a",
+      "unit": "A",
+      "value": 3.451781748655012,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1021/from/b",
+      "unit": "A",
+      "value": 1.5611384009974887,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1021/from/c",
+      "unit": "A",
+      "value": 1.3717961870167983,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1021/from/n",
+      "unit": "A",
+      "value": 2.7425074896005563,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1021/to/a",
+      "unit": "A",
+      "value": 3.4517796079518153,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1021/to/b",
+      "unit": "A",
+      "value": 1.5611355374572857,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1021/to/c",
+      "unit": "A",
+      "value": 1.3717935837654776,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1021/to/n",
+      "unit": "A",
+      "value": 2.74250668929245,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3912/from/a",
+      "unit": "A",
+      "value": 22.18672147981671,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3912/from/b",
+      "unit": "A",
+      "value": 11.211644402407696,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3912/from/c",
+      "unit": "A",
+      "value": 8.51027457260153,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3912/from/n",
+      "unit": "A",
+      "value": 15.230465536319116,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3912/to/a",
+      "unit": "A",
+      "value": 22.186739355330495,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3912/to/b",
+      "unit": "A",
+      "value": 11.211667659203485,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3912/to/c",
+      "unit": "A",
+      "value": 8.510294698177194,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3912/to/n",
+      "unit": "A",
+      "value": 15.230473707280868,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_86/from/a",
+      "unit": "A",
+      "value": 2.080201162712267e-05,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_86/from/b",
+      "unit": "A",
+      "value": 2.3648434459821642e-05,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_86/from/c",
+      "unit": "A",
+      "value": 2.1266724891978e-05,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_86/from/n",
+      "unit": "A",
+      "value": 5.505856360966798e-06,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_86/to/a",
+      "unit": "A",
+      "value": 1.6971778228453975e-12,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_86/to/b",
+      "unit": "A",
+      "value": 9.004379491929819e-13,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_86/to/c",
+      "unit": "A",
+      "value": 1.1381326039495659e-12,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_86/to/n",
+      "unit": "A",
+      "value": 8.467471063606605e-13,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_504/from/a",
+      "unit": "A",
+      "value": 3.96804967336937,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_504/from/b",
+      "unit": "A",
+      "value": 2.6461177093277444,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_504/from/c",
+      "unit": "A",
+      "value": 1.4707477265638458,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_504/from/n",
+      "unit": "A",
+      "value": 1.6832627021135824,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_504/to/a",
+      "unit": "A",
+      "value": 3.9680301719345805,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_504/to/b",
+      "unit": "A",
+      "value": 2.646082829907084,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_504/to/c",
+      "unit": "A",
+      "value": 1.470724012560202,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_504/to/n",
+      "unit": "A",
+      "value": 1.6832538420403285,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4005/from/a",
+      "unit": "A",
+      "value": 46.01164336315466,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4005/from/b",
+      "unit": "A",
+      "value": 24.53909149161254,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4005/from/c",
+      "unit": "A",
+      "value": 17.789700677062527,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4005/from/n",
+      "unit": "A",
+      "value": 29.27447013273529,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4005/to/a",
+      "unit": "A",
+      "value": 46.011643989490544,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4005/to/b",
+      "unit": "A",
+      "value": 24.539092331642706,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4005/to/c",
+      "unit": "A",
+      "value": 17.78970140921502,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_4005/to/n",
+      "unit": "A",
+      "value": 29.274470387632864,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3802/from/a",
+      "unit": "A",
+      "value": 6.685172686563936e-05,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3802/from/b",
+      "unit": "A",
+      "value": 7.593834151252578e-05,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3802/from/c",
+      "unit": "A",
+      "value": 6.826762199374674e-05,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3802/from/n",
+      "unit": "A",
+      "value": 1.7703242729266194e-05,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3802/to/a",
+      "unit": "A",
+      "value": 3.0377055057131265e-13,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3802/to/b",
+      "unit": "A",
+      "value": 4.849710614243835e-13,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3802/to/c",
+      "unit": "A",
+      "value": 7.18324575080853e-13,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3802/to/n",
+      "unit": "A",
+      "value": 1.7618234499550994e-13,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3656/from/a",
+      "unit": "A",
+      "value": 4.740075683149101,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3656/from/b",
+      "unit": "A",
+      "value": 2.628482689713805,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3656/from/c",
+      "unit": "A",
+      "value": 2.185899822197268,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3656/from/n",
+      "unit": "A",
+      "value": 2.742509750149458,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3656/to/a",
+      "unit": "A",
+      "value": 4.740024331377886,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3656/to/b",
+      "unit": "A",
+      "value": 2.628420939124301,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3656/to/c",
+      "unit": "A",
+      "value": 2.1858471235617856,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3656/to/n",
+      "unit": "A",
+      "value": 2.7424922546695867,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_989/from/a",
+      "unit": "A",
+      "value": 3.4519578723332245,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_989/from/b",
+      "unit": "A",
+      "value": 1.561368349901889,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_989/from/c",
+      "unit": "A",
+      "value": 1.3720010376417635,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_989/from/n",
+      "unit": "A",
+      "value": 2.742584023891149,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_989/to/a",
+      "unit": "A",
+      "value": 3.451960394683907,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_989/to/b",
+      "unit": "A",
+      "value": 1.5613716432092712,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_989/to/c",
+      "unit": "A",
+      "value": 1.3720039715377204,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_989/to/n",
+      "unit": "A",
+      "value": 2.742585119933511,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3311/from/a",
+      "unit": "A",
+      "value": 7.234402505210601,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3311/from/b",
+      "unit": "A",
+      "value": 4.082382009630031,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3311/from/c",
+      "unit": "A",
+      "value": 2.5509002586303273,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3311/from/n",
+      "unit": "A",
+      "value": 4.311984397723481,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3311/to/a",
+      "unit": "A",
+      "value": 7.234617006397983,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3311/to/b",
+      "unit": "A",
+      "value": 4.08268352112812,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3311/to/c",
+      "unit": "A",
+      "value": 2.551146706805657,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3311/to/n",
+      "unit": "A",
+      "value": 4.312091844534455,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1608/from/a",
+      "unit": "A",
+      "value": 15.297761021553114,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1608/from/b",
+      "unit": "A",
+      "value": 8.126234474910444,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1608/from/c",
+      "unit": "A",
+      "value": 5.879317280286555,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1608/from/n",
+      "unit": "A",
+      "value": 9.745761214239883,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1608/to/a",
+      "unit": "A",
+      "value": 15.297549934327956,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1608/to/b",
+      "unit": "A",
+      "value": 8.125960305579675,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1608/to/c",
+      "unit": "A",
+      "value": 5.87908839910718,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1608/to/n",
+      "unit": "A",
+      "value": 9.745662265361823,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1636/from/a",
+      "unit": "A",
+      "value": 22.18671994361017,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1636/from/b",
+      "unit": "A",
+      "value": 11.21164234075696,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1636/from/c",
+      "unit": "A",
+      "value": 8.51027272247318,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1636/from/n",
+      "unit": "A",
+      "value": 15.230464927976849,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1636/to/a",
+      "unit": "A",
+      "value": 22.186721311166593,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1636/to/b",
+      "unit": "A",
+      "value": 11.21164417616234,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1636/to/c",
+      "unit": "A",
+      "value": 8.510274369625424,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_1636/to/n",
+      "unit": "A",
+      "value": 15.230465469463057,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3932/from/a",
+      "unit": "A",
+      "value": 0.000253721241834847,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3932/from/b",
+      "unit": "A",
+      "value": 0.0002882075139327828,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3932/from/c",
+      "unit": "A",
+      "value": 0.0002590949577371963,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3932/from/n",
+      "unit": "A",
+      "value": 6.71888197764703e-05,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3932/to/a",
+      "unit": "A",
+      "value": 4.094199541812702e-14,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3932/to/b",
+      "unit": "A",
+      "value": 5.740902730653163e-14,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3932/to/c",
+      "unit": "A",
+      "value": 1.8906053277943723e-14,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "line/l_3932/to/n",
+      "unit": "A",
+      "value": 3.21918863734901e-14,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_3774_closed/voltage/a",
+      "unit": "V",
+      "value": 0.0,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-06,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_3774_closed/voltage/b",
+      "unit": "V",
+      "value": 0.0,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-06,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_3774_closed/voltage/c",
+      "unit": "V",
+      "value": 0.0,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-06,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_3774_closed/voltage/n",
+      "unit": "V",
+      "value": 0.0,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-06,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_3760_closed/voltage/a",
+      "unit": "V",
+      "value": 0.0,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-06,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_3760_closed/voltage/b",
+      "unit": "V",
+      "value": 0.0,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-06,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_3760_closed/voltage/c",
+      "unit": "V",
+      "value": 0.0,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-06,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_3760_closed/voltage/n",
+      "unit": "V",
+      "value": 0.0,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-06,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_3753_closed/voltage/a",
+      "unit": "V",
+      "value": 0.0,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-06,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_3753_closed/voltage/b",
+      "unit": "V",
+      "value": 0.0,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-06,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_3753_closed/voltage/c",
+      "unit": "V",
+      "value": 0.0,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-06,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_3753_closed/voltage/n",
+      "unit": "V",
+      "value": 0.0,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-06,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_1450_closed/voltage/a",
+      "unit": "V",
+      "value": 0.0,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-06,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_1450_closed/voltage/b",
+      "unit": "V",
+      "value": 0.0,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-06,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_1450_closed/voltage/c",
+      "unit": "V",
+      "value": 0.0,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-06,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_1450_closed/voltage/n",
+      "unit": "V",
+      "value": 0.0,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-06,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_1030_closed/voltage/a",
+      "unit": "V",
+      "value": 0.0,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-06,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_1030_closed/voltage/b",
+      "unit": "V",
+      "value": 0.0,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-06,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_1030_closed/voltage/c",
+      "unit": "V",
+      "value": 0.0,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-06,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_1030_closed/voltage/n",
+      "unit": "V",
+      "value": 0.0,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-06,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_3416_closed/voltage/a",
+      "unit": "V",
+      "value": 0.0,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-06,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_3416_closed/voltage/b",
+      "unit": "V",
+      "value": 0.0,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-06,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_3416_closed/voltage/c",
+      "unit": "V",
+      "value": 0.0,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-06,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_3416_closed/voltage/n",
+      "unit": "V",
+      "value": 0.0,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-06,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_2207_closed/voltage/a",
+      "unit": "V",
+      "value": 0.0,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-06,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_2207_closed/voltage/b",
+      "unit": "V",
+      "value": 0.0,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-06,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_2207_closed/voltage/c",
+      "unit": "V",
+      "value": 0.0,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-06,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_2207_closed/voltage/n",
+      "unit": "V",
+      "value": 0.0,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-06,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_1181_closed/voltage/a",
+      "unit": "V",
+      "value": 0.0,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-06,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_1181_closed/voltage/b",
+      "unit": "V",
+      "value": 0.0,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-06,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_1181_closed/voltage/c",
+      "unit": "V",
+      "value": 0.0,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-06,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_1181_closed/voltage/n",
+      "unit": "V",
+      "value": 0.0,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-06,
+      "passed": true
+    },
+    {
+      "name": "transformer/tx3703/kvl/a",
+      "unit": "V",
+      "value": 1.9570132908835817e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-06,
+      "passed": true
+    },
+    {
+      "name": "transformer/tx3703/kvl/b",
+      "unit": "V",
+      "value": 2.8340671073408517e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-06,
+      "passed": true
+    },
+    {
+      "name": "transformer/tx3703/kvl/c",
+      "unit": "V",
+      "value": 1.6320024960876388e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-06,
+      "passed": true
+    },
+    {
+      "name": "transformer/tx3703/apparent_power",
+      "unit": "VA",
+      "value": 20433.127549753568,
+      "lower": 0.0,
+      "upper": 500000.0,
+      "tolerance": 0.01,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b718/a",
+      "unit": "A",
+      "value": 1.3205846830657332e-11,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2740/a",
+      "unit": "A",
+      "value": 1.3204562771107285e-11,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_2207_closed/current/a",
+      "unit": "A",
+      "value": 3.4517817486516447,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b718/b",
+      "unit": "A",
+      "value": 3.0604207311782055e-11,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2740/b",
+      "unit": "A",
+      "value": 3.060536024163865e-11,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_2207_closed/current/b",
+      "unit": "A",
+      "value": 1.5611384010260199,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b718/c",
+      "unit": "A",
+      "value": 5.0860194071478525e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2740/c",
+      "unit": "A",
+      "value": 5.0868600693036995e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_2207_closed/current/c",
+      "unit": "A",
+      "value": 1.3717961870217386,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b718/n",
+      "unit": "A",
+      "value": 3.142013733010812e-11,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2740/n",
+      "unit": "A",
+      "value": 3.141922530996352e-11,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_2207_closed/current/n",
+      "unit": "A",
+      "value": 2.7425074895791757,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2531/a",
+      "unit": "A",
+      "value": 1.9939081930258675e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2531/b",
+      "unit": "A",
+      "value": 3.9659501572850234e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2531/c",
+      "unit": "A",
+      "value": 5.339607415347709e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2531/n",
+      "unit": "A",
+      "value": 1.2172089085236741e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1396/a",
+      "unit": "A",
+      "value": 3.1001142713393494e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1141/a",
+      "unit": "A",
+      "value": 3.1001500492801245e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_3416_closed/current/a",
+      "unit": "A",
+      "value": 23.85296842528307,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1396/b",
+      "unit": "A",
+      "value": 5.395106945470347e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1141/b",
+      "unit": "A",
+      "value": 5.395156245201162e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_3416_closed/current/b",
+      "unit": "A",
+      "value": 13.370807367894956,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1396/c",
+      "unit": "A",
+      "value": 6.428385127707125e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1141/c",
+      "unit": "A",
+      "value": 6.42835453692612e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_3416_closed/current/c",
+      "unit": "A",
+      "value": 9.40369767526657,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1396/n",
+      "unit": "A",
+      "value": 4.08894718453749e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1141/n",
+      "unit": "A",
+      "value": 4.0889551756205994e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_3416_closed/current/n",
+      "unit": "A",
+      "value": 14.055183717753918,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1384/a",
+      "unit": "A",
+      "value": 1.6561881411561544e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1006/a",
+      "unit": "A",
+      "value": 1.6562839679722316e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_3760_closed/current/a",
+      "unit": "A",
+      "value": 23.852968584258225,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1384/b",
+      "unit": "A",
+      "value": 3.761509796252281e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1006/b",
+      "unit": "A",
+      "value": 3.761496335326577e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_3760_closed/current/b",
+      "unit": "A",
+      "value": 13.37080758093889,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1384/c",
+      "unit": "A",
+      "value": 6.159073222880452e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1006/c",
+      "unit": "A",
+      "value": 6.159012702256444e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_3760_closed/current/c",
+      "unit": "A",
+      "value": 9.40369785358655,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1384/n",
+      "unit": "A",
+      "value": 3.3711345550897237e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1006/n",
+      "unit": "A",
+      "value": 3.371235290746763e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_3760_closed/current/n",
+      "unit": "A",
+      "value": 14.055183784257109,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b605/a",
+      "unit": "A",
+      "value": 1.5124542185655164e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b605/b",
+      "unit": "A",
+      "value": 1.0209923858983148e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b605/c",
+      "unit": "A",
+      "value": 9.576708146732516e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b605/n",
+      "unit": "A",
+      "value": 7.383706747539094e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1320/a",
+      "unit": "A",
+      "value": 1.6451427535346205e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1320/b",
+      "unit": "A",
+      "value": 2.5773613024382804e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1320/c",
+      "unit": "A",
+      "value": 1.0468333448443713e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1320/n",
+      "unit": "A",
+      "value": 2.373023442810179e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1804/a",
+      "unit": "A",
+      "value": 6.0580951414686525e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1804/b",
+      "unit": "A",
+      "value": 3.303094867366102e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1804/c",
+      "unit": "A",
+      "value": 1.1281303951608084e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1804/n",
+      "unit": "A",
+      "value": 5.174085414829406e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1656/a",
+      "unit": "A",
+      "value": 6.277900190788321e-11,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b608/a",
+      "unit": "A",
+      "value": 6.277900190788316e-11,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_1450_closed/current/a",
+      "unit": "A",
+      "value": 6.277900190788316e-11,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1656/b",
+      "unit": "A",
+      "value": 1.638796714397555e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b608/b",
+      "unit": "A",
+      "value": 1.6387967143975533e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_1450_closed/current/b",
+      "unit": "A",
+      "value": 1.6387967143975533e-10,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1656/c",
+      "unit": "A",
+      "value": 1.3276659772349716e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b608/c",
+      "unit": "A",
+      "value": 1.3276659772349703e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_1450_closed/current/c",
+      "unit": "A",
+      "value": 1.3276659772349703e-10,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1656/n",
+      "unit": "A",
+      "value": 4.2199636787151834e-11,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b608/n",
+      "unit": "A",
+      "value": 4.219963678715181e-11,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_1450_closed/current/n",
+      "unit": "A",
+      "value": 4.219963678715181e-11,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b3008/a",
+      "unit": "A",
+      "value": 1.809917840248466e-11,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b3008/b",
+      "unit": "A",
+      "value": 2.3160678851615196e-11,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b3008/c",
+      "unit": "A",
+      "value": 1.592378652028667e-11,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b3008/n",
+      "unit": "A",
+      "value": 4.088932623005283e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b641/a",
+      "unit": "A",
+      "value": 0.0,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b641/b",
+      "unit": "A",
+      "value": 0.0,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b641/c",
+      "unit": "A",
+      "value": 0.0,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b641/n",
+      "unit": "A",
+      "value": 2.2195905330939993e-11,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1877/a",
+      "unit": "A",
+      "value": 3.366603110705475e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1877/b",
+      "unit": "A",
+      "value": 5.6170183654235524e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1877/c",
+      "unit": "A",
+      "value": 8.857993836763565e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1877/n",
+      "unit": "A",
+      "value": 6.6005163879305586e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b828/a",
+      "unit": "A",
+      "value": 6.900056752807228e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b828/b",
+      "unit": "A",
+      "value": 8.356058026768888e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b828/c",
+      "unit": "A",
+      "value": 4.703744433870366e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b828/n",
+      "unit": "A",
+      "value": 5.009150627898138e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b783/a",
+      "unit": "A",
+      "value": 3.172663107692061e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b783/b",
+      "unit": "A",
+      "value": 2.7142780823945138e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b783/c",
+      "unit": "A",
+      "value": 4.659286235763911e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b783/n",
+      "unit": "A",
+      "value": 2.8836534382749605e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2024/a",
+      "unit": "A",
+      "value": 1.4717581125311708e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2024/b",
+      "unit": "A",
+      "value": 4.671421208795396e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2024/c",
+      "unit": "A",
+      "value": 3.523257761163835e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2024/n",
+      "unit": "A",
+      "value": 3.836505982331619e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2698/a",
+      "unit": "A",
+      "value": 1.614843356827959e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2698/b",
+      "unit": "A",
+      "value": 7.72598355756919e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2698/c",
+      "unit": "A",
+      "value": 2.6553557123614215e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2698/n",
+      "unit": "A",
+      "value": 4.0998888819198194e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1821/a",
+      "unit": "A",
+      "value": 4.913297463176598e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1821/b",
+      "unit": "A",
+      "value": 2.3872093256356407e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1821/c",
+      "unit": "A",
+      "value": 6.323819822967626e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1821/n",
+      "unit": "A",
+      "value": 4.784418846565057e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1713/a",
+      "unit": "A",
+      "value": 5.549479702061102e-11,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1713/b",
+      "unit": "A",
+      "value": 1.9200775292200466e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1713/c",
+      "unit": "A",
+      "value": 7.352619623871161e-11,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1713/n",
+      "unit": "A",
+      "value": 5.1142219427479695e-11,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2473/a",
+      "unit": "A",
+      "value": 1.0269658336495975e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2473/b",
+      "unit": "A",
+      "value": 2.2343321533716426e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2473/c",
+      "unit": "A",
+      "value": 5.755959330425423e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2473/n",
+      "unit": "A",
+      "value": 2.5118287162690318e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b3015/a",
+      "unit": "A",
+      "value": 6.625463317248464e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b3015/b",
+      "unit": "A",
+      "value": 5.406061274766094e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b3015/c",
+      "unit": "A",
+      "value": 5.452719614622262e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b3015/n",
+      "unit": "A",
+      "value": 7.400133930213295e-11,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2560/a",
+      "unit": "A",
+      "value": 1.2695036344364147e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2560/b",
+      "unit": "A",
+      "value": 5.841663319525762e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2560/c",
+      "unit": "A",
+      "value": 1.0310413327808405e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2560/n",
+      "unit": "A",
+      "value": 1.4368884732263487e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2443/a",
+      "unit": "A",
+      "value": 4.244955505154322e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2443/b",
+      "unit": "A",
+      "value": 2.0067299503410683e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2443/c",
+      "unit": "A",
+      "value": 7.818215528059626e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2443/n",
+      "unit": "A",
+      "value": 3.706917970967992e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2526/a",
+      "unit": "A",
+      "value": 1.1165845017178495e-09,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1599/a",
+      "unit": "A",
+      "value": 1.1165900032889096e-09,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_3774_closed/current/a",
+      "unit": "A",
+      "value": 22.186721479422925,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2526/b",
+      "unit": "A",
+      "value": 6.124237611464183e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1599/b",
+      "unit": "A",
+      "value": 6.124190650505868e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_3774_closed/current/b",
+      "unit": "A",
+      "value": 11.211644402777123,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2526/c",
+      "unit": "A",
+      "value": 3.293156518164808e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1599/c",
+      "unit": "A",
+      "value": 3.2932155195284623e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_3774_closed/current/c",
+      "unit": "A",
+      "value": 8.510274572278169,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2526/n",
+      "unit": "A",
+      "value": 4.598078583506628e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1599/n",
+      "unit": "A",
+      "value": 4.5981816368031415e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_3774_closed/current/n",
+      "unit": "A",
+      "value": 15.230465535878785,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b3304/a",
+      "unit": "A",
+      "value": 3.0377055057131265e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b3304/b",
+      "unit": "A",
+      "value": 4.849710614243835e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b3304/c",
+      "unit": "A",
+      "value": 7.18324575080853e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b3304/n",
+      "unit": "A",
+      "value": 1.7618234499550994e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2236/a",
+      "unit": "A",
+      "value": 2.3067979914624728e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2973/a",
+      "unit": "A",
+      "value": 2.3067979914624728e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_3753_closed/current/a",
+      "unit": "A",
+      "value": 2.3067979914624728e-10,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2236/b",
+      "unit": "A",
+      "value": 2.6377929260776555e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2973/b",
+      "unit": "A",
+      "value": 2.6377929260776565e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_3753_closed/current/b",
+      "unit": "A",
+      "value": 2.6377929260776555e-10,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2236/c",
+      "unit": "A",
+      "value": 5.608410811256983e-11,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2973/c",
+      "unit": "A",
+      "value": 5.608410811256984e-11,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_3753_closed/current/c",
+      "unit": "A",
+      "value": 5.608410811256983e-11,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2236/n",
+      "unit": "A",
+      "value": 7.652817630408361e-11,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2973/n",
+      "unit": "A",
+      "value": 7.652817630408364e-11,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_3753_closed/current/n",
+      "unit": "A",
+      "value": 7.652817630408361e-11,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b3020/a",
+      "unit": "A",
+      "value": 3.703127974344047e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b3020/b",
+      "unit": "A",
+      "value": 6.183878065174849e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b3020/c",
+      "unit": "A",
+      "value": 3.525434519266996e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b3020/n",
+      "unit": "A",
+      "value": 1.0301152747402634e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1452/a",
+      "unit": "A",
+      "value": 1.1151526469473563e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1452/b",
+      "unit": "A",
+      "value": 9.683604991321844e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1452/c",
+      "unit": "A",
+      "value": 1.1373878952493497e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1452/n",
+      "unit": "A",
+      "value": 6.506398765154779e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1754/a",
+      "unit": "A",
+      "value": 7.846832494073005e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1754/b",
+      "unit": "A",
+      "value": 5.694952502205136e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1754/c",
+      "unit": "A",
+      "value": 9.016468078280775e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1754/n",
+      "unit": "A",
+      "value": 7.805436318452694e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b260/a",
+      "unit": "A",
+      "value": 1.3965580332658805e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b260/b",
+      "unit": "A",
+      "value": 1.90430872413989e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b260/c",
+      "unit": "A",
+      "value": 3.614630425942454e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b260/n",
+      "unit": "A",
+      "value": 1.6717368324676425e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1393/a",
+      "unit": "A",
+      "value": 4.094199541812702e-14,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1393/b",
+      "unit": "A",
+      "value": 5.740902730653163e-14,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1393/c",
+      "unit": "A",
+      "value": 1.8906053277943723e-14,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1393/n",
+      "unit": "A",
+      "value": 3.21918863734901e-14,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1118/a",
+      "unit": "A",
+      "value": 3.461507610261323e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1118/b",
+      "unit": "A",
+      "value": 1.2763630914399867e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1118/c",
+      "unit": "A",
+      "value": 2.9323566310907397e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1118/n",
+      "unit": "A",
+      "value": 3.661840354022838e-14,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2004/a",
+      "unit": "A",
+      "value": 1.0119196661272797e-09,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2004/b",
+      "unit": "A",
+      "value": 2.6209060256717887e-09,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2004/c",
+      "unit": "A",
+      "value": 1.3048650274396707e-09,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2004/n",
+      "unit": "A",
+      "value": 4.0819567289304164e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1473/a",
+      "unit": "A",
+      "value": 1.2110673662739727e-09,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1606/a",
+      "unit": "A",
+      "value": 1.2110743092892901e-09,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_1030_closed/current/a",
+      "unit": "A",
+      "value": 22.186721310699795,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1473/b",
+      "unit": "A",
+      "value": 4.943429018309129e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1606/b",
+      "unit": "A",
+      "value": 4.943407711005335e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_1030_closed/current/b",
+      "unit": "A",
+      "value": 11.211644176382997,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1473/c",
+      "unit": "A",
+      "value": 4.985897771676737e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1606/c",
+      "unit": "A",
+      "value": 4.985924737516023e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_1030_closed/current/c",
+      "unit": "A",
+      "value": 8.51027436913656,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1473/n",
+      "unit": "A",
+      "value": 4.530192167682319e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1606/n",
+      "unit": "A",
+      "value": 4.530277690417194e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_1030_closed/current/n",
+      "unit": "A",
+      "value": 15.2304654690333,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1069/a",
+      "unit": "A",
+      "value": 3.86002985592412e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1069/b",
+      "unit": "A",
+      "value": 5.331677926828357e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1069/c",
+      "unit": "A",
+      "value": 9.77066894670177e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1069/n",
+      "unit": "A",
+      "value": 7.646184322796915e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2925/a",
+      "unit": "A",
+      "value": 4.730255407107142e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2972/a",
+      "unit": "A",
+      "value": 4.730162563314732e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_1181_closed/current/a",
+      "unit": "A",
+      "value": 46.01164336305527,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2925/b",
+      "unit": "A",
+      "value": 5.512821317312739e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2972/b",
+      "unit": "A",
+      "value": 5.512941270138368e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_1181_closed/current/b",
+      "unit": "A",
+      "value": 24.539091492104273,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2925/c",
+      "unit": "A",
+      "value": 2.105657800174637e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2972/c",
+      "unit": "A",
+      "value": 2.1056925397415373e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_1181_closed/current/c",
+      "unit": "A",
+      "value": 17.78970067714739,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2925/n",
+      "unit": "A",
+      "value": 1.5815694347786268e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2972/n",
+      "unit": "A",
+      "value": 1.581401238422259e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "switch/switch_1181_closed/current/n",
+      "unit": "A",
+      "value": 29.27447013258461,
+      "lower": 0.0,
+      "upper": 600.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2190/a",
+      "unit": "A",
+      "value": 4.331809035117063e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2190/b",
+      "unit": "A",
+      "value": 6.285279611083242e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2190/c",
+      "unit": "A",
+      "value": 5.098922096221704e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2190/n",
+      "unit": "A",
+      "value": 4.498118696796196e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2055/a",
+      "unit": "A",
+      "value": 8.794291744382722e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2055/b",
+      "unit": "A",
+      "value": 3.7685568390134333e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2055/c",
+      "unit": "A",
+      "value": 3.025664362016568e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2055/n",
+      "unit": "A",
+      "value": 8.639455937230974e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2710/a",
+      "unit": "A",
+      "value": 1.6971778228453975e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2710/b",
+      "unit": "A",
+      "value": 9.004379491929819e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2710/c",
+      "unit": "A",
+      "value": 1.1381326039495659e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2710/n",
+      "unit": "A",
+      "value": 8.467471063606605e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b101/a",
+      "unit": "A",
+      "value": 6.410466372918069e-11,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b101/b",
+      "unit": "A",
+      "value": 2.1727133130341077e-10,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b101/c",
+      "unit": "A",
+      "value": 8.752486723606227e-11,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b101/n",
+      "unit": "A",
+      "value": 5.217315368903375e-11,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b956/a",
+      "unit": "A",
+      "value": 1.4667111574355992e-11,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b956/b",
+      "unit": "A",
+      "value": 6.4500385809314786e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b956/c",
+      "unit": "A",
+      "value": 1.9633605958180484e-11,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b956/n",
+      "unit": "A",
+      "value": 5.266809514470805e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2492/a",
+      "unit": "A",
+      "value": 6.928500973785967e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2492/b",
+      "unit": "A",
+      "value": 2.9631062174349634e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2492/c",
+      "unit": "A",
+      "value": 7.05892006951614e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b2492/n",
+      "unit": "A",
+      "value": 6.496081921101613e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b837/a",
+      "unit": "A",
+      "value": 2.8372347780818104e-11,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b837/b",
+      "unit": "A",
+      "value": 6.077335039961462e-11,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b837/c",
+      "unit": "A",
+      "value": 1.0898639073980937e-11,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b837/n",
+      "unit": "A",
+      "value": 6.295811834118219e-11,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b690/a",
+      "unit": "A",
+      "value": 3.2523995614814865e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b690/b",
+      "unit": "A",
+      "value": 3.7114696669266546e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b690/c",
+      "unit": "A",
+      "value": 4.030457227829377e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b690/n",
+      "unit": "A",
+      "value": 1.6315112497561288e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1892/a",
+      "unit": "A",
+      "value": 5.825288745448901e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1892/b",
+      "unit": "A",
+      "value": 3.9508051962433795e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1892/c",
+      "unit": "A",
+      "value": 3.1625572036938074e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1892/n",
+      "unit": "A",
+      "value": 1.5494150910936196e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b628/a",
+      "unit": "A",
+      "value": 8.501864614915999e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b628/b",
+      "unit": "A",
+      "value": 1.520226705681664e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b628/c",
+      "unit": "A",
+      "value": 7.222983568266577e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b628/n",
+      "unit": "A",
+      "value": 5.159617139040165e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1044/a",
+      "unit": "A",
+      "value": 4.322176540099905e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1044/b",
+      "unit": "A",
+      "value": 5.35220776114121e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1044/c",
+      "unit": "A",
+      "value": 6.420366380616398e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1044/n",
+      "unit": "A",
+      "value": 3.376298502740339e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b121/a",
+      "unit": "A",
+      "value": 2.363770272224476e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b121/b",
+      "unit": "A",
+      "value": 8.54548267281559e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b121/c",
+      "unit": "A",
+      "value": 2.347469724852999e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b121/n",
+      "unit": "A",
+      "value": 3.142287750640926e-13,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1479/a",
+      "unit": "A",
+      "value": 5.812916259420356e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1479/b",
+      "unit": "A",
+      "value": 1.8735519565146513e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1479/c",
+      "unit": "A",
+      "value": 4.353779587507015e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/kcl/b1479/n",
+      "unit": "A",
+      "value": 1.1455137251371443e-12,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 1e-05,
+      "passed": true
+    },
+    {
+      "name": "network/active_power_balance",
+      "unit": "W",
+      "value": 4.191690834431938e-07,
+      "lower": 0.0,
+      "upper": 0.0,
+      "tolerance": 0.01,
+      "passed": true
+    }
+  ],
+  "maximum_conductor_utilization": 0.07668607331581757,
+  "source_active_power_W": 12941.305542256367,
+  "pv_active_power_W": 5102.694492972838,
+  "load_active_power_W": 18000.0,
+  "line_loss_W": 34.818066200113364,
+  "grounding_loss_W": 0.07536825415282962,
+  "transformer_loss_W": 9.106600355769237,
+  "active_power_residual_W": 4.191690834431938e-07,
+  "line_currents": {
+    "l_1232": {
+      "from": [
+        [
+          2.2011343410373983e-05,
+          2.119268582614539e-05
+        ],
+        [
+          3.783461337160553e-07,
+          -3.474399626556911e-05
+        ],
+        [
+          -2.253654055410647e-05,
+          2.1647810350786837e-05
+        ],
+        [
+          1.223930860588767e-07,
+          -8.085067658490001e-06
+        ]
+      ],
+      "to": [
+        [
+          -5.562369836243199e-13,
+          -1.7303267820574942e-13
+        ],
+        [
+          3.9454405331176215e-13,
+          -2.0581714772153342e-14
+        ],
+        [
+          2.732292236700632e-13,
+          -1.5925913474275355e-13
+        ],
+        [
+          -1.4814093386233507e-13,
+          4.5399724222529823e-14
+        ]
+      ]
+    },
+    "l_2249": {
+      "from": [
+        [
+          -0.8519766816792612,
+          3.8695818593423454
+        ],
+        [
+          1.5332056672518186,
+          -2.1590198356718857
+        ],
+        [
+          -1.4504616077271468,
+          -0.20227881328308153
+        ],
+        [
+          0.7643202111277168,
+          -1.5005097877538103
+        ]
+      ],
+      "to": [
+        [
+          0.852013253943746,
+          -3.869546672308295
+        ],
+        [
+          -1.5332050612506076,
+          2.158962166614657
+        ],
+        [
+          1.4504242228441995,
+          0.2023147501636593
+        ],
+        [
+          -0.764320045233713,
+          1.5004963523035413
+        ]
+      ]
+    },
+    "l_4153": {
+      "from": [
+        [
+          -0.610889645910121,
+          -3.3971359890378587
+        ],
+        [
+          -0.37681935670960204,
+          1.5147684617687598
+        ],
+        [
+          1.0604637587533587,
+          -0.8699096416478954
+        ],
+        [
+          -0.07156308152473817,
+          2.7415058813235116
+        ]
+      ],
+      "to": [
+        [
+          0.6110050240302258,
+          3.397271746923453
+        ],
+        [
+          0.3768213964999973,
+          -1.5149751818526898
+        ],
+        [
+          -1.0605821712125907,
+          0.8700477542034846
+        ],
+        [
+          0.07156371521298822,
+          -2.7415728287328593
+        ]
+      ]
+    },
+    "l_3005": {
+      "from": [
+        [
+          1.2454609766285167e-05,
+          1.1981123946918819e-05
+        ],
+        [
+          2.0334280796875945e-07,
+          -1.963469260321032e-05
+        ],
+        [
+          -1.2726174310804997e-05,
+          1.2235629186965513e-05
+        ],
+        [
+          5.435573749200847e-08,
+          -4.575446181439417e-06
+        ]
+      ],
+      "to": [
+        [
+          1.7731263065613994e-13,
+          -1.1009657837569224e-12
+        ],
+        [
+          -7.3701105460054e-13,
+          6.281216137629187e-13
+        ],
+        [
+          -1.0002740399617542e-12,
+          5.41389941944193e-13
+        ],
+        [
+          3.7212908229175525e-13,
+          5.337154626060335e-13
+        ]
+      ]
+    },
+    "l_54": {
+      "from": [
+        [
+          0.584788922719752,
+          4.707231497181505
+        ],
+        [
+          1.518298780307844,
+          -2.1459933280261643
+        ],
+        [
+          -2.1768798074651845,
+          0.19671766947387706
+        ],
+        [
+          0.06628921442125774,
+          -2.7367303745080043
+        ]
+      ],
+      "to": [
+        [
+          -0.5847497813754844,
+          -4.707193809886983
+        ],
+        [
+          -1.518298112318545,
+          2.1459315574401354
+        ],
+        [
+          2.1768397456792,
+          -0.19667918341598192
+        ],
+        [
+          -0.06628900552340404,
+          2.7367159923028384
+        ]
+      ]
+    },
+    "l_521": {
+      "from": [
+        [
+          8.12946678273257e-05,
+          7.82584754315091e-05
+        ],
+        [
+          1.3904257141982796e-06,
+          -0.00012829820624458667
+        ],
+        [
+          -8.321422322428009e-05,
+          7.994109895130447e-05
+        ],
+        [
+          4.3877075381916475e-07,
+          -2.985895753496862e-05
+        ]
+      ],
+      "to": [
+        [
+          4.5265007020400816e-14,
+          -3.431784207936356e-13
+        ],
+        [
+          -1.2199389100566393e-13,
+          3.753022740672629e-14
+        ],
+        [
+          -1.325530668300906e-14,
+          2.929359161382532e-13
+        ],
+        [
+          1.5003117400356098e-14,
+          3.340380137209151e-14
+        ]
+      ]
+    },
+    "l_1243": {
+      "from": [
+        [
+          -0.8536597574621831,
+          3.8745989364186735
+        ],
+        [
+          1.532731116786961,
+          -2.1579195458634346
+        ],
+        [
+          -1.455297379068019,
+          -0.19983470601230552
+        ],
+        [
+          0.7660843295833986,
+          -1.4979548174256618
+        ]
+      ],
+      "to": [
+        [
+          0.8537007395529433,
+          -3.8745594839806747
+        ],
+        [
+          -1.5327304141626803,
+          2.1578548702303135
+        ],
+        [
+          1.4552554308028125,
+          0.19987500474500736
+        ],
+        [
+          -0.7660841116128825,
+          1.497939763339461
+        ]
+      ]
+    },
+    "l_1594": {
+      "from": [
+        [
+          1.2461685187374429e-05,
+          1.1993782166713082e-05
+        ],
+        [
+          2.0951091020702157e-07,
+          -1.9659610228811586e-05
+        ],
+        [
+          -1.2747834122475882e-05,
+          1.2250037224373292e-05
+        ],
+        [
+          6.277616755725853e-08,
+          -4.577660923240477e-06
+        ]
+      ],
+      "to": [
+        [
+          7.203458741162467e-13,
+          -2.2513355417386974e-12
+        ],
+        [
+          -8.119651989572923e-13,
+          2.663930494516695e-13
+        ],
+        [
+          -6.28777835598145e-13,
+          2.2616924067082878e-12
+        ],
+        [
+          2.5475819780090095e-13,
+          1.8395103623387692e-13
+        ]
+      ]
+    },
+    "l_3919": {
+      "from": [
+        [
+          5.43988566791996e-07,
+          5.698360430876028e-07
+        ],
+        [
+          8.22047983507896e-09,
+          -9.040453865520639e-07
+        ],
+        [
+          -5.568499119890079e-07,
+          5.81719065516796e-07
+        ],
+        [
+          1.8440864373493893e-09,
+          -2.459198728405454e-07
+        ]
+      ],
+      "to": [
+        [
+          1.7357010270799978e-10,
+          6.394068040989121e-10
+        ],
+        [
+          3.341929982471325e-10,
+          -4.249353185931339e-10
+        ],
+        [
+          -5.251586699113473e-10,
+          -1.4673064906081476e-10
+        ],
+        [
+          3.3982359422796975e-11,
+          -6.573733692939841e-11
+        ]
+      ]
+    },
+    "l_613": {
+      "from": [
+        [
+          0.00038267034038222565,
+          0.00039696446574085455
+        ],
+        [
+          6.39298552052549e-06,
+          -0.0006321387222730971
+        ],
+        [
+          -0.00039153536376651776,
+          0.00040475836950610113
+        ],
+        [
+          1.7748250567074768e-06,
+          -0.00016921491058061674
+        ]
+      ],
+      "to": [
+        [
+          -0.0002658339160139762,
+          -0.0002594574491477492
+        ],
+        [
+          -4.303870847675698e-06,
+          0.000422745990433395
+        ],
+        [
+          0.00027156967352677693,
+          -0.0002648661190416634
+        ],
+        [
+          -1.100172190873194e-06,
+          0.00010141386287985027
+        ]
+      ]
+    },
+    "l_2000": {
+      "from": [
+        [
+          0.5849010106296055,
+          4.708179176274568
+        ],
+        [
+          1.518413426449033,
+          -2.146121538659849
+        ],
+        [
+          -2.176988247410131,
+          0.19670620760502272
+        ],
+        [
+          0.06543828372733487,
+          -2.736792725392437
+        ]
+      ],
+      "to": [
+        [
+          -0.5848640580548385,
+          -4.708143596657787
+        ],
+        [
+          -1.5184127928131643,
+          2.1460632178376726
+        ],
+        [
+          2.1769504201022634,
+          -0.196669870014292
+        ],
+        [
+          -0.0654380837300608,
+          2.7367791483475834
+        ]
+      ]
+    },
+    "l_1254": {
+      "from": [
+        [
+          1.296851663050602e-05,
+          1.2469415573953673e-05
+        ],
+        [
+          2.0575827086653798e-07,
+          -2.0431014383736306e-05
+        ],
+        [
+          -1.3236880177497545e-05,
+          1.2733112245756343e-05
+        ],
+        [
+          4.815555324368294e-08,
+          -4.76456591451019e-06
+        ]
+      ],
+      "to": [
+        [
+          7.81414777820805e-13,
+          1.2471819782231366e-12
+        ],
+        [
+          -3.39283092941757e-13,
+          -3.2110550282377515e-13
+        ],
+        [
+          1.9028427701654185e-13,
+          -2.9652208423033843e-13
+        ],
+        [
+          7.93169270804113e-14,
+          -3.7536196744367123e-13
+        ]
+      ]
+    },
+    "l_754": {
+      "from": [
+        [
+          -1.5133579007920814,
+          -18.687690961793024
+        ],
+        [
+          -4.117926610437599,
+          8.756510521194802
+        ],
+        [
+          6.703122507151385,
+          -2.616082103594784
+        ],
+        [
+          -1.032388951954932,
+          12.448910969888717
+        ]
+      ],
+      "to": [
+        [
+          1.5134726093194921,
+          18.68782596369863
+        ],
+        [
+          4.117928665022825,
+          -8.756716104389252
+        ],
+        [
+          -6.703240293782386,
+          2.616219452249969
+        ],
+        [
+          1.0323896166946067,
+          -12.448977535647266
+        ]
+      ]
+    },
+    "l_3253": {
+      "from": [
+        [
+          -0.62095850210513,
+          -23.8448844245849
+        ],
+        [
+          -6.779674844418275,
+          11.524517285471916
+        ],
+        [
+          9.241447741820611,
+          -1.739302621835984
+        ],
+        [
+          -1.7920645655072678,
+          13.940469645153179
+        ]
+      ],
+      "to": [
+        [
+          0.6209586502653354,
+          23.844884579909962
+        ],
+        [
+          6.7796748467487316,
+          -11.524517531736992
+        ],
+        [
+          -9.241447893581572,
+          1.739302780183768
+        ],
+        [
+          1.7920645660206003,
+          -13.94046971212755
+        ]
+      ]
+    },
+    "l_1677": {
+      "from": [
+        [
+          7.677247298421607e-07,
+          8.044179159085707e-07
+        ],
+        [
+          1.1859617523856644e-08,
+          -1.2756363921997388e-06
+        ],
+        [
+          -7.86333986892226e-07,
+          8.204551990329571e-07
+        ],
+        [
+          2.7854392014190114e-09,
+          -3.4697015223180085e-07
+        ]
+      ],
+      "to": [
+        [
+          2.6509816321355524e-11,
+          4.6059733887118796e-10
+        ],
+        [
+          2.1536957286625423e-10,
+          -4.815952739780781e-10
+        ],
+        [
+          -7.290211444496929e-11,
+          8.524664474677162e-11
+        ],
+        [
+          -1.2731122508606403e-10,
+          -8.495939642441657e-11
+        ]
+      ]
+    },
+    "l_1168": {
+      "from": [
+        [
+          -2.1242203174584358,
+          -22.084797724698426
+        ],
+        [
+          -4.494745512244514,
+          10.27123302836269
+        ],
+        [
+          7.763558398588892,
+          -3.4859619649907008
+        ],
+        [
+          -1.1039519095223576,
+          15.190403831754676
+        ]
+      ],
+      "to": [
+        [
+          2.124220465617813,
+          22.084797880022904
+        ],
+        [
+          4.494745514575348,
+          -10.271233274627361
+        ],
+        [
+          -7.763558550350006,
+          3.485962123338117
+        ],
+        [
+          1.103951910036296,
+          -15.190403898728505
+        ]
+      ]
+    },
+    "l_4294": {
+      "from": [
+        [
+          0.57786047174054,
+          3.3442343907096386
+        ],
+        [
+          0.33802380545228133,
+          -1.4578743959472065
+        ],
+        [
+          -0.9903420199138241,
+          0.8743298991583691
+        ],
+        [
+          0.06328069803054741,
+          -2.731618055216224
+        ]
+      ],
+      "to": [
+        [
+          -0.5778226040850868,
+          -3.3441979176975623
+        ],
+        [
+          -0.33802314586258575,
+          1.4578146022502814
+        ],
+        [
+          0.9903032273269111,
+          -0.8742926462984146
+        ],
+        [
+          -0.06328047477222216,
+          2.7316041426745374
+        ]
+      ]
+    },
+    "l_2590": {
+      "from": [
+        [
+          0.5778226040863644,
+          3.344197917700553
+        ],
+        [
+          0.338023145858891,
+          -1.4578146022499296
+        ],
+        [
+          -0.9903032273233532,
+          0.874292646296521
+        ],
+        [
+          0.06328047477148024,
+          -2.7316041426759905
+        ]
+      ],
+      "to": [
+        [
+          -0.5777743391855452,
+          -3.344141032137038
+        ],
+        [
+          -0.33802221327704424,
+          1.4577279395928273
+        ],
+        [
+          0.9902535099467732,
+          -0.8742347587986118
+        ],
+        [
+          -0.06328010586731936,
+          2.7315761166082386
+        ]
+      ]
+    },
+    "l_2764": {
+      "from": [
+        [
+          -2.3207306014378466e-12,
+          -2.4388985178891128e-12
+        ],
+        [
+          4.540660659180758e-12,
+          3.3065535071541852e-12
+        ],
+        [
+          -2.790226191846305e-12,
+          -8.407062067718792e-12
+        ],
+        [
+          -6.998718181250444e-13,
+          6.563306790447496e-12
+        ]
+      ],
+      "to": [
+        [
+          1.7607757604861552e-05,
+          2.0722905170757832e-05
+        ],
+        [
+          3.14833817823773e-07,
+          -3.155639471099762e-05
+        ],
+        [
+          -1.8079345997804806e-05,
+          2.1082376420487078e-05
+        ],
+        [
+          1.0167366384034476e-07,
+          -1.0217918045066275e-05
+        ]
+      ]
+    },
+    "l_3577": {
+      "from": [
+        [
+          7.833796132533122e-07,
+          8.21094533966806e-07
+        ],
+        [
+          1.2164470370316882e-08,
+          -1.3017216369042296e-06
+        ],
+        [
+          -8.022975698337281e-07,
+          8.369316719432816e-07
+        ],
+        [
+          2.7303260339292844e-09,
+          -3.540143874656786e-07
+        ]
+      ],
+      "to": [
+        [
+          -5.0862936993782705e-11,
+          1.147944857672462e-10
+        ],
+        [
+          1.5551566678426738e-10,
+          -2.885152755565179e-10
+        ],
+        [
+          -6.534901972452835e-11,
+          2.5736624391192955e-10
+        ],
+        [
+          -1.8265201820526404e-11,
+          -8.239914916020424e-11
+        ]
+      ]
+    },
+    "l_4155": {
+      "from": [
+        [
+          0.6054160010016497,
+          3.383378384250451
+        ],
+        [
+          0.36736340441241117,
+          -1.5021580157822423
+        ],
+        [
+          -1.044678230069506,
+          0.871967911707885
+        ],
+        [
+          0.06901080153077058,
+          -2.7440808554387877
+        ]
+      ],
+      "to": [
+        [
+          -0.6053901313887792,
+          -3.3833534924772444
+        ],
+        [
+          -0.3673629786354772,
+          1.5021172241667615
+        ],
+        [
+          1.044651788098373,
+          -0.871942492887992
+        ],
+        [
+          -0.06901068375764763,
+          2.7440713502010636
+        ]
+      ]
+    },
+    "l_3877": {
+      "from": [
+        [
+          7.090260885396905e-13,
+          1.4845122718514588e-12
+        ],
+        [
+          1.3495968796829033e-13,
+          -2.1957640004464322e-13
+        ],
+        [
+          -3.593817426403344e-13,
+          -9.83211480270064e-13
+        ],
+        [
+          -8.570316639694857e-15,
+          -2.371475327174249e-13
+        ]
+      ],
+      "to": [
+        [
+          1.280023273368456e-05,
+          1.2313052624263737e-05
+        ],
+        [
+          2.0940109333940632e-07,
+          -2.0179638995843093e-05
+        ],
+        [
+          -1.3079793022151301e-05,
+          1.2575608137512952e-05
+        ],
+        [
+          5.590872554640446e-08,
+          -4.7022296035814385e-06
+        ]
+      ]
+    },
+    "l_1250": {
+      "from": [
+        [
+          -2.7451745052816947,
+          -45.92967762529476
+        ],
+        [
+          -11.274420287354301,
+          21.79574314014858
+        ],
+        [
+          17.00500171904943,
+          -5.225259974745055
+        ],
+        [
+          -2.8960164595257307,
+          29.130871527052737
+        ]
+      ],
+      "to": [
+        [
+          2.745175046896603,
+          45.92967819310018
+        ],
+        [
+          11.274420295869847,
+          -21.795744040387248
+        ],
+        [
+          -17.005002273817784,
+          5.225260553596362
+        ],
+        [
+          2.8960164613964543,
+          -29.130871771886408
+        ]
+      ]
+    },
+    "l_1749": {
+      "from": [
+        [
+          0.6210765621976653,
+          23.845023343045302
+        ],
+        [
+          6.779676954903332,
+          -11.52472884406589
+        ],
+        [
+          -9.241568958481215,
+          1.7394439595075308
+        ],
+        [
+          1.7920652421729315,
+          -13.940538135025605
+        ]
+      ],
+      "to": [
+        [
+          -0.6209586504231307,
+          -23.84488458020121
+        ],
+        [
+          -6.779674846083627,
+          11.524517532088549
+        ],
+        [
+          9.241447892466855,
+          -1.7393027807079415
+        ],
+        [
+          -1.7920645655388165,
+          13.940469712599228
+        ]
+      ]
+    },
+    "l_4415": {
+      "from": [
+        [
+          1.1566057287556042,
+          6.689507043076151
+        ],
+        [
+          0.6770118463058981,
+          -2.9169841384091564
+        ],
+        [
+          -1.9823656228169249,
+          1.7484628469974994
+        ],
+        [
+          0.12676591378497584,
+          -5.463920996640322
+        ]
+      ],
+      "to": [
+        [
+          -1.1564315930448161,
+          -6.689301855119939
+        ],
+        [
+          -0.6770085174377972,
+          2.916671558326322
+        ],
+        [
+          1.9821863331453125,
+          -1.7482540459800673
+        ],
+        [
+          -0.12676463344079764,
+          5.463819892341125
+        ]
+      ]
+    },
+    "l_2641": {
+      "from": [
+        [
+          0.5935765583178539,
+          3.368152247536608
+        ],
+        [
+          0.35502456274178706,
+          -1.48387095266829
+        ],
+        [
+          -1.0219415199603892,
+          0.8730184594529882
+        ],
+        [
+          0.06590106782443805,
+          -2.7371847634254305
+        ]
+      ],
+      "to": [
+        [
+          -0.593542663060067,
+          -3.368119615306995
+        ],
+        [
+          -0.355023987050648,
+          1.4838174653379366
+        ],
+        [
+          1.0219068321863873,
+          -0.8729851328791505
+        ],
+        [
+          -0.06590088871253628,
+          2.7371723097595484
+        ]
+      ]
+    },
+    "l_474": {
+      "from": [
+        [
+          9.599388824929489e-06,
+          1.1297719205274532e-05
+        ],
+        [
+          1.716604743469397e-07,
+          -1.720391273831752e-05
+        ],
+        [
+          -9.856505885445885e-06,
+          1.1493675612488709e-05
+        ],
+        [
+          5.542859186577695e-08,
+          -5.570599346697315e-06
+        ]
+      ],
+      "to": [
+        [
+          -2.339657647511934e-12,
+          -1.7947319045957984e-11
+        ],
+        [
+          -1.6772206866885777e-11,
+          1.5972167094106078e-11
+        ],
+        [
+          1.58539816542372e-11,
+          -1.4893766651769935e-12
+        ],
+        [
+          1.5776603652223958e-12,
+          3.772314643224131e-12
+        ]
+      ]
+    },
+    "l_3254": {
+      "from": [
+        [
+          0.5788901246991799,
+          3.3454225728245013
+        ],
+        [
+          0.3389906493956504,
+          -1.4593489262161552
+        ],
+        [
+          -0.9921722660447406,
+          0.8742858614975578
+        ],
+        [
+          0.06348614432290813,
+          -2.7323664573210817
+        ]
+      ],
+      "to": [
+        [
+          -0.5788534009135797,
+          -3.3453872036269305
+        ],
+        [
+          -0.3389900113711622,
+          1.459290942811548
+        ],
+        [
+          0.9921346494059082,
+          -0.8742497360068942
+        ],
+        [
+          -0.06348593030989762,
+          2.732352965100618
+        ]
+      ]
+    },
+    "l_4288": {
+      "from": [
+        [
+          -0.6110067946137436,
+          -3.3972736035293396
+        ],
+        [
+          -0.37682142467590884,
+          1.5149781256349488
+        ],
+        [
+          1.0605839856203712,
+          -0.8700496469665083
+        ],
+        [
+          -0.07156372181371982,
+          2.7415736291408943
+        ]
+      ],
+      "to": [
+        [
+          0.6111386968949661,
+          3.3974288285981507
+        ],
+        [
+          0.37682377381842996,
+          -1.5152144954072
+        ],
+        [
+          -1.0607193981919518,
+          0.8702075645449106
+        ],
+        [
+          0.07156447036338034,
+          -2.741650170021014
+        ]
+      ]
+    },
+    "l_1353": {
+      "from": [
+        [
+          1.7172397538583216e-05,
+          1.6515765455808398e-05
+        ],
+        [
+          2.759651863991234e-07,
+          -2.706267454102763e-05
+        ],
+        [
+          -1.7536576399582038e-05,
+          1.6865070756455506e-05
+        ],
+        [
+          6.907713469722576e-08,
+          -6.308977815896659e-06
+        ]
+      ],
+      "to": [
+        [
+          2.843219366541194e-13,
+          -8.012353309988637e-13
+        ],
+        [
+          -1.3750642855240776e-12,
+          6.482958023494231e-13
+        ],
+        [
+          1.9021257821865561e-13,
+          -6.968027636009358e-13
+        ],
+        [
+          -1.0983918161854531e-13,
+          5.041347482530225e-13
+        ]
+      ]
+    },
+    "l_496": {
+      "from": [
+        [
+          -0.6209580455106933,
+          -23.844883946346062
+        ],
+        [
+          -6.7796748369608375,
+          11.524516527326268
+        ],
+        [
+          9.241447273016647,
+          -1.7393021345415278
+        ],
+        [
+          -1.7920645632598073,
+          13.940469439158303
+        ]
+      ],
+      "to": [
+        [
+          0.6209585022616305,
+          23.84488442518485
+        ],
+        [
+          6.779674844144802,
+          -11.524517286515712
+        ],
+        [
+          -9.241447740867008,
+          1.7393026226983053
+        ],
+        [
+          1.7920645648416706,
+          -13.940469645628323
+        ]
+      ]
+    },
+    "l_3432": {
+      "from": [
+        [
+          0.6115906089480851,
+          3.3978948871406307
+        ],
+        [
+          0.3768313174256249,
+          -1.515958280017313
+        ],
+        [
+          -1.061181749126324,
+          0.870682818231379
+        ],
+        [
+          0.0715665680978659,
+          -2.74184727734767
+        ]
+      ],
+      "to": [
+        [
+          -0.6115328555022501,
+          -3.3978393138228467
+        ],
+        [
+          -0.37683037221824245,
+          1.5158672232484534
+        ],
+        [
+          1.0611227295109191,
+          -0.8706260782065743
+        ],
+        [
+          -0.07156631152353143,
+          2.741826051658364
+        ]
+      ]
+    },
+    "l_1870": {
+      "from": [
+        [
+          -0.9080949325391753,
+          -15.304484452339667
+        ],
+        [
+          -3.7505658897289367,
+          7.254618514913671
+        ],
+        [
+          5.65860123185815,
+          -1.7442891949955146
+        ],
+        [
+          -0.963378987293534,
+          9.704910760891604
+        ]
+      ],
+      "to": [
+        [
+          0.9082461137667647,
+          15.304662490112095
+        ],
+        [
+          3.7505686883655285,
+          -7.254889681008993
+        ],
+        [
+          -5.658756679951266,
+          1.7444703435293327
+        ],
+        [
+          0.9633799825893025,
+          -9.704998515905183
+        ]
+      ]
+    },
+    "l_2791": {
+      "from": [
+        [
+          0.5840573259518356,
+          3.3546118819472834
+        ],
+        [
+          0.34492199982536553,
+          -1.4684461593412084
+        ],
+        [
+          -1.0030933874115633,
+          0.8737888542039497
+        ],
+        [
+          0.06376408519295747,
+          -2.733138232459337
+        ]
+      ],
+      "to": [
+        [
+          -0.5840145433721191,
+          -3.354570681885043
+        ],
+        [
+          -0.3449212588434562,
+          1.4683786181019136
+        ],
+        [
+          1.0030495720521568,
+          -0.8737467728057721
+        ],
+        [
+          -0.06376384096151554,
+          2.7331225145448217
+        ]
+      ]
+    },
+    "l_1021": {
+      "from": [
+        [
+          0.6110067945898001,
+          3.397273603540485
+        ],
+        [
+          0.37682142464064616,
+          -1.5149781255849173
+        ],
+        [
+          -1.0605839856111983,
+          0.87004964696211
+        ],
+        [
+          0.07156372186086718,
+          -2.7415736291824384
+        ]
+      ],
+      "to": [
+        [
+          -0.6110050240037787,
+          -3.397271746933726
+        ],
+        [
+          -0.3768213964656152,
+          1.5149751818025772
+        ],
+        [
+          1.0605821712024281,
+          -0.8700477541995472
+        ],
+        [
+          -0.07156371526063603,
+          2.7415728287740104
+        ]
+      ]
+    },
+    "l_3912": {
+      "from": [
+        [
+          -2.124220467773311,
+          -22.084797880606768
+        ],
+        [
+          -4.494745513384183,
+          10.271233274342112
+        ],
+        [
+          7.763558550991074,
+          -3.48596212348923
+        ],
+        [
+          -1.1039519098359287,
+          15.190403899626038
+        ]
+      ],
+      "to": [
+        [
+          2.124234578172163,
+          22.084814481409364
+        ],
+        [
+          4.494745761382612,
+          -10.271258551947877
+        ],
+        [
+          -7.763573029007816,
+          3.4859790121406746
+        ],
+        [
+          1.1039519853268778,
+          -15.190412086650799
+        ]
+      ]
+    },
+    "l_86": {
+      "from": [
+        [
+          1.498781172090515e-05,
+          1.4425296792567041e-05
+        ],
+        [
+          2.5340798007016294e-07,
+          -2.3647076707198216e-05
+        ],
+        [
+          -1.533476321972782e-05,
+          1.4734945694706835e-05
+        ],
+        [
+          7.68774688463828e-08,
+          -5.50531962036559e-06
+        ]
+      ],
+      "to": [
+        [
+          3.7963001272840573e-13,
+          1.6541746025719515e-12
+        ],
+        [
+          -7.616669630676961e-13,
+          -4.802623634203454e-13
+        ],
+        [
+          8.600167002566174e-13,
+          7.454643515640027e-13
+        ],
+        [
+          5.717806588168889e-13,
+          -6.24537861408799e-13
+        ]
+      ]
+    },
+    "l_504": {
+      "from": [
+        [
+          -0.8537520716237793,
+          3.8751162060672284
+        ],
+        [
+          1.532330969503358,
+          -2.1572901361473864
+        ],
+        [
+          -1.4572776994360288,
+          -0.1985965304811643
+        ],
+        [
+          0.7674282522884788,
+          -1.498141248986947
+        ]
+      ],
+      "to": [
+        [
+          0.8537789672842369,
+          -3.8750903112580795
+        ],
+        [
+          -1.5323305053039258,
+          2.1572476828690994
+        ],
+        [
+          1.4572501611673159,
+          0.1986229817997225
+        ],
+        [
+          -0.7674281037791566,
+          1.498131370165332
+        ]
+      ]
+    },
+    "l_4005": {
+      "from": [
+        [
+          -2.745175047831745,
+          -45.929678193243376
+        ],
+        [
+          -11.274420294975267,
+          21.795744039742733
+        ],
+        [
+          17.005002273768735,
+          -5.225260553178093
+        ],
+        [
+          -2.8960164613306056,
+          29.130871772195775
+        ]
+      ],
+      "to": [
+        [
+          2.7451756140608246,
+          45.92967878685401
+        ],
+        [
+          11.274420303879767,
+          -21.79574498089821
+        ],
+        [
+          -17.005002853754082,
+          5.2252611583386335
+        ],
+        [
+          2.896016463289438,
+          -29.13087202815511
+        ]
+      ]
+    },
+    "l_3802": {
+      "from": [
+        [
+          4.818354674430319e-05,
+          4.63411178982294e-05
+        ],
+        [
+          7.743193149674449e-07,
+          -7.59343936650018e-05
+        ],
+        [
+          -4.920538439920039e-05,
+          4.7321225246267876e-05
+        ],
+        [
+          1.9382119038420695e-07,
+          -1.7702181686941145e-05
+        ]
+      ],
+      "to": [
+        [
+          1.3608996809783176e-13,
+          2.7158068410240363e-13
+        ],
+        [
+          -4.2934332894424936e-13,
+          2.255243585738871e-13
+        ],
+        [
+          -7.133136176997942e-14,
+          -7.147741125650316e-13
+        ],
+        [
+          1.5931590977302123e-15,
+          1.7617514164094267e-13
+        ]
+      ]
+    },
+    "l_3656": {
+      "from": [
+        [
+          0.585741404801542,
+          4.703745793373886
+        ],
+        [
+          1.5183246060356872,
+          -2.1456028618623004
+        ],
+        [
+          -2.1770056025028497,
+          0.19698893205774679
+        ],
+        [
+          0.06945986290112353,
+          -2.7416300000384077
+        ]
+      ],
+      "to": [
+        [
+          -0.5856937958443479,
+          -4.703699973378809
+        ],
+        [
+          -1.5183238125419771,
+          2.1455277750462862
+        ],
+        [
+          2.176956921775681,
+          -0.19694214459145923
+        ],
+        [
+          -0.06945963764642174,
+          2.7416125046513593
+        ]
+      ]
+    },
+    "l_989": {
+      "from": [
+        [
+          -0.6111386968470026,
+          -3.3974288286260643
+        ],
+        [
+          -0.376823773970926,
+          1.5152144955238702
+        ],
+        [
+          1.060719398239069,
+          -0.8702075646013558
+        ],
+        [
+          -0.07156447031462677,
+          2.741650170005567
+        ]
+      ],
+      "to": [
+        [
+          0.6111405857278703,
+          3.397431051683385
+        ],
+        [
+          0.3768238077435618,
+          -1.5152178807470769
+        ],
+        [
+          -1.060721337705973,
+          0.8702098262203943
+        ],
+        [
+          0.07156448121906439,
+          -2.741651266136625
+        ]
+      ]
+    },
+    "l_3311": {
+      "from": [
+        [
+          0.27003386898288034,
+          -7.22936105869665
+        ],
+        [
+          -1.8772467985068415,
+          3.625160317840681
+        ],
+        [
+          2.460022849921652,
+          -0.6748182772744253
+        ],
+        [
+          -0.8311901511301933,
+          4.2311147915029315
+        ]
+      ],
+      "to": [
+        [
+          -0.2698457185794243,
+          7.229582734669219
+        ],
+        [
+          1.8772503737224226,
+          -3.625498002764603
+        ],
+        [
+          -2.4602165189980014,
+          0.6750438499051037
+        ],
+        [
+          0.8311915059701867,
+          -4.231224025752309
+        ]
+      ]
+    },
+    "l_1608": {
+      "from": [
+        [
+          0.8875799237348816,
+          15.271990510458437
+        ],
+        [
+          3.7281514710055417,
+          -7.220565999314889
+        ],
+        [
+          -5.614376849288273,
+          1.7450341762991306
+        ],
+        [
+          0.9582867519054501,
+          -9.698533298705787
+        ]
+      ],
+      "to": [
+        [
+          -0.8874088205308179,
+          -15.27178901041071
+        ],
+        [
+          -3.728148290512324,
+          7.220259082041762
+        ],
+        [
+          5.614200893657141,
+          -1.7448291406828298
+        ],
+        [
+          -0.9582856152016184,
+          9.698433980297798
+        ]
+      ]
+    },
+    "l_1636": {
+      "from": [
+        [
+          -2.1242191194102054,
+          -22.084796467002395
+        ],
+        [
+          -4.494745492375722,
+          10.271231033124623
+        ],
+        [
+          7.763557170024972,
+          -3.4859606823119673
+        ],
+        [
+          -1.103951905139104,
+          15.190403290020727
+        ]
+      ],
+      "to": [
+        [
+          2.124220319772548,
+          22.084797725413726
+        ],
+        [
+          4.494745511257077,
+          -10.27123302831307
+        ],
+        [
+          -7.763558399561122,
+          3.4859619652123817
+        ],
+        [
+          1.103951909298758,
+          -15.190403832632699
+        ]
+      ]
+    },
+    "l_3932": {
+      "from": [
+        [
+          0.0001828702158090744,
+          0.00017587766409683602
+        ],
+        [
+          2.938748378052308e-06,
+          -0.0002881925308631119
+        ],
+        [
+          -0.0001867483629351292,
+          0.0001795974556219793
+        ],
+        [
+          7.356014631084425e-07,
+          -6.71847928734061e-05
+        ]
+      ],
+      "to": [
+        [
+          1.0602860278131898e-14,
+          -3.954524424934491e-14
+        ],
+        [
+          5.6293200022557014e-14,
+          -1.1263749264897593e-14
+        ],
+        [
+          -1.7000845718186108e-14,
+          -8.271039560713012e-15
+        ],
+        [
+          -3.199754398523056e-14,
+          -3.5319579834609816e-15
+        ]
+      ]
+    }
+  },
+  "switch_currents": {
+    "switch_2207_closed": {
+      "a": [
+        -0.6110067946017717,
+        -3.3972736035349103
+      ],
+      "b": [
+        -0.37682142465827745,
+        1.5149781256099324
+      ],
+      "c": [
+        1.0605839856157844,
+        -0.8700496469643089
+      ],
+      "n": [
+        -0.07156372183729348,
+        2.7415736291616657
+      ]
+    },
+    "switch_3416_closed": {
+      "a": [
+        0.62095850218338,
+        23.844884424884874
+      ],
+      "b": [
+        6.779674844281538,
+        -11.524517285993811
+      ],
+      "c": [
+        -9.241447741343807,
+        1.739302622267144
+      ],
+      "n": [
+        1.7920645651744684,
+        -13.940469645390749
+      ]
+    },
+    "switch_3760_closed": {
+      "a": [
+        -0.6209586503442328,
+        -23.84488458005558
+      ],
+      "b": [
+        -6.779674846416176,
+        11.524517531912766
+      ],
+      "c": [
+        9.24144789302421,
+        -1.7393027804458543
+      ],
+      "n": [
+        -1.7920645657797076,
+        13.940469712363381
+      ]
+    },
+    "switch_1450_closed": {
+      "a": [
+        -2.543146849689134e-11,
+        5.739724288362308e-11
+      ],
+      "b": [
+        7.775783339213365e-11,
+        -1.4425763777825888e-10
+      ],
+      "c": [
+        -3.2674509862264154e-11,
+        1.2868312195596472e-10
+      ],
+      "n": [
+        -9.132600910263197e-12,
+        -4.119957458010211e-11
+      ]
+    },
+    "switch_3774_closed": {
+      "a": [
+        -2.1242204666955615,
+        -22.084797880314827
+      ],
+      "b": [
+        -4.494745513979764,
+        10.271233274484734
+      ],
+      "c": [
+        7.763558550670537,
+        -3.485962123413672
+      ],
+      "n": [
+        -1.1039519099361121,
+        15.190403899177266
+      ]
+    },
+    "switch_3753_closed": {
+      "a": [
+        1.325490816067776e-11,
+        2.3029866943559398e-10
+      ],
+      "b": [
+        1.0768478643312709e-10,
+        -2.40797636989039e-10
+      ],
+      "c": [
+        -3.6451057222484647e-11,
+        4.26233223733858e-11
+      ],
+      "n": [
+        -6.3655612543032e-11,
+        -4.247969821220828e-11
+      ]
+    },
+    "switch_1030_closed": {
+      "a": [
+        2.124220318615491,
+        22.084797725056067
+      ],
+      "b": [
+        4.494745511750795,
+        -10.271233028337877
+      ],
+      "c": [
+        -7.763558399075006,
+        3.485961965101541
+      ],
+      "n": [
+        1.1039519094105577,
+        -15.190403832193683
+      ]
+    },
+    "switch_1181_closed": {
+      "a": [
+        -2.745175047364173,
+        -45.92967819317175
+      ],
+      "b": [
+        -11.274420295422553,
+        21.795744040064985
+      ],
+      "c": [
+        17.005002273793256,
+        -5.225260553387226
+      ],
+      "n": [
+        -2.8960164613635286,
+        29.130871772041083
+      ]
+    }
+  },
+  "scope": "independent SI circuit reconstruction and fundamental network limits; no carrier-harmonic feeder propagation",
+  "network_sha256": "11fea1394d2fcdc1a563b87b4c2928e1edea49555d43c99ecf1cd7d7470d9fd7",
+  "point_sha256": "2487cc3935c4b524029880be626a311f0e63f7f41d47b87214bc1a697541c29f",
+  "audit_code_sha256": "df49f67232767f8ec6eab6c5d3808f1a9f7138f04bd7dc8d982bde760d0f3a86",
+  "python_version": "3.14.6 (main, Jun 10 2026, 10:03:53) [Clang 17.0.0 (clang-1700.6.4.2)]",
+  "numpy_version": "2.5.4"
+}

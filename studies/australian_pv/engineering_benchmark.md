@@ -32,7 +32,7 @@ Positive P/Q are injection; negative Q is absorption. Night export is negative (
 - No site exceeds the 258 V sustained-overvoltage setting (snapshot treated as its 10-minute average).
 - Largest native conductor utilisation across all points: 11.1%.
 
-**Simulation/optimisation agreement.** Without the 253 V row, the same-service OPF reproduces the local fixed point in all 5 conditions: largest bus-voltage difference 5.9e-08 V, site P 4.7e-05 W, site Q 9.9e-05 var (tolerances 0.001 V, 0.5 W, 0.5 var).
+**Simulation/optimisation agreement.** Without the 253 V row, the same-service OPF reproduces the local fixed point in all 5 conditions: largest bus-voltage difference 1.9e-08 V, site P 4.7e-05 W, site Q 9.9e-05 var (tolerances 0.001 V, 0.5 W, 0.5 var).
 
 **Local fixed point.** Converged in 5–6 iterations without relaxation. The largest ratio between successive voltage residuals is 0.041 (empirical contraction indicator on this stiff feeder; not a uniqueness or stability proof).
 
@@ -57,6 +57,6 @@ With this fixture, same-service OPF has no accepted solution in: High source, Ro
 
 This point is not counted as hardware-feasible. A small margin on active ripple limits in the OPF, or a switching correction in the 2ω model, would close the gap; neither is applied here.
 
-**Solve times** (diagnostic, this machine): Local control median 9.1 s; OPF, same volt-var service median 7.7 s; OPF, volt-var released median 2.8 s. OPF size: 2552 variables, 6025 constraints for 12 sites. Scaling beyond one feeder is not yet measured.
+**Solve times** (diagnostic, this machine): Local control median 8.4 s; OPF, same volt-var service median 6.4 s; OPF, volt-var released median 2.7 s. OPF size: 2552 variables, 6025 constraints for 12 sites. Scaling beyond one feeder is not yet measured.
 
 Per-site records: [devices.csv](results/engineering_benchmark/devices.csv) (requested and delivered Q, curtailment, losses, named limits). Reproduce: see the [study README](README.md).
