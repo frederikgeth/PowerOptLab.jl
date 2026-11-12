@@ -1,5 +1,5 @@
 {
-    "Manifest_sha256": "b61f2440eecd083978dd5bffb99893c75454a70aa2438d97e2b9b45aa0117e07",
+    "Manifest_sha256": "cc2a5cc12dac25062e0c2b8eb59fb5b6efe358a883e67b999f9b0d19e5692a1a",
     "operating_limits": {
         "dc_max_V": 765,
         "dc_min_V": 735,
@@ -178,7 +178,7 @@
     "network_sha256": "11fea1394d2fcdc1a563b87b4c2928e1edea49555d43c99ecf1cd7d7470d9fd7",
     "fixture_limits": "declared",
     "git_status": "",
-    "git_revision": "706d025e83593c6834993de1372cf23951ae7f27",
+    "git_revision": "9b0ce1d12874eac16c88d5d2cdff380021bdf094",
     "scope": "matched physical/network limits and hardware; fixed-point PF and nonconvex local OPF; no global optimality, dynamic stability or regional conformity claim",
     "objectives": {
         "opf_vv_released": "maximum total POC active injection; Q free, local VV/VW commands released",
@@ -196,7 +196,7 @@
         "max_iter": 1000,
         "mu_strategy": "monotone"
     },
-    "Project_sha256": "2724f9784cf88c1b37a76368436c396b5d7ba9a05d19bb28a73bbbabc9eafb24",
+    "Project_sha256": "0c5cee0c64e0ec1660feda166b834a7baee135b3b43acfaeb70ffd4b7830f40b",
     "current_capabilities": "balanced converter current at three-leg sites; free four-leg current with equal per-phase P; all temporary initialization rows removed",
     "site_availability_fractions": [
         0.25,

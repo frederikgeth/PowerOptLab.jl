@@ -13,24 +13,24 @@
     "capacitor_rating_A": 7,
     "circuit_checks": 13578,
     "integrations": 360,
-    "maximum_switched_capacitor_A": 4.647896418060189,
-    "minimum_prediction_margin_A": 0.11943679604888041,
+    "maximum_switched_capacitor_A": 4.647896418060204,
+    "minimum_prediction_margin_A": 0.1194367960488808,
     "reference_checks": 727,
     "references": 60,
     "thermal_prediction_failures": []
   },
   "fixture_limits": "declared",
   "generation_julia": "1.12.6",
-  "generation_revision": "706d025e83593c6834993de1372cf23951ae7f27",
+  "generation_revision": "9b0ce1d12874eac16c88d5d2cdff380021bdf094",
   "input_sha256": {
-    "results/engineering_benchmark/audit.json": "e083f56d2c87cc1ba5ae683e5507d770de02ab4d00208e4f23956373d6d693b5",
-    "results/engineering_benchmark/environment.json": "9d54ea3f79fd80c1703e41f5a878aa8a0fcc57ffea0a3fe6d87dfeadb77dcc5b",
-    "results/engineering_benchmark_emt/matched_audit.json": "42ba2a9134f5064f9691f680f313df544a413fa0d1f496851a737f0a1e1dec06",
-    "results/engineering_benchmark_emt_inputs.json": "38bce1649ec6d0547dd667ce213f5a0d1b3c1b8fa00c21facc9da1b89be9969b",
-    "results/engineering_boundary_emt/audit.json": "a47534645ae0d70c194019cc8a441a2be867c2086a30592000f846b50a8e2c5c",
-    "results/engineering_boundary_emt_inputs.json": "60320d630840c1dba963bcb47253ec4f25915b696fd1430aa835cc200f265b47",
-    "results/engineering_domain_audit.json": "3dd0929c346dc68e5e287450b5797b4be1101684e2d86b8e3f66b7a6b3c4d6de",
-    "results/engineering_domain_inputs.json": "fd6b2508af2ed0c5db9739ec1df0134e49cd5bc39ef148571272ca7d083cb8aa"
+    "results/engineering_benchmark/audit.json": "1787c22b1cc8c21d763b980d7281c4bf737f07fbd7fc65e4ff34724214e6bb92",
+    "results/engineering_benchmark/environment.json": "e0ca212aa32f88f0cb5de4ba3c1bccdf67cca12ed313f47c1132aa0f106e9bf3",
+    "results/engineering_benchmark_emt/matched_audit.json": "96d7acfc35614b9eae45e29e228383f0f957106f83623633337e13580d294cf7",
+    "results/engineering_benchmark_emt_inputs.json": "4acade26725d8d6eeb5e1335c70d6496a6ec1a31f96dbb6e44b0505500be2ad1",
+    "results/engineering_boundary_emt/audit.json": "a7a7c4392e302ce4ab9cde1fd33700019e8ac186daa2ec739b0007ce5baa15ec",
+    "results/engineering_boundary_emt_inputs.json": "54ae30f65343690429c181e7376dd0feb8d808086bac53a9ce2a221fc7b41c75",
+    "results/engineering_domain_audit.json": "d540a4424868acc5ec6dd3e1fe7c24913ae1d50340609b9247969220c79dce67",
+    "results/engineering_domain_inputs.json": "3ce34b875f006899f0415e55f3871c15003dae5d42897acc463108f46a743bb1"
   },
   "operating_limits": {
     "capacitor_rms_A": 7,
@@ -43,9 +43,9 @@
     "agreement": {
       "high_source": {
         "accepted": true,
-        "max_site_P_difference_W": 1.1416141205700114e-06,
+        "max_site_P_difference_W": 1.1397589787520701e-06,
         "max_site_Q_difference_var": 5.192856042413041e-05,
-        "max_voltage_difference_V": 5.4231914130090766e-08,
+        "max_voltage_difference_V": 1.4314192545803844e-08,
         "tolerance": {
           "power_W": 0.5,
           "reactive_var": 0.5,
@@ -54,9 +54,9 @@
       },
       "night": {
         "accepted": true,
-        "max_site_P_difference_W": 9.950971104899509e-07,
-        "max_site_Q_difference_var": 5.4257435749605065e-05,
-        "max_voltage_difference_V": 1.4270443117825405e-08,
+        "max_site_P_difference_W": 9.950968262728566e-07,
+        "max_site_Q_difference_var": 5.425742392617394e-05,
+        "max_voltage_difference_V": 1.4271322967523244e-08,
         "tolerance": {
           "power_W": 0.5,
           "reactive_var": 0.5,
@@ -65,9 +65,9 @@
       },
       "nominal": {
         "accepted": true,
-        "max_site_P_difference_W": 7.815860953996889e-07,
-        "max_site_Q_difference_var": 5.107284437144699e-05,
-        "max_voltage_difference_V": 3.1864228423952034e-08,
+        "max_site_P_difference_W": 7.807234396750573e-07,
+        "max_site_Q_difference_var": 5.1072839141852455e-05,
+        "max_voltage_difference_V": 1.48192039562645e-08,
         "tolerance": {
           "power_W": 0.5,
           "reactive_var": 0.5,
@@ -76,9 +76,9 @@
       },
       "oversized_dc": {
         "accepted": true,
-        "max_site_P_difference_W": 4.71001394544146e-05,
-        "max_site_Q_difference_var": 9.898045664158417e-05,
-        "max_voltage_difference_V": 5.898535776044629e-08,
+        "max_site_P_difference_W": 4.710004213848151e-05,
+        "max_site_Q_difference_var": 9.89804739219835e-05,
+        "max_voltage_difference_V": 1.8820232760079546e-08,
         "tolerance": {
           "power_W": 0.5,
           "reactive_var": 0.5,
@@ -87,9 +87,9 @@
       },
       "rotated_unbalance": {
         "accepted": true,
-        "max_site_P_difference_W": 1.245972043761867e-06,
-        "max_site_Q_difference_var": 5.192866183278966e-05,
-        "max_voltage_difference_V": 2.6672404171231292e-08,
+        "max_site_P_difference_W": 1.2451978363969829e-06,
+        "max_site_Q_difference_var": 5.1928661946476495e-05,
+        "max_voltage_difference_V": 1.7331035202478037e-08,
         "tolerance": {
           "power_W": 0.5,
           "reactive_var": 0.5,
