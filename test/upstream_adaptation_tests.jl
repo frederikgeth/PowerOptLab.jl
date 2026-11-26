@@ -100,14 +100,14 @@ end
         end
         original = deepcopy(net)
         for input in (net, JSON3.write(net))
-            dict = kron_reduce_bmopf(input)
+            dict = kron_reduce_neutrals(input)
             @test haskey(dict["bus"]["b"],"longitude") == coordinates
-            strict = JSON3.read(kron_reduce_bmopf(input; as_json=true), Dict{String,Any})
+            strict = JSON3.read(kron_reduce_neutrals(input; as_json=true), Dict{String,Any})
             @test JSONSchema.validate(schema, strict) === nothing
             @test strict["meta"]["created"] == net["meta"]["created"]
             @test !haskey(strict["bus"]["b"],"longitude")
             @test !haskey(strict["bus"]["b"],"latitude")
-            extended = JSON3.read(kron_reduce_bmopf(input; as_json=true, include_coordinates=true), Dict{String,Any})
+            extended = JSON3.read(kron_reduce_neutrals(input; as_json=true, include_coordinates=true), Dict{String,Any})
             @test (JSONSchema.validate(schema, extended) === nothing) == !coordinates
             if coordinates
                 @test extended["bus"]["b"]["longitude"] == 151.0
