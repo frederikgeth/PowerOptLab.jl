@@ -1,0 +1,12 @@
+{
+  "artifacts": {
+    "engineering_benchmark.md": "289ff02ca911991cf1408777a0bf840f61a0cccad236de6b72aa802727947fd5",
+    "figures/engineering_coordination.png": "d77a2c2ce75d89ce0d3a384e12efb84eb545cb3d1c9286dcc8d7aef3a6e25392",
+    "figures/engineering_coordination.svg": "621aac7d7c0a21956bc180e07d314221f61f18f0cb71581ce275e7e0c05834ba",
+    "figures/engineering_coordination_emt.png": "f04a091b6a22745bf1062e51e606a6622cab4a8674c33023bf5442f774a0e48b",
+    "figures/engineering_coordination_emt.svg": "8c83a60df27831fade0b3f026716f850c832e54fd99c6fe52d7321c007a4e794"
+  },
+  "plot_code_sha256": "ffa89cbf7c3e73f559b049ee12e557c51660ae033bb5b046a0ac2b64a8f0f158",
+  "audit_sha256": "4578cc7c8232a0980222c11381cdfb8b3f5ca5c7df04321d519a6d98dc3758d0",
+  "matched_emt_audit_sha256": "326e4967f65245b233a36fc084ff5ea2aaaadd396831cc2a81c70ff74715dd62"
+}

@@ -1,9 +1,9 @@
 {
     "night": {
-        "max_voltage_difference_V": 1.4271322967523244e-8,
-        "max_site_P_difference_W": 9.950968262728566e-7,
+        "max_voltage_difference_V": 1.427134500953779e-8,
+        "max_site_P_difference_W": 9.95097131806233e-7,
         "accepted": true,
-        "max_site_Q_difference_var": 5.425742392617394e-5,
+        "max_site_Q_difference_var": 5.4257430292636855e-5,
         "tolerance": {
             "reactive_var": 0.5,
             "power_W": 0.5,
@@ -11,10 +11,10 @@
         }
     },
     "nominal": {
-        "max_voltage_difference_V": 1.48192039562645e-8,
+        "max_voltage_difference_V": 1.4819151565444443e-8,
         "max_site_P_difference_W": 7.807234396750573e-7,
         "accepted": true,
-        "max_site_Q_difference_var": 5.1072839141852455e-5,
+        "max_site_Q_difference_var": 5.107284482619434e-5,
         "tolerance": {
             "reactive_var": 0.5,
             "power_W": 0.5,
@@ -23,9 +23,9 @@
     },
     "oversized_dc": {
         "max_voltage_difference_V": 1.8820232760079546e-8,
-        "max_site_P_difference_W": 4.710004213848151e-5,
+        "max_site_P_difference_W": 4.7100038500502706e-5,
         "accepted": true,
-        "max_site_Q_difference_var": 9.89804739219835e-5,
+        "max_site_Q_difference_var": 9.89804748314782e-5,
         "tolerance": {
             "reactive_var": 0.5,
             "power_W": 0.5,
@@ -36,7 +36,7 @@
         "max_voltage_difference_V": 1.4314192545803844e-8,
         "max_site_P_difference_W": 1.1397589787520701e-6,
         "accepted": true,
-        "max_site_Q_difference_var": 5.192856042413041e-5,
+        "max_site_Q_difference_var": 5.192856588109862e-5,
         "tolerance": {
             "reactive_var": 0.5,
             "power_W": 0.5,
@@ -44,10 +44,10 @@
         }
     },
     "rotated_unbalance": {
-        "max_voltage_difference_V": 1.7331035202478037e-8,
+        "max_voltage_difference_V": 1.733104204704886e-8,
         "max_site_P_difference_W": 1.2451978363969829e-6,
         "accepted": true,
-        "max_site_Q_difference_var": 5.1928661946476495e-5,
+        "max_site_Q_difference_var": 5.1928663424405386e-5,
         "tolerance": {
             "reactive_var": 0.5,
             "power_W": 0.5,
