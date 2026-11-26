@@ -1,5 +1,5 @@
 {
-    "Manifest_sha256": "93e0ba9b4f16ca921e613aec62b11d4b8d2c172dc3ab8578f0a0d96c2153aafb",
+    "Manifest_sha256": "b61f2440eecd083978dd5bffb99893c75454a70aa2438d97e2b9b45aa0117e07",
     "operating_limits": {
         "dc_max_V": 765,
         "dc_min_V": 735,
@@ -57,7 +57,7 @@
         "src/components/inverter_carrier_thermal.jl": "3ccd458b2f0a87d27891b051de89ea50e7483383fc09efed90c0129da51d1ebd",
         "scripts/australian_pv/coordinated_engineering.jl": "97a926930b7b8ca473b2263bb0b7a1c6ebeca95008155e30597319c6f1f306a4",
         "src/PowerOptLab.jl": "d82f72635c857a99e0eb667528ac02dab343ecee108f9a969aff8e09d868e520",
-        "src/components/inverter_feasibility.jl": "d2e93651e245754ab54490c267d7e705cea5ce32238236843ca349d5ecc32b40",
+        "src/components/inverter_feasibility.jl": "80628a3d42e73b33532a8ac3544c444e1091122691cac702daf93a2d4b566dd3",
         "src/formulations/jump.jl": "8d1480ed914a90b20302cd7b495fc470e18697dc15083897bf1d1f1808991e26",
         "src/problems/voltage_aware_inverter_fleet.jl": "285ef3067ce278ba7ee76b81e16d00348849cf46f72ab05ac43f3b972aef938d",
         "src/components/devices.jl": "295ee2aed266b01165ccc0c1ea0238e7d22ed41d4a0fb5f77420d2d1792fe793",
@@ -65,7 +65,7 @@
         "src/formulations/control_intent.jl": "9429c437e8dea0ce4f50b227b7c5187395d28b404d127d0103a43805834b0664",
         "src/problems/constrained_state_estimation.jl": "c2ed0c2541dfc9846244033e0c189d9a3b24f0da6bb569eb05c9298232d0ce08",
         "scripts/australian_pv/network_si_audit.py": "df49f67232767f8ec6eab6c5d3808f1a9f7138f04bd7dc8d982bde760d0f3a86",
-        "src/components/advanced_inverter.jl": "61c10d063e450c9dbf895264b6875e90e534d292bd1cb515fe9911606df6b4b7",
+        "src/components/advanced_inverter.jl": "4f10c72a29b17788a1c0752ccbe12a3c292ab7f6ae648f49e513d26aa2eda450",
         "src/formulations/error_tools.jl": "a4e6292df32cbaea08e25fecfa54f2e76a92b87c935ca8dca1ac05ed6ff4c1ff",
         "src/problems/generator_opf.jl": "b0540ace7f36b5c5fb5067b7a1efbc6af4db42e1623d5af403307060f6a782fb",
         "src/formulations/primitives.jl": "d919b895117a6e1ae3e68c7bb1723dd57ba852bad679e96219d3ebb164040506",
@@ -177,8 +177,8 @@
     "cpu": "Apple M4 Max",
     "network_sha256": "11fea1394d2fcdc1a563b87b4c2928e1edea49555d43c99ecf1cd7d7470d9fd7",
     "fixture_limits": "declared",
-    "git_status": "",
-    "git_revision": "ced6b286ca31e72e2a72ba0a96d9823164f57781",
+    "git_status": " D studies/australian_pv/results/engineering_benchmark/agreement.json\n D studies/australian_pv/results/engineering_benchmark/cases.csv\n D studies/australian_pv/results/engineering_benchmark/devices.csv\n D studies/australian_pv/results/engineering_benchmark/environment.json\n D studies/australian_pv/results/engineering_benchmark/rated_capability.csv\n D studies/australian_pv/results/engineering_benchmark/summary.json\n D studies/australian_pv/results/engineering_benchmark_legacy_fixture/cases.csv\n D studies/australian_pv/results/engineering_boundary_emt/comparison.csv\n D studies/australian_pv/results/engineering_domain_summary.csv\n",
+    "git_revision": "0fd7f67ffaad83b327c1e535fa8c84372ea11a35",
     "scope": "matched physical/network limits and hardware; fixed-point PF and nonconvex local OPF; no global optimality, dynamic stability or regional conformity claim",
     "objectives": {
         "opf_vv_released": "maximum total POC active injection; Q free, local VV/VW commands released",

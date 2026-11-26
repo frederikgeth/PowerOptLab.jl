@@ -1,0 +1,219 @@
+{
+    "agreement_accepted": false,
+    "accepted": 11,
+    "all_planned_accepted": false,
+    "completed": 15,
+    "cases": {
+        "oversized_dc_opf_vv_released": {
+            "raw_status": {
+                "has_primal": true,
+                "termination_status": "LOCALLY_SOLVED",
+                "primal_status": "FEASIBLE_POINT",
+                "publishable": true,
+                "optimal": true,
+                "feasible": true
+            },
+            "point_sha256": "f3f159ff35918d6e0b1334bdd538b4047bbc8c93e84620c8936aa2e740fa5bf8",
+            "accepted": true,
+            "model_accepted": true,
+            "network_accepted": true
+        },
+        "oversized_dc_opf_equal_service": {
+            "raw_status": {
+                "has_primal": true,
+                "termination_status": "LOCALLY_INFEASIBLE",
+                "primal_status": "INFEASIBLE_POINT",
+                "publishable": false,
+                "optimal": false,
+                "feasible": false
+            },
+            "point_sha256": "4ec488e6722fe873da9e91356a0668b7e1a9051afb0c707cca19718d8d48a3ac",
+            "accepted": false,
+            "model_accepted": false,
+            "network_accepted": true
+        },
+        "oversized_dc_local": {
+            "raw_status": {
+                "has_primal": true,
+                "termination_status": "LOCALLY_SOLVED",
+                "primal_status": "FEASIBLE_POINT",
+                "publishable": true,
+                "optimal": true,
+                "feasible": true
+            },
+            "point_sha256": "93ec3803f55dcde0b2a755f20d42ba55a9ff2a70ae7ea9b09b317e51c6dd1d8b",
+            "accepted": true,
+            "model_accepted": true,
+            "network_accepted": true
+        },
+        "night_opf_equal_service": {
+            "raw_status": {
+                "has_primal": true,
+                "termination_status": "LOCALLY_INFEASIBLE",
+                "primal_status": "INFEASIBLE_POINT",
+                "publishable": false,
+                "optimal": false,
+                "feasible": false
+            },
+            "point_sha256": "9fb1fac92239a77171ae4676553693726d0a2f7b61f27e37abcd18f55deaf57b",
+            "accepted": false,
+            "model_accepted": false,
+            "network_accepted": true
+        },
+        "high_source_opf_vv_released": {
+            "raw_status": {
+                "has_primal": true,
+                "termination_status": "LOCALLY_SOLVED",
+                "primal_status": "FEASIBLE_POINT",
+                "publishable": true,
+                "optimal": true,
+                "feasible": true
+            },
+            "point_sha256": "ede00bf03bd8151284477ca76f665fdfc72fc616b0c6ad6e6d51e0d5022e2b65",
+            "accepted": true,
+            "model_accepted": true,
+            "network_accepted": true
+        },
+        "rotated_unbalance_opf_equal_service": {
+            "raw_status": {
+                "has_primal": true,
+                "termination_status": "LOCALLY_INFEASIBLE",
+                "primal_status": "INFEASIBLE_POINT",
+                "publishable": false,
+                "optimal": false,
+                "feasible": false
+            },
+            "point_sha256": "d2135838f706e95c6fd72910189361aba2a7eea1a443d75d7fc817426e03bd72",
+            "accepted": false,
+            "model_accepted": false,
+            "network_accepted": true
+        },
+        "night_opf_vv_released": {
+            "raw_status": {
+                "has_primal": true,
+                "termination_status": "LOCALLY_SOLVED",
+                "primal_status": "FEASIBLE_POINT",
+                "publishable": true,
+                "optimal": true,
+                "feasible": true
+            },
+            "point_sha256": "4fc9495f3b39ff2b50769c720ec069f657111a0f3e5f2158bf846f113e75f551",
+            "accepted": true,
+            "model_accepted": true,
+            "network_accepted": true
+        },
+        "night_local": {
+            "raw_status": {
+                "has_primal": true,
+                "termination_status": "LOCALLY_SOLVED",
+                "primal_status": "FEASIBLE_POINT",
+                "publishable": true,
+                "optimal": true,
+                "feasible": true
+            },
+            "point_sha256": "56ca552d602dcd0202e38e090289241c2b0c5d18802e693fba2d8c7316d67dd3",
+            "accepted": true,
+            "model_accepted": true,
+            "network_accepted": true
+        },
+        "high_source_opf_equal_service": {
+            "raw_status": {
+                "has_primal": true,
+                "termination_status": "LOCALLY_INFEASIBLE",
+                "primal_status": "INFEASIBLE_POINT",
+                "publishable": false,
+                "optimal": false,
+                "feasible": false
+            },
+            "point_sha256": "439ba9ee2b8552a901af93e054500fcd4a134941ed9d9778da6809a1256d2fb1",
+            "accepted": false,
+            "model_accepted": false,
+            "network_accepted": true
+        },
+        "nominal_opf_vv_released": {
+            "raw_status": {
+                "has_primal": true,
+                "termination_status": "LOCALLY_SOLVED",
+                "primal_status": "FEASIBLE_POINT",
+                "publishable": true,
+                "optimal": true,
+                "feasible": true
+            },
+            "point_sha256": "def433efd449974a3a7e50eb075c6a668314ff17db0541936e1fb773a66d886c",
+            "accepted": true,
+            "model_accepted": true,
+            "network_accepted": true
+        },
+        "rotated_unbalance_opf_vv_released": {
+            "raw_status": {
+                "has_primal": true,
+                "termination_status": "LOCALLY_SOLVED",
+                "primal_status": "FEASIBLE_POINT",
+                "publishable": true,
+                "optimal": true,
+                "feasible": true
+            },
+            "point_sha256": "c42522f02466cdfbf40f6e0df38135280acb47926a2d9efccba8e6533eed21fa",
+            "accepted": true,
+            "model_accepted": true,
+            "network_accepted": true
+        },
+        "nominal_opf_equal_service": {
+            "raw_status": {
+                "has_primal": true,
+                "termination_status": "LOCALLY_SOLVED",
+                "primal_status": "FEASIBLE_POINT",
+                "publishable": true,
+                "optimal": true,
+                "feasible": true
+            },
+            "point_sha256": "eeed266887e06c089e4c3886c975bb375299401139ec4475cec90707025a1fb9",
+            "accepted": true,
+            "model_accepted": true,
+            "network_accepted": true
+        },
+        "nominal_local": {
+            "raw_status": {
+                "has_primal": true,
+                "termination_status": "LOCALLY_SOLVED",
+                "primal_status": "FEASIBLE_POINT",
+                "publishable": true,
+                "optimal": true,
+                "feasible": true
+            },
+            "point_sha256": "e1715afe97a367a9d2861f9558fd7cd44482e002dc163f7e97fdf7e11a28781b",
+            "accepted": true,
+            "model_accepted": true,
+            "network_accepted": true
+        },
+        "high_source_local": {
+            "raw_status": {
+                "has_primal": true,
+                "termination_status": "LOCALLY_SOLVED",
+                "primal_status": "FEASIBLE_POINT",
+                "publishable": true,
+                "optimal": true,
+                "feasible": true
+            },
+            "point_sha256": "703d55be6310a575ee6dafeebbd19f7735df316fb34babfc53c481377102660a",
+            "accepted": true,
+            "model_accepted": true,
+            "network_accepted": true
+        },
+        "rotated_unbalance_local": {
+            "raw_status": {
+                "has_primal": true,
+                "termination_status": "LOCALLY_SOLVED",
+                "primal_status": "FEASIBLE_POINT",
+                "publishable": true,
+                "optimal": true,
+                "feasible": true
+            },
+            "point_sha256": "ca8bc816dc18c2e0b47af6a323673b284042187c269aa025e0c20ba68f7cd494",
+            "accepted": true,
+            "model_accepted": true,
+            "network_accepted": true
+        }
+    },
+    "planned": 15
+}

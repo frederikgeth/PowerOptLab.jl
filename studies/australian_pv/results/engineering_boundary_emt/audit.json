@@ -1,0 +1,48 @@
+{
+  "accepted": true,
+  "checks": 749,
+  "cases": {
+    "combined": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.17771879958604597,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.6628122169910665,
+        "failed_engineering_checks": []
+      }
+    },
+    "lf_only_boundary": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.3994604006722621,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.810511473282523,
+        "failed_engineering_checks": [
+          "dc_voltage_max"
+        ]
+      }
+    },
+    "four_leg_combined": {
+      "averaged": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.09488369640262034,
+        "failed_engineering_checks": []
+      },
+      "switched": {
+        "mechanisms_accepted": true,
+        "capacitor_total_rms_A": 0.3463318355354975,
+        "failed_engineering_checks": []
+      }
+    }
+  },
+  "expectation_failures": [],
+  "scope": "independent metric, energy, RMS-limit, coverage and provenance reconstruction; mechanism agreement does not certify failed hardware bounds",
+  "input_sha256": "517a0ac6bb53f3bb83ade3602ca60c6506b8b169f6406d774311396efc744108",
+  "results_sha256": "97f4b3c1a8cb97151d4ace1ac53ed79df1d1731e3be3e62358b9712e802d6bc0"
+}
