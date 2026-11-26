@@ -182,10 +182,11 @@ end
     @test_throws ArgumentError solve_advanced_inverter(inv_grid3_bal(),
         AdvancedInverter(; id="i", pwm_ac_converter_reserve=(1.0, 0.0, 0.0),
             splitbase...)) # reserve requires i_max
-    # Natural offset = 800(2.5-3.5)/(2·6) = -66.7 V; without an actuator a
+    # Equal-charge offset = 800(2.5-3.5)/(2·6) = -66.7 V; without an actuator a
     # 1 V mean-offset limit is a contradictory parameterisation.
     @test_throws ArgumentError solve_advanced_inverter(inv_grid3_bal(),
         AdvancedInverter(; id="i", c_dc_upper=2.5e-3, c_dc_lower=3.5e-3,
+            midpoint_mean_model=:equal_charge,
             v_mid_mean_max=1.0, splitbase...))
 end
 
@@ -670,10 +671,24 @@ end
     @test explicit_symmetric.i_cap_upper ≈ explicit_symmetric.i_cap_lower rtol=1e-8
     @test explicit_symmetric.i_cap ≈ explicit_symmetric.i_cap_upper rtol=1e-12
 
-    asym = solve_advanced_inverter(inv_grid3_unbal(),
+    # Default: bleeder resistors or a balancing loop hold the mean midpoint at
+    # half the bus, whatever the capacitance mismatch.
+    held = solve_advanced_inverter(inv_grid3_unbal(),
         AdvancedInverter(; id="i", c_dc_upper=cu, c_dc_lower=cl, common...))
+    @test solve_status(held).publishable
+    @test held.v_mid_mean == 0.0
+    @test_throws ArgumentError validate_device(AdvancedInverter(; id="i",
+        midpoint_mean_model=:bogus, common...))
+    @test_throws ArgumentError validate_device(AdvancedInverter(; id="i", bus="poc",
+        phase_terminals=["a","b","c"], neutral="n", topology=:FOUR_LEG, s_max=20e3,
+        v_dc=vdc, c_dc=3e-3, midpoint_mean_model=:equal_charge))
+
+    asym = solve_advanced_inverter(inv_grid3_unbal(),
+        AdvancedInverter(; id="i", c_dc_upper=cu, c_dc_lower=cl,
+            midpoint_mean_model=:equal_charge, common...))
     @test asym.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
     @test asym.v_mid_mean ≈ vdc*(cu-cl)/(2csum) atol=1e-10
+    @test asym.switching_margin < held.switching_margin - 50.0
     @test asym.q_mid_balance == 0.0
     @test asym.dv2 ≈ asym.ripple/(2w*ceq*vdc) rtol=1e-4
     # Default open line-frequency source: each averaged rail carries half the
@@ -712,6 +727,7 @@ end
     common = (bus="poc", phase_terminals=["a","b","c"], neutral="n",
               topology=:SPLIT_DC, s_max=20e3, i_max=50.0, In_max=40.0,
               v_dc=vdc, c_dc=3e-3, c_dc_upper=cu, c_dc_lower=cl,
+              midpoint_mean_model=:equal_charge,
               m_max=0.96, r_filter=0.05, x_filter=0.15)
     r = solve_advanced_inverter(inv_grid3_unbal(), AdvancedInverter(; id="i",
         q_mid_balance_max=0.25, v_mid_mean_max=1.0,
@@ -1241,13 +1257,39 @@ end
     @test tight.p_poc < loose.p_poc - 50.0        # … curtailing export
 end
 
-@testset "Advanced inverter: legacy single-phase scalar cap binds (|V_int| ≤ m·Vdc/√3)" begin
+@testset "Advanced inverter: single-phase bridge voltage cap binds" begin
     common = (bus="poc", s_max=5000.0, r_filter=0.2, x_filter=0.5)
     loose = solve_advanced_inverter(inv_grid(), AdvancedInverter(; id="i", common...))
-    capd  = solve_advanced_inverter(inv_grid(), AdvancedInverter(; id="i", modulation_max=1.0, v_dc=400.0, common...))
-    @test capd.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
-    @test capd.v_int_mag[1] ≈ 1.0 * 400.0 / sqrt(3)  atol=1.0   # pins the retained convention
-    @test capd.p_poc < loose.p_poc - 20.0
+    # Ideal fundamental limits: full bridge m·Vdc/√2, half bridge m·Vdc/(2√2).
+    full = solve_advanced_inverter(inv_grid(), AdvancedInverter(; id="i",
+        modulation_max=1.0, v_dc=320.0, common...))
+    half = solve_advanced_inverter(inv_grid(), AdvancedInverter(; id="i",
+        modulation_max=1.0, v_dc=640.0, single_phase_bridge=:half_bridge, common...))
+    for capd in (full, half)
+        @test solve_status(capd).publishable
+        @test capd.v_int_mag[1] ≈ 320.0 / sqrt(2)  atol=0.5
+        @test capd.p_poc < loose.p_poc - 20.0
+    end
+    @test half.p_poc ≈ full.p_poc rtol=1e-5
+    # A 400 V full bridge reaches a 230 V grid; a 400 V half bridge cannot.
+    roomy = solve_advanced_inverter(inv_grid(), AdvancedInverter(; id="i",
+        modulation_max=1.0, v_dc=400.0, common...))
+    @test solve_status(roomy).publishable
+    @test roomy.p_poc ≈ loose.p_poc rtol=1e-5
+    short = solve_advanced_inverter(inv_grid(), AdvancedInverter(; id="i",
+        modulation_max=1.0, v_dc=400.0, single_phase_bridge=:half_bridge, common...))
+    @test !solve_status(short).publishable
+    # Several phases can only share one DC link through half bridges.
+    three = (bus="poc", phase_terminals=["a","b","c"], neutral="n", s_max=15e3,
+             modulation_max=1.0, v_dc=700.0)
+    @test_throws ArgumentError validate_device(AdvancedInverter(; id="i", three...))
+    @test validate_device(AdvancedInverter(; id="i",
+        single_phase_bridge=:half_bridge, three...)) === nothing
+    @test_throws ArgumentError validate_device(AdvancedInverter(; id="i", bus="poc",
+        s_max=5e3, single_phase_bridge=:h_bridge))
+    @test_throws ArgumentError validate_device(AdvancedInverter(; id="i", bus="poc",
+        phase_terminals=["a","b","c"], neutral="n", topology=:THREE_LEG, s_max=5e3,
+        v_dc=700.0, c_dc=1e-3, single_phase_bridge=:half_bridge))
 end
 
 @testset "Advanced inverter: POC Q includes the grid-side shunt" begin
@@ -1489,4 +1531,27 @@ end
                                r_filter=0.2, x_filter=0.5, v_int_max=245.0)
     runrated = solve_advanced_inverter(inv_grid(), unrated)
     @test solve_status(runrated).publishable
+end
+
+@testset "Advanced inverter: stalled raw-SI solve falls back to per-unit" begin
+    # No filter and no conductor rating: poorly conditioned in raw SI.
+    bare = AdvancedInverter(; id="i", bus="poc", phase_terminals=["a","b","c"],
+        neutral="n", topology=:FOUR_LEG, s_max=20e3, v_dc=800.0, c_dc=3e-3,
+        i_cap_max=12.0, f_sw=10e3, pwm_strategy=:CENTERED)
+    raw = solve_advanced_inverter(inv_grid3(), bare; per_unit_fallback=false)
+    reference = solve_advanced_inverter(inv_grid3(), bare; per_unit=true, s_base=20e3)
+    @test solve_status(reference).publishable
+    if solve_status(raw).publishable
+        # Whether raw SI stalls is platform dependent. When it converges, the
+        # two coordinate systems close the PWM reserve at slightly different
+        # points inside the 1 % reserve band, so export agrees only to that band.
+        @test raw.p_poc ≈ reference.p_poc rtol=1e-2
+        @test raw.pwm_reserve_margin >= -1e-6
+    else
+        recovered = @test_logs (:warn, r"per-unit") match_mode=:any solve_advanced_inverter(
+            inv_grid3(), bare)
+        @test solve_status(recovered).publishable
+        @test recovered.p_poc ≈ reference.p_poc rtol=1e-6
+        @test recovered.pwm_reserve_margin >= -1e-6
+    end
 end

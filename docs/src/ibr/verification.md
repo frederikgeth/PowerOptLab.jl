@@ -185,6 +185,8 @@ Warm starts and damping are numerical choices, not a transient inverter model.
 | Sequence limits | unbalanced voltage sources | each of `i_zero_max`, `i_positive_max`, `i_negative_max` bounds its reported component |
 | 3-wire topology | KCL | the three phase-current phasors sum to zero under balanced and unbalanced voltage |
 | Balanced switching hull | closed form | `Vdc_min = sqrt(6) U/m` for 3-leg and `2sqrt(2) U/m` for split DC |
+| Single-phase bridge cap | closed form | `abs(U) = m Vdc/sqrt(2)` for a full bridge and `m Vdc/(2sqrt(2))` for a half bridge when binding; full bridges on several phases of one link are rejected |
+| Stalled raw-SI solve | paired raw-SI and per-unit solves of an unrated plant | a stall is repeated once in per-unit coordinates and reported; infeasible outcomes are not retried |
 | Sample resolution and audit | nested grids, full-cycle Taylor enclosure and adaptive separating cuts | a coarse-grid false optimum cannot publish; feasible dispatch remains available after refinement |
 | Offline current allocation | analytic VA-circle projection across bases; primitive LCL reconstruction; rail-conflict witness | accepted alternatives meet all declared bounds; a failed solve never establishes plant infeasibility; inconclusive rail enclosures remain unresolved |
 | Local Q→P→I₂ allocation | analytic Q-priority circle; fixed-boundary Australian mean/worst/sequence laws; primitive LCL/grid commands | every stage passes physical and policy checks; lower-priority stages preserve achieved powers; explicit override is distinct from a failed strict request |
@@ -192,7 +194,7 @@ Warm starts and damping are numerical choices, not a transient inverter model.
 | 2ω PLECS comparison | Deakin et al. Table VII | all six rows are retained; non-cancelling analytical powers agree with PLECS within 0.3% and reported currents within 1% |
 | Bus capacitance | capacitor energy balance | open line-frequency source: `dv2 = ripple/(2ω Ceq Vdc)`, with `Ceq=Cu Cl/(Cu+Cl)` for a split link; ideal stiff source: `dv2 = 0` |
 | Split midpoint | charge balance | equal banks: `dv_mid = i_neutral/[ω(Cu+Cl)]` for every source model, recovering `i_neutral/(2ω Cdc)` |
-| Split-bank mismatch | series charge, midpoint KCL, and an independent three-node nodal solve over open, stiff, resistive and R–L sources | natural mean offset is `Vdc(Cu-Cl)/[2(Cu+Cl)]`; open source: equal neutral shares, `dv_mid = In(1/Cu+1/Cl)/(4ω)` and `dv_bus_fundamental = In abs(1/Cl-1/Cu)/(2ω)`; stiff source: shares `Cu/(Cu+Cl)`, `Cl/(Cu+Cl)` and no bus ripple |
+| Split-bank mismatch | series charge, midpoint KCL, and an independent three-node nodal solve over open, stiff, resistive and R–L sources | the default balanced mean offset is zero and the `:equal_charge` offset is `Vdc(Cu-Cl)/[2(Cu+Cl)]`; open source: equal neutral shares, `dv_mid = In(1/Cu+1/Cl)/(4ω)` and `dv_bus_fundamental = In abs(1/Cl-1/Cu)/(2ω)`; stiff source: shares `Cu/(Cu+Cl)`, `Cl/(Cu+Cl)` and no bus ripple |
 | Bounded midpoint balancing | differential-charge identity | `v_mid_mean - v_mid_natural = 2q_mid_balance/(Cu+Cl)` and insufficient charge authority is infeasible |
 | Capacitor RMS budget | orthogonal components | reported physical upper/lower currents combine their neutral share, common 2ω current, and reserved switching term |
 | Capacitor thermal and ESR loss | weighted squared-current sum | rating constraints use `i_cap_thermal_*`; `p_cap_loss = ESRu Iu,th² + ESRl Il,th²` and enters `p_dc` exactly |

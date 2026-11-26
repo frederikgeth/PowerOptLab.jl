@@ -405,12 +405,19 @@ regulation bandwidth lies below 100 Hz. `result.dv_bus_fundamental` reports
 ``C_{eq}/C_u`` and ``C_{eq}/C_l``, which moves the midpoint by
 ``N_2=D(C_u-C_l)/(2C_\Sigma)`` at 2ω.
 
-With equal stored charge and no balancing action, unequal capacitances also
-shift the mean midpoint away from half the total bus:
+The mean midpoint voltage is not determined by the fundamental-frequency
+circuit. `midpoint_mean_model` declares it. The default `:balanced` sets
+``\bar N_{nat}=0``: bleeder resistors or a balancing loop hold the mean midpoint
+at half the bus, whatever the capacitance mismatch. `:equal_charge` describes
+two series banks with no balancing path that have only ever carried the same
+charge, which shifts the mean midpoint away from half the bus:
 
 ```math
 \boxed{\bar N_{nat}=\frac{V_{dc}(C_u-C_l)}{2C_\Sigma}}.
 ```
+
+This offset is large for ordinary tolerances (40 V on an 800 V link for a
+±10 % mismatch) and subtracts directly from the half-rail headroom.
 
 The optional quasi-static balancing actuator transfers a bounded differential
 charge ``q_b``:

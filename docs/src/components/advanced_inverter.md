@@ -47,7 +47,7 @@ the forward controller and lists supported versus planned features.
 | Phase | Feature | Model |
 |---|---|---|
 | 0 | Output filter | reduced one-arm primitive, or explicit LCL with independent converter/grid primitive matrices, damped midpoint capacitor, distinct arm currents, and an optional POC shunt |
-| 1 | Internal EMF / DC utilisation | `abs(V_int)` box; a legacy scalar `:SINGLE_PHASE` cap using the documented `/√3` convention; or a three-phase topology's sampled switching polytope (below) |
+| 1 | Internal EMF / DC utilisation | `abs(V_int)` box; an ideal full- or half-bridge `:SINGLE_PHASE` voltage cap; or a three-phase topology's sampled switching polytope (below) |
 | 2 | Grid-forming | balanced 120° internal EMF with a bounded magnitude decision variable; no droop, virtual impedance, or limiter dynamics |
 | 3 | Converter losses | non-branching `P_dc = P_conv + P_loss + P_cap_loss`; fitted per-leg fixed/linear/quadratic terms include the fourth-leg neutral current for `:FOUR_LEG` |
 | 4 | Double-frequency ripple | single-phase ripple-amplitude cap; three-phase topologies form a small-ripple 2ω bus-voltage phasor that derates the sampled DC rails (below) |
@@ -60,12 +60,14 @@ Every feature is opt-in: with only `id`, `bus`, and `s_max` the device is a plai
 grid-following converter, and the internal node collapses onto the POC when the
 filter is zero.
 
-!!! warning "`:SINGLE_PHASE` is not yet a circuit topology model"
-    `modulation_max*v_dc/√3` is a retained scalar convention, not a derived
-    full-bridge or half-bridge switching hull. A single-phase full bridge and
-    half bridge have different DC-utilisation factors, so do not infer hardware
-    feasibility from this cap until the bridge and modulation convention are
-    made explicit. Also, for one sinusoidal phase `|V I| = |S|`; consequently
+!!! note "`:SINGLE_PHASE` voltage and ripple limits"
+    With `modulation_max` and `v_dc`, the internal EMF is capped at the ideal
+    fundamental voltage of the bridge named by `single_phase_bridge`:
+    `modulation_max·v_dc/√2` for `:full_bridge` (the default) and
+    `modulation_max·v_dc/(2√2)` for `:half_bridge`. These are linear-modulation
+    limits of an ideal bridge, without dead time or device drops. With several
+    phase terminals only `:half_bridge` is accepted, because full bridges on
+    one DC link cannot share a neutral. For one sinusoidal phase `|V I| = |S|`; consequently
     `p_ripple_max` is only an oscillating-power amplitude bound and largely
     duplicates an apparent-power cap. It does not calculate capacitor voltage or
     RMS current without `v_dc`, `c_dc`, and a DC-source model.
@@ -502,19 +504,19 @@ neutral current and capacitor ripple are still calculated, but no thermal
 capability is asserted. For `:FOUR_LEG`, capacitor ratings do not constrain the
 fourth semiconductor leg; supply `In_max` separately to enforce that rating.
 
-If the series banks have equal stored charge, their natural mean offset is
-`N̄_nat = V_dc(C_u-C_l)/(2C_\Sigma)`. Optional charge transfer gives
+`midpoint_mean_model` sets the mean midpoint offset `N̄_nat` before any
+balancing charge. The default `:balanced` gives `N̄_nat = 0`: bleeder resistors
+or a balancing loop hold the mean midpoint at half the bus whatever the
+capacitance mismatch. `:equal_charge` gives
+`N̄_nat = V_dc(C_u-C_l)/(2C_\Sigma)`, the offset of two series banks that have
+only ever carried the same charge. Optional charge transfer gives
 `N̄=N̄_nat+2q_mid_balance/C_\Sigma`, subject to `q_mid_balance_max` and
 `v_mid_mean_max`.
 
-!!! warning "The equal-charge mean offset can dominate the rail headroom"
-    `N̄_nat` is the offset of two series capacitors that have only ever carried
-    the same charge. It is large for ordinary tolerances: 2.5 mF and 3.5 mF
-    half-banks on an 800 V link give `N̄_nat ≈ −67 V`, and a ±10 % mismatch
-    gives 40 V. Hardware with bleeder resistors or an active balancing loop
-    holds the mean midpoint near half the bus regardless of capacitance. To
-    represent that, supply `q_mid_balance_max` (and, if wanted,
-    `v_mid_mean_max`) so the solve can remove the offset.
+!!! warning "The equal-charge offset can dominate the rail headroom"
+    Under `:equal_charge` the offset is large for ordinary tolerances: 2.5 mF
+    and 3.5 mF half-banks on an 800 V link give `N̄_nat ≈ −67 V`, and a ±10 %
+    mismatch gives 40 V. Select it only for a link with no balancing path.
 
 The factor of two on the rail is the half-bus constraint. For a balanced set, the pairwise switching
 hull limits the 3-leg/4-leg bridge first, so the split link needs `2/√3 ≈ 1.155`
@@ -645,12 +647,15 @@ bank capacitance and `f_sw`; `pwm_modulation_margin` is the minimum duty-cycle
 headroom. The manual `i_sw` term remains separate and combines in quadrature.
 
 Two things are worth knowing before copying this example. First, the coupled
-reserve equations are solved in per-unit coordinates here: with no declared
-filter or current rating the raw-SI solve of this plant can stop at the
-iteration limit. Second, the 12 A bank rating is deliberately small. The
-switching-frequency capacitor current of a two-level bridge is roughly 0.6 times
-the phase RMS current at this modulation depth, so on a 230 V grid this plant is
-capacitor-limited to about 13.5 kW of its 20 kVA rating.
+reserve equations are best conditioned in per-unit coordinates, as used here.
+A raw-SI solve (`per_unit=false`) of a plant with no filter and no current
+rating can stall at the iteration limit; `solve_advanced_inverter` then repeats
+the solve once in per-unit coordinates on `s_base = s_max` and warns that it
+did so (`per_unit_fallback=false` disables the retry). Second, the 12 A bank
+rating is deliberately small. The switching-frequency capacitor current of a
+two-level bridge is roughly 0.6 times the phase RMS current at this modulation
+depth, so on a 230 V grid this plant is capacitor-limited to about 13.5 kW of
+its 20 kVA rating.
 
 When the upstream DC system is not effectively open at carrier frequencies,
 supply its local series R–L approximation and a Fourier bandwidth:
@@ -670,11 +675,6 @@ r = solve_advanced_inverter(net3, finite_dc; per_unit=true, s_base=20e3)
 @show r.dv_switching_upper_rms r.dv_switching_lower_rms
 @show r.pwm_dc_network_margin
 ```
-
-This plant exports well below its 20 kVA rating on a 230 V grid. Its unequal
-2.5/3.5 mF half-banks have an equal-charge mean midpoint offset of about −67 V,
-which consumes most of the half-bus headroom (see the warning under
-[Three-phase topology models](@ref three-phase-topology-models)).
 
 The reported harmonic currents satisfy DC-node KCL frequency by frequency.
 Unretained bridge-current energy is assigned to the capacitor for conservative
