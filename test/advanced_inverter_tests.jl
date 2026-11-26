@@ -1542,7 +1542,11 @@ end
     reference = solve_advanced_inverter(inv_grid3(), bare; per_unit=true, s_base=20e3)
     @test solve_status(reference).publishable
     if solve_status(raw).publishable
-        @test raw.p_poc ≈ reference.p_poc rtol=1e-3
+        # Whether raw SI stalls is platform dependent. When it converges, the
+        # two coordinate systems close the PWM reserve at slightly different
+        # points inside the 1 % reserve band, so export agrees only to that band.
+        @test raw.p_poc ≈ reference.p_poc rtol=1e-2
+        @test raw.pwm_reserve_margin >= -1e-6
     else
         recovered = @test_logs (:warn, r"per-unit") match_mode=:any solve_advanced_inverter(
             inv_grid3(), bare)
