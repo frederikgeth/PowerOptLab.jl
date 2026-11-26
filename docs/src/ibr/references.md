@@ -56,8 +56,8 @@ were actually transcribed; update fixture provenance when changing versions.
    utilization in split-link, four-wire inverters,” *IEEE Transactions on Power
    Electronics*, vol. 24, no. 6, pp. 1562-1569, 2009.
    [doi:10.1109/TPEL.2009.2013351](https://doi.org/10.1109/TPEL.2009.2013351).
-7. **A. Viatkin et al.**, “Analysis of the output current ripple of the
-   three-phase four-leg inverter with a neutral inductor,” *Energies*, vol. 14,
+7. **A. Viatkin et al.**, “AC current ripple in three-phase four-leg PWM
+   converters with neutral line inductor,” *Energies*, vol. 14,
    1430, 2021. [doi:10.3390/en14051430](https://doi.org/10.3390/en14051430).
    Basis for phase/neutral ripple with an arbitrary neutral-to-phase inductance
    ratio and for the corresponding topology-ordering tests.
@@ -73,11 +73,11 @@ were actually transcribed; update fixture provenance when changing versions.
    Basis for the finite series R–L source branch, DC-node harmonic current
    sharing, and high-source-impedance limit. The implementation extends that
    circuit beyond the paper's balanced centered-PWM operating cases.
-10. **A. Hammami et al.**, “Analysis of input voltage switching ripple in
+10. **M. Hammami et al.**, “Analysis of input voltage switching ripple in
     three-phase four-wire split capacitor PWM inverters,” *Energies*, vol. 13,
     5076, 2020. [doi:10.3390/en13195076](https://doi.org/10.3390/en13195076).
-    Split-capacitor switching-ripple basis and an independent source for future
-    modulation/load-angle map regressions.
+    Split-capacitor switching-ripple basis (SPWM, near-unity power factor) and
+    an independent source for future regressions.
 11. **R. Mandrioli, M. Hammami, A. Viatkin, R. Barbone, D. Pontara, and M.
     Ricco**, “Phase and neutral current ripple analysis in three-phase four-wire
     split-capacitor grid converter for EV chargers,” *Electronics*, vol. 10,
@@ -88,8 +88,9 @@ were actually transcribed; update fixture provenance when changing versions.
     approach for determining the current ripple RMS in four-leg inverters with
     the neutral inductor,” *Energies*, vol. 16, 1710, 2023.
     [doi:10.3390/en16041710](https://doi.org/10.3390/en16041710).
-    General arbitrary-common-mode/neutral-inductance formulation, validated for
-    SPWM, SVPWM, DPWM, and THIPWM in simulation and experiment.
+    General arbitrary-common-mode/neutral-inductance formulation, validated
+    numerically for ten PWM techniques including THIPWM, and experimentally for
+    SPWM, SVPWM and DPWM1.
 13. **† R. Zhang, V. H. Prasad, D. Boroyevich, and F. C. Lee**, “Three-dimensional
     space vector modulation for four-leg voltage-source converters,” *IEEE
     Transactions on Power Electronics*, 2002. The canonical four-leg modulation

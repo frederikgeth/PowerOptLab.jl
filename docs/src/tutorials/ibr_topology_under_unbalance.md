@@ -86,7 +86,7 @@ adjustment intended to equalise the answers.
 ```julia
 function study(network, device)
     r = solve_advanced_inverter(network, device)
-    @assert r.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+    @assert solve_status(r).publishable
     return (
         topology=r.topology,
         status=r.termination_status,
@@ -138,7 +138,7 @@ sequence_limited = AdvancedInverter(; id="four-leg-sequence-limited",
     i_negative_max=0.5, common...)
 
 r_sequence = solve_advanced_inverter(unbalanced, sequence_limited)
-@assert r_sequence.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+@assert solve_status(r_sequence).publishable
 @assert r_sequence.i_negative <= 0.5 + 1e-4
 @assert r_sequence.i_neutral <= 40.0 + 1e-4
 @show r_sequence.p_poc r_sequence.i_zero r_sequence.i_negative
@@ -152,8 +152,10 @@ separate is essential for a defensible four-wire study.
 
 For every reported point, record:
 
-1. `termination_status` and `solve_status(result)`;
-2. `switching_margin`, especially when DC utilisation affects the conclusion;
+1. `solve_status(result).publishable`, which requires both solver success and
+   the independent physical check, alongside the raw `termination_status`;
+2. the rail headroom (`physical_feasibility(result).rail` or
+   `switching_margin`), especially when DC utilisation affects the conclusion;
 3. all three sequence currents rather than only `i_neutral`;
 4. the physical reason each topology has its selected `v_dc`, `In_max`, and
    capacitor ratings; and

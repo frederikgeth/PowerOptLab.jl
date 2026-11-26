@@ -49,7 +49,7 @@ the forward controller and lists supported versus planned features.
 | 0 | Output filter | reduced one-arm primitive, or explicit LCL with independent converter/grid primitive matrices, damped midpoint capacitor, distinct arm currents, and an optional POC shunt |
 | 1 | Internal EMF / DC utilisation | `abs(V_int)` box; a legacy scalar `:SINGLE_PHASE` cap using the documented `/√3` convention; or a three-phase topology's sampled switching polytope (below) |
 | 2 | Grid-forming | balanced 120° internal EMF with a bounded magnitude decision variable; no droop, virtual impedance, or limiter dynamics |
-| 3 | Converter losses | non-branching `P_dc = P_ac + P_loss`; fitted per-leg fixed/linear/quadratic terms include the fourth-leg neutral current for `:FOUR_LEG` |
+| 3 | Converter losses | non-branching `P_dc = P_conv + P_loss + P_cap_loss`; fitted per-leg fixed/linear/quadratic terms include the fourth-leg neutral current for `:FOUR_LEG` |
 | 4 | Double-frequency ripple | single-phase ripple-amplitude cap; three-phase topologies form a small-ripple 2ω bus-voltage phasor that derates the sampled DC rails (below) |
 
 `p_poc` and `q_poc` are the total grid-side exchange. In particular, `q_poc`
@@ -85,8 +85,9 @@ filter is zero.
   circle bounds phase-redistribution currents. Use an explicit current allocation
   or suitable current/sequence ratings when that freedom is unwanted.
 - **Non-branching losses.** With AC power positive = injected to grid and DC power
-  positive = drawn from the DC source, the single equation `P_dc = P_ac + P_loss`
-  (`P_loss ≥ 0`) holds for both discharge and charge — no direction `if`-branch.
+  positive = drawn from the DC source, the single equation
+  `P_dc = P_conv + P_loss + P_cap_loss` (both losses `≥ 0`; `P_cap_loss` is zero
+  unless a capacitor ESR is declared) holds for both discharge and charge — no direction `if`-branch.
 - **Grid-forming ≠ slack.** A grid-forming inverter holds a balanced, bounded
   internal EMF *behind the filter*, but does not replace the network's reference;
   the surrounding grid still needs a slack source.
@@ -210,6 +211,13 @@ phase-to-neutral branch and `r_filter_damping` is in series with it. Inspect
 `v_filter_mag`, `i_mag`, `i_grid_mag`, `i_filter_shunt_mag`,
 `p_filter_loss`, and `filter_resonance_hz` together.
 
+!!! note "The capacitor star point is always tied to the neutral"
+    The midpoint capacitors are referenced to `neutral` (or to ground when
+    `neutral=nothing`). A `:THREE_LEG` bridge still enforces zero-sequence
+    current at its own terminals, but its filter capacitors can exchange
+    zero-sequence current with the grid neutral. A floating capacitor star, the
+    usual arrangement for a three-wire filter, is not represented.
+
 `filter_resonance_hz` is the undamped scalar estimate derived from the two
 positive arm reactances and `c_filter_mid`. It returns `NaN` for matrix-valued
 filters because those require modal analysis. The optimisation still evaluates
@@ -252,21 +260,40 @@ r.p_filter_loss # passive filter/damping loss between converter and POC (W)
 
 Switch `objective=:max_export` to maximise POC active power and watch the
 converter rating, filter, EMF/modulation, or ripple limits bind. For a
-three-phase `grid_forming=true` inverter the solved internal EMF magnitudes are
-equal across phases (balanced 120°) and the 2ω ripple is ≈ 0.
+four-wire `grid_forming=true` inverter the solved internal EMF magnitudes are
+equal across phases (balanced 120°). A `:THREE_LEG` grid-forming inverter has no
+zero-sequence path: its internal negative-sequence EMF is zero and its
+positive-sequence magnitude is bounded, but the zero-sequence EMF follows the
+network, so the reported phase-to-neutral `v_int_mag` values differ whenever
+the POC voltage has a zero-sequence component.
 
 ### Choosing a three-phase topology
 
 Set `topology` to one of `:THREE_LEG`, `:FOUR_LEG`, or `:SPLIT_DC` (with `v_dc`,
 `c_dc`, and an appropriate neutral limit for the 4-wire ones) to use the sampled
-switching-polytope model:
+switching-polytope model. The three-phase examples on this page share one
+four-wire network, `net3`:
 
 ```julia
+net3 = parse_bmopf("""
+{"bus":{
+   "grid":{"terminal_names":["a","b","c","n"],"perfectly_grounded_terminals":["n"]},
+   "poc":{"terminal_names":["a","b","c","n"],"perfectly_grounded_terminals":["n"],
+          "v_min":[180.0,180.0,180.0],"v_max":[270.0,270.0,270.0]}},
+ "voltage_source":{"vs":{"bus":"grid","terminal_map":["a","b","c"],
+   "v_magnitude":[245.0,215.0,230.0],"v_angle":[0.05,-2.15,2.0]}},
+ "linecode":{"lc":{"R_series_1_1":0.05,"R_series_2_2":0.05,
+   "R_series_3_3":0.05,"R_series_4_4":0.05}},
+ "line":{"l1":{"bus_from":"grid","bus_to":"poc",
+   "terminal_map_from":["a","b","c","n"],"terminal_map_to":["a","b","c","n"],
+   "linecode":"lc","length":1.0}}}
+"""; from_string=true)
+
 inv = AdvancedInverter(id="inv", bus="poc", phase_terminals=["a","b","c"], neutral="n",
                        topology=:FOUR_LEG, s_max=20e3, i_max=40.0,
                        v_dc=700.0, c_dc=1.1e-3, In_max=40.0, m_max=0.96,
                        r_filter=0.05, x_filter=0.15)
-r = solve_advanced_inverter(net3, inv)   # net3 = a three-phase grid
+r = solve_advanced_inverter(net3, inv)
 r.i_neutral   # neutral current (A) — non-zero only under unbalance
 r.i_zero      # zero-sequence current (A); i_neutral ≈ 3*i_zero
 r.i_negative  # negative-sequence current (A)
@@ -291,8 +318,11 @@ See the API reference for [`AdvancedInverter`](@ref),
 This is an **experimental** circuit-aware model, not a vendor-validated engine
 feature. It
 implements the design doc's Phases 0–4 plus the three-phase topology models as a
-hook-stamped device; reactive/active priority state machines,
-grid-forming-as-reference capability, and dynamic control/fault models are not
+hook-stamped device. Local control laws and P/Q priority are not part of the
+plant itself; they are provided by the wrappers described in the
+[control guide](inverter_controls.md) and the
+[operating-constraint guide](inverter_operating_constraints.md).
+Grid-forming-as-reference capability and dynamic control/fault models are not
 included. If a piece of this matures, it can be folded back into the engine.
 
 The model is a fundamental-frequency steady-state capability model with derived
@@ -306,13 +336,13 @@ flow, averaged dynamic model, impedance scan, or EMT model.
 | Source result | Mapping in `AdvancedInverter` | Important boundary |
 |---|---|---|
 | Heidari and Geth, [improved algebraic inverter modelling](https://doi.org/10.1016/j.epsr.2024.110825), Eqs. (2)–(20), (36)–(37) | internal voltage, primitive four-conductor filter KVL, POC/internal power, 3-leg zero-sequence restriction, sequence-current limits, and balanced GFM voltage | the extension adds a passive LCL midpoint, but not controller dynamics or a modal impedance scan |
-| Same paper, Tables 1–3 | topology and GFM/GFL concepts | Volt-var/Watt, droop, power sharing, constant-PF, and sequence-current controls are not part of this advanced device |
+| Same paper, Tables 1–3 | topology and GFM/GFL concepts | Volt-var/Watt, constant-PF and sequence-current laws are not part of the plant; `SequenceController` and `ConstrainedInverter` add them around it. Droop and power sharing are not implemented |
 | Deakin, Heidari, and Deng, [DC-link ripple in OPF](https://arxiv.org/abs/2512.18293), Eqs. (5), (11), and (18) | unconjugated `S̃ = Σ U_x I_x`, bus-ripple phasor, and capacitor-current conversion | assumes fundamental sinusoidal phasors, a stiff mean `V_dc`, small ripple, and a DC source that contributes negligibly at 2ω |
 | Deakin et al., [capacitor ripple constraints](https://arxiv.org/abs/2606.21934), Eqs. (4)–(9) | simultaneous allocation of midpoint neutral current, 2ω current, and `i_sw`, generalized here to unequal half-banks and ESR-ratio weights | the paper's hybrid **4-leg plus split-link** return path and reconfigurable leg allocation are not represented |
 | Liang et al., [split-link voltage utilisation](https://doi.org/10.1109/TPEL.2009.2013351) | half-bus limit and the familiar split-link utilisation penalty | bounded mean charge correction is algebraic; dynamic active balancing, third-harmonic offset injection, common-mode/EMC effects, dead time, and overmodulation are omitted |
 | Mandrioli et al., [four-leg DC-link switching ripple](https://doi.org/10.3390/en14051434), especially Eqs. (40) and (42) | shared-carrier switching reconstruction, DC-link switching-current RMS, voltage ripple, and balanced SPWM/centered-PWM regression formulas | currents and references are frozen over each ideal carrier period; dead time, device drops, sampling delay, overmodulation, and thermal dynamics are omitted |
 | Vujacic et al., [three-leg DC-link switching ripple](https://doi.org/10.3390/en11020471) | optional series R–L DC-source branch in parallel with the link capacitor, harmonic KCL, source-current/loss diagnostics, and the high-source-impedance limit | the implementation generalizes the paper's balanced centered-PWM setting but uses a constant R–L spectrum rather than a measured battery/DC-stage impedance |
-| Hammami et al., [split-capacitor input-voltage ripple](https://doi.org/10.3390/en13195076) | split-link series-equivalent capacitance, finite-source current sharing, and individual upper/lower switching-voltage ripple | the implemented split-link audit admits sinusoidal PWM only and is a numerical reconstruction, not the paper's complete closed-form modulation/load-angle map |
+| Hammami et al., [split-capacitor input-voltage ripple](https://doi.org/10.3390/en13195076) | split-link series-equivalent capacitance, finite-source current sharing, and individual upper/lower switching-voltage ripple | the implemented split-link audit admits sinusoidal PWM only and is a numerical reconstruction, not the paper's closed-form result |
 | Mandrioli et al., [split-capacitor phase and neutral current ripple](https://doi.org/10.3390/electronics10091016), Eqs. (15), (27) | phase/neutral AC-ripple regression formulas and the `1/(Lf_sw)` scaling oracle | formulas assume balanced voltage references, SPWM, independent phase inductors, and negligible high-frequency resistance |
 | Viatkin et al., [four-leg AC ripple with a neutral inductor](https://doi.org/10.3390/en14051430), generalized in [Energies 16, 1710](https://doi.org/10.3390/en16041710) | phase/neutral switching ripple, arbitrary neutral-to-phase inductance ratio, and carrier common-mode effects; generalized here by solving each harmonic through the primitive L/LCL circuit | frozen-duty local spectra omit asynchronous long-record sidebands, dead time, frequency-dependent magnetics, common-mode earth paths, and a non-stiff high-frequency grid |
 
@@ -427,15 +457,43 @@ utilisation factor on the ideal switching hull:
 ```
 
 - **split-DC (4-wire)** — each phase is an independent half-bridge against the
-  capacitor midpoint. With `CΣ=C_u+C_l`, the fundamental midpoint ripple
-  `N = I_{ret}/(j\omega CΣ)` (where `I_{ret} = \sum_x I_x`) and signed mean
-  offset `N̄` merge into the phase reference `W_x = U_x + N + N̄`:
+  capacitor midpoint. Let `I_ret = Σ_x I_x = -I_n` be the current returning into
+  the midpoint. It displaces the midpoint from the centre of the bus by a
+  fundamental phasor `N`, and unequal half-banks add a mean offset `N̄`, a
+  fundamental total-bus ripple `B` and a 2ω midpoint term. For **equal
+  half-banks** (`C_u = C_l`, `CΣ = C_u + C_l`) only the first is non-zero,
+  `N = I_{ret}/(j\omega CΣ)`, and the stamped constraint is
 
 ```math
 \pm\left(\sqrt2\big[(U^{re}_x+N_{re})\cos\theta_k - (U^{im}_x+N_{im})\sin\theta_k\big]+\bar N\right)
    \le \tfrac{m}{2}\,v_{dc}(\theta_k);\qquad
    \underbrace{|I_n| \le I_{n,\max}}_{\text{optional — see below}},
 ```
+
+with `N_{re} = -I^{im}_n/(\omega C_\Sigma)`, `N_{im} = I^{re}_n/(\omega C_\Sigma)`
+and `N̄ = 0`.
+
+For **unequal half-banks** the coefficients depend on the line-frequency DC
+source declared by `dc_source_r` / `dc_source_l`. The general inequality is
+
+```math
+\pm\left(\sqrt2\,\Re\{(U_x+N)e^{j\theta_k}\}+r_2\,d(\theta_k)+\bar N\right)
+   \le \tfrac{m}{2}\left(v_{dc}(\theta_k)+\sqrt2\,\Re\{B e^{j\theta_k}\}\right),
+\qquad r_2=\frac{C_u-C_l}{2C_\Sigma},
+```
+
+where `d(θ) = D_re cos2θ − D_im sin2θ` is the 2ω bus ripple. `N` and `B` are
+linear in `I_ret`:
+
+| line-frequency source | neutral-current shares `α_u, α_l` | `|N|` | `|B|` |
+| --- | --- | --- | --- |
+| open (default, `dc_source_r=nothing`) | `½, ½` | `|I_n|(1/C_u+1/C_l)/(4ω)` | `|I_n||1/C_l−1/C_u|/(2ω)` |
+| ideal stiff (`dc_source_r=0`, `dc_source_l=0`) | `C_u/CΣ, C_l/CΣ` | `|I_n|/(ωCΣ)` | 0 |
+
+A finite source impedance lies between these two rows; the
+[split-link derivation](@ref ibr-scientific-foundations) gives the general
+expressions. `result.dv_mid` reports `|N|` and `result.dv_bus_fundamental`
+reports `|B|`.
 
 Here the standalone neutral-current bound and capacitor thermal ratings are
 independently optional. For the split link, a supplied `i_cap_max` also bounds
@@ -444,12 +502,21 @@ neutral current and capacitor ripple are still calculated, but no thermal
 capability is asserted. For `:FOUR_LEG`, capacitor ratings do not constrain the
 fourth semiconductor leg; supply `In_max` separately to enforce that rating.
 
-with `N_{re} = -I^{im}_n/(\omega C_\Sigma)`,
-`N_{im} = I^{re}_n/(\omega C_\Sigma)`. If the series banks have equal stored
-charge, their natural mean offset is
+If the series banks have equal stored charge, their natural mean offset is
 `N̄_nat = V_dc(C_u-C_l)/(2C_\Sigma)`. Optional charge transfer gives
 `N̄=N̄_nat+2q_mid_balance/C_\Sigma`, subject to `q_mid_balance_max` and
-`v_mid_mean_max`. The factor of two on the rail is the half-bus constraint. For a balanced set, the pairwise switching
+`v_mid_mean_max`.
+
+!!! warning "The equal-charge mean offset can dominate the rail headroom"
+    `N̄_nat` is the offset of two series capacitors that have only ever carried
+    the same charge. It is large for ordinary tolerances: 2.5 mF and 3.5 mF
+    half-banks on an 800 V link give `N̄_nat ≈ −67 V`, and a ±10 % mismatch
+    gives 40 V. Hardware with bleeder resistors or an active balancing loop
+    holds the mean midpoint near half the bus regardless of capacitance. To
+    represent that, supply `q_mid_balance_max` (and, if wanted,
+    `v_mid_mean_max`) so the solve can remove the offset.
+
+The factor of two on the rail is the half-bus constraint. For a balanced set, the pairwise switching
 hull limits the 3-leg/4-leg bridge first, so the split link needs `2/√3 ≈ 1.155`
 times their total DC voltage, not twice as much.
 
@@ -466,7 +533,9 @@ times their total DC voltage, not twice as much.
     \qquad I_{2\omega,rms} = \frac{|\tilde S|}{\sqrt2\,V_{dc}}
     ```
 
-    where `α_u=C_u/(C_u+C_l)` and `α_l=C_l/(C_u+C_l)`. For equal banks,
+    where `α_u` and `α_l` are the neutral-current shares from the table above
+    (one half each for the default open line-frequency source), and the
+    expression for `I_2ω,rms` is the open-source value. For equal banks,
     `In_max = 2·√(I_half_rated² − I_2ω,rms² − I_sw,rms²)`. Passing the raw bank rating
     double-counts the capacitors. Example: equal 12 A half-banks at `|S̃|` = 6.6 kVA and
     `V_dc` = 800 V gives `I_2ω,rms` = 5.8 A, hence `In_max ≈ 21 A`, not 24 A.
@@ -487,15 +556,17 @@ For equal banks and default weights:
 ```math
 \underbrace{\Big(\tfrac{|I_n|}{2}\Big)^2}_{\texttt{:SPLIT\_DC}\ \text{only}}
  + \; I_{2\omega,rms}^2 \; + \; i_{sw}^2 \;\le\; i_{cap,max}^2 ,
-\qquad I_{2\omega,rms} = \frac{|\tilde S|}{\sqrt2\,V_{dc}} = k\,|D|,
+\qquad I_{2\omega,rms} = k\,|D|,
 \quad k = \frac{2\omega C_{eq}}{\sqrt2}
 ```
 
-For unequal banks, replace `|I_n|/2` by `α_u|I_n|` and `α_l|I_n|` and enforce
-both inequalities. `i_cap_upper_max` and `i_cap_lower_max` can represent unequal
+With the default open line-frequency source `k|D| = |\tilde S|/(\sqrt2 V_{dc})`;
+a declared `dc_source_r` branch shares the 2ω current and reduces it. For
+unequal banks with a non-open source, replace `|I_n|/2` by `α_u|I_n|` and
+`α_l|I_n|` from the table above and enforce both inequalities. `i_cap_upper_max` and `i_cap_lower_max` can represent unequal
 ratings and compose with the common `i_cap_max`.
 
-Note `I_{2ω,rms} = |\tilde S|/(\sqrt2 V_{dc})` is independent of `C`: capacitance
+Note that the open-source `I_{2ω,rms} = |\tilde S|/(\sqrt2 V_{dc})` is independent of `C`: capacitance
 sets the ripple *voltage*, not the ripple *current*. `result.i_cap` reports the
 larger physical RMS current. `result.i_cap_thermal` applies
 `cap_thermal_weights` and is the quantity that compares directly against the
@@ -546,6 +617,89 @@ See the [thermal derivation](../ibr/foundations.md).
 
 ### Carrier-level PWM closure
 
+Set `pwm_strategy=:SPWM` or `:CENTERED` and provide `f_sw` to reconstruct all
+leg switch states against one shared triangular carrier. The audit subtracts
+the carrier-period average from the instantaneous DC current, so correlation
+between legs is retained. A sequential outer loop updates a current-norm
+majorant until the capacitor reserve covers that operating point:
+
+```julia
+pwm_inv = AdvancedInverter(; id="inv", bus="poc",
+    phase_terminals=["a", "b", "c"], neutral="n",
+    topology=:FOUR_LEG, s_max=20e3, i_max=40.0, v_dc=800.0, c_dc=3e-3,
+    r_filter=0.05, x_filter=0.15,
+    i_cap_max=12.0, f_sw=10e3, pwm_strategy=:CENTERED)
+r = solve_advanced_inverter(net3, pwm_inv; per_unit=true, s_base=20e3)
+@assert solve_status(r).publishable
+
+@show r.i_cap_switching r.i_cap_switching_reserved r.pwm_reserve_margin
+@show r.dv_switching_rms r.dv_switching_pp r.pwm_modulation_margin
+@show r.pwm_iterations
+```
+
+`i_cap_switching` is the post-solve carrier prediction;
+`i_cap_switching_reserved` is the conservative current actually present in the
+smooth capacitor constraint. Require a non-negative `pwm_reserve_margin` before
+publishing the point. `dv_switching_rms` and `dv_switching_pp` use the physical
+bank capacitance and `f_sw`; `pwm_modulation_margin` is the minimum duty-cycle
+headroom. The manual `i_sw` term remains separate and combines in quadrature.
+
+Two things are worth knowing before copying this example. First, the coupled
+reserve equations are solved in per-unit coordinates here: with no declared
+filter or current rating the raw-SI solve of this plant can stop at the
+iteration limit. Second, the 12 A bank rating is deliberately small. The
+switching-frequency capacitor current of a two-level bridge is roughly 0.6 times
+the phase RMS current at this modulation depth, so on a 230 V grid this plant is
+capacitor-limited to about 13.5 kW of its 20 kVA rating.
+
+When the upstream DC system is not effectively open at carrier frequencies,
+supply its local series R–L approximation and a Fourier bandwidth:
+
+```julia
+finite_dc = AdvancedInverter(; id="inv", bus="poc",
+    phase_terminals=["a", "b", "c"], neutral="n",
+    topology=:SPLIT_DC, s_max=20e3, v_dc=800.0, c_dc=3e-3,
+    c_dc_upper=2.5e-3, c_dc_lower=3.5e-3, i_cap_max=15.0,
+    f_sw=10e3, pwm_strategy=:SPWM,
+    pwm_dc_source_r=0.08, pwm_dc_source_l=80e-6,
+    pwm_dc_harmonics=96, pwm_carrier_samples=256)
+r = solve_advanced_inverter(net3, finite_dc; per_unit=true, s_base=20e3)
+
+@show r.i_dc_bridge_switching_rms r.i_cap_switching
+@show r.i_dc_source_switching_rms r.p_dc_source_switching_loss
+@show r.dv_switching_upper_rms r.dv_switching_lower_rms
+@show r.pwm_dc_network_margin
+```
+
+This plant exports well below its 20 kVA rating on a 230 V grid. Its unequal
+2.5/3.5 mF half-banks have an equal-charge mean midpoint offset of about −67 V,
+which consumes most of the half-bus headroom (see the warning under
+[Three-phase topology models](@ref three-phase-topology-models)).
+
+The reported harmonic currents satisfy DC-node KCL frequency by frequency.
+Unretained bridge-current energy is assigned to the capacitor for conservative
+thermal closure; source current and switching voltage contain the retained
+series. Require a finite positive `pwm_dc_network_margin` and demonstrate
+convergence in `pwm_dc_harmonics`/`pwm_carrier_samples`. A value near zero flags
+parallel cancellation between source inductance and link capacitance, not a
+certified small-signal stability margin. Source resistance loss belongs to the
+upstream DC network and is therefore reported separately from `p_dc`.
+
+![DC-source and capacitor current sharing at carrier harmonics](../assets/ibr/generated-dc-source-sharing.svg)
+
+`:SPLIT_DC` currently supports `:SPWM` because the physical capacitor midpoint
+fixes its zero reference. The 3-leg and 4-leg models also support centered
+continuous PWM through common-mode injection. Direct hook stamping deliberately
+does not run the outer iteration: either use this convenience solver or supply
+an audited `pwm_current_factor` with `pwm_strategy=:NONE`.
+
+![Carrier-level PWM audit and conservative reserve closure](../assets/ibr/generated-pwm-ripple-closure.svg)
+
+### Analytical switching envelopes and peak-current limits
+
+The options in this section are alternatives to the sequential audit above for
+monolithic three/four-leg bridges with centered PWM and an L filter.
+
 `pwm_current_envelope=true` enables an all-duty analytical AC-current
 reserve in the shared plant constraints. It requires a declared `v_dc_max`,
 nonlinear DC energy and a monolithic three/four-leg L filter with proportional
@@ -589,69 +743,6 @@ continuation, with caller options preserved. This remains a periodic carrier
 approximation with the declared constant-input-power, fixed mean-loss model;
 it does not bound arbitrary transients or cumulative mean-voltage drift.
 
-Set `pwm_strategy=:SPWM` or `:CENTERED` and provide `f_sw` to reconstruct all
-leg switch states against one shared triangular carrier. The audit subtracts
-the carrier-period average from the instantaneous DC current, so correlation
-between legs is retained. A sequential outer loop updates a current-norm
-majorant until the capacitor reserve covers that operating point:
-
-```julia
-pwm_inv = AdvancedInverter(; id="inv", bus="poc",
-    phase_terminals=["a", "b", "c"], neutral="n",
-    topology=:FOUR_LEG, s_max=20e3, v_dc=800.0, c_dc=3e-3,
-    i_cap_max=12.0, f_sw=10e3, pwm_strategy=:CENTERED)
-r = solve_advanced_inverter(net, pwm_inv)
-
-@show r.i_cap_switching r.i_cap_switching_reserved r.pwm_reserve_margin
-@show r.dv_switching_rms r.dv_switching_pp r.pwm_modulation_margin
-@show r.pwm_iterations
-```
-
-`i_cap_switching` is the post-solve carrier prediction;
-`i_cap_switching_reserved` is the conservative current actually present in the
-smooth capacitor constraint. Require a non-negative `pwm_reserve_margin` before
-publishing the point. `dv_switching_rms` and `dv_switching_pp` use the physical
-bank capacitance and `f_sw`; `pwm_modulation_margin` is the minimum duty-cycle
-headroom. The manual `i_sw` term remains separate and combines in quadrature.
-
-When the upstream DC system is not effectively open at carrier frequencies,
-supply its local series R–L approximation and a Fourier bandwidth:
-
-```julia
-finite_dc = AdvancedInverter(; id="inv", bus="poc",
-    phase_terminals=["a", "b", "c"], neutral="n",
-    topology=:SPLIT_DC, s_max=20e3, v_dc=800.0, c_dc=3e-3,
-    c_dc_upper=2.5e-3, c_dc_lower=3.5e-3, i_cap_max=15.0,
-    f_sw=10e3, pwm_strategy=:SPWM,
-    pwm_dc_source_r=0.08, pwm_dc_source_l=80e-6,
-    pwm_dc_harmonics=96, pwm_carrier_samples=256)
-r = solve_advanced_inverter(net, finite_dc)
-
-@show r.i_dc_bridge_switching_rms r.i_cap_switching
-@show r.i_dc_source_switching_rms r.p_dc_source_switching_loss
-@show r.dv_switching_upper_rms r.dv_switching_lower_rms
-@show r.pwm_dc_network_margin
-```
-
-The reported harmonic currents satisfy DC-node KCL frequency by frequency.
-Unretained bridge-current energy is assigned to the capacitor for conservative
-thermal closure; source current and switching voltage contain the retained
-series. Require a finite positive `pwm_dc_network_margin` and demonstrate
-convergence in `pwm_dc_harmonics`/`pwm_carrier_samples`. A value near zero flags
-parallel cancellation between source inductance and link capacitance, not a
-certified small-signal stability margin. Source resistance loss belongs to the
-upstream DC network and is therefore reported separately from `p_dc`.
-
-![DC-source and capacitor current sharing at carrier harmonics](../assets/ibr/generated-dc-source-sharing.svg)
-
-`:SPLIT_DC` currently supports `:SPWM` because the physical capacitor midpoint
-fixes its zero reference. The 3-leg and 4-leg models also support centered
-continuous PWM through common-mode injection. Direct hook stamping deliberately
-does not run the outer iteration: either use this convenience solver or supply
-an audited `pwm_current_factor` with `pwm_strategy=:NONE`.
-
-![Carrier-level PWM audit and conservative reserve closure](../assets/ibr/generated-pwm-ripple-closure.svg)
-
 ### AC switching ripple through L and LCL filters
 
 Enable `pwm_ac_ripple=true` when the supplied filter inductances are meaningful
@@ -662,11 +753,12 @@ ac_pwm = AdvancedInverter(; id="inv", bus="poc",
     phase_terminals=["a", "b", "c"], neutral="n",
     topology=:FOUR_LEG, s_max=20e3, i_max=35.0, In_max=25.0,
     v_dc=800.0, c_dc=3e-3, i_cap_max=20.0,
-    r_filter=0.04, x_filter=0.08,
-    r_filter_grid=0.03, x_filter_grid=0.12,
-    c_filter_mid=20e-6, r_filter_damping=1.0, i_grid_max=35.0,
+    r_filter=0.04, x_filter=0.47, x_filter_neutral=0.47,   # 1.5 mH at 50 Hz
+    r_filter_grid=0.03, x_filter_grid=0.16,                # 0.5 mH
+    c_filter_mid=10e-6, r_filter_damping=1.0, i_grid_max=35.0,
     f_sw=10e3, pwm_strategy=:CENTERED, pwm_ac_ripple=true)
-r = solve_advanced_inverter(net, ac_pwm)
+r = solve_advanced_inverter(net3, ac_pwm)
+@assert solve_status(r).publishable
 
 @show r.i_ac_switching_rms r.i_grid_switching_rms
 @show r.i_filter_shunt_switching_rms r.i_neutral_switching_rms
@@ -680,6 +772,13 @@ explicit LCL model distinguishes converter-arm, midpoint-capacitor, and
 grid-arm stress. The sequential solve reserves the predicted switching RMS
 inside `i_max`, `i_grid_max`, and `In_max`; corresponding `*_reserved` results
 must cover the predicted values within tolerance.
+
+The filter values matter. Ripple scales as `1/(L f_sw)`, and a four-leg bridge
+without a neutral inductor returns the carrier common-mode ripple of all three
+phases through the fourth leg. With 0.25 mH phase inductors and no neutral
+inductor, this 800 V, 10 kHz plant would carry about 30 A RMS of neutral
+switching ripple, more than its 25 A `In_max`, and no operating point would be
+feasible. The 1.5 mH phase and neutral inductors above give about 1.2 A.
 
 `pwm_ac_harmonics` controls Fourier truncation. Increase it together with
 `pwm_carrier_samples` and demonstrate convergence for boundary studies. The
@@ -698,7 +797,7 @@ is needed. The solved bank currents and thermal equivalents are reported,
 including when no thermal rating is enforced:
 
 ```julia
-r = solve_advanced_inverter(net, AdvancedInverter(; id="inv", bus="poc",
+r = solve_advanced_inverter(net3, AdvancedInverter(; id="inv", bus="poc",
         phase_terminals=["a","b","c"], neutral="n", s_max=20e3,
         topology=:SPLIT_DC, v_dc=800.0, c_dc=2.8e-3, i_cap_max=12.0))
 r.i_cap        # capacitor RMS ripple current (A) vs the 12 A rating
@@ -718,7 +817,7 @@ Optional `i_zero_max`, `i_positive_max`, and `i_negative_max` independently boun
 the Fortescue RMS components. For a four-wire connection the reported values
 satisfy `i_neutral ≈ 3*i_zero`; a 3-wire topology enforces `i_zero = 0` through
 KCL. `dv_mid_max` can additionally cap the split-link RMS midpoint ripple
-`|I_n|/(ω(C_u+C_l))`; `v_mid_mean_max` separately limits the unequal-bank mean
+`|N|` (`|I_n|/(ω(C_u+C_l))` for equal banks); `v_mid_mean_max` separately limits the unequal-bank mean
 offset after any bounded `q_mid_balance_max` correction.
 The sampling makes these **outer** approximations and converges as `N→∞`.
 A finite sample count alone gives no a priori uniform feasibility guarantee

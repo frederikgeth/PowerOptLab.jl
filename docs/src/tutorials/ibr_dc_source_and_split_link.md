@@ -78,7 +78,7 @@ cases = [
 
 function dc_summary(label, device)
     r = solve_dc(device)
-    @assert r.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+    @assert solve_status(r).publishable
     @assert abs(r.p_poc - 15000.0) < 0.1
     @assert abs(r.q_poc) < 0.1
     return (
@@ -147,7 +147,7 @@ for thermal reserve closure.
 for h in (16, 32, 64)
     r = solve_dc(
         four_leg(source_r=0.02, source_l=0.2e-6, harmonics=h))
-    @assert r.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+    @assert solve_status(r).publishable
     println((harmonics=h,
         cap=r.i_cap_switching,
         source=r.i_dc_source_switching_rms,
@@ -178,7 +178,7 @@ split = AdvancedInverter(
 )
 
 r_split = solve_dc(split)
-@assert r_split.termination_status in ("LOCALLY_SOLVED", "OPTIMAL")
+@assert solve_status(r_split).publishable
 ceq = cu*cl/(cu+cl)
 
 @assert isapprox(r_split.dv_switching_upper_rms,
@@ -216,6 +216,7 @@ passive R–L/C network; it is not a Nyquist stability margin.
 
 Require all of the following:
 
+- `solve_status(result).publishable`;
 - `pwm_reserve_margin ≥ 0` within the selected closure tolerance;
 - `pwm_modulation_margin ≥ 0`;
 - finite `pwm_dc_network_margin` comfortably above zero;

@@ -23,6 +23,7 @@ script. The three focused studies above provide complete inputs and CI checks.
 | Study question | Recommended model | Why |
 | --- | --- | --- |
 | Feasible POC injections, fixed power factor, or mandatory Volt-VAr / Volt-Watt behaviour | Ordinary IBR | The control law and limits are imposed at the POC; an internal converter circuit is not needed. |
+| The same control laws, but filter, topology or DC-link limits may decide what is delivered | `AdvancedInverter` wrapped by a [controller](../components/inverter_controls.md) or [operating constraints](../components/inverter_operating_constraints.md) | The wrapper supplies the law; the plant supplies the hardware limits. |
 | Hosting capacity or a DOE where DERs are represented by POC setpoints | Ordinary IBR | It is compact, transparent, and matches the available control interface. |
 | Do a series filter or explicit fundamental-frequency LCL network change converter voltage, arm currents, reactive exchange, or loss? | `AdvancedInverter` | The filter separates converter, midpoint, and POC quantities. Dynamic resonance and control interaction remain outside this model. |
 | Can a grid-forming converter sustain its requested internal EMF? | `AdvancedInverter` | Internal voltage, modulation, and DC limits must be represented. |
@@ -156,8 +157,8 @@ result = solve_advanced_inverter(network, inv;
 Inspect `result.p_poc`, `result.q_poc`, `result.p_conv`, `result.p_loss`, and
 `result.v_int_mag` together. A result can be feasible at the converter while falling
 short of a requested POC export, because the filter consumes real power. Losses are
-modelled without a complementarity branch: `p_dc = p_conv + p_loss`, so the same
-convention is retained in charging and exporting regimes.
+modelled without a complementarity branch: `p_dc = p_conv + p_loss + p_cap_loss`,
+so the same convention is retained in charging and exporting regimes.
 
 ### Pitfall: applying nameplate limits at the wrong terminal
 
@@ -169,8 +170,11 @@ both terminals rather than calling either one simply "inverter power".
 ## Grid-forming operation is an internal-voltage statement
 
 Set `grid_forming = true` when the converter controls a balanced internal EMF behind
-its filter. The model constrains the three internal phase voltages to a balanced,
-120-degree set and chooses their magnitude within its specified bounds.
+its filter. For the four-wire topologies the model constrains the three internal
+phase voltages to a balanced, 120-degree set and chooses their magnitude within
+its specified bounds. A three-leg bridge has no zero-sequence path, so there the
+model sets the negative-sequence internal EMF to zero, bounds the
+positive-sequence magnitude, and lets the zero-sequence EMF follow the network.
 
 ```julia
 gfm = AdvancedInverter(
@@ -182,8 +186,6 @@ gfm = AdvancedInverter(
     i_max = 100.0,
     r_filter = 0.02,
     x_filter = 0.08,
-    r_filter_neutral = 0.01,
-    x_filter_neutral = 0.04,
     grid_forming = true,
     v_int_min = 220.0,
     v_int_max = 260.0,
@@ -196,6 +198,11 @@ This is not equivalent to declaring the POC a slack bus. The surrounding network
 still needs a voltage reference. In an unbalanced grid, a balanced internal EMF can
 produce unbalanced POC voltages and currents through the filter. Treating a
 grid-forming flag as a network reference silently hides that distinction.
+
+Because this example is a three-leg bridge, the reported phase-to-neutral
+`v_int_mag` values are equal only when the POC voltage has no zero-sequence
+component. The negative-sequence current is `-V2/Z_filter`; with a filter this
+small it can reach `i_max` at a few percent of voltage unbalance.
 
 ## DC modulation is a capability limit, not a post-processing check
 
@@ -213,10 +220,16 @@ single_phase = AdvancedInverter(
     topology = :SINGLE_PHASE,
     s_max = 7_000.0,
     i_max = 32.0,
-    v_dc = 400.0,
+    v_dc = 450.0,
     modulation_max = 0.95,
 )
 ```
+
+Under this convention the internal EMF is capped at
+`0.95 × 450 / √3 ≈ 247 V` RMS, which leaves headroom above a 230 V grid. The
+same cap with `v_dc = 400.0` is 219 V, below the grid voltage, and the plant is
+infeasible even though a real 400 V full bridge can synthesise 230 V RMS. Check
+the cap against the network voltage before using the scalar convention.
 
 For a three-phase device, choose the physical bridge topology explicitly:
 
@@ -243,10 +256,12 @@ four_wire = AdvancedInverter(
 samples gives a close but outer approximation to the true switching boundary. It is
 appropriate for most planning studies, but do not interpret a point very near its
 edge as a hardware guarantee. Increase the resolution and compare the result when
-the conclusion depends on modulation headroom. Also inspect
-`result.switching_margin`: a negative value means the independent dense audit
-found a rail violation between optimisation samples. A positive value is useful
-numerical headroom, but is not an analytic continuous-time certificate.
+the conclusion depends on modulation headroom. After each solve the package
+encloses the minimum rail headroom over the full electrical cycle, adds any
+violating angle as a new constraint, and re-solves. Accept a point with
+`solve_status(result).publishable`; `physical_feasibility(result).rail` gives
+the enclosed headroom, and `result.switching_margin` is a dense-grid value of
+the same quantity that is convenient for tables.
 
 ### Three-leg, four-leg, and split-DC are not interchangeable
 
@@ -330,8 +345,11 @@ can reduce feasible export even when RMS current and apparent-power limits look
 comfortable.
 
 `result.ripple` is the sinusoidal 2ω power amplitude. The physical upper/lower
-RMS currents include capacitance-proportional neutral shares, the common 2ω
-component `result.ripple/(√2*v_dc)`, and `i_sw`. Their `i_cap_thermal_*`
+RMS currents include each bank's share of the neutral current, the common 2ω
+component `result.ripple/(√2*v_dc)`, and `i_sw`. With the default open
+line-frequency DC source each bank carries half the neutral current whatever
+its capacitance; declaring `dc_source_r` moves the shares toward
+`C_u/(C_u+C_l)` and `C_l/(C_u+C_l)`. Their `i_cap_thermal_*`
 counterparts apply the squared-current ESR-ratio weights and are the quantities
 checked against the ratings. `p_cap_loss` converts those weighted currents back
 to watts using the supplied reference ESRs.

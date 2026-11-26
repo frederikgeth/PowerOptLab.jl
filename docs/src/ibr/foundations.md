@@ -5,6 +5,30 @@ phasors are fundamental-frequency RMS quantities in an `a-b-c` phase order.
 Displayed equations use SI units; the implementation applies the same equations
 after converting AC quantities to the network's per-unit bases.
 
+## Notation
+
+A few letters are conventional in more than one of the fields this page draws
+on. The table fixes what each means here.
+
+| Symbol | Meaning | Convention |
+| --- | --- | --- |
+| ``U_x``, ``V_{p,x}``, ``M_x`` | converter internal, POC and LCL-midpoint phase-to-neutral voltages | RMS phasor |
+| ``I_x``, ``I_{c,x}``, ``I_{g,x}``, ``I_{sh,x}`` | phase current; converter-arm, grid-arm and midpoint-shunt currents | RMS phasor, positive toward the POC |
+| ``I_n``, ``J`` | neutral current ``-\sum_x I_x``; return current ``\sum_x I_x`` into a split-link midpoint | RMS phasor |
+| ``I_0, I_1, I_2`` | zero-, positive- and negative-sequence currents | RMS phasor |
+| ``\alpha`` | Fortescue operator ``e^{j2\pi/3}`` | |
+| ``\alpha_u, \alpha_l`` | upper and lower half-bank shares of the neutral current | dimensionless |
+| ``S``, ``\widetilde S`` | complex power ``\sum U I^*``; oscillating power ``\sum U I`` | ``|\widetilde S|`` is a peak amplitude |
+| ``V_{dc}``, ``C_{eq}`` | mean DC-link voltage and equivalent bus capacitance | |
+| ``D`` | 2ω DC-bus voltage ripple | peak phasor |
+| ``N``, ``\bar N``, ``N_2`` | split-link midpoint displacement at ω, its mean, and at 2ω | ``N`` RMS phasor; ``\bar N`` volts; ``N_2`` peak phasor |
+| ``B`` | split-link total-bus ripple at ω | RMS phasor |
+| ``\rho`` | split-link source-current ratio (Section 6) | dimensionless |
+| ``\rho_{dc}`` | carrier-frequency DC network margin (Section 9.3) | dimensionless |
+| ``m`` | utilisation factor `m_max` on the ideal switching hull | |
+| ``N_s``, ``\theta_k`` | number of rail samples `n_samples` and sample angles | |
+| ``\beta(d,K)``, ``\Delta_\alpha`` | carrier-coupling variance bound and damping residual (Section 9.2) | |
+
 ## 1. Reference directions and internal node
 
 For phase `x`, current ``I_x`` is positive from the converter toward the POC.
@@ -136,8 +160,8 @@ branch:
 ```
 
 `result.p_filter_loss` reports this terminal difference. It is distinct from
-the fitted semiconductor `p_loss`; `p_dc=p_conv+p_loss` therefore includes the
-filter loss implicitly through the converter-side power required to deliver a
+the fitted semiconductor `p_loss`; `p_dc=p_conv+p_loss+p_cap_loss` therefore
+includes the filter loss implicitly through the converter-side power required to deliver a
 given POC setpoint.
 
 The semiconductor loss fit is kept separate:
@@ -145,8 +169,11 @@ The semiconductor loss fit is kept separate:
 ```math
 P_{loss}=P_0+a\sum_{\ell\in\mathcal L}|I_\ell|
               +c\sum_{\ell\in\mathcal L}|I_\ell|^2,
-\qquad P_{dc}=P_{conv}+P_{loss}.
+\qquad P_{dc}=P_{conv}+P_{loss}+P_{cap}.
 ```
+
+``P_{cap}`` is the capacitor ESR loss of Section 8 and is zero unless an ESR is
+declared.
 
 ``\mathcal L`` contains the three phase legs and, for `:FOUR_LEG`, the neutral
 leg carrying ``I_n``. For `:SPLIT_DC` there is no fourth semiconductor leg;
@@ -157,9 +184,15 @@ temperature feedback, switching-state dependence, and reverse-conduction maps
 remain future refinements.
 
 Numerically, the current-linear term uses the shifted smooth norm
-``\sqrt{|I|^2+\epsilon^2}-\epsilon`` with ``\epsilon=1`` mA. It is zero at zero
-current, differs from ``|I|`` by less than 1 mA, and avoids the singular
-Jacobian of an exact current-magnitude equality at the origin.
+``\sqrt{|I|^2+\epsilon^2}-\epsilon``. It is zero at zero current,
+underestimates ``|I|`` by less than ``\epsilon``, and avoids the singular
+Jacobian of an exact current-magnitude equality at the origin. For a phase leg
+``\epsilon`` is ``10^{-9}`` of the declared `i_max`, or 1 mA when no rating is
+declared. Every width is then capped so that the total loss deficit
+``a\sum_\ell\epsilon_\ell`` is at most 0.1 mW per inverter. The fourth leg uses
+its share of that watt budget, capped at 1 mA, because its current can vanish
+while the phase currents do not. Reported losses in the physical acceptance
+check use the exact norm.
 
 The non-branching equality is important: it stays valid in charging and
 discharging without binary direction variables or sign-dependent efficiency
@@ -280,7 +313,7 @@ which reduces to the boxed open-source result as ``Z_s\to\infty`` and to
 ``D=0`` for an ideal stiff source. The capacitor's 2ω current is
 ``|j2\omega C_{eq}D|``. The same branch is used at the fundamental (Section 6),
 so one physical source model governs every line-frequency quantity. Carrier
-frequencies use the separate `pwm_dc_source_*` branch (Section 9.1).
+frequencies use the separate `pwm_dc_source_*` branch (Section 9.3).
 
 The mean power boundary is separate from this small-signal impedance model.
 `p_dc`, request availability and `DCSourceBounds` apply at the regulated DC-link
@@ -402,7 +435,7 @@ the actuator reproduces the original stiff symmetric split exactly.
 
 ## 7. Ideal switching hull and sampled enforcement
 
-Let ``\theta_k=2\pi(k-1)/N`` and
+Let ``\theta_k=2\pi(k-1)/N_s`` with ``N_s`` = `n_samples`, and
 
 ```math
 v_{dc}(\theta)=V_{dc}+D_{re}\cos2\theta-D_{im}\sin2\theta.
@@ -415,7 +448,8 @@ must fit inside a fraction ``m=m_{max}`` of the ideal two-level rail:
   ``\sum I_x=0``;
 - `:FOUR_LEG`: those pairwise inequalities plus every phase-to-neutral voltage
   fit the full rail, while ``|I_n|\le I_{n,max}``;
-- `:SPLIT_DC`: every ``u_x+n+\bar n`` fits half the rail.
+- `:SPLIT_DC`: every ``u_x+n+n_2+\bar n`` fits half the rail, and for unequal
+  half-banks the rail includes the fundamental bus ripple ``B`` (Section 6).
 
 For a balanced sinusoid with no ripple, these recover the familiar RMS limits
 
@@ -430,16 +464,24 @@ voltage for the same balanced phase RMS voltage.
 
 ![Equation-generated comparison of balanced DC-voltage utilisation](../assets/ibr/generated-topology-utilisation.svg)
 
-Sampling is an **outer approximation**: a peak between samples can be missed.
-Increasing `n_samples` tightens the feasible set toward the continuous-time
-hull. After every publishable three-phase solve, `result.switching_margin`
-evaluates all relevant rail inequalities on a separate grid of at least 3600
-angles. A positive value is audited headroom in volts; a negative value exposes
-a between-sample violation accepted by the optimisation grid. This dense check
-is materially stronger than reporting solver status alone, but it is still a
-numerical audit—not an analytic global certificate. Boundary-sensitive studies
-should also increase `n_samples` and report convergence; no uniform a priori
-error bound is claimed once endogenous DC ripple is included.
+Sampling is an **outer approximation**: a peak between samples can be missed,
+and no uniform a priori error bound is claimed once endogenous DC ripple is
+included. Two post-solve checks therefore close the gap.
+
+1. `physical_feasibility(result).rail` encloses the minimum headroom over the
+   whole electrical cycle. Each signed rail inequality is a degree-two
+   trigonometric polynomial in ``\theta``; a Taylor bound with adaptive
+   subdivision brackets its minimum to 1 µV by default. The standalone solvers
+   add the worst violating angle as a new constraint and re-solve, at most 12
+   times (`rail_refinement=false` disables this). A point whose enclosed
+   headroom is negative is never publishable.
+2. `result.switching_margin` evaluates the same inequalities on a separate
+   grid of at least 3600 angles. It is a convenient scalar diagnostic in volts,
+   but it is a dense sample and not an enclosure.
+
+Use `solve_status(result).publishable` to accept a point. Both checks cover
+the declared averaged fundamental-plus-2ω waveform, not switching transients
+or unmodelled harmonics; see [verification](@ref ibr-verification).
 
 ## 8. Capacitor RMS thermal allocation
 
@@ -493,62 +535,6 @@ more general ``\sum_h ESR(f_h,T)|I_h|^2`` relation; they do not model ESR/ESL as
 electrical impedances or solve the capacitor temperature.
 
 ## 9. Carrier-level PWM ripple and sequential closure
-
-### Coupled thermal allocation in constrained dispatch
-
-Embedded centered-PWM allocation additionally includes DC current caused by
-AC switching ripple. This term remains present when fundamental current is
-zero. The following bound applies to a monolithic three/four-leg L filter with
-proportional passive R/L and an open carrier-frequency DC source.
-
-Let ``t`` be normalized carrier time, ``a_j=(1-d_j)/2`` and
-``h_j(t)=-d_jt+(t-a_j)_+`` on ``0\le t\le1/2``. The lossless periodic leg
-ripple is ``i_L=V_{dc}T_{sw}Kh``, where ``K`` maps physical leg voltages to
-current derivatives and includes the fourth neutral leg. Thus
-
-```math
-B(d,K)=2\int_0^{1/2}(g(t)^TKh(t))^2\,dt,\qquad
-I_{dc,AC,L}^2=(V_{dc}T_{sw})^2 B(d,K).
-```
-
-On each gate interval, the bridge current is affine and its square integrates
-exactly. Centered gates are even about mid-carrier and the lossless ripple is
-odd. This contribution therefore has zero carrier mean and is orthogonal to
-the even frozen-fundamental carrier current. Their variances add.
-
-For each duty ordering, write the extreme duties as ``(1\pm r)/2``, with
-``0\le r\le m_{max}``. The middle duties use one unit-box coordinate for
-three legs and two ordered unit-box coordinates for four legs. The event
-integral is polynomial of degree at most five in each coordinate. Exact
-rational interpolation and a tensor Bernstein basis give an upper bound on
-the entire box. Subdivision rounds coefficients upward; stopping early only
-makes the bound more conservative. All duty permutations are covered. The
-result is cached per geometry and enters the NLP as a constant times the
-upper bus-voltage bound squared, without event sorting inside the NLP.
-
-For damping rate ``\alpha``, the periodic passive response differs from its
-lossless primitive by at most ``\alpha/\omega_{sw}`` times the primitive RMS.
-Because leg currents sum to zero, ``g^T\delta i=(g-1/2)^T\delta i``. A
-separate residual ``D\le\alpha\sum_j I_{L,j,bound}/(2\omega_{sw})`` bounds
-the mean-subtracted damped bridge current. Young's inequality gives
-
-```math
-I_{sw}^2\le(1+\eta)(F+V_{upper}^2T_{sw}^2B_{upper})
- +(1+1/\eta)D^2,\qquad \eta=\alpha/\omega_{sw},
-```
-
-where ``F`` is the frozen-current variance enclosure including the declared
-10% validation allowance. At zero damping the residual vanishes and the
-lossless sum is used directly. No thermal rating is enlarged. An all-duty
-bound can exhaust a rating even if a particular waveform would fit; rejection
-by this sufficient bound does not prove physical infeasibility.
-
-This remains a periodic carrier model with frozen slow quantities. The slow
-energy balance retains the declared fitted mean converter-loss model; it does
-not infer extra filter/semiconductor heating from an ideal switched orbit.
-Carrier-scale bus variation, low-frequency dynamics of switching losses,
-dead time, semiconductor drops and transients require separate validation.
-The independent switched EMT comparison must therefore remain a separate gate.
 
 The low-frequency model above cannot infer switching stress from line-frequency
 RMS current alone: the DC-link current depends on correlated switch states. For
@@ -623,9 +609,9 @@ This procedure is locally self-consistent and conservative at the returned
 operating point, but it is not a proof of the globally optimal switched system.
 It assumes ideal complementary switches, no dead time, sinusoidal current frozen
 within each switching period, and a shared triangular carrier. The optional
-finite source branch below relaxes the final open-source assumption.
+finite source branch of Section 9.3 relaxes the final open-source assumption.
 
-### Embedded thermal allocation
+### 9.1 Embedded thermal allocation
 
 `ConstrainedInverter`, three-leg service allocation and four-leg phase-service
 allocation embed a dispatch-dependent switching-current bound when
@@ -636,7 +622,7 @@ in the voltage and current phasors; a norm-smoothing error enclosure and complet
 low-frequency DC-voltage extrema bound the resulting variance. Independent
 carrier/event quadrature checks frozen-current RMS, the lossless AC-induced
 contribution, the damping reserve and modulation. The allocator additionally
-includes the all-duty coupled thermal term derived above.
+includes the all-duty coupled thermal term derived in Section 9.2.
 
 `pwm_thermal_headroom` defaults to 0.10 in the constrained allocator. The
 service allocators use the same default. It applies to the frozen-current
@@ -663,7 +649,64 @@ DC energy combined with PWM requires the constrained or service allocator.
 PWM/nonlinear service stages preserve preceding services within an explicit
 100 µvar or 100 µW numerical budget, independently of the hardware acceptance limits.
 
-### 9.1 DC-source current sharing and split-bank voltage
+### 9.2 Coupled thermal allocation in constrained dispatch
+
+Embedded centered-PWM allocation additionally includes DC current caused by
+AC switching ripple. This term remains present when fundamental current is
+zero. The following bound applies to a monolithic three/four-leg L filter with
+proportional passive R/L and an open carrier-frequency DC source.
+
+Let ``t`` be normalized carrier time, ``d_j`` the duty of leg ``j``, ``g_j(t)\in\{0,1\}`` its
+centered gate signal, ``a_j=(1-d_j)/2`` and
+``h_j(t)=-d_jt+(t-a_j)_+`` on ``0\le t\le1/2``. The lossless periodic leg
+ripple is ``i_L=V_{dc}T_{sw}Kh``, where ``K`` maps physical leg voltages to
+current derivatives and includes the fourth neutral leg. Thus
+
+```math
+\beta(d,K)=2\int_0^{1/2}(g(t)^TKh(t))^2\,dt,\qquad
+I_{dc,AC,L}^2=(V_{dc}T_{sw})^2 \beta(d,K).
+```
+
+On each gate interval, the bridge current is affine and its square integrates
+exactly. Centered gates are even about mid-carrier and the lossless ripple is
+odd. This contribution therefore has zero carrier mean and is orthogonal to
+the even frozen-fundamental carrier current. Their variances add.
+
+For each duty ordering, write the extreme duties as ``(1\pm r)/2``, with
+``0\le r\le m_{max}``. The middle duties use one unit-box coordinate for
+three legs and two ordered unit-box coordinates for four legs. The event
+integral is polynomial of degree at most five in each coordinate. Exact
+rational interpolation and a tensor Bernstein basis give an upper bound on
+the entire box. Subdivision rounds coefficients upward; stopping early only
+makes the bound more conservative. All duty permutations are covered. The
+result is cached per geometry and enters the NLP as a constant times the
+upper bus-voltage bound squared, without event sorting inside the NLP.
+
+For damping rate ``\alpha``, the periodic passive response differs from its
+lossless primitive by at most ``\alpha/\omega_{sw}`` times the primitive RMS.
+Because leg currents sum to zero, ``g^T\delta i=(g-1/2)^T\delta i``. A
+separate residual ``\Delta_\alpha\le\alpha\sum_j I_{L,j,bound}/(2\omega_{sw})`` bounds
+the mean-subtracted damped bridge current. Young's inequality gives
+
+```math
+I_{sw}^2\le(1+\eta)(F+V_{upper}^2T_{sw}^2\beta_{upper})
+ +(1+1/\eta)\Delta_\alpha^2,\qquad \eta=\alpha/\omega_{sw},
+```
+
+where ``F`` is the frozen-current variance enclosure including the declared
+10% validation allowance. At zero damping the residual vanishes and the
+lossless sum is used directly. No thermal rating is enlarged. An all-duty
+bound can exhaust a rating even if a particular waveform would fit; rejection
+by this sufficient bound does not prove physical infeasibility.
+
+This remains a periodic carrier model with frozen slow quantities. The slow
+energy balance retains the declared fitted mean converter-loss model; it does
+not infer extra filter/semiconductor heating from an ideal switched orbit.
+Carrier-scale bus variation, low-frequency dynamics of switching losses,
+dead time, semiconductor drops and transients require separate validation.
+The independent switched EMT comparison must therefore remain a separate gate.
+
+### 9.3 DC-source current sharing and split-bank voltage
 
 Hammami et al. and Vujacic et al. explicitly place a source R–L impedance in
 parallel with the link capacitor at switching frequencies. At retained carrier
@@ -718,7 +761,7 @@ busbars, capacitors, and control loops have frequency-dependent impedance,
 ESR/ESL, and additional resonances not represented by one constant series R–L
 branch.
 
-### 9.2 AC-side carrier harmonics through the conductor network
+### 9.4 AC-side carrier harmonics through the conductor network
 
 When `pwm_ac_ripple=true`, the same switch states also define pole-voltage error
 
