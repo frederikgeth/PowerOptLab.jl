@@ -465,16 +465,18 @@ An internal budget that binds below nameplate dominates every comparison.
 
 For every claimed boundary point:
 
-1. check the per-unit base against the device ratings. Ratings are stamped as
-   squared per-unit inequalities, and Ipopt's `bound_relax_factor` floors its
-   relaxation at `max(1, |bound|)`, so the admissible physical violation grows
-   as `s_base²`: a 20 kVA rating is honoured to ~0.25 VA at `s_base=1e6` but
-   exceeded by ~2.4 kVA (12 %) at `s_base=1e8`. Keep `s_base` within a couple of
-   decades of the ratings or pass `bound_relax_factor=0`. The mechanism and the
-   durable fix are documented on [`AdvancedInverter`](@ref). No hardware-sizing
-   claim should be published from a base that has not been checked this way;
-2. require non-negative `switching_margin`, increase `n_samples`, and
-   demonstrate convergence;
+1. confirm the rating margins in SI at the per-unit base used. Capability rows
+   are normalized by their own engineering ratings and the standalone solvers
+   set Ipopt's `bound_relax_factor` to zero, so the admissible violation no
+   longer grows with `s_base`: a 20 kVA rating is honoured to a few mVA at both
+   `s_base=1e6` and `s_base=1e8`. The earlier behaviour (about 12 % overshoot
+   at `s_base=1e8`) returns if a caller passes a positive `bound_relax_factor`
+   together with `normalize_capability_constraints=false`. The independent
+   physical check rejects such a point, so rely on
+   `solve_status(result).publishable` and not on the termination status;
+2. require a publishable result, whose full-cycle rail enclosure is
+   non-negative, and report `physical_feasibility(result).rail` or
+   `switching_margin` when DC utilisation decides the conclusion;
 3. for PWM-enabled points, require non-negative `pwm_reserve_margin` and
    `pwm_modulation_margin`, require every AC `*_reserved` value to cover its
    predicted ripple, then refine both sampling grids and `pwm_ac_harmonics`;
