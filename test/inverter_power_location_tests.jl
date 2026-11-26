@@ -313,6 +313,16 @@ end
 end
 
 @testset "PCC terminal controller: priority through physical arm limits" begin
+    # Under watt priority at the arm-current limit the remaining reactive power
+    # can move inward along the current circle, so the limiter's multipliers are
+    # degenerate there. With `tol=1e-9` the constraint residual plateaus near
+    # 5e-9 to 5e-8 (the formulation's accuracy floor) while the dual residual
+    # stalls, and both the first solve and the cold restart can end in
+    # "Restoration Failed" after a 1e-9 V change in source voltage. Use the
+    # documented controller regression settings instead: `tol=1e-8` and
+    # adaptive barrier updates. The physical tolerances below are unchanged.
+    options = ("tol"=>1e-8, "bound_relax_factor"=>0., "max_iter"=>1000,
+        "mu_strategy"=>"adaptive")
     for priority in (:var,:watt,:proportional), target in (:converter,:grid)
         inv = _power_location_plant(power_limit_location=:poc,
             i_grid_max=10., b_filter_shunt=.003,
@@ -322,8 +332,10 @@ end
             CommonScaleLimiter(pq_priority=priority);current_target=target)
         request = InverterControlRequest(p_available=20e3,p_rated=20e3,q_scale=10e3)
         r = solve_controlled_inverter(_power_location_grid(),ControlledDevice(inv,controller),request;
-            solver_options=_POWER_LOCATION_OPTIONS)
+            solver_options=options)
         @test r.solve.publishable
+        # A single cold solve should suffice; a restart signals lost robustness.
+        @test length(r.plant.numerical_attempts) == 1
         if r.solve.publishable
             qsh = inv.b_filter_shunt*3*230^2
             arm_rating = 3*230*inv.i_grid_max
