@@ -353,7 +353,8 @@ end
 
 """
     state_estimator_preflight(net, measurements=[]; neutral="n", zero_injection=[],
-                              exact_devices=[], injection_connections=nothing)
+                              exact_devices=[], injection_connections=nothing,
+                              formulation=:auto)
 
 Inspect the supported electrical interpretation before compiling. Ideal and
 warning-producing transformer primitives are rejected, never regularised or
@@ -361,6 +362,8 @@ silently skipped. Fixed taps are data, not estimated controls. This report does
 not certify observability, model accuracy, or convergence.
 Pass `injection_connections` to declare unknown injection paths independently
 of P/Q telemetry; the default infers them from the measurements.
+`formulation` (`:auto`, `:voltage`, `:current`, as in
+[`compile_state_estimator`](@ref)) selects which elimination contract is checked.
 """
 state_estimator_preflight(net::Dict{String,Any}, measurements::AbstractVector=Measurement[]; kwargs...) =
     first(_se_preflight(net, measurements; kwargs...))

@@ -26,7 +26,7 @@ struct NetInjectionMeasurement <: AbstractMeasurement
 end
 
 """
-    TransformerMeasurement(; kind, transformer, variant, port=1, terminal,
+    TransformerMeasurement(; kind, transformer, variant=nothing, port=1, terminal,
                              reference=nothing, value, sigma)
 
 Current (`:ire`, `:iim`, `:imag`) or power (`:pflow`, `:qflow`) into a finite

@@ -172,7 +172,7 @@ The formulation deliberately keeps three categories separate.
 | Category | Representation | Examples |
 |---|---|---|
 | Network identity | compiled into `SEStructure` | passive Ybus, conductor incidence, closed-switch aliases |
-| Exact equation | `c(x)=0` | true zero injection, exact device law, ideal source relationship |
+| Exact equation | `c(x)=0` | true zero injection, exact device law |
 | Stochastic information | whitened residual `r(x)` | meters, forecasts, nominal loads, state priors |
 
 A small meter variance does **not** make a reading exact.  Exact constraints
@@ -312,9 +312,22 @@ A on a 132 kV feeder with short 20 kS segments.  Feasibility is therefore tested
 against `max(constraint_tolerance, constraint_rtol * current_scale)`: the
 absolute request acts as a floor, so small networks behave exactly as before,
 while a high-voltage network is no longer asked for a precision that double
-precision cannot deliver.  Stationarity is divided by `norm(H, Inf)`, so
-`optimality_tolerance` reads in units of the whitened residual rather than in
-whatever units ``\partial h/\partial x`` happens to carry.
+precision cannot deliver.  Stationarity is divided by `max(1, norm(H, Inf))`, so
+`optimality_tolerance` (default `1e-6` for all three solvers) reads in units of
+the whitened residual rather than in whatever units ``\partial h/\partial x``
+happens to carry.
+
+The dense and sparse solvers accept a second, scale-free stationarity test: the
+Gauss--Newton change of the whitened residual on the feasible tangent space,
+divided by `max(1, norm(r))`. This is the cosine of the angle between the
+residual and the range of the reduced Jacobian, and it is floored at
+``\sqrt{8\varepsilon}`` because a smaller predicted reduction cannot be resolved
+in double precision. With noisy data the residual is not zero at the optimum, and
+round-off in ``YV`` then limits how small the gradient can be made. If the trust
+region collapses at a feasible point where the model predicts a relative
+objective reduction below ``\sqrt{\varepsilon}``, the solvers report convergence
+rather than `:trust_region_stalled`; a genuine stall, with a larger predicted
+reduction that cannot be realised, keeps the failure status.
 
 Both solvers require finite, non-negative feasibility, stationarity, and rank
 tolerances. Trust-region radii and the merit penalty must be finite and
@@ -463,7 +476,7 @@ it does not impose zero net current at a source-fixed conductor.
 
 ```julia
 load = ExactDeviceEquation(ConstantPowerDevice(
-    [TerminalConnection(("b1", "1"), nothing)] # earth return in this one-wire example,
+    [TerminalConnection(("b1", "1"), nothing)], # earth return in this one-wire example
     ComplexF64[4_000 + 1_000im],
 ))
 
@@ -474,16 +487,24 @@ result = solve_with_continuation(structure, parameters, x0;
                                  alphas=[0.0, 0.5, 1.0])
 ```
 
-The constant-current term is a fixed complex phasor; it does not rotate with
-the terminal voltage to preserve power factor. `ZIPDevice` implements the
+By default the constant-current term is a fixed complex phasor; it does not
+rotate with the terminal voltage. `ConstantCurrentDevice(...;
+angle_reference=:voltage)` instead holds magnitude and power factor relative to
+the connection voltage. The current term of `ZIPDevice` is always a fixed
+phasor. `ZIPDevice` implements the
 explicit law `conj(S/V) + I + YV`, rather than every conventional ZIP-load
 parameterisation.
 
 Available models are [`ConstantPowerDevice`](@ref),
-[`ConstantCurrentDevice`](@ref), and [`ZIPDevice`](@ref).  Constant-power
-evaluation rejects trial states below `voltage_min_model`.  Continuation starts
-with a regularised internal law and **must finish at `α=1`** before accepting a
-physical result.
+[`ConstantCurrentDevice`](@ref), and [`ZIPDevice`](@ref).  The physical
+constant-power law (`α>0`, nonzero power) rejects trial states below
+`voltage_min_model`.  Continuation starts with a regularised internal law,
+``\overline{S}V/(|V|^2+v_{reg}^2)``, and **must finish at `α=1`** before
+accepting a physical result. `regularization_voltage` defaults to the largest
+nominal conductor voltage, which makes the first stage a lightly loaded model;
+a value far below the operating voltage would make every stage identical.
+`:power_flow_initialization_failed` means some stage did not converge for any
+reason; the stage results carry the specific status.
 
 A converged stage with a nonzero constant-power term and `α<1` reports
 `:converged_regularized`. It is not publishable through `solve_status`, and a

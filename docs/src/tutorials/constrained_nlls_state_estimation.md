@@ -155,8 +155,9 @@ Here, `:vr` and `:vi` deliberately represent rectangular phasor information.
 
 Branch current and power are positive from the selected bus into the line.
 `side=:from` identifies the source end here. Branch `:pflow`/`:qflow` use the
-conductor-to-earth potential, so a phase-to-neutral power reading must not be
-relabelled as branch power without conversion.
+conductor-to-earth potential unless `reference` names a return terminal, so a
+phase-to-neutral power reading needs `reference="n"` (or a conversion) rather
+than a bare relabelling as branch power.
 
 ## Compile the electrical equations and solve clean data
 

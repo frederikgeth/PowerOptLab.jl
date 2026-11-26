@@ -16,8 +16,8 @@ path where conditioning stays bounded, a genuinely degenerate one that arises
 at unity power factor, and a non-uniqueness that is not a conditioning
 question at all.
 
-Everything below runs against one two-bus feeder, and every table on this page
-is pinned by a test in `test/constrained_state_estimation_tests.jl`:
+Everything below runs against one two-bus feeder. The zero-current statuses in
+the first table are pinned by a test in `test/state_estimation_solver_regression_tests.jl`:
 
 ```julia
 using PowerOptLab
@@ -134,7 +134,7 @@ evaluate_state_estimator(s, SEParameters(s, [imeas]; current_epsilon=1e-3), xfla
 |---|---:|---:|---|
 | `0.0` | 0.0000 | *DomainError* | `:undefined_derivative` |
 | `1e-3` | 0.0010 | 0.0 | `:stationary_not_minimum` |
-| `1.0` | 1.0000 | 0.0 | `:stationary_not_minimum` |
+| `1.0` | 1.0000 | 0.0 | `:converged_underobserved` |
 
 Three things to read off this:
 
@@ -149,7 +149,9 @@ Three things to read off this:
   scalar cannot carry both units.
 * **But the smoothed row is information-free at zero current**: its gradient
   there is exactly zero, so ``\|H\| = 0`` and the point need not minimise the objective. For a positive reading exceeding
-  the smoothed prediction, negative curvature produces `:stationary_not_minimum`. Smoothing buys differentiability, not
+  the smoothed prediction, negative curvature produces `:stationary_not_minimum`. When the smoothed
+  prediction happens to equal the reading (the last row), the residual is zero, the point is a minimum, and the
+  status is `:converged_underobserved`: a perfect fit that identifies nothing. Smoothing buys differentiability, not
   information. It does not invent a measurement that the operating point
   cannot support. The solver rejects detected negative curvature instead of treating
   first-order stationarity as a successful fit.
