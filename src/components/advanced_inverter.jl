@@ -724,17 +724,6 @@ zero filter) it is a plain grid-following converter at the POC.
 - `pwm_ac_converter_reserve`, `pwm_ac_grid_reserve`, and
   `pwm_ac_neutral_reserve` are expert direct-stamping inputs (A RMS). The
   convenience solver calibrates them automatically; leave them zero otherwise.
-- `pwm_current_envelope=false` — reserve an analytical all-duty AC switching
-  current bound inside `i_max`, `i_grid_max` and `In_max`, in place of the
-  truncated harmonic audit (`pwm_ac_ripple`; the two cannot be combined).
-  Requires `v_dc_max`, centered PWM and a monolithic three/four-leg bridge with
-  an L filter whose passive R and L are proportional.
-- `pwm_dc_voltage_envelope=false` — additionally bound the carrier-frequency
-  DC-link voltage excursion, so `v_dc_min`/`v_dc_max` constrain the combined
-  low-frequency and carrier envelope. Requires `pwm_current_envelope=true`,
-  `dc_energy_model=:nonlinear`, both DC voltage limits, an open
-  carrier-frequency source, and no RMS-only allowances (`i_sw`,
-  `pwm_current_factor`, manual AC reserves).
 - `dv2_max` — optional cap on the 2ω bus-ripple amplitude (V).
 - `dv_mid_max` — `:SPLIT_DC` only: optional cap on the RMS fundamental
   midpoint-to-ideal-midpoint voltage ripple (V).
@@ -824,12 +813,6 @@ zero filter) it is a plain grid-following converter at the POC.
 - `i_max=nothing` — optional per-phase-conductor current limit (A). Strongly
   recommended for every three-phase topology: the aggregate `s_max` circle does
   not bound phase-redistribution currents whose per-phase powers cancel.
-- `i_peak_max`, `i_grid_peak_max`, `In_peak_max` — optional peak-current limits
-  (A) on the converter arm, grid arm and neutral. No peak rating is inferred
-  from an RMS rating. With `pwm_strategy=:NONE` they bound the fundamental peak
-  `√2·|I|`; with PWM they require `pwm_current_envelope=true` and include its
-  carrier peak bound. They cannot be combined with manual RMS reserves, and
-  `In_peak_max` requires a three-phase topology.
 """
 Base.@kwdef struct AdvancedInverter <: AbstractDevice
     id::String
@@ -2745,10 +2728,6 @@ also prevent publication, even when the final fundamental NLP solved. Inspect
 - `q_set=nothing` — optional reactive-power constraint at the POC (var).
 - `per_unit=false`, `s_base=1e6`, `optimizer=Ipopt.Optimizer`, `verbose=false`,
   `solver_options=()`. Results are returned in SI regardless of formulation.
-- `rail_refinement=true` — after each solve, enclose the minimum rail headroom
-  over the full electrical cycle, add any violating angle as a constraint and
-  re-solve (at most 12 times). `false` keeps the fixed `n_samples` grid; the
-  physical acceptance check still rejects a missed violation.
 """
 function solve_advanced_inverter(net::Dict{String,Any}, inverter::AdvancedInverter;
                                  objective::Symbol=:max_export,
