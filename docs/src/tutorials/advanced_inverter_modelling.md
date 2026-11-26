@@ -207,9 +207,9 @@ small it can reach `i_max` at a few percent of voltage unbalance.
 ## DC modulation is a capability limit, not a post-processing check
 
 At a fixed DC voltage, an inverter cannot create an arbitrary internal AC voltage.
-For `:SINGLE_PHASE`, PowerOptLab currently retains a scalar `/√3` convention;
-it is not a bridge-specific full- or half-bridge model, so treat it as a user-supplied
-engineering cap. For three-phase units, PowerOptLab uses a sampled outer
+For `:SINGLE_PHASE`, `modulation_max` scales the ideal fundamental voltage of
+the bridge named by `single_phase_bridge`: `v_dc/√2` for the default
+`:full_bridge` and `v_dc/(2√2)` for `:half_bridge`. For three-phase units, PowerOptLab uses a sampled outer
 approximation of the topology-specific continuous-time switching hull.
 
 ```julia
@@ -220,16 +220,15 @@ single_phase = AdvancedInverter(
     topology = :SINGLE_PHASE,
     s_max = 7_000.0,
     i_max = 32.0,
-    v_dc = 450.0,
+    v_dc = 400.0,
     modulation_max = 0.95,
 )
 ```
 
-Under this convention the internal EMF is capped at
-`0.95 × 450 / √3 ≈ 247 V` RMS, which leaves headroom above a 230 V grid. The
-same cap with `v_dc = 400.0` is 219 V, below the grid voltage, and the plant is
-infeasible even though a real 400 V full bridge can synthesise 230 V RMS. Check
-the cap against the network voltage before using the scalar convention.
+The full bridge caps the internal EMF at `0.95 × 400 / √2 ≈ 269 V` RMS, which
+leaves headroom above a 230 V grid. With `single_phase_bridge = :half_bridge`
+the same link gives only 134 V and the plant is infeasible; a half bridge needs
+about 700 V for the same grid.
 
 For a three-phase device, choose the physical bridge topology explicitly:
 
@@ -379,8 +378,10 @@ physical conductor/device ratings. For an explicit LCL filter, also inspect
 `i_grid_switching_rms` and `i_filter_shunt_switching_rms` rather than assuming
 the converter-side ripple reaches the grid unchanged.
 
-Unequal capacitances create a natural mean midpoint shift even at zero neutral
-current. `q_mid_balance_max` supplies bounded quasi-static charge authority to
+By default the mean midpoint is held at half the bus. With
+`midpoint_mean_model = :equal_charge`, unequal capacitances create a mean
+midpoint shift even at zero neutral current. `q_mid_balance_max` then supplies
+bounded quasi-static charge authority to
 correct it, while `v_mid_mean_max` states the admissible residual. This is a
 steady-state feasibility abstraction: it does not demonstrate that a physical
 balancing controller has adequate bandwidth or remains within its transient

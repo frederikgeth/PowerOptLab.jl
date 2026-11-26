@@ -129,6 +129,7 @@ end
     for source in ((;),(dc_source_r=0.,),(dc_source_r=.2,),(dc_source_r=.2,dc_source_l=.001))
         split=AdvancedInverter(;common...,topology=:SPLIT_DC,v_dc=900.,c_dc=.003,
             c_dc_upper=.002,c_dc_lower=.004,q_mid_balance_max=.5,v_mid_mean_max=1.,
+            midpoint_mean_model=:equal_charge,
             i_cap_upper_max=10.,i_cap_lower_max=10.,source...)
         # The exact charge required to cancel the natural mean displacement.
         r=inverter_physical_feasibility(split;converter_voltage=v,converter_current=current,

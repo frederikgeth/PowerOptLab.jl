@@ -642,7 +642,7 @@ zero filter) it is a plain grid-following converter at the POC.
   allocation when combining it with embedded PWM thermal limits.
 - `c_dc_upper`, `c_dc_lower` — optional split-link half-bank capacitances (F).
   Each defaults to `c_dc`; supplying either exposes unequal series capacitance,
-  a mean midpoint offset, and (for a finite or open line-frequency DC source,
+  a mean midpoint offset when `midpoint_mean_model=:equal_charge`, and (for a finite or open line-frequency DC source,
   see `dc_source_r`) a 2ω midpoint ripple and a fundamental total-bus ripple.
   The neutral-current share of each bank follows the source model: one half
   each for an open source, `C_u/C_Σ` and `C_l/C_Σ` for an ideal stiff source.
@@ -685,6 +685,10 @@ zero filter) it is a plain grid-following converter at the POC.
 - `q_mid_balance_max` — optional split-link charge-transfer authority (C). The
   actuator can shift mean midpoint voltage by `2q/(C_upper+C_lower)`.
 - `v_mid_mean_max` — optional magnitude limit on mean midpoint offset (V).
+- `midpoint_mean_model=:balanced` — mean midpoint voltage before any balancing
+  charge. `:balanced` holds it at half the bus, as bleeder resistors or a
+  balancing loop do. `:equal_charge` uses `v_dc·(C_upper−C_lower)/(2(C_upper+C_lower))`,
+  the offset of unequal series banks that carry equal charge.
 - `i_sw` — optional constant switching-frequency RMS allowance (A) reserved out
   of a supplied common or half-bank capacitor rating (use when the
   electrolytics, not a parallel film cap, carry the `f_sw` component).
@@ -770,9 +774,13 @@ zero filter) it is a plain grid-following converter at the POC.
 
 # Internal EMF box / single-phase modulation
 - `v_int_min`, `v_int_max` — per-phase EMF magnitude box (V; applies to all topologies).
-- `modulation_max` — SINGLE_PHASE only: legacy scalar DC-link convention
-  `|V_int| ≤ modulation_max·v_dc/√3`. This is not a bridge-specific
-  full-/half-bridge switching model.
+- `modulation_max` — SINGLE_PHASE only (requires `v_dc`): utilisation factor on
+  the ideal fundamental voltage of the bridge named by `single_phase_bridge`.
+- `single_phase_bridge=:full_bridge` — `:full_bridge` gives
+  `|V_int| ≤ modulation_max·v_dc/√2`; `:half_bridge` gives
+  `|V_int| ≤ modulation_max·v_dc/(2√2)`. With several phase terminals only
+  `:half_bridge` is accepted (half bridges against a shared DC midpoint).
+  These are ideal linear-modulation limits without dead time or device drops.
 
 # Grid-forming
 - `grid_forming=false` — balanced positive-sequence internal EMF; the magnitude
@@ -881,6 +889,7 @@ Base.@kwdef struct AdvancedInverter <: AbstractDevice
     dv_mid_max::Union{Float64,Nothing} = nothing
     q_mid_balance_max::Union{Float64,Nothing} = nothing
     v_mid_mean_max::Union{Float64,Nothing} = nothing
+    midpoint_mean_model::Symbol = :balanced
     i_zero_max::Union{Float64,Nothing} = nothing
     i_positive_max::Union{Float64,Nothing} = nothing
     i_negative_max::Union{Float64,Nothing} = nothing
@@ -905,6 +914,7 @@ Base.@kwdef struct AdvancedInverter <: AbstractDevice
     v_int_min::Union{Float64,Nothing} = nothing
     v_int_max::Union{Float64,Nothing} = nothing
     modulation_max::Union{Float64,Nothing} = nothing
+    single_phase_bridge::Symbol = :full_bridge
     grid_forming::Bool = false
     p_loss_fixed::Float64 = 0.0
     a_loss::Float64 = 0.0
@@ -1031,6 +1041,25 @@ function _split_bus_ripple_value(inv, h)
     return reim(kb*j)
 end
 
+# Mean midpoint displacement from the centre of the bus before any declared
+# balancing charge. `:balanced` is a link whose bleeder resistors or balancing
+# loop hold the midpoint at half the bus; `:equal_charge` is two series
+# capacitors that have only ever carried the same charge.
+function _split_natural_mean(inv)
+    inv.topology == :SPLIT_DC && inv.midpoint_mean_model === :equal_charge || return 0.0
+    cu, cl = _split_capacitances(inv)
+    return inv.v_dc * (cu - cl) / (2(cu + cl))
+end
+
+# Fundamental RMS voltage available from one ideal single-phase bridge:
+# a full bridge swings its output over ±V_dc, a half bridge over ±V_dc/2.
+function _single_phase_voltage_cap(inv)
+    (inv.topology === :SINGLE_PHASE && inv.modulation_max !== nothing &&
+     inv.v_dc !== nothing) || return nothing
+    utilisation = inv.single_phase_bridge === :half_bridge ? 1/(2sqrt(2)) : 1/sqrt(2)
+    return inv.modulation_max * inv.v_dc * utilisation
+end
+
 _split_midpoint_2w_ratio(inv) = inv.topology == :SPLIT_DC ?
     (c -> (c[1] - c[2])/(2(c[1] + c[2])))(_split_capacitances(inv)) : 0.0
 
@@ -1044,6 +1073,21 @@ function _validate_inverter(inv::AdvancedInverter, nets=())
 
     inv.power_limit_location in (:converter, :poc) || throw(ArgumentError(
         "power_limit_location must be :converter or :poc"))
+    inv.single_phase_bridge in (:full_bridge, :half_bridge) || throw(ArgumentError(
+        "inverter '$(inv.id)' single_phase_bridge must be :full_bridge or :half_bridge"))
+    inv.midpoint_mean_model in (:balanced, :equal_charge) || throw(ArgumentError(
+        "inverter '$(inv.id)' midpoint_mean_model must be :balanced or :equal_charge"))
+    inv.midpoint_mean_model === :balanced || inv.topology == :SPLIT_DC ||
+        throw(ArgumentError("inverter '$(inv.id)' midpoint_mean_model applies only to :SPLIT_DC"))
+    inv.single_phase_bridge === :full_bridge || inv.topology === :SINGLE_PHASE ||
+        throw(ArgumentError("inverter '$(inv.id)' single_phase_bridge applies only to :SINGLE_PHASE"))
+    # Full bridges on several phases of one DC link would short the link
+    # through the shared neutral; only half bridges to a DC midpoint can share it.
+    if inv.topology === :SINGLE_PHASE && inv.modulation_max !== nothing &&
+       length(inv.phase_terminals) > 1 && inv.single_phase_bridge === :full_bridge
+        throw(ArgumentError("inverter '$(inv.id)' modulation_max with several phase " *
+            "terminals requires single_phase_bridge=:half_bridge or a three-phase topology"))
+    end
     isfinite(inv.s_max) && inv.s_max > 0 || throw(ArgumentError(
         "inverter '$(inv.id)' s_max must be finite and > 0"))
     for (name, value) in (("r_filter", inv.r_filter), ("x_filter", inv.x_filter),
@@ -1240,8 +1284,7 @@ function _validate_inverter(inv::AdvancedInverter, nets=())
         # removes protection bounds, not the topology or ripple equations.
         if inv.topology == :SPLIT_DC && inv.v_mid_mean_max !== nothing &&
            inv.q_mid_balance_max === nothing
-            cu, cl = _split_capacitances(inv)
-            natural_mean = inv.v_dc * (cu - cl) / (2(cu + cl))
+            natural_mean = _split_natural_mean(inv)
             abs(natural_mean) <= inv.v_mid_mean_max || throw(ArgumentError(
                 "inverter '$(inv.id)' natural mean midpoint offset exceeds " *
                 "v_mid_mean_max; supply q_mid_balance_max or relax the limit"))
@@ -2008,8 +2051,8 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
                 scale = normalize_capability_constraints && rating > 0 ? rating : 1.0
                 JuMP.@constraint(m, vmag2/scale >= rating/scale)
             end
-            if !is_3ph_topo && inv.modulation_max !== nothing && inv.v_dc !== nothing
-                cap = inv.modulation_max * inv.v_dc / _SQRT3
+            if _single_phase_voltage_cap(inv) !== nothing
+                cap = _single_phase_voltage_cap(inv)
                 scale = normalize_capability_constraints ? (cap/vb)^2 : 1.0
                 JuMP.@constraint(m, vmag2/scale <= (cap / vb)^2/scale)
             end
@@ -2089,8 +2132,8 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
         vgfm = JuMP.@variable(m, base_name = "vgfm_$(inv.id)", lower_bound = 0.0)
         inv.v_int_min !== nothing && JuMP.@constraint(m, vgfm >= inv.v_int_min / vb)
         vmax_gfm = inv.v_int_max === nothing ? nothing : inv.v_int_max / vb
-        if !is_3ph_topo && inv.modulation_max !== nothing && inv.v_dc !== nothing
-            cap = inv.modulation_max * inv.v_dc / _SQRT3 / vb
+        if _single_phase_voltage_cap(inv) !== nothing
+            cap = _single_phase_voltage_cap(inv) / vb
             vmax_gfm = vmax_gfm === nothing ? cap : min(vmax_gfm, cap)
         end
         vmax_gfm !== nothing && JuMP.@constraint(m, vgfm <= vmax_gfm)
@@ -2176,7 +2219,7 @@ function _stamp_inverter!(ctx, inv::AdvancedInverter;
                 scale = normalize_capability_constraints ? inv.dv_mid_max^2 : 1.0
                 JuMP.@constraint(m, (nre^2 + nim^2)/scale <= inv.dv_mid_max^2/scale)
             end
-            natural_mean = v_dc * (cu - cl) / (2csum)
+            natural_mean = _split_natural_mean(inv)
             if inv.q_mid_balance_max === nothing
                 nmean = natural_mean
             else
@@ -2749,8 +2792,52 @@ also prevent publication, even when the final fundamental NLP solved. Inspect
   over the full electrical cycle, add any violating angle as a constraint and
   re-solve (at most 12 times). `false` keeps the fixed `n_samples` grid; the
   physical acceptance check still rejects a missed violation.
+- `per_unit_fallback=true` — when a raw-SI solve (`per_unit=false`) stalls
+  (iteration limit, numerical error, slow progress), repeat it once in per-unit
+  coordinates on `s_base = s_max` and return that solve if it is publishable.
+  A warning reports the substitution. Infeasible outcomes are not retried.
 """
 function solve_advanced_inverter(net::Dict{String,Any}, inverter::AdvancedInverter;
+                                 objective::Symbol=:max_export,
+                                 p_set::Union{Float64,Nothing}=nothing,
+                                 q_set::Union{Float64,Nothing}=nothing,
+                                 per_unit::Bool=false,
+                                 s_base::Float64=1e6,
+                                 optimizer=Ipopt.Optimizer,
+                                 verbose::Bool=false,
+                                 solver_options=(),
+                                 pwm_tolerance::Float64=1e-3,
+                                 pwm_max_iterations::Int=16,
+                                 pwm_reserve_factor::Float64=1.01,
+                                 rail_refinement::Bool=true,
+                                 per_unit_fallback::Bool=true)
+    solve(per_unit, s_base) = _solve_advanced_inverter_closed(net, inverter;
+        objective, p_set, q_set, per_unit, s_base, optimizer, verbose,
+        solver_options, pwm_tolerance, pwm_max_iterations, pwm_reserve_factor,
+        rail_refinement)
+    result = solve(per_unit, s_base)
+    # An unrated plant (no `i_max`, no filter) can be poorly conditioned in raw
+    # SI coordinates and stall without reaching a verdict. Results are SI in
+    # both formulations, so repeat such a stall once on the plant's own base.
+    stalled = !solve_status(result).publishable &&
+        result.termination_status in _STALLED_TERMINATIONS
+    (per_unit || !per_unit_fallback || !stalled) && return result
+    retry = try
+        solve(true, inverter.s_max)
+    catch
+        return result
+    end
+    solve_status(retry).publishable || return result
+    @warn "inverter '$(inverter.id)': the raw-SI solve stopped at " *
+          "$(result.termination_status); returning the publishable per-unit " *
+          "solve on s_base = s_max instead. Pass per_unit=true, declare i_max, " *
+          "or set per_unit_fallback=false to silence or disable this retry."
+    return retry
+end
+
+const _STALLED_TERMINATIONS = ("ITERATION_LIMIT", "NUMERICAL_ERROR", "SLOW_PROGRESS")
+
+function _solve_advanced_inverter_closed(net::Dict{String,Any}, inverter::AdvancedInverter;
                                  objective::Symbol=:max_export,
                                  p_set::Union{Float64,Nothing}=nothing,
                                  q_set::Union{Float64,Nothing}=nothing,

@@ -255,9 +255,9 @@ function inverter_physical_feasibility(inv; converter_voltage,converter_current,
             upper("internal_voltage_max_$k",:V,abs(u[k]),inv.v_int_max)
         end
     end
-    if inv.topology===:SINGLE_PHASE && inv.modulation_max!==nothing && inv.v_dc!==nothing
+    if _single_phase_voltage_cap(inv)!==nothing
         for k in 1:n
-            upper("single_phase_modulation_$k",:V,abs(u[k]),inv.modulation_max*inv.v_dc/sqrt(3))
+            upper("single_phase_modulation_$k",:V,abs(u[k]),_single_phase_voltage_cap(inv))
         end
     end
     sconv=sum(u.*conj.(ic))
@@ -310,7 +310,7 @@ function inverter_physical_feasibility(inv; converter_voltage,converter_current,
             share=_split_fundamental_coefficients(inv)
             midpoint=share.midpoint*(-ineutral); bus=share.bus*(-ineutral)
             cu,cl=_split_capacitances(inv)
-            mean=inv.v_dc*(cu-cl)/(2*(cu+cl))+2midpoint_charge/(cu+cl)
+            mean=_split_natural_mean(inv)+2midpoint_charge/(cu+cl)
             upper("midpoint_fundamental_ripple",:V,abs(midpoint),inv.dv_mid_max)
             upper("midpoint_mean",:V,abs(mean),inv.v_mid_mean_max)
             upper("midpoint_balance_charge",:C,abs(midpoint_charge),inv.q_mid_balance_max)
