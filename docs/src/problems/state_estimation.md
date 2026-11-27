@@ -201,7 +201,7 @@ se = solve_state_estimation(net, meas)
 solve_status(se).publishable # checks termination and primal feasibility
 se.bus["bus1"]["1"]["vm"]   # estimated |V| at bus1 (V); NaN if not publishable
 se.residuals                # per-measurement measured/estimated/residual/standardized
-se.observability            # (observable, n_states, rank, redundancy,
+se.observability            # (observable, n_states, rank, redundancy, nuisance_dimension,
                             #  min_singular, cond, tangent_dimension)
 se.objective                # optimal weighted-residual sum
 ```
@@ -214,7 +214,8 @@ state is determined.
 
 ## Not yet supported
 
-Branch-flow / branch-current / phasor (PMU) / source measurements; bad-data
+Branch-flow / branch-current / current-phasor / source measurements (voltage
+phasors are supported through `:vr` and `:vi`); bad-data
 detection and identification (χ², largest-`rᴺ`); multistart / global search.
 Both estimators keep ungrounded neutrals as explicit voltage states. This
 formulation states zero injection per phase against a return terminal, so

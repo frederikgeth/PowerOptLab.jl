@@ -321,6 +321,11 @@ An initially rank-deficient Jacobian alone never permits dropping an equation.
 curvature approximation uses Ipopt's `hessian_approximation="exact"` callback mode. Final physical feasibility and reduced stationarity are
 checked independently of the optimizer's status. Internal homotopy stages
 remain nonpublishable.
+
+# Keywords
+`max_iterations=500`, `optimality_tolerance=1e-6`, `constraint_tolerance=1e-8`,
+`constraint_rtol=1e-11` and `rank_rtol=sqrt(eps())` have the meanings given for
+[`solve_compiled_state_estimator`](@ref). `verbose=false` silences Ipopt.
 """
 function _solve_ipopt_state_estimator(
     s::SEStructure,
@@ -466,6 +471,12 @@ function _solve_ipopt_state_estimator(
     result(status, xf, ef, rc, td, od, term, primal)
 end
 
+"""
+    solve_state_estimation(structure, parameters, x0; kwargs...)
+
+Compiled-model convenience method: forwards to
+[`solve_sparse_state_estimator`](@ref) with the same keywords.
+"""
 solve_state_estimation(s::SEStructure, p::SEParameters, x0::AbstractVector{<:Real}; kwargs...) =
     solve_sparse_state_estimator(s, p, x0; kwargs...)
 

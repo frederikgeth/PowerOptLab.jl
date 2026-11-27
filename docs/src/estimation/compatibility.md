@@ -219,10 +219,10 @@ simulations are essential.
 
 Use the same initial state, residual weights, injection paths, priors and
 stopping tolerances when comparing algorithms. The nonlinear comparison uses
-`optimality_tolerance=1e-6` explicitly: dense/sparse currently default to `1e-8`
-and shared Ipopt to `1e-6`. An overstrict request can correctly return a
-nonpublishable stall near floating-point resolution even when voltages and
-objectives already agree. Do not loosen a test merely to hide a physical
+`optimality_tolerance=1e-6` explicitly, which is also the default of the dense,
+sparse and shared Ipopt solvers. A request far below the round-off floor of the
+residual no longer returns a nonpublishable stall when the model predicts no
+resolvable improvement; the solvers report convergence at that floor. Do not loosen a test merely to hide a physical
 constraint error.
 
 For underobserved problems, compare predicted measurements and identifiable

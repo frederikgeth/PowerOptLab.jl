@@ -113,7 +113,16 @@ struct _SEPowerGroup
     customers::Vector{Vector{Int}}
 end
 
-"""A scalar telemetry reading on one end/conductor of a named BMOPF line."""
+"""
+    BranchMeasurement(; kind, line, side=:from, terminal, value, sigma, reference=nothing)
+
+A scalar telemetry reading on one end and conductor of a named BMOPF line.
+`kind` is `:ire`, `:iim`, `:imag` (current into the line at `side`, amperes) or
+`:pflow`, `:qflow` (power into the line, watts/vars). `side` is `:from` or `:to`.
+Power uses the conductor-to-earth voltage unless `reference` names a return
+terminal on the same bus, e.g. `reference="n"` for phase-to-neutral power.
+`sigma` must be finite and positive.
+"""
 struct BranchMeasurement <: AbstractMeasurement
     kind::Symbol
     line::String
@@ -171,8 +180,9 @@ conductors are held in the parameter vector instead.  Closed ideal switches are 
 node aliases in `ybus_passive`.
 
 The evaluator supports terminal voltage components/magnitudes and terminal
-active/reactive injection measurements, exact zero-injection equations, and
-connection-aware exact constant-power, constant-current, and ZIP devices.
+active/reactive injection measurements, net-injection, line, transformer-port
+and shunt telemetry, functional measurements, exact zero-injection equations,
+and connection-aware exact constant-power, constant-current, and ZIP devices.
 Explicit `injection_connections` (or power-measurement references by default)
 declare injection return paths: the sum of
 terminal currents on each connected, non-source, non-earth return component
@@ -234,6 +244,22 @@ it applies to.
 `voltage_min_model` (volts) bounds the domain of physical constant-power laws
 and merged-customer power profiling. At zero connection voltage individual
 customer powers cannot be recovered from their sum using finite currents.
+
+# Constructor
+
+    SEParameters(structure, measurements=Measurement[]; exact_devices=[],
+                 magnitude_epsilon=0, current_epsilon=0, voltage_min_model=1e-3,
+                 regularization_voltage=nothing, continuation_alpha=1, prior=nothing)
+
+`exact_devices` must repeat the devices used at compilation (values may differ).
+`prior` is an optional [`StatePrior`](@ref). `continuation_alpha` in `[0, 1]`
+blends the internal constant-power law (`0`) with the physical one (`1`); only
+`1` yields a publishable estimate. `regularization_voltage` (volts) sets the
+voltage scale of that internal law, `conj(S)*V/(abs2(V) + vreg^2)`, and has no
+effect at `continuation_alpha=1`. It defaults to the largest nominal conductor
+voltage of the compiled network, so [`solve_with_continuation`](@ref) starts
+from a lightly loaded model; a value far below the operating voltage makes all
+continuation stages coincide.
 """
 mutable struct SEParameters
     fixed_voltages::Vector{ComplexF64}
@@ -656,7 +682,7 @@ end
 """
     compile_state_estimator(net, measurements=Measurement[];
                             neutral="n", zero_injection=String[], exact_devices=[],
-                            injection_connections=nothing) -> SEStructure
+                            injection_connections=nothing, formulation=:auto) -> SEStructure
 
 Compile the voltage/current evaluator.  The network is represented by
 BMOPFTools' passive `I = YV` relation in SI units.  Every source terminal with a
@@ -782,7 +808,8 @@ end
 function SEParameters(s::SEStructure, measurements::AbstractVector=Measurement[];
                       exact_devices=Any[], magnitude_epsilon::Real=0.0,
                       current_epsilon::Real=0.0,
-                      voltage_min_model::Real=1e-3, regularization_voltage::Real=1e-3,
+                      voltage_min_model::Real=1e-3,
+                      regularization_voltage::Union{Real,Nothing}=nothing,
                       continuation_alpha::Real=1.0, prior::Union{StatePrior,Nothing}=nothing)
     length(measurements) == length(s.measurement_pattern) ||
         throw(ArgumentError("SEParameters needs the same number of measurements used for compilation"))
@@ -796,7 +823,8 @@ function SEParameters(s::SEStructure, measurements::AbstractVector=Measurement[]
     epscur = Float64(current_epsilon)
     epscur >= 0 && isfinite(epscur) ||
         throw(ArgumentError("current_epsilon must be finite and non-negative"))
-    vmin = Float64(voltage_min_model); vreg = Float64(regularization_voltage)
+    vmin = Float64(voltage_min_model)
+    vreg = Float64(something(regularization_voltage, _se_default_regularization_voltage(s)))
     α = Float64(continuation_alpha)
     vmin > 0 && isfinite(vmin) || throw(ArgumentError("voltage_min_model must be finite and > 0"))
     vreg > 0 && isfinite(vreg) || throw(ArgumentError("regularization_voltage must be finite and > 0"))
@@ -826,6 +854,21 @@ function SEParameters(s::SEStructure, measurements::AbstractVector=Measurement[]
                      vmin, vreg, α, prior_indices, prior_values, prior_sigmas)
     _validate_parameters(s, p)
     p
+end
+
+# The continuation's internal law is `conj(S)*V/(abs2(V) + vreg^2)`. It differs
+# from the physical law only where `abs(V)` is comparable with `vreg`, so a
+# millivolt value makes every stage numerically identical to the last one and
+# the homotopy does nothing. The largest nominal conductor voltage makes the
+# `α=0` stage a smooth, lightly loaded model defined at zero volts on every
+# voltage level; devices on lower-voltage buses simply start closer to no load.
+function _se_default_regularization_voltage(s::SEStructure)
+    level = maximum(abs, values(s.reference_map); init=0.0)
+    nf = length(s.free_state_map)
+    for k in 1:nf
+        level = max(level, hypot(s.nominal_state[k], s.nominal_state[nf + k]))
+    end
+    isfinite(level) && level > 0 ? level : 1e-3
 end
 
 """Replace the stochastic state prior without recompiling network structure."""
@@ -1255,11 +1298,38 @@ end
 # Projection onto a computed null space introduces roundoff proportional to the
 # ORIGINAL operator. If H*Z is mathematically zero, a threshold relative only to
 # H*Z promotes that roundoff to information and invents gauge observability.
+#
+# `rtol` is a conditioning threshold: a direction counts as numerically
+# unidentified once its singular value falls below `rtol * smax`. It is NOT
+# multiplied by the matrix dimension. Only the round-off floors scale with
+# dimension; scaling the conditioning threshold as well declared well-posed
+# feeders rank deficient merely because they were large (a fully metered
+# 200-bus four-wire chain has cond(H*Z) near 7e4).
 function _se_rank_tolerance(A, smax, rtol, reference_scale)
     dimension = max(size(A)...)
-    max(Float64(rtol) * dimension * smax,
+    max(Float64(rtol) * smax, eps(Float64) * dimension * smax,
         8eps(Float64) * dimension * reference_scale, eps(Float64))
 end
+
+# Residual-orthogonality stationarity for nonlinear least squares. With `d`
+# the Gauss--Newton change of the whitened residual on the feasible tangent
+# space, `norm(d) / norm(r)` is the cosine of the angle between the residual
+# and the range of the reduced Jacobian, and `norm(d)^2 / 2` is the objective
+# reduction still predicted. Below `sqrt(8eps) * norm(r)` that reduction cannot
+# be resolved in double precision, so a tighter request is floored there
+# instead of letting the trust region collapse on round-off at the optimum.
+_se_orthogonality_tolerance(tol) = max(Float64(tol), sqrt(8eps(Float64)))
+_se_orthogonality(change, r) = norm(change) / max(1.0, norm(r))
+_se_orthogonal(change, r, tol) =
+    _se_orthogonality(change, r) <= _se_orthogonality_tolerance(tol)
+
+# A trust region that collapses at a feasible point while the Gauss--Newton
+# model predicts a relative objective reduction below `sqrt(eps)` has reached
+# the evaluation noise of the residual (`Y*V` cancellation makes that noise far
+# larger than `eps`). No further progress is measurable, so this is convergence
+# in the MINPACK `ftol` sense rather than a failure. `norm(d)^2/2 <=
+# sqrt(eps) * norm(r)^2/2` gives the bound on the orthogonality measure.
+const _SE_STALL_ORTHOGONALITY = sqrt(sqrt(eps(Float64)))
 
 function _se_rank_nullspace(A::AbstractMatrix{<:Real}; rtol::Real=sqrt(eps(Float64)), reference_scale::Real=0.0)
     n = size(A, 2)
@@ -1338,7 +1408,8 @@ end
 # the same numerical-rank convention as the reported diagnostics.
 function _se_least_squares(A, b; rtol=sqrt(eps(Float64)))
     F = svd(collect(Float64, A); full=false)
-    tol = max(rtol * max(size(A)...) * maximum(F.S; init=0.0), eps(Float64))
+    smax = maximum(F.S; init=0.0)
+    tol = max(rtol * smax, eps(Float64) * max(size(A)...) * smax, eps(Float64))
     keep = findall(>(tol), F.S)
     isempty(keep) && return zeros(Float64, size(A, 2))
     F.V[:, keep] * ((F.U[:, keep]' * b) ./ F.S[keep])
@@ -1382,23 +1453,70 @@ function _se_checked_status(s, p, x, e, H, C, Z, status; rank_rtol=sqrt(eps(Floa
     (!nonlinear_measurement && !nonlinear_constraint) && return status
     norm(e.residual) <= 1e-7 && return status
     multipliers = _se_least_squares(C', -(H' * e.residual); rtol=rank_rtol)
-    reduced_hessian = zeros(Float64, tangent, tangent)
     h = cbrt(eps(Float64)) * max(1.0, norm(x, Inf))
-    for j in 1:tangent
+    # Reduced Lagrangian Hessian applied to one tangent vector, by a central
+    # difference of the Lagrangian gradient. `nothing` reports a failed domain.
+    function hessian_product(v)
+        direction = Z * v
         gradients = Vector{Vector{Float64}}()
         for sign in (-1, 1)
-            point = x + (sign * h) .* Z[:, j]
+            point = x + (sign * h) .* direction
             value = _se_trial_evaluation(s, p, point)
-            value === nothing && return :curvature_check_failed
+            value === nothing && return nothing
             jac = _se_jacobians(s, p, point)
-            jac === nothing && return :curvature_check_failed
+            jac === nothing && return nothing
             push!(gradients, Vector{Float64}(jac[1]' * value.residual + jac[2]' * multipliers))
         end
-        reduced_hessian[:, j] = Z' * ((gradients[2] - gradients[1]) / (2h))
+        Z' * ((gradients[2] - gradients[1]) / (2h))
+    end
+    if tangent > _SE_CURVATURE_DENSE_LIMIT
+        return _se_lanczos_curvature_status(hessian_product, tangent, status)
+    end
+    reduced_hessian = zeros(Float64, tangent, tangent)
+    for j in 1:tangent
+        unit = zeros(Float64, tangent); unit[j] = 1.0
+        column = hessian_product(unit)
+        column === nothing && return :curvature_check_failed
+        reduced_hessian[:, j] = column
     end
     curvature = Symmetric((reduced_hessian + reduced_hessian') / 2)
     threshold = 1e-5 * max(1.0, opnorm(curvature, Inf))
     eigmin(curvature) < -threshold ? :stationary_not_minimum : status
+end
+
+# The exact check needs two Jacobian evaluations per tangent direction, which
+# dominated every solver's runtime on feeders with thousands of states. Above
+# this dimension use a fixed number of Lanczos steps instead. A Ritz value never
+# lies below the smallest eigenvalue, so a clearly negative one still
+# establishes negative curvature; failing to find one is weaker evidence than
+# the exact small-case test, and remains a rejection test, never a proof.
+const _SE_CURVATURE_DENSE_LIMIT = 64
+const _SE_CURVATURE_LANCZOS_STEPS = 40
+
+function _se_lanczos_curvature_status(hessian_product, tangent, status)
+    steps = min(tangent, _SE_CURVATURE_LANCZOS_STEPS)
+    basis = zeros(Float64, tangent, steps)
+    # Deterministic, non-sparse start: no direction is favoured or excluded.
+    v = [cos(0.7 + 1.3k) for k in 1:tangent]
+    v ./= norm(v)
+    alphas = Float64[]; betas = Float64[]
+    for k in 1:steps
+        basis[:, k] = v
+        w = hessian_product(v)
+        w === nothing && return :curvature_check_failed
+        push!(alphas, dot(v, w))
+        # Full reorthogonalisation: a finite-difference operator is only
+        # approximately symmetric and the basis is small.
+        w -= basis[:, 1:k] * (basis[:, 1:k]' * w)
+        w -= basis[:, 1:k] * (basis[:, 1:k]' * w)
+        beta = norm(w)
+        (k == steps || beta <= 1e-12 * max(1.0, maximum(abs, alphas))) && break
+        push!(betas, beta)
+        v = w / beta
+    end
+    ritz = eigvals(SymTridiagonal(alphas, betas[1:length(alphas)-1]))
+    threshold = 1e-5 * max(1.0, maximum(abs, ritz))
+    minimum(ritz) < -threshold ? :stationary_not_minimum : status
 end
 
 function _se_scaled_normal_step(C, c, scale, radius; rank_rtol=sqrt(eps(Float64)))
@@ -1440,6 +1558,26 @@ This intentionally transparent solver is for small-system verification.  It
 uses dense SVD rank/null-space diagnostics; the compiled evaluator preserves the
 sparsity used by [`solve_sparse_state_estimator`](@ref), the sparse
 Hachtel-system implementation for larger networks.
+
+# Keywords
+- `max_iterations=100`.
+- `optimality_tolerance=1e-6` — first-order stationarity, in whitened-residual
+  units. Either the reduced gradient divided by `max(1, norm(H, Inf))`, or the
+  Gauss--Newton residual change divided by `max(1, norm(r))`, must fall below
+  it. The second test is floored at `sqrt(8eps)`. A trust region that collapses
+  at a feasible point where the model predicts a relative objective reduction
+  below `sqrt(eps)` is also reported as converged: the residual evaluation has
+  reached its round-off noise.
+- `constraint_tolerance=1e-8` (amperes), `constraint_rtol=1e-11` — exact
+  equations are satisfied when `norm(c) <= max(atol, rtol * current_scale)`.
+- `rank_rtol=sqrt(eps())` — singular values below `rank_rtol * σmax` are
+  treated as zero in steps and in the rank/observability status. The threshold
+  is not multiplied by the matrix dimension.
+- `initial_radius=0.25`, `max_radius=4.0`, `min_radius=1e-10` — scaled
+  trust-region radii (`initial_radius ≤ max_radius`); one unit is one nominal
+  voltage. `normal_fraction=0.8` is the share available to the normal step.
+- `penalty=10.0` — initial exact-penalty weight; `acceptance_threshold=0.1`
+  in `(0, 1)` is the actual/predicted reduction ratio required to accept.
 """
 function _solve_compiled_state_estimator(s::SEStructure, p::SEParameters,
                                         x0::AbstractVector{<:Real};
@@ -1451,7 +1589,7 @@ function _solve_compiled_state_estimator(s::SEStructure, p::SEParameters,
                                         acceptance_threshold::Real=0.1,
                                         constraint_tolerance::Real=1e-8,
                                         constraint_rtol::Real=1e-11,
-                                        optimality_tolerance::Real=1e-8,
+                                        optimality_tolerance::Real=1e-6,
                                         min_radius::Real=1e-10,
                                         rank_rtol::Real=sqrt(eps(Float64)))
     _se_validate_solver_options(; max_iterations, initial_radius, max_radius, penalty,
@@ -1475,6 +1613,7 @@ function _solve_compiled_state_estimator(s::SEStructure, p::SEParameters,
     history = [_se_history_entry(0, radius, _se_merit(e, μ, ctol), e; penalty=μ)]
     rejected = 0
     iterations = 0
+    stall = Inf
 
     for iteration in 1:max_iterations
         iterations = iteration
@@ -1491,13 +1630,14 @@ function _solve_compiled_state_estimator(s::SEStructure, p::SEParameters,
         # satisfy both tests.  Do not manufacture a zero predicted-reduction
         # failure merely because there is no step left to take.
         gred0 = size(Z, 2) == 0 ? 0.0 : _se_stationarity(H, Z' * (H' * r))
-        if norm(c) <= ctol && gred0 <= optimality_tolerance
+        converged() = begin
             observable, _ = _se_rank_nullspace(H * Z; rtol=rank_rtol, reference_scale=norm(H))
             status = observable == size(Z, 2) ? :converged_unique : :converged_underobserved
             status = _se_checked_status(s, p, x, e, H, C, Z, status; rank_rtol)
-            return ConstrainedStateEstimationResult(status, x, e, iteration - 1, rankC,
-                                                    size(Z, 2), observable, history)
+            ConstrainedStateEstimationResult(status, x, e, iteration - 1, rankC,
+                                             size(Z, 2), observable, history)
         end
+        norm(c) <= ctol && gred0 <= optimality_tolerance && return converged()
         n = _se_scaled_normal_step(C, c, scale, normal_fraction * radius; rank_rtol)
 
         # The tangential component is an exact linearised-null-space step.  Its
@@ -1507,6 +1647,9 @@ function _solve_compiled_state_estimator(s::SEStructure, p::SEParameters,
         if size(Z, 2) > 0 && reduced_radius > 0
             B = H * Z
             q = -_se_least_squares(B, r + H * n; rtol=rank_rtol)
+            # Second, scale-free stationarity test (see `_se_orthogonal`).
+            stall = norm(c) <= ctol ? _se_orthogonality(B * q, r) : Inf
+            stall <= _se_orthogonality_tolerance(optimality_tolerance) && return converged()
             nq = norm(scale .* (Z * q))
             nq > reduced_radius && nq > 0 && (q .*= reduced_radius / nq)
             t .= Z * q
@@ -1569,6 +1712,7 @@ function _solve_compiled_state_estimator(s::SEStructure, p::SEParameters,
             x .+= step
             e = trial
             rejected = 0
+            stall = Inf
             radius = ρ > 0.75 ? min(2radius, Float64(max_radius)) : radius
             push!(history, _se_history_entry(iteration, radius, _se_merit(e, μ, ctol), e; penalty=μ))
 
@@ -1601,6 +1745,13 @@ function _solve_compiled_state_estimator(s::SEStructure, p::SEParameters,
     jac === nothing && return ConstrainedStateEstimationResult(:undefined_derivative, x, e,
                                                                iterations, 0, 0, 0, history)
     rankC, Z = _se_rank_nullspace(jac[2]; rtol=rank_rtol)
+    if norm(e.constraints) <= ctol && radius < min_radius && stall <= _SE_STALL_ORTHOGONALITY
+        observable, _ = _se_rank_nullspace(jac[1] * Z; rtol=rank_rtol, reference_scale=norm(jac[1]))
+        status = observable == size(Z, 2) ? :converged_unique : :converged_underobserved
+        status = _se_checked_status(s, p, x, e, jac[1], jac[2], Z, status; rank_rtol)
+        return ConstrainedStateEstimationResult(status, x, e, iterations, rankC,
+                                                size(Z, 2), observable, history)
+    end
     status = norm(e.constraints) > ctol ?
         (rejected > 0 ? :constraint_restoration_failed : :constraint_not_satisfied) :
         (radius < min_radius ? :trust_region_stalled : :max_iterations)
@@ -1614,8 +1765,12 @@ end
 Advance exact constant-power/ZIP constraints from the regularised internal model
 (`α=0`) to their physical, unregularised equations (`α=1`).  Each stage warm
 starts the dense constrained solver.  A returned `:power_flow_initialization_failed`
-status means a stage could not establish feasibility; no final estimate is
-claimed unless the last stage is at α=1.
+status means some stage did not converge, for any reason (infeasible exact
+equations, a stalled trust region, the iteration limit, a failed curvature or
+derivative check); inspect `result.result.status` and `result.stages` for the
+cause. No final estimate is claimed unless the last stage is at α=1.
+The homotopy only acts when `parameters.regularization_voltage` is comparable
+with the operating voltage, which is the [`SEParameters`](@ref) default.
 Intermediate converged stages report `:converged_regularized` and are not
 publishable. Failure or an exception restores the caller's original alpha;
 successful continuation leaves it at one.
@@ -1729,6 +1884,15 @@ rank diagnostic/status; it is not part of the linear step.
 The trust-region acceptance uses the same exact-penalty merit function as the
 dense reference solver.  `damping` is a small scaled primal regulariser used
 only to select a stable representative in rank-deficient linear systems.
+
+# Keywords
+The convergence, tolerance, rank and trust-region keywords and their defaults
+match [`solve_compiled_state_estimator`](@ref), except that there is no
+`normal_fraction`. `damping=1e-10` is specific to this solver.
+
+Exit diagnostics (constraint rank, observable dimension) still use dense
+decompositions. The negative-curvature check is exact up to 64 tangent
+dimensions and a 40-step Lanczos estimate above that.
 """
 function _solve_sparse_state_estimator(s::SEStructure, p::SEParameters,
                                       x0::AbstractVector{<:Real};
@@ -1739,7 +1903,7 @@ function _solve_sparse_state_estimator(s::SEStructure, p::SEParameters,
                                       acceptance_threshold::Real=0.1,
                                       constraint_tolerance::Real=1e-8,
                                       constraint_rtol::Real=1e-11,
-                                      optimality_tolerance::Real=1e-8,
+                                      optimality_tolerance::Real=1e-6,
                                       min_radius::Real=1e-10,
                                       damping::Real=1e-10,
                                       rank_rtol::Real=sqrt(eps(Float64)))
@@ -1761,6 +1925,7 @@ function _solve_sparse_state_estimator(s::SEStructure, p::SEParameters,
     λ = zeros(Float64, length(e.constraints))
     rejected = 0
     iterations = 0
+    stall = Inf
 
     for iteration in 1:max_iterations
         iterations = iteration
@@ -1794,8 +1959,10 @@ function _solve_sparse_state_estimator(s::SEStructure, p::SEParameters,
         # iteration made this solver cubic in the state dimension and dominated
         # its runtime.
         λ = λtrial
+        stall = norm(c) <= ctol ? _se_orthogonality(H * step, r) : Inf
         if norm(c) <= ctol &&
-           _se_stationarity(H, H' * r - C' * λ) <= optimality_tolerance
+           (_se_stationarity(H, H' * r - C' * λ) <= optimality_tolerance ||
+            stall <= _se_orthogonality_tolerance(optimality_tolerance))
             rankC, Z = _se_rank_nullspace(C; rtol=rank_rtol)
             observable, _ = _se_rank_nullspace(H * Z; rtol=rank_rtol, reference_scale=norm(H))
             tangent = size(Z, 2)
@@ -1834,7 +2001,7 @@ function _solve_sparse_state_estimator(s::SEStructure, p::SEParameters,
             accepted = isfinite(ρ) && ρ >= acceptance_threshold
         end
         if accepted
-            x .+= step; e = trial; λ = λtrial; rejected = 0
+            x .+= step; e = trial; λ = λtrial; rejected = 0; stall = Inf
             radius = ρ > 0.75 ? min(2radius, Float64(max_radius)) : radius
             push!(history, _se_history_entry(iteration, radius, _se_merit(e, μ, ctol), e; penalty=μ))
         else
@@ -1846,8 +2013,16 @@ function _solve_sparse_state_estimator(s::SEStructure, p::SEParameters,
     jac = _se_jacobians(s, p, x)
     jac === nothing && return SparseConstrainedStateEstimationResult(:undefined_derivative, x, e,
                                                                      iterations, 0, 0, 0, λ, history)
-    _, rankC, tangent, observable = _se_status_from_linearisation(sparse(jac[1]), sparse(jac[2]);
+    converged, rankC, tangent, observable = _se_status_from_linearisation(sparse(jac[1]), sparse(jac[2]);
                                                                  rank_rtol=rank_rtol)
+    if norm(e.constraints) <= ctol && radius < min_radius && stall <= _SE_STALL_ORTHOGONALITY
+        H = sparse(jac[1]); C = sparse(jac[2])
+        _, Z = _se_rank_nullspace(C; rtol=rank_rtol)
+        status = _se_checked_status(s, p, x, e, H, C, Z, converged; rank_rtol)
+        _, λ = _se_hachtel_step(H, C, e.residual, zeros(Float64, length(e.constraints)), scale, damping)
+        return SparseConstrainedStateEstimationResult(status, x, e, iterations, rankC,
+                                                      tangent, observable, λ, history)
+    end
     status = norm(e.constraints) > ctol ?
         (rejected > 0 ? :constraint_restoration_failed : :constraint_not_satisfied) :
         (radius < min_radius ? :trust_region_stalled : :max_iterations)
@@ -1887,6 +2062,7 @@ end
 
 Report local identifiability on the feasible tangent space. `include_prior=true`
 includes prior information; set it to `false` to report measurement-only rank.
+`rank_rtol=sqrt(eps())` is the relative singular-value threshold.
 Uses `H*Z` where
 `C*Z = 0`.  This is deliberately not the rank of the unconstrained measurement
 Jacobian.  The current dense diagnostic is intended for small/reference cases;
@@ -1957,7 +2133,8 @@ end
 """
     selected_state_covariance(structure, parameters, x, indices)
 
-Return only the requested covariance block of the rectangular voltage state.
+Return only the requested covariance block of the state vector (rectangular
+voltages, followed by explicit unknown-current entries when present).
 The measurement residual Jacobian is already whitened, so this is the local
 Gauss--Newton covariance under the diagonal covariance model.  It throws for a
 quantity that depends on an unobservable tangent direction. Identifiable
@@ -2031,7 +2208,8 @@ end
 
 """
     solve_time_series_state_estimator(structure, parameters, x0;
-                                      previous_state_sigma=nothing, solver=:sparse, kwargs...)
+                                      previous_state_sigma=nothing, solver=:sparse,
+                                      solver_kwargs=(;), kwargs...)
 
 Solve successive snapshots without rebuilding terminal maps, Ybus structure, or
 measurement/device incidence.  `parameters` contains one mutable
@@ -2047,6 +2225,13 @@ per-snapshot result and stops at the first non-converged snapshot, reporting
 `:time_series_stalled` without claiming later estimates.
 Use `solver_kwargs=(dense=(...), sparse=(...), ipopt=(...))` for backend-specific
 settings; shared `kwargs` must apply to the selected solver.
+
+A previous-state prior covers every state entry, so from the second snapshot on
+`:converged_unique` and `observable_dimension` describe measurements **and**
+prior together. Call `observability_diagnostics(...; include_prior=false)` to
+learn what the measurements identify on their own. `previous_state_sigma` is a
+caller-chosen process uncertainty; the previous posterior covariance is not
+propagated, so this is a random-walk smoother rather than a filter.
 """
 function solve_time_series_state_estimator(s::SEStructure,
                                             parameters::AbstractVector{<:SEParameters},

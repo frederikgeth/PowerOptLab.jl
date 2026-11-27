@@ -56,8 +56,8 @@ d = observability_diagnostics(structure, parameters, x)
 | `condition_number` | ``\sigma_{\max}/\sigma_{\min}`` |
 
 The WLS estimator's `result.observability` reports the analogous
-`(observable, n_states, rank, redundancy, min_singular, cond,
-tangent_dimension)`. Exact KCL equations are ranked in their own units, then the
+`(observable, n_states, rank, redundancy, nuisance_dimension, min_singular,
+cond, tangent_dimension)`. Exact KCL equations are ranked in their own units, then the
 **whitened** measurement Jacobian is ranked on their tangent space. `rank` is
 the sum of those two independent ranks; `redundancy` counts measurement rows
 beyond the tangent directions they identify and the fitted individual-customer
@@ -319,10 +319,15 @@ threshold delicate (Expósito and Abur, 1998).
 PowerOptLab is entirely numerical: both estimators rank exact equations
 separately, then use dense SVD on the whitened measurement map ``HZ`` on the
 feasible tangent space. The compiled estimator's threshold is
-``\max(\mathtt{rank\_rtol}\,\max(m,n)\,\sigma_{\max},\varepsilon)``, with
-`rank_rtol` defaulting to ``\sqrt{\varepsilon}``; legacy WLS uses
-``\varepsilon\max(m,n)\sigma_{\max}``. These thresholds differ, so extremely
-weak directions can receive different classifications. Merged-customer power
+``\max(\mathtt{rank\_rtol}\,\sigma_{\max},\ \varepsilon\max(m,n)\,\sigma_{\max},\ 8\varepsilon\max(m,n)\,s_{\text{ref}})``,
+with `rank_rtol` defaulting to ``\sqrt{\varepsilon}`` and ``s_{\text{ref}}`` the
+norm of the unprojected operator (a floor for projection round-off); legacy WLS
+uses the two round-off terms only. `rank_rtol` is a conditioning threshold and is
+deliberately not multiplied by the dimension: a large, fully metered feeder is
+not less observable because it has more states. A direction is therefore called
+unobserved by the compiled estimator once ``\sigma/\sigma_{\max}`` falls below
+about ``1.5\times10^{-8}``, and by legacy WLS only at round-off, so extremely
+weak directions can still receive different classifications. Merged-customer power
 allocations are profiled out before testing voltage information. That choice buys
 the constraint handling and the singular values; it costs ``O(n^3)`` and a
 threshold. Treat a ``\sigma_{\min}`` near the tolerance as "ask again", not as

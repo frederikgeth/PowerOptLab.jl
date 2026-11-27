@@ -628,8 +628,12 @@ end
     red = vcat(rect, [obs_m(:vmag, "b", abs(OBS_VB))])
     s2 = compile_state_estimator(obs_net(), red)
     p2 = SEParameters(s2, red)
+    # Consistent data fit to the requested stationarity: ask for it explicitly,
+    # the default (1e-6) only bounds the residual at about that level.
     @test norm(solve_compiled_state_estimator(s2, p2, x0; initial_radius=2.0
-              ).evaluation.residual) < 1e-8
+              ).evaluation.residual) < 1e-5
+    @test norm(solve_compiled_state_estimator(s2, p2, x0; initial_radius=2.0,
+              optimality_tolerance=1e-10).evaluation.residual) < 1e-8
     p2.measurement_values[1] += 5.0
     exposed = solve_compiled_state_estimator(s2, p2, x0; initial_radius=2.0)
     @test norm(exposed.evaluation.residual) > 10.0

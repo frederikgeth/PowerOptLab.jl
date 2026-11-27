@@ -127,13 +127,20 @@ Result of [`solve_state_estimation`](@ref).
   leverage-adjusted normalised residual (`rᴺ = r / √(Sᵢᵢ)`) used for bad-data
   identification; it is a scale-free residual, not a χ²/rᴺ test statistic.
 - `observability::NamedTuple` — a LOCAL numerical identifiability diagnostic
-  `(observable, n_states, rank, redundancy, min_singular, cond,
-  tangent_dimension)` from the measurement Jacobian at the returned point.
+  `(observable, n_states, rank, redundancy, nuisance_dimension, min_singular,
+  cond, tangent_dimension)` from the measurement Jacobian at the returned point.
+  With `check_observability=false` the same fields are present, `observable`
+  is `missing`, the counts are zero and the singular-value fields are `NaN`.
   Exact KCL equations are ranked in their own units; measurement rank,
   redundancy, `min_singular`, and `cond` are computed from the whitened
   measurement Jacobian on the feasible tangent space. Thus `1/min_singular` is
   the local worst-case estimate standard deviation under the stated Gaussian
   model (see [`solve_state_estimation`](@ref)).
+- `solve::SolveStatus` — the shared solve-status record returned by
+  `solve_status(result)`.
+
+`residuals` use `measured − estimated`. The compiled estimators report the
+opposite sign, `(predicted − measured)/σ`, in `evaluation.residual`.
 """
 struct StateEstimationResult <: AbstractSolveResult
     termination_status::String
@@ -550,7 +557,7 @@ function solve_state_estimation(net::Dict{String,Any}, measurements::AbstractVec
     obsv = check_observability ?
         _observability(net, measurements, neutral, zi, est_bus) :
         (observable=missing, n_states=0, rank=0, redundancy=0,
-         min_singular=NaN, cond=NaN)
+         nuisance_dimension=0, min_singular=NaN, cond=NaN, tangent_dimension=0)
     if check_observability && obsv.observable === false
         @warn "solve_state_estimation: state is locally UNOBSERVABLE " *
               "(rank $(obsv.rank) < $(obsv.n_states) states); the estimate is not " *
@@ -812,12 +819,4 @@ function _se_observability_metrics(Hm::AbstractMatrix{<:Real}, C::AbstractMatrix
      min_singular = smin,
      cond = condn,
      tangent_dimension = tangent)
-end
-
-# Any source magnitude as a flat fallback voltage for a bus with no estimate.
-function _flat_re(fixed, bus)
-    for ((b, _), v) in fixed
-        b == bus && return abs(v)
-    end
-    isempty(fixed) ? 1.0 : abs(first(values(fixed)))
 end
